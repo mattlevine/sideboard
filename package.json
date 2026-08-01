@@ -1,0 +1,19 @@
+{
+  "name": "sideboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent-agnostic orchestration layer over git worktrees — your threads aren't trapped anywhere.",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm --filter @sideboard/desktop run dev",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "cli": "pnpm --filter @sideboard/cli run start",
+    "lint": "pnpm -r run typecheck"
+  }
+}
