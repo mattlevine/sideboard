@@ -11,7 +11,13 @@ import {
   resolveRepoRoot,
   startMcpServer,
   startOrchestration,
-  hasConductorHook,
+  hasRepoHook,
+  settingsSourceLabel,
+  runCloudConnect,
+  getBrightsySession,
+  switchBrightsyAccount,
+  connectBrightsyTeam,
+  disconnectBrightsyTeam,
   type AgentKind,
 } from '@sideboard/core';
 
@@ -58,7 +64,15 @@ async function confirm(question: string): Promise<boolean> {
 }
 
 function parseAgent(raw: string): AgentKind {
-  if (raw === 'claude' || raw === 'codex' || raw === 'opencode') return raw;
+  if (
+    raw === 'claude' ||
+    raw === 'codex' ||
+    raw === 'opencode' ||
+    raw === 'brightsy' ||
+    raw === 'cursor'
+  ) {
+    return raw;
+  }
   throw new Error(`Unknown agent: ${raw}`);
 }
 
@@ -109,7 +123,7 @@ async function main(): Promise<void> {
     .command('new')
     .description('Create a thread from branch, PR, or Linear ticket')
     .requiredOption('--from <spec>', 'branch:<name>|pr:<n>|ticket:<key>')
-    .requiredOption('--agent <agent>', 'claude|codex|opencode')
+    .requiredOption('--agent <agent>', 'claude|codex|opencode|brightsy|cursor')
     .option('--repo <path>', 'repo path', process.cwd())
     .option('--title <title>', 'thread title')
     .action(async (opts) => {
@@ -118,8 +132,11 @@ async function main(): Promise<void> {
       const agent = parseAgent(opts.agent);
       const repoPath = await resolveRepoRoot(opts.repo);
       console.log(chalk.dim(`Creating ${sourceType} thread in ${repoPath}…`));
-      if (hasConductorHook(repoPath)) {
-        console.log(chalk.dim('Found .conductor/settings.toml — will run setup'));
+      const hook = settingsSourceLabel(repoPath);
+      if (hook) {
+        console.log(chalk.dim(`Found ${hook} — will run setup / enable dev`));
+      } else if (hasRepoHook(repoPath)) {
+        console.log(chalk.dim('Repo hook present'));
       }
       const thread = await orch.createThread({
         sourceType,
@@ -137,7 +154,7 @@ async function main(): Promise<void> {
     .command('adopt')
     .description('Adopt an existing worktree or import from Conductor')
     .argument('[path]', 'worktree path')
-    .option('--agent <agent>', 'claude|codex|opencode', 'claude')
+    .option('--agent <agent>', 'claude|codex|opencode|brightsy|cursor', 'claude')
     .option('--from-conductor', 'import from Conductor DB')
     .option('--all', 'import all Conductor workspaces')
     .option('--id <id>', 'Conductor workspace id')
@@ -392,10 +409,16 @@ async function main(): Promise<void> {
   program
     .command('orchestrate')
     .argument('<goal>', 'orchestration goal')
-    .option('--agent <agent>', 'claude|codex|opencode', 'claude')
+    .option('--agent <agent>', 'claude|codex|opencode|cursor', 'claude')
     .option('--repo <path>', 'repo path', process.cwd())
     .action(async (goal, opts) => {
       const agent = parseAgent(opts.agent);
+      if (agent === 'brightsy') {
+        // The brightsy CLI has no MCP client, so it can't drive Sideboard tools.
+        throw new Error(
+          'orchestrate is not supported with brightsy — use claude, codex, opencode, or cursor',
+        );
+      }
       const repoPath = await resolveRepoRoot(opts.repo);
       const thread = await startOrchestration({ goal, agent, repoPath });
       console.log(chalk.bold('Orchestration thread'), thread.id.slice(0, 8));
@@ -460,6 +483,136 @@ async function main(): Promise<void> {
       await startMcpServer();
     });
 
+  const brightsyCmd = program
+    .command('brightsy')
+    .description(
+      'Brightsy team helpers (wraps `brightsy teams` + Sideboard multi-team MCP state)',
+    );
+
+  brightsyCmd
+    .command('teams')
+    .alias('accounts')
+    .description('List Brightsy teams (via `brightsy teams --json`)')
+    .action(async () => {
+      const session = await getBrightsySession();
+      if (!session.connected) {
+        console.error(chalk.red(session.reason || 'Not logged in — brightsy login'));
+        process.exitCode = 1;
+        return;
+      }
+      const connectedIds = new Set(
+        (session.connectedTeams ?? []).map((t) => t.id),
+      );
+      console.log(
+        chalk.dim(
+          `Active: ${session.accountSlug || session.accountId} @ ${session.endpoint}`,
+        ),
+      );
+      console.log(
+        chalk.dim(
+          `Connected (CLI + MCP): ${(session.connectedTeams ?? []).map((t) => t.slug).join(', ') || '(none)'}`,
+        ),
+      );
+      for (const a of session.accounts) {
+        const mark = a.id === session.accountId
+          ? chalk.green('*')
+          : connectedIds.has(a.id)
+            ? chalk.cyan('+')
+            : ' ';
+        console.log(
+          `${mark} ${a.slug.padEnd(24)}  ${a.name}${a.is_personal_account ? chalk.dim(' (personal)') : ''}`,
+        );
+      }
+      console.log(chalk.dim('  * = active (CLI) · + = connected'));
+    });
+
+  brightsyCmd
+    .command('switch')
+    .argument('<team>', 'team id or slug')
+    .description('Connect/activate a team for CLI + MCP (alias of connect-team)')
+    .action(async (team) => {
+      const session = await switchBrightsyAccount(team);
+      const names = (session.connectedTeams ?? []).map((t) => t.slug).join(', ');
+      console.log(
+        chalk.green(
+          `Active: ${session.accountSlug || session.accountId} · connected: ${names}`,
+        ),
+      );
+    });
+
+  brightsyCmd
+    .command('connect-team')
+    .argument('<team>', 'team id or slug')
+    .description('Connect a team for Brightsy CLI + MCP (activates it for CLI)')
+    .action(async (team) => {
+      await connectBrightsyTeam(team);
+      const session = await getBrightsySession();
+      const names = (session.connectedTeams ?? []).map((t) => t.slug).join(', ');
+      console.log(
+        chalk.green(
+          `Active: ${session.accountSlug || session.accountId} · connected: ${names}`,
+        ),
+      );
+    });
+
+  brightsyCmd
+    .command('disconnect-team')
+    .argument('<team>', 'team id or slug')
+    .description('Disconnect a team from Brightsy CLI + MCP selection')
+    .action(async (team) => {
+      await disconnectBrightsyTeam(team);
+      const session = await getBrightsySession();
+      const names = (session.connectedTeams ?? []).map((t) => t.slug).join(', ');
+      console.log(
+        chalk.green(
+          names
+            ? `Active: ${session.accountSlug || session.accountId} · connected: ${names}`
+            : 'No teams connected',
+        ),
+      );
+    });
+
+  program
+    .command('connect')
+    .description(
+      'Connect Sideboard to Brightsy cloud (Slack/Discord/Teams — poll inbound orchestrator tasks across all workspaces)',
+    )
+    .option(
+      '--repo <path>',
+      'home repo for the coordinator thread (still sees all registered workspaces)',
+      process.cwd(),
+    )
+    .option('--agent <agent>', 'claude|codex|opencode|cursor', 'claude')
+    .option('--no-enable-access', 'do not auto-enable Sideboard cloud access')
+    .option('--no-allow-always', 'do not set allow_always when enabling access')
+    .option('--poll-ms <ms>', 'poll interval', '5000')
+    .action(async (opts) => {
+      const agent = parseAgent(opts.agent);
+      if (agent === 'brightsy') {
+        throw new Error(
+          'connect coordinator cannot use brightsy — use claude, codex, opencode, or cursor',
+        );
+      }
+      const repoPath = await resolveRepoRoot(opts.repo);
+      const ac = new AbortController();
+      const stop = () => ac.abort();
+      process.on('SIGINT', stop);
+      process.on('SIGTERM', stop);
+      console.log(
+        chalk.bold('Sideboard ↔ Brightsy'),
+        chalk.dim('(Ctrl+C to stop)'),
+      );
+      await runCloudConnect({
+        repoPath,
+        agent,
+        enableAccess: opts.enableAccess !== false,
+        allowAlways: opts.allowAlways !== false,
+        pollIntervalMs: Number(opts.pollMs) || 5000,
+        signal: ac.signal,
+        onLog: (line) => console.log(chalk.dim(line)),
+      });
+    });
+
   program
     .command('branches')
     .option('--repo <path>', 'repo path', process.cwd())
@@ -489,6 +642,7 @@ async function main(): Promise<void> {
     .requiredOption('--agent <agent>', 'claude|codex|opencode')
     .option('--repo <path>', 'repo path', process.cwd())
     .action(async (opts) => {
+      // brightsy has no Linear MCP connector; listLinearIssues rejects it.
       const issues = await listLinearIssues(parseAgent(opts.agent), opts.repo);
       console.log(JSON.stringify(issues, null, 2));
     });

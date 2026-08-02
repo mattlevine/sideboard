@@ -1,0 +1,102 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { FAMOUS_SOCCER_TEAMS } from '../git/teams.js';
+import type { Thread } from '../types/thread.js';
+
+const source: Thread = {
+  id: 'source-thread-id',
+  title: 'West Ham',
+  sourceType: 'branch',
+  sourceRef: 'main',
+  branchName: 'thread/west-ham',
+  worktreePath: '/Users/me/sideboard/workspaces/sideboard/west-ham',
+  repoPath: '/Users/me/Projects/sideboard',
+  agent: 'claude',
+  model: null,
+  fast: false,
+  planMode: false,
+  sessionId: 'sess-1',
+  autonomy: 'default',
+  sourceIsFork: false,
+  status: 'idle',
+  queue: [],
+  parentThreadId: null,
+  devPort: null,
+  prUrl: null,
+  createdAt: '2026-08-01T23:10:10.000Z',
+  updatedAt: '2026-08-01T23:10:10.000Z',
+  messages: [
+    { role: 'user', text: 'hello', ts: '2026-08-01T23:10:11.000Z' },
+    { role: 'agent', text: 'hi', ts: '2026-08-01T23:10:12.000Z' },
+  ],
+  attachments: [],
+};
+
+let written: Thread | null = null;
+const teamNames = new Set(FAMOUS_SOCCER_TEAMS.map((t) => t.name));
+
+vi.mock('../store/thread-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../store/thread-store.js')>();
+  return {
+    ...actual,
+    findThreadByRef: (ref: string) => (ref === source.id ? source : null),
+    listThreads: () => [source],
+    writeThread: (thread: Thread) => {
+      written = thread;
+    },
+  };
+});
+
+describe('forkChatTab', () => {
+  beforeEach(() => {
+    written = null;
+  });
+
+  it('inherits the source thread worktree binding (no new git worktree)', async () => {
+    const { forkChatTab } = await import('./chat-tabs.js');
+    const forked = forkChatTab({ threadId: source.id, throughIndex: 1 });
+
+    expect(forked.worktreePath).toBe(source.worktreePath);
+    expect(forked.repoPath).toBe(source.repoPath);
+    expect(forked.branchName).toBe(source.branchName);
+    expect(forked.sessionId).toBeNull();
+    expect(forked.messages).toEqual([]);
+    expect(forked.attachments).toHaveLength(1);
+    expect(forked.attachments[0]?.kind).toBe('transcript');
+    expect(written?.worktreePath).toBe(source.worktreePath);
+    expect(written?.branchName).toBe(source.branchName);
+  });
+
+  it('names the forked tab after a soccer team unused by siblings', async () => {
+    const { forkChatTab } = await import('./chat-tabs.js');
+    const forked = forkChatTab({ threadId: source.id, throughIndex: 1 });
+
+    expect(teamNames.has(forked.title)).toBe(true);
+    expect(forked.title).not.toBe(source.title);
+  });
+});
+
+describe('createChatTab', () => {
+  beforeEach(() => {
+    written = null;
+  });
+
+  it('adds a chat tab without changing worktree path, branch, or folder identity', async () => {
+    const { createChatTab } = await import('./chat-tabs.js');
+    const tab = createChatTab({ fromThreadId: source.id, title: 'Context manager' });
+
+    expect(tab.worktreePath).toBe(source.worktreePath);
+    expect(tab.branchName).toBe(source.branchName);
+    expect(tab.repoPath).toBe(source.repoPath);
+    expect(tab.title).toBe('Context manager');
+    expect(written?.worktreePath).toBe(source.worktreePath);
+    expect(written?.branchName).toBe(source.branchName);
+  });
+
+  it('defaults new tabs to a random soccer team name', async () => {
+    const { createChatTab } = await import('./chat-tabs.js');
+    const tab = createChatTab({ fromThreadId: source.id });
+
+    expect(teamNames.has(tab.title)).toBe(true);
+    expect(tab.title).not.toBe(source.title);
+  });
+});

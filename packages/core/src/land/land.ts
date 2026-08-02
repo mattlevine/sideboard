@@ -7,6 +7,7 @@ import {
   resolveDefaultBranch,
 } from '../git/worktree.js';
 import { getDiff } from '../diff/diff.js';
+import { suggestPrMetadata } from './pr-metadata.js';
 
 export async function previewLand(thread: Thread): Promise<LandPreview> {
   if (thread.sourceIsFork) {
@@ -55,26 +56,45 @@ export async function previewLand(thread: Thread): Promise<LandPreview> {
   };
 }
 
-export async function confirmLand(thread: Thread): Promise<LandResult> {
+export async function confirmLand(
+  thread: Thread,
+  opts?: { draft?: boolean; web?: boolean },
+): Promise<LandResult> {
   const preview = await previewLand(thread);
   if (preview.blocked) {
     throw new Error(preview.blockReason ?? 'Land blocked');
   }
 
+  const meta = await suggestPrMetadata(thread.worktreePath, {
+    base: preview.target,
+    fallbackTitle: thread.title,
+    sourceLabel: `${thread.sourceType}:${thread.sourceRef}`,
+  });
+
   let committed = false;
   if (preview.dirty) {
-    committed = await commitAll(
-      thread.worktreePath,
-      thread.title || `sideboard: ${thread.branchName}`,
-    );
+    committed = await commitAll(thread.worktreePath, meta.commitMessage);
   }
 
-  await pushBranch(thread.worktreePath, thread.branchName);
+  // Prefer live HEAD in case the agent renamed the placeholder branch.
+  const { git } = await import('../git/run.js');
+  const { stdout: headOut } = await git(
+    ['rev-parse', '--abbrev-ref', 'HEAD'],
+    thread.worktreePath,
+    { reject: false },
+  );
+  const head = headOut.trim();
+  const branch =
+    head && head !== 'HEAD' ? head : thread.branchName;
+
+  await pushBranch(thread.worktreePath, branch);
   const prUrl = await createOrUpdatePr(thread.worktreePath, {
-    title: thread.title || thread.branchName,
-    body: `Landed via Sideboard from ${thread.sourceType}:${thread.sourceRef}`,
+    title: meta.title,
+    body: meta.body,
     base: preview.target,
-    head: thread.branchName,
+    head: branch,
+    draft: opts?.draft,
+    web: opts?.web,
   });
 
   return { prUrl, pushed: true, committed };

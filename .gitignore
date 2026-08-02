@@ -16,3 +16,5 @@ apps/desktop/dist/
 *.AppImage
 *.exe
 .vite/
+# Legacy in-repo worktrees (new ones go to ~/sideboard/workspaces)
+.sideboard/worktrees/

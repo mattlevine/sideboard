@@ -1,55 +1,35 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
-import { parse as parseToml } from 'smol-toml';
 import { execa } from 'execa';
 import { createInterface } from 'node:readline';
+import {
+  hasConductorHook,
+  hasRepoHook,
+  hasWorkspaceHook,
+  loadConductorSettings,
+  loadRepoSettings,
+  loadWorkspaceSettings,
+  settingsSourceLabel,
+  workspaceSettingsSourceLabel,
+  type RepoSettings,
+} from './settings.js';
 
-export interface ConductorSettings {
-  setup?: string;
-  filesToCopy?: string[];
-  runScripts: Array<{ name: string; command: string; default?: boolean }>;
-}
-
-export function loadConductorSettings(repoPath: string): ConductorSettings | null {
-  const path = join(repoPath, '.conductor', 'settings.toml');
-  if (!existsSync(path)) return null;
-  const raw = readFileSync(path, 'utf8');
-  const data = parseToml(raw) as Record<string, unknown>;
-
-  const scripts = (data.scripts ?? {}) as Record<string, unknown>;
-  const setup = typeof scripts.setup === 'string' ? scripts.setup : undefined;
-
-  const filesToCopy: string[] = [];
-  const files = data.files as { copy?: string[] } | undefined;
-  if (Array.isArray(files?.copy)) {
-    filesToCopy.push(...files.copy.map(String));
-  }
-  // Common convention also used by Conductor docs
-  const copySection = data['files-to-copy'] as { paths?: string[] } | undefined;
-  if (Array.isArray(copySection?.paths)) {
-    filesToCopy.push(...copySection.paths.map(String));
-  }
-
-  const runScripts: ConductorSettings['runScripts'] = [];
-  const run = scripts.run as Record<string, { command?: string; default?: boolean }> | undefined;
-  if (run && typeof run === 'object') {
-    for (const [name, value] of Object.entries(run)) {
-      if (value && typeof value.command === 'string') {
-        runScripts.push({
-          name,
-          command: value.command,
-          default: Boolean(value.default),
-        });
-      }
-    }
-  }
-
-  return { setup, filesToCopy, runScripts };
-}
+export type { RepoSettings };
+export type ConductorSettings = RepoSettings;
+export {
+  hasConductorHook,
+  hasRepoHook,
+  hasWorkspaceHook,
+  loadConductorSettings,
+  loadRepoSettings,
+  loadWorkspaceSettings,
+  settingsSourceLabel,
+  workspaceSettingsSourceLabel,
+};
 
 export function copyConfiguredFiles(repoPath: string, worktreePath: string): string[] {
-  const settings = loadConductorSettings(repoPath);
+  const settings = loadRepoSettings(repoPath);
   if (!settings?.filesToCopy?.length) {
     // Sensible default for common local env files
     const defaults = ['.env.local', '.env'];
@@ -81,9 +61,9 @@ export async function runSetupScript(
   repoPath: string,
   worktreePath: string,
   onLine?: (line: string) => void,
-): Promise<{ ran: boolean; exitCode: number | null }> {
-  const settings = loadConductorSettings(repoPath);
-  if (!settings?.setup) return { ran: false, exitCode: null };
+): Promise<{ ran: boolean; exitCode: number | null; source: string | null }> {
+  const settings = loadWorkspaceSettings(worktreePath, repoPath);
+  if (!settings?.setup) return { ran: false, exitCode: null, source: null };
 
   const child = execa('bash', ['-lc', settings.setup], {
     cwd: worktreePath,
@@ -100,11 +80,18 @@ export async function runSetupScript(
   pipe(child.stderr);
 
   const result = await child;
-  return { ran: true, exitCode: result.exitCode ?? null };
+  return {
+    ran: true,
+    exitCode: result.exitCode ?? null,
+    source: workspaceSettingsSourceLabel(worktreePath, repoPath),
+  };
 }
 
-export function getDefaultRunScript(repoPath: string): { name: string; command: string } | null {
-  const settings = loadConductorSettings(repoPath);
+export function getDefaultRunScript(
+  worktreePath: string,
+  repoPath?: string | null,
+): { name: string; command: string } | null {
+  const settings = loadWorkspaceSettings(worktreePath, repoPath);
   if (!settings?.runScripts.length) return null;
   return (
     settings.runScripts.find((s) => s.default) ??
@@ -143,7 +130,7 @@ export async function startDevServer(
   worktreePath: string,
   onLine?: (line: string) => void,
 ): Promise<DevServerHandle | null> {
-  const script = getDefaultRunScript(repoPath);
+  const script = getDefaultRunScript(worktreePath, repoPath);
   if (!script) return null;
 
   const port = await allocatePort();
@@ -152,6 +139,8 @@ export async function startDevServer(
     reject: false,
     env: {
       ...process.env,
+      // Both names — Conductor-compatible repos keep working; Sideboard-native preferred.
+      SIDEBOARD_PORT: String(port),
       CONDUCTOR_PORT: String(port),
       PORT: String(port),
     },
@@ -177,8 +166,4 @@ export async function startDevServer(
     },
     done: child.then((r) => r.exitCode ?? null),
   };
-}
-
-export function hasConductorHook(repoPath: string): boolean {
-  return existsSync(join(repoPath, '.conductor', 'settings.toml'));
 }

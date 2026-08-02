@@ -12,7 +12,13 @@
     "isolatedModules": true,
     "noEmit": true,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "types": ["vite/client"],
+    "paths": {
+      "@sideboard/message-parts": ["../../packages/core/src/agents/message-parts.ts"],
+      "@sideboard/worktree-labels": ["../../packages/core/src/git/worktree-labels.ts"],
+      "@sideboard/brightsy-targets": ["../../packages/core/src/agents/brightsy-targets.ts"]
+    }
   },
   "include": ["src/renderer/src/**/*", "src/preload/index.d.ts"]
 }

@@ -1,10 +1,15 @@
-import type { AgentEvent, AgentKind, AgentStatus, Autonomy, Thread } from '../types/thread.js';
+import type { AgentEvent, AgentKind, AgentStatus, Thread } from '../types/thread.js';
+import type { AgentTurnInput } from './turn-input.js';
+
+export type { AgentTurnInput } from './turn-input.js';
 
 export interface TurnCommand {
   file: string;
   args: string[];
   cwd: string;
   env?: Record<string, string>;
+  /** When set, written to the child process stdin (e.g. Claude stream-json). */
+  stdin?: string;
 }
 
 export interface AttachCommand {
@@ -17,8 +22,8 @@ export interface AttachCommand {
 export interface AgentAdapter {
   kind: AgentKind;
   detect(): Promise<AgentStatus>;
-  buildTurn(thread: Thread, prompt: string): Promise<TurnCommand>;
-  parseEvent(line: string): AgentEvent | null;
+  buildTurn(thread: Thread, input: string | AgentTurnInput): Promise<TurnCommand>;
+  parseEvent(line: string): AgentEvent | AgentEvent[] | null;
   resolveSessionId(worktreePath: string, cached: string | null): Promise<string | null>;
   buildAttach(thread: Thread): Promise<AttachCommand>;
   /** Optional: list Linear issues via this agent's MCP connector */
@@ -27,14 +32,32 @@ export interface AgentAdapter {
   >;
 }
 
-export function permissionMode(autonomy: Autonomy): {
+export const PLAN_MODE_INSTRUCTION =
+  'Plan mode is active and must remain active until the user turns Plan mode off in the UI (or explicitly asks you to implement). Analyze the codebase, search and read files as needed, and produce or refine a clear implementation plan. Do not modify, create, or delete any files. Do not exit plan mode on your own.';
+
+export function permissionMode(
+  thread: Pick<Thread, 'autonomy' | 'planMode'>,
+): {
   claude: string;
   opencodePermission: string;
+  codexSandbox: 'read-only' | 'workspace-write';
 } {
-  if (autonomy === 'full') {
+  if (thread.planMode) {
+    return {
+      claude: 'plan',
+      opencodePermission: JSON.stringify({
+        edit: 'deny',
+        write: 'deny',
+        bash: { '*': 'deny' },
+      }),
+      codexSandbox: 'read-only',
+    };
+  }
+  if (thread.autonomy === 'full') {
     return {
       claude: 'bypassPermissions',
       opencodePermission: JSON.stringify({ '*': 'allow' }),
+      codexSandbox: 'workspace-write',
     };
   }
   return {
@@ -43,5 +66,6 @@ export function permissionMode(autonomy: Autonomy): {
       edit: 'allow',
       bash: { '*': 'allow', 'rm -rf *': 'deny' },
     }),
+    codexSandbox: 'workspace-write',
   };
 }

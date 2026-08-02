@@ -2,8 +2,32 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
-import type { AgentEvent, AgentStatus, IssueInfo } from '../types/thread.js';
+import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
+import { flattenTurnInput, normalizeTurnInput } from './turn-input.js';
+import { permissionMode } from './types.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
+
+/** macOS ARG_MAX ~256KiB — use `codex exec -` + stdin for larger prompts. */
+export const CODEX_PROMPT_ARG_MAX = 200_000;
+
+type CodexUsage = {
+  input_tokens?: number;
+  cached_input_tokens?: number;
+  output_tokens?: number;
+  reasoning_output_tokens?: number;
+};
+
+function usageFromCodex(usage: CodexUsage | undefined): TokenUsage | null {
+  if (!usage) return null;
+  const inputTokens = Number(usage.input_tokens ?? 0);
+  const outputTokens = Number(usage.output_tokens ?? 0) + Number(usage.reasoning_output_tokens ?? 0);
+  if (!inputTokens && !outputTokens) return null;
+  return {
+    inputTokens,
+    outputTokens,
+    cacheReadTokens: usage.cached_input_tokens ? Number(usage.cached_input_tokens) : undefined,
+  };
+}
 
 function codexConfigHasNetworkAccess(): boolean {
   const candidates = [
@@ -57,42 +81,44 @@ export const codexAdapter: AgentAdapter = {
     };
   },
 
-  async buildTurn(thread, prompt): Promise<TurnCommand> {
+  async buildTurn(thread, input): Promise<TurnCommand> {
+    // Codex CLI cannot emit OpenAI `prompt_cache_breakpoint` / cache_control
+    // (see openai/codex#35300). Keep a stable prefix-first string so implicit
+    // prompt caching can still match across turns / resume. Plain text only —
+    // no structured stdin / stream-json input that could add extra breakpoints.
+    const prompt = flattenTurnInput(input);
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
-    if (sessionId) {
-      // Never use --last — it's global and wrong under concurrency.
-      return {
-        file: 'codex',
-        args: [
-          'exec',
-          'resume',
-          sessionId,
-          prompt,
-          '--cd',
-          thread.worktreePath,
-          '--json',
-          '--sandbox',
-          'workspace-write',
-          '--ask-for-approval',
-          'never',
-        ],
-        cwd: thread.worktreePath,
-      };
+    const useStdin = prompt.length > CODEX_PROMPT_ARG_MAX;
+    // `-` reads the full prompt from stdin; spawn closes the pipe immediately
+    // (avoids codex exec hanging on an open empty stdin — see openai/codex#20919).
+    const promptArg = useStdin ? '-' : prompt;
+
+    if (process.env.SIDEBOARD_DEBUG_CODEX_TURN === '1') {
+      const { cachedPrefix } = normalizeTurnInput(input);
+      console.error(
+        `[sideboard/codex] promptChars=${prompt.length} resumed=${Boolean(sessionId)} stdin=${useStdin} hasPrefix=${Boolean(cachedPrefix)}`,
+      );
     }
+
+    const mode = permissionMode(thread);
+    const args = [
+      'exec',
+      ...(sessionId ? (['resume', sessionId] as const) : []),
+      promptArg,
+      '--cd',
+      thread.worktreePath,
+      '--json',
+      '--sandbox',
+      mode.codexSandbox,
+      '--ask-for-approval',
+      'never',
+    ];
+
     return {
       file: 'codex',
-      args: [
-        'exec',
-        prompt,
-        '--cd',
-        thread.worktreePath,
-        '--json',
-        '--sandbox',
-        'workspace-write',
-        '--ask-for-approval',
-        'never',
-      ],
+      args,
       cwd: thread.worktreePath,
+      stdin: useStdin ? `${prompt}\n` : undefined,
     };
   },
 
@@ -107,6 +133,11 @@ export const codexAdapter: AgentAdapter = {
         (typeof (obj as { session?: { id?: string } }).session?.id === 'string' &&
           (obj as { session: { id: string } }).session.id);
       if (sid) return { type: 'session_id', data: sid };
+
+      if (obj.type === 'turn.completed' || obj.type === 'turn_completed') {
+        const usage = usageFromCodex((obj as { usage?: CodexUsage }).usage);
+        return usage ? { type: 'usage', data: usage } : null;
+      }
 
       if (typeof obj.item === 'object' && obj.item !== null) {
         const item = obj.item as { type?: string; text?: string };
@@ -132,11 +163,15 @@ export const codexAdapter: AgentAdapter = {
     if (sessionId) {
       return {
         file: 'codex',
-        args: ['exec', 'resume', sessionId],
+        args: ['exec', 'resume', sessionId, '--cd', thread.worktreePath],
         cwd: thread.worktreePath,
       };
     }
-    return { file: 'codex', args: [], cwd: thread.worktreePath };
+    return {
+      file: 'codex',
+      args: ['--cd', thread.worktreePath],
+      cwd: thread.worktreePath,
+    };
   },
 
   async listLinearIssues(_repoPath: string): Promise<IssueInfo[]> {

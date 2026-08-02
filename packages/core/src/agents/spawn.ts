@@ -1,32 +1,72 @@
 import { createInterface } from 'node:readline';
 import { execa } from 'execa';
-import type { AgentEvent, Thread } from '../types/thread.js';
+import { childEnvWithAppSettings } from '../store/app-settings.js';
+import type { AgentEvent, MessagePart, Thread, TokenUsage } from '../types/thread.js';
+import { parseBrightsyCliLine } from './brightsy.js';
 import { getAdapter } from './index.js';
+import {
+  applyAgentEvent,
+  finalizeParts,
+  isBrightsyNdjsonLine,
+  normalizeParseResult,
+  partsToAssistantText,
+  stripBrightsyNdjsonNoise,
+} from './message-parts.js';
+import { ensureAgentPath } from './path.js';
+import { mergeUsage } from './usage.js';
+import type { AgentTurnInput } from './turn-input.js';
 
 export interface SpawnTurnHandle {
   pid: number | undefined;
   kill: () => void;
-  done: Promise<{ exitCode: number | null; sessionId: string | null; assistantText: string }>;
+  done: Promise<{
+    exitCode: number | null;
+    sessionId: string | null;
+    assistantText: string;
+    parts: MessagePart[];
+    usage: TokenUsage | null;
+  }>;
 }
 
 export async function spawnAgentTurn(
   thread: Thread,
-  prompt: string,
+  input: string | AgentTurnInput,
   onEvent: (event: AgentEvent) => void,
 ): Promise<SpawnTurnHandle> {
+  ensureAgentPath();
+  if (!thread.worktreePath?.trim()) {
+    throw new Error(
+      `Cannot spawn ${thread.agent}: thread ${thread.id} has no worktreePath`,
+    );
+  }
   const adapter = getAdapter(thread.agent);
-  const cmd = await adapter.buildTurn(thread, prompt);
+  const cmd = await adapter.buildTurn(thread, input);
+  if (cmd.cwd !== thread.worktreePath) {
+    throw new Error(
+      `Agent cwd must be the thread worktree (got ${cmd.cwd}, expected ${thread.worktreePath})`,
+    );
+  }
 
   const child = execa(cmd.file, cmd.args, {
     cwd: cmd.cwd,
-    env: { ...process.env, ...cmd.env },
+    env: childEnvWithAppSettings(cmd.env),
     reject: false,
     stdout: 'pipe',
     stderr: 'pipe',
+    // Claude stream-json turns write a user message to stdin; otherwise ignore
+    // so Claude doesn't wait ~3s for an empty pipe.
+    stdin: cmd.stdin != null ? 'pipe' : 'ignore',
   });
+
+  if (cmd.stdin != null && child.stdin) {
+    child.stdin.write(cmd.stdin);
+    child.stdin.end();
+  }
 
   let sessionId: string | null = thread.sessionId;
   let assistantText = '';
+  let parts: MessagePart[] = [];
+  let usage: TokenUsage | null = null;
 
   const consume = (stream: NodeJS.ReadableStream | null, kind: 'stdout' | 'stderr') => {
     if (!stream) return;
@@ -36,15 +76,43 @@ export async function spawnAgentTurn(
         onEvent({ type: 'stderr', data: line });
         return;
       }
-      const parsed = adapter.parseEvent(line);
-      if (!parsed) return;
-      if (parsed.type === 'session_id') {
-        sessionId = parsed.data;
+      let events = normalizeParseResult(adapter.parseEvent(line));
+      // Brightsy CLI `--json` lines must become tool/thinking events, never answer text.
+      if (thread.agent === 'brightsy' && kind === 'stdout' && isBrightsyNdjsonLine(line)) {
+        const dumped = events.some(
+          (e) => e.type === 'stdout' && isBrightsyNdjsonLine(e.data),
+        );
+        if (events.length === 0 || dumped) {
+          events = normalizeParseResult(parseBrightsyCliLine(line));
+        }
       }
-      if (parsed.type === 'stdout') {
-        assistantText += parsed.data;
+      for (const parsed of events) {
+        if (parsed.type === 'session_id') {
+          sessionId = parsed.data;
+          onEvent(parsed);
+          continue;
+        }
+        if (parsed.type === 'usage') {
+          usage = mergeUsage(usage, parsed.data);
+          onEvent(parsed);
+          continue;
+        }
+        if (parsed.type === 'stdout') {
+          if (thread.agent === 'brightsy' && isBrightsyNdjsonLine(parsed.data)) {
+            continue;
+          }
+          // Claude emits assistant text then a result event with the same string.
+          if (
+            assistantText &&
+            (parsed.data === assistantText || assistantText.endsWith(parsed.data))
+          ) {
+            continue;
+          }
+          assistantText += parsed.data;
+        }
+        parts = applyAgentEvent(parts, parsed);
+        onEvent(parsed);
       }
-      onEvent(parsed);
     });
   };
 
@@ -54,7 +122,11 @@ export async function spawnAgentTurn(
   const done = child.then((result) => {
     const exitCode = result.exitCode ?? null;
     onEvent({ type: 'exit', data: exitCode });
-    return { exitCode, sessionId, assistantText };
+    const finalized = finalizeParts(parts);
+    const rawText = assistantText.trim() || partsToAssistantText(finalized);
+    const text =
+      thread.agent === 'brightsy' ? stripBrightsyNdjsonNoise(rawText) : rawText;
+    return { exitCode, sessionId, assistantText: text, parts: finalized, usage };
   });
 
   return {

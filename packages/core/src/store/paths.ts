@@ -1,6 +1,8 @@
+import { basename } from 'node:path';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { loadRepoSettings } from '../hook/settings.js';
 
 export function appDataDir(): string {
   const base =
@@ -25,8 +27,45 @@ export function locksDir(): string {
   return dir;
 }
 
+/** Conductor-style home root: ~/sideboard */
+export function sideboardHomeDir(): string {
+  const dir = join(homedir(), 'sideboard');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function sideboardReposDir(): string {
+  const dir = join(sideboardHomeDir(), 'repos');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function sideboardWorkspacesDir(): string {
+  const dir = join(sideboardHomeDir(), 'workspaces');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function repoSlug(repoPath: string): string {
+  return basename(repoPath.replace(/\/$/, '')) || 'repo';
+}
+
+/**
+ * Worktree root for a repo (new threads).
+ * Default: ~/sideboard/workspaces/<repo-slug>/
+ * Override via [.sideboard|.conductor]/settings.toml [worktrees] root = "..."
+ *
+ * Existing threads keep whatever absolute worktreePath is stored on their record,
+ * so older repo-local checkouts continue to work until archived.
+ */
 export function worktreesRoot(repoPath: string): string {
-  const dir = join(repoPath, '.sideboard', 'worktrees');
+  const settings = loadRepoSettings(repoPath);
+  if (settings?.worktreesRoot) {
+    mkdirSync(settings.worktreesRoot, { recursive: true });
+    return settings.worktreesRoot;
+  }
+
+  const dir = join(sideboardWorkspacesDir(), repoSlug(repoPath));
   mkdirSync(dir, { recursive: true });
   return dir;
 }

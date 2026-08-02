@@ -1,7 +1,8 @@
-import { allAdapters } from '../agents/index.js';
+import { allAdapters, ensureAgentPath } from '../agents/index.js';
 import type { AgentStatus } from '../types/thread.js';
 
 export async function detectAgents(): Promise<AgentStatus[]> {
+  ensureAgentPath();
   return Promise.all(allAdapters().map((a) => a.detect()));
 }
 

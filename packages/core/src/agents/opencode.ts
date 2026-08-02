@@ -1,7 +1,28 @@
 import { run } from '../git/run.js';
-import type { AgentEvent, AgentStatus, IssueInfo } from '../types/thread.js';
+import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
+import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 import { permissionMode } from './types.js';
+
+type OpencodeTokens = {
+  input?: number;
+  output?: number;
+  reasoning?: number;
+  cache?: { read?: number; write?: number };
+};
+
+function usageFromOpencode(tokens: OpencodeTokens | undefined): TokenUsage | null {
+  if (!tokens) return null;
+  const inputTokens = Number(tokens.input ?? 0);
+  const outputTokens = Number(tokens.output ?? 0) + Number(tokens.reasoning ?? 0);
+  if (!inputTokens && !outputTokens) return null;
+  return {
+    inputTokens,
+    outputTokens,
+    cacheReadTokens: tokens.cache?.read ? Number(tokens.cache.read) : undefined,
+    cacheWriteTokens: tokens.cache?.write ? Number(tokens.cache.write) : undefined,
+  };
+}
 
 export const opencodeAdapter: AgentAdapter = {
   kind: 'opencode',
@@ -37,13 +58,19 @@ export const opencodeAdapter: AgentAdapter = {
     };
   },
 
-  async buildTurn(thread, prompt): Promise<TurnCommand> {
+  async buildTurn(thread, input): Promise<TurnCommand> {
+    // OpenCode `run` only accepts a plain-text message (+ file attachments). There
+    // is no CLI/API way for callers to set Anthropic `cache_control` breakpoints.
+    // OpenCode itself injects provider cache markers in ProviderTransform.applyCaching
+    // (system + last messages → cacheControl / cache_control / cachePoint) for
+    // Anthropic, OpenRouter, Bedrock, etc. We keep a stable prefix-first string and
+    // pipe it on stdin so large seeds avoid ARG_MAX and stay byte-identical across turns.
+    const prompt = flattenTurnInput(input);
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
-    const mode = permissionMode(thread.autonomy);
+    const mode = permissionMode(thread);
     // Never use --continue — it's global under concurrency. Always --session <id>.
     const args = [
       'run',
-      prompt,
       '--dir',
       thread.worktreePath,
       '--format',
@@ -56,6 +83,9 @@ export const opencodeAdapter: AgentAdapter = {
       file: 'opencode',
       args,
       cwd: thread.worktreePath,
+      // `opencode run` treats non-TTY stdin as the message body when no positional
+      // message is given (see resolveRunInput in opencode's run.ts).
+      stdin: prompt,
       env: {
         OPENCODE_PERMISSION: mode.opencodePermission,
       },
@@ -79,14 +109,55 @@ export const opencodeAdapter: AgentAdapter = {
           (obj as { text?: string }).text;
         if (text) return { type: 'stdout', data: text };
       }
-      if (obj.type === 'tool_use' || obj.type === 'tool_result') {
-        return { type: 'stdout', data: trimmed };
+      if (obj.type === 'tool_use') {
+        const part = (obj as {
+          part?: { id?: string; tool?: string; name?: string; input?: Record<string, unknown> };
+          id?: string;
+          name?: string;
+          tool?: string;
+          input?: Record<string, unknown>;
+        }).part;
+        const id = part?.id ?? (obj as { id?: string }).id ?? `tool-${Date.now()}`;
+        const name =
+          part?.name ?? part?.tool ?? (obj as { name?: string; tool?: string }).name ??
+          (obj as { tool?: string }).tool ??
+          'tool';
+        const input = part?.input ?? (obj as { input?: Record<string, unknown> }).input;
+        return { type: 'tool_use', id, name, input };
+      }
+      if (obj.type === 'tool_result') {
+        const part = (obj as {
+          part?: { id?: string; tool_use_id?: string; output?: string; content?: string };
+          id?: string;
+          tool_use_id?: string;
+          output?: string;
+          content?: string;
+        }).part;
+        const id =
+          part?.tool_use_id ??
+          part?.id ??
+          (obj as { tool_use_id?: string; id?: string }).tool_use_id ??
+          (obj as { id?: string }).id;
+        if (!id) return null;
+        return {
+          type: 'tool_result',
+          id,
+          content: part?.output ?? part?.content ?? (obj as { output?: string; content?: string }).output ?? (obj as { content?: string }).content,
+        };
       }
       if (obj.type === 'error') {
         return {
           type: 'stderr',
           data: String((obj as { error?: string }).error ?? trimmed),
         };
+      }
+      // Usage is reported incrementally per agentic step; spawn sums these.
+      if (obj.type === 'step_finish' || obj.type === 'step-finish') {
+        const part = (obj as { part?: { tokens?: OpencodeTokens } }).part;
+        const usage = usageFromOpencode(
+          part?.tokens ?? (obj as { tokens?: OpencodeTokens }).tokens,
+        );
+        return usage ? { type: 'usage', data: usage } : null;
       }
       return { type: 'stdout', data: trimmed };
     } catch {
@@ -109,11 +180,13 @@ export const opencodeAdapter: AgentAdapter = {
           updated?: string;
         }>;
         if (Array.isArray(sessions) && sessions.length > 0) {
+          const norm = (p: string) => p.replace(/\/+$/, '');
+          const wt = norm(worktreePath);
+          // Exact directory match only — never bind a parent/repo session via prefix.
           const match = sessions.find(
             (s) =>
-              s.directory === worktreePath ||
-              s.path === worktreePath ||
-              (s.directory && worktreePath.startsWith(s.directory)),
+              (s.directory && norm(s.directory) === wt) ||
+              (s.path && norm(s.path) === wt),
           );
           if (match?.id) return match.id;
         }
@@ -126,13 +199,14 @@ export const opencodeAdapter: AgentAdapter = {
 
   async buildAttach(thread): Promise<AttachCommand> {
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
-    const args = sessionId ? ['--session', sessionId] : [];
+    const args = ['--dir', thread.worktreePath];
+    if (sessionId) args.push('--session', sessionId);
     return {
       file: 'opencode',
       args,
       cwd: thread.worktreePath,
       env: {
-        OPENCODE_PERMISSION: permissionMode(thread.autonomy).opencodePermission,
+        OPENCODE_PERMISSION: permissionMode(thread).opencodePermission,
       },
     };
   },

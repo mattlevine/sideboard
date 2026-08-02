@@ -1,0 +1,259 @@
+import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
+import { summarizeConversation } from './summarize.js';
+
+/** Rough char budget before we compact (≈ 25k tokens at ~4 chars/token). */
+export const CONTEXT_COMPACT_CHARS = 100_000;
+/** Keep this much recent transcript after compaction. */
+export const CONTEXT_KEEP_RECENT_CHARS = 24_000;
+/** Always keep at least this many trailing messages. */
+export const CONTEXT_KEEP_RECENT_MESSAGES = 12;
+/** Don't bother compacting tiny threads. */
+export const CONTEXT_MIN_MESSAGES = 10;
+
+export interface CompactThresholds {
+  maxChars?: number;
+  keepRecentChars?: number;
+  keepRecentMessages?: number;
+  minMessages?: number;
+}
+
+export function estimateMessageChars(message: ThreadMessage): number {
+  let n = message.text.length + 16;
+  for (const part of message.parts ?? []) {
+    n += estimatePartChars(part);
+  }
+  return n;
+}
+
+function estimatePartChars(part: MessagePart): number {
+  switch (part.type) {
+    case 'text':
+    case 'thinking':
+      return part.text.length;
+    case 'tool': {
+      const input = part.input ? JSON.stringify(part.input) : '';
+      return (
+        part.name.length +
+        (part.description?.length ?? 0) +
+        (part.detail?.length ?? 0) +
+        (part.result?.length ?? 0) +
+        input.length +
+        32
+      );
+    }
+    default:
+      return 0;
+  }
+}
+
+export function estimateThreadChars(messages: ThreadMessage[]): number {
+  return messages.reduce((sum, m) => sum + estimateMessageChars(m), 0);
+}
+
+export function shouldCompactContext(
+  messages: ThreadMessage[],
+  thresholds: CompactThresholds = {},
+): boolean {
+  const maxChars = thresholds.maxChars ?? CONTEXT_COMPACT_CHARS;
+  const minMessages = thresholds.minMessages ?? CONTEXT_MIN_MESSAGES;
+  if (messages.length < minMessages) return false;
+  return estimateThreadChars(messages) >= maxChars;
+}
+
+/** Split into older (to summarize) + recent (kept verbatim). */
+export function splitForCompaction(
+  messages: ThreadMessage[],
+  thresholds: CompactThresholds = {},
+): { older: ThreadMessage[]; recent: ThreadMessage[] } {
+  const keepChars = thresholds.keepRecentChars ?? CONTEXT_KEEP_RECENT_CHARS;
+  const keepCount = thresholds.keepRecentMessages ?? CONTEXT_KEEP_RECENT_MESSAGES;
+
+  if (messages.length === 0) return { older: [], recent: [] };
+
+  let recentChars = 0;
+  let cut = messages.length;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const next = recentChars + estimateMessageChars(messages[i]!);
+    const kept = messages.length - i;
+    if (kept >= keepCount && next > keepChars) break;
+    recentChars = next;
+    cut = i;
+  }
+
+  // Never summarize everything — leave at least a few recent turns.
+  const minRecent = Math.min(keepCount, messages.length);
+  cut = Math.min(cut, messages.length - minRecent);
+  if (cut <= 0) return { older: [], recent: messages };
+
+  return {
+    older: messages.slice(0, cut),
+    recent: messages.slice(cut),
+  };
+}
+
+export type TranscriptToolDetail = 'full' | 'summary' | 'none';
+
+function formatToolPart(
+  t: Extract<MessagePart, { type: 'tool' }>,
+  detail: Exclude<TranscriptToolDetail, 'none'>,
+): string {
+  if (detail === 'summary') {
+    const label = t.description || t.detail || t.name;
+    const path = t.filePath ? ` (${t.filePath})` : '';
+    return `- ${t.name}: ${label}${path}`;
+  }
+
+  const lines = [`#### Tool: ${t.name}`, `Status: ${t.status}`];
+  if (t.description) lines.push(`Description: ${t.description}`);
+  if (t.filePath) lines.push(`Path: ${t.filePath}`);
+  if (t.input && Object.keys(t.input).length > 0) {
+    lines.push('Input:');
+    lines.push('```json');
+    lines.push(JSON.stringify(t.input, null, 2));
+    lines.push('```');
+  } else if (t.detail) {
+    lines.push(`Detail: ${t.detail}`);
+  }
+  if (t.result != null && t.result !== '') {
+    lines.push('Result:');
+    lines.push('```');
+    lines.push(t.result);
+    lines.push('```');
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Format stored thread messages for agent context or summarization.
+ * Use `tools: 'full'` when the transcript is sent back to the agent so tool
+ * inputs/results are not truncated; `summary` keeps one-line tool labels for
+ * compaction prompts.
+ */
+export function formatMessagesAsTranscript(
+  messages: ThreadMessage[],
+  opts?: { tools?: TranscriptToolDetail },
+): string {
+  const tools = opts?.tools ?? 'full';
+  const blocks: string[] = [];
+  for (const m of messages) {
+    if (m.role === 'summary') {
+      blocks.push(`## Prior summary\n${m.text}`);
+      continue;
+    }
+    if (m.role === 'user') {
+      blocks.push(`### User\n${m.text}`);
+      continue;
+    }
+    const bits: string[] = [];
+    if (m.text?.trim()) {
+      bits.push(`### Agent\n${m.text}`);
+    } else {
+      bits.push('### Agent');
+    }
+    const thinking = (m.parts ?? []).filter((p) => p.type === 'thinking');
+    for (const th of thinking) {
+      if (th.type !== 'thinking' || !th.text.trim()) continue;
+      bits.push('Thinking:');
+      bits.push(th.text);
+    }
+    const toolParts = (m.parts ?? []).filter(
+      (p): p is Extract<MessagePart, { type: 'tool' }> => p.type === 'tool',
+    );
+    if (tools !== 'none' && toolParts.length > 0) {
+      if (tools === 'summary') bits.push('Tools:');
+      for (const t of toolParts) {
+        bits.push(formatToolPart(t, tools));
+      }
+    }
+    blocks.push(bits.join('\n'));
+  }
+  return blocks.join('\n\n');
+}
+
+/**
+ * Seed prompt for a fresh agent session (no --resume).
+ * Includes summary + recent turns with full tool use data so continuity is not lost.
+ * Pass `tools: 'none'` for hosts that choke on tool-heavy seeds (e.g. Brightsy).
+ */
+export function buildSessionSeed(
+  messages: ThreadMessage[],
+  opts?: { tools?: TranscriptToolDetail },
+): string | null {
+  if (messages.length === 0) return null;
+  const body = formatMessagesAsTranscript(messages, { tools: opts?.tools ?? 'full' });
+  if (!body.trim()) return null;
+  return [
+    'Sideboard conversation context (restored after compaction or a new session):',
+    '',
+    body,
+    '',
+    'Continue from this context. Do not repeat the summary unless asked.',
+  ].join('\n');
+}
+
+export function applyCompaction(
+  messages: ThreadMessage[],
+  summaryText: string,
+  thresholds: CompactThresholds = {},
+): ThreadMessage[] {
+  const { older, recent } = splitForCompaction(messages, thresholds);
+  if (older.length === 0) return messages;
+
+  const summary: ThreadMessage = {
+    role: 'summary',
+    text: summaryText.trim(),
+    ts: new Date().toISOString(),
+  };
+  return [summary, ...recent];
+}
+
+export interface CompactResult {
+  didCompact: boolean;
+  thread: Thread;
+  summary?: string;
+  method?: 'claude' | 'extractive';
+  olderCount?: number;
+}
+
+/**
+ * If the thread transcript is oversized, summarize older turns, keep recent ones,
+ * and clear sessionId so the next agent turn starts fresh with a seed prompt.
+ */
+export async function maybeCompactContext(
+  thread: Thread,
+  thresholds: CompactThresholds = {},
+  summarize: typeof summarizeConversation = summarizeConversation,
+): Promise<CompactResult> {
+  if (!shouldCompactContext(thread.messages, thresholds)) {
+    return { didCompact: false, thread };
+  }
+
+  const { older } = splitForCompaction(thread.messages, thresholds);
+  if (older.length === 0) {
+    return { didCompact: false, thread };
+  }
+
+  // Summarizer only needs labels — keep the prompt small. Full tool bodies stay
+  // on recent messages and are included when seeding a new agent session.
+  const transcript = formatMessagesAsTranscript(older, { tools: 'summary' });
+  const { summary, method } = await summarize(transcript, {
+    cwd: thread.worktreePath,
+  });
+
+  const messages = applyCompaction(thread.messages, summary, thresholds);
+  // Persist via caller (updateThread) — return the patched shape here.
+  const next: Thread = {
+    ...thread,
+    messages,
+    sessionId: null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  return {
+    didCompact: true,
+    thread: next,
+    summary,
+    method,
+    olderCount: older.length,
+  };
+}

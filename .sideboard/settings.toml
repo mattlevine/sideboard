@@ -1,0 +1,14 @@
+# Sideboard repo settings (preferred over .conductor/settings.toml).
+# Schema mirrors Conductor's scripts/files-to-copy conventions so existing
+# repos keep working via fallback.
+
+[worktrees]
+# Optional override. Default: ~/sideboard/workspaces/<repo-slug>
+# root = "~/sideboard/workspaces/sideboard"
+
+[scripts]
+setup = "pnpm install"
+
+# [scripts.run.dev]
+# command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-3000}} pnpm --filter @sideboard/desktop run dev"
+# default = true

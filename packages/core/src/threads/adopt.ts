@@ -1,5 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -16,21 +23,75 @@ import type {
   ThreadMessage,
 } from '../types/thread.js';
 
-const CONDUCTOR_DB = join(
+const CONDUCTOR_APP_SUPPORT = join(
   process.env.HOME ?? '',
   'Library',
   'Application Support',
   'com.conductor.app',
-  'conductor.db',
 );
+
+const CONDUCTOR_DB = join(CONDUCTOR_APP_SUPPORT, 'conductor.db');
+const CURSOR_SDK_STORE = join(CONDUCTOR_APP_SUPPORT, 'cursor-sdk-store');
 
 function mapAgentType(raw: string | null | undefined): AgentKind | null {
   if (!raw) return null;
   const v = raw.toLowerCase();
+  if (v.includes('cursor')) return 'cursor';
   if (v.includes('claude')) return 'claude';
   if (v.includes('codex')) return 'codex';
   if (v.includes('opencode') || v.includes('open-code')) return 'opencode';
+  if (v.includes('brightsy')) return 'brightsy';
   return null;
+}
+
+/**
+ * Conductor persists Cursor SDK agent IDs under cursor-sdk-store/<hash>/agents.ndjson
+ * (not in sessions.claude_session_id). Prefer the newest durable agent for a cwd.
+ */
+export function resolveConductorCursorAgentId(workspacePath: string): string | null {
+  if (!workspacePath || !existsSync(CURSOR_SDK_STORE)) return null;
+  const normalized = workspacePath.replace(/\/$/, '');
+  let best: { agentId: string; updatedAt: number } | null = null;
+
+  let hashes: string[];
+  try {
+    hashes = readdirSync(CURSOR_SDK_STORE);
+  } catch {
+    return null;
+  }
+
+  for (const hash of hashes) {
+    const agentsFile = join(CURSOR_SDK_STORE, hash, 'agents.ndjson');
+    if (!existsSync(agentsFile)) continue;
+    let text: string;
+    try {
+      text = readFileSync(agentsFile, 'utf8');
+    } catch {
+      continue;
+    }
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const row = JSON.parse(trimmed) as {
+          agentId?: string;
+          cwd?: string;
+          updatedAt?: number;
+        };
+        if (!row.agentId || !row.cwd) continue;
+        if (row.agentId.startsWith('conductor-one-shot-')) continue;
+        const cwd = String(row.cwd).replace(/\/$/, '');
+        if (cwd !== normalized) continue;
+        const updatedAt = Number(row.updatedAt ?? 0);
+        if (!best || updatedAt >= best.updatedAt) {
+          best = { agentId: row.agentId, updatedAt };
+        }
+      } catch {
+        // skip bad lines
+      }
+    }
+  }
+  return best?.agentId ?? null;
 }
 
 export async function adoptThread(input: AdoptInput): Promise<Thread> {
@@ -147,9 +208,14 @@ export function listConductorWorkspaces(): ConductorWorkspace[] {
           }
         }
 
+        const workspacePath = String(row.workspacePath ?? '');
+        if (agentType === 'cursor' && !claudeSessionId) {
+          claudeSessionId = resolveConductorCursorAgentId(workspacePath);
+        }
+
         return {
           id: String(row.id),
-          workspacePath: String(row.workspacePath ?? ''),
+          workspacePath,
           branch: String(row.branch ?? ''),
           workspaceName: String(row.workspaceName ?? row.branch ?? 'workspace'),
           prTitle: (row.prTitle as string) ?? null,
@@ -256,6 +322,11 @@ export function importConductorWorkspace(workspaceId: string): Thread {
         } catch {
           // degrade to path+branch only
         }
+      }
+
+      // Cursor sessions store the resumable agentId in cursor-sdk-store, not claude_session_id.
+      if (agent === 'cursor' && !sessionId) {
+        sessionId = resolveConductorCursorAgentId(worktreePath);
       }
 
       let repoPath = worktreePath;

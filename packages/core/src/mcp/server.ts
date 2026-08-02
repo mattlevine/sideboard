@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { basename } from 'node:path';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { listBranches, listPrs } from '../git/worktree.js';
 import { listLinearIssues } from '../threads/create.js';
@@ -21,15 +22,30 @@ export async function startMcpServer(): Promise<void> {
   });
 
   server.tool(
+    'list_workspaces',
+    'List registered Sideboard workspaces (repos under the global orchestrator)',
+    {},
+    async () => {
+      const workspaces = orch.listWorkspaces();
+      const lines = workspaces.map((w) => `${w.name}  ${w.path}`);
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') || '(no workspaces)' },
+        ],
+      };
+    },
+  );
+
+  server.tool(
     'list_threads',
-    'List Sideboard threads (one summary line each — token-frugal)',
+    'List Sideboard threads across all workspaces (one summary line each — token-frugal)',
     {},
     async () => {
       const threads = orch.getThreads(true);
-      const lines = threads.map(
-        (t) =>
-          `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${t.sourceType}:${t.sourceRef}  ${t.title}${t.devPort ? `  http://localhost:${t.devPort}` : ''}`,
-      );
+      const lines = threads.map((t) => {
+        const repo = basename(t.repoPath) || t.repoPath;
+        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${t.devPort ? `  http://localhost:${t.devPort}` : ''}`;
+      });
       return {
         content: [{ type: 'text', text: lines.join('\n') || '(no threads)' }],
       };
@@ -71,7 +87,7 @@ export async function startMcpServer(): Promise<void> {
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
-      agent: z.enum(['claude', 'codex', 'opencode']),
+      agent: z.enum(['claude', 'codex', 'opencode', 'brightsy']),
       repoPath: z.string(),
       title: z.string().optional(),
       parentThreadId: z.string().optional(),
@@ -202,7 +218,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'run_dev_script',
-    'Start the .conductor default run script for a thread; returns port',
+    'Start the .sideboard (or .conductor fallback) default run script for a thread; returns port',
     { ref: z.string() },
     async ({ ref }) => {
       const { port } = await orch.startDev(ref);

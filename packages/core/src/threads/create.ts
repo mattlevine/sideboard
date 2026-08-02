@@ -1,18 +1,21 @@
 import { existsSync } from 'node:fs';
 import { requireAgent } from '../detect/detect.js';
 import {
+  allocateTeamSlug,
   createThreadWorktree,
   fetchPrHead,
   getPr,
   resolveDefaultBranch,
   resolveRepoRoot,
-  suggestSlug,
 } from '../git/worktree.js';
 import { copyConfiguredFiles, runSetupScript } from '../hook/conductor.js';
 import {
   createEmptyThread,
+  readThread,
+  updateThread,
   writeThread,
 } from '../store/thread-store.js';
+import { ensureWorkspace } from '../store/workspaces.js';
 import type {
   AgentKind,
   CreateThreadInput,
@@ -34,57 +37,82 @@ export async function createThread(
 
   let sourceRef = input.sourceRef;
   let sourceIsFork = false;
-  let title = input.title;
-  let slugBase = input.sourceRef;
 
+  let prUrl: string | null = null;
   if (input.sourceType === 'pr') {
     const num = Number(input.sourceRef.replace(/^#/, ''));
     if (!Number.isFinite(num)) throw new Error(`Invalid PR number: ${input.sourceRef}`);
     const pr = await getPr(repoPath, num);
     if (!pr) throw new Error(`PR #${num} not found`);
     sourceIsFork = pr.isCrossRepository;
-    title = title ?? `PR #${pr.number}: ${pr.title}`;
-    slugBase = `pr-${pr.number}`;
+    prUrl = pr.url;
     const localFetchBranch = `sideboard-pr-${pr.number}`;
     await fetchPrHead(repoPath, pr.number, localFetchBranch);
     sourceRef = localFetchBranch;
   } else if (input.sourceType === 'ticket') {
-    const key = input.sourceRef.toUpperCase();
-    title = title ?? key;
-    slugBase = key.toLowerCase();
+    // Tickets always branch from the repo default (origin tip after fetch).
     sourceRef = await resolveDefaultBranch(repoPath);
   } else if (input.sourceType === 'branch') {
-    title = title ?? `Branch ${input.sourceRef}`;
-    slugBase = input.sourceRef;
+    // Quick create / "default branch" → repo default (usually main).
+    // createThreadWorktree then forks from origin/<default>, not a stale local tip.
+    if (!sourceRef || sourceRef === 'HEAD' || sourceRef === 'default') {
+      sourceRef = await resolveDefaultBranch(repoPath);
+    }
   } else if (input.sourceType === 'adopt') {
     throw new Error('Use adoptThread() for adopt sources');
   }
 
-  const slug = suggestSlug(slugBase);
+  // Conductor-style: worktree dir + placeholder branch = soccer team.
+  // Sidebar later shows renamed branch / PR title (not the create prompt).
+  const team = allocateTeamSlug(repoPath);
   const { branchName, worktreePath } = await createThreadWorktree({
     repoPath,
     sourceRef,
-    slug,
+    slug: team.slug,
   });
 
   copyConfiguredFiles(repoPath, worktreePath);
-  await runSetupScript(repoPath, worktreePath, onSetupLine);
 
+  const explicitTitle = input.title?.trim();
+  // Persist immediately so the UI sees the thread even if setup is slow/fails.
+  // (Previously setup ran first — `pnpm install` could leave orphan branches.)
   const thread = createEmptyThread({
-    title: title ?? branchName,
+    title: explicitTitle || team.name,
+    userSetTitle: Boolean(explicitTitle),
     sourceType: input.sourceType,
-    sourceRef: input.sourceRef,
+    sourceRef: input.sourceRef === 'default' ? sourceRef : input.sourceRef,
     branchName,
     worktreePath,
     repoPath,
     agent: input.agent,
     autonomy: input.autonomy ?? 'default',
+    model: input.model ?? null,
+    fast: Boolean(input.fast),
+    planMode: Boolean(input.planMode),
+    attachments: input.attachments ?? [],
     sourceIsFork,
     parentThreadId: input.parentThreadId ?? null,
+    status: 'idle',
+    prUrl,
   });
-
   writeThread(thread);
-  return thread;
+  await ensureWorkspace(repoPath);
+
+  try {
+    const setup = await runSetupScript(repoPath, worktreePath, onSetupLine);
+    if (setup.ran && setup.exitCode !== 0 && setup.exitCode !== null) {
+      updateThread(thread.id, {
+        lastError: `Setup exited ${setup.exitCode} (thread is still usable)`,
+      });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    updateThread(thread.id, {
+      lastError: `Setup failed: ${message}`,
+    });
+  }
+
+  return readThread(thread.id) ?? thread;
 }
 
 export async function listLinearIssues(agent: AgentKind, repoPath: string) {

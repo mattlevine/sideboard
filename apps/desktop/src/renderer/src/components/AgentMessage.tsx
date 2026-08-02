@@ -1,0 +1,361 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MessagePart, TokenUsage } from '@sideboard/core';
+import { formatTokenCount, totalTokens, usageTooltip } from '../lib/tokens';
+import type { FilePathLink } from '../lib/file-path-link';
+import { FileReferenceModal } from './FileReferenceModal';
+import { FloatingMenu } from './FloatingMenu';
+import { MarkdownMessage } from './MarkdownMessage';
+import { ToolDiffPopover } from './ToolDiffPopover';
+
+type ToolPart = Extract<MessagePart, { type: 'tool' }>;
+
+interface Props {
+  text: string;
+  parts?: MessagePart[];
+  ts?: string;
+  /** Persisted turn duration (ms). */
+  durationMs?: number;
+  /** Token usage for this turn, when the agent CLI reports it. */
+  usage?: TokenUsage;
+  /** When set (live turn), show a ticking timer from this epoch ms. */
+  startedAt?: number;
+  streaming?: boolean;
+  threadId?: string;
+  knownFilePaths?: string[];
+  onOpenFile?: (path: string) => void;
+  onFork?: () => void;
+}
+
+function basename(path: string): string {
+  const parts = path.replace(/\/$/, '').split('/');
+  return parts[parts.length - 1] || path;
+}
+
+export function formatDuration(ms: number): string {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  const rem = sec % 60;
+  if (min < 60) return rem === 0 ? `${min}m` : `${min}m ${rem}s`;
+  const hr = Math.floor(min / 60);
+  const m2 = min % 60;
+  return m2 === 0 ? `${hr}h` : `${hr}h ${m2}m`;
+}
+
+function useLiveDuration(startedAt: number | undefined, fixedMs: number | undefined): string | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (startedAt == null) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [startedAt]);
+
+  if (startedAt != null) return formatDuration(now - startedAt);
+  if (fixedMs != null && Number.isFinite(fixedMs)) return formatDuration(fixedMs);
+  return null;
+}
+
+function stripBrightsyNdjsonNoise(text: string): string {
+  if (!text || !text.includes('"type"')) return text;
+  let out = text;
+  out = out.replace(
+    /\{"type":"(?:tool_use|tool_result|tool|thinking|usage|done|error)"[\s\S]*?\}\s*(?=\{"type":"|$|(?=[A-Za-z*#]))/g,
+    '',
+  );
+  out = out.replace(/\{"type":"(?:tool_use|tool_result|tool)"[\s\S]*$/g, '');
+  return out.trim();
+}
+
+function finalText(text: string, parts: MessagePart[] | undefined): string {
+  if (!parts?.length) return stripBrightsyNdjsonNoise(text);
+  const texts = parts.filter((p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text');
+  if (texts.length === 0) return stripBrightsyNdjsonNoise(text);
+  return stripBrightsyNdjsonNoise(texts[texts.length - 1]!.text.trim() || text);
+}
+
+function toolChips(parts: MessagePart[]): ToolPart[] {
+  const tools = parts.filter((p): p is ToolPart => p.type === 'tool');
+  const edits = tools.filter(
+    (t) =>
+      Boolean(t.filePath) ||
+      /edit|write|apply|multi.?edit/i.test(t.name),
+  );
+  const list = edits.length > 0 ? edits : tools.slice(-4);
+  const seen = new Set<string>();
+  return list.filter((t) => {
+    const key = t.filePath ?? `${t.name}:${t.detail ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function hasCodeDiff(tool: ToolPart): boolean {
+  const input = tool.input;
+  if (!input) return Boolean(tool.filePath);
+  return Boolean(
+    input.old_string != null ||
+      input.oldString != null ||
+      input.new_string != null ||
+      input.newString != null ||
+      input.content != null ||
+      tool.filePath,
+  );
+}
+
+export function AgentMessage({
+  text,
+  parts,
+  durationMs,
+  usage,
+  startedAt,
+  streaming,
+  threadId,
+  knownFilePaths,
+  onOpenFile,
+  onFork,
+}: Props) {
+  const [expanded, setExpanded] = useState(Boolean(streaming));
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [diffTool, setDiffTool] = useState<ToolPart | null>(null);
+  const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
+
+  function openFileReference(link: FilePathLink) {
+    setFileRef(link);
+  }
+
+  const safeParts = parts ?? [];
+  const toolCount = safeParts.filter((p) => p.type === 'tool').length;
+  const messageCount = safeParts.filter((p) => p.type === 'text').length;
+  const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
+  const hasTranscript = toolCount > 0 || thinkingCount > 0;
+  const answer = finalText(text, safeParts);
+  const chips = useMemo(() => toolChips(safeParts), [safeParts]);
+  const durationLabel = useLiveDuration(startedAt, durationMs);
+
+  const summaryBits: string[] = [];
+  if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
+  if (messageCount > 0) summaryBits.push(`${messageCount} message${messageCount === 1 ? '' : 's'}`);
+  else if (thinkingCount > 0) summaryBits.push(`${thinkingCount} thinking`);
+
+  async function copyAnswer() {
+    try {
+      await navigator.clipboard.writeText(answer || text);
+    } catch {
+      // ignore
+    }
+  }
+
+  function openDiff(tool: ToolPart) {
+    setDiffTool((prev) => (prev?.id === tool.id ? null : tool));
+  }
+
+  return (
+    <div className={`agent-msg${streaming ? ' streaming' : ''}`}>
+      {hasTranscript && (
+        <div className="turn-transcript">
+          <button
+            type="button"
+            className="turn-summary"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+          >
+            <span className={`turn-chevron${expanded ? ' open' : ''}`}>▸</span>
+            <span className="turn-summary-text">{summaryBits.join(', ')}</span>
+            <span className="turn-summary-icons" aria-hidden>
+              <span title="Tools">›_</span>
+              <span title="Transcript">☰</span>
+              <span title="Attachments">⧉</span>
+            </span>
+          </button>
+
+          {expanded && (
+            <div className="turn-details">
+              {safeParts.map((part, i) => {
+                if (part.type === 'thinking') {
+                  return (
+                    <div key={`th-${i}`} className="turn-thinking">
+                      <div className="turn-thinking-label">
+                        <span className="turn-icon brain" aria-hidden>
+                          ✶
+                        </span>
+                        Thinking
+                      </div>
+                      <div className="turn-thinking-pill">
+                        {part.text.length > 160 ? `${part.text.slice(0, 157)}…` : part.text}
+                      </div>
+                    </div>
+                  );
+                }
+                if (part.type === 'tool') {
+                  const clickable = hasCodeDiff(part);
+                  return (
+                    <div key={`tool-${part.id}-${i}`} className="turn-tool">
+                      <span className="turn-icon term" aria-hidden>
+                        ›_
+                      </span>
+                      <span className="turn-tool-desc">
+                        {part.description ?? part.name}
+                      </span>
+                      {part.detail && (
+                        <button
+                          type="button"
+                          className={`turn-tool-pill${clickable ? ' clickable' : ''}`}
+                          title={clickable ? 'Show diff' : part.detail}
+                          onClick={() => {
+                            if (clickable) openDiff(part);
+                          }}
+                        >
+                          {part.detail}
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+                if (part.type === 'text' && part.text.trim()) {
+                  return (
+                    <div key={`tx-${i}`} className="turn-text">
+                      <MarkdownMessage
+                        text={part.text}
+                        knownFilePaths={knownFilePaths}
+                        onFileReferenceClick={threadId ? openFileReference : undefined}
+                        isStreaming={streaming}
+                      />
+                    </div>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {answer && (!hasTranscript || !expanded) && (
+        <div className="msg-body">
+          <MarkdownMessage
+            text={answer}
+            knownFilePaths={knownFilePaths}
+            onFileReferenceClick={threadId ? openFileReference : undefined}
+            isStreaming={streaming}
+          />
+          {streaming && <span className="stream-caret" />}
+        </div>
+      )}
+
+      {!answer && streaming && !hasTranscript && (
+        <div className="msg-body waiting-inline">Thinking…</div>
+      )}
+
+      {(durationLabel || usage || chips.length > 0 || onFork) && (
+        <div className="msg-footer">
+          <div className="msg-footer-left">
+            {durationLabel && (
+              <span className={`msg-age${startedAt != null ? ' live' : ''}`}>{durationLabel}</span>
+            )}
+            {usage && (
+              <span className="msg-usage" title={usageTooltip(usage)}>
+                {formatTokenCount(totalTokens(usage))} tok
+              </span>
+            )}
+            <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>
+              ⎘
+            </button>
+            <div className="msg-footer-more">
+              <button
+                ref={moreBtnRef}
+                type="button"
+                className="msg-foot-btn"
+                title="More"
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                ···
+              </button>
+              {onFork && (
+                <FloatingMenu
+                  open={menuOpen}
+                  onClose={() => setMenuOpen(false)}
+                  anchorRef={moreBtnRef}
+                  align="left"
+                  minWidth={180}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onFork();
+                    }}
+                  >
+                    <span className="tool-menu-icon">⎇</span>
+                    <span>Fork to new tab</span>
+                  </button>
+                </FloatingMenu>
+              )}
+            </div>
+          </div>
+          {chips.length > 0 && (
+            <div className="tool-chips">
+              {chips.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`tool-chip${t.status === 'error' ? ' error' : ''}${t.status === 'running' ? ' running' : ''}${diffTool?.id === t.id ? ' active' : ''}`}
+                  title={hasCodeDiff(t) ? 'Show diff' : 'Show tool input & result'}
+                  onClick={() => openDiff(t)}
+                >
+                  <span className="tool-chip-gear" aria-hidden>
+                    ⚙
+                  </span>
+                  <span className="tool-chip-name">
+                    {t.filePath ? basename(t.filePath) : t.name}
+                  </span>
+                  {(t.additions != null || t.deletions != null) && (
+                    <span className="tool-chip-diff">
+                      {t.additions != null && (
+                        <span className="add">+{t.additions}</span>
+                      )}
+                      {t.deletions != null && (
+                        <span className="del">-{t.deletions}</span>
+                      )}
+                    </span>
+                  )}
+                </button>
+              ))}
+              {diffTool && (
+                <div className="tool-diff-anchor">
+                  <ToolDiffPopover
+                    tool={diffTool}
+                    threadId={threadId}
+                    onClose={() => setDiffTool(null)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* When opened from transcript tool row (no chips match), still show popover */}
+      {diffTool && chips.every((c) => c.id !== diffTool.id) && (
+        <div className="tool-diff-anchor floating">
+          <ToolDiffPopover
+            tool={diffTool}
+            threadId={threadId}
+            onClose={() => setDiffTool(null)}
+          />
+        </div>
+      )}
+
+      {fileRef && threadId && onOpenFile && (
+        <FileReferenceModal
+          threadId={threadId}
+          link={fileRef}
+          onClose={() => setFileRef(null)}
+          onOpenInTab={onOpenFile}
+        />
+      )}
+    </div>
+  );
+}

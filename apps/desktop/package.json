@@ -5,9 +5,8 @@
   "description": "Sideboard desktop — agent-agnostic worktree orchestration",
   "license": "Apache-2.0",
   "main": "./out/main/index.js",
-  "type": "module",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
@@ -17,11 +16,20 @@
     "pack": "pnpm run dist:dir"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@sideboard/core": "workspace:*",
+    "better-sqlite3": "^11.9.1",
     "chokidar": "^4.0.3",
     "electron-updater": "^6.3.9",
+    "highlight.js": "^11.11.1",
+    "mermaid": "^11.4.0",
+    "monaco-editor": "^0.56.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "typescript": "^5.8.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
@@ -31,7 +39,6 @@
     "electron": "^34.2.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",
-    "typescript": "^5.8.2",
     "vite": "^6.2.0",
     "vitest": "^3.0.9"
   },
@@ -46,6 +53,7 @@
       "package.json"
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
       "target": [
         {

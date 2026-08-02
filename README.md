@@ -174,42 +174,47 @@ sideboard brightsy teams
 sideboard brightsy connect-team <slug>   # connect + activate
 sideboard brightsy disconnect-team <slug>
 ```
+## Brightsy remote orchestrator (Slack / Discord / Teams)
 
-## Brightsy / Slack remote orchestrator
-
-`sideboard connect` runs a daemon that lets Slack (via Brightsy cloud agents) drive Sideboard on your machine — no need to be at the keyboard:
+Brightsy chat channels can drive Sideboard on your machine across **all registered workspaces** — no need to be at the keyboard. Slack is the best-tested path; Discord and Microsoft Teams use the same cloud-task flow but are less battle-tested.
 
 ```
-Slack → Brightsy cloud agent → Sideboard cloud task queue
-                                        │  polled every 5s by `sideboard connect`
+Slack / Discord / Teams → Brightsy cloud agent → Sideboard cloud task queue
+                                        │  polled every 5s
                                         ▼
                         local coordinator thread (Sideboard MCP)
-                                        │  list / create / send / diff
+                                        │  list_workspaces / list_threads / create / send / diff
                                         ▼
-                              your thread/* worktrees
+                         any registered workspace + its threads
 ```
 
-Each repo gets one coordinator thread, reused across requests — the daemon doesn't spawn a fresh one per message. The coordinator's reply is text-only and gets posted back to the Brightsy task, which relays it to Slack.
+One coordinator thread is reused across requests. It can list and act on threads in every workspace Sideboard knows about. Replies are text-only and post back to the Brightsy task (and the chat channel).
 
-**Setup**
+**Setup (desktop UI — preferred)**
 
-1. `brightsy login`, then connect a team: `sideboard brightsy connect-team <slug>`.
-2. Enable **Cloud messages to Sideboard** in Brightsy User Settings → Integrations — or just run `connect`, which enables it for you (pass `--no-enable-access` to skip).
-3. Link your Slack user ID in Brightsy if you want Slack → orchestrator (done on Brightsy's side, not Sideboard's).
-4. Run the daemon and keep it running (foreground process, Ctrl+C to stop):
+1. `brightsy login`, then in Sideboard: **Settings → Agents → Brightsy** and check the teams you want.
+2. Same panel: turn on **Cloud messages / remote orchestrator** and pick a coordinator agent (`claude` recommended).
+3. In Brightsy, connect Slack, Discord, and/or Teams on the agent, and link your chat identity under User Settings → Integrations.
+4. Keep the Sideboard desktop app running. It polls Brightsy and routes tasks to the global orchestrator.
+
+Turning the switch off stops the daemon and disables Sideboard cloud access.
+
+**Setup (CLI)**
 
 ```bash
+brightsy login
+sideboard brightsy connect-team <slug>
 sideboard connect --repo /path/to/repo --agent claude
 ```
 
-`--agent` accepts `claude|codex|opencode|cursor` — Brightsy itself can't run the coordinator (chat-only, no local file edits). Other flags: `--poll-ms <ms>` (default 5000), `--no-allow-always` (don't ask Brightsy to remember cloud access across sessions).
+`--repo` is only the coordinator's home repo — the daemon still exposes **all** workspaces registered in Sideboard. `--agent` accepts `claude|codex|opencode|cursor` (not Brightsy — chat-only). Other flags: `--poll-ms <ms>` (default 5000), `--no-enable-access`, `--no-allow-always`.
 
 **What the coordinator can/can't do**
 
-- Can: list/create/send threads, wait for turns, read diffs — the same Sideboard MCP tools available locally.
+- Can: `list_workspaces`, list/create/send threads across workspaces, wait for turns, read diffs.
 - Can't: `confirm_land` or purge — those stay human-only, from the desktop app or CLI directly.
 
-Any inbound task Brightsy marks `awaiting_confirmation` is auto-approved by the daemon as soon as it's seen — once `connect` is running there's no extra approval step per message.
+Any inbound task Brightsy marks `awaiting_confirmation` is auto-approved by the daemon as soon as it's seen — once connect is running there's no extra approval step per message.
 
 ## Monorepo
 
@@ -234,7 +239,7 @@ Worktrees live **outside** the repo (Conductor-style):
 ~/sideboard/workspaces/<repo-slug>/<soccer-team>/
 ```
 
-New threads pick an unused famous soccer team (e.g. `liverpool`, `ajax`) for the worktree directory, `thread/<team>` branch, and thread title — same idea as Conductor’s memorable nicknames.
+New threads pick an unused famous soccer team (e.g. `liverpool`, `ajax`) for the worktree directory and a placeholder `thread/<team>` branch — same idea as Conductor’s city nicknames. On the first agent turn, Sideboard asks the agent to rename the branch to match the task; the sidebar then shows the PR title (if any) or that branch name.
 
 Override per repo in `.sideboard/settings.toml`:
 

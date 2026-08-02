@@ -15,22 +15,81 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+export function normalizeThread(raw: Thread): Thread {
+  return {
+    ...raw,
+    model: raw.model ?? null,
+    fast: Boolean(raw.fast),
+    planMode: Boolean(raw.planMode),
+    autonomy: raw.autonomy ?? 'default',
+    lastError: raw.lastError ?? null,
+    attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    prTitle: raw.prTitle ?? null,
+    userSetTitle: Boolean(raw.userSetTitle),
+  };
+}
+
 export function createEmptyThread(
-  partial: Omit<Thread, 'id' | 'createdAt' | 'updatedAt' | 'messages' | 'queue' | 'status' | 'devPort' | 'prUrl' | 'sessionId' | 'sourceIsFork' | 'parentThreadId' | 'autonomy'> &
-    Partial<Pick<Thread, 'sessionId' | 'sourceIsFork' | 'parentThreadId' | 'autonomy' | 'messages' | 'queue' | 'status' | 'devPort' | 'prUrl'>>,
+  partial: Omit<
+    Thread,
+    | 'id'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'messages'
+    | 'queue'
+    | 'status'
+    | 'devPort'
+    | 'prUrl'
+    | 'prTitle'
+    | 'userSetTitle'
+    | 'sessionId'
+    | 'sourceIsFork'
+    | 'parentThreadId'
+    | 'autonomy'
+    | 'model'
+    | 'fast'
+    | 'planMode'
+    | 'attachments'
+  > &
+    Partial<
+      Pick<
+        Thread,
+        | 'sessionId'
+        | 'sourceIsFork'
+        | 'parentThreadId'
+        | 'autonomy'
+        | 'model'
+        | 'fast'
+        | 'planMode'
+        | 'messages'
+        | 'queue'
+        | 'status'
+        | 'devPort'
+        | 'prUrl'
+        | 'prTitle'
+        | 'userSetTitle'
+        | 'attachments'
+      >
+    >,
 ): Thread {
   const ts = nowIso();
   return {
     id: randomUUID(),
     sessionId: partial.sessionId ?? null,
     autonomy: partial.autonomy ?? 'default',
+    model: partial.model ?? null,
+    fast: partial.fast ?? false,
+    planMode: partial.planMode ?? false,
     sourceIsFork: partial.sourceIsFork ?? false,
     status: partial.status ?? 'idle',
     queue: partial.queue ?? [],
     parentThreadId: partial.parentThreadId ?? null,
     devPort: partial.devPort ?? null,
     prUrl: partial.prUrl ?? null,
+    prTitle: partial.prTitle ?? null,
+    userSetTitle: partial.userSetTitle ?? false,
     messages: partial.messages ?? [],
+    attachments: partial.attachments ?? [],
     createdAt: ts,
     updatedAt: ts,
     title: partial.title,
@@ -66,7 +125,7 @@ export function readThread(id: string): Thread | null {
   const path = threadFilePath(id);
   if (!existsSync(path)) return null;
   const raw = readFileSync(path, 'utf8');
-  return JSON.parse(raw) as Thread;
+  return normalizeThread(JSON.parse(raw) as Thread);
 }
 
 export function writeThread(thread: Thread): void {
@@ -86,7 +145,9 @@ export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {
   const threads = files
     .map((f) => {
       try {
-        return JSON.parse(readFileSync(threadFilePath(f.replace(/\.json$/, '')), 'utf8')) as Thread;
+        return normalizeThread(
+          JSON.parse(readFileSync(threadFilePath(f.replace(/\.json$/, '')), 'utf8')) as Thread,
+        );
       } catch {
         return null;
       }

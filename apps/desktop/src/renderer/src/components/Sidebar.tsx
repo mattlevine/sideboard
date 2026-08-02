@@ -1,95 +1,348 @@
+import { useMemo, useState } from 'react';
+import {
+  normalizeWorktreePath,
+  threadDisplayLabel,
+  worktreeDisplayLabelForGroup,
+} from '@sideboard/worktree-labels';
 import type { Thread } from '@sideboard/core';
+import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
   threads: Thread[];
   archived: Thread[];
   selectedId: string | null;
+  view: 'board' | 'thread';
   multiSelected: Set<string>;
   repoPath: string;
+  onShowBoard: () => void;
   onSelect: (id: string, multi: boolean) => void;
-  onNew: () => void;
+  onNew: (repoPath?: string) => void;
   onPickRepo: () => void;
   onRestore: (id: string) => void;
-  onFanOut: () => void;
+  onCreatePr?: (threadId: string, opts?: { draft?: boolean; web?: boolean }) => void;
+  onForkChat?: (threadId: string) => void;
+  onToggleSidebar: () => void;
+  onOpenSettings?: () => void;
+}
+
+function repoName(repoPath: string): string {
+  const parts = repoPath.replace(/\/$/, '').split('/');
+  return parts[parts.length - 1] || repoPath;
+}
+
+function groupByWorktree(threads: Thread[]): Thread[][] {
+  const map = new Map<string, Thread[]>();
+  for (const t of threads) {
+    const key = normalizeWorktreePath(t.worktreePath);
+    const list = map.get(key) ?? [];
+    list.push(t);
+    map.set(key, list);
+  }
+  return [...map.values()].map((list) =>
+    list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+  );
 }
 
 export function Sidebar({
   threads,
   archived,
   selectedId,
+  view,
   multiSelected,
   repoPath,
+  onShowBoard,
   onSelect,
   onNew,
   onPickRepo,
   onRestore,
-  onFanOut,
+  onCreatePr,
+  onForkChat,
+  onToggleSidebar,
+  onOpenSettings,
 }: Props) {
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [toolsFor, setToolsFor] = useState<string | null>(null);
+
+  const q = filter.trim().toLowerCase();
+
+  const byRepo = useMemo(() => {
+    const map = new Map<string, Thread[]>();
+    for (const t of threads) {
+      if (q) {
+        const hay =
+          `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repoName(t.repoPath)}`.toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
+      const list = map.get(t.repoPath) ?? [];
+      list.push(t);
+      map.set(t.repoPath, list);
+    }
+    // Ensure current repo shows even with zero threads (unless filtering)
+    if (!q && repoPath && !map.has(repoPath)) map.set(repoPath, []);
+    // When filtering, also show matching workspace names with empty lists if name matches
+    if (q && repoPath && repoName(repoPath).toLowerCase().includes(q) && !map.has(repoPath)) {
+      map.set(repoPath, []);
+    }
+    return [...map.entries()].sort(([a], [b]) =>
+      repoName(a).localeCompare(repoName(b)),
+    );
+  }, [threads, repoPath, q]);
+
+  const filteredArchived = useMemo(() => {
+    if (!q) return archived;
+    return archived.filter((t) =>
+      `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${repoName(t.repoPath)}`
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [archived, q]);
+
   return (
     <aside className="sidebar">
+      <div className="sidebar-chrome">
+        <SidebarToggle side="left" open onClick={onToggleSidebar} />
+      </div>
       <div className="sidebar-header">
-        <div className="brand">Sideboard</div>
-        <div className="repo-row">
-          <span className="repo-path" title={repoPath}>
-            {repoPath}
+        <div className="brand">
+          <span className="brand-mark" aria-hidden>
+            <span className="brand-mark-cube" />
           </span>
-          <button onClick={onPickRepo}>Repo</button>
+          <span className="brand-name">Sideboard</span>
         </div>
-        <div className="row" style={{ marginTop: 10, marginBottom: 0 }}>
-          <button className="primary" onClick={onNew} style={{ flex: 1 }}>
-            New thread
+        <nav className="sidebar-nav">
+          <button
+            type="button"
+            className={`sidebar-nav-btn${view === 'board' ? ' active' : ''}`}
+            onClick={onShowBoard}
+          >
+            <span className="nav-glyph home" aria-hidden />
+            Home
           </button>
-          {multiSelected.size > 1 && (
-            <button onClick={onFanOut}>Fan-out ({multiSelected.size})</button>
-          )}
-        </div>
+          <button type="button" className="sidebar-nav-btn" onClick={() => onNew()}>
+            <span className="nav-glyph plus" aria-hidden />
+            Create
+          </button>
+          <button
+            type="button"
+            className={`sidebar-nav-btn${filterOpen ? ' active' : ''}`}
+            onClick={() => setFilterOpen((v) => !v)}
+          >
+            <span className="nav-glyph search" aria-hidden />
+            Search
+          </button>
+        </nav>
       </div>
 
-      <div className="thread-list">
-        <div className="section-label">Threads</div>
-        {threads.length === 0 && <div className="empty">No active threads</div>}
-        {threads.map((t) => (
-          <div
-            key={t.id}
-            className={`thread-item${selectedId === t.id ? ' active' : ''}${
-              multiSelected.has(t.id) ? ' selected' : ''
-            }`}
-            onClick={(e) => onSelect(t.id, e.metaKey || e.ctrlKey || e.shiftKey)}
-          >
-            <span className={`dot ${t.status}`} />
-            <div>
-              <div className="thread-title">{t.title}</div>
-              <div className="thread-meta">
-                {t.agent} · {t.sourceType}:{t.sourceRef}
-                {t.devPort ? ` · :${t.devPort}` : ''}
-              </div>
+      <div
+        className={`thread-list${filteredArchived.length > 0 ? ' has-history' : ''}`}
+      >
+        <div className="sidebar-projects">
+        <div className="projects-header">
+          <span className="section-label projects-label">Projects</span>
+          <div className="projects-actions">
+            <button
+              type="button"
+              className={`icon-btn${filterOpen ? ' active' : ''}`}
+              title="Filter projects"
+              onClick={() => setFilterOpen((v) => !v)}
+            >
+              <span className="filter-glyph" aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Add workspace"
+              onClick={onPickRepo}
+            >
+              <span className="folder-plus-glyph" aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        {filterOpen && (
+          <div className="sidebar-filter">
+            <input
+              autoFocus
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter workspaces & threads…"
+            />
+          </div>
+        )}
+
+        {byRepo.length === 0 && <div className="empty">No workspaces yet</div>}
+        {byRepo.map(([path, repoThreads]) => (
+          <div key={path} className="workspace-group">
+            <div className="workspace-header">
+              <button
+                type="button"
+                className="workspace-name-btn"
+                title={`New thread in ${repoName(path)}`}
+                onClick={() => onNew(path)}
+              >
+                <span className="workspace-glyph" aria-hidden />
+                <span className="workspace-name" title={path}>
+                  {repoName(path)}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title={`New thread in ${repoName(path)}`}
+                onClick={() => onNew(path)}
+              >
+                +
+              </button>
             </div>
-            <span className="thread-meta">{t.status}</span>
+            {repoThreads.length === 0 && (
+              <div className="thread-meta" style={{ padding: '4px 8px' }}>
+                No threads
+              </div>
+            )}
+            {groupByWorktree(repoThreads).map((group) => {
+              const primary =
+                group.find((t) => t.id === selectedId) ??
+                [...group].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!;
+              const worktreeLabel = worktreeDisplayLabelForGroup(group);
+              const active =
+                view === 'thread' && group.some((t) => t.id === selectedId);
+              const selected =
+                group.some((t) => multiSelected.has(t.id));
+              const menuOpen = toolsFor === primary.worktreePath;
+              return (
+                <div key={primary.worktreePath} className="worktree-block">
+                  <div
+                    className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}`}
+                    onClick={(e) => onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey)}
+                  >
+                    <span className={`dot ${primary.status}`} />
+                    <div>
+                      <div className="thread-title">
+                        {worktreeLabel}
+                        {primary.sourceType === 'orchestration' ? ' ✦' : ''}
+                      </div>
+                      <div className="thread-meta">
+                        {primary.agent}
+                        {group.length > 1 ? ` · ${group.length} chats` : ''}
+                        {primary.devPort ? ` · :${primary.devPort}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-btn worktree-tools-btn"
+                      title="Worktree tools"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setToolsFor(menuOpen ? null : primary.worktreePath);
+                      }}
+                    >
+                      ▾
+                    </button>
+                  </div>
+                  {menuOpen && (
+                    <div className="tool-menu sidebar-tool-menu">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolsFor(null);
+                          onCreatePr?.(primary.id);
+                        }}
+                      >
+                        <span className="tool-menu-icon">⎇</span>
+                        <span>Create PR</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolsFor(null);
+                          onCreatePr?.(primary.id, { draft: true });
+                        }}
+                      >
+                        <span className="tool-menu-icon">⎇</span>
+                        <span>Create draft PR</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolsFor(null);
+                          onCreatePr?.(primary.id, { web: true });
+                        }}
+                      >
+                        <span className="tool-menu-icon">↗</span>
+                        <span>Create PR manually</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolsFor(null);
+                          onForkChat?.(primary.id);
+                        }}
+                      >
+                        <span className="tool-menu-icon">⎇</span>
+                        <span>Fork to new tab</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
+        </div>
 
-        {archived.length > 0 && (
-          <>
+        {filteredArchived.length > 0 && (
+          <div className="sidebar-history">
             <div className="section-label">History</div>
-            {archived.map((t) => (
-              <div key={t.id} className="thread-item" onClick={() => onSelect(t.id, false)}>
-                <span className="dot archived" />
-                <div>
-                  <div className="thread-title">{t.title}</div>
-                  <div className="thread-meta">archived · {t.agent}</div>
+            <div className="sidebar-history-list">
+              {filteredArchived.map((t) => (
+                <div key={t.id} className="thread-item" onClick={() => onSelect(t.id, false)}>
+                  <span className="dot archived" />
+                  <div>
+                    <div className="thread-title">{threadDisplayLabel(t)}</div>
+                    <div className="thread-meta">archived · {t.agent}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRestore(t.id);
+                    }}
+                  >
+                    Restore
+                  </button>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRestore(t.id);
-                  }}
-                >
-                  Restore
-                </button>
-              </div>
-            ))}
-          </>
+              ))}
+            </div>
+          </div>
         )}
+      </div>
+
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className="sidebar-footer-btn"
+          title="Get a Cursor API key"
+          aria-label="Get a Cursor API key"
+          onClick={() =>
+            void window.sideboard.openExternal(
+              'https://cursor.com/dashboard/integrations',
+            )
+          }
+        >
+          <span className="sidebar-footer-icon help" aria-hidden>
+            ?
+          </span>
+        </button>
+        <button
+          type="button"
+          className="sidebar-footer-btn"
+          title="Settings"
+          aria-label="Settings"
+          onClick={() => onOpenSettings?.()}
+        >
+          <span className="sidebar-footer-icon gear" aria-hidden />
+        </button>
       </div>
     </aside>
   );

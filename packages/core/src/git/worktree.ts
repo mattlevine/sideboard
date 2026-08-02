@@ -1,8 +1,20 @@
-import { existsSync } from 'node:fs';
-import { basename, join } from 'node:path';
-import type { BranchInfo, PrInfo } from '../types/thread.js';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import type {
+  BranchInfo,
+  PrCheckRun,
+  PrDetails,
+  PrInfo,
+  Thread,
+} from '../types/thread.js';
 import { worktreesRoot } from '../store/paths.js';
+import { listThreads } from '../store/thread-store.js';
+import { allocateTeamName, type TeamName } from './teams.js';
+import { worktreeNameFromPath } from './worktree-labels.js';
 import { gh, git } from './run.js';
+
+export type { TeamName } from './teams.js';
+export { allocateTeamName, FAMOUS_SOCCER_TEAMS } from './teams.js';
 
 export function slugify(input: string): string {
   return input
@@ -104,6 +116,189 @@ export async function getPr(
   return JSON.parse(stdout) as PrInfo;
 }
 
+/** Prefer PR URL, then PR source ref, then branch name for `gh pr …`. */
+export function resolvePrSelector(thread: Pick<
+  Thread,
+  'prUrl' | 'sourceType' | 'sourceRef' | 'branchName'
+>): string | null {
+  if (thread.prUrl?.trim()) return thread.prUrl.trim();
+  if (thread.sourceType === 'pr' && thread.sourceRef?.trim()) {
+    return thread.sourceRef.replace(/^#/, '').trim();
+  }
+  if (thread.branchName?.trim()) return thread.branchName.trim();
+  return null;
+}
+
+function normalizeGhTime(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  if (value.startsWith('0001-01-01')) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? value : null;
+}
+
+function normalizeCheck(raw: Record<string, unknown>): PrCheckRun {
+  return {
+    name: String(raw.name ?? 'check'),
+    state: String(raw.state ?? ''),
+    bucket: String(raw.bucket ?? 'pending'),
+    startedAt: normalizeGhTime(raw.startedAt),
+    completedAt: normalizeGhTime(raw.completedAt),
+    link: typeof raw.link === 'string' && raw.link ? raw.link : null,
+    description:
+      typeof raw.description === 'string' && raw.description
+        ? raw.description
+        : null,
+    workflow:
+      typeof raw.workflow === 'string' && raw.workflow ? raw.workflow : null,
+  };
+}
+
+/** CI checks for a PR (`gh pr checks <selector> --json …`). */
+export async function getPrChecks(
+  cwd: string,
+  selector: string,
+): Promise<PrCheckRun[]> {
+  const { stdout, exitCode, stderr } = await gh(
+    [
+      'pr',
+      'checks',
+      selector,
+      '--json',
+      'name,state,bucket,startedAt,completedAt,link,description,workflow',
+    ],
+    cwd,
+    { reject: false },
+  );
+  // gh exits 1 on failing checks and 8 while pending — still parse JSON.
+  if (!stdout.trim()) {
+    if (exitCode !== 0 && exitCode !== 1 && exitCode !== 8) {
+      throw new Error(stderr.trim() || `gh pr checks failed (${exitCode})`);
+    }
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(stdout) as Array<Record<string, unknown>>;
+    return parsed.map(normalizeCheck);
+  } catch {
+    throw new Error(stderr.trim() || 'gh pr checks returned invalid JSON');
+  }
+}
+
+/** PR description / commits / reviews (+ checks) for the Review tab. */
+export async function getPrDetails(
+  cwd: string,
+  selector: string,
+): Promise<PrDetails | null> {
+  const { stdout, exitCode, stderr } = await gh(
+    [
+      'pr',
+      'view',
+      selector,
+      '--json',
+      [
+        'number',
+        'title',
+        'body',
+        'url',
+        'state',
+        'isDraft',
+        'reviewDecision',
+        'author',
+        'baseRefName',
+        'headRefName',
+        'additions',
+        'deletions',
+        'changedFiles',
+        'commits',
+        'comments',
+        'reviews',
+      ].join(','),
+    ],
+    cwd,
+    { reject: false },
+  );
+  if (exitCode !== 0 || !stdout.trim()) {
+    if (stderr.trim()) {
+      // No PR for this branch is a soft miss, not a hard error.
+      if (/no pull requests found/i.test(stderr)) return null;
+    }
+    return null;
+  }
+
+  let view: Record<string, unknown>;
+  try {
+    view = JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    throw new Error(stderr.trim() || 'gh pr view returned invalid JSON');
+  }
+
+  let checks: PrCheckRun[] = [];
+  try {
+    checks = await getPrChecks(cwd, selector);
+  } catch {
+    checks = [];
+  }
+
+  const author = (view.author ?? {}) as { login?: string; name?: string | null };
+  const commits = Array.isArray(view.commits) ? view.commits : [];
+  const comments = Array.isArray(view.comments) ? view.comments : [];
+  const reviews = Array.isArray(view.reviews) ? view.reviews : [];
+
+  return {
+    number: Number(view.number),
+    title: String(view.title ?? ''),
+    body: String(view.body ?? ''),
+    url: String(view.url ?? ''),
+    state: String(view.state ?? ''),
+    isDraft: Boolean(view.isDraft),
+    reviewDecision:
+      typeof view.reviewDecision === 'string' && view.reviewDecision
+        ? view.reviewDecision
+        : null,
+    author: { login: author.login ?? 'unknown', name: author.name ?? null },
+    baseRefName: String(view.baseRefName ?? ''),
+    headRefName: String(view.headRefName ?? ''),
+    additions: Number(view.additions ?? 0),
+    deletions: Number(view.deletions ?? 0),
+    changedFiles: Number(view.changedFiles ?? 0),
+    commits: commits.map((c) => {
+      const row = c as Record<string, unknown>;
+      const authors = Array.isArray(row.authors)
+        ? row.authors.map((a) => {
+            const actor = a as { login?: string; name?: string | null };
+            return { login: actor.login ?? 'unknown', name: actor.name ?? null };
+          })
+        : [];
+      return {
+        oid: String(row.oid ?? ''),
+        messageHeadline: String(row.messageHeadline ?? ''),
+        committedDate: String(row.committedDate ?? ''),
+        authors,
+      };
+    }),
+    comments: comments.map((c) => {
+      const row = c as Record<string, unknown>;
+      const a = (row.author ?? {}) as { login?: string };
+      return {
+        author: { login: a.login ?? 'unknown' },
+        body: String(row.body ?? ''),
+        createdAt: String(row.createdAt ?? ''),
+      };
+    }),
+    reviews: reviews.map((r) => {
+      const row = r as Record<string, unknown>;
+      const a = (row.author ?? {}) as { login?: string };
+      return {
+        author: { login: a.login ?? 'unknown' },
+        state: String(row.state ?? ''),
+        body: String(row.body ?? ''),
+        submittedAt: normalizeGhTime(row.submittedAt),
+      };
+    }),
+    checks,
+  };
+}
+
 export async function fetchPrHead(
   repoPath: string,
   number: number,
@@ -121,6 +316,39 @@ export interface CreateWorktreeResult {
   worktreePath: string;
 }
 
+/**
+ * Prefer an up-to-date remote tip (`origin/<branch>`) after fetch so new
+ * worktrees don't fork from a stale local main/master.
+ * Local-only refs (e.g. fetched PR heads, existing thread branches) stay local.
+ */
+export async function resolveWorktreeStartPoint(
+  repoPath: string,
+  sourceRef: string,
+): Promise<string> {
+  const ref = sourceRef.trim();
+  if (!ref) throw new Error('sourceRef is required');
+
+  if (ref.startsWith('origin/') || ref.startsWith('refs/')) {
+    const ok = await git(['rev-parse', '--verify', ref], repoPath, {
+      reject: false,
+    });
+    if (ok.exitCode === 0) return ref;
+  }
+
+  const remote = `origin/${ref}`;
+  const remoteOk = await git(['rev-parse', '--verify', remote], repoPath, {
+    reject: false,
+  });
+  if (remoteOk.exitCode === 0) return remote;
+
+  const localOk = await git(['rev-parse', '--verify', ref], repoPath, {
+    reject: false,
+  });
+  if (localOk.exitCode === 0) return ref;
+
+  return ref;
+}
+
 export async function createThreadWorktree(opts: {
   repoPath: string;
   sourceRef: string;
@@ -133,22 +361,19 @@ export async function createThreadWorktree(opts: {
     throw new Error(`Worktree already exists at ${worktreePath}`);
   }
 
-  // Ensure source ref exists locally
-  await git(['fetch', 'origin', opts.sourceRef], opts.repoPath, { reject: false });
+  // Refresh remotes first so default-branch forks track current origin/main (etc).
+  await git(['fetch', 'origin', '--prune'], opts.repoPath, { reject: false });
+  // Also fetch the named ref in case prune/fetch missed a new remote branch.
+  if (!opts.sourceRef.startsWith('origin/') && !opts.sourceRef.startsWith('refs/')) {
+    await git(['fetch', 'origin', opts.sourceRef], opts.repoPath, {
+      reject: false,
+    });
+  }
 
-  const startPoint = (await git(
-    ['rev-parse', '--verify', opts.sourceRef],
+  const startPoint = await resolveWorktreeStartPoint(
     opts.repoPath,
-    { reject: false },
-  )).exitCode === 0
-    ? opts.sourceRef
-    : (await git(
-        ['rev-parse', '--verify', `origin/${opts.sourceRef}`],
-        opts.repoPath,
-        { reject: false },
-      )).exitCode === 0
-      ? `origin/${opts.sourceRef}`
-      : opts.sourceRef;
+    opts.sourceRef,
+  );
 
   await git(
     ['worktree', 'add', '-b', branchName, worktreePath, startPoint],
@@ -224,15 +449,63 @@ export async function pushBranch(
 
 export async function createOrUpdatePr(
   worktreePath: string,
-  opts: { title: string; body?: string; base: string; head: string },
+  opts: {
+    title: string;
+    body?: string;
+    base: string;
+    head: string;
+    draft?: boolean;
+    /** Open the GitHub PR form in the browser instead of creating via API. */
+    web?: boolean;
+  },
 ): Promise<string> {
   const existing = await gh(
     ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url'],
     worktreePath,
     { reject: false },
   );
-  if (existing.exitCode === 0 && existing.stdout.trim()) {
-    return existing.stdout.trim();
+  if (existing.exitCode === 0 && existing.stdout.trim() && !opts.web) {
+    const url = existing.stdout.trim();
+    // Refresh title/body from the latest change purpose (not the thread nickname).
+    await gh(
+      [
+        'pr',
+        'edit',
+        opts.head,
+        '--title',
+        opts.title,
+        '--body',
+        opts.body ?? opts.title,
+      ],
+      worktreePath,
+      { reject: false },
+    );
+    return url;
+  }
+
+  if (opts.web) {
+    const args = [
+      'pr',
+      'create',
+      '--web',
+      '--title',
+      opts.title,
+      '--body',
+      opts.body ?? opts.title,
+      '--base',
+      opts.base,
+      '--head',
+      opts.head,
+    ];
+    if (opts.draft) args.push('--draft');
+    await gh(args, worktreePath, { reject: false });
+    // URL may open in browser; return existing view if available
+    const again = await gh(
+      ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url'],
+      worktreePath,
+      { reject: false },
+    );
+    return again.stdout.trim() || '';
   }
 
   const args = [
@@ -247,17 +520,51 @@ export async function createOrUpdatePr(
     '--head',
     opts.head,
   ];
+  if (opts.draft) args.push('--draft');
   const { stdout } = await gh(args, worktreePath);
   const url = stdout.trim().split('\n').find((l) => l.startsWith('http')) ?? stdout.trim();
   return url;
 }
 
+/** @deprecated Prefer allocateTeamSlug — kept for any external callers. */
 export function suggestSlug(source: string): string {
   const base = slugify(source || 'thread');
   const stamp = Date.now().toString(36).slice(-4);
   return `${base || 'thread'}-${stamp}`;
 }
 
-export function worktreeNameFromPath(worktreePath: string): string {
-  return basename(worktreePath);
+export {
+  branchDisplayLabel,
+  isPlaceholderBranch,
+  normalizeWorktreePath,
+  threadDisplayLabel,
+  worktreeDisplayLabel,
+  worktreeDisplayLabelForGroup,
+  worktreeNameFromPath,
+} from './worktree-labels.js';
+
+/** Slugs already used by worktree dirs, thread records, or `thread/<slug>` branches. */
+export function collectTakenTeamSlugs(repoPath: string): Set<string> {
+  const taken = new Set<string>();
+
+  const root = worktreesRoot(repoPath);
+  if (existsSync(root)) {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (entry.isDirectory()) taken.add(entry.name.toLowerCase());
+    }
+  }
+
+  for (const thread of listThreads({ includeArchived: true })) {
+    if (thread.repoPath !== repoPath) continue;
+    taken.add(worktreeNameFromPath(thread.worktreePath).toLowerCase());
+    const branchSlug = thread.branchName.replace(/^thread\//, '');
+    if (branchSlug) taken.add(branchSlug.toLowerCase());
+  }
+
+  return taken;
+}
+
+/** Pick an unused soccer team for the worktree directory / branch slug. */
+export function allocateTeamSlug(repoPath: string): TeamName {
+  return allocateTeamName(collectTakenTeamSlugs(repoPath));
 }

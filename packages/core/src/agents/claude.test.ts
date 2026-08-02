@@ -1,5 +1,115 @@
-import { describe, expect, it } from 'vitest';
-import { claudeAdapter } from './claude.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CLAUDE_PROMPT_ARG_MAX, claudeAdapter } from './claude.js';
+
+const claudeSettings = {
+  executablePath: undefined as string | undefined,
+  chromeEnabled: false,
+};
+
+vi.mock('../store/app-settings.js', () => ({
+  resolveClaudeExecutable: () => claudeSettings.executablePath || 'claude',
+  claudeChromeEnabled: () => Boolean(claudeSettings.chromeEnabled),
+  loadAppSettings: () => ({
+    environment: {},
+    claude: {
+      executablePath: claudeSettings.executablePath,
+      chromeEnabled: claudeSettings.chromeEnabled,
+    },
+  }),
+}));
+
+vi.mock('../git/run.js', () => ({
+  run: vi.fn(async (cmd: string, args: string[]) => {
+    if (cmd === 'which') return { exitCode: 0, stdout: '/usr/bin/claude', stderr: '' };
+    if ((cmd === 'claude' || cmd.endsWith('/claude')) && args[0] === 'mcp') {
+      return {
+        exitCode: 0,
+        stdout: 'claude.ai Brightsy Ai: https://mcp.example/mcp - ✔ Connected\n',
+        stderr: '',
+      };
+    }
+    return { exitCode: 0, stdout: '', stderr: '' };
+  }),
+}));
+
+beforeEach(() => {
+  claudeSettings.executablePath = undefined;
+  claudeSettings.chromeEnabled = false;
+});
+
+describe('claudeAdapter.buildTurn', () => {
+  const baseThread = {
+    id: 't1',
+    agent: 'claude' as const,
+    worktreePath: '/tmp/wt',
+    repoPath: '/tmp/repo',
+    sessionId: null as string | null,
+    autonomy: 'default' as const,
+    model: null,
+    fast: false,
+    planMode: false,
+    messages: [],
+    attachments: [],
+    status: 'idle' as const,
+    branch: 'main',
+    createdAt: '',
+    updatedAt: '',
+    ref: 't1',
+  };
+
+  it('uses plan permission mode when planMode is enabled', async () => {
+    const cmd = await claudeAdapter.buildTurn(
+      { ...baseThread, planMode: true },
+      { prompt: 'plan a refactor' },
+    );
+    expect(cmd.args).toContain('--permission-mode');
+    expect(cmd.args[cmd.args.indexOf('--permission-mode') + 1]).toBe('plan');
+  });
+
+  it('passes prompt as plain -p arg without stream-json input format', async () => {
+    const cmd = await claudeAdapter.buildTurn(baseThread, {
+      cachedPrefix: 'seed',
+      prompt: 'do thing',
+    });
+    expect(cmd.args[0]).toBe('-p');
+    expect(cmd.args[1]).toContain('seed');
+    expect(cmd.args[1]).toContain('do thing');
+    expect(cmd.args.includes('--input-format')).toBe(false);
+    expect(cmd.args[cmd.args.indexOf('--output-format') + 1]).toBe('stream-json');
+    expect(cmd.stdin).toBeUndefined();
+  });
+
+  it('omits prefix on resumed sessions', async () => {
+    const cmd = await claudeAdapter.buildTurn(
+      { ...baseThread, sessionId: 'sess-abc' },
+      { cachedPrefix: 'should not appear', prompt: 'only this' },
+    );
+    expect(cmd.args[1]).toBe('only this');
+    expect(cmd.args).toContain('--resume');
+    expect(cmd.args).toContain('sess-abc');
+  });
+
+  it('uses text stdin for oversized prompts', async () => {
+    const big = 'x'.repeat(CLAUDE_PROMPT_ARG_MAX + 1);
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: big });
+    expect(cmd.args[1]).not.toBe(big);
+    expect(cmd.args).toContain('--input-format');
+    expect(cmd.args).toContain('text');
+    expect(cmd.stdin).toBe(`${big}\n`);
+  });
+
+  it('passes --chrome when Chrome integration is enabled', async () => {
+    claudeSettings.chromeEnabled = true;
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'browse' });
+    expect(cmd.args).toContain('--chrome');
+  });
+
+  it('uses a custom Claude executable path when configured', async () => {
+    claudeSettings.executablePath = '/opt/custom/claude';
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    expect(cmd.file).toBe('/opt/custom/claude');
+  });
+});
 
 describe('claudeAdapter.parseEvent', () => {
   it('extracts session_id from init', () => {
@@ -9,13 +119,123 @@ describe('claudeAdapter.parseEvent', () => {
     expect(event).toEqual({ type: 'session_id', data: 'sess-123' });
   });
 
-  it('extracts assistant text', () => {
+  it('extracts assistant text even when session_id is present', () => {
     const event = claudeAdapter.parseEvent(
       JSON.stringify({
         type: 'assistant',
+        session_id: 'sess-123',
         message: { content: [{ type: 'text', text: 'hello' }] },
       }),
     );
     expect(event).toEqual({ type: 'stdout', data: 'hello' });
+  });
+
+  it('extracts result text', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        result: 'Hi there!',
+        session_id: 'sess-123',
+      }),
+    );
+    expect(event).toEqual({ type: 'stdout', data: 'Hi there!' });
+  });
+
+  it('extracts usage from the final result event', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        result: 'Hi there!',
+        session_id: 'sess-123',
+        usage: {
+          input_tokens: 120,
+          output_tokens: 45,
+          cache_read_input_tokens: 900,
+          cache_creation_input_tokens: 300,
+        },
+      }),
+    );
+    expect(event).toEqual([
+      { type: 'stdout', data: 'Hi there!' },
+      {
+        type: 'usage',
+        data: {
+          inputTokens: 120,
+          outputTokens: 45,
+          cacheReadTokens: 900,
+          cacheWriteTokens: 300,
+        },
+      },
+    ]);
+  });
+
+  it('extracts usage-only from a result event with no text', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        session_id: 'sess-123',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    );
+    expect(event).toEqual({
+      type: 'usage',
+      data: { inputTokens: 10, outputTokens: 5 },
+    });
+  });
+
+  it('ignores rate_limit and other non-text events', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'rate_limit_event',
+        session_id: 'sess-123',
+        rate_limit_info: { status: 'allowed' },
+      }),
+    );
+    expect(event).toBeNull();
+  });
+
+  it('extracts text from stream_event content_block_delta', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'Hi' },
+        },
+        session_id: 'sess-123',
+      }),
+    );
+    expect(event).toEqual({ type: 'stdout', data: 'Hi' });
+  });
+
+  it('extracts tool_use and thinking from assistant content', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'check git' },
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'Bash',
+              input: { command: 'git status' },
+            },
+          ],
+        },
+      }),
+    );
+    expect(event).toEqual([
+      { type: 'thinking', data: 'check git' },
+      {
+        type: 'tool_use',
+        id: 'toolu_1',
+        name: 'Bash',
+        input: { command: 'git status' },
+      },
+    ]);
   });
 });

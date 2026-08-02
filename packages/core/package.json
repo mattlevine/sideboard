@@ -4,24 +4,28 @@
   "description": "Sideboard core — orchestration, agents, git worktrees, MCP server",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
-    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "build": "tsup src/index.ts src/agents/cursor-runner.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts src/agents/cursor-runner.ts --format esm,cjs --dts --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cursor/sdk": "^1.0.26",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "better-sqlite3": "^11.9.1",
     "chokidar": "^4.0.3",

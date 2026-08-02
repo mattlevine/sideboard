@@ -1,37 +1,242 @@
-import { app, BrowserWindow, Notification, dialog, ipcMain, shell } from 'electron';
-import { join } from 'node:path';
+import { app, BrowserWindow, Notification, dialog, ipcMain, nativeImage, shell } from 'electron';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { watch } from 'chokidar';
+import { watch, type FSWatcher } from 'chokidar';
 import { autoUpdater } from 'electron-updater';
 import {
+  applyAppEnvironment,
+  brightsyCloudConnectAgent,
+  brightsyCloudConnectEnabled,
+  BrightsySideboardApi,
+  claudeUserSettingsPath,
   detectAgents,
+  ensureAgentPath,
   getOrchestrator,
   listBranches,
+  listBrightsyChatTargets,
+  getBrightsySession,
+  switchBrightsyAccount,
+  connectBrightsyTeam,
+  disconnectBrightsyTeam,
   listPrs,
   listLinearIssues,
+  loadAppSettings,
+  loadBrightsyConfig,
   resolveRepoRoot,
+  run,
+  runCloudConnect,
+  saveAppSettings,
   startOrchestration,
   hasConductorHook,
+  getRepoSetupInfo,
   threadsDir,
+  updateAppEnvironment,
+  updateBrightsySettings,
+  updateClaudeSettings,
   type AgentKind,
   type AdoptInput,
+  type AppSettings,
+  type Autonomy,
+  type BrightsyCloudConnectAgent,
+  type BrightsyHarnessSettings,
+  type ClaudeHarnessSettings,
+  type CloudConnectStatus,
   type CreateThreadInput,
+  type DiffScope,
   type OrchestratorEvent,
+  type ThreadAttachment,
+  type ThreadOptionsPatch,
 } from '@sideboard/core';
+import { closeTsServer, setupTsServer } from './tsserver';
 
 let mainWindow: BrowserWindow | null = null;
 let repoPath = process.cwd();
 const orch = getOrchestrator();
+let openFileWatcher: FSWatcher | null = null;
+let openFileWatchKey: string | null = null;
+
+let cloudConnectAbort: AbortController | null = null;
+let cloudConnectRunning = false;
+let cloudConnectLastError: string | null = null;
+let cloudConnectLastLog: string | null = null;
+
+function readCloudConnectStatus(): CloudConnectStatus {
+  const settings = loadAppSettings();
+  let endpoint: string | null = null;
+  try {
+    endpoint = loadBrightsyConfig().endpoint?.replace(/\/$/, '') || 'https://brightsy.ai';
+  } catch {
+    endpoint = null;
+  }
+  return {
+    enabled: brightsyCloudConnectEnabled(settings),
+    running: cloudConnectRunning,
+    agent: brightsyCloudConnectAgent(settings),
+    endpoint,
+    workspaces: orch.listWorkspaces(),
+    lastError: cloudConnectLastError,
+    lastLog: cloudConnectLastLog,
+  };
+}
+
+function stopCloudConnectDaemon(): void {
+  if (cloudConnectAbort) {
+    cloudConnectAbort.abort();
+    cloudConnectAbort = null;
+  }
+  cloudConnectRunning = false;
+}
+
+function startCloudConnectDaemon(): void {
+  if (cloudConnectAbort) return;
+  const settings = loadAppSettings();
+  if (!brightsyCloudConnectEnabled(settings)) return;
+
+  const agent = brightsyCloudConnectAgent(settings);
+  const ac = new AbortController();
+  cloudConnectAbort = ac;
+  cloudConnectRunning = true;
+  cloudConnectLastError = null;
+  cloudConnectLastLog = 'Starting Brightsy cloud connect…';
+
+  void runCloudConnect({
+    repoPath,
+    agent,
+    enableAccess: true,
+    allowAlways: true,
+    signal: ac.signal,
+    onLog: (line) => {
+      cloudConnectLastLog = line;
+      if (line.startsWith('poll error:') || line.startsWith('error ')) {
+        cloudConnectLastError = line;
+      }
+    },
+  })
+    .catch((err) => {
+      cloudConnectLastError = err instanceof Error ? err.message : String(err);
+      cloudConnectLastLog = cloudConnectLastError;
+    })
+    .finally(() => {
+      if (cloudConnectAbort === ac) {
+        cloudConnectAbort = null;
+        cloudConnectRunning = false;
+      }
+    });
+}
+
+async function setCloudConnect(opts: {
+  enabled?: boolean;
+  agent?: BrightsyCloudConnectAgent;
+}): Promise<CloudConnectStatus> {
+  const patch: {
+    cloudConnectEnabled?: boolean;
+    cloudConnectAgent?: BrightsyCloudConnectAgent;
+  } = {};
+  if (typeof opts.enabled === 'boolean') {
+    patch.cloudConnectEnabled = opts.enabled;
+  }
+  if (opts.agent) {
+    patch.cloudConnectAgent = opts.agent;
+  }
+  if (Object.keys(patch).length > 0) {
+    updateBrightsySettings(patch);
+  }
+
+  const enabled = brightsyCloudConnectEnabled();
+  if (!enabled) {
+    stopCloudConnectDaemon();
+    // Best-effort: disable remote access when the user turns the UI off.
+    if (opts.enabled === false) {
+      try {
+        await new BrightsySideboardApi().setAccess(false, false);
+      } catch (err) {
+        cloudConnectLastError =
+          err instanceof Error ? err.message : String(err);
+      }
+    }
+  } else {
+    // Restart so agent/home changes take effect.
+    stopCloudConnectDaemon();
+    startCloudConnectDaemon();
+  }
+  return readCloudConnectStatus();
+}
+
+async function stopOpenFileWatcher(): Promise<void> {
+  if (!openFileWatcher) {
+    openFileWatchKey = null;
+    return;
+  }
+  const prev = openFileWatcher;
+  openFileWatcher = null;
+  openFileWatchKey = null;
+  await prev.close();
+}
+
+async function startOpenFileWatcher(threadRef: string, relativePath: string): Promise<void> {
+  if (relativePath.includes('..') || relativePath.startsWith('/')) {
+    throw new Error('Invalid path');
+  }
+  const thread = orch.getThread(threadRef);
+  if (!thread) throw new Error(`Thread not found: ${threadRef}`);
+
+  const absPath = join(thread.worktreePath, relativePath);
+  const key = `${threadRef}\0${relativePath}`;
+  if (openFileWatchKey === key && openFileWatcher) return;
+
+  await stopOpenFileWatcher();
+  openFileWatchKey = key;
+  openFileWatcher = watch(absPath, {
+    ignoreInitial: true,
+    awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 40 },
+  });
+  const notify = () => {
+    if (openFileWatchKey !== key) return;
+    mainWindow?.webContents.send('file:changed', {
+      threadRef,
+      path: relativePath,
+    });
+  };
+  openFileWatcher.on('change', notify);
+  openFileWatcher.on('add', notify);
+  openFileWatcher.on('unlink', notify);
+}
+
+function resolveAppIcon(): string | null {
+  const candidates = [
+    join(__dirname, '../../build/icon.png'),
+    join(__dirname, '../../build/icon.icns'),
+    join(process.resourcesPath, 'icon.png'),
+  ];
+  for (const path of candidates) {
+    if (existsSync(path)) return path;
+  }
+  return null;
+}
+
+function applyDockIcon(): void {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  const path = resolveAppIcon();
+  if (!path) return;
+  const image = nativeImage.createFromPath(path);
+  if (!image.isEmpty()) app.dock.setIcon(image);
+}
 
 function createWindow(): void {
+  const icon = resolveAppIcon() ?? undefined;
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
     minWidth: 960,
     minHeight: 640,
     title: 'Sideboard',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 14, y: 12 },
+    ...(icon ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -103,7 +308,89 @@ function setupNotifications(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle('detectAgents', () => detectAgents());
+  ipcMain.handle('detectAgents', () => {
+    applyAppEnvironment(process.env);
+    return detectAgents();
+  });
+  ipcMain.handle('getAppSettings', () => loadAppSettings());
+  ipcMain.handle('saveAppSettings', (_e, settings: AppSettings) => {
+    const saved = saveAppSettings(settings);
+    applyAppEnvironment(process.env, saved);
+    return saved;
+  });
+  ipcMain.handle(
+    'updateAppEnvironment',
+    (_e, patch: Record<string, string | null | undefined>) => {
+      const saved = updateAppEnvironment(patch);
+      applyAppEnvironment(process.env, saved);
+      return saved;
+    },
+  );
+  ipcMain.handle(
+    'updateClaudeSettings',
+    (
+      _e,
+      patch: Partial<ClaudeHarnessSettings> & { executablePath?: string | null },
+    ) => {
+      const saved = updateClaudeSettings(patch);
+      applyAppEnvironment(process.env, saved);
+      return saved;
+    },
+  );
+  ipcMain.handle(
+    'updateBrightsySettings',
+    (
+      _e,
+      patch: Partial<BrightsyHarnessSettings> & {
+        cloudConnectAgent?: BrightsyCloudConnectAgent | null;
+      },
+    ) => updateBrightsySettings(patch),
+  );
+  ipcMain.handle('getCloudConnectStatus', () => readCloudConnectStatus());
+  ipcMain.handle(
+    'setCloudConnect',
+    (
+      _e,
+      opts: { enabled?: boolean; agent?: BrightsyCloudConnectAgent },
+    ) => setCloudConnect(opts),
+  );
+  ipcMain.handle('pickClaudeExecutable', async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Choose Claude Code executable',
+      properties: ['openFile'],
+      message: 'Select the Claude Code binary to use for agent turns',
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
+  ipcMain.handle('resolveSystemClaudePath', async () => {
+    const which = await run('which', ['claude'], { reject: false });
+    if (which.exitCode !== 0) return null;
+    const path = which.stdout.trim().split('\n')[0]?.trim();
+    return path || null;
+  });
+  ipcMain.handle('openClaudeUserSettings', async () => {
+    const path = claudeUserSettingsPath();
+    if (!existsSync(path)) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, '{}\n', 'utf8');
+    }
+    const err = await shell.openPath(path);
+    if (err) throw new Error(err);
+  });
+  ipcMain.handle('listBrightsyChatTargets', () => listBrightsyChatTargets());
+  ipcMain.handle('getBrightsySession', () => getBrightsySession());
+  ipcMain.handle('switchBrightsyAccount', (_e, accountIdOrSlug: string) =>
+    switchBrightsyAccount(accountIdOrSlug),
+  );
+  ipcMain.handle('connectBrightsyTeam', async (_e, accountIdOrSlug: string) => {
+    await connectBrightsyTeam(accountIdOrSlug);
+    return getBrightsySession();
+  });
+  ipcMain.handle('disconnectBrightsyTeam', async (_e, accountIdOrSlug: string) => {
+    await disconnectBrightsyTeam(accountIdOrSlug);
+    return getBrightsySession();
+  });
   ipcMain.handle('listBranches', async (_e, path: string) => listBranches(await resolveRepoRoot(path)));
   ipcMain.handle('listPrs', async (_e, path: string) => listPrs(await resolveRepoRoot(path)));
   ipcMain.handle('listLinearIssues', (_e, agent: AgentKind, path: string) =>
@@ -114,33 +401,137 @@ function registerIpc(): void {
     orch.getThreads(Boolean(includeArchived)),
   );
   ipcMain.handle('getThread', (_e, id: string) => orch.getThread(id));
+  ipcMain.handle('getRuntime', () => orch.getRuntime());
+  ipcMain.handle('setMaxConcurrent', (_e, n: number) => {
+    orch.setMaxConcurrent(n);
+  });
   ipcMain.handle('createThread', async (_e, input: CreateThreadInput) => {
     await orch.reconcile(input.repoPath);
     return orch.createThread(input);
+  });
+  ipcMain.handle('createChatTab', (_e, input) => orch.createChatTab(input));
+  ipcMain.handle('forkChatTab', (_e, input) => orch.forkChatTab(input));
+  ipcMain.handle('forkThreadWorktree', async (_e, input) => {
+    const source = orch.getThread(input.threadId);
+    if (source) await orch.reconcile(source.repoPath);
+    return orch.forkThreadWorktree(input);
+  });
+  ipcMain.handle('renameThread', (_e, ref: string, title: string) =>
+    orch.renameThread(ref, title),
+  );
+  ipcMain.handle('setAttachments', (_e, ref: string, attachments) =>
+    orch.setAttachments(ref, attachments),
+  );
+  ipcMain.handle('listWorktreeChats', (_e, ref: string) => orch.listWorktreeChats(ref));
+  ipcMain.handle('listWorkspaces', () => {
+    try {
+      return orch.listWorkspaces();
+    } catch (err) {
+      console.error('listWorkspaces failed', err);
+      return [];
+    }
+  });
+  ipcMain.handle('addWorkspace', async (_e, path: string) => orch.addWorkspace(path));
+  ipcMain.handle('removeWorkspace', (_e, path: string) => {
+    orch.removeWorkspace(path);
   });
   ipcMain.handle('adopt', (_e, input: AdoptInput) => orch.adopt(input));
   ipcMain.handle('listConductor', () => orch.listConductor());
   ipcMain.handle('adoptFromConductor', (_e, id: string) => orch.adoptFromConductor(id));
   ipcMain.handle('sendToThread', (_e, ref: string, prompt: string) => orch.send(ref, prompt));
+  ipcMain.handle('setAutonomy', (_e, ref: string, autonomy: Autonomy) =>
+    orch.setAutonomy(ref, autonomy),
+  );
+  ipcMain.handle('setThreadOptions', (_e, ref: string, patch: ThreadOptionsPatch) =>
+    orch.setThreadOptions(ref, patch),
+  );
   ipcMain.handle('fanOut', (_e, refs: string[], prompt: string) => orch.fanOut(refs, prompt));
   ipcMain.handle(
     'startOrchestration',
-    (_e, opts: { goal: string; agent: AgentKind; repoPath: string }) => startOrchestration(opts),
+    (
+      _e,
+      opts: {
+        goal: string;
+        agent: AgentKind;
+        repoPath: string;
+        autonomy?: Autonomy;
+        model?: string | null;
+        fast?: boolean;
+        planMode?: boolean;
+        attachments?: ThreadAttachment[];
+      },
+    ) => startOrchestration(opts),
   );
   ipcMain.handle('stopThread', (_e, ref: string) => orch.stop(ref));
-  ipcMain.handle('getDiff', (_e, ref: string) => orch.diff(ref));
-  ipcMain.handle('openInEditor', async (_e, ref: string, editor?: string) => {
-    const t = orch.getThread(ref);
-    if (!t) throw new Error(`Thread not found: ${ref}`);
-    const cmd = editor ?? process.env.SIDEBOARD_EDITOR ?? 'cursor';
-    spawn(cmd, [t.worktreePath], { detached: true, stdio: 'ignore' }).unref();
-  });
+  ipcMain.handle(
+    'getDiff',
+    (_e, ref: string, opts?: { scope?: DiffScope; commitSha?: string | null }) =>
+      orch.diff(ref, opts),
+  );
+  ipcMain.handle('initializeGit', (_e, ref: string) => orch.initializeGit(ref));
+  ipcMain.handle('getPrChecks', (_e, ref: string) => orch.getPrChecks(ref));
+  ipcMain.handle('getPrDetails', (_e, ref: string) => orch.getPrDetails(ref));
+  ipcMain.handle('listFiles', (_e, ref: string) => orch.listFiles(ref));
+  ipcMain.handle('readFile', (_e, ref: string, relativePath: string) =>
+    orch.readFile(ref, relativePath),
+  );
+  ipcMain.handle('writeFile', (_e, ref: string, relativePath: string, content: string) =>
+    orch.writeFile(ref, relativePath, content),
+  );
+  ipcMain.handle('watchOpenFile', (_e, ref: string, relativePath: string) =>
+    startOpenFileWatcher(ref, relativePath),
+  );
+  ipcMain.handle('unwatchOpenFile', () => stopOpenFileWatcher());
+  ipcMain.handle('listSkills', (_e, ref: string) => orch.listSkills(ref));
+  ipcMain.handle(
+    'openInEditor',
+    async (_e, ref: string, editor?: string, relativePath?: string) => {
+      const t = orch.getThread(ref);
+      if (!t) throw new Error(`Thread not found: ${ref}`);
+      if (relativePath && (relativePath.includes('..') || relativePath.startsWith('/'))) {
+        throw new Error('Invalid path');
+      }
+      const target = relativePath ? join(t.worktreePath, relativePath) : t.worktreePath;
+      const cmd = editor ?? process.env.SIDEBOARD_EDITOR ?? 'cursor';
+      spawn(cmd, [target], { detached: true, stdio: 'ignore' }).unref();
+    },
+  );
+  ipcMain.handle(
+    'openWorktree',
+    async (_e, ref: string, target: 'finder' | 'cursor' | 'code' | 'xcode' | 'terminal' | 'datagrip') => {
+      const t = orch.getThread(ref);
+      if (!t) throw new Error(`Thread not found: ${ref}`);
+      const p = t.worktreePath;
+      if (target === 'finder') {
+        spawn('open', [p], { detached: true, stdio: 'ignore' }).unref();
+        return;
+      }
+      if (target === 'terminal') {
+        spawn('open', ['-a', 'Terminal', p], { detached: true, stdio: 'ignore' }).unref();
+        return;
+      }
+      if (target === 'xcode') {
+        spawn('open', ['-a', 'Xcode', p], { detached: true, stdio: 'ignore' }).unref();
+        return;
+      }
+      if (target === 'datagrip') {
+        spawn('open', ['-a', 'DataGrip', p], { detached: true, stdio: 'ignore' }).unref();
+        return;
+      }
+      const cmd = target === 'code' ? 'code' : 'cursor';
+      spawn(cmd, [p], { detached: true, stdio: 'ignore' }).unref();
+    },
+  );
   ipcMain.handle('runDevScript', (_e, ref: string) => orch.startDev(ref));
   ipcMain.handle('stopDevScript', (_e, ref: string) => {
     orch.stopDev(ref);
   });
   ipcMain.handle('previewLand', (_e, ref: string) => orch.previewLand(ref));
-  ipcMain.handle('confirmLand', (_e, ref: string) => orch.confirmLand(ref));
+  ipcMain.handle(
+    'confirmLand',
+    (_e, ref: string, opts?: { draft?: boolean; web?: boolean }) =>
+      orch.confirmLand(ref, opts),
+  );
   ipcMain.handle('archiveThread', (_e, ref: string) => orch.archive(ref));
   ipcMain.handle('purgeThread', (_e, ref: string, opts?: { deleteBranch?: boolean }) =>
     orch.purge(ref, opts),
@@ -152,15 +543,79 @@ function registerIpc(): void {
     await orch.reconcile(repoPath);
     return repoPath;
   });
-  ipcMain.handle('hasConductorHook', (_e, path: string) => hasConductorHook(path));
+  ipcMain.handle(
+    'hasConductorHook',
+    (_e, worktreePath: string, repoPath?: string | null) =>
+      hasConductorHook(worktreePath, repoPath),
+  );
+  ipcMain.handle(
+    'getRepoSetupInfo',
+    (_e, worktreePath: string, repoPath?: string | null) =>
+      getRepoSetupInfo(worktreePath, repoPath),
+  );
+  ipcMain.handle('runSetup', (_e, ref: string) => orch.runSetup(ref));
   ipcMain.handle('pickRepoPath', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory'],
     });
     if (result.canceled || !result.filePaths[0]) return null;
     repoPath = await resolveRepoRoot(result.filePaths[0]);
+    await orch.addWorkspace(repoPath);
     await orch.reconcile(repoPath);
     return repoPath;
+  });
+  ipcMain.handle('pickFiles', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return [];
+    const maxBytes = 400_000;
+    const out: Array<{
+      id: string;
+      name: string;
+      kind: 'file';
+      content: string;
+    }> = [];
+    for (const filePath of result.filePaths) {
+      try {
+        const st = statSync(filePath);
+        if (!st.isFile()) continue;
+        if (st.size > maxBytes) {
+          out.push({
+            id: randomUUID(),
+            name: basename(filePath),
+            kind: 'file',
+            content: `(file too large to attach inline: ${filePath}, ${st.size} bytes)`,
+          });
+          continue;
+        }
+        const buf = readFileSync(filePath);
+        // Skip obvious binary
+        if (buf.includes(0)) {
+          out.push({
+            id: randomUUID(),
+            name: basename(filePath),
+            kind: 'file',
+            content: `(binary file attached by path only: ${filePath})`,
+          });
+          continue;
+        }
+        out.push({
+          id: randomUUID(),
+          name: basename(filePath),
+          kind: 'file',
+          content: buf.toString('utf8'),
+        });
+      } catch (err) {
+        out.push({
+          id: randomUUID(),
+          name: basename(filePath),
+          kind: 'file',
+          content: `(could not read ${filePath}: ${err instanceof Error ? err.message : String(err)})`,
+        });
+      }
+    }
+    return out;
   });
   ipcMain.handle('installUpdate', () => {
     autoUpdater.quitAndInstall();
@@ -169,6 +624,11 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  // GUI apps get a stripped PATH; make sure `claude` / friends resolve.
+  ensureAgentPath();
+  // Conductor-style Settings → Environment (e.g. CURSOR_API_KEY).
+  applyAppEnvironment(process.env);
+  applyDockIcon();
   registerIpc();
   setupNotifications();
   setupStoreWatcher();
@@ -179,13 +639,33 @@ app.whenReady().then(async () => {
     repoPath = process.cwd();
   }
   await orch.reconcile(repoPath);
+  // Seed workspace registry from current cwd + any thread repos
+  try {
+    await orch.addWorkspace(repoPath);
+  } catch {
+    // cwd may not be a git repo
+  }
+  orch.listWorkspaces();
   createWindow();
+  if (mainWindow) setupTsServer(mainWindow);
+  if (brightsyCloudConnectEnabled()) {
+    startCloudConnectDaemon();
+  }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+      if (mainWindow) setupTsServer(mainWindow);
+    }
   });
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('will-quit', () => {
+  stopCloudConnectDaemon();
+  void stopOpenFileWatcher();
+  void closeTsServer();
 });
