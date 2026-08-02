@@ -174,6 +174,7 @@ sideboard brightsy teams
 sideboard brightsy connect-team <slug>   # connect + activate
 sideboard brightsy disconnect-team <slug>
 ```
+
 ## Brightsy / Slack remote orchestrator
 
 `sideboard connect` runs a daemon that lets Slack (via Brightsy cloud agents) drive Sideboard on your machine — no need to be at the keyboard:
