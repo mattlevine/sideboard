@@ -75,6 +75,7 @@ describe('forkChatTab', () => {
 
     expect(teamNames.has(forked.title)).toBe(true);
     expect(forked.title).not.toBe(source.title);
+    expect(forked.userSetTitle).toBe(true);
   });
 });
 
@@ -102,6 +103,7 @@ describe('createChatTab', () => {
 
     expect(teamNames.has(tab.title)).toBe(true);
     expect(tab.title).not.toBe(source.title);
+    expect(tab.userSetTitle).toBe(true);
   });
 
   it('does not reuse the worktree folder soccer team as a new tab title', async () => {

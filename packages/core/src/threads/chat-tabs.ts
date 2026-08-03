@@ -121,7 +121,10 @@ export function createChatTab(input: CreateChatTabInput): Thread {
 
   const thread = createEmptyThread({
     title,
-    userSetTitle: Boolean(explicitTitle),
+    // Chat-tab nicknames (soccer team or explicit) must stick. Post-turn
+    // syncThreadBranchFromGit would otherwise rewrite every sibling to the
+    // shared worktree folder name (e.g. fork "Arsenal" → "Monaco").
+    userSetTitle: true,
     ...binding,
     agent: input.agent ?? from.agent,
     model: input.agent && input.agent !== from.agent ? null : from.model,
