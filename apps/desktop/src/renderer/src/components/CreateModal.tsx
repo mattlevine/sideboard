@@ -509,7 +509,7 @@ export function CreateModal({
             onPatchOptions={patchOptions}
             onAttachmentsChange={setAttachments}
             repoPath={repoPath || undefined}
-            menuPlacement="down"
+            menuPlacement="auto"
             variant="create"
             rightSlot={
               <>
