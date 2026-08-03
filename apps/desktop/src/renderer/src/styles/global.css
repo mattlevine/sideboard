@@ -993,6 +993,15 @@ body.resizing-panels * {
   margin-bottom: 4px;
 }
 
+.turn-thinking.live .turn-icon.brain {
+  animation: thinking-spin 2.4s ease-in-out infinite;
+  color: var(--accent);
+}
+
+.turn-thinking.live .turn-thinking-pill {
+  animation: thinking-pill-pulse 1.8s ease-in-out infinite;
+}
+
 .turn-thinking-pill {
   display: inline-block;
   max-width: 100%;
@@ -1056,6 +1065,7 @@ body.resizing-panels * {
 
 .turn-icon.brain {
   color: #c8c8c8;
+  display: inline-block;
 }
 
 .msg-body-final {
@@ -1064,7 +1074,125 @@ body.resizing-panels * {
 
 .waiting-inline {
   color: var(--muted);
-  font-style: italic;
+}
+
+.thinking-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-style: normal;
+  letter-spacing: 0.01em;
+}
+
+.thinking-indicator.queued {
+  opacity: 0.85;
+}
+
+.thinking-indicator-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  color: var(--accent);
+  animation: thinking-spin 2.4s ease-in-out infinite;
+}
+
+.thinking-indicator.queued .thinking-indicator-mark {
+  color: var(--muted);
+  animation: thinking-breathe 2s ease-in-out infinite;
+}
+
+.thinking-indicator-label {
+  font-size: inherit;
+}
+
+.thinking-indicator-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 1px;
+}
+
+.thinking-indicator-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: thinking-dot 1.2s ease-in-out infinite;
+}
+
+.thinking-indicator-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.thinking-indicator-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes thinking-spin {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.75;
+  }
+  40% {
+    transform: rotate(18deg) scale(1.08);
+    opacity: 1;
+  }
+  70% {
+    transform: rotate(-10deg) scale(0.98);
+    opacity: 0.9;
+  }
+}
+
+@keyframes thinking-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes thinking-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes thinking-pill-pulse {
+  0%,
+  100% {
+    background: #2a2a2c;
+  }
+  50% {
+    background: #323234;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-indicator-mark,
+  .thinking-indicator-dots span,
+  .turn-thinking.live .turn-icon.brain,
+  .turn-thinking.live .turn-thinking-pill {
+    animation: none !important;
+  }
+
+  .thinking-indicator-dots span {
+    opacity: 0.55;
+  }
 }
 
 .msg-footer {
@@ -2182,7 +2310,7 @@ body.resizing-panels * {
 
 .msg.agent.waiting {
   color: var(--muted);
-  font-style: italic;
+  font-style: normal;
 }
 
 .stream-caret {

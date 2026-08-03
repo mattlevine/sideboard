@@ -68,12 +68,14 @@ export function FloatingMenu({
       let openUp: boolean;
       if (placement === 'up') openUp = true;
       else if (placement === 'down') openUp = false;
-      else openUp = spaceAbove >= spaceBelow || spaceBelow < Math.min(naturalH, 240);
+      else if (naturalH <= spaceBelow - gap) openUp = false;
+      else if (naturalH <= spaceAbove - gap) openUp = true;
+      else openUp = spaceAbove > spaceBelow;
 
-      const spaceCap = Math.max(160, openUp ? spaceAbove - gap : spaceBelow - gap);
+      const spaceCap = Math.max(120, openUp ? spaceAbove - gap : spaceBelow - gap);
       const hardCap =
         typeof maxMenuHeight === 'number' && Number.isFinite(maxMenuHeight)
-          ? Math.max(160, maxMenuHeight)
+          ? Math.max(120, maxMenuHeight)
           : Number.POSITIVE_INFINITY;
       const maxH = Math.min(spaceCap, hardCap);
       const height = Math.min(naturalH, maxH);
@@ -81,7 +83,9 @@ export function FloatingMenu({
       let left = align === 'right' ? r.right - naturalW : r.left;
       left = Math.max(pad, Math.min(left, window.innerWidth - naturalW - pad));
 
-      const top = openUp ? Math.max(pad, r.top - height - gap) : r.bottom + gap;
+      let top = openUp ? r.top - height - gap : r.bottom + gap;
+      // Keep the menu fully inside the viewport even when space is tight.
+      top = Math.max(pad, Math.min(top, window.innerHeight - height - pad));
 
       setStyle({
         position: 'fixed',
@@ -93,7 +97,7 @@ export function FloatingMenu({
         maxHeight: maxH,
         zIndex: 10000,
         visibility: 'visible',
-        overflow: 'hidden',
+        overflow: 'auto',
       });
     };
 

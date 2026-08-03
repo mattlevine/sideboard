@@ -6,6 +6,7 @@ import { AgentMessage } from './AgentMessage';
 import { BrightsyTargetPicker } from './BrightsyTargetPicker';
 import { ChatTabs } from './ChatTabs';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ThinkingIndicator } from './ThinkingIndicator';
 import {
   applyAutocomplete,
   ComposerAutocomplete,
@@ -580,7 +581,7 @@ export function ThreadPanel({
                   onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
                 />
               ) : (
-                thread.status === 'queued' ? 'Queued…' : 'Thinking…'
+                <ThinkingIndicator queued={thread.status === 'queued'} />
               )}
             </div>
           )}

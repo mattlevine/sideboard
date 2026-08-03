@@ -5,6 +5,7 @@ import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
+import { ThinkingIndicator } from './ThinkingIndicator';
 import { ToolDiffPopover } from './ToolDiffPopover';
 
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
@@ -179,13 +180,31 @@ export function AgentMessage({
             <div className="turn-details">
               {safeParts.map((part, i) => {
                 if (part.type === 'thinking') {
+                  let lastThinking = -1;
+                  for (let j = safeParts.length - 1; j >= 0; j--) {
+                    if (safeParts[j]?.type === 'thinking') {
+                      lastThinking = j;
+                      break;
+                    }
+                  }
+                  const isLive = Boolean(streaming && i === lastThinking);
                   return (
-                    <div key={`th-${i}`} className="turn-thinking">
+                    <div
+                      key={`th-${i}`}
+                      className={`turn-thinking${isLive ? ' live' : ''}`}
+                    >
                       <div className="turn-thinking-label">
                         <span className="turn-icon brain" aria-hidden>
                           ✶
                         </span>
                         Thinking
+                        {isLive ? (
+                          <span className="thinking-indicator-dots" aria-hidden>
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                        ) : null}
                       </div>
                       <div className="turn-thinking-pill">
                         {part.text.length > 160 ? `${part.text.slice(0, 157)}…` : part.text}
@@ -250,7 +269,9 @@ export function AgentMessage({
       )}
 
       {!answer && streaming && !hasTranscript && (
-        <div className="msg-body waiting-inline">Thinking…</div>
+        <div className="msg-body waiting-inline">
+          <ThinkingIndicator />
+        </div>
       )}
 
       {(durationLabel || usage || chips.length > 0 || onFork) && (
