@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, dialog, ipcMain, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, Notification, dialog, ipcMain, nativeImage, net, shell } from 'electron';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -120,10 +120,19 @@ function startCloudConnectDaemon(): void {
     enableAccess: true,
     allowAlways: true,
     signal: ac.signal,
+    // Chromium networking — avoids opaque Node undici "fetch failed" errors.
+    fetchImpl: net.fetch.bind(net) as typeof fetch,
     onLog: (line) => {
       cloudConnectLastLog = line;
       if (line.startsWith('poll error:') || line.startsWith('error ')) {
         cloudConnectLastError = line;
+      } else if (
+        line.startsWith('Connected to Brightsy') ||
+        line.startsWith('run ') ||
+        line.startsWith('replied ') ||
+        line.startsWith('poll recovered')
+      ) {
+        cloudConnectLastError = null;
       }
     },
   })
@@ -164,7 +173,9 @@ async function setCloudConnect(opts: {
     // Best-effort: disable remote access when the user turns the UI off.
     if (opts.enabled === false) {
       try {
-        await new BrightsySideboardApi().setAccess(false, false);
+        await new BrightsySideboardApi({
+          fetchImpl: net.fetch.bind(net) as typeof fetch,
+        }).setAccess(false, false);
       } catch (err) {
         cloudConnectLastError =
           err instanceof Error ? err.message : String(err);
