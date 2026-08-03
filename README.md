@@ -197,7 +197,7 @@ Sideboard uses Brightsy’s existing `/api/v1beta/desktop/*` cloud-to-local API 
 3. In Brightsy, connect Slack, Discord, and/or Teams on the agent, and link your chat identity under User Settings → Integrations.
 4. Keep the Sideboard desktop app running. It polls Brightsy desktop tasks and routes them to the global orchestrator.
 
-Turning the switch off stops the daemon and disables Brightsy desktop access for that account.
+Once enabled, the same panel shows live status (listening / starting / error) and the list of registered workspaces the coordinator can reach — handy for confirming it's actually connected. Turning the switch off stops the daemon and disables Brightsy desktop access for that account.
 
 **Setup (CLI)**
 
