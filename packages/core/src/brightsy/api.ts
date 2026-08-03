@@ -24,19 +24,60 @@ export interface SideboardCloudTask {
   expires_at: string | null;
 }
 
+type FetchLike = typeof fetch;
+
 type FetchInit = {
   method?: string;
   body?: unknown;
 };
+
+export type BrightsySideboardApiOptions = {
+  cfg?: BrightsyLocalConfig;
+  /**
+   * Electron main should pass `net.fetch` (Chromium stack). Node's undici
+   * `fetch` often surfaces as opaque "fetch failed" behind system proxies/VPN.
+   */
+  fetchImpl?: FetchLike;
+};
+
+/** Expand undici/Electron `TypeError: fetch failed` with the underlying cause. */
+export function formatBrightsyFetchError(err: unknown, url: string): string {
+  if (!(err instanceof Error)) return `${String(err)} (${url})`;
+  const cause = (err as Error & { cause?: unknown }).cause;
+  let detail = '';
+  if (cause instanceof Error) {
+    const code =
+      typeof (cause as NodeJS.ErrnoException).code === 'string'
+        ? (cause as NodeJS.ErrnoException).code
+        : undefined;
+    detail = code ? ` [${code}: ${cause.message}]` : ` [${cause.message}]`;
+  } else if (cause != null) {
+    detail = ` [${String(cause)}]`;
+  }
+  return `${err.message}${detail} (${url})`;
+}
 
 /**
  * Minimal Brightsy HTTP client using ~/.brightsy/config.json (same session as CLI).
  */
 export class BrightsySideboardApi {
   private cfg: BrightsyLocalConfig;
+  private readonly fetchImpl: FetchLike;
 
-  constructor(cfg?: BrightsyLocalConfig) {
-    this.cfg = cfg ?? loadBrightsyConfig();
+  constructor(cfgOrOpts?: BrightsyLocalConfig | BrightsySideboardApiOptions) {
+    const isOpts =
+      !!cfgOrOpts &&
+      typeof cfgOrOpts === 'object' &&
+      ('fetchImpl' in cfgOrOpts || 'cfg' in cfgOrOpts) &&
+      !('access_token' in cfgOrOpts);
+    if (isOpts) {
+      const opts = cfgOrOpts as BrightsySideboardApiOptions;
+      this.cfg = opts.cfg ?? loadBrightsyConfig();
+      this.fetchImpl = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
+    } else {
+      this.cfg = (cfgOrOpts as BrightsyLocalConfig | undefined) ?? loadBrightsyConfig();
+      this.fetchImpl = globalThis.fetch.bind(globalThis);
+    }
   }
 
   get accountId(): string {
@@ -50,20 +91,27 @@ export class BrightsySideboardApi {
   private async request<T>(path: string, init: FetchInit = {}): Promise<T> {
     await this.refreshIfNeeded();
     const url = `${this.endpoint}${path}`;
-    const res = await fetch(url, {
-      method: init.method ?? 'GET',
-      headers: {
-        Authorization: `Bearer ${this.cfg.access_token}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: init.body != null ? JSON.stringify(init.body) : undefined,
-    });
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.cfg.access_token}`,
+      Accept: 'application/json',
+    };
+    if (init.body != null) headers['Content-Type'] = 'application/json';
+
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, {
+        method: init.method ?? 'GET',
+        headers,
+        body: init.body != null ? JSON.stringify(init.body) : undefined,
+      });
+    } catch (err) {
+      throw new Error(formatBrightsyFetchError(err, url));
+    }
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as {
         error?: { message?: string };
       };
-      throw new Error(err.error?.message ?? `${res.status} ${res.statusText}`);
+      throw new Error(err.error?.message ?? `${res.status} ${res.statusText} (${url})`);
     }
     return (await res.json()) as T;
   }
@@ -72,15 +120,21 @@ export class BrightsySideboardApi {
     const expiresAt = this.cfg.expires_at ?? 0;
     if (!this.cfg.refresh_token || Date.now() < expiresAt - 60_000) return;
     const clientId = this.cfg.oauth_client_id || 'brightsy-cli';
-    const res = await fetch(`${this.endpoint}/oauth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: this.cfg.refresh_token,
-        client_id: clientId,
-      }),
-    });
+    const url = `${this.endpoint}/oauth/token`;
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: this.cfg.refresh_token,
+          client_id: clientId,
+        }),
+      });
+    } catch (err) {
+      throw new Error(formatBrightsyFetchError(err, url));
+    }
     if (!res.ok) return;
     const data = (await res.json()) as {
       access_token?: string;
@@ -117,7 +171,10 @@ export class BrightsySideboardApi {
   }
 
   async getTasks(status?: string): Promise<SideboardCloudTask[]> {
-    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    params.set('accountId', this.accountId);
+    const q = `?${params.toString()}`;
     const data = await this.request<{ tasks: SideboardCloudTask[] }>(
       `/api/v1beta/desktop/tasks${q}`,
     );

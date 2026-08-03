@@ -32,7 +32,11 @@ export * from './orchestrator/orchestrator.js';
 export { startMcpServer } from './mcp/server.js';
 export type { CloudConnectStatus, IpcApi } from './ipc/types.js';
 export { loadBrightsyConfig, brightsyConfigPath } from './brightsy/config.js';
-export { BrightsySideboardApi, taskMessageText } from './brightsy/api.js';
+export {
+  BrightsySideboardApi,
+  formatBrightsyFetchError,
+  taskMessageText,
+} from './brightsy/api.js';
 export {
   CLOUD_ORCHESTRATOR_GOAL,
   coordinatorSystemPrompt,

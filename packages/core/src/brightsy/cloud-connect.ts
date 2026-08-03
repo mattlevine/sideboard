@@ -30,6 +30,10 @@ export interface CloudConnectOptions {
   pollIntervalMs?: number;
   onLog?: (line: string) => void;
   signal?: AbortSignal;
+  /** Prefer Electron `net.fetch` when running in the desktop main process. */
+  fetchImpl?: typeof fetch;
+  /** Optional pre-built API client (tests / custom auth). */
+  api?: BrightsySideboardApi;
 }
 
 export function formatWorkspaceInventory(workspaces: Workspace[]): string {
@@ -168,7 +172,11 @@ async function handleTask(
  */
 export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> {
   const log = opts.onLog ?? console.log;
-  const api = new BrightsySideboardApi();
+  const api =
+    opts.api ??
+    new BrightsySideboardApi(
+      opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : undefined,
+    );
   const enableAccess = opts.enableAccess !== false;
   const allowAlways = opts.allowAlways !== false;
   const pollMs = opts.pollIntervalMs ?? POLL_MS;
@@ -198,14 +206,18 @@ export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> 
   }
 
   const inFlight = new Set<string>();
+  let consecutivePollFailures = 0;
 
   while (!opts.signal?.aborted) {
     try {
+      const hadFailures = consecutivePollFailures > 0;
       const [pending, awaiting, running] = await Promise.all([
         api.getTasks('pending'),
         api.getTasks('awaiting_confirmation'),
         api.getTasks('running'),
       ]);
+      consecutivePollFailures = 0;
+      if (hadFailures) log('poll recovered');
       const tasks = [...awaiting, ...pending, ...running];
       for (const task of tasks) {
         if (inFlight.has(task.id)) continue;
@@ -220,8 +232,14 @@ export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> 
           .finally(() => inFlight.delete(task.id));
       }
     } catch (err) {
+      consecutivePollFailures += 1;
       const msg = err instanceof Error ? err.message : String(err);
-      log(`poll error: ${msg}`);
+      // One soft retry before surfacing — brief VPN/DNS blips are common.
+      if (consecutivePollFailures === 1) {
+        log(`poll retry: ${msg}`);
+      } else {
+        log(`poll error: ${msg}`);
+      }
     }
     await new Promise<void>((resolve) => {
       const t = setTimeout(resolve, pollMs);
