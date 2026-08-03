@@ -334,22 +334,25 @@ export class Orchestrator {
         `Thread ${threadId} has no worktreePath — refusing to start an agent outside an isolated worktree`,
       );
     }
-    // Always remind agents of the worktree. Claude/Brightsy skip project AGENTS.md
-    // injection, but they still need this isolation rule on every turn (incl. resume).
-    const worktreeDirective = formatWorktreeDirective(fresh);
+    // Local agents need the worktree isolation rule on every turn (incl. resume).
+    // Brightsy agents run hosted — they cannot edit the worktree or open PRs, and
+    // stuffing those directives has contributed to empty model responses.
+    const isBrightsy = fresh.agent === 'brightsy';
+    const worktreeDirective = isBrightsy ? null : formatWorktreeDirective(fresh);
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     const { autoRenameBranchEnabled } = await import('../store/app-settings.js');
-    const renameBranchDirective = autoRenameBranchEnabled()
-      ? formatRenameBranchDirective(fresh, {
-          customPrompt: settings?.prompts?.renameBranch,
-        })
-      : null;
+    const renameBranchDirective =
+      !isBrightsy && autoRenameBranchEnabled()
+        ? formatRenameBranchDirective(fresh, {
+            customPrompt: settings?.prompts?.renameBranch,
+          })
+        : null;
     // Claude Code auto-loads CLAUDE.md / AGENTS.md for `-p` turns — duplicating
     // them in every user message wastes tokens and adds cache-breakpoint pressure.
     // Brightsy agents already carry their own server-side instructions; stuffing
     // local AGENTS.md into every turn has also triggered empty model responses.
     const instructions =
-      fresh.agent === 'claude' || fresh.agent === 'brightsy'
+      fresh.agent === 'claude' || isBrightsy
         ? null
         : formatAgentInstructions(instructionFiles);
     // Fresh / compacted sessions have no CLI resume — seed from Sideboard history.
@@ -358,13 +361,12 @@ export class Orchestrator {
       const prior = fresh.messages.slice(0, -1);
       // Brightsy has no session resume and rejects/empty-completes on oversized
       // tool-heavy seeds — keep a short text-only transcript.
-      seed =
-        fresh.agent === 'brightsy'
-          ? buildSessionSeed(prior.slice(-8), { tools: 'none' })
-          : buildSessionSeed(prior);
+      seed = isBrightsy
+        ? buildSessionSeed(prior.slice(-6), { tools: 'none' })
+        : buildSessionSeed(prior);
     }
 
-    // Worktree directive is always included (even on Claude resume). Project
+    // Worktree directive for local agents (even on Claude resume). Project
     // instructions + seed only on fresh sessions / non-Claude agents.
     // Rename-branch is Conductor-style: only while still on the placeholder branch.
     const cachedPrefix = [
