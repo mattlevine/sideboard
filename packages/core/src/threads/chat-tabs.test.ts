@@ -32,14 +32,16 @@ const source: Thread = {
 };
 
 let written: Thread | null = null;
+let listed: Thread[] = [source];
 const teamNames = new Set(FAMOUS_SOCCER_TEAMS.map((t) => t.name));
 
 vi.mock('../store/thread-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../store/thread-store.js')>();
   return {
     ...actual,
-    findThreadByRef: (ref: string) => (ref === source.id ? source : null),
-    listThreads: () => [source],
+    findThreadByRef: (ref: string) =>
+      listed.find((t) => t.id === ref || t.id.startsWith(ref)) ?? null,
+    listThreads: () => listed,
     writeThread: (thread: Thread) => {
       written = thread;
     },
@@ -49,6 +51,7 @@ vi.mock('../store/thread-store.js', async (importOriginal) => {
 describe('forkChatTab', () => {
   beforeEach(() => {
     written = null;
+    listed = [source];
   });
 
   it('inherits the source thread worktree binding (no new git worktree)', async () => {
@@ -78,6 +81,7 @@ describe('forkChatTab', () => {
 describe('createChatTab', () => {
   beforeEach(() => {
     written = null;
+    listed = [source];
   });
 
   it('adds a chat tab without changing worktree path, branch, or folder identity', async () => {
@@ -98,5 +102,21 @@ describe('createChatTab', () => {
 
     expect(teamNames.has(tab.title)).toBe(true);
     expect(tab.title).not.toBe(source.title);
+  });
+
+  it('does not reuse the worktree folder soccer team as a new tab title', async () => {
+    const { createChatTab } = await import('./chat-tabs.js');
+    // Even if the sibling title is not a club name, the worktree dir / branch
+    // still reserve "west-ham".
+    const untitledSource: Thread = {
+      ...source,
+      id: 'untitled-source',
+      title: 'Untitled',
+    };
+    listed = [untitledSource];
+
+    const tab = createChatTab({ fromThreadId: untitledSource.id });
+    expect(tab.title).not.toBe('West Ham');
+    expect(teamNames.has(tab.title)).toBe(true);
   });
 });

@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { formatMessagesAsTranscript } from '../composer/context-compact.js';
-import { allocateTeamName, teamSlugFromName } from '../git/teams.js';
-import { normalizeWorktreePath } from '../git/worktree-labels.js';
+import {
+  allocateTeamName,
+  takenSlugsFromThread,
+} from '../git/teams.js';
+import {
+  normalizeWorktreePath,
+  worktreeNameFromPath,
+} from '../git/worktree-labels.js';
 import {
   createEmptyThread,
   findThreadByRef,
@@ -20,6 +26,21 @@ export { normalizeWorktreePath } from '../git/worktree-labels.js';
 
 export function sameWorktreePath(a: string, b: string): boolean {
   return normalizeWorktreePath(a) === normalizeWorktreePath(b);
+}
+
+/** Soccer-team slugs already used by this worktree or sibling tab titles. */
+export function takenTeamSlugsForChatTab(worktreePath: string): string[] {
+  const key = normalizeWorktreePath(worktreePath);
+  const taken = new Set<string>();
+  const dir = worktreeNameFromPath(key);
+  if (dir) taken.add(dir.toLowerCase());
+
+  for (const sibling of threadsSharingWorktree(key)) {
+    for (const slug of takenSlugsFromThread(sibling)) {
+      taken.add(slug);
+    }
+  }
+  return [...taken];
 }
 
 function requireThread(idOrRef: string): Thread {
@@ -93,15 +114,10 @@ export function createChatTab(input: CreateChatTabInput): Thread {
   const from = requireThread(input.fromThreadId);
   const binding = worktreeBindingFrom(from);
 
-  const siblings = threadsSharingWorktree(binding.worktreePath);
   const explicitTitle = input.title?.trim();
   const title =
     explicitTitle ||
-    allocateTeamName(
-      siblings
-        .map((t) => teamSlugFromName(t.title))
-        .filter((slug): slug is string => Boolean(slug)),
-    ).name;
+    allocateTeamName(takenTeamSlugsForChatTab(binding.worktreePath)).name;
 
   const thread = createEmptyThread({
     title,

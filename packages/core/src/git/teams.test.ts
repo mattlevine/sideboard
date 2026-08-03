@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allocateTeamName,
   FAMOUS_SOCCER_TEAMS,
+  takenSlugsFromThread,
   teamNameFromSlug,
   teamSlugFromName,
 } from './teams.js';
@@ -95,6 +96,28 @@ describe('worktreeDisplayLabelForGroup', () => {
   });
 });
 
+describe('takenSlugsFromThread', () => {
+  it('includes title, branch, and worktree directory slugs', () => {
+    expect(
+      takenSlugsFromThread({
+        title: 'West Ham',
+        branchName: 'thread/west-ham',
+        worktreePath: '/Users/me/sideboard/workspaces/sideboard/west-ham',
+      }).sort(),
+    ).toEqual(['west-ham']);
+  });
+
+  it('still reserves the worktree slug when the title is not a club', () => {
+    expect(
+      takenSlugsFromThread({
+        title: 'Untitled',
+        branchName: 'thread/monaco',
+        worktreePath: '/Users/me/sideboard/workspaces/brightsy-ai/monaco',
+      }).sort(),
+    ).toEqual(['monaco']);
+  });
+});
+
 describe('allocateTeamName', () => {
   it('picks an unused team', () => {
     const taken = new Set(FAMOUS_SOCCER_TEAMS.slice(1).map((t) => t.slug));
@@ -106,6 +129,15 @@ describe('allocateTeamName', () => {
     const team = allocateTeamName(['thread/liverpool', 'arsenal'], () => 0);
     expect(team.slug).not.toBe('liverpool');
     expect(team.slug).not.toBe('arsenal');
+  });
+
+  it('never returns a taken slug', () => {
+    const taken = ['monaco', 'thread/west-ham', 'Ajax'];
+    for (let i = 0; i < 20; i++) {
+      const team = allocateTeamName(taken, () => i / 20);
+      expect(team.slug).not.toBe('monaco');
+      expect(team.slug).not.toBe('west-ham');
+    }
   });
 
   it('suffixes when the pool is exhausted', () => {

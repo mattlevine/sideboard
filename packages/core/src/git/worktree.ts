@@ -9,8 +9,13 @@ import type {
 } from '../types/thread.js';
 import { worktreesRoot } from '../store/paths.js';
 import { listThreads } from '../store/thread-store.js';
-import { allocateTeamName, type TeamName } from './teams.js';
-import { worktreeNameFromPath } from './worktree-labels.js';
+import {
+  allocateTeamName,
+  normalizeTakenSlug,
+  takenSlugsFromThread,
+  type TeamName,
+} from './teams.js';
+import { normalizeWorktreePath } from './worktree-labels.js';
 import { gh, git } from './run.js';
 
 export type { TeamName } from './teams.js';
@@ -543,6 +548,23 @@ export {
   worktreeNameFromPath,
 } from './worktree-labels.js';
 
+function sameRepoPath(a: string, b: string): boolean {
+  return normalizeWorktreePath(a) === normalizeWorktreePath(b);
+}
+
+/** Local `thread/*` branch tips under `.git/refs/heads/thread` (best-effort). */
+function listLocalThreadBranchSlugs(repoPath: string): string[] {
+  const refsDir = join(repoPath, '.git', 'refs', 'heads', 'thread');
+  if (!existsSync(refsDir)) return [];
+  try {
+    return readdirSync(refsDir)
+      .filter((name) => !name.startsWith('.'))
+      .map((name) => normalizeTakenSlug(name));
+  } catch {
+    return [];
+  }
+}
+
 /** Slugs already used by worktree dirs, thread records, or `thread/<slug>` branches. */
 export function collectTakenTeamSlugs(repoPath: string): Set<string> {
   const taken = new Set<string>();
@@ -550,15 +572,21 @@ export function collectTakenTeamSlugs(repoPath: string): Set<string> {
   const root = worktreesRoot(repoPath);
   if (existsSync(root)) {
     for (const entry of readdirSync(root, { withFileTypes: true })) {
-      if (entry.isDirectory()) taken.add(entry.name.toLowerCase());
+      if (entry.isDirectory() && entry.name !== '.DS_Store') {
+        taken.add(normalizeTakenSlug(entry.name));
+      }
     }
   }
 
+  for (const slug of listLocalThreadBranchSlugs(repoPath)) {
+    taken.add(slug);
+  }
+
   for (const thread of listThreads({ includeArchived: true })) {
-    if (thread.repoPath !== repoPath) continue;
-    taken.add(worktreeNameFromPath(thread.worktreePath).toLowerCase());
-    const branchSlug = thread.branchName.replace(/^thread\//, '');
-    if (branchSlug) taken.add(branchSlug.toLowerCase());
+    if (!sameRepoPath(thread.repoPath, repoPath)) continue;
+    for (const slug of takenSlugsFromThread(thread)) {
+      taken.add(slug);
+    }
   }
 
   return taken;
@@ -566,5 +594,13 @@ export function collectTakenTeamSlugs(repoPath: string): Set<string> {
 
 /** Pick an unused soccer team for the worktree directory / branch slug. */
 export function allocateTeamSlug(repoPath: string): TeamName {
-  return allocateTeamName(collectTakenTeamSlugs(repoPath));
+  const taken = collectTakenTeamSlugs(repoPath);
+  // Retry if a dir appeared between collect and allocate (or stale taken set).
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const team = allocateTeamName(taken);
+    const path = join(worktreesRoot(repoPath), team.slug);
+    if (!existsSync(path)) return team;
+    taken.add(team.slug);
+  }
+  throw new Error('No available soccer team worktree directories left');
 }
