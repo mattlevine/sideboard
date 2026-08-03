@@ -26,9 +26,9 @@ export async function createThread(
   input: CreateThreadInput,
   onSetupLine?: (line: string) => void,
 ): Promise<Thread> {
-  await requireAgent(input.agent, {
-    requireLinear: input.sourceType === 'ticket',
-  });
+  // Tickets no longer require agent Linear MCP — Sideboard Account owns
+  // Linear/GitHub issue connections (see integrations/).
+  await requireAgent(input.agent);
 
   const repoPath = await resolveRepoRoot(input.repoPath);
   if (!existsSync(repoPath)) {
@@ -115,6 +115,7 @@ export async function createThread(
   return readThread(thread.id) ?? thread;
 }
 
+/** @deprecated Prefer listIssues() from integrations/issues — agent-agnostic. */
 export async function listLinearIssues(agent: AgentKind, repoPath: string) {
   const { getAdapter } = await import('../agents/index.js');
   await requireAgent(agent, { requireLinear: true });

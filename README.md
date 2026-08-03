@@ -179,7 +179,7 @@ sideboard brightsy disconnect-team <slug>
 Brightsy chat channels can drive Sideboard on your machine across **all registered workspaces** — no need to be at the keyboard. Slack is the best-tested path; Discord and Microsoft Teams use the same cloud-task flow but are less battle-tested.
 
 ```
-Slack / Discord / Teams → Brightsy cloud agent → Sideboard cloud task queue
+Slack / Discord / Teams → Brightsy cloud agent → Brightsy desktop task queue
                                         │  polled every 5s
                                         ▼
                         local coordinator thread (Sideboard MCP)
@@ -188,16 +188,16 @@ Slack / Discord / Teams → Brightsy cloud agent → Sideboard cloud task queue
                          any registered workspace + its threads
 ```
 
-One coordinator thread is reused across requests. It can list and act on threads in every workspace Sideboard knows about. Replies are text-only and post back to the Brightsy task (and the chat channel).
+Sideboard uses Brightsy’s existing `/api/v1beta/desktop/*` cloud-to-local API (same queue/access as Brightsy desktop access). One coordinator thread is reused across requests. It can list and act on threads in every workspace Sideboard knows about. Replies are text-only and post back to the Brightsy task (and the chat channel).
 
 **Setup (desktop UI — preferred)**
 
 1. `brightsy login`, then in Sideboard: **Settings → Agents → Brightsy** and check the teams you want.
 2. Same panel: turn on **Cloud messages / remote orchestrator** and pick a coordinator agent (`claude` recommended).
 3. In Brightsy, connect Slack, Discord, and/or Teams on the agent, and link your chat identity under User Settings → Integrations.
-4. Keep the Sideboard desktop app running. It polls Brightsy and routes tasks to the global orchestrator.
+4. Keep the Sideboard desktop app running. It polls Brightsy desktop tasks and routes them to the global orchestrator.
 
-Turning the switch off stops the daemon and disables Sideboard cloud access.
+Turning the switch off stops the daemon and disables Brightsy desktop access for that account.
 
 **Setup (CLI)**
 

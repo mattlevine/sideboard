@@ -27,6 +27,8 @@ interface Props {
   menuPlacement?: 'auto' | 'up' | 'down';
   /** Extra controls on the right (e.g. send button). */
   rightSlot?: ReactNode;
+  /** Conductor-style create dialog chrome (paperclip, quieter chips). */
+  variant?: 'default' | 'create';
 }
 
 function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
@@ -83,7 +85,9 @@ export function ComposerOptionsToolbar({
   repoPath,
   menuPlacement = 'auto',
   rightSlot,
+  variant = 'default',
 }: Props) {
+  const isCreate = variant === 'create';
   const [plusOpen, setPlusOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [brightsyPickerOpen, setBrightsyPickerOpen] = useState(false);
@@ -166,7 +170,7 @@ export function ComposerOptionsToolbar({
   return (
     <>
       <div
-        className="composer-toolbar"
+        className={`composer-toolbar${isCreate ? ' create-variant' : ''}`}
         onMouseDown={(e) => {
           e.preventDefault();
         }}
@@ -182,29 +186,46 @@ export function ComposerOptionsToolbar({
               setModelOpen((v) => !v);
             }}
           >
-            ▦ {modelLabel}
+            <span className="chip-model-icon" aria-hidden>
+              ✦
+            </span>{' '}
+            {modelLabel}
           </button>
+          {isCreate ? (
+            <button
+              type="button"
+              className={`chip${options.fast ? ' active fast' : ''}`}
+              title={options.fast ? 'Fast mode (lower effort)' : 'High effort'}
+              onClick={() => patch({ fast: !options.fast })}
+            >
+              <span className="chip-effort-icon" aria-hidden>
+                ▮▮▮
+              </span>{' '}
+              {options.fast ? 'Fast' : 'High'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`chip${options.fast ? ' active fast' : ''}`}
+              title="Fast mode (lower effort)"
+              onClick={() => patch({ fast: !options.fast })}
+            >
+              <span className="chip-bolt" aria-hidden>
+                ⚡
+              </span>{' '}
+              Fast
+            </button>
+          )}
           <button
             type="button"
-            className={`chip${options.planMode ? ' active plan' : ''}`}
+            className={`chip${options.planMode ? ' active plan' : ''}${isCreate ? ' icon-only' : ''}`}
             title="Plan mode — analyze and plan without editing files"
             onClick={() => patch({ planMode: !options.planMode })}
           >
             <span className="chip-plan-icon" aria-hidden>
               ◫
-            </span>{' '}
-            Plan
-          </button>
-          <button
-            type="button"
-            className={`chip${options.fast ? ' active fast' : ''}`}
-            title="Fast mode (lower effort)"
-            onClick={() => patch({ fast: !options.fast })}
-          >
-            <span className="chip-bolt" aria-hidden>
-              ⚡
-            </span>{' '}
-            Fast
+            </span>
+            {isCreate ? null : ' Plan'}
           </button>
           <FloatingMenu
             open={modelOpen}
@@ -308,73 +329,89 @@ export function ComposerOptionsToolbar({
           </FloatingMenu>
         </div>
         <div className="composer-right">
-          <button
-            ref={plusBtnRef}
-            type="button"
-            className="icon-round"
-            title="More"
-            onClick={() => {
-              setModelOpen(false);
-              setPlusOpen((v) => !v);
-            }}
-          >
-            +
-          </button>
-          <FloatingMenu
-            open={plusOpen}
-            onClose={() => setPlusOpen(false)}
-            anchorRef={plusBtnRef}
-            align="right"
-            placement={menuPlacement}
-            minWidth={240}
-          >
+          {isCreate ? (
             <button
+              ref={plusBtnRef}
               type="button"
+              className="icon-round create-attach-btn"
+              title="Add attachment (⌘U)"
               onClick={() => {
                 void addAttachmentsFromPicker();
               }}
             >
-              <span className="menu-item-label">
-                <span className="tool-menu-icon paperclip" aria-hidden />
-                Add attachment
-              </span>
-              <kbd>⌘U</kbd>
+              <span className="tool-menu-icon paperclip" aria-hidden />
             </button>
-            {repoPath ? (
+          ) : (
+            <>
               <button
+                ref={plusBtnRef}
                 type="button"
+                className="icon-round"
+                title="More"
                 onClick={() => {
-                  setPlusOpen(false);
-                  setWorkspacePickerOpen(false);
-                  setIssuePickerOpen(true);
+                  setModelOpen(false);
+                  setPlusOpen((v) => !v);
                 }}
               >
-                <span className="menu-item-label">
-                  <span className="tool-menu-icon menu-issue-icons" aria-hidden>
-                    <span className="picker-logo linear tiny" />
-                    <span className="picker-logo github tiny" />
-                  </span>
-                  Link issue
-                </span>
-                <kbd>⌘I</kbd>
+                +
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                setPlusOpen(false);
-                setIssuePickerOpen(false);
-                setWorkspacePickerOpen(true);
-              }}
-            >
-              <span className="menu-item-label">
-                <span className="tool-menu-icon" aria-hidden>
-                  <span className="picker-folder-in" />
-                </span>
-                Link workspaces
-              </span>
-            </button>
-          </FloatingMenu>
+              <FloatingMenu
+                open={plusOpen}
+                onClose={() => setPlusOpen(false)}
+                anchorRef={plusBtnRef}
+                align="right"
+                placement={menuPlacement}
+                minWidth={240}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    void addAttachmentsFromPicker();
+                  }}
+                >
+                  <span className="menu-item-label">
+                    <span className="tool-menu-icon paperclip" aria-hidden />
+                    Add attachment
+                  </span>
+                  <kbd>⌘U</kbd>
+                </button>
+                {repoPath ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlusOpen(false);
+                      setWorkspacePickerOpen(false);
+                      setIssuePickerOpen(true);
+                    }}
+                  >
+                    <span className="menu-item-label">
+                      <span className="tool-menu-icon menu-issue-icons" aria-hidden>
+                        <span className="picker-logo linear tiny" />
+                        <span className="picker-logo github tiny" />
+                      </span>
+                      Link issue
+                    </span>
+                    <kbd>⌘I</kbd>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlusOpen(false);
+                    setIssuePickerOpen(false);
+                    setWorkspacePickerOpen(true);
+                  }}
+                >
+                  <span className="menu-item-label">
+                    <span className="tool-menu-icon" aria-hidden>
+                      <span className="picker-folder-in" />
+                    </span>
+                    Link workspaces
+                  </span>
+                </button>
+              </FloatingMenu>
+            </>
+          )}
           {rightSlot}
         </div>
       </div>

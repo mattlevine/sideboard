@@ -41,6 +41,8 @@ describe('app settings', () => {
       environment: { CURSOR_API_KEY: 'from-settings', EXTRA: 'yes' },
       claude: {},
       brightsy: {},
+      integrations: {},
+      advanced: {},
     });
     const target: NodeJS.ProcessEnv = { CURSOR_API_KEY: 'from-shell' };
     mod.applyAppEnvironment(target);
@@ -55,7 +57,66 @@ describe('app settings', () => {
       environment: {},
       claude: {},
       brightsy: {},
+      integrations: {},
+      advanced: {},
     });
+  });
+
+  it('round-trips integrations (Linear key + issue source)', async () => {
+    const mod = await load();
+    expect(mod.isLinearConnected()).toBe(false);
+    expect(mod.getIssueSource()).toBe('github');
+    expect(mod.resolveEffectiveIssueSource()).toBe('github');
+
+    const saved = mod.updateIntegrationsSettings({
+      linearApiKey: 'lin_api_test',
+      issueSource: 'linear',
+    });
+    expect(saved.integrations).toEqual({
+      linearApiKey: 'lin_api_test',
+      issueSource: 'linear',
+    });
+    expect(mod.isLinearConnected()).toBe(true);
+    expect(mod.resolveEffectiveIssueSource()).toBe('linear');
+
+    const githubPref = mod.updateIntegrationsSettings({ issueSource: 'github' });
+    expect(githubPref.integrations.issueSource).toBe('github');
+    expect(mod.resolveEffectiveIssueSource()).toBe('github');
+
+    const cleared = mod.updateIntegrationsSettings({ linearApiKey: null });
+    expect(cleared.integrations.linearApiKey).toBeUndefined();
+    expect(mod.isLinearConnected()).toBe(false);
+    expect(mod.resolveEffectiveIssueSource()).toBe('github');
+  });
+
+  it('round-trips Advanced preferences with Conductor-like defaults', async () => {
+    const mod = await load();
+    expect(mod.autoRenameBranchEnabled()).toBe(true);
+    expect(mod.autoRunAfterSetupEnabled()).toBe(false);
+    expect(mod.caffeinateWhileRunningEnabled()).toBe(false);
+    expect(mod.caffeinateWhileCloudConnectEnabled()).toBe(false);
+    expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
+    expect(mod.maxConcurrentAgents()).toBe(3);
+
+    const saved = mod.updateAdvancedSettings({
+      autoRenameBranch: false,
+      autoRunAfterSetup: true,
+      caffeinateWhileRunning: true,
+      caffeinateWhileCloudConnect: true,
+      deleteBranchOnPurge: true,
+      maxConcurrent: 8,
+    });
+    expect(saved.advanced).toEqual({
+      autoRenameBranch: false,
+      autoRunAfterSetup: true,
+      caffeinateWhileRunning: true,
+      caffeinateWhileCloudConnect: true,
+      deleteBranchOnPurge: true,
+      maxConcurrent: 8,
+    });
+    expect(mod.autoRenameBranchEnabled()).toBe(false);
+    expect(mod.caffeinateWhileCloudConnectEnabled()).toBe(true);
+    expect(mod.maxConcurrentAgents()).toBe(8);
   });
 
   it('round-trips Brightsy cloud connect settings', async () => {

@@ -4,17 +4,21 @@ import type { IssueInfo, Thread, ThreadAttachment, Workspace } from '@sideboard/
 
 interface IssuePickerProps {
   open: boolean;
-  agent: Thread['agent'];
+  /** @deprecated Ignored — issues come from Sideboard Account connections. */
+  agent?: Thread['agent'];
   repoPath: string;
   onClose: () => void;
   onPick: (attachment: ThreadAttachment) => void;
 }
 
-export function LinkIssuePicker({ open, agent, repoPath, onClose, onPick }: IssuePickerProps) {
+export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePickerProps) {
   const [query, setQuery] = useState('');
   const [issues, setIssues] = useState<IssueInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<'linear' | 'github'>('github');
+  const [preferredSource, setPreferredSource] = useState<'linear' | 'github'>('github');
+  const [linearConnected, setLinearConnected] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -22,17 +26,20 @@ export function LinkIssuePicker({ open, agent, repoPath, onClose, onPick }: Issu
     setLoading(true);
     setError(null);
     void window.sideboard
-      .listLinearIssues(agent, repoPath)
-      .then((list) => {
-        setIssues(list);
-        if (list.length === 0) setError('empty');
+      .listIssues(repoPath)
+      .then((result) => {
+        setIssues(result.issues);
+        setSource(result.source);
+        setPreferredSource(result.preferredSource);
+        setLinearConnected(result.linearConnected);
+        if (result.issues.length === 0) setError('empty');
       })
       .catch((err) => {
         setIssues([]);
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setLoading(false));
-  }, [open, agent, repoPath]);
+  }, [open, repoPath]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -47,6 +54,8 @@ export function LinkIssuePicker({ open, agent, repoPath, onClose, onPick }: Issu
 
   if (!open) return null;
 
+  const showLinearSetup = preferredSource === 'linear' && !linearConnected;
+
   return (
     <div className="composer-picker-backdrop" onClick={onClose}>
       <div
@@ -58,7 +67,11 @@ export function LinkIssuePicker({ open, agent, repoPath, onClose, onPick }: Issu
         <input
           className="composer-picker-search"
           autoFocus
-          placeholder="Search issues..."
+          placeholder={
+            source === 'github'
+              ? 'Search by title, number, or label'
+              : 'Search by issue number, title, or description'
+          }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -66,37 +79,50 @@ export function LinkIssuePicker({ open, agent, repoPath, onClose, onPick }: Issu
           }}
         />
         {loading && <div className="composer-picker-empty">Loading issues…</div>}
-        {!loading && (error || filtered.length === 0) && (
+        {!loading && showLinearSetup && (
           <div className="composer-picker-section">
             <div className="composer-picker-section-label">Setup</div>
             <button
               type="button"
               className="composer-picker-row"
               onClick={() => {
-                void window.sideboard.openExternal('https://linear.app');
+                void window.sideboard.openExternal('https://linear.app/settings/api');
               }}
             >
               <span className="composer-picker-icons">
                 <span className="picker-logo linear" aria-hidden />
               </span>
               <span className="composer-picker-main">
-                <span className="composer-picker-title">Connect Linear</span>
+                <span className="composer-picker-title">Set up Linear</span>
+                <span className="composer-picker-sub">
+                  Add an API key in Settings → Account (showing GitHub Issues for now)
+                </span>
               </span>
               <span className="composer-picker-hint">
-                Setup <kbd>↵</kbd>
+                Open <kbd>↵</kbd>
               </span>
             </button>
+          </div>
+        )}
+        {!loading && filtered.length === 0 && !showLinearSetup && (
+          <div className="composer-picker-section">
             {error && error !== 'empty' && (
               <div className="composer-picker-empty">{error}</div>
             )}
-            {!error && filtered.length === 0 && issues.length > 0 && (
-              <div className="composer-picker-empty">No matching issues</div>
+            {(error === 'empty' || !error) && (
+              <div className="composer-picker-empty">
+                {issues.length === 0
+                  ? `No ${source === 'github' ? 'GitHub' : 'Linear'} issues`
+                  : 'No matching issues'}
+              </div>
             )}
           </div>
         )}
         {!loading && filtered.length > 0 && (
           <div className="composer-picker-section">
-            <div className="composer-picker-section-label">Issues</div>
+            <div className="composer-picker-section-label">
+              {source === 'github' ? 'GitHub Issues' : 'Linear Issues'}
+            </div>
             {filtered.slice(0, 40).map((issue) => (
               <button
                 key={issue.id || issue.identifier}
@@ -119,7 +145,10 @@ export function LinkIssuePicker({ open, agent, repoPath, onClose, onPick }: Issu
                 }}
               >
                 <span className="composer-picker-icons">
-                  <span className="picker-logo linear" aria-hidden />
+                  <span
+                    className={`picker-logo ${issue.provider ?? source}`}
+                    aria-hidden
+                  />
                 </span>
                 <span className="composer-picker-main">
                   <span className="composer-picker-title">{issue.identifier}</span>

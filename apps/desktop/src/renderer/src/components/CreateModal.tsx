@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentStatus,
-  BranchInfo,
   ThreadAttachment,
   Workspace,
 } from '@sideboard/core';
@@ -10,9 +9,13 @@ import {
   ComposerOptionsToolbar,
   type ComposerDraftOptions,
 } from './ComposerOptionsToolbar';
+import {
+  CreateFromPicker,
+  type CreateFromSelection,
+} from './CreateFromPicker';
+import { FloatingMenu } from './FloatingMenu';
 
-type Mode = 'quick' | 'advanced';
-type AdvancedTab = 'branch' | 'pr' | 'ticket' | 'orchestration';
+type Mode = 'create' | 'orchestration';
 
 interface Props {
   /** Preselected workspace path (from per-repo +). */
@@ -21,7 +24,9 @@ interface Props {
   knownWorkspaces?: Workspace[];
   initialMode?: 'quick' | 'orchestration';
   onClose: () => void;
-  onCreated: (threadId: string) => void;
+  onCreated: (threadId: string, opts?: { stayOpen?: boolean }) => void;
+  /** Open Settings → Account (e.g. Linear setup). */
+  onOpenAccount?: () => void;
 }
 
 function dedupeWorkspaces(list: Workspace[]): Workspace[] {
@@ -40,18 +45,47 @@ const DEFAULT_OPTIONS: ComposerDraftOptions = {
   autonomy: 'default',
 };
 
+const AVATAR_COLORS = [
+  '#c45c26',
+  '#2d6a4f',
+  '#1d3557',
+  '#6a4c93',
+  '#bc4749',
+  '#0077b6',
+  '#b08968',
+  '#3a5a40',
+];
+
+function repoAvatarStyle(name: string): { background: string } {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return { background: AVATAR_COLORS[hash % AVATAR_COLORS.length] };
+}
+
+function selectionLabel(sel: CreateFromSelection | null): string {
+  if (!sel) return 'Create from…';
+  if (sel.kind === 'pr') return `PR #${sel.ref}${sel.title ? ` — ${sel.title}` : ''}`;
+  if (sel.kind === 'ticket') return `${sel.ref}${sel.title ? ` — ${sel.title}` : ''}`;
+  if (sel.ref === 'default') return 'default branch';
+  return sel.ref;
+}
+
 export function CreateModal({
   initialRepoPath = null,
   knownWorkspaces = [],
   initialMode = 'quick',
   onClose,
   onCreated,
+  onOpenAccount,
 }: Props) {
-  const [mode, setMode] = useState<Mode>(initialMode === 'orchestration' ? 'advanced' : 'quick');
-  const [tab, setTab] = useState<AdvancedTab>(
-    initialMode === 'orchestration' ? 'orchestration' : 'branch',
+  const [mode, setMode] = useState<Mode>(
+    initialMode === 'orchestration' ? 'orchestration' : 'create',
   );
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => dedupeWorkspaces(knownWorkspaces));
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(() =>
+    dedupeWorkspaces(knownWorkspaces),
+  );
   const [repoPath, setRepoPath] = useState(
     initialRepoPath ?? knownWorkspaces[0]?.path ?? '',
   );
@@ -59,14 +93,29 @@ export function CreateModal({
   const [attachments, setAttachments] = useState<ThreadAttachment[]>([]);
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [agentsLoaded, setAgentsLoaded] = useState(false);
-  const [branches, setBranches] = useState<BranchInfo[]>([]);
-  const [branch, setBranch] = useState('default');
-  const [pr, setPr] = useState('');
-  const [ticket, setTicket] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [repoMenuOpen, setRepoMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [selection, setSelection] = useState<CreateFromSelection | null>(null);
+  const [linearConnected, setLinearConnected] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [goal, setGoal] = useState('');
+  const [createMore, setCreateMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const repoBtnRef = useRef<HTMLButtonElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((w) => w.path === repoPath) ?? null,
+    [workspaces, repoPath],
+  );
+  const repoName =
+    selectedWorkspace?.name ||
+    (repoPath ? repoPath.split('/').filter(Boolean).pop() : '') ||
+    'Select project';
 
   async function refreshWorkspaces(preferred?: string | null) {
     const collected: Workspace[] = [...knownWorkspaces];
@@ -131,22 +180,14 @@ export function CreateModal({
       .catch(() => setStatuses([]))
       .finally(() => setAgentsLoaded(true));
     void refreshWorkspaces(initialRepoPath);
+    void window.sideboard
+      .getAppSettings()
+      .then((s) => setLinearConnected(Boolean(s.integrations?.linearApiKey)))
+      .catch(() => setLinearConnected(false));
   }, [initialRepoPath]);
 
   useEffect(() => {
-    if (!repoPath) return;
-    void window.sideboard
-      .listBranches(repoPath)
-      .then((b) => {
-        const usable = b.filter((x) => !x.name.startsWith('thread/'));
-        setBranches(usable);
-        // Keep "default branch" selected — new threads fork from up-to-date origin/main.
-        setBranch((prev) => (prev === 'default' || !usable.some((x) => x.name === prev) ? 'default' : prev));
-      })
-      .catch(() => {
-        setBranches([]);
-        setBranch('default');
-      });
+    setSelection(null);
   }, [repoPath]);
 
   useEffect(() => {
@@ -167,6 +208,8 @@ export function CreateModal({
 
   async function addWorkspace() {
     setError(null);
+    setRepoMenuOpen(false);
+    setMoreMenuOpen(false);
     const picked = await window.sideboard.pickRepoPath();
     if (!picked) return;
     try {
@@ -181,9 +224,18 @@ export function CreateModal({
     setOptions((prev) => ({ ...prev, ...patch }));
   }
 
+  function resetDraft() {
+    setPrompt('');
+    setGoal('');
+    setSelection(null);
+    setAttachments([]);
+    setError(null);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   async function submit() {
     if (!repoPath) {
-      setError('Add a workspace first (Add…)');
+      setError('Add a project first');
       return;
     }
     setBusy(true);
@@ -198,45 +250,73 @@ export function CreateModal({
         attachments,
       };
 
-      if (mode === 'advanced' && tab === 'orchestration') {
+      if (mode === 'orchestration') {
         if (!goal.trim()) throw new Error('Describe the orchestration goal');
         const t = await window.sideboard.startOrchestration({
           goal: goal.trim(),
           repoPath,
           ...draft,
         });
-        onCreated(t.id);
-        onClose();
+        if (createMore) {
+          onCreated(t.id, { stayOpen: true });
+          resetDraft();
+        } else {
+          onCreated(t.id);
+          onClose();
+        }
         return;
       }
 
       let sourceType: 'branch' | 'pr' | 'ticket' = 'branch';
       let sourceRef = 'default';
+      let title: string | undefined;
+      let createAttachments = [...attachments];
 
-      if (mode === 'advanced') {
-        if (tab === 'pr') {
+      if (selection) {
+        if (selection.kind === 'pr') {
           sourceType = 'pr';
-          sourceRef = pr.replace(/^#/, '');
-        } else if (tab === 'ticket') {
+          sourceRef = selection.ref;
+          title = selection.title;
+        } else if (selection.kind === 'ticket') {
           sourceType = 'ticket';
-          sourceRef = ticket.toUpperCase();
+          sourceRef = selection.ref;
+          title = selection.title;
+          createAttachments = [
+            ...createAttachments,
+            {
+              id: crypto.randomUUID(),
+              name: selection.ref,
+              kind: 'issue',
+              content: [
+                `Linked issue: ${selection.ref} — ${selection.title}`,
+                selection.url ? `URL: ${selection.url}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n'),
+            },
+          ];
         } else {
           sourceType = 'branch';
-          sourceRef = branch === 'default' ? 'default' : branch;
+          sourceRef = selection.ref;
         }
       }
-
-      if (!sourceRef) throw new Error('Pick a source');
 
       const t = await window.sideboard.createThread({
         sourceType,
         sourceRef,
         repoPath,
+        title,
         prompt: prompt.trim() || undefined,
         ...draft,
+        attachments: createAttachments,
       });
-      onCreated(t.id);
-      onClose();
+      if (createMore) {
+        onCreated(t.id, { stayOpen: true });
+        resetDraft();
+      } else {
+        onCreated(t.id);
+        onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -244,171 +324,235 @@ export function CreateModal({
     }
   }
 
-  const promptValue = mode === 'advanced' && tab === 'orchestration' ? goal : prompt;
-  const setPromptValue =
-    mode === 'advanced' && tab === 'orchestration' ? setGoal : setPrompt;
+  const promptValue = mode === 'orchestration' ? goal : prompt;
+  const setPromptValue = mode === 'orchestration' ? setGoal : setPrompt;
+  const canSubmit =
+    !busy &&
+    agentsLoaded &&
+    agentOk &&
+    Boolean(repoPath) &&
+    (mode !== 'orchestration' || Boolean(goal.trim()));
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal create-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal create-modal"
+        role="dialog"
+        aria-label="New thread"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="create-header">
-          <div className="row" style={{ marginBottom: 0, flex: 1 }}>
-            <label>Workspace</label>
-            {workspaces.length > 0 ? (
-              <select
-                value={repoPath}
-                onChange={(e) => setRepoPath(e.target.value)}
-                style={{ flex: 1 }}
+          <div className="create-header-left">
+            <button
+              ref={repoBtnRef}
+              type="button"
+              className="create-repo-trigger"
+              onClick={() => {
+                setMoreMenuOpen(false);
+                setRepoMenuOpen((v) => !v);
+              }}
+            >
+              <span
+                className="create-repo-avatar"
+                style={repoAvatarStyle(repoName)}
+                aria-hidden
               >
-                {workspaces.map((w) => (
-                  <option key={w.path} value={w.path}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="thread-meta" style={{ flex: 1 }}>
-                No workspaces yet — click Add…
+                {(repoName[0] || '?').toUpperCase()}
               </span>
-            )}
-            <button type="button" className="primary" onClick={() => void addWorkspace()}>
-              Add…
-            </button>
-          </div>
-          <div className="tab-bar" style={{ marginBottom: 0 }}>
-            <button
-              className={mode === 'quick' ? 'active primary' : ''}
-              onClick={() => setMode('quick')}
-            >
-              Create
+              <span className="create-repo-name">{repoName}</span>
+              <span className="create-from-chevron">▾</span>
             </button>
             <button
-              className={mode === 'advanced' ? 'active primary' : ''}
-              onClick={() => setMode('advanced')}
+              ref={moreBtnRef}
+              type="button"
+              className="create-icon-btn"
+              title="More"
+              aria-label="More options"
+              onClick={() => {
+                setRepoMenuOpen(false);
+                setMoreMenuOpen((v) => !v);
+              }}
             >
-              Advanced
+              ···
             </button>
-          </div>
-        </div>
-
-        {mode === 'advanced' && (
-          <div className="tab-bar">
-            {(['branch', 'pr', 'ticket', 'orchestration'] as AdvancedTab[]).map((t) => (
-              <button
-                key={t}
-                className={tab === t ? 'active primary' : ''}
-                onClick={() => setTab(t)}
-              >
-                {t}
+            <FloatingMenu
+              open={repoMenuOpen}
+              onClose={() => setRepoMenuOpen(false)}
+              anchorRef={repoBtnRef}
+              align="left"
+              placement="down"
+              minWidth={240}
+            >
+              {workspaces.length === 0 ? (
+                <div className="menu-section">No projects yet</div>
+              ) : (
+                workspaces.map((w) => (
+                  <button
+                    key={w.path}
+                    type="button"
+                    className={w.path === repoPath ? 'selected' : ''}
+                    onClick={() => {
+                      setRepoPath(w.path);
+                      setRepoMenuOpen(false);
+                    }}
+                  >
+                    <span>
+                      {w.path === repoPath ? '✓ ' : ''}
+                      {w.name}
+                    </span>
+                  </button>
+                ))
+              )}
+              <div className="menu-section">Projects</div>
+              <button type="button" onClick={() => void addWorkspace()}>
+                <span>Add project…</span>
               </button>
-            ))}
-          </div>
-        )}
-
-        {mode === 'advanced' && tab === 'branch' && (
-          <div className="row">
-            <label>From</label>
-            <select value={branch} onChange={(e) => setBranch(e.target.value)} style={{ flex: 1 }}>
-              <option value="default">default branch</option>
-              {branches.map((b) => (
-                <option key={b.name} value={b.name}>
-                  {b.current ? '* ' : ''}
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {mode === 'advanced' && tab === 'pr' && (
-          <div className="row">
-            <label>PR #</label>
-            <input
-              value={pr}
-              onChange={(e) => setPr(e.target.value)}
-              placeholder="50"
-              style={{ flex: 1 }}
-            />
-          </div>
-        )}
-
-        {mode === 'advanced' && tab === 'ticket' && (
-          <div className="row">
-            <label>Ticket</label>
-            <input
-              value={ticket}
-              onChange={(e) => setTicket(e.target.value)}
-              placeholder="ABC-123"
-              style={{ flex: 1 }}
-            />
-          </div>
-        )}
-
-        <div className="composer-shell create-composer">
-          <div className="composer-box expanded">
-            {options.planMode && (
-              <div className="composer-plan-banner">
-                Plan mode stays on until you turn it off (no file edits).
-              </div>
-            )}
-            <ComposerAttachmentChips
-              attachments={attachments}
-              onRemove={(id) =>
-                setAttachments((prev) => prev.filter((a) => a.id !== id))
-              }
-            />
-            <div className="composer-input-row">
-              <span className="composer-cube" aria-hidden />
-              <textarea
-                className="create-composer-input"
-                value={promptValue}
-                onChange={(e) => setPromptValue(e.target.value)}
-                rows={4}
-                autoFocus
-                placeholder={
-                  mode === 'advanced' && tab === 'orchestration'
-                    ? 'Coordination goal across threads…'
-                    : mode === 'quick'
-                      ? 'What do you want to work on?'
-                      : 'Optional: first message to the agent…'
-                }
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void submit();
-                  }
+            </FloatingMenu>
+            <FloatingMenu
+              open={moreMenuOpen}
+              onClose={() => setMoreMenuOpen(false)}
+              anchorRef={moreBtnRef}
+              align="left"
+              placement="down"
+              minWidth={220}
+            >
+              <button
+                type="button"
+                className={mode === 'create' ? 'selected' : ''}
+                onClick={() => {
+                  setMode('create');
+                  setMoreMenuOpen(false);
                 }}
-              />
-            </div>
-            <ComposerOptionsToolbar
-              options={options}
-              attachments={attachments}
-              onPatchOptions={patchOptions}
-              onAttachmentsChange={setAttachments}
-              repoPath={repoPath || undefined}
-              menuPlacement="down"
-            />
+              >
+                <span>{mode === 'create' ? '✓ ' : ''}New thread</span>
+              </button>
+              <button
+                type="button"
+                className={mode === 'orchestration' ? 'selected' : ''}
+                onClick={() => {
+                  setMode('orchestration');
+                  setMoreMenuOpen(false);
+                }}
+              >
+                <span>{mode === 'orchestration' ? '✓ ' : ''}Orchestration</span>
+              </button>
+              <div className="menu-section">Projects</div>
+              <button type="button" onClick={() => void addWorkspace()}>
+                <span>Add project…</span>
+              </button>
+            </FloatingMenu>
+          </div>
+
+          <div className="create-header-right">
+            <button
+              type="button"
+              className="create-from-trigger"
+              disabled={!repoPath || mode === 'orchestration'}
+              onClick={() => setPickerOpen(true)}
+            >
+              <span className="composer-picker-icons" aria-hidden>
+                <span className="picker-logo github tiny" />
+                {linearConnected ? <span className="picker-logo linear tiny" /> : null}
+              </span>
+              <span className="create-from-label">{selectionLabel(selection)}</span>
+              <span className="create-from-chevron">▾</span>
+            </button>
           </div>
         </div>
 
-        {agentsLoaded && !agentOk && (
-          <p style={{ color: 'var(--err)', margin: '8px 0 0' }}>
-            {agentStatus?.reason ?? 'Agent unavailable'}
-          </p>
-        )}
-        {error && <p style={{ color: 'var(--err)' }}>{error}</p>}
+        <div className="create-body">
+          {options.planMode && (
+            <div className="composer-plan-banner">
+              Plan mode stays on until you turn it off (no file edits).
+            </div>
+          )}
+          <ComposerAttachmentChips
+            attachments={attachments}
+            onRemove={(id) =>
+              setAttachments((prev) => prev.filter((a) => a.id !== id))
+            }
+          />
+          <textarea
+            ref={textareaRef}
+            className="create-composer-input"
+            value={promptValue}
+            onChange={(e) => setPromptValue(e.target.value)}
+            rows={5}
+            autoFocus
+            placeholder={
+              mode === 'orchestration'
+                ? 'Coordination goal across threads…'
+                : 'What do you want to work on?'
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (canSubmit) void submit();
+              }
+            }}
+          />
+        </div>
 
-        <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12, marginBottom: 0 }}>
-          <button onClick={onClose}>Cancel</button>
-          <button
-            className="primary"
-            disabled={busy || !agentsLoaded || !agentOk || !repoPath}
-            onClick={() => void submit()}
-          >
-            {busy ? 'Creating…' : 'Create ↵'}
-          </button>
+        {(agentsLoaded && !agentOk) || error ? (
+          <div className="create-errors">
+            {agentsLoaded && !agentOk && (
+              <p>{agentStatus?.reason ?? 'Agent unavailable'}</p>
+            )}
+            {error && <p>{error}</p>}
+          </div>
+        ) : null}
+
+        <div className="create-footer">
+          <ComposerOptionsToolbar
+            options={options}
+            attachments={attachments}
+            onPatchOptions={patchOptions}
+            onAttachmentsChange={setAttachments}
+            repoPath={repoPath || undefined}
+            menuPlacement="down"
+            variant="create"
+            rightSlot={
+              <>
+                <label className="create-more-toggle" title="Keep dialog open after create">
+                  <button
+                    type="button"
+                    className={`settings-switch create-more-switch${createMore ? ' on' : ''}`}
+                    role="switch"
+                    aria-checked={createMore}
+                    onClick={() => setCreateMore((v) => !v)}
+                  >
+                    <span className="settings-switch-knob" />
+                  </button>
+                  <span>Create more</span>
+                </label>
+                <button
+                  type="button"
+                  className="create-submit-btn"
+                  disabled={!canSubmit}
+                  onClick={() => void submit()}
+                >
+                  {busy ? 'Creating…' : (
+                    <>
+                      Create <kbd>↵</kbd>
+                    </>
+                  )}
+                </button>
+              </>
+            }
+          />
         </div>
       </div>
+
+      <CreateFromPicker
+        open={pickerOpen}
+        repoPath={repoPath}
+        linearConnected={linearConnected}
+        hasSelection={Boolean(selection)}
+        onClose={() => setPickerOpen(false)}
+        onSelect={setSelection}
+        onClear={() => setSelection(null)}
+        onOpenAccount={onOpenAccount}
+      />
     </div>
   );
 }

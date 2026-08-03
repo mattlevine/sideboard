@@ -216,6 +216,8 @@ export interface IssueInfo {
   title: string;
   url: string;
   labels: string[];
+  /** When set, which tracker produced this issue. */
+  provider?: 'linear' | 'github';
 }
 
 export interface DiffFile {

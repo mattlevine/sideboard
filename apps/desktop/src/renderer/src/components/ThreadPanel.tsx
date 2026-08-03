@@ -543,6 +543,7 @@ export function ThreadPanel({
                     durationMs={m.durationMs ?? fallbackDuration}
                     usage={m.usage}
                     threadId={thread.id}
+                    worktreePath={thread.worktreePath}
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
                     onFork={() => void forkToTab(i)}
@@ -573,6 +574,7 @@ export function ThreadPanel({
                   streaming
                   startedAt={turnStartedAt}
                   threadId={thread.id}
+                  worktreePath={thread.worktreePath}
                   knownFilePaths={filePaths}
                   onOpenFile={onSelectFile}
                   onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}

@@ -159,6 +159,15 @@ export class Orchestrator {
     });
     this.emit({ type: 'status_changed', threadId: thread.id, status: thread.status });
 
+    const { autoRunAfterSetupEnabled } = await import('../store/app-settings.js');
+    if (autoRunAfterSetupEnabled()) {
+      try {
+        await this.startDev(thread.id);
+      } catch {
+        // Best-effort — setup/run script may be missing.
+      }
+    }
+
     const prompt = input.prompt?.trim();
     if (prompt) {
       thread = await this.send(thread.id, prompt);
@@ -329,9 +338,12 @@ export class Orchestrator {
     // injection, but they still need this isolation rule on every turn (incl. resume).
     const worktreeDirective = formatWorktreeDirective(fresh);
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
-    const renameBranchDirective = formatRenameBranchDirective(fresh, {
-      customPrompt: settings?.prompts?.renameBranch,
-    });
+    const { autoRenameBranchEnabled } = await import('../store/app-settings.js');
+    const renameBranchDirective = autoRenameBranchEnabled()
+      ? formatRenameBranchDirective(fresh, {
+          customPrompt: settings?.prompts?.renameBranch,
+        })
+      : null;
     // Claude Code auto-loads CLAUDE.md / AGENTS.md for `-p` turns — duplicating
     // them in every user message wastes tokens and adds cache-breakpoint pressure.
     // Brightsy agents already carry their own server-side instructions; stuffing
@@ -776,8 +788,10 @@ export class Orchestrator {
     const siblings = threadsSharingWorktree(thread.worktreePath).filter((t) => t.id !== thread.id);
     if (siblings.length === 0) {
       this.stopDev(thread.id);
+      const { deleteBranchOnPurgeEnabled } = await import('../store/app-settings.js');
+      const deleteBranch = opts?.deleteBranch ?? deleteBranchOnPurgeEnabled();
       await removeWorktree(thread.repoPath, thread.worktreePath, {
-        deleteBranch: opts?.deleteBranch ? thread.branchName : undefined,
+        deleteBranch: deleteBranch ? thread.branchName : undefined,
       });
     }
     deleteThreadRecord(thread.id);
@@ -810,7 +824,7 @@ export class Orchestrator {
   }
 
   setMaxConcurrent(n: number): void {
-    this.maxConcurrent = Math.max(1, n);
+    this.maxConcurrent = Math.max(1, Math.min(32, Math.floor(n)));
   }
 
   getRuntime(): OrchestratorRuntime {

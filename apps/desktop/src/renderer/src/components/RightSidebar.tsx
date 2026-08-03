@@ -26,6 +26,8 @@ interface Props {
   openFilePath?: string | null;
   onOpenFile?: (path: string) => void;
   onForkWorktree?: () => void;
+  /** Select another chat tab in this worktree (e.g. after creating one for setup). */
+  onSelectChat?: (id: string, created?: Thread) => void;
   pendingLand?: { draft?: boolean; web?: boolean } | null;
   onPendingLandConsumed?: () => void;
   /** Notify parent so file tabs can show the same git markers. */
@@ -72,6 +74,7 @@ export function RightSidebar({
   openFilePath = null,
   onOpenFile,
   onForkWorktree,
+  onSelectChat,
   pendingLand = null,
   onPendingLandConsumed,
   onFileChanges,
@@ -95,6 +98,8 @@ export function RightSidebar({
   const setupOutputRef = useRef<HTMLPreElement>(null);
   const [landPreview, setLandPreview] = useState<LandPreview | null>(null);
   const [landOpts, setLandOpts] = useState<{ draft?: boolean; web?: boolean }>({});
+  const [landBusy, setLandBusy] = useState(false);
+  const [landError, setLandError] = useState<string | null>(null);
   const [prMenuOpen, setPrMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState<{ chatCount: number } | null>(null);
@@ -353,6 +358,7 @@ export function RightSidebar({
   async function openLand(opts: { draft?: boolean; web?: boolean } = {}) {
     setLandOpts(opts);
     setPrMenuOpen(false);
+    setLandError(null);
     setBusy(true);
     try {
       const preview = await window.sideboard.previewLand(thread.id);
@@ -362,6 +368,39 @@ export function RightSidebar({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function confirmLandPush() {
+    if (!landPreview || landPreview.blocked || landBusy) return;
+    setLandBusy(true);
+    setLandError(null);
+    try {
+      const result = await window.sideboard.confirmLand(thread.id, landOpts);
+      setLandPreview(null);
+      onRefresh();
+      if (result.prUrl) {
+        void window.sideboard.openExternal(result.prUrl);
+      }
+    } catch (err) {
+      setLandError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLandBusy(false);
+    }
+  }
+
+  function landTitle() {
+    if (thread.prUrl) return 'Update pull request?';
+    if (landOpts.draft) return 'Create draft pull request?';
+    if (landOpts.web) return 'Push and open GitHub?';
+    return 'Create pull request?';
+  }
+
+  function landConfirmLabel() {
+    if (landBusy) return 'Pushing…';
+    if (landOpts.web) return 'Push & open';
+    if (landOpts.draft) return 'Push & draft PR';
+    if (thread.prUrl) return 'Push & update';
+    return 'Push & create PR';
   }
 
   async function runSetupScript() {
@@ -377,7 +416,18 @@ export function RightSidebar({
     if (agentSetupBusy) return;
     setAgentSetupBusy(true);
     try {
-      await window.sideboard.sendToThread(thread.id, AGENT_SETUP_PROMPT);
+      const agentBusy = thread.status === 'running' || thread.status === 'queued';
+      let targetId = thread.id;
+      if (agentBusy) {
+        // Don't interrupt the active turn — open a sibling chat in this worktree.
+        const tab = await window.sideboard.createChatTab({
+          fromThreadId: thread.id,
+          title: 'Setup',
+        });
+        targetId = tab.id;
+        onSelectChat?.(tab.id, tab);
+      }
+      await window.sideboard.sendToThread(targetId, AGENT_SETUP_PROMPT);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
@@ -718,15 +768,6 @@ export function RightSidebar({
             Terminal
           </button>
           <div className="lower-tab-actions">
-            {(thread.status === 'running' || thread.status === 'queued') && (
-              <button
-                type="button"
-                className="chip danger active"
-                onClick={() => void window.sideboard.stopThread(thread.id).then(onRefresh)}
-              >
-                Stop agent
-              </button>
-            )}
             <button
               type="button"
               className={`dev-composite${thread.devPort ? ' running' : ''}`}
@@ -762,7 +803,12 @@ export function RightSidebar({
                     <button
                       type="button"
                       className="primary"
-                      disabled={agentSetupBusy || thread.status === 'running' || thread.status === 'queued'}
+                      disabled={agentSetupBusy}
+                      title={
+                        thread.status === 'running' || thread.status === 'queued'
+                          ? 'Opens a new Setup chat so the current turn isn’t interrupted'
+                          : undefined
+                      }
                       onClick={() => void useAgentSetup()}
                     >
                       {agentSetupBusy ? 'Starting agent…' : 'Use agent to set up'}
@@ -805,10 +851,15 @@ export function RightSidebar({
                       <button
                         type="button"
                         className="primary"
-                        disabled={agentSetupBusy || thread.status === 'running' || thread.status === 'queued'}
+                        disabled={agentSetupBusy}
+                        title={
+                          thread.status === 'running' || thread.status === 'queued'
+                            ? 'Opens a new Setup chat so the current turn isn’t interrupted'
+                            : undefined
+                        }
                         onClick={() => void useAgentSetup()}
                       >
-                        Use agent to add setup script
+                        {agentSetupBusy ? 'Starting agent…' : 'Use agent to add setup script'}
                       </button>
                     )}
                   </div>
@@ -819,18 +870,6 @@ export function RightSidebar({
 
           {lower === 'run' && (
             <div className="run-panel">
-              {(thread.status === 'running' || thread.status === 'queued') && (
-                <div className="run-agent-bar">
-                  <span className="thread-meta">Agent {thread.status}</span>
-                  <button
-                    type="button"
-                    className="primary"
-                    onClick={() => void window.sideboard.stopThread(thread.id).then(onRefresh)}
-                  >
-                    Stop
-                  </button>
-                </div>
-              )}
               {thread.devPort ? (
                 <>
                   <div className="run-hero">▶</div>
@@ -901,49 +940,73 @@ export function RightSidebar({
       </div>
 
       {landPreview && (
-        <div className="modal-backdrop" onClick={() => setLandPreview(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>
-              {thread.prUrl
-                ? 'Update land'
-                : landOpts.draft
-                  ? 'Draft PR preview'
-                  : landOpts.web
-                    ? 'Manual PR preview'
-                    : 'Land preview'}
-            </h3>
-            <p>
-              <strong>{landPreview.branch}</strong> → {landPreview.target}
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            if (!landBusy) {
+              setLandPreview(null);
+              setLandError(null);
+            }
+          }}
+        >
+          <div
+            className="modal confirm-modal land-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="land-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="land-confirm-title">{landTitle()}</h3>
+            <p className="confirm-dialog-message">
+              {landOpts.web
+                ? 'Push this branch, then open GitHub to finish the pull request.'
+                : thread.prUrl
+                  ? 'Push this branch and update the existing pull request.'
+                  : 'Push this branch and open a pull request on GitHub.'}
             </p>
-            <p>Dirty: {landPreview.dirty ? 'yes (will auto-commit)' : 'no'}</p>
-            <pre className="diff-view" style={{ maxHeight: 200 }}>
-              {landPreview.diffStat}
-            </pre>
-            {landPreview.blocked && (
-              <p style={{ color: 'var(--err)' }}>{landPreview.blockReason}</p>
+            <dl className="land-confirm-meta">
+              <div>
+                <dt>Branch</dt>
+                <dd>
+                  <span className="land-confirm-branch">{landPreview.branch}</span>
+                  <span className="land-confirm-arrow">→</span>
+                  <span>{landPreview.target}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Working tree</dt>
+                <dd>
+                  {landPreview.dirty ? 'Dirty — will auto-commit before push' : 'Clean'}
+                </dd>
+              </div>
+            </dl>
+            {landPreview.diffStat.trim() ? (
+              <pre className="land-confirm-stat">{landPreview.diffStat}</pre>
+            ) : (
+              <p className="land-confirm-empty">No diff against {landPreview.target}</p>
             )}
-            <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setLandPreview(null)}>
+            {landPreview.blocked && (
+              <p className="land-confirm-error">{landPreview.blockReason}</p>
+            )}
+            {landError && <p className="land-confirm-error">{landError}</p>}
+            <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+              <button
+                type="button"
+                disabled={landBusy}
+                onClick={() => {
+                  setLandPreview(null);
+                  setLandError(null);
+                }}
+              >
                 Cancel
               </button>
               <button
                 type="button"
                 className="primary"
-                disabled={landPreview.blocked}
-                onClick={() =>
-                  void window.sideboard
-                    .confirmLand(thread.id, landOpts)
-                    .then((r) => {
-                      if (r.prUrl) alert(`PR: ${r.prUrl}`);
-                      setLandPreview(null);
-                      onRefresh();
-                    })
-                    .catch((err: unknown) =>
-                      alert(err instanceof Error ? err.message : String(err)),
-                    )
-                }
+                disabled={landPreview.blocked || landBusy}
+                onClick={() => void confirmLandPush()}
               >
-                {landOpts.web ? 'Push & open' : landOpts.draft ? 'Push & draft PR' : 'Push & PR'}
+                {landConfirmLabel()}
               </button>
             </div>
           </div>

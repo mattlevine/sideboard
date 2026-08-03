@@ -72,3 +72,13 @@ export function detectLanguage(filePath: string): string {
   if (base === 'dockerfile' || base.startsWith('dockerfile.')) return 'dockerfile';
   return 'plaintext';
 }
+
+/** Files that support a rendered Preview alongside source. */
+export type DocumentPreviewKind = 'markdown' | 'html';
+
+export function documentPreviewKind(filePath: string): DocumentPreviewKind | null {
+  const lang = detectLanguage(filePath);
+  if (lang === 'markdown') return 'markdown';
+  if (lang === 'html') return 'html';
+  return null;
+}

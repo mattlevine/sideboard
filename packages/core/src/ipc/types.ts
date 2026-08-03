@@ -24,14 +24,18 @@ import type {
   ThreadOptionsPatch,
 } from '../types/thread.js';
 import type {
+  AdvancedAppSettings,
   AppSettings,
   BrightsyCloudConnectAgent,
   BrightsyHarnessSettings,
   ClaudeHarnessSettings,
+  IssueSource,
 } from '../store/app-settings.js';
 import type { Workspace } from '../store/workspaces.js';
 import type { BrightsyChatTargets } from '../agents/brightsy-targets.js';
 import type { BrightsySession } from '../brightsy/accounts.js';
+import type { GitHubStatus } from '../integrations/github.js';
+import type { ListIssuesResult } from '../integrations/issues.js';
 
 /** Live status of the Brightsy cloud connect daemon in the desktop app. */
 export interface CloudConnectStatus {
@@ -80,8 +84,21 @@ export interface IpcApi {
       cloudConnectAgent?: BrightsyCloudConnectAgent | null;
     },
   ): Promise<AppSettings>;
+  updateAdvancedSettings(patch: Partial<AdvancedAppSettings>): Promise<AppSettings>;
+  updateIntegrationsSettings(patch: {
+    linearApiKey?: string | null;
+    issueSource?: IssueSource | null;
+  }): Promise<AppSettings>;
+  /** Machine-global GitHub status via `gh`. */
+  getGitHubStatus(): Promise<GitHubStatus>;
+  /**
+   * Unified issues for Create-from / Link issue (Linear API or GitHub Issues,
+   * based on Account preference with Linear→GitHub fallback).
+   */
+  listIssues(repoPath: string): Promise<ListIssuesResult>;
   listBranches(repoPath: string): Promise<BranchInfo[]>;
   listPrs(repoPath: string): Promise<PrInfo[]>;
+  /** @deprecated Prefer listIssues — agent Linear MCP. */
   listLinearIssues(agent: AgentKind, repoPath: string): Promise<IssueInfo[]>;
   resolveRepoRoot(cwd: string): Promise<string>;
   getThreads(includeArchived?: boolean): Promise<Thread[]>;

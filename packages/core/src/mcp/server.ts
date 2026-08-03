@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { basename } from 'node:path';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { listBranches, listPrs } from '../git/worktree.js';
+import { listIssues } from '../integrations/issues.js';
 import { listLinearIssues } from '../threads/create.js';
 
 const MAX_ORCH_THREADS = 5;
@@ -283,8 +284,18 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'list_issues',
+    'List issues from Sideboard Account connections (Linear API or GitHub Issues; Linear→GitHub fallback when Linear is not connected)',
+    { repoPath: z.string() },
+    async ({ repoPath }) => {
+      const result = await listIssues(repoPath);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
     'list_linear_issues',
-    'List assigned Linear issues via the chosen agent MCP connector',
+    'Deprecated: prefer list_issues. Lists assigned Linear issues via the chosen agent MCP connector',
     {
       agent: z.enum(['claude', 'codex', 'opencode']),
       repoPath: z.string(),

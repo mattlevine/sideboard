@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { documentPreviewKind } from '../lib/language';
 import { CodeView } from './CodeView';
+import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
 
 interface Props {
   threadId: string;
@@ -10,6 +12,7 @@ interface Props {
 }
 
 export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: Props) {
+  const previewKind = documentPreviewKind(path);
   const [content, setContent] = useState<string | null>(null);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +21,11 @@ export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: P
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [diskNewer, setDiskNewer] = useState(false);
+  const [mode, setMode] = useState<'code' | 'preview'>('code');
+
+  useEffect(() => {
+    setMode('code');
+  }, [path]);
 
   const dirty = content != null && content !== saved && !binary && !truncated;
   const dirtyRef = useRef(dirty);
@@ -147,6 +155,9 @@ export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: P
           </span>
         </button>
         <div className="file-editor-actions">
+          {previewKind && !binary && (
+            <DocumentPreviewModeToggle mode={mode} onChange={setMode} />
+          )}
           {(binary || truncated) && (
             <span className="thread-meta">
               {binary ? 'Binary — view only' : 'Truncated — view only'}
@@ -185,7 +196,10 @@ export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: P
 
       {error && <div className="empty">{error}</div>}
       {!error && content == null && <div className="empty">Loading…</div>}
-      {!error && content != null && (
+      {!error && content != null && mode === 'preview' && previewKind && !binary && (
+        <DocumentPreview path={path} content={content} className="file-editor-preview" />
+      )}
+      {!error && content != null && (mode === 'code' || !previewKind || binary) && (
         <CodeView
           path={path}
           worktreePath={worktreePath}

@@ -23,7 +23,7 @@ export interface CloudConnectOptions {
    */
   repoPath?: string;
   agent: CloudConnectAgent;
-  /** Auto-enable Sideboard cloud access if disabled. Default true. */
+  /** Auto-enable Brightsy desktop access if disabled. Default true. */
   enableAccess?: boolean;
   /** When enabling access, set allow_always. Default true for connect daemon. */
   allowAlways?: boolean;
@@ -163,7 +163,7 @@ async function handleTask(
 }
 
 /**
- * Poll Brightsy for Sideboard inbound tasks and route them to the local
+ * Poll Brightsy desktop inbound tasks and route them to the local
  * global orchestrator (coordinator thread + MCP across all workspaces).
  */
 export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> {
@@ -179,17 +179,17 @@ export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> 
   if (!access.enabled) {
     if (!enableAccess) {
       throw new Error(
-        'Sideboard cloud access is disabled. Enable it in Sideboard Settings → Brightsy, or Brightsy User Settings → Integrations.',
+        'Brightsy desktop access is disabled. Enable Cloud messages in Sideboard Settings → Brightsy, or Brightsy User Settings.',
       );
     }
-    log('Enabling Sideboard cloud access…');
+    log('Enabling Brightsy desktop access…');
     await api.setAccess(true, allowAlways);
   } else if (allowAlways && !access.allow_always) {
     await api.setAccess(true, true);
   }
 
   log(
-    `Connected to Brightsy (${api.endpoint}). Polling Sideboard tasks every ${pollMs / 1000}s…`,
+    `Connected to Brightsy (${api.endpoint}). Polling desktop tasks every ${pollMs / 1000}s…`,
   );
   log(`Coordinator home: ${homeRepoPath}  agent: ${opts.agent}`);
   log(`Workspaces (${workspaces.length}):`);

@@ -1,17 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FilePathLink } from '../lib/file-path-link';
+import { documentPreviewKind } from '../lib/language';
+import { CodeView } from './CodeView';
+import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
 
 interface Props {
   threadId: string;
   link: FilePathLink;
+  worktreePath?: string;
   onClose: () => void;
   onOpenInTab: (path: string) => void;
 }
 
-export function FileReferenceModal({ threadId, link, onClose, onOpenInTab }: Props) {
+export function FileReferenceModal({
+  threadId,
+  link,
+  worktreePath,
+  onClose,
+  onOpenInTab,
+}: Props) {
+  const previewKind = documentPreviewKind(link.path);
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [binary, setBinary] = useState(false);
+  const [mode, setMode] = useState<'code' | 'preview'>('code');
+
+  useEffect(() => {
+    // Line links open in Code so the highlight is visible; otherwise prefer Preview.
+    const kind = documentPreviewKind(link.path);
+    setMode(kind && link.startLine == null ? 'preview' : 'code');
+  }, [link.path, link.startLine]);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,21 +59,6 @@ export function FileReferenceModal({ threadId, link, onClose, onOpenInTab }: Pro
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const preview = useMemo(() => {
-    if (content == null) return null;
-    if (link.startLine != null) {
-      const lines = content.split('\n');
-      const start = Math.max(0, link.startLine - 1);
-      const end =
-        link.endLine != null ? Math.min(lines.length, link.endLine) : Math.min(lines.length, start + 1);
-      return lines.slice(start, end).join('\n');
-    }
-    const maxLines = 48;
-    const lines = content.split('\n');
-    if (lines.length <= maxLines) return content;
-    return `${lines.slice(0, maxLines).join('\n')}\n…`;
-  }, [content, link.endLine, link.startLine]);
-
   const lineLabel =
     link.startLine != null
       ? link.endLine != null && link.endLine !== link.startLine
@@ -78,6 +81,9 @@ export function FileReferenceModal({ threadId, link, onClose, onOpenInTab }: Pro
             {lineLabel && <span className="thread-meta">{lineLabel}</span>}
           </div>
           <div className="file-ref-actions">
+            {previewKind && !binary && (
+              <DocumentPreviewModeToggle mode={mode} onChange={setMode} />
+            )}
             <button
               type="button"
               className="primary"
@@ -95,8 +101,27 @@ export function FileReferenceModal({ threadId, link, onClose, onOpenInTab }: Pro
         </div>
         {error && <p className="file-ref-error">{error}</p>}
         {!error && content == null && <div className="empty">Loading…</div>}
-        {!error && preview != null && (
-          <pre className="file-ref-preview">{binary ? '(Binary file — open in tab to view)' : preview}</pre>
+        {!error && content != null && binary && (
+          <pre className="file-ref-preview">(Binary file — open in tab to view)</pre>
+        )}
+        {!error && content != null && !binary && mode === 'preview' && previewKind && (
+          <div className="file-ref-code">
+            <DocumentPreview path={link.path} content={content} />
+          </div>
+        )}
+        {!error && content != null && !binary && (mode === 'code' || !previewKind) && (
+          <div className="file-ref-code">
+            <CodeView
+              key={`preview:${link.path}`}
+              path={link.path}
+              value={content}
+              worktreePath={worktreePath}
+              modelNonce="file-ref-modal"
+              readOnly
+              revealLine={link.startLine}
+              highlightEndLine={link.endLine}
+            />
+          </div>
         )}
       </div>
     </div>

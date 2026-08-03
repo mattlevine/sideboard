@@ -13,7 +13,7 @@ export interface SideboardCloudTask {
   source_chat_id: string | null;
   message: { parts?: Array<{ kind?: string; text?: string }> };
   messages?: Array<{
-    role: 'cloud' | 'sideboard';
+    role: 'cloud' | 'desktop';
     content: unknown;
     created_at?: string;
   }> | null;
@@ -98,7 +98,7 @@ export class BrightsySideboardApi {
 
   async getAccess(): Promise<{ enabled: boolean; allow_always: boolean }> {
     return this.request(
-      `/api/v1beta/sideboard/access?accountId=${encodeURIComponent(this.accountId)}`,
+      `/api/v1beta/desktop/access?accountId=${encodeURIComponent(this.accountId)}`,
     );
   }
 
@@ -106,7 +106,7 @@ export class BrightsySideboardApi {
     enabled: boolean,
     allow_always = false,
   ): Promise<{ enabled: boolean; allow_always: boolean }> {
-    return this.request('/api/v1beta/sideboard/access', {
+    return this.request('/api/v1beta/desktop/access', {
       method: 'PUT',
       body: {
         accountId: this.accountId,
@@ -119,27 +119,27 @@ export class BrightsySideboardApi {
   async getTasks(status?: string): Promise<SideboardCloudTask[]> {
     const q = status ? `?status=${encodeURIComponent(status)}` : '';
     const data = await this.request<{ tasks: SideboardCloudTask[] }>(
-      `/api/v1beta/sideboard/tasks${q}`,
+      `/api/v1beta/desktop/tasks${q}`,
     );
     return data.tasks ?? [];
   }
 
   async approveTask(taskId: string): Promise<void> {
-    await this.request(`/api/v1beta/sideboard/tasks/${taskId}`, {
+    await this.request(`/api/v1beta/desktop/tasks/${taskId}`, {
       method: 'PATCH',
       body: { action: 'approve' },
     });
   }
 
   async markRunning(taskId: string): Promise<void> {
-    await this.request(`/api/v1beta/sideboard/tasks/${taskId}`, {
+    await this.request(`/api/v1beta/desktop/tasks/${taskId}`, {
       method: 'PATCH',
       body: { task_status: 'running' },
     });
   }
 
   async submitResponse(taskId: string, response: string): Promise<void> {
-    await this.request(`/api/v1beta/sideboard/tasks/${taskId}/response`, {
+    await this.request(`/api/v1beta/desktop/tasks/${taskId}/response`, {
       method: 'POST',
       body: { response },
     });

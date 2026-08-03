@@ -21,6 +21,7 @@ interface Props {
   startedAt?: number;
   streaming?: boolean;
   threadId?: string;
+  worktreePath?: string;
   knownFilePaths?: string[];
   onOpenFile?: (path: string) => void;
   onFork?: () => void;
@@ -112,6 +113,7 @@ export function AgentMessage({
   startedAt,
   streaming,
   threadId,
+  worktreePath,
   knownFilePaths,
   onOpenFile,
   onFork,
@@ -121,6 +123,7 @@ export function AgentMessage({
   const [diffTool, setDiffTool] = useState<ToolPart | null>(null);
   const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
+  const diffAnchorRef = useRef<HTMLElement | null>(null);
 
   function openFileReference(link: FilePathLink) {
     setFileRef(link);
@@ -148,7 +151,8 @@ export function AgentMessage({
     }
   }
 
-  function openDiff(tool: ToolPart) {
+  function openDiff(tool: ToolPart, anchor?: HTMLElement | null) {
+    diffAnchorRef.current = anchor ?? moreBtnRef.current;
     setDiffTool((prev) => (prev?.id === tool.id ? null : tool));
   }
 
@@ -204,8 +208,8 @@ export function AgentMessage({
                           type="button"
                           className={`turn-tool-pill${clickable ? ' clickable' : ''}`}
                           title={clickable ? 'Show diff' : part.detail}
-                          onClick={() => {
-                            if (clickable) openDiff(part);
+                          onClick={(e) => {
+                            if (clickable) openDiff(part, e.currentTarget);
                           }}
                         >
                           {part.detail}
@@ -303,7 +307,7 @@ export function AgentMessage({
                   type="button"
                   className={`tool-chip${t.status === 'error' ? ' error' : ''}${t.status === 'running' ? ' running' : ''}${diffTool?.id === t.id ? ' active' : ''}`}
                   title={hasCodeDiff(t) ? 'Show diff' : 'Show tool input & result'}
-                  onClick={() => openDiff(t)}
+                  onClick={(e) => openDiff(t, e.currentTarget)}
                 >
                   <span className="tool-chip-gear" aria-hidden>
                     ⚙
@@ -323,35 +327,35 @@ export function AgentMessage({
                   )}
                 </button>
               ))}
-              {diffTool && (
-                <div className="tool-diff-anchor">
-                  <ToolDiffPopover
-                    tool={diffTool}
-                    threadId={threadId}
-                    onClose={() => setDiffTool(null)}
-                  />
-                </div>
-              )}
             </div>
           )}
         </div>
       )}
 
-      {/* When opened from transcript tool row (no chips match), still show popover */}
-      {diffTool && chips.every((c) => c.id !== diffTool.id) && (
-        <div className="tool-diff-anchor floating">
+      {diffTool && (
+        <FloatingMenu
+          open
+          onClose={() => setDiffTool(null)}
+          anchorRef={diffAnchorRef}
+          align="right"
+          placement="auto"
+          minWidth={480}
+          maxMenuHeight={Math.min(420, Math.round(window.innerHeight * 0.55))}
+          className="tool-diff-floating"
+        >
           <ToolDiffPopover
             tool={diffTool}
             threadId={threadId}
             onClose={() => setDiffTool(null)}
           />
-        </div>
+        </FloatingMenu>
       )}
 
       {fileRef && threadId && onOpenFile && (
         <FileReferenceModal
           threadId={threadId}
           link={fileRef}
+          worktreePath={worktreePath}
           onClose={() => setFileRef(null)}
           onOpenInTab={onOpenFile}
         />

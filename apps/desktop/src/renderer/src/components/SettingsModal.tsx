@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
+  AdvancedAppSettings,
   AgentStatus,
   AppSettings,
   BrightsyCloudConnectAgent,
   BrightsySession,
   CloudConnectStatus,
+  GitHubStatus,
+  IssueSource,
 } from '@sideboard/core';
 
-type NavId = 'agents' | 'environment';
+type NavId = 'account' | 'agents' | 'environment' | 'advanced';
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
 
 const CLOUD_CONNECT_AGENTS: Array<{ id: BrightsyCloudConnectAgent; label: string }> = [
@@ -19,6 +22,8 @@ const CLOUD_CONNECT_AGENTS: Array<{ id: BrightsyCloudConnectAgent; label: string
 
 interface Props {
   onClose: () => void;
+  /** Initial sidebar section (e.g. Account from Create-from Linear setup). */
+  initialNav?: NavId;
 }
 
 const CLAUDE_CHROME_DOCS = 'https://code.claude.com/docs/en/chrome';
@@ -81,17 +86,20 @@ function statusFor(statuses: AgentStatus[], id: AgentPanel): AgentStatus | undef
   return statuses.find((s) => s.agent === id);
 }
 
-export function SettingsModal({ onClose }: Props) {
-  const [nav, setNav] = useState<NavId>('agents');
+export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
+  const [nav, setNav] = useState<NavId>(initialNav);
   const [agentPanel, setAgentPanel] = useState<AgentPanel | null>(null);
   const [settings, setSettings] = useState<AppSettings>({
     environment: {},
     claude: {},
     brightsy: {},
+    integrations: {},
+    advanced: {},
   });
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [maxConcurrentDraft, setMaxConcurrentDraft] = useState('3');
   const [draftKey, setDraftKey] = useState('');
   const [draftValue, setDraftValue] = useState('');
   const [editingEnvKey, setEditingEnvKey] = useState<string | null>(null);
@@ -100,10 +108,13 @@ export function SettingsModal({ onClose }: Props) {
   const [systemClaudePath, setSystemClaudePath] = useState<string | null>(null);
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
   const [cloudConnect, setCloudConnect] = useState<CloudConnectStatus | null>(null);
+  const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
+  const [linearKeyDraft, setLinearKeyDraft] = useState('');
+  const [showLinearKey, setShowLinearKey] = useState(false);
 
   async function reload() {
     const cloudApi = window.sideboard.getCloudConnectStatus;
-    const [s, agents, systemPath, session, cloud] = await Promise.all([
+    const [s, agents, systemPath, session, cloud, gh] = await Promise.all([
       window.sideboard.getAppSettings(),
       window.sideboard.detectAgents(),
       window.sideboard.resolveSystemClaudePath(),
@@ -111,17 +122,23 @@ export function SettingsModal({ onClose }: Props) {
       typeof cloudApi === 'function'
         ? cloudApi().catch(() => null)
         : Promise.resolve(null),
+      window.sideboard.getGitHubStatus().catch(() => null),
     ]);
     setSettings({
       environment: s.environment ?? {},
       claude: s.claude ?? {},
       brightsy: s.brightsy ?? {},
+      integrations: s.integrations ?? {},
+      advanced: s.advanced ?? {},
     });
+    setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 3));
     setStatuses(agents);
     setSystemClaudePath(systemPath);
     setClaudePathDraft(s.claude?.executablePath ?? '');
     setBrightsySession(session);
     setCloudConnect(cloud);
+    setGithubStatus(gh);
+    setLinearKeyDraft('');
   }
 
   useEffect(() => {
@@ -171,6 +188,8 @@ export function SettingsModal({ onClose }: Props) {
         environment: next.environment ?? {},
         claude: next.claude ?? {},
         brightsy: next.brightsy ?? {},
+        integrations: next.integrations ?? {},
+        advanced: next.advanced ?? {},
       });
       const agents = await window.sideboard.detectAgents();
       setStatuses(agents);
@@ -193,6 +212,8 @@ export function SettingsModal({ onClose }: Props) {
         environment: next.environment ?? {},
         claude: next.claude ?? {},
         brightsy: next.brightsy ?? {},
+        integrations: next.integrations ?? {},
+        advanced: next.advanced ?? {},
       });
       setClaudePathDraft(next.claude?.executablePath ?? '');
       const agents = await window.sideboard.detectAgents();
@@ -223,6 +244,8 @@ export function SettingsModal({ onClose }: Props) {
         environment: next.environment ?? {},
         claude: next.claude ?? {},
         brightsy: next.brightsy ?? {},
+        integrations: next.integrations ?? {},
+        advanced: next.advanced ?? {},
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -230,6 +253,50 @@ export function SettingsModal({ onClose }: Props) {
       setBusy(false);
     }
   }
+
+  function applySettings(next: AppSettings) {
+    setSettings({
+      environment: next.environment ?? {},
+      claude: next.claude ?? {},
+      brightsy: next.brightsy ?? {},
+      integrations: next.integrations ?? {},
+      advanced: next.advanced ?? {},
+    });
+    setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 3));
+  }
+
+  async function saveIntegrationsPatch(patch: {
+    linearApiKey?: string | null;
+    issueSource?: IssueSource | null;
+  }) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await window.sideboard.updateIntegrationsSettings(patch);
+      applySettings(next);
+      setLinearKeyDraft('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAdvancedPatch(patch: Partial<AdvancedAppSettings>) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await window.sideboard.updateAdvancedSettings(patch);
+      applySettings(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const advanced = settings.advanced ?? {};
+  const autoRenameOn = advanced.autoRenameBranch !== false;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -245,6 +312,16 @@ export function SettingsModal({ onClose }: Props) {
             <div className="settings-nav-title" id="settings-title">
               Settings
             </div>
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'account' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('account');
+                setAgentPanel(null);
+              }}
+            >
+              Account
+            </button>
             <button
               type="button"
               className={`settings-nav-btn${nav === 'agents' && !agentPanel ? ' active' : ''}`}
@@ -288,16 +365,30 @@ export function SettingsModal({ onClose }: Props) {
             >
               Environment
             </button>
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'advanced' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('advanced');
+                setAgentPanel(null);
+              }}
+            >
+              Advanced
+            </button>
           </aside>
 
           <div className="settings-main">
             <div className="settings-main-header">
               <h3>
-                {nav === 'environment'
+                {nav === 'account'
+                  ? 'Account'
+                  : nav === 'environment'
                   ? 'Environment'
-                  : activeAgent
-                    ? activeAgent.label
-                    : 'Agents'}
+                  : nav === 'advanced'
+                    ? 'Advanced'
+                    : activeAgent
+                      ? activeAgent.label
+                      : 'Agents'}
               </h3>
               <button type="button" className="icon-btn" title="Close" onClick={onClose}>
                 ✕
@@ -305,6 +396,160 @@ export function SettingsModal({ onClose }: Props) {
             </div>
 
             {error && <div className="settings-error">{error}</div>}
+
+            {nav === 'account' && (
+              <div className="settings-body">
+                <p className="settings-lead">
+                  Connect GitHub and Linear for Create-from (PRs, branches, issues). These
+                  connections are owned by Sideboard — not per-agent MCP.
+                </p>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">GitHub</div>
+                      <p className="settings-hint">
+                        Connect GitHub to clone repos, create PRs, load comments and more. Uses the{' '}
+                        <code>gh</code> CLI on this machine.
+                      </p>
+                      {githubStatus?.connected ? (
+                        <p className="settings-status-text" style={{ marginTop: 8 }}>
+                          <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
+                          Connected to {githubStatus.login ?? 'GitHub'}
+                        </p>
+                      ) : (
+                        <p className="settings-hint" style={{ marginTop: 8 }}>
+                          {githubStatus?.reason ?? 'Not connected'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="row" style={{ gap: 8, margin: 0 }}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          void window.sideboard
+                            .getGitHubStatus()
+                            .then(setGithubStatus)
+                            .catch((err) =>
+                              setError(err instanceof Error ? err.message : String(err)),
+                            );
+                        }}
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy}
+                        onClick={() => {
+                          void window.sideboard.openExternal(
+                            'https://cli.github.com/manual/gh_auth_login',
+                          );
+                        }}
+                      >
+                        Manage
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Linear</div>
+                  <p className="settings-hint">
+                    Connect Linear so Sideboard can use issue context from your account. Create an
+                    API key at linear.app/settings/api.
+                  </p>
+                  {settings.integrations.linearApiKey ? (
+                    <div className="settings-toggle-row" style={{ marginTop: 10 }}>
+                      <div>
+                        <p className="settings-status-text">
+                          <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
+                          Connected
+                          {showLinearKey
+                            ? ` · ${settings.integrations.linearApiKey}`
+                            : ` · ${maskSecret(settings.integrations.linearApiKey)}`}
+                        </p>
+                      </div>
+                      <div className="row" style={{ gap: 8, margin: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowLinearKey((v) => !v)}
+                        >
+                          {showLinearKey ? 'Hide' : 'Show'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void saveIntegrationsPatch({ linearApiKey: null })}
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                      <input
+                        type={showLinearKey ? 'text' : 'password'}
+                        value={linearKeyDraft}
+                        onChange={(e) => setLinearKeyDraft(e.target.value)}
+                        placeholder="lin_api_…"
+                        style={{ flex: 1 }}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy || !linearKeyDraft.trim()}
+                        onClick={() =>
+                          void saveIntegrationsPatch({ linearApiKey: linearKeyDraft.trim() })
+                        }
+                      >
+                        Connect
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Issue source</div>
+                  <p className="settings-hint">
+                    Prefer GitHub Issues or Linear in Create-from. If Linear is selected but not
+                    connected, GitHub Issues are used automatically.
+                  </p>
+                  <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                    {([
+                      { id: 'github' as const, label: 'GitHub Issues' },
+                      { id: 'linear' as const, label: 'Linear' },
+                    ]).map((opt) => {
+                      const preferred = settings.integrations.issueSource ?? 'github';
+                      const active = preferred === opt.id;
+                      const linearOk = Boolean(settings.integrations.linearApiKey);
+                      const disabled = opt.id === 'linear' && !linearOk;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          className={active ? 'primary' : ''}
+                          disabled={busy || disabled}
+                          title={
+                            disabled
+                              ? 'Connect Linear first'
+                              : undefined
+                          }
+                          onClick={() =>
+                            void saveIntegrationsPatch({ issueSource: opt.id })
+                          }
+                        >
+                          {opt.label}
+                          {opt.id === 'linear' && !linearOk ? ' (not connected)' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {nav === 'agents' && !activeAgent && (
               <div className="settings-body">
@@ -692,6 +937,32 @@ export function SettingsModal({ onClose }: Props) {
                       </button>
                     </div>
 
+                    <div className="settings-toggle-row" style={{ marginTop: '0.85rem' }}>
+                      <div>
+                        <div className="settings-section-title">
+                          Caffeinate while cloud connect is on
+                        </div>
+                        <p className="settings-hint">
+                          Keep the Mac awake while listening for Slack / Discord / Teams messages
+                          (macOS only; lid-close may still sleep on battery).
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`settings-switch${advanced.caffeinateWhileCloudConnect ? ' on' : ''}`}
+                        role="switch"
+                        aria-checked={Boolean(advanced.caffeinateWhileCloudConnect)}
+                        disabled={busy}
+                        onClick={() =>
+                          void saveAdvancedPatch({
+                            caffeinateWhileCloudConnect: !advanced.caffeinateWhileCloudConnect,
+                          })
+                        }
+                      >
+                        <span className="settings-switch-knob" />
+                      </button>
+                    </div>
+
                     <label className="settings-label" htmlFor="cloud-connect-agent">
                       Coordinator agent
                     </label>
@@ -750,6 +1021,163 @@ export function SettingsModal({ onClose }: Props) {
                     extra provider keys.
                   </p>
                 )}
+              </div>
+            )}
+
+            {nav === 'advanced' && (
+              <div className="settings-body">
+                <p className="settings-lead">
+                  Power-user preferences inspired by Conductor. Repo scripts and files-to-copy still
+                  live in <code>.sideboard/settings.toml</code> (or{' '}
+                  <code>.conductor/settings.toml</code>).
+                </p>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">
+                        Auto-rename placeholder branch on send
+                      </div>
+                      <p className="settings-hint">
+                        On the first agent turn, ask the agent to rename temporary{' '}
+                        <code>thread/&lt;team&gt;</code> branches to a task-shaped name (Conductor
+                        Git default: on).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${autoRenameOn ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={autoRenameOn}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({ autoRenameBranch: !autoRenameOn })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">Auto-run after setup</div>
+                      <p className="settings-hint">
+                        After a new workspace finishes its setup script, start the default run/dev
+                        script (Conductor <code>scripts.auto_run_after_setup</code>).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.autoRunAfterSetup ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.autoRunAfterSetup)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          autoRunAfterSetup: !advanced.autoRunAfterSetup,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">
+                        Caffeinate while agents are running
+                      </div>
+                      <p className="settings-hint">
+                        Keep the Mac awake with <code>caffeinate</code> while any agent turn is
+                        running (macOS only).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.caffeinateWhileRunning ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.caffeinateWhileRunning)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          caffeinateWhileRunning: !advanced.caffeinateWhileRunning,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">Delete branch on purge</div>
+                      <p className="settings-hint">
+                        When purging a thread, also delete its git branch (Conductor{' '}
+                        <code>git.delete_branch_on_archive</code>).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.deleteBranchOnPurge ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.deleteBranchOnPurge)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          deleteBranchOnPurge: !advanced.deleteBranchOnPurge,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <label className="settings-section-title" htmlFor="max-concurrent-agents">
+                    Max concurrent agents
+                  </label>
+                  <p className="settings-hint">
+                    Cap how many agent turns can run at once across the global orchestrator.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem' }}>
+                    <input
+                      id="max-concurrent-agents"
+                      type="number"
+                      min={1}
+                      max={32}
+                      step={1}
+                      value={maxConcurrentDraft}
+                      disabled={busy}
+                      onChange={(e) => setMaxConcurrentDraft(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        busy ||
+                        !maxConcurrentDraft.trim() ||
+                        Number(maxConcurrentDraft) === (advanced.maxConcurrent ?? 3)
+                      }
+                      onClick={() => {
+                        const n = Number(maxConcurrentDraft);
+                        if (!Number.isFinite(n)) {
+                          setError('Max concurrent must be a number');
+                          return;
+                        }
+                        void saveAdvancedPatch({ maxConcurrent: n });
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

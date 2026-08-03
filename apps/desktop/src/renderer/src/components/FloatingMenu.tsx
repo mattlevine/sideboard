@@ -21,6 +21,8 @@ interface Props {
   /** Force direction, or auto-flip based on available space. */
   placement?: 'auto' | 'up' | 'down';
   minWidth?: number;
+  /** Cap menu height (e.g. tool inspector should not eat the whole viewport). */
+  maxMenuHeight?: number;
 }
 
 export function FloatingMenu({
@@ -32,6 +34,7 @@ export function FloatingMenu({
   align = 'left',
   placement = 'auto',
   minWidth = 200,
+  maxMenuHeight,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<CSSProperties>({
@@ -55,6 +58,7 @@ export function FloatingMenu({
 
       // Temporarily unconstrain to measure natural size
       menu.style.maxHeight = 'none';
+      menu.style.height = 'auto';
       const naturalH = Math.max(menu.scrollHeight, 1);
       const naturalW = Math.max(menu.offsetWidth, minWidth);
 
@@ -66,7 +70,12 @@ export function FloatingMenu({
       else if (placement === 'down') openUp = false;
       else openUp = spaceAbove >= spaceBelow || spaceBelow < Math.min(naturalH, 240);
 
-      const maxH = Math.max(160, openUp ? spaceAbove - gap : spaceBelow - gap);
+      const spaceCap = Math.max(160, openUp ? spaceAbove - gap : spaceBelow - gap);
+      const hardCap =
+        typeof maxMenuHeight === 'number' && Number.isFinite(maxMenuHeight)
+          ? Math.max(160, maxMenuHeight)
+          : Number.POSITIVE_INFINITY;
+      const maxH = Math.min(spaceCap, hardCap);
       const height = Math.min(naturalH, maxH);
 
       let left = align === 'right' ? r.right - naturalW : r.left;
@@ -78,10 +87,13 @@ export function FloatingMenu({
         position: 'fixed',
         top,
         left,
+        width: naturalW,
         minWidth,
+        height,
         maxHeight: maxH,
         zIndex: 10000,
         visibility: 'visible',
+        overflow: 'hidden',
       });
     };
 
@@ -94,7 +106,7 @@ export function FloatingMenu({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [open, anchorRef, align, placement, minWidth]);
+  }, [open, anchorRef, align, placement, minWidth, maxMenuHeight]);
 
   useEffect(() => {
     if (!open) return;

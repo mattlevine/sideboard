@@ -7,6 +7,7 @@ import {
   getOrchestrator,
   listBranches,
   listPrs,
+  listIssues,
   listLinearIssues,
   resolveRepoRoot,
   startMcpServer,
@@ -583,7 +584,7 @@ async function main(): Promise<void> {
       process.cwd(),
     )
     .option('--agent <agent>', 'claude|codex|opencode|cursor', 'claude')
-    .option('--no-enable-access', 'do not auto-enable Sideboard cloud access')
+    .option('--no-enable-access', 'do not auto-enable Brightsy desktop access')
     .option('--no-allow-always', 'do not set allow_always when enabling access')
     .option('--poll-ms <ms>', 'poll interval', '5000')
     .action(async (opts) => {
@@ -639,12 +640,20 @@ async function main(): Promise<void> {
 
   program
     .command('issues')
-    .requiredOption('--agent <agent>', 'claude|codex|opencode')
     .option('--repo <path>', 'repo path', process.cwd())
+    .option(
+      '--agent <agent>',
+      'legacy: list via agent Linear MCP (claude|codex|opencode). Omit to use Account connections.',
+    )
     .action(async (opts) => {
-      // brightsy has no Linear MCP connector; listLinearIssues rejects it.
-      const issues = await listLinearIssues(parseAgent(opts.agent), opts.repo);
-      console.log(JSON.stringify(issues, null, 2));
+      const repo = await resolveRepoRoot(opts.repo);
+      if (opts.agent) {
+        const issues = await listLinearIssues(parseAgent(opts.agent), repo);
+        console.log(JSON.stringify(issues, null, 2));
+        return;
+      }
+      const result = await listIssues(repo);
+      console.log(JSON.stringify(result, null, 2));
     });
 
   await program.parseAsync(process.argv);

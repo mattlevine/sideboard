@@ -22,6 +22,12 @@ const api: IpcApi = {
   setCloudConnect: (opts) => ipcRenderer.invoke('setCloudConnect', opts),
   updateBrightsySettings: (patch) =>
     ipcRenderer.invoke('updateBrightsySettings', patch),
+  updateAdvancedSettings: (patch) =>
+    ipcRenderer.invoke('updateAdvancedSettings', patch),
+  updateIntegrationsSettings: (patch) =>
+    ipcRenderer.invoke('updateIntegrationsSettings', patch),
+  getGitHubStatus: () => ipcRenderer.invoke('getGitHubStatus'),
+  listIssues: (repoPath) => ipcRenderer.invoke('listIssues', repoPath),
   listBranches: (repoPath) => ipcRenderer.invoke('listBranches', repoPath),
   listPrs: (repoPath) => ipcRenderer.invoke('listPrs', repoPath),
   listLinearIssues: (agent, repoPath) => ipcRenderer.invoke('listLinearIssues', agent, repoPath),

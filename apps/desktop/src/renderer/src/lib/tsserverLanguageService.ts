@@ -247,3 +247,34 @@ export async function closeTsFile(absPath: string): Promise<void> {
   openFiles.delete(absPath);
   await window.sideboard.tsserver.closeFile(absPath);
 }
+
+/** Tear down tsserver client + markers. Safe to call when resolution is disabled. */
+export async function shutdownTsDiagnostics(): Promise<void> {
+  for (const timer of diagnosticTimers.values()) clearTimeout(timer);
+  diagnosticTimers.clear();
+  pendingMarkers.clear();
+
+  unsubscribe?.();
+  unsubscribe = null;
+  initPromise = null;
+  initialized = false;
+  activeWorktree = null;
+
+  if (monacoInstance) {
+    for (const model of monacoInstance.editor.getModels()) {
+      monacoInstance.editor.setModelMarkers(model, MARKER_OWNER, []);
+      monacoInstance.editor.setModelMarkers(model, 'typescript', []);
+      monacoInstance.editor.setModelMarkers(model, 'javascript', []);
+    }
+  }
+  fileModels.clear();
+  openFiles.clear();
+
+  try {
+    await window.sideboard.tsserver.stop();
+  } catch {
+    // ignore — may not be running
+  }
+  monacoInstance = null;
+}
+

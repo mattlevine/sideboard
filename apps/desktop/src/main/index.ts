@@ -2,7 +2,7 @@ import { app, BrowserWindow, Notification, dialog, ipcMain, nativeImage, shell }
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { watch, type FSWatcher } from 'chokidar';
 import { autoUpdater } from 'electron-updater';
 import {
@@ -10,6 +10,8 @@ import {
   brightsyCloudConnectAgent,
   brightsyCloudConnectEnabled,
   BrightsySideboardApi,
+  caffeinateWhileCloudConnectEnabled,
+  caffeinateWhileRunningEnabled,
   claudeUserSettingsPath,
   detectAgents,
   ensureAgentPath,
@@ -22,8 +24,11 @@ import {
   disconnectBrightsyTeam,
   listPrs,
   listLinearIssues,
+  listIssues,
+  getGitHubStatus,
   loadAppSettings,
   loadBrightsyConfig,
+  maxConcurrentAgents,
   resolveRepoRoot,
   run,
   runCloudConnect,
@@ -32,9 +37,12 @@ import {
   hasConductorHook,
   getRepoSetupInfo,
   threadsDir,
+  updateAdvancedSettings,
   updateAppEnvironment,
   updateBrightsySettings,
   updateClaudeSettings,
+  updateIntegrationsSettings,
+  type AdvancedAppSettings,
   type AgentKind,
   type AdoptInput,
   type AppSettings,
@@ -43,6 +51,8 @@ import {
   type BrightsyHarnessSettings,
   type ClaudeHarnessSettings,
   type CloudConnectStatus,
+  type IntegrationsSettings,
+  type IssueSource,
   type CreateThreadInput,
   type DiffScope,
   type OrchestratorEvent,
@@ -56,6 +66,7 @@ let repoPath = process.cwd();
 const orch = getOrchestrator();
 let openFileWatcher: FSWatcher | null = null;
 let openFileWatchKey: string | null = null;
+let caffeinateProc: ChildProcess | null = null;
 
 let cloudConnectAbort: AbortController | null = null;
 let cloudConnectRunning = false;
@@ -87,6 +98,7 @@ function stopCloudConnectDaemon(): void {
     cloudConnectAbort = null;
   }
   cloudConnectRunning = false;
+  syncCaffeinate();
 }
 
 function startCloudConnectDaemon(): void {
@@ -100,6 +112,7 @@ function startCloudConnectDaemon(): void {
   cloudConnectRunning = true;
   cloudConnectLastError = null;
   cloudConnectLastLog = 'Starting Brightsy cloud connect…';
+  syncCaffeinate();
 
   void runCloudConnect({
     repoPath,
@@ -122,6 +135,7 @@ function startCloudConnectDaemon(): void {
       if (cloudConnectAbort === ac) {
         cloudConnectAbort = null;
         cloudConnectRunning = false;
+        syncCaffeinate();
       }
     });
 }
@@ -285,9 +299,54 @@ function setupStoreWatcher(): void {
   });
 }
 
+function stopCaffeinate(): void {
+  if (!caffeinateProc) return;
+  try {
+    caffeinateProc.kill();
+  } catch {
+    // ignore
+  }
+  caffeinateProc = null;
+}
+
+/** Keep the Mac awake while agents run and/or cloud connect is listening. */
+function syncCaffeinate(): void {
+  if (process.platform !== 'darwin') {
+    stopCaffeinate();
+    return;
+  }
+  const keepAwake =
+    (caffeinateWhileRunningEnabled() && orch.getRuntime().running > 0) ||
+    (caffeinateWhileCloudConnectEnabled() && cloudConnectRunning);
+  if (keepAwake && !caffeinateProc) {
+    try {
+      caffeinateProc = spawn('caffeinate', ['-dimsu'], {
+        stdio: 'ignore',
+        detached: false,
+      });
+      caffeinateProc.on('exit', () => {
+        caffeinateProc = null;
+      });
+    } catch {
+      caffeinateProc = null;
+    }
+  } else if (!keepAwake) {
+    stopCaffeinate();
+  }
+}
+
 function setupNotifications(): void {
   orch.on((event: OrchestratorEvent) => {
     mainWindow?.webContents.send('orchestrator:event', event);
+
+    if (
+      event.type === 'status_changed' ||
+      event.type === 'turn_finished' ||
+      event.type === 'turn_started' ||
+      event.type === 'error'
+    ) {
+      syncCaffeinate();
+    }
 
     const focused = mainWindow?.isFocused() ?? false;
     if (focused || !Notification.isSupported()) return;
@@ -345,6 +404,33 @@ function registerIpc(): void {
         cloudConnectAgent?: BrightsyCloudConnectAgent | null;
       },
     ) => updateBrightsySettings(patch),
+  );
+  ipcMain.handle('updateAdvancedSettings', (_e, patch: Partial<AdvancedAppSettings>) => {
+    const saved = updateAdvancedSettings(patch);
+    if (typeof patch.maxConcurrent === 'number') {
+      orch.setMaxConcurrent(patch.maxConcurrent);
+    }
+    if (
+      'caffeinateWhileRunning' in patch ||
+      'caffeinateWhileCloudConnect' in patch
+    ) {
+      syncCaffeinate();
+    }
+    return saved;
+  });
+  ipcMain.handle(
+    'updateIntegrationsSettings',
+    (
+      _e,
+      patch: Partial<IntegrationsSettings> & {
+        linearApiKey?: string | null;
+        issueSource?: IssueSource | null;
+      },
+    ) => updateIntegrationsSettings(patch),
+  );
+  ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
+  ipcMain.handle('listIssues', async (_e, path: string) =>
+    listIssues(await resolveRepoRoot(path)),
   );
   ipcMain.handle('getCloudConnectStatus', () => readCloudConnectStatus());
   ipcMain.handle(
@@ -404,6 +490,7 @@ function registerIpc(): void {
   ipcMain.handle('getRuntime', () => orch.getRuntime());
   ipcMain.handle('setMaxConcurrent', (_e, n: number) => {
     orch.setMaxConcurrent(n);
+    updateAdvancedSettings({ maxConcurrent: n });
   });
   ipcMain.handle('createThread', async (_e, input: CreateThreadInput) => {
     await orch.reconcile(input.repoPath);
@@ -628,6 +715,7 @@ app.whenReady().then(async () => {
   ensureAgentPath();
   // Conductor-style Settings → Environment (e.g. CURSOR_API_KEY).
   applyAppEnvironment(process.env);
+  orch.setMaxConcurrent(maxConcurrentAgents());
   applyDockIcon();
   registerIpc();
   setupNotifications();
@@ -666,6 +754,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   stopCloudConnectDaemon();
+  stopCaffeinate();
   void stopOpenFileWatcher();
   void closeTsServer();
 });

@@ -1,5 +1,7 @@
 import type * as monacoEditor from 'monaco-editor';
 
+const MARKER_OWNERS = ['typescript', 'javascript', 'tsserver'] as const;
+
 /** Turn off Monaco's in-browser TS worker diagnostics (no disk / node_modules). */
 export function disableMonacoTsDiagnostics(monaco: typeof monacoEditor): void {
   const ts = monaco.languages.typescript;
@@ -13,11 +15,19 @@ export function disableMonacoTsDiagnostics(monaco: typeof monacoEditor): void {
   ts.javascriptDefaults.setDiagnosticsOptions(opts);
 }
 
-/** Clear leftover worker markers on a model. */
+/** Clear diagnostic markers on a model (Monaco worker + tsserver). */
 export function clearMonacoWorkerMarkers(
   monaco: typeof monacoEditor,
   model: monacoEditor.editor.ITextModel,
 ): void {
-  monaco.editor.setModelMarkers(model, 'typescript', []);
-  monaco.editor.setModelMarkers(model, 'javascript', []);
+  for (const owner of MARKER_OWNERS) {
+    monaco.editor.setModelMarkers(model, owner, []);
+  }
+}
+
+/** Clear diagnostics on every open Monaco model. */
+export function clearAllMonacoDiagnostics(monaco: typeof monacoEditor): void {
+  for (const model of monaco.editor.getModels()) {
+    clearMonacoWorkerMarkers(monaco, model);
+  }
 }

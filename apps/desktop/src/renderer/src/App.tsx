@@ -105,6 +105,9 @@ export function App() {
   }
   const [pendingLand, setPendingLand] = useState<{ draft?: boolean; web?: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialNav, setSettingsInitialNav] = useState<
+    'account' | 'agents' | 'environment' | 'advanced'
+  >('agents');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -529,6 +532,11 @@ export function App() {
                 openFilePath={openFilePath}
                 onOpenFile={openFile}
                 onFileChanges={onFileChanges}
+                onSelectChat={(id, created) => {
+                  if (created) upsertThread(created);
+                  setSelectedId(id);
+                  setMultiSelected(new Set([id]));
+                }}
                 onAskAboutFile={(path) =>
                   setPrefill(`Look at the changes in ${path} and suggest next steps.`)
                 }
@@ -561,16 +569,30 @@ export function App() {
           knownWorkspaces={knownWorkspaces}
           initialMode={createState.mode}
           onClose={() => setCreateState(null)}
-          onCreated={(id) => {
+          onOpenAccount={() => {
+            setCreateState(null);
+            setSettingsOpen(true);
+            setSettingsInitialNav('account');
+          }}
+          onCreated={(id, opts) => {
+            void refresh();
+            if (opts?.stayOpen) return;
             setSelectedId(id);
             setView('thread');
             setMultiSelected(new Set([id]));
-            void refresh();
           }}
         />
       )}
 
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal
+          initialNav={settingsInitialNav}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsInitialNav('agents');
+          }}
+        />
+      )}
 
       {updateReady && (
         <div className="update-banner">
