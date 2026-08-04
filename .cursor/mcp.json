@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "sideboard": {
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/packages/cli/dist/index.js",
+        "mcp"
+      ],
+      "env": {
+        "PATH": "${userHome}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+      }
+    }
+  }
+}
