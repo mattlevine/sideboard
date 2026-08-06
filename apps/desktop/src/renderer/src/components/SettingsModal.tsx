@@ -916,9 +916,10 @@ export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
                         </div>
                         <p className="settings-hint">
                           Let Brightsy cloud agents ask about and drive threads across all
-                          registered Sideboard workspaces — via Slack, Discord, or Microsoft Teams
-                          (Slack is the best-tested path). Requires <code>brightsy login</code> and
-                          a chat channel connected on the Brightsy agent.
+                          registered Sideboard workspaces via the Global coordinator (no home
+                          repo) — Slack, Discord, or Microsoft Teams (Slack is best-tested).
+                          Requires <code>brightsy login</code> and a chat channel on the Brightsy
+                          agent. Keep the desktop app running.
                         </p>
                       </div>
                       <button
@@ -1131,6 +1132,32 @@ export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
                       onClick={() =>
                         void saveAdvancedPatch({
                           deleteBranchOnPurge: !advanced.deleteBranchOnPurge,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">Auto-clean orphan worktrees</div>
+                      <p className="settings-hint">
+                        Remove Sideboard worktrees with no thread record when over the machine max
+                        (Cursor-style cleanup).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.autoCleanupOrphans ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.autoCleanupOrphans)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          autoCleanupOrphans: !advanced.autoCleanupOrphans,
                         })
                       }
                     >

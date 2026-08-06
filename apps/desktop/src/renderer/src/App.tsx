@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { MessagePart, OrchestratorEvent, OrchestratorRuntime, Thread } from '@sideboard/core';
+import type {
+  MessagePart,
+  OrchestratorEvent,
+  OrchestratorRuntime,
+  Thread,
+  Workspace,
+} from '@sideboard/core';
 import { applyAgentEvent } from '@sideboard/message-parts';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
@@ -10,6 +16,7 @@ import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal } from './components/SettingsModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
+import { isGlobalThread } from './lib/global-workspace';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
 const RIGHT_SIDEBAR_DEFAULT = 340;
@@ -345,9 +352,12 @@ export function App() {
     setCreateState({ repoPath: forRepo ?? null, mode });
   }
 
+  /** Global orchestrators have no worktree — Changes/Files/Terminal sidebar is N/A. */
+  const showRightSidebar = Boolean(selected && !isGlobalThread(selected));
+
   const appClass = [
     'app',
-    view === 'thread' && selected ? 'with-right' : '',
+    view === 'thread' && selected && showRightSidebar ? 'with-right' : '',
     leftSidebarOpen ? '' : 'left-collapsed',
   ]
     .filter(Boolean)
@@ -371,7 +381,7 @@ export function App() {
             repoPath={repoPath}
             onShowBoard={showBoard}
             onSelect={onSelect}
-            onNew={(path) => openCreate(path)}
+            onNew={(path, mode) => openCreate(path, mode ?? 'quick')}
             onPickRepo={() =>
               void window.sideboard.pickRepoPath().then(async (p) => {
                 if (!p) return;
@@ -415,35 +425,23 @@ export function App() {
         <GlobalBoard
           threads={threads}
           runtime={runtime}
-          selectedIds={multiSelected}
           liveByThread={liveByThread}
-          onToggle={(id) =>
-            setMultiSelected((prev) => {
-              const next = new Set(prev);
-              if (next.has(id)) next.delete(id);
-              else next.add(id);
-              return next;
-            })
-          }
-          onSelectAll={(ids) => setMultiSelected(new Set(ids))}
-          onClearSelection={() => setMultiSelected(new Set())}
           onOpenThread={(id) => {
             setSelectedId(id);
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
-          onFanOut={async (prompt) => {
-            await window.sideboard.fanOut([...multiSelected], prompt);
-            await refresh();
-          }}
-          onStopSelected={async () => {
-            await Promise.all(
-              [...multiSelected].map((id) => window.sideboard.stopThread(id).catch(() => undefined)),
+          onOpenCloudCoordinator={async () => {
+            const status = await window.sideboard.getCloudConnectStatus();
+            const t = await window.sideboard.ensureCloudCoordinator(
+              status.agent ?? 'claude',
             );
             await refresh();
+            setSelectedId(t.id);
+            setView('thread');
+            setMultiSelected(new Set([t.id]));
           }}
-          onNewThread={() => openCreate()}
-          onNewCoordinator={() => openCreate(repoPath || undefined, 'orchestration')}
+          onNewGlobalChat={() => openCreate(undefined, 'orchestration')}
           onRefresh={() => void refresh()}
           leftSidebarToggle={
             !leftSidebarOpen ? (
@@ -455,19 +453,42 @@ export function App() {
 
       {view === 'thread' && selected && (
         <div
-          className={`thread-workspace${rightSidebarOpen ? '' : ' right-collapsed'}`}
+          className={`thread-workspace${
+            showRightSidebar && rightSidebarOpen ? ' has-right' : ''
+          }`}
         >
           {(() => {
             const leftToggle = !leftSidebarOpen ? (
               <SidebarToggle side="left" open={false} onClick={toggleLeftSidebar} />
             ) : undefined;
-            const rightToggle = (
+            const rightToggle = showRightSidebar ? (
               <SidebarToggle
                 side="right"
                 open={rightSidebarOpen}
                 onClick={toggleRightSidebar}
               />
-            );
+            ) : undefined;
+            const threadPanelProps = {
+              worktreeChats,
+              liveOutput: liveByThread[selected.id] ?? '',
+              liveParts: livePartsByThread[selected.id] ?? [],
+              turnStartedAt: turnStartedAtByThread[selected.id],
+              onRefresh: () => void refresh(),
+              onSelectChat: (id: string, created?: Thread) => {
+                if (created) upsertThread(created);
+                setSelectedId(id);
+                setMultiSelected(new Set([id]));
+              },
+              composerPrefill: prefill,
+              onComposerPrefillConsumed: () => setPrefill(undefined),
+              leftSidebarToggle: leftToggle,
+              rightSidebarToggle: rightToggle,
+            };
+            // Global orchestrators: same full-width chat layout as worktree agents.
+            // Repo-pinned orchestration still uses OrchestratorPanel (child strip).
+            if (isGlobalThread(selected)) {
+              return <ThreadPanel thread={selected} {...threadPanelProps} />;
+            }
             return selected.sourceType === 'orchestration' ? (
             <OrchestratorPanel
               thread={selected}
@@ -493,30 +514,17 @@ export function App() {
           ) : (
             <ThreadPanel
               thread={selected}
-              worktreeChats={worktreeChats}
-              liveOutput={liveByThread[selected.id] ?? ''}
-              liveParts={livePartsByThread[selected.id] ?? []}
-              turnStartedAt={turnStartedAtByThread[selected.id]}
-              onRefresh={() => void refresh()}
-              onSelectChat={(id, created) => {
-                if (created) upsertThread(created);
-                setSelectedId(id);
-                setMultiSelected(new Set([id]));
-              }}
-              composerPrefill={prefill}
-              onComposerPrefillConsumed={() => setPrefill(undefined)}
               openFilePath={openFilePath}
               openFiles={openFiles}
               onSelectFile={openFile}
               onCloseFile={closeFile}
               onShowChat={() => setOpenFilePath(null)}
               fileChanges={fileChanges}
-              leftSidebarToggle={leftToggle}
-              rightSidebarToggle={rightToggle}
+              {...threadPanelProps}
             />
           );
           })()}
-          {rightSidebarOpen && (
+          {showRightSidebar && rightSidebarOpen && (
             <div className="right-sidebar-slot">
               <PanelResizeHandle
                 edge="left"

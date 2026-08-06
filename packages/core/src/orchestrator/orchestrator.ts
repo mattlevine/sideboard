@@ -5,11 +5,32 @@ import { getAdapter } from '../agents/index.js';
 import {
   getPrChecks,
   getPrDetails,
-  listWorktrees,
   removeWorktree,
   resolvePrSelector,
 } from '../git/worktree.js';
-import { runSetupScript, startDevServer } from '../hook/conductor.js';
+import { runSetupScript, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
+import { runCursorWorktreeSetup } from '../hook/cursor-worktrees.js';
+import {
+  cleanupOrphanWorktrees,
+  findOrphanWorktrees,
+  shouldRunWorktreeCleanup,
+} from '../git/orphan-cleanup.js';
+import { applyThreadIntoMain } from '../git/apply-into-main.js';
+import { cloneRepoIntoSideboard } from '../git/clone-repo.js';
+import type { RunScript } from '../hook/settings.js';
+import type {
+  AgentKind,
+  Autonomy,
+  ActiveRun,
+  CreateThreadInput,
+  DiffScope,
+  OrchestratorEvent,
+  OrchestratorRuntime,
+  PrCheckRun,
+  PrDetails,
+  Thread,
+  ThreadOptionsPatch,
+} from '../types/thread.js';
 import {
   appendMessage,
   deleteThreadRecord,
@@ -20,18 +41,6 @@ import {
   updateThread,
   withThreadLock,
 } from '../store/thread-store.js';
-import type {
-  AgentKind,
-  Autonomy,
-  CreateThreadInput,
-  DiffScope,
-  OrchestratorEvent,
-  OrchestratorRuntime,
-  PrCheckRun,
-  PrDetails,
-  Thread,
-  ThreadOptionsPatch,
-} from '../types/thread.js';
 import { createThread } from '../threads/create.js';
 import {
   createChatTab as createChatTabImpl,
@@ -75,11 +84,21 @@ import {
   syncWorkspacesFromThreads,
   type Workspace,
 } from '../store/workspaces.js';
+import {
+  createGlobalChat,
+  isGlobalRepoPath,
+  isGlobalThread,
+} from '../store/global-workspace.js';
+import {
+  coordinatorSystemPrompt,
+  enrichWorkspacesWithGithub,
+} from './coordinator-prompt.js';
 
 interface RegisteredProcess {
-  kind: 'agent' | 'dev';
+  kind: 'agent' | 'dev' | 'setup';
   pid?: number;
   startedAt: string;
+  scriptName?: string;
   kill: () => void;
 }
 
@@ -109,6 +128,16 @@ export class Orchestrator {
   async reconcile(repoPath?: string): Promise<void> {
     for (const thread of listThreads({ includeArchived: true })) {
       if (thread.status === 'archived') continue;
+      if (isGlobalThread(thread)) {
+        // Ensure synthetic cwd exists; never mark global chats broken for git.
+        const { globalAgentCwd } = await import('../store/paths.js');
+        globalAgentCwd();
+        if (thread.status === 'running' && !this.activeTurns.has(thread.id)) {
+          setStatus(thread.id, 'stopped', 'Process died (reconciled on startup)');
+          this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
+        }
+        continue;
+      }
       if (!existsSync(thread.worktreePath)) {
         setStatus(thread.id, 'broken', 'Worktree missing on disk');
         this.emit({ type: 'status_changed', threadId: thread.id, status: 'broken' });
@@ -120,17 +149,30 @@ export class Orchestrator {
       }
     }
 
-    if (repoPath && existsSync(repoPath)) {
-      const wts = await listWorktrees(repoPath);
-      const known = new Set(listThreads({ includeArchived: true }).map((t) => t.worktreePath));
-      for (const wt of wts) {
-        const isSideboardWt =
-          wt.path.includes('/.sideboard/worktrees/') ||
-          wt.path.includes('/sideboard/workspaces/');
-        if (isSideboardWt && !known.has(wt.path)) {
-          // orphaned — leave for manual cleanup; surface via events if needed
-        }
+    const repoPaths = (
+      repoPath
+        ? [repoPath]
+        : [...new Set(listThreads({ includeArchived: true }).map((t) => t.repoPath))]
+    ).filter((p) => !isGlobalRepoPath(p));
+
+    try {
+      const orphans = await findOrphanWorktrees(repoPaths);
+      if (orphans.length) {
+        this.emit({
+          type: 'orphan_worktrees',
+          orphans: orphans.map((o) => ({ path: o.path, repoPath: o.repoPath })),
+        });
       }
+      const { autoCleanupOrphansEnabled } = await import('../store/app-settings.js');
+      if (
+        autoCleanupOrphansEnabled() &&
+        shouldRunWorktreeCleanup() &&
+        orphans.length > 0
+      ) {
+        await cleanupOrphanWorktrees({ repoPaths });
+      }
+    } catch {
+      // Best-effort orphan discovery
     }
 
     // Drain any persisted queues
@@ -338,11 +380,14 @@ export class Orchestrator {
     // Brightsy agents run hosted — they cannot edit the worktree or open PRs, and
     // stuffing those directives has contributed to empty model responses.
     const isBrightsy = fresh.agent === 'brightsy';
-    const worktreeDirective = isBrightsy ? null : formatWorktreeDirective(fresh);
+    const isOrchestration = fresh.sourceType === 'orchestration';
+    // Orchestrators use Sideboard MCP across registered repos — not a single worktree PR playbook.
+    const worktreeDirective =
+      isBrightsy || isOrchestration ? null : formatWorktreeDirective(fresh);
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     const { autoRenameBranchEnabled } = await import('../store/app-settings.js');
     const renameBranchDirective =
-      !isBrightsy && autoRenameBranchEnabled()
+      !isBrightsy && !isOrchestration && autoRenameBranchEnabled()
         ? formatRenameBranchDirective(fresh, {
             customPrompt: settings?.prompts?.renameBranch,
           })
@@ -366,10 +411,24 @@ export class Orchestrator {
         : buildSessionSeed(prior);
     }
 
+    // Fresh orchestration sessions get the fleet playbook + workspace inventory.
+    // (Claude --resume drops cachedPrefix; cloud-connect also wraps each cloud task.)
+    let coordinatorDirective: string | null = null;
+    if (isOrchestration && !fresh.sessionId) {
+      const inventory = await enrichWorkspacesWithGithub(this.listWorkspaces());
+      coordinatorDirective = coordinatorSystemPrompt({
+        goal: fresh.sourceRef || fresh.title || 'Global orchestration',
+        parentId: fresh.id,
+        workspaces: inventory,
+        audience: 'desktop',
+      });
+    }
+
     // Worktree directive for local agents (even on Claude resume). Project
     // instructions + seed only on fresh sessions / non-Claude agents.
     // Rename-branch is Conductor-style: only while still on the placeholder branch.
     const cachedPrefix = [
+      coordinatorDirective,
       worktreeDirective,
       renameBranchDirective,
       ...(fresh.agent === 'claude' && fresh.sessionId
@@ -441,7 +500,8 @@ export class Orchestrator {
       setStatus(threadId, 'error', message);
       this.emit({ type: 'error', threadId, message });
       this.emit({ type: 'status_changed', threadId, status: 'error' });
-      this.emit({ type: 'turn_finished', threadId, exitCode: 1 });    } finally {
+      this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+    } finally {
       this.activeTurns.delete(threadId);
       this.processes.delete(`${threadId}:agent`);
       this.runningCount = Math.max(0, this.runningCount - 1);
@@ -459,72 +519,209 @@ export class Orchestrator {
     return this.requireThread(thread.id);
   }
 
-  async startDev(threadRef: string): Promise<{ port: number }> {
+  async startDev(
+    threadRef: string,
+    scriptName?: string,
+  ): Promise<{ port: number; scriptName: string; ports: number[] }> {
     const thread = this.requireThread(threadRef);
-    const existing = this.processes.get(`${thread.id}:dev`);
-    if (existing && thread.devPort) {
-      return { port: thread.devPort };
-    }
-    const handle = await startDevServer(thread.repoPath, thread.worktreePath, (line) => {
-      this.emit({
-        type: 'turn_output',
-        threadId: thread.id,
-        event: { type: 'stdout', data: `[dev] ${line}` },
-      });
-    });
-    if (!handle) {
+    this.assertNotGlobal(thread, 'Run script');
+    const scripts = listRunScripts(thread.worktreePath, thread.repoPath);
+    const resolvedName =
+      scriptName ??
+      scripts.find((s) => s.default === true)?.name ??
+      scripts.find((s) => s.name === 'dev')?.name ??
+      scripts.find((s) => s.name !== 'all')?.name ??
+      scripts[0]?.name;
+    if (!resolvedName) {
       throw new Error(
-        'No .sideboard/settings.toml (or .conductor/settings.toml) run script found — testing hook is a no-op',
+        'No run script found for this worktree. Add [scripts.run.*] in the worktree’s .sideboard/settings.toml or .conductor/settings.toml (or settings.local.toml on the main repo).',
       );
     }
-    this.processes.set(`${thread.id}:dev`, {
+
+    const runKey = `${thread.id}:run:${resolvedName}`;
+    const existing = this.processes.get(runKey);
+    const active = (thread.activeRuns ?? []).find((r) => r.scriptName === resolvedName);
+    if (existing && active) {
+      return { port: active.port, scriptName: resolvedName, ports: active.ports };
+    }
+    // Legacy key
+    if (!scriptName) {
+      const legacy = this.processes.get(`${thread.id}:dev`);
+      if (legacy && thread.devPort) {
+        return { port: thread.devPort, scriptName: resolvedName, ports: [thread.devPort] };
+      }
+    }
+
+    const mode = getRunMode(thread.worktreePath, thread.repoPath);
+    if (mode === 'nonconcurrent') {
+      for (const t of listThreads()) {
+        if (t.id === thread.id) continue;
+        const runs = t.activeRuns ?? [];
+        if (runs.length > 0 || t.devPort) {
+          throw new Error(
+            `run_mode is nonconcurrent — stop running scripts on thread ${t.id.slice(0, 8)} first`,
+          );
+        }
+      }
+    }
+
+    const handle = await startDevServer(
+      thread.repoPath,
+      thread.worktreePath,
+      (line) => {
+        this.emit({
+          type: 'run_output',
+          threadId: thread.id,
+          scriptName: resolvedName,
+          line,
+        });
+      },
+      { scriptName: resolvedName },
+    );
+    if (!handle) {
+      throw new Error(`Run script not found: ${resolvedName}`);
+    }
+
+    const startedAt = new Date().toISOString();
+    this.processes.set(runKey, {
       kind: 'dev',
       pid: handle.pid,
-      startedAt: new Date().toISOString(),
+      startedAt,
+      scriptName: resolvedName,
       kill: handle.kill,
     });
-    updateThread(thread.id, { devPort: handle.port });
-    this.emit({ type: 'dev_server_started', threadId: thread.id, port: handle.port });
-    void handle.done.then(() => {
-      this.processes.delete(`${thread.id}:dev`);
-      updateThread(thread.id, { devPort: null });
-      this.emit({ type: 'dev_server_stopped', threadId: thread.id });
+    // Keep legacy :dev key for default script
+    const isDefault =
+      scripts.find((s) => s.default)?.name === resolvedName ||
+      (!scripts.some((s) => s.default) &&
+        (resolvedName === 'dev' || resolvedName === scripts[0]?.name));
+    if (isDefault) {
+      this.processes.set(`${thread.id}:dev`, {
+        kind: 'dev',
+        pid: handle.pid,
+        startedAt,
+        scriptName: resolvedName,
+        kill: handle.kill,
+      });
+    }
+
+    const run: ActiveRun = {
+      scriptName: resolvedName,
+      port: handle.port,
+      ports: handle.ports,
+      startedAt,
+    };
+    const nextRuns = [
+      ...(thread.activeRuns ?? []).filter((r) => r.scriptName !== resolvedName),
+      run,
+    ];
+    updateThread(thread.id, {
+      activeRuns: nextRuns,
+      devPort: isDefault ? handle.port : thread.devPort,
     });
-    return { port: handle.port };
+    this.emit({
+      type: 'dev_server_started',
+      threadId: thread.id,
+      port: handle.port,
+      scriptName: resolvedName,
+    });
+    void handle.done.then(() => {
+      this.processes.delete(runKey);
+      if (isDefault) this.processes.delete(`${thread.id}:dev`);
+      const latest = readThread(thread.id);
+      const remaining = (latest?.activeRuns ?? []).filter(
+        (r) => r.scriptName !== resolvedName,
+      );
+      updateThread(thread.id, {
+        activeRuns: remaining,
+        devPort: isDefault ? null : latest?.devPort ?? null,
+      });
+      this.emit({
+        type: 'dev_server_stopped',
+        threadId: thread.id,
+        scriptName: resolvedName,
+      });
+    });
+    return { port: handle.port, scriptName: resolvedName, ports: handle.ports };
   }
 
-  stopDev(threadRef: string): void {
+  stopDev(threadRef: string, scriptName?: string): void {
     const thread = this.requireThread(threadRef);
-    const proc = this.processes.get(`${thread.id}:dev`);
-    if (proc) proc.kill();
-    this.processes.delete(`${thread.id}:dev`);
-    updateThread(thread.id, { devPort: null });
+    if (scriptName) {
+      const runKey = `${thread.id}:run:${scriptName}`;
+      const proc = this.processes.get(runKey);
+      if (proc) proc.kill();
+      this.processes.delete(runKey);
+      const remaining = (thread.activeRuns ?? []).filter((r) => r.scriptName !== scriptName);
+      const isPrimary = thread.devPort != null &&
+        thread.activeRuns?.find((r) => r.scriptName === scriptName)?.port === thread.devPort;
+      updateThread(thread.id, {
+        activeRuns: remaining,
+        devPort: isPrimary ? null : thread.devPort,
+      });
+      this.emit({ type: 'dev_server_stopped', threadId: thread.id, scriptName });
+      return;
+    }
+    // Stop all run scripts for this thread
+    for (const [key, proc] of [...this.processes.entries()]) {
+      if (key.startsWith(`${thread.id}:run:`) || key === `${thread.id}:dev`) {
+        proc.kill();
+        this.processes.delete(key);
+      }
+    }
+    updateThread(thread.id, { activeRuns: [], devPort: null });
     this.emit({ type: 'dev_server_stopped', threadId: thread.id });
   }
 
-  async runSetup(threadRef: string): Promise<{ exitCode: number | null }> {
+  listThreadRunScripts(threadRef: string): RunScript[] {
     const thread = this.requireThread(threadRef);
+    return listRunScripts(thread.worktreePath, thread.repoPath);
+  }
+
+  getActiveRuns(threadRef: string): ActiveRun[] {
+    return this.requireThread(threadRef).activeRuns ?? [];
+  }
+
+  async runSetup(threadRef: string): Promise<{ exitCode: number | null; source?: string | null }> {
+    const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Setup');
     const key = `${thread.id}:setup`;
     if (this.processes.has(key)) {
       throw new Error('Setup already running for this thread');
     }
 
+    const abort = new AbortController();
     this.processes.set(key, {
-      kind: 'dev',
+      kind: 'setup',
       startedAt: new Date().toISOString(),
-      kill: () => {
-        // setup scripts are short-lived; no cancel hook yet
-      },
+      kill: () => abort.abort(),
     });
     this.emit({ type: 'setup_started', threadId: thread.id });
 
     try {
-      const setup = await runSetupScript(thread.repoPath, thread.worktreePath, (line) => {
-        this.emit({ type: 'setup_output', threadId: thread.id, line });
-      });
+      let setup = await runSetupScript(
+        thread.repoPath,
+        thread.worktreePath,
+        (line) => {
+          this.emit({ type: 'setup_output', threadId: thread.id, line });
+        },
+        { signal: abort.signal },
+      );
+
+      // Fall back to Cursor .cursor/worktrees.json when no Sideboard/Conductor setup
+      if (!setup.ran) {
+        setup = await runCursorWorktreeSetup(
+          thread.repoPath,
+          thread.worktreePath,
+          (line) => {
+            this.emit({ type: 'setup_output', threadId: thread.id, line });
+          },
+        );
+      }
+
       if (!setup.ran) {
         throw new Error(
-          'No setup script in .sideboard/settings.toml (or .conductor/settings.toml)',
+          'No setup script in .sideboard/settings.toml, .conductor/settings.toml, or .cursor/worktrees.json',
         );
       }
       if (setup.exitCode !== 0 && setup.exitCode !== null) {
@@ -533,10 +730,77 @@ export class Orchestrator {
         });
       }
       this.emit({ type: 'setup_finished', threadId: thread.id, exitCode: setup.exitCode });
-      return { exitCode: setup.exitCode };
+      return { exitCode: setup.exitCode, source: setup.source };
     } finally {
       this.processes.delete(key);
     }
+  }
+
+  cancelSetup(threadRef: string): void {
+    const thread = this.requireThread(threadRef);
+    const proc = this.processes.get(`${thread.id}:setup`);
+    if (proc) proc.kill();
+  }
+
+  async applyIntoMain(
+    threadRef: string,
+    opts?: { method?: 'merge' | 'cherry-pick'; targetBranch?: string },
+  ) {
+    const thread = this.requireThread(threadRef);
+    return applyThreadIntoMain(thread, opts);
+  }
+
+  async cloneRepo(url: string, name?: string) {
+    return cloneRepoIntoSideboard({ url, name });
+  }
+
+  async listOrphanWorktrees(repoPath?: string) {
+    const repos = repoPath
+      ? [repoPath]
+      : [...new Set(listThreads({ includeArchived: true }).map((t) => t.repoPath))];
+    return findOrphanWorktrees(repos);
+  }
+
+  async cleanupOrphans(opts?: { dryRun?: boolean; maxCount?: number; repoPath?: string }) {
+    const repoPaths = opts?.repoPath
+      ? [opts.repoPath]
+      : [...new Set(listThreads({ includeArchived: true }).map((t) => t.repoPath))];
+    return cleanupOrphanWorktrees({
+      dryRun: opts?.dryRun,
+      maxCount: opts?.maxCount,
+      repoPaths,
+    });
+  }
+
+  /**
+   * Best-of-n / fanout: create N threads (one per agent) with the same prompt.
+   */
+  async bestOfN(opts: {
+    prompt: string;
+    agents: AgentKind[];
+    repoPath: string;
+    sourceType?: 'branch' | 'pr' | 'ticket';
+    sourceRef?: string;
+    title?: string;
+  }): Promise<Thread[]> {
+    const agents = opts.agents.length ? opts.agents : (['claude'] as AgentKind[]);
+    const sourceType = opts.sourceType ?? 'branch';
+    const sourceRef = opts.sourceRef ?? 'default';
+    const created: Thread[] = [];
+    for (const agent of agents) {
+      const thread = await this.createThread({
+        sourceType,
+        sourceRef,
+        agent,
+        repoPath: opts.repoPath,
+        title: opts.title
+          ? `${opts.title} (${agent})`
+          : `best-of-n: ${opts.prompt.slice(0, 48)} (${agent})`,
+        prompt: opts.prompt,
+      });
+      created.push(thread);
+    }
+    return created;
   }
 
   async waitForTurn(threadRef: string, timeoutMs = 600_000): Promise<Thread> {
@@ -583,11 +847,18 @@ export class Orchestrator {
     };
   }
 
+  private assertNotGlobal(thread: Thread, action: string): void {
+    if (isGlobalThread(thread)) {
+      throw new Error(`${action} is not available on the global coordinator`);
+    }
+  }
+
   async diff(
     threadRef: string,
     opts?: { scope?: DiffScope; commitSha?: string | null },
   ) {
     const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Diff');
     return getDiff(thread.worktreePath, thread.repoPath, {
       scope: opts?.scope,
       commitSha: opts?.commitSha,
@@ -597,11 +868,13 @@ export class Orchestrator {
 
   async diffSummary(threadRef: string) {
     const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Diff');
     return getDiffSummary(thread.worktreePath, thread.repoPath);
   }
 
   async initializeGit(threadRef: string): Promise<void> {
     const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Initialize git');
     await initializeGitRepository(thread.worktreePath);
   }
 
@@ -636,11 +909,14 @@ export class Orchestrator {
   }
 
   async previewLand(threadRef: string) {
-    return previewLand(this.requireThread(threadRef));
+    const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Land');
+    return previewLand(thread);
   }
 
   async confirmLand(threadRef: string, opts?: { draft?: boolean; web?: boolean }) {
     const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Land');
     const result = await confirmLand(thread, opts);
     if (result.prUrl) {
       const patch: Partial<Thread> = { prUrl: result.prUrl };
@@ -775,10 +1051,24 @@ export class Orchestrator {
   async archive(threadRef: string): Promise<Thread> {
     const thread = this.requireThread(threadRef);
     this.stop(thread.id);
+    if (isGlobalThread(thread)) {
+      return setStatus(thread.id, 'archived');
+    }
     const siblings = threadsSharingWorktree(thread.worktreePath).filter((t) => t.id !== thread.id);
     // Only tear down the worktree when this is the last active chat tab.
     if (siblings.length === 0) {
       this.stopDev(thread.id);
+      try {
+        await runArchiveScript(thread.repoPath, thread.worktreePath, (line) => {
+          this.emit({
+            type: 'turn_output',
+            threadId: thread.id,
+            event: { type: 'stdout', data: `[archive] ${line}` },
+          });
+        });
+      } catch {
+        // Best-effort archive script
+      }
       await removeWorktree(thread.repoPath, thread.worktreePath);
     }
     return setStatus(thread.id, 'archived');
@@ -787,9 +1077,18 @@ export class Orchestrator {
   async purge(threadRef: string, opts?: { deleteBranch?: boolean }): Promise<void> {
     const thread = this.requireThread(threadRef);
     this.stop(thread.id);
+    if (isGlobalThread(thread)) {
+      deleteThreadRecord(thread.id);
+      return;
+    }
     const siblings = threadsSharingWorktree(thread.worktreePath).filter((t) => t.id !== thread.id);
     if (siblings.length === 0) {
       this.stopDev(thread.id);
+      try {
+        await runArchiveScript(thread.repoPath, thread.worktreePath);
+      } catch {
+        // Best-effort
+      }
       const { deleteBranchOnPurgeEnabled } = await import('../store/app-settings.js');
       const deleteBranch = opts?.deleteBranch ?? deleteBranchOnPurgeEnabled();
       await removeWorktree(thread.repoPath, thread.worktreePath, {
@@ -803,6 +1102,11 @@ export class Orchestrator {
     const thread = this.requireThread(threadRef);
     if (thread.status !== 'archived') {
       throw new Error('Thread is not archived');
+    }
+    if (isGlobalThread(thread)) {
+      const { globalAgentCwd } = await import('../store/paths.js');
+      updateThread(thread.id, { worktreePath: globalAgentCwd() });
+      return setStatus(thread.id, 'idle');
     }
     if (!existsSync(thread.worktreePath)) {
       const { createThreadWorktree } = await import('../git/worktree.js');
@@ -864,7 +1168,8 @@ export function getOrchestrator(): Orchestrator {
 export async function startOrchestration(opts: {
   goal: string;
   agent: AgentKind;
-  repoPath: string;
+  /** Omit or pass GLOBAL_WORKSPACE_ID for a home-less Global chat. */
+  repoPath?: string;
   autonomy?: Thread['autonomy'];
   model?: string | null;
   fast?: boolean;
@@ -872,11 +1177,27 @@ export async function startOrchestration(opts: {
   attachments?: Thread['attachments'];
 }): Promise<Thread> {
   const { titleFromPrompt } = await import('../threads/title.js');
-  // Explicit title so orchestration shows the goal (userSetTitle via createThread).
   const title = titleFromPrompt(opts.goal) || 'Orchestration';
+  const repoPath = opts.repoPath?.trim();
+
+  // Default: Global workspace (no git home).
+  if (!repoPath || isGlobalRepoPath(repoPath)) {
+    return createGlobalChat({
+      title,
+      sourceRef: opts.goal,
+      agent: opts.agent,
+      autonomy: opts.autonomy,
+      model: opts.model,
+      fast: opts.fast,
+      planMode: opts.planMode,
+      attachments: opts.attachments,
+    });
+  }
+
+  // Legacy: pinned-repo orchestration (real worktree). Prefer Global for new work.
   const createOpts = {
     agent: opts.agent,
-    repoPath: opts.repoPath,
+    repoPath,
     title,
     autonomy: opts.autonomy,
     model: opts.model,
@@ -889,11 +1210,8 @@ export async function startOrchestration(opts: {
     sourceRef: 'default',
     ...createOpts,
   }).catch(async () => {
-    // Orchestration threads don't need a worktree for the coordinator itself —
-    // store a lightweight record without worktree when possible.
-    // Fallback: create off resolved default branch name.
     const { resolveDefaultBranch, resolveRepoRoot } = await import('../git/worktree.js');
-    const repo = await resolveRepoRoot(opts.repoPath);
+    const repo = await resolveRepoRoot(repoPath);
     const def = await resolveDefaultBranch(repo);
     return createThread({
       sourceType: 'branch',
@@ -903,10 +1221,10 @@ export async function startOrchestration(opts: {
     });
   });
 
-  // Mark as orchestration source
   const { updateThread: upd } = await import('../store/thread-store.js');
   return upd(thread.id, {
     sourceType: 'orchestration',
     sourceRef: opts.goal,
   });
 }
+

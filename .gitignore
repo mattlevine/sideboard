@@ -18,3 +18,6 @@ apps/desktop/dist/
 .vite/
 # Legacy in-repo worktrees (new ones go to ~/sideboard/workspaces)
 .sideboard/worktrees/
+# Conductor-style machine-local overrides (apply to all worktrees of this repo)
+.sideboard/settings.local.toml
+.conductor/settings.local.toml

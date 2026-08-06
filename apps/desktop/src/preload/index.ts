@@ -28,7 +28,7 @@ const api: IpcApi = {
     ipcRenderer.invoke('updateIntegrationsSettings', patch),
   getGitHubStatus: () => ipcRenderer.invoke('getGitHubStatus'),
   listIssues: (repoPath) => ipcRenderer.invoke('listIssues', repoPath),
-  listBranches: (repoPath) => ipcRenderer.invoke('listBranches', repoPath),
+  listBranches: (repoPath, opts) => ipcRenderer.invoke('listBranches', repoPath, opts),
   listPrs: (repoPath) => ipcRenderer.invoke('listPrs', repoPath),
   listLinearIssues: (agent, repoPath) => ipcRenderer.invoke('listLinearIssues', agent, repoPath),
   resolveRepoRoot: (cwd) => ipcRenderer.invoke('resolveRepoRoot', cwd),
@@ -56,6 +56,9 @@ const api: IpcApi = {
     ipcRenderer.invoke('setThreadOptions', threadRef, patch),
   fanOut: (threadRefs, prompt) => ipcRenderer.invoke('fanOut', threadRefs, prompt),
   startOrchestration: (opts) => ipcRenderer.invoke('startOrchestration', opts),
+  createGlobalChat: (opts) => ipcRenderer.invoke('createGlobalChat', opts),
+  ensureCloudCoordinator: (agent) =>
+    ipcRenderer.invoke('ensureCloudCoordinator', agent),
   stopThread: (threadRef) => ipcRenderer.invoke('stopThread', threadRef),
   getDiff: (threadRef, opts) => ipcRenderer.invoke('getDiff', threadRef, opts),
   initializeGit: (threadRef) => ipcRenderer.invoke('initializeGit', threadRef),
@@ -83,13 +86,48 @@ const api: IpcApi = {
   openInEditor: (threadRef, editor, relativePath) =>
     ipcRenderer.invoke('openInEditor', threadRef, editor, relativePath),
   openWorktree: (threadRef, target) => ipcRenderer.invoke('openWorktree', threadRef, target),
-  runDevScript: (threadRef) => ipcRenderer.invoke('runDevScript', threadRef),
-  stopDevScript: (threadRef) => ipcRenderer.invoke('stopDevScript', threadRef),
+  runDevScript: (threadRef, scriptName) =>
+    ipcRenderer.invoke('runDevScript', threadRef, scriptName),
+  stopDevScript: (threadRef, scriptName) =>
+    ipcRenderer.invoke('stopDevScript', threadRef, scriptName),
+  listRunScripts: (threadRef) => ipcRenderer.invoke('listRunScripts', threadRef),
+  getActiveRuns: (threadRef) => ipcRenderer.invoke('getActiveRuns', threadRef),
   previewLand: (threadRef) => ipcRenderer.invoke('previewLand', threadRef),
   confirmLand: (threadRef, opts) => ipcRenderer.invoke('confirmLand', threadRef, opts),
   archiveThread: (threadRef) => ipcRenderer.invoke('archiveThread', threadRef),
   purgeThread: (threadRef, opts) => ipcRenderer.invoke('purgeThread', threadRef, opts),
   restoreThread: (threadRef) => ipcRenderer.invoke('restoreThread', threadRef),
+  applyIntoMain: (threadRef, opts) => ipcRenderer.invoke('applyIntoMain', threadRef, opts),
+  cloneRepo: (url, name) => ipcRenderer.invoke('cloneRepo', url, name),
+  listOrphanWorktrees: (repoPath) => ipcRenderer.invoke('listOrphanWorktrees', repoPath),
+  cleanupOrphans: (opts) => ipcRenderer.invoke('cleanupOrphans', opts),
+  bestOfN: (opts) => ipcRenderer.invoke('bestOfN', opts),
+  attachThread: (threadRef) => ipcRenderer.invoke('attachThread', threadRef),
+  terminal: {
+    start: (threadRef, cols, rows) =>
+      ipcRenderer.invoke('terminal:start', threadRef, cols, rows),
+    attach: (threadRef, cols, rows) =>
+      ipcRenderer.invoke('terminal:attach', threadRef, cols, rows),
+    write: (id, data) => ipcRenderer.invoke('terminal:write', id, data),
+    resize: (id, cols, rows) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
+    kill: (id) => ipcRenderer.invoke('terminal:kill', id),
+    onData: (listener) => {
+      const handler = (
+        _event: IpcRendererEvent,
+        payload: { id: string; data: string },
+      ) => listener(payload);
+      ipcRenderer.on('terminal:data', handler);
+      return () => ipcRenderer.removeListener('terminal:data', handler);
+    },
+    onExit: (listener) => {
+      const handler = (
+        _event: IpcRendererEvent,
+        payload: { id: string; exitCode: number | null },
+      ) => listener(payload);
+      ipcRenderer.on('terminal:exit', handler);
+      return () => ipcRenderer.removeListener('terminal:exit', handler);
+    },
+  },
   getRepoPath: () => ipcRenderer.invoke('getRepoPath'),
   setRepoPath: (path) => ipcRenderer.invoke('setRepoPath', path),
   pickRepoPath: () => ipcRenderer.invoke('pickRepoPath'),

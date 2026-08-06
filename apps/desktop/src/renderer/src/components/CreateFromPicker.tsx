@@ -42,33 +42,47 @@ export function CreateFromPicker({
 
   useEffect(() => {
     if (!open || !repoPath) return;
+    let cancelled = false;
     setQuery('');
     setError(null);
     setLoading(true);
+    setPrs([]);
+    setBranches([]);
+    setIssues([]);
     void (async () => {
       try {
         if (tab === 'prs') {
           const list = await window.sideboard.listPrs(repoPath);
-          setPrs(list);
+          if (!cancelled) setPrs(list);
         } else if (tab === 'branches') {
-          const list = await window.sideboard.listBranches(repoPath);
-          setBranches(list.filter((b) => !b.name.startsWith('thread/')));
+          const list = await window.sideboard.listBranches(repoPath, {
+            unmergedOnly: true,
+          });
+          if (!cancelled) {
+            setBranches(list.filter((b) => !b.name.startsWith('thread/')));
+          }
         } else {
           const result = await window.sideboard.listIssues(repoPath);
-          setIssues(result.issues);
-          setIssueSource(result.source);
-          setPreferredSource(result.preferredSource);
-          setLinearOk(result.linearConnected);
+          if (!cancelled) {
+            setIssues(result.issues);
+            setIssueSource(result.source);
+            setPreferredSource(result.preferredSource);
+            setLinearOk(result.linearConnected);
+          }
         }
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : String(err));
         if (tab === 'prs') setPrs([]);
         else if (tab === 'branches') setBranches([]);
         else setIssues([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [open, repoPath, tab]);
 
   const q = query.trim().toLowerCase();
@@ -136,6 +150,11 @@ export function CreateFromPicker({
             if (e.key === 'Escape') onClose();
           }}
         />
+        {repoPath ? (
+          <div className="composer-picker-section-label" title={repoPath}>
+            {repoPath.split('/').filter(Boolean).pop() || repoPath}
+          </div>
+        ) : null}
         <div className="create-from-tabs">
           {([
             { id: 'prs' as const, label: 'PRs' },

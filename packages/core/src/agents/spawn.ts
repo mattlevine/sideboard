@@ -39,6 +39,12 @@ export async function spawnAgentTurn(
       `Cannot spawn ${thread.agent}: thread ${thread.id} has no worktreePath`,
     );
   }
+  // Global orchestration chats use a synthetic empty cwd (not a git worktree).
+  const { isGlobalThread } = await import('../store/global-workspace.js');
+  if (isGlobalThread(thread)) {
+    const { globalAgentCwd } = await import('../store/paths.js');
+    globalAgentCwd();
+  }
   const adapter = getAdapter(thread.agent);
   const cmd = await adapter.buildTurn(thread, input);
   if (cmd.cwd !== thread.worktreePath) {

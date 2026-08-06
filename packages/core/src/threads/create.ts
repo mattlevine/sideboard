@@ -9,6 +9,7 @@ import {
   resolveRepoRoot,
 } from '../git/worktree.js';
 import { copyConfiguredFiles, runSetupScript } from '../hook/conductor.js';
+import { runCursorWorktreeSetup } from '../hook/cursor-worktrees.js';
 import {
   createEmptyThread,
   readThread,
@@ -99,7 +100,10 @@ export async function createThread(
   await ensureWorkspace(repoPath);
 
   try {
-    const setup = await runSetupScript(repoPath, worktreePath, onSetupLine);
+    let setup = await runSetupScript(repoPath, worktreePath, onSetupLine);
+    if (!setup.ran) {
+      setup = await runCursorWorktreeSetup(repoPath, worktreePath, onSetupLine);
+    }
     if (setup.ran && setup.exitCode !== 0 && setup.exitCode !== null) {
       updateThread(thread.id, {
         lastError: `Setup exited ${setup.exitCode} (thread is still usable)`,

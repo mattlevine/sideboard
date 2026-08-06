@@ -1,28 +1,58 @@
 import type { AgentKind } from '../types/thread.js';
+import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import {
-  getOrchestrator,
-  startOrchestration,
-} from '../orchestrator/orchestrator.js';
-import { resolveRepoRoot } from '../git/worktree.js';
-import { listWorkspaces, type Workspace } from '../store/workspaces.js';
+  ensureCloudCoordinator,
+  listGlobalThreads,
+} from '../store/global-workspace.js';
 import {
   BrightsySideboardApi,
   taskMessageText,
   type SideboardCloudTask,
 } from './api.js';
+import {
+  CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_TIMEOUT_REPLY,
+  CLOUD_ORCHESTRATOR_GOAL,
+} from './cloud-connect-constants.js';
+import { readThread } from '../store/thread-store.js';
+import {
+  coordinatorSystemPrompt,
+  enrichWorkspacesWithGithub,
+  formatWorkspaceInventory,
+} from '../orchestrator/coordinator-prompt.js';
+
+export {
+  CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_TIMEOUT_REPLY,
+  CLOUD_ORCHESTRATOR_GOAL,
+} from './cloud-connect-constants.js';
+
+export {
+  coordinatorSystemPrompt,
+  formatWorkspaceInventory,
+  enrichWorkspacesWithGithub,
+} from '../orchestrator/coordinator-prompt.js';
 
 const POLL_MS = 5_000;
-export const CLOUD_ORCHESTRATOR_GOAL = 'Cloud-connected Sideboard orchestrator';
+
+/** Serialize cloud task handling so busy checks / sends cannot interleave. */
+let handleTaskChain: Promise<void> = Promise.resolve();
+
+function enqueueHandleTask(fn: () => Promise<void>): Promise<void> {
+  const run = handleTaskChain.then(fn, fn);
+  handleTaskChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 
 export type CloudConnectAgent = Exclude<AgentKind, 'brightsy'>;
 
 export interface CloudConnectOptions {
-  /**
-   * Home repo for the coordinator thread. Defaults to the first registered
-   * workspace (or cwd). The coordinator can still operate across all workspaces.
-   */
-  repoPath?: string;
   agent: CloudConnectAgent;
+  /** @deprecated Ignored — cloud connect uses the Global workspace coordinator. */
+  repoPath?: string;
   /** Auto-enable Brightsy desktop access if disabled. Default true. */
   enableAccess?: boolean;
   /** When enabling access, set allow_always. Default true for connect daemon. */
@@ -36,87 +66,49 @@ export interface CloudConnectOptions {
   api?: BrightsySideboardApi;
 }
 
-export function formatWorkspaceInventory(workspaces: Workspace[]): string {
-  if (workspaces.length === 0) return '(no registered workspaces)';
-  return workspaces.map((w) => `- ${w.name}: ${w.path}`).join('\n');
-}
-
-export function coordinatorSystemPrompt(opts: {
-  goal: string;
-  homeRepoPath: string;
-  parentId: string;
-  workspaces: Workspace[];
-}): string {
-  return [
-    'You are a Sideboard coordinator responding to a request from a Brightsy cloud agent (Slack, Discord, Teams, or other chat).',
-    'Your reply will be sent back to that cloud agent — be concise and actionable.',
-    'You operate the global orchestrator across ALL registered workspaces below.',
-    'Use Sideboard MCP tools (list_workspaces, list_threads, create_thread, send_to_thread, wait_for_turn, get_diff, …).',
-    'When creating threads, pass the correct repoPath for the target workspace.',
-    'You cannot confirm_land or purge_thread — those stay human-only.',
-    `Goal: ${opts.goal}`,
-    `Coordinator home repo: ${opts.homeRepoPath}`,
-    `Parent thread id (pass as parentThreadId when creating children): ${opts.parentId}`,
-    'Registered workspaces:',
-    formatWorkspaceInventory(opts.workspaces),
-  ].join('\n');
-}
-
-async function resolveHomeRepo(preferred?: string): Promise<string> {
-  if (preferred) {
-    try {
-      return await resolveRepoRoot(preferred);
-    } catch {
-      // fall through to workspace list / cwd
-    }
-  }
-  const workspaces = listWorkspaces();
-  if (workspaces[0]) {
-    try {
-      return await resolveRepoRoot(workspaces[0].path);
-    } catch {
-      return workspaces[0].path;
-    }
-  }
-  return resolveRepoRoot(process.cwd()).catch(() => process.cwd());
-}
-
-function refreshWorkspaces(homeRepoPath: string): Workspace[] {
+function refreshWorkspaces() {
   const orch = getOrchestrator();
-  // Ensure home is registered, then sync from threads.
-  void orch.addWorkspace(homeRepoPath).catch(() => undefined);
   return orch.listWorkspaces();
-}
-
-async function ensureCoordinator(homeRepoPath: string, agent: CloudConnectAgent) {
-  const orch = getOrchestrator();
-  await orch.reconcile(homeRepoPath);
-  const existing = orch
-    .getThreads(true)
-    .find(
-      (t) =>
-        t.sourceType === 'orchestration' &&
-        (t.sourceRef === CLOUD_ORCHESTRATOR_GOAL ||
-          t.title === CLOUD_ORCHESTRATOR_GOAL),
-    );
-  if (existing) return existing;
-  return startOrchestration({
-    goal: CLOUD_ORCHESTRATOR_GOAL,
-    agent,
-    repoPath: homeRepoPath,
-  });
 }
 
 async function handleTask(
   api: BrightsySideboardApi,
   task: SideboardCloudTask,
   opts: CloudConnectOptions,
-  homeRepoPath: string,
 ): Promise<void> {
   const log = opts.onLog ?? (() => undefined);
   const message = taskMessageText(task);
   if (!message) {
     log(`skip ${task.id.slice(0, 8)}: empty message`);
+    return;
+  }
+
+  if (task.task_status !== 'pending' && task.task_status !== 'running' && task.task_status !== 'awaiting_confirmation') {
+    return;
+  }
+
+  const workspaces = refreshWorkspaces();
+  for (const ws of workspaces) {
+    await getOrchestrator().reconcile(ws.path).catch(() => undefined);
+  }
+  const inventory = await enrichWorkspacesWithGithub(workspaces);
+
+  // Re-read coordinator after serialization so busy checks see prior sends.
+  const coordinator = ensureCloudCoordinator(opts.agent);
+  const fresh = readThread(coordinator.id) ?? coordinator;
+
+  // Busy: non-AI reply — do not interrupt, queue, or spawn a sibling.
+  // Check before approve so we do not mutate server state when busy.
+  if (fresh.status === 'running' || fresh.status === 'queued') {
+    log(
+      `busy ${task.id.slice(0, 8)} → coordinator ${fresh.id.slice(0, 8)} (${fresh.status})`,
+    );
+    if (task.task_status === 'awaiting_confirmation') {
+      await api.approveTask(task.id).catch(() => undefined);
+    }
+    await api.markRunning(task.id).catch(() => undefined);
+    await api.submitResponse(task.id, CLOUD_COORDINATOR_BUSY_REPLY);
+    log(`replied busy ${task.id.slice(0, 8)}`);
     return;
   }
 
@@ -126,49 +118,48 @@ async function handleTask(
     task = { ...task, task_status: 'pending' };
   }
 
-  if (task.task_status !== 'pending' && task.task_status !== 'running') {
-    return;
-  }
-
-  const workspaces = refreshWorkspaces(homeRepoPath);
-  for (const ws of workspaces) {
-    await getOrchestrator().reconcile(ws.path).catch(() => undefined);
-  }
-
-  const coordinator = await ensureCoordinator(homeRepoPath, opts.agent);
-
   log(
-    `run ${task.id.slice(0, 8)} → coordinator ${coordinator.id.slice(0, 8)} (${workspaces.length} workspace${workspaces.length === 1 ? '' : 's'})`,
+    `run ${task.id.slice(0, 8)} → coordinator ${fresh.id.slice(0, 8)} (${inventory.length} workspace${inventory.length === 1 ? '' : 's'})`,
   );
   await api.markRunning(task.id).catch(() => undefined);
 
   const orch = getOrchestrator();
   const prompt = [
     coordinatorSystemPrompt({
-      goal: coordinator.sourceRef || CLOUD_ORCHESTRATOR_GOAL,
-      homeRepoPath,
-      parentId: coordinator.id,
-      workspaces,
+      goal: fresh.sourceRef || CLOUD_ORCHESTRATOR_GOAL,
+      parentId: fresh.id,
+      workspaces: inventory,
+      audience: 'cloud',
     }),
     '',
     '--- Cloud agent request ---',
     message,
   ].join('\n');
 
-  await orch.send(coordinator.id, prompt);
-  await orch.waitForTurn(coordinator.id, 14 * 60 * 1000);
-  const result = orch.getTurnResult(coordinator.id);
-  const reply =
-    result.text.trim() ||
-    `(coordinator finished with status ${result.status}, no text)`;
-
-  await api.submitResponse(task.id, reply);
-  log(`replied ${task.id.slice(0, 8)} (${reply.length} chars)`);
+  try {
+    await orch.send(fresh.id, prompt);
+    await orch.waitForTurn(fresh.id, 14 * 60 * 1000);
+    const result = orch.getTurnResult(fresh.id);
+    const reply =
+      result.text.trim() ||
+      `(coordinator finished with status ${result.status}, no text)`;
+    await api.submitResponse(task.id, reply);
+    log(`replied ${task.id.slice(0, 8)} (${reply.length} chars)`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const timedOut = /timed out|timeout/i.test(msg);
+    const reply = timedOut
+      ? CLOUD_COORDINATOR_TIMEOUT_REPLY
+      : `Sideboard coordinator error: ${msg}`;
+    await api.submitResponse(task.id, reply).catch(() => undefined);
+    log(`replied error ${task.id.slice(0, 8)}: ${msg}`);
+    if (!timedOut) throw err;
+  }
 }
 
 /**
  * Poll Brightsy desktop inbound tasks and route them to the local
- * global orchestrator (coordinator thread + MCP across all workspaces).
+ * global orchestrator (coordinator chat + MCP across all workspaces).
  */
 export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> {
   const log = opts.onLog ?? console.log;
@@ -180,8 +171,8 @@ export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> 
   const enableAccess = opts.enableAccess !== false;
   const allowAlways = opts.allowAlways !== false;
   const pollMs = opts.pollIntervalMs ?? POLL_MS;
-  const homeRepoPath = await resolveHomeRepo(opts.repoPath);
-  const workspaces = refreshWorkspaces(homeRepoPath);
+  const workspaces = refreshWorkspaces();
+  const coordinator = ensureCloudCoordinator(opts.agent);
 
   const access = await api.getAccess();
   if (!access.enabled) {
@@ -199,7 +190,9 @@ export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> 
   log(
     `Connected to Brightsy (${api.endpoint}). Polling desktop tasks every ${pollMs / 1000}s…`,
   );
-  log(`Coordinator home: ${homeRepoPath}  agent: ${opts.agent}`);
+  log(
+    `Global coordinator: ${coordinator.id.slice(0, 8)}  agent: ${opts.agent}  global chats: ${listGlobalThreads().length}`,
+  );
   log(`Workspaces (${workspaces.length}):`);
   for (const line of formatWorkspaceInventory(workspaces).split('\n')) {
     log(`  ${line}`);
@@ -224,7 +217,7 @@ export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> 
         // Skip running tasks we didn't start in this process
         if (task.task_status === 'running') continue;
         inFlight.add(task.id);
-        void handleTask(api, task, opts, homeRepoPath)
+        void enqueueHandleTask(() => handleTask(api, task, opts))
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);
             log(`error ${task.id.slice(0, 8)}: ${msg}`);

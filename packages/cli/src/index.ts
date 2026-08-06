@@ -320,17 +320,167 @@ async function main(): Promise<void> {
 
   program
     .command('dev')
-    .description('Start/stop per-worktree test instance')
+    .description('Start/stop per-worktree run script')
     .argument('<thread>', 'thread id/ref')
-    .option('--stop', 'stop the dev server')
-    .action(async (thread, opts) => {
+    .argument('[script]', 'named run script (default script if omitted)')
+    .option('--stop', 'stop the run script')
+    .action(async (thread, script, opts) => {
       if (opts.stop) {
-        orch.stopDev(thread);
-        console.log(chalk.yellow('Dev server stopped'));
+        orch.stopDev(thread, script);
+        console.log(chalk.yellow(script ? `Stopped ${script}` : 'Run scripts stopped'));
         return;
       }
-      const { port } = await orch.startDev(thread);
-      console.log(chalk.green(`Dev server on http://localhost:${port}`));
+      const { port, scriptName } = await orch.startDev(thread, script);
+      console.log(chalk.green(`${scriptName} on http://localhost:${port}`));
+    });
+
+  program
+    .command('setup')
+    .description('Re-run workspace setup for a thread')
+    .argument('<thread>', 'thread id/ref')
+    .action(async (thread) => {
+      const off = orch.on((event) => {
+        if (event.type === 'setup_output' && event.threadId.startsWith(thread.slice(0, 8))) {
+          console.log(event.line);
+        }
+      });
+      const result = await orch.runSetup(thread);
+      off();
+      console.log(
+        chalk.green(`Setup finished exit=${result.exitCode}${result.source ? ` (${result.source})` : ''}`),
+      );
+    });
+
+  const workspaceCmd = program
+    .command('workspace')
+    .description('Manage registered Sideboard workspaces (repos)');
+
+  workspaceCmd
+    .command('ls')
+    .description('List workspaces')
+    .action(() => {
+      const list = orch.listWorkspaces();
+      if (!list.length) {
+        console.log('(no workspaces)');
+        return;
+      }
+      for (const w of list) {
+        console.log(`${w.name}  ${w.path}`);
+      }
+    });
+
+  workspaceCmd
+    .command('add')
+    .argument('<path>', 'git repo path')
+    .action(async (path) => {
+      const repoPath = await resolveRepoRoot(path);
+      const w = await orch.addWorkspace(repoPath);
+      console.log(chalk.green(`Added ${w.name}  ${w.path}`));
+    });
+
+  workspaceCmd
+    .command('rm')
+    .argument('<path>', 'git repo path')
+    .action(async (path) => {
+      const repoPath = await resolveRepoRoot(path);
+      orch.removeWorkspace(repoPath);
+      console.log(chalk.yellow(`Removed ${repoPath}`));
+    });
+
+  program
+    .command('clone')
+    .description('Clone a repo into ~/sideboard/repos and register it')
+    .argument('<url>', 'git clone URL')
+    .option('--name <name>', 'directory name under ~/sideboard/repos')
+    .action(async (url, opts) => {
+      const { repoPath, workspace } = await orch.cloneRepo(url, opts.name);
+      console.log(chalk.green(`Cloned ${workspace.name}`));
+      console.log(`  path: ${repoPath}`);
+    });
+
+  program
+    .command('apply')
+    .description('Merge/cherry-pick thread branch into the main checkout (no PR)')
+    .argument('<thread>', 'thread id/ref')
+    .option('--method <method>', 'merge|cherry-pick', 'merge')
+    .option('--target <branch>', 'target branch (default: repo default)')
+    .action(async (thread, opts) => {
+      const method = opts.method === 'cherry-pick' ? 'cherry-pick' : 'merge';
+      const ok = await confirm(
+        `Apply thread into main checkout via ${method}? This modifies the main working tree.`,
+      );
+      if (!ok) {
+        console.log('Aborted');
+        return;
+      }
+      const result = await orch.applyIntoMain(thread, {
+        method,
+        targetBranch: opts.target,
+      });
+      console.log(chalk.green(result.message));
+    });
+
+  program
+    .command('orphans')
+    .description('List or clean orphan Sideboard worktrees')
+    .option('--clean', 'remove orphans beyond worktreeMaxCount')
+    .option('--dry-run', 'show what would be removed')
+    .option('--repo <path>', 'limit to one repo')
+    .action(async (opts) => {
+      if (opts.clean) {
+        const result = await orch.cleanupOrphans({
+          dryRun: Boolean(opts.dryRun),
+          repoPath: opts.repo,
+        });
+        console.log(
+          chalk.bold(
+            opts.dryRun
+              ? `Would remove ${result.removed.length}, keep ${result.kept.length}`
+              : `Removed ${result.removed.length}, kept ${result.kept.length}`,
+          ),
+        );
+        for (const p of result.removed) console.log(chalk.red(`  - ${p}`));
+        for (const p of result.kept) console.log(chalk.dim(`  keep ${p}`));
+        return;
+      }
+      const orphans = await orch.listOrphanWorktrees(opts.repo);
+      if (!orphans.length) {
+        console.log('(no orphans)');
+        return;
+      }
+      for (const o of orphans) {
+        console.log(`${o.path}  (${o.repoPath})`);
+      }
+    });
+
+  program
+    .command('best-of-n')
+    .description('Create one thread per agent with the same prompt (Cursor-style fanout)')
+    .argument('<prompt>', 'prompt text')
+    .requiredOption(
+      '--agents <list>',
+      'comma-separated agents (claude,codex,opencode,cursor,brightsy)',
+    )
+    .option('--repo <path>', 'repo path', process.cwd())
+    .option('--from <spec>', 'branch:<name>|pr:<n>|ticket:<key>', 'branch:default')
+    .action(async (prompt, opts) => {
+      const agents = String(opts.agents)
+        .split(',')
+        .map((s: string) => parseAgent(s.trim()));
+      const repoPath = await resolveRepoRoot(opts.repo);
+      const { sourceType, sourceRef } = parseFrom(opts.from);
+      const threads = await orch.bestOfN({
+        prompt,
+        agents,
+        repoPath,
+        sourceType,
+        sourceRef,
+      });
+      for (const t of threads) {
+        console.log(
+          chalk.green(`${t.id.slice(0, 8)}  ${t.agent.padEnd(8)}  ${t.branchName}`),
+        );
+      }
     });
 
   program
@@ -411,7 +561,10 @@ async function main(): Promise<void> {
     .command('orchestrate')
     .argument('<goal>', 'orchestration goal')
     .option('--agent <agent>', 'claude|codex|opencode|cursor', 'claude')
-    .option('--repo <path>', 'repo path', process.cwd())
+    .option(
+      '--repo <path>',
+      'optional legacy pinned-repo home (omit for Global workspace)',
+    )
     .action(async (goal, opts) => {
       const agent = parseAgent(opts.agent);
       if (agent === 'brightsy') {
@@ -420,8 +573,12 @@ async function main(): Promise<void> {
           'orchestrate is not supported with brightsy — use claude, codex, opencode, or cursor',
         );
       }
-      const repoPath = await resolveRepoRoot(opts.repo);
+      const repoPath = opts.repo
+        ? await resolveRepoRoot(opts.repo)
+        : undefined;
       const thread = await startOrchestration({ goal, agent, repoPath });
+      // Agent process cwd: worktree for pinned-repo, synthetic global cwd otherwise.
+      const agentCwd = thread.worktreePath || process.cwd();
       console.log(chalk.bold('Orchestration thread'), thread.id.slice(0, 8));
       console.log(chalk.dim('Registering sideboard MCP with agent and starting coordinator…'));
       console.log(
@@ -432,20 +589,21 @@ async function main(): Promise<void> {
 
       const systemHint = [
         'You are a Sideboard coordinator.',
+        'You operate from the Global workspace (no git home). Use Sideboard MCP tools only.',
         'Use Sideboard MCP tools for persistent cross-agent threads, land/dev lifecycle, and work that outlives this session.',
         'For same-session Claude subtasks, prefer Claude Code native Agent(isolation: "worktree") instead.',
         'You cannot confirm_land or purge_thread — those stay human-only.',
         `Goal: ${goal}`,
-        `Repo: ${repoPath}`,
+        repoPath ? `Pinned repo (legacy): ${repoPath}` : 'Workspace: Global',
         `Parent thread id (pass as parentThreadId when creating children): ${thread.id}`,
       ].join('\n');
 
-      // Launch the chosen CLI with MCP config pointing at `sideboard mcp`
+      // Prefer PATH `sideboard mcp` so global installs work (not process.argv[1]).
       const mcpConfig = {
         mcpServers: {
           sideboard: {
-            command: process.execPath,
-            args: [process.argv[1], 'mcp'],
+            command: 'sideboard',
+            args: ['mcp'],
           },
         },
       };
@@ -461,16 +619,31 @@ async function main(): Promise<void> {
         child = spawn(
           'claude',
           ['-p', systemHint, '--mcp-config', cfgPath, '--permission-mode', 'plan'],
-          { cwd: repoPath, stdio: 'inherit' },
+          { cwd: agentCwd, stdio: 'inherit' },
         );
       } else if (agent === 'codex') {
-        child = spawn('codex', ['exec', systemHint, '--cd', repoPath], {
-          cwd: repoPath,
+        child = spawn('codex', ['exec', systemHint, '--cd', agentCwd], {
+          cwd: agentCwd,
           stdio: 'inherit',
         });
+      } else if (agent === 'cursor') {
+        // Cursor SDK agents are driven via Sideboard MCP from another agent;
+        // spawn `cursor-agent` CLI when available for interactive coordination.
+        child = spawn(
+          'cursor-agent',
+          ['--workspace', agentCwd, systemHint],
+          { cwd: agentCwd, stdio: 'inherit', env: process.env },
+        );
+        child.on('error', () => {
+          console.error(
+            chalk.yellow(
+              'cursor-agent CLI not found — orchestration thread was created; use MCP from Claude/Codex or the desktop app.',
+            ),
+          );
+        });
       } else {
-        child = spawn('opencode', ['run', systemHint, '--dir', repoPath], {
-          cwd: repoPath,
+        child = spawn('opencode', ['run', systemHint, '--dir', agentCwd], {
+          cwd: agentCwd,
           stdio: 'inherit',
         });
       }
@@ -580,8 +753,7 @@ async function main(): Promise<void> {
     )
     .option(
       '--repo <path>',
-      'home repo for the coordinator thread (still sees all registered workspaces)',
-      process.cwd(),
+      'deprecated — ignored; cloud connect uses the Global workspace coordinator',
     )
     .option('--agent <agent>', 'claude|codex|opencode|cursor', 'claude')
     .option('--no-enable-access', 'do not auto-enable Brightsy desktop access')
@@ -594,7 +766,6 @@ async function main(): Promise<void> {
           'connect coordinator cannot use brightsy — use claude, codex, opencode, or cursor',
         );
       }
-      const repoPath = await resolveRepoRoot(opts.repo);
       const ac = new AbortController();
       const stop = () => ac.abort();
       process.on('SIGINT', stop);
@@ -604,7 +775,6 @@ async function main(): Promise<void> {
         chalk.dim('(Ctrl+C to stop)'),
       );
       await runCloudConnect({
-        repoPath,
         agent,
         enableAccess: opts.enableAccess !== false,
         allowAlways: opts.allowAlways !== false,
@@ -616,12 +786,14 @@ async function main(): Promise<void> {
 
   program
     .command('branches')
+    .description('List branches in a repo')
     .option('--repo <path>', 'repo path', process.cwd())
+    .option('--all', 'include branches already merged into the default branch')
     .action(async (opts) => {
       const repo = await resolveRepoRoot(opts.repo);
-      const branches = await listBranches(repo);
+      const branches = await listBranches(repo, { unmergedOnly: !opts.all });
       for (const b of branches) {
-        console.log(`${b.current ? '*' : ' '} ${b.name}`);
+        console.log(`${b.current ? '*' : ' '} ${b.name}${b.remote ? ' (remote)' : ''}`);
       }
     });
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, Thread } from '@sideboard/core';
+import { threadDisplayTitle } from '../lib/global-workspace';
 import { FloatingMenu } from './FloatingMenu';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 
@@ -65,7 +66,7 @@ export function ChatTabs({
 
   function startEdit(t: Thread) {
     setEditingId(t.id);
-    setDraft(t.title);
+    setDraft(threadDisplayTitle(t));
   }
 
   function commitEdit() {
@@ -149,7 +150,7 @@ export function ChatTabs({
                     ›_
                   </span>
                   <span className="chat-tab-title" title={t.title}>
-                    {t.title}
+                    {threadDisplayTitle(t)}
                   </span>
                   {active && (
                     <button

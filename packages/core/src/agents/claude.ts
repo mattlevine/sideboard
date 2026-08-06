@@ -178,11 +178,6 @@ export const claudeAdapter: AgentAdapter = {
     }
 
     const mode = permissionMode(thread);
-    // Only Linear was previously allowed, so other Connected MCP servers (Brightsy,
-    // Gmail, …) looked "not logged in" when Claude hit a permission denial.
-    const servers = await loadMcpServers();
-    // Pass each allow as its own flag. Joining with commas breaks when names
-    // contain spaces; Claude also splits the value on whitespace.
     const isOrchestrator = thread.sourceType === 'orchestration';
     // Auto-inject Brightsy MCP for every Claude turn when logged in; Sideboard MCP
     // for coordinator turns. Multi-team: one MCP server per Sideboard-connected team.
@@ -193,12 +188,23 @@ export const claudeAdapter: AgentAdapter = {
     const injectedBrightsyNames = injectedServers
       .filter((s) => s.name === 'brightsy' || s.name.startsWith('brightsy_'))
       .map((s) => s.name);
-    const allowedTools = [
-      ...BASE_ALLOWED_TOOLS,
-      ...mcpAllowTools(servers),
-      ...(isOrchestrator ? [...SIDEBOARD_MCP_ALLOWED_TOOLS] : []),
-      ...brightsyMcpAllowedTools(injectedBrightsyNames),
-    ];
+    // Orchestrators: MCP only (no Edit/Write/Bash on a home directory).
+    let allowedTools: string[];
+    if (isOrchestrator) {
+      allowedTools = [
+        ...SIDEBOARD_MCP_ALLOWED_TOOLS,
+        ...brightsyMcpAllowedTools(injectedBrightsyNames),
+      ];
+    } else {
+      // Only Linear was previously allowed, so other Connected MCP servers (Brightsy,
+      // Gmail, …) looked "not logged in" when Claude hit a permission denial.
+      const servers = await loadMcpServers();
+      allowedTools = [
+        ...BASE_ALLOWED_TOOLS,
+        ...mcpAllowTools(servers),
+        ...brightsyMcpAllowedTools(injectedBrightsyNames),
+      ];
+    }
     // Plain-text `-p` prompt (not --input-format stream-json). Structured stream-json
     // user messages are merged into the API request where Claude Code already applies
     // cache_control on system + tools + messages (max 4). stream-json input was the

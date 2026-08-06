@@ -144,9 +144,15 @@ For the global board and live orchestration UI, run the desktop app.
 sideboard mcp
 ```
 
-Point Claude Code, Codex, or any MCP client at that server. Agents get tools to list/create/send threads, wait for turn results, read diffs, run dev scripts, and preview land — so a coordinator isn't guessing what other worktrees are doing.
+Point Claude Code, Codex, or any MCP client at that server. Agents get tools to:
 
-`confirm_land` and purge stay human-only.
+- **Discover** — `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
+- **Workspaces** — `add_workspace` / `remove_workspace`
+- **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result`; `stop_thread`, `archive_thread`, `restore_thread`
+- **Setup / run** — `run_setup`, `list_run_scripts`, `run_dev_script`, `stop_dev_script`
+- **Inspect** — `get_diff`, `preview_land`
+
+`confirm_land` and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP.
 
 ## Brightsy MCP on every Claude thread
 
@@ -182,37 +188,41 @@ Brightsy chat channels can drive Sideboard on your machine across **all register
 Slack / Discord / Teams → Brightsy cloud agent → Brightsy desktop task queue
                                         │  polled every 5s
                                         ▼
-                        local coordinator thread (Sideboard MCP)
-                                        │  list_workspaces / list_threads / create / send / diff
+              Global workspace coordinator (no git home; Sideboard MCP only)
+                                        │  list_workspaces → branches/PRs/issues → create_thread
+                                        │  send / wait / stop / archive · setup / run · diff
                                         ▼
-                         any registered workspace + its threads
+                         any registered workspace + its worktree threads
 ```
 
-Sideboard uses Brightsy’s existing `/api/v1beta/desktop/*` cloud-to-local API (same queue/access as Brightsy desktop access). One coordinator thread is reused across requests. It can list and act on threads in every workspace Sideboard knows about. Replies are text-only and post back to the Brightsy task (and the chat channel).
+The **Global** workspace is a first-class home-less project: multiple orchestration chats, each using a synthetic empty cwd and Sideboard/Brightsy MCP tools only (no Edit/Write/Bash on a home checkout). Brightsy cloud always routes to one designated chat (`Cloud-connected Sideboard orchestrator`). The Home board lists those Global chats (last responses) — not a fan-out console.
+
+Sideboard uses Brightsy’s existing `/api/v1beta/desktop/*` cloud-to-local API. If the cloud coordinator is already running or queued, the daemon returns a fixed non-AI busy reply (no interrupt, no queue, no sibling chat) so the cloud agent can decide what to do next.
 
 **Setup (desktop UI — preferred)**
 
 1. `brightsy login`, then in Sideboard: **Settings → Agents → Brightsy** and check the teams you want.
 2. Same panel: turn on **Cloud messages / remote orchestrator** and pick a coordinator agent (`claude` recommended).
 3. In Brightsy, connect Slack, Discord, and/or Teams on the agent, and link your chat identity under User Settings → Integrations.
-4. Keep the Sideboard desktop app running. It polls Brightsy desktop tasks and routes them to the global orchestrator.
+4. Keep the Sideboard desktop app running. It polls Brightsy desktop tasks and routes them to the Global coordinator.
 
-Once enabled, the same panel shows live status (listening / starting / error) and the list of registered workspaces the coordinator can reach — handy for confirming it's actually connected. Turning the switch off stops the daemon and disables Brightsy desktop access for that account.
+Once enabled, the same panel shows live status (listening / starting / error) and the list of registered workspaces the coordinator can reach. Turning the switch off stops the daemon and disables Brightsy desktop access for that account.
 
 **Setup (CLI)**
 
 ```bash
 brightsy login
 sideboard brightsy connect-team <slug>
-sideboard connect --repo /path/to/repo --agent claude
+sideboard connect --agent claude
 ```
 
-`--repo` is only the coordinator's home repo — the daemon still exposes **all** workspaces registered in Sideboard. `--agent` accepts `claude|codex|opencode|cursor` (not Brightsy — chat-only). Other flags: `--poll-ms <ms>` (default 5000), `--no-enable-access`, `--no-allow-always`.
+`--repo` is deprecated/ignored — the daemon always uses the Global workspace coordinator and still exposes **all** registered workspaces. `--agent` accepts `claude|codex|opencode|cursor` (not Brightsy — chat-only). Other flags: `--poll-ms <ms>` (default 5000), `--no-enable-access`, `--no-allow-always`.
 
 **What the coordinator can/can't do**
 
 - Can: `list_workspaces`, list/create/send threads across workspaces, wait for turns, read diffs.
 - Can't: `confirm_land` or purge — those stay human-only, from the desktop app or CLI directly.
+- Can't: edit a home git checkout — Global chats have no repo worktree.
 
 Any inbound task Brightsy marks `awaiting_confirmation` is auto-approved by the daemon as soon as it's seen — once connect is running there's no extra approval step per message.
 

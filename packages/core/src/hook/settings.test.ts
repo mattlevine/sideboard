@@ -40,18 +40,31 @@ describe('loadRepoSettings', () => {
       `
 [scripts]
 setup = "pnpm install"
+archive = "echo cleanup"
+run_mode = "nonconcurrent"
 
 [scripts.run.dev]
 command = "PORT=\${CONDUCTOR_PORT:-3000} pnpm dev"
 default = true
+icon = "play"
+available_in = [ "local" ]
+
+[scripts.run.test]
+command = "pnpm test:watch"
+icon = "test-tube"
 `,
     );
 
     const settings = loadRepoSettings(root);
     expect(settings?.source).toBe('conductor');
     expect(settings?.setup).toBe('pnpm install');
+    expect(settings?.archive).toBe('echo cleanup');
+    expect(settings?.runMode).toBe('nonconcurrent');
     expect(settings?.runScripts[0]?.name).toBe('dev');
     expect(settings?.runScripts[0]?.default).toBe(true);
+    expect(settings?.runScripts[0]?.icon).toBe('play');
+    expect(settings?.runScripts[0]?.availableIn).toEqual(['local']);
+    expect(settings?.runScripts[1]?.name).toBe('test');
   });
 
   it('reads worktrees.root override with ~ expansion', () => {
@@ -130,5 +143,59 @@ describe('getRepoSetupInfo', () => {
       hasSetupScript: true,
       configLabel: '.sideboard/settings.toml (main repo)',
     });
+  });
+});
+
+describe('settings.local.toml', () => {
+  it('overlays local run scripts on committed settings', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-local-'));
+    mkdirSync(join(root, '.conductor'));
+    writeFileSync(
+      join(root, '.conductor', 'settings.toml'),
+      `[scripts]\nsetup = "pnpm install"\n`,
+    );
+    writeFileSync(
+      join(root, '.conductor', 'settings.local.toml'),
+      `[scripts.run.dev]\ncommand = "pnpm dev:local"\ndefault = true\nicon = "play"\n`,
+    );
+
+    const settings = loadRepoSettings(root);
+    expect(settings?.setup).toBe('pnpm install');
+    expect(settings?.runScripts).toEqual([
+      { name: 'dev', command: 'pnpm dev:local', default: true, icon: 'play' },
+    ]);
+  });
+
+  it('applies main-repo settings.local.toml to a worktree (Conductor parity)', () => {
+    const repo = mkdtempSync(join(tmpdir(), 'sideboard-repo-local-'));
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-wt-local-'));
+    mkdirSync(join(repo, '.conductor'));
+    mkdirSync(join(wt, '.conductor'));
+    // Worktree has committed snapshot without run scripts (common mid-migration).
+    writeFileSync(
+      join(wt, '.conductor', 'settings.toml'),
+      `[scripts]\nsetup = "pnpm install"\n`,
+    );
+    // Machine-local on main checkout — Conductor applies this to every workspace.
+    writeFileSync(
+      join(repo, '.conductor', 'settings.local.toml'),
+      `[scripts.run.dev]\ncommand = "pnpm --filter web dev"\ndefault = true\n`,
+    );
+
+    const settings = loadWorkspaceSettings(wt, repo);
+    expect(settings?.setup).toBe('pnpm install');
+    expect(settings?.runScripts[0]?.command).toBe('pnpm --filter web dev');
+    expect(hasWorkspaceHook(wt, repo)).toBe(true);
+  });
+
+  it('loads run scripts from settings.local.toml alone', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-local-only-'));
+    mkdirSync(join(root, '.conductor'));
+    writeFileSync(
+      join(root, '.conductor', 'settings.local.toml'),
+      `[scripts.run.dev]\ncommand = "pnpm dev"\ndefault = true\n`,
+    );
+    expect(loadRepoSettings(root)?.runScripts[0]?.name).toBe('dev');
+    expect(hasRepoHook(root)).toBe(true);
   });
 });

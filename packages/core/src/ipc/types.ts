@@ -96,7 +96,7 @@ export interface IpcApi {
    * based on Account preference with Linear→GitHub fallback).
    */
   listIssues(repoPath: string): Promise<ListIssuesResult>;
-  listBranches(repoPath: string): Promise<BranchInfo[]>;
+  listBranches(repoPath: string, opts?: { unmergedOnly?: boolean }): Promise<BranchInfo[]>;
   listPrs(repoPath: string): Promise<PrInfo[]>;
   /** @deprecated Prefer listIssues — agent Linear MCP. */
   listLinearIssues(agent: AgentKind, repoPath: string): Promise<IssueInfo[]>;
@@ -125,13 +125,24 @@ export interface IpcApi {
   startOrchestration(opts: {
     goal: string;
     agent: AgentKind;
-    repoPath: string;
+    /** Omit for Global workspace (home-less). */
+    repoPath?: string;
     autonomy?: Autonomy;
     model?: string | null;
     fast?: boolean;
     planMode?: boolean;
     attachments?: ThreadAttachment[];
   }): Promise<Thread>;
+  createGlobalChat(opts: {
+    title?: string;
+    agent: AgentKind;
+    autonomy?: Autonomy;
+    model?: string | null;
+    fast?: boolean;
+    planMode?: boolean;
+    attachments?: ThreadAttachment[];
+  }): Promise<Thread>;
+  ensureCloudCoordinator(agent: AgentKind): Promise<Thread>;
   stopThread(threadRef: string): Promise<Thread>;
   getDiff(
     threadRef: string,
@@ -171,8 +182,22 @@ export interface IpcApi {
     threadRef: string,
     target: 'finder' | 'cursor' | 'code' | 'xcode' | 'terminal' | 'datagrip',
   ): Promise<void>;
-  runDevScript(threadRef: string): Promise<{ port: number }>;
-  stopDevScript(threadRef: string): Promise<void>;
+  runDevScript(
+    threadRef: string,
+    scriptName?: string,
+  ): Promise<{ port: number; scriptName: string; ports: number[] }>;
+  stopDevScript(threadRef: string, scriptName?: string): Promise<void>;
+  listRunScripts(threadRef: string): Promise<
+    Array<{
+      name: string;
+      command: string;
+      default?: boolean;
+      icon?: string;
+    }>
+  >;
+  getActiveRuns(threadRef: string): Promise<
+    Array<{ scriptName: string; port: number; ports: number[]; startedAt: string }>
+  >;
   previewLand(threadRef: string): Promise<LandPreview>;
   confirmLand(
     threadRef: string,
@@ -181,6 +206,38 @@ export interface IpcApi {
   archiveThread(threadRef: string): Promise<Thread>;
   purgeThread(threadRef: string, opts?: { deleteBranch?: boolean }): Promise<void>;
   restoreThread(threadRef: string): Promise<Thread>;
+  applyIntoMain(
+    threadRef: string,
+    opts?: { method?: 'merge' | 'cherry-pick'; targetBranch?: string },
+  ): Promise<{ applied: boolean; method: string; targetBranch: string; message: string }>;
+  cloneRepo(url: string, name?: string): Promise<{ repoPath: string; workspace: Workspace }>;
+  listOrphanWorktrees(repoPath?: string): Promise<Array<{ path: string; repoPath: string; mtimeMs: number }>>;
+  cleanupOrphans(opts?: {
+    dryRun?: boolean;
+    maxCount?: number;
+    repoPath?: string;
+  }): Promise<{ removed: string[]; kept: string[] }>;
+  bestOfN(opts: {
+    prompt: string;
+    agents: AgentKind[];
+    repoPath: string;
+    sourceType?: 'branch' | 'pr' | 'ticket';
+    sourceRef?: string;
+    title?: string;
+  }): Promise<Thread[]>;
+  /** Attach into the native agent CLI (opens a PTY session when available). */
+  attachThread(threadRef: string): Promise<{ file: string; args: string[]; cwd: string }>;
+  /** Embedded terminal (PTY) IPC. */
+  terminal: {
+    start(threadRef: string, cols?: number, rows?: number): Promise<{ id: string }>;
+    /** Start a PTY running the native agent attach command. */
+    attach(threadRef: string, cols?: number, rows?: number): Promise<{ id: string }>;
+    write(id: string, data: string): Promise<void>;
+    resize(id: string, cols: number, rows: number): Promise<void>;
+    kill(id: string): Promise<void>;
+    onData(listener: (payload: { id: string; data: string }) => void): () => void;
+    onExit(listener: (payload: { id: string; exitCode: number | null }) => void): () => void;
+  };
   /** Subscribe to orchestrator events; returns unsubscribe. */
   onEvent(listener: (event: OrchestratorEvent) => void): () => void;
   /** Subscribe to store directory changes (CLI threads appear live). */

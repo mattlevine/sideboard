@@ -34,6 +34,8 @@ import {
   runCloudConnect,
   saveAppSettings,
   startOrchestration,
+  createGlobalChat,
+  ensureCloudCoordinator,
   hasConductorHook,
   getRepoSetupInfo,
   threadsDir,
@@ -115,7 +117,6 @@ function startCloudConnectDaemon(): void {
   syncCaffeinate();
 
   void runCloudConnect({
-    repoPath,
     agent,
     enableAccess: true,
     allowAlways: true,
@@ -130,6 +131,7 @@ function startCloudConnectDaemon(): void {
         line.startsWith('Connected to Brightsy') ||
         line.startsWith('run ') ||
         line.startsWith('replied ') ||
+        line.startsWith('busy ') ||
         line.startsWith('poll recovered')
       ) {
         cloudConnectLastError = null;
@@ -488,7 +490,11 @@ function registerIpc(): void {
     await disconnectBrightsyTeam(accountIdOrSlug);
     return getBrightsySession();
   });
-  ipcMain.handle('listBranches', async (_e, path: string) => listBranches(await resolveRepoRoot(path)));
+  ipcMain.handle(
+    'listBranches',
+    async (_e, path: string, opts?: { unmergedOnly?: boolean }) =>
+      listBranches(await resolveRepoRoot(path), opts),
+  );
   ipcMain.handle('listPrs', async (_e, path: string) => listPrs(await resolveRepoRoot(path)));
   ipcMain.handle('listLinearIssues', (_e, agent: AgentKind, path: string) =>
     listLinearIssues(agent, path),
@@ -551,7 +557,7 @@ function registerIpc(): void {
       opts: {
         goal: string;
         agent: AgentKind;
-        repoPath: string;
+        repoPath?: string;
         autonomy?: Autonomy;
         model?: string | null;
         fast?: boolean;
@@ -559,6 +565,24 @@ function registerIpc(): void {
         attachments?: ThreadAttachment[];
       },
     ) => startOrchestration(opts),
+  );
+  ipcMain.handle(
+    'createGlobalChat',
+    (
+      _e,
+      opts: {
+        title?: string;
+        agent: AgentKind;
+        autonomy?: Autonomy;
+        model?: string | null;
+        fast?: boolean;
+        planMode?: boolean;
+        attachments?: ThreadAttachment[];
+      },
+    ) => createGlobalChat(opts),
+  );
+  ipcMain.handle('ensureCloudCoordinator', (_e, agent: AgentKind) =>
+    ensureCloudCoordinator(agent),
   );
   ipcMain.handle('stopThread', (_e, ref: string) => orch.stop(ref));
   ipcMain.handle(
@@ -620,9 +644,84 @@ function registerIpc(): void {
       spawn(cmd, [p], { detached: true, stdio: 'ignore' }).unref();
     },
   );
-  ipcMain.handle('runDevScript', (_e, ref: string) => orch.startDev(ref));
-  ipcMain.handle('stopDevScript', (_e, ref: string) => {
-    orch.stopDev(ref);
+  ipcMain.handle('runDevScript', (_e, ref: string, scriptName?: string) =>
+    orch.startDev(ref, scriptName),
+  );
+  ipcMain.handle('stopDevScript', (_e, ref: string, scriptName?: string) => {
+    orch.stopDev(ref, scriptName);
+  });
+  ipcMain.handle('listRunScripts', (_e, ref: string) =>
+    orch.listThreadRunScripts(ref),
+  );
+  ipcMain.handle('getActiveRuns', (_e, ref: string) => orch.getActiveRuns(ref));
+  ipcMain.handle(
+    'applyIntoMain',
+    (
+      _e,
+      ref: string,
+      opts?: { method?: 'merge' | 'cherry-pick'; targetBranch?: string },
+    ) => orch.applyIntoMain(ref, opts),
+  );
+  ipcMain.handle('cloneRepo', (_e, url: string, name?: string) =>
+    orch.cloneRepo(url, name),
+  );
+  ipcMain.handle('listOrphanWorktrees', (_e, repoPath?: string) =>
+    orch.listOrphanWorktrees(repoPath),
+  );
+  ipcMain.handle(
+    'cleanupOrphans',
+    (
+      _e,
+      opts?: { dryRun?: boolean; maxCount?: number; repoPath?: string },
+    ) => orch.cleanupOrphans(opts),
+  );
+  ipcMain.handle(
+    'bestOfN',
+    (
+      _e,
+      opts: {
+        prompt: string;
+        agents: Array<'claude' | 'codex' | 'opencode' | 'brightsy' | 'cursor'>;
+        repoPath: string;
+        sourceType?: 'branch' | 'pr' | 'ticket';
+        sourceRef?: string;
+        title?: string;
+      },
+    ) => orch.bestOfN(opts),
+  );
+  ipcMain.handle('attachThread', async (_e, ref: string) => {
+    const cmd = await orch.attachCommand(ref);
+    return { file: cmd.file, args: cmd.args, cwd: cmd.cwd };
+  });
+  ipcMain.handle(
+    'terminal:start',
+    async (_e, ref: string, cols?: number, rows?: number) => {
+      const { startTerminalSession } = await import('./terminal.js');
+      return startTerminalSession(orch, ref, cols, rows);
+    },
+  );
+  ipcMain.handle(
+    'terminal:attach',
+    async (_e, ref: string, cols?: number, rows?: number) => {
+      const { startTerminalSession } = await import('./terminal.js');
+      const cmd = await orch.attachCommand(ref);
+      return startTerminalSession(orch, ref, cols, rows, {
+        command: cmd.file,
+        args: cmd.args,
+      });
+    },
+  );
+  ipcMain.handle('terminal:write', (_e, id: string, data: string) => {
+    return import('./terminal.js').then((m) => m.writeTerminal(id, data));
+  });
+  ipcMain.handle(
+    'terminal:resize',
+    (_e, id: string, cols: number, rows: number) => {
+      return import('./terminal.js').then((m) => m.resizeTerminal(id, cols, rows));
+    },
+  );
+  ipcMain.handle('terminal:kill', (_e, id: string) => {
+    return import('./terminal.js').then((m) => m.killTerminal(id));
   });
   ipcMain.handle('previewLand', (_e, ref: string) => orch.previewLand(ref));
   ipcMain.handle(

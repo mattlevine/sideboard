@@ -1,3 +1,4 @@
+import { resolveGithubRepoSlug } from '../git/worktree.js';
 import { gh } from '../git/run.js';
 import {
   isLinearConnected,
@@ -20,26 +21,26 @@ export interface ListIssuesResult {
 
 /**
  * List GitHub Issues for the repo via `gh` (machine-global auth).
+ * Scoped to the workspace's connected GitHub remote via `--repo`.
  */
 export async function listGitHubIssues(
   repoPath: string,
   opts?: { limit?: number },
 ): Promise<IssueInfo[]> {
   const limit = Math.max(1, Math.min(100, opts?.limit ?? 50));
-  const { stdout, exitCode } = await gh(
-    [
-      'issue',
-      'list',
-      '--json',
-      'number,title,url,labels',
-      '--limit',
-      String(limit),
-      '--state',
-      'open',
-    ],
-    repoPath,
-    { reject: false },
-  );
+  const slug = await resolveGithubRepoSlug(repoPath);
+  const args = [
+    'issue',
+    'list',
+    '--json',
+    'number,title,url,labels',
+    '--limit',
+    String(limit),
+    '--state',
+    'open',
+  ];
+  if (slug) args.push('--repo', slug);
+  const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) return [];
 
   let parsed: unknown;

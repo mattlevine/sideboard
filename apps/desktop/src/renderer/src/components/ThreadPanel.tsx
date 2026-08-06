@@ -18,6 +18,7 @@ import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
+import { isGlobalThread } from '../lib/global-workspace';
 
 function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
   switch (kind) {
@@ -417,58 +418,60 @@ export function ThreadPanel({
         usageTotalLabel={threadUsage ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok` : null}
         usageTotalTooltip={threadUsage ? `Thread total — ${usageTooltip(threadUsage)}` : undefined}
         openMenu={
-          <>
-            <button
-              ref={openBtnRef}
-              type="button"
-              className="chat-tab-open"
-              title="Open worktree"
-              onClick={() => setOpenMenu((v) => !v)}
-            >
-              <span className="open-cube" aria-hidden />
-              <span className="open-caret">▾</span>
-            </button>
-            <FloatingMenu
-              open={openMenu}
-              onClose={() => setOpenMenu(false)}
-              anchorRef={openBtnRef}
-              align="right"
-              minWidth={220}
-            >
-              {(
-                [
-                  { id: 'finder' as const, label: 'Finder', kbd: '1' },
-                  { id: 'cursor' as const, label: 'Cursor', kbd: '⌘O' },
-                  { id: 'code' as const, label: 'VS Code', kbd: '3' },
-                  { id: 'xcode' as const, label: 'Xcode', kbd: '4' },
-                  { id: 'terminal' as const, label: 'Terminal', kbd: '5' },
-                  { id: 'datagrip' as const, label: 'DataGrip', kbd: '6' },
-                ] as const
-              ).map((item) => (
+          isGlobalThread(thread) ? undefined : (
+            <>
+              <button
+                ref={openBtnRef}
+                type="button"
+                className="chat-tab-open"
+                title="Open worktree"
+                onClick={() => setOpenMenu((v) => !v)}
+              >
+                <span className="open-cube" aria-hidden />
+                <span className="open-caret">▾</span>
+              </button>
+              <FloatingMenu
+                open={openMenu}
+                onClose={() => setOpenMenu(false)}
+                anchorRef={openBtnRef}
+                align="right"
+                minWidth={220}
+              >
+                {(
+                  [
+                    { id: 'finder' as const, label: 'Finder', kbd: '1' },
+                    { id: 'cursor' as const, label: 'Cursor', kbd: '⌘O' },
+                    { id: 'code' as const, label: 'VS Code', kbd: '3' },
+                    { id: 'xcode' as const, label: 'Xcode', kbd: '4' },
+                    { id: 'terminal' as const, label: 'Terminal', kbd: '5' },
+                    { id: 'datagrip' as const, label: 'DataGrip', kbd: '6' },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(false);
+                      void window.sideboard.openWorktree(thread.id, item.id).catch(alert);
+                    }}
+                  >
+                    <span>{item.label}</span>
+                    <kbd>{item.kbd}</kbd>
+                  </button>
+                ))}
                 <button
-                  key={item.id}
                   type="button"
                   onClick={() => {
                     setOpenMenu(false);
-                    void window.sideboard.openWorktree(thread.id, item.id).catch(alert);
+                    void navigator.clipboard?.writeText(thread.worktreePath);
                   }}
                 >
-                  <span>{item.label}</span>
-                  <kbd>{item.kbd}</kbd>
+                  <span>Copy path</span>
+                  <kbd>7</kbd>
                 </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenMenu(false);
-                  void navigator.clipboard?.writeText(thread.worktreePath);
-                }}
-              >
-                <span>Copy path</span>
-                <kbd>7</kbd>
-              </button>
-            </FloatingMenu>
-          </>
+              </FloatingMenu>
+            </>
+          )
         }
         onSelectChat={(id) => {
           onShowChat?.();
@@ -519,11 +522,25 @@ export function ThreadPanel({
                 <div className="chat-empty-mark" aria-hidden>
                   <span className="chat-empty-cube" />
                 </div>
-                <h3>What are you working on?</h3>
-                <p>
-                  Ask Sideboard to explore this worktree, make changes, or summarize a PR. Use{' '}
-                  <kbd>⌘L</kbd> to focus the composer.
-                </p>
+                {thread.sourceType === 'orchestration' || isGlobalThread(thread) ? (
+                  <>
+                    <h3>What should we orchestrate?</h3>
+                    <p>
+                      {isGlobalThread(thread)
+                        ? 'Steer worktree agents across registered repos with Sideboard MCP. Brightsy cloud tasks land here when this is the cloud coordinator.'
+                        : 'Coordinate child worktree agents from this orchestration chat.'}{' '}
+                      Use <kbd>⌘L</kbd> to focus the composer.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3>What are you working on?</h3>
+                    <p>
+                      Ask Sideboard to explore this worktree, make changes, or summarize a PR. Use{' '}
+                      <kbd>⌘L</kbd> to focus the composer.
+                    </p>
+                  </>
+                )}
               </div>
             )}
           {thread.messages.map((m, i) => {
@@ -658,7 +675,9 @@ export function ThreadPanel({
                   ? 'Queued when you send…'
                   : thread.planMode
                     ? 'Plan mode — agent will analyze and plan without editing files'
-                    : 'Ask to make changes, @mention files, run /commands'
+                    : thread.sourceType === 'orchestration' || isGlobalThread(thread)
+                      ? 'Describe a goal — spawn and steer worktree agents via MCP'
+                      : 'Ask to make changes, @mention files, run /commands'
               }
               onFocus={() => setComposerFocused(true)}
               onBlur={() => {

@@ -18,6 +18,8 @@ import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { summarizeChecks } from '../lib/pr-format';
 import { parseUnifiedPatch } from '../lib/tool-diff';
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
+import { EmbeddedTerminal } from './EmbeddedTerminal';
+import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
 
 interface Props {
   thread: Thread;
@@ -41,6 +43,25 @@ interface RepoSetupInfo {
   hasConfig: boolean;
   hasSetupScript: boolean;
   configLabel: string | null;
+}
+
+interface RunScriptInfo {
+  name: string;
+  command: string;
+  default?: boolean;
+  icon?: string;
+}
+
+/** Prefer explicit default, then `dev`, and never fall back to `all`. */
+function pickDefaultRunScript(scripts: RunScriptInfo[]): RunScriptInfo | null {
+  if (!scripts.length) return null;
+  return (
+    scripts.find((s) => s.default === true) ??
+    scripts.find((s) => s.name === 'dev') ??
+    scripts.find((s) => s.name !== 'all') ??
+    scripts[0] ??
+    null
+  );
 }
 
 function prNumber(url: string | null | undefined): string | null {
@@ -96,14 +117,18 @@ export function RightSidebar({
   const [setupRunning, setSetupRunning] = useState(false);
   const [agentSetupBusy, setAgentSetupBusy] = useState(false);
   const setupOutputRef = useRef<HTMLPreElement>(null);
+  const [runScripts, setRunScripts] = useState<RunScriptInfo[]>([]);
+  const [runLogs, setRunLogs] = useState<Record<string, string>>({});
   const [landPreview, setLandPreview] = useState<LandPreview | null>(null);
   const [landOpts, setLandOpts] = useState<{ draft?: boolean; web?: boolean }>({});
   const [landBusy, setLandBusy] = useState(false);
   const [landError, setLandError] = useState<string | null>(null);
   const [prMenuOpen, setPrMenuOpen] = useState(false);
+  const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState<{ chatCount: number } | null>(null);
   const prMenuRef = useRef<HTMLDivElement>(null);
+  const runMenuRef = useRef<HTMLDivElement>(null);
   const fileSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
   const [prDetails, setPrDetails] = useState<PrDetails | null>(null);
@@ -112,6 +137,17 @@ export function RightSidebar({
   const [prChecksLoading, setPrChecksLoading] = useState(false);
   const [prDetailsLoading, setPrDetailsLoading] = useState(false);
 
+  const reloadRunScripts = useCallback(() => {
+    if (typeof window.sideboard.listRunScripts !== 'function') {
+      setRunScripts([]);
+      return;
+    }
+    void window.sideboard
+      .listRunScripts(thread.id)
+      .then(setRunScripts)
+      .catch(() => setRunScripts([]));
+  }, [thread.id]);
+
   useEffect(() => {
     void window.sideboard
       .hasConductorHook(thread.worktreePath, thread.repoPath)
@@ -119,11 +155,12 @@ export function RightSidebar({
     void window.sideboard
       .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
       .then(setSetupInfo);
-  }, [thread.worktreePath, thread.repoPath, thread.updatedAt]);
+    reloadRunScripts();
+  }, [thread.worktreePath, thread.repoPath, thread.updatedAt, thread.id, reloadRunScripts]);
 
   useEffect(() => {
     const off = window.sideboard.onEvent((event) => {
-      if (event.threadId !== thread.id) return;
+      if ('threadId' in event && event.threadId !== thread.id) return;
       if (event.type === 'setup_started') {
         setSetupOutput('');
         setSetupRunning(true);
@@ -139,6 +176,19 @@ export function RightSidebar({
         void window.sideboard
           .hasConductorHook(thread.worktreePath, thread.repoPath)
           .then(setHasHook);
+        reloadRunScripts();
+      }
+      if (event.type === 'run_output') {
+        setRunLogs((prev) => {
+          const cur = prev[event.scriptName] ?? '';
+          return {
+            ...prev,
+            [event.scriptName]: cur ? `${cur}\n${event.line}` : event.line,
+          };
+        });
+      }
+      if (event.type === 'dev_server_started' || event.type === 'dev_server_stopped') {
+        onRefresh();
       }
       if (event.type === 'turn_finished') {
         void window.sideboard
@@ -147,10 +197,11 @@ export function RightSidebar({
         void window.sideboard
           .hasConductorHook(thread.worktreePath, thread.repoPath)
           .then(setHasHook);
+        reloadRunScripts();
       }
     });
     return off;
-  }, [thread.id, thread.worktreePath, thread.repoPath]);
+  }, [thread.id, thread.worktreePath, thread.repoPath, onRefresh, reloadRunScripts]);
 
   useEffect(() => {
     const el = setupOutputRef.current;
@@ -166,6 +217,19 @@ export function RightSidebar({
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [prMenuOpen]);
+
+  useEffect(() => {
+    if (!runMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!runMenuRef.current?.contains(e.target as Node)) setRunMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [runMenuOpen]);
+
+  useEffect(() => {
+    setRunMenuOpen(false);
+  }, [thread.id, lower]);
 
   const reloadDiff = useCallback(() => {
     let cancelled = false;
@@ -310,19 +374,32 @@ export function RightSidebar({
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'r') {
         // Dev start/stop — match Conductor ⌘R
-        if (!hasHook && !thread.devPort) return;
+        if (!hasHook && !thread.devPort && !(thread.activeRuns?.length)) return;
         e.preventDefault();
-        if (thread.devPort) {
-          void window.sideboard.stopDevScript(thread.id).then(onRefresh);
+        const primary =
+          runScripts.find((s) => s.default === true)?.name ??
+          runScripts.find((s) => s.name === 'dev')?.name ??
+          runScripts.find((s) => s.name !== 'all')?.name ??
+          runScripts[0]?.name;
+        const primaryIsRunning = primary
+          ? (thread.activeRuns ?? []).some((r) => r.scriptName === primary)
+          : thread.devPort != null;
+        if (primaryIsRunning) {
+          void window.sideboard
+            .stopDevScript(thread.id, primary)
+            .then(onRefresh);
         } else {
           setLower('run');
-          void window.sideboard.runDevScript(thread.id).then(onRefresh).catch(alert);
+          void window.sideboard
+            .runDevScript(thread.id, primary)
+            .then(onRefresh)
+            .catch(alert);
         }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [hasHook, thread.devPort, thread.id, onRefresh]);
+  }, [hasHook, thread.devPort, thread.activeRuns, thread.id, onRefresh, runScripts]);
 
   const changeCount = diff?.files.length ?? 0;
 
@@ -436,19 +513,85 @@ export function RightSidebar({
     }
   }
 
+  const defaultRunScript = pickDefaultRunScript(runScripts);
+  const primaryScriptName =
+    defaultRunScript?.name ??
+    thread.activeRuns?.[0]?.scriptName ??
+    null;
+  const primaryRunning = primaryScriptName
+    ? (thread.activeRuns ?? []).some((r) => r.scriptName === primaryScriptName)
+    : thread.devPort != null;
+  const primaryPort =
+    (primaryScriptName
+      ? thread.activeRuns?.find((r) => r.scriptName === primaryScriptName)?.port
+      : null) ??
+    thread.devPort ??
+    thread.activeRuns?.[0]?.port ??
+    null;
+
   async function toggleDev() {
     setLower('run');
-    if (thread.devPort) {
-      await window.sideboard.stopDevScript(thread.id);
+    // Main button only starts/stops the default script — never every script.
+    if (primaryRunning) {
+      await window.sideboard.stopDevScript(
+        thread.id,
+        primaryScriptName ?? undefined,
+      );
       onRefresh();
       return;
     }
+    if (!defaultRunScript) {
+      void openRunConfig();
+      return;
+    }
     try {
-      await window.sideboard.runDevScript(thread.id);
+      setRunLogs((prev) => ({ ...prev, [defaultRunScript.name]: '' }));
+      await window.sideboard.runDevScript(thread.id, defaultRunScript.name);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  async function toggleNamedScript(name: string) {
+    setLower('run');
+    if (typeof window.sideboard.runDevScript !== 'function') {
+      window.alert('Restart Sideboard to pick up the latest Run script APIs.');
+      return;
+    }
+    const active = (thread.activeRuns ?? []).some((r) => r.scriptName === name);
+    try {
+      if (active) {
+        await window.sideboard.stopDevScript(thread.id, name);
+      } else {
+        setRunLogs((prev) => ({ ...prev, [name]: '' }));
+        await window.sideboard.runDevScript(thread.id, name);
+      }
+      onRefresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function openRunConfig() {
+    // Prefer worktree settings (agent may have edited them), then main repo.
+    const candidates = [
+      '.sideboard/settings.toml',
+      '.conductor/settings.toml',
+    ];
+    for (const rel of candidates) {
+      try {
+        const file = await window.sideboard.readFile(thread.id, rel);
+        if (!file.binary) {
+          await window.sideboard.openInEditor(thread.id, undefined, rel);
+          return;
+        }
+      } catch {
+        // try next
+      }
+    }
+    // No config yet — ask an agent to create one.
+    void useAgentSetup();
   }
 
   useEffect(() => {
@@ -746,194 +889,295 @@ export function RightSidebar({
 
       <div className="right-lower">
         <div className="right-tabs lower-tabs">
-          <button
-            type="button"
-            className={lower === 'setup' ? 'active' : ''}
-            onClick={() => setLower('setup')}
-          >
-            Setup
-          </button>
-          <button
-            type="button"
-            className={lower === 'run' ? 'active' : ''}
-            onClick={() => setLower('run')}
-          >
-            Run
-          </button>
-          <button
-            type="button"
-            className={lower === 'terminal' ? 'active' : ''}
-            onClick={() => setLower('terminal')}
-          >
-            Terminal
-          </button>
-          <div className="lower-tab-actions">
+          <div className="lower-tabs-scroll">
             <button
               type="button"
-              className={`dev-composite${thread.devPort ? ' running' : ''}`}
-              disabled={!hasHook && !thread.devPort}
-              title={thread.devPort ? 'Stop Dev (⌘R)' : 'Start Dev (⌘R)'}
-              onClick={() => void toggleDev()}
+              className={lower === 'setup' ? 'active' : ''}
+              onClick={() => setLower('setup')}
             >
-              <span className="dev-play">{thread.devPort ? '■' : '▶'}</span>
-              <span>Dev</span>
-              {thread.devPort ? <span className="dev-port">:{thread.devPort}</span> : null}
-              <kbd>⌘R</kbd>
+              Setup
             </button>
+            <button
+              type="button"
+              className={lower === 'run' ? 'active' : ''}
+              onClick={() => setLower('run')}
+            >
+              Run
+            </button>
+            <button
+              type="button"
+              className={lower === 'terminal' ? 'active' : ''}
+              onClick={() => setLower('terminal')}
+            >
+              Terminal
+            </button>
+          </div>
+          <div className="lower-tab-actions" ref={runMenuRef}>
+            {/* Conductor: Open is pinned with Stop/Dev, not in the scrolling tabs. */}
+            {lower === 'run' && primaryPort != null ? (
+              <button
+                type="button"
+                className="dev-open-port"
+                title={`Open http://localhost:${primaryPort}`}
+                onClick={() =>
+                  void window.sideboard.openExternal(
+                    `http://localhost:${primaryPort}`,
+                  )
+                }
+              >
+                <RunScriptIcon name="globe" />
+                <span>{`Open :${primaryPort}`}</span>
+              </button>
+            ) : null}
+            {primaryRunning ? (
+              <button
+                type="button"
+                className="dev-stop-btn"
+                title={`Stop ${scriptDisplayName(primaryScriptName ?? 'Dev')} (⌘R)`}
+                onClick={() => {
+                  setRunMenuOpen(false);
+                  void toggleDev();
+                }}
+              >
+                <RunScriptIcon name="stop" />
+                <span>Stop</span>
+                <kbd>⌘R</kbd>
+              </button>
+            ) : (
+              <div className="dev-composite-group">
+                <button
+                  type="button"
+                  className="dev-composite"
+                  disabled={!hasHook && runScripts.length === 0}
+                  title={
+                    defaultRunScript
+                      ? `Start ${scriptDisplayName(defaultRunScript.name)} (⌘R)`
+                      : 'Configure run scripts'
+                  }
+                  onClick={() => {
+                    setRunMenuOpen(false);
+                    void toggleDev();
+                  }}
+                >
+                  <RunScriptIcon name={defaultRunScript?.icon ?? 'play'} />
+                  <span>
+                    {defaultRunScript
+                      ? scriptDisplayName(defaultRunScript.name)
+                      : 'Dev'}
+                  </span>
+                  <kbd>⌘R</kbd>
+                </button>
+                <button
+                  type="button"
+                  className={`dev-script-chevron${runMenuOpen ? ' open' : ''}`}
+                  title="Run scripts"
+                  aria-haspopup="menu"
+                  aria-expanded={runMenuOpen}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    reloadRunScripts();
+                    setRunMenuOpen((open) => !open);
+                  }}
+                >
+                  ▾
+                </button>
+              </div>
+            )}
+
+            {/* Conductor Terminal is Stop-only; script picker stays on Run. */}
+            {primaryRunning && lower === 'run' ? (
+              <div className="dev-script-menu standalone">
+                <button
+                  type="button"
+                  className={`dev-script-menu-btn${runMenuOpen ? ' open' : ''}`}
+                  title="Run scripts"
+                  aria-haspopup="menu"
+                  aria-expanded={runMenuOpen}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    reloadRunScripts();
+                    setRunMenuOpen((open) => !open);
+                  }}
+                >
+                  ▾
+                </button>
+              </div>
+            ) : null}
+
+            {runMenuOpen ? (
+              <ul className="dev-script-dropdown" role="menu">
+                {runScripts.length === 0 ? (
+                  <li className="dev-script-empty">No run scripts configured</li>
+                ) : (
+                  runScripts.map((script) => {
+                    const active = (thread.activeRuns ?? []).some(
+                      (r) => r.scriptName === script.name,
+                    );
+                    return (
+                      <li key={script.name} role="none">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={active ? 'active' : ''}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setRunMenuOpen(false);
+                            void toggleNamedScript(script.name);
+                          }}
+                        >
+                          <RunScriptIcon
+                            name={active ? 'stop' : script.icon ?? 'play'}
+                          />
+                          <span>{scriptDisplayName(script.name)}</span>
+                          {active ? (
+                            <span className="dev-script-port">
+                              :
+                              {
+                                thread.activeRuns?.find(
+                                  (r) => r.scriptName === script.name,
+                                )?.port
+                              }
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+                <li className="dev-script-sep" aria-hidden />
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setRunMenuOpen(false);
+                      void openRunConfig();
+                    }}
+                  >
+                    <RunScriptIcon name="settings" />
+                    <span>Configure</span>
+                  </button>
+                </li>
+              </ul>
+            ) : null}
           </div>
         </div>
 
         <div className="right-lower-body">
           {lower === 'setup' && (
-            <div className="setup-panel">
+            <div className={`setup-panel${setupOutput || setupRunning ? ' has-log' : ''}`}>
               {!setupInfo ? (
-                <div className="empty">Loading setup…</div>
-              ) : !setupInfo.hasConfig ? (
+                <div className="panel-empty">
+                  <div className="panel-empty-title">Loading setup…</div>
+                </div>
+              ) : setupOutput || setupRunning ? (
                 <>
-                  <div className="setup-empty-title">No setup configured</div>
-                  <p className="thread-meta setup-empty-copy">
-                    This worktree has no <code>.sideboard/settings.toml</code> or{' '}
-                    <code>.conductor/settings.toml</code>. Use an agent (in this worktree) to
-                    explore the project and create the setup config so Dev (⌘R) works.
-                  </p>
-                  <p className="thread-meta worktree-path-inline" title={thread.worktreePath}>
-                    {thread.worktreePath}
-                  </p>
-                  <div className="setup-actions">
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={agentSetupBusy}
-                      title={
-                        thread.status === 'running' || thread.status === 'queued'
-                          ? 'Opens a new Setup chat so the current turn isn’t interrupted'
-                          : undefined
-                      }
-                      onClick={() => void useAgentSetup()}
-                    >
-                      {agentSetupBusy ? 'Starting agent…' : 'Use agent to set up'}
-                    </button>
-                  </div>
-                  <p className="thread-meta setup-footnote">
-                    Or add <code>.sideboard/settings.toml</code> in this worktree — see the Sideboard
-                    README.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="thread-meta setup-config-label">
-                    {setupInfo.configLabel}
-                    {setupInfo.hasSetupScript ? '' : ' — no setup script defined'}
-                  </p>
-                  <p className="thread-meta worktree-path-inline" title={thread.worktreePath}>
-                    Runs in {thread.worktreePath}
-                  </p>
-                  <pre
-                    ref={setupOutputRef}
-                    className={`setup-output${setupOutput ? ' has-output' : ''}`}
-                  >
-                    {setupOutput ||
-                      (setupRunning
-                        ? 'Running setup…'
-                        : 'No setup script output\n\nSetup script output will appear here after running setup.')}
+                  <pre ref={setupOutputRef} className="setup-output has-output">
+                    {setupOutput || 'Running setup…'}
                   </pre>
-                  <div className="setup-actions">
-                    {setupInfo.hasSetupScript ? (
+                  {setupInfo.hasSetupScript ? (
+                    <div className="panel-footer-actions">
                       <button
                         type="button"
-                        className="primary"
+                        className="ghost-action"
                         disabled={setupRunning}
                         onClick={() => void runSetupScript()}
                       >
-                        {setupRunning ? 'Running setup…' : 'Run setup'}
+                        {setupRunning ? 'Running…' : '▶ Run setup again'}
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={agentSetupBusy}
-                        title={
-                          thread.status === 'running' || thread.status === 'queued'
-                            ? 'Opens a new Setup chat so the current turn isn’t interrupted'
-                            : undefined
-                        }
-                        onClick={() => void useAgentSetup()}
-                      >
-                        {agentSetupBusy ? 'Starting agent…' : 'Use agent to add setup script'}
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  ) : null}
                 </>
+              ) : (
+                <div className="panel-empty">
+                  <div className="panel-empty-title">No setup script output</div>
+                  <p className="panel-empty-copy">
+                    {setupInfo.hasSetupScript
+                      ? 'Setup script output will appear here after running setup.'
+                      : setupInfo.hasConfig
+                        ? 'No setup script defined in settings.toml.'
+                        : 'No .sideboard or .conductor settings.toml in this worktree.'}
+                  </p>
+                  {setupInfo.hasSetupScript ? (
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      disabled={setupRunning}
+                      onClick={() => void runSetupScript()}
+                    >
+                      ▶ Run setup
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      disabled={agentSetupBusy}
+                      onClick={() => void useAgentSetup()}
+                    >
+                      {agentSetupBusy ? 'Starting agent…' : '▶ Use agent to set up'}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
 
           {lower === 'run' && (
-            <div className="run-panel">
-              {thread.devPort ? (
+            <div
+              className={`run-panel${
+                thread.devPort || Object.keys(runLogs).some((k) => runLogs[k])
+                  ? ' has-log'
+                  : ''
+              }`}
+            >
+              {thread.devPort || Object.keys(runLogs).some((k) => runLogs[k]) ? (
                 <>
-                  <div className="run-hero">▶</div>
-                  <div className="run-hero-label">Dev :{thread.devPort}</div>
-                  <p className="thread-meta worktree-path-inline" title={thread.worktreePath}>
-                    {thread.worktreePath}
-                  </p>
-                  <div className="row" style={{ justifyContent: 'center', marginBottom: 0 }}>
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() =>
-                        void navigator.clipboard?.writeText(`http://localhost:${thread.devPort}`)
-                      }
-                    >
-                      Copy URL
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void window.sideboard.stopDevScript(thread.id).then(onRefresh)
-                      }
-                    >
-                      Stop Dev
-                    </button>
+                  <div className="run-log-header">
+                    Running{' '}
+                    {scriptDisplayName(
+                      primaryScriptName ??
+                        thread.activeRuns?.[0]?.scriptName ??
+                        defaultRunScript?.name ??
+                        'Dev',
+                    )}
                   </div>
+                  <pre className="setup-output has-output run-log">
+                    {Object.entries(runLogs)
+                      .filter(([, log]) => log)
+                      .map(([name, log]) =>
+                        (thread.activeRuns?.length ?? 0) > 1 ? `[${name}]\n${log}` : log,
+                      )
+                      .join('\n\n') || 'Starting…'}
+                  </pre>
                 </>
               ) : (
-                <>
-                  <div className="run-hero">▶</div>
+                <div className="panel-empty">
+                  <div className="run-hero" aria-hidden>
+                    ▶
+                  </div>
                   <button
                     type="button"
-                    className="primary run-start"
-                    disabled={!hasHook}
+                    className="ghost-action run-start"
+                    disabled={!hasHook && runScripts.length === 0}
                     onClick={() => void toggleDev()}
                   >
-                    Start Dev
+                    Start {defaultRunScript ? scriptDisplayName(defaultRunScript.name) : 'Dev'}{' '}
+                    <kbd>⌘R</kbd>
                   </button>
-                  <p className="thread-meta">
-                    {hasHook
-                      ? 'Test your changes in this worktree. ⌘R to start.'
-                      : 'Add a run script in this worktree’s settings.toml'}
-                  </p>
-                  <p className="thread-meta worktree-path-inline" title={thread.worktreePath}>
-                    {thread.worktreePath}
-                  </p>
-                </>
+                  <p className="panel-empty-copy">Test your changes here.</p>
+                </div>
               )}
             </div>
           )}
 
           {lower === 'terminal' && (
-            <div className="run-panel">
-              <p className="thread-meta">Open a shell in this worktree.</p>
-              <p className="thread-meta worktree-path-inline" title={thread.worktreePath}>
-                {thread.worktreePath}
-              </p>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => void window.sideboard.openWorktree(thread.id, 'terminal')}
-              >
-                Open Terminal
-              </button>
+            <div className="terminal-panel">
+              <EmbeddedTerminal key={thread.id} threadId={thread.id} mode="shell" />
             </div>
           )}
         </div>

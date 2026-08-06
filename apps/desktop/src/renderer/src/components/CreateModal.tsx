@@ -113,9 +113,11 @@ export function CreateModal({
     [workspaces, repoPath],
   );
   const repoName =
-    selectedWorkspace?.name ||
-    (repoPath ? repoPath.split('/').filter(Boolean).pop() : '') ||
-    'Select project';
+    mode === 'orchestration'
+      ? 'Global'
+      : selectedWorkspace?.name ||
+        (repoPath ? repoPath.split('/').filter(Boolean).pop() : '') ||
+        'Select project';
 
   async function refreshWorkspaces(preferred?: string | null) {
     const collected: Workspace[] = [...knownWorkspaces];
@@ -131,14 +133,20 @@ export function CreateModal({
       const threads = await window.sideboard.getThreads(true);
       for (const t of threads) {
         if (!t.repoPath) continue;
-        const name = t.repoPath.split('/').filter(Boolean).pop() || t.repoPath;
+        let root = t.repoPath;
+        try {
+          root = await window.sideboard.resolveRepoRoot(t.repoPath);
+        } catch {
+          // keep t.repoPath
+        }
+        const name = root.split('/').filter(Boolean).pop() || root;
         collected.push({
-          path: t.repoPath,
+          path: root,
           name,
           addedAt: t.createdAt,
         });
         try {
-          await window.sideboard.addWorkspace(t.repoPath);
+          await window.sideboard.addWorkspace(root);
         } catch {
           // ignore per-thread add failures
         }
@@ -150,10 +158,16 @@ export function CreateModal({
     try {
       const current = await window.sideboard.getRepoPath();
       if (current) {
-        const name = current.split('/').filter(Boolean).pop() || current;
-        collected.push({ path: current, name, addedAt: new Date().toISOString() });
+        let root = current;
         try {
-          await window.sideboard.addWorkspace(current);
+          root = await window.sideboard.resolveRepoRoot(current);
+        } catch {
+          // keep current
+        }
+        const name = root.split('/').filter(Boolean).pop() || root;
+        collected.push({ path: root, name, addedAt: new Date().toISOString() });
+        try {
+          await window.sideboard.addWorkspace(root);
         } catch {
           // ignore
         }
@@ -188,6 +202,7 @@ export function CreateModal({
 
   useEffect(() => {
     setSelection(null);
+    setPickerOpen(false);
   }, [repoPath]);
 
   useEffect(() => {
@@ -234,7 +249,7 @@ export function CreateModal({
   }
 
   async function submit() {
-    if (!repoPath) {
+    if (mode !== 'orchestration' && !repoPath) {
       setError('Add a project first');
       return;
     }
@@ -254,7 +269,6 @@ export function CreateModal({
         if (!goal.trim()) throw new Error('Describe the orchestration goal');
         const t = await window.sideboard.startOrchestration({
           goal: goal.trim(),
-          repoPath,
           ...draft,
         });
         if (createMore) {
@@ -330,8 +344,9 @@ export function CreateModal({
     !busy &&
     agentsLoaded &&
     agentOk &&
-    Boolean(repoPath) &&
-    (mode !== 'orchestration' || Boolean(goal.trim()));
+    (mode === 'orchestration'
+      ? Boolean(goal.trim())
+      : Boolean(repoPath));
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -393,6 +408,7 @@ export function CreateModal({
                     className={w.path === repoPath ? 'selected' : ''}
                     onClick={() => {
                       setRepoPath(w.path);
+                      setPickerOpen(false);
                       setRepoMenuOpen(false);
                     }}
                   >

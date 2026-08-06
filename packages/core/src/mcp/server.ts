@@ -3,9 +3,16 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { basename } from 'node:path';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
-import { listBranches, listPrs } from '../git/worktree.js';
+import {
+  listBranches,
+  listPrs,
+  resolveGithubRepoSlug,
+  resolveRepoRoot,
+} from '../git/worktree.js';
 import { listIssues } from '../integrations/issues.js';
 import { listLinearIssues } from '../threads/create.js';
+import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
+import { mcpArchiveBlockedReason } from './archive-guard.js';
 
 const MAX_ORCH_THREADS = 5;
 
@@ -24,11 +31,18 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_workspaces',
-    'List registered Sideboard workspaces (repos under the global orchestrator)',
+    'List registered Sideboard workspaces (repos). Each line is name, path, and github:owner/repo when resolvable — use path as repoPath for list_branches/list_prs/list_issues/create_thread.',
     {},
     async () => {
       const workspaces = orch.listWorkspaces();
-      const lines = workspaces.map((w) => `${w.name}  ${w.path}`);
+      const lines = await Promise.all(
+        workspaces.map(async (w) => {
+          const slug = await resolveGithubRepoSlug(w.path).catch(() => null);
+          return slug
+            ? `${w.name}  ${w.path}  github:${slug}`
+            : `${w.name}  ${w.path}`;
+        }),
+      );
       return {
         content: [
           { type: 'text', text: lines.join('\n') || '(no workspaces)' },
@@ -44,7 +58,10 @@ export async function startMcpServer(): Promise<void> {
     async () => {
       const threads = orch.getThreads(true);
       const lines = threads.map((t) => {
-        const repo = basename(t.repoPath) || t.repoPath;
+        const repo =
+          t.repoPath === GLOBAL_WORKSPACE_ID
+            ? 'Global'
+            : basename(t.repoPath) || t.repoPath;
         return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${t.devPort ? `  http://localhost:${t.devPort}` : ''}`;
       });
       return {
@@ -84,11 +101,11 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_thread',
-    'Create a new thread from branch, pr, or ticket',
+    'Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces and parentThreadId when spawning from an orchestrator. Then use send_to_thread to chat.',
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
-      agent: z.enum(['claude', 'codex', 'opencode', 'brightsy']),
+      agent: z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor']),
       repoPath: z.string(),
       title: z.string().optional(),
       parentThreadId: z.string().optional(),
@@ -137,7 +154,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_thread',
-    'Queue a prompt on a thread (runs under concurrency cap)',
+    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation.',
     {
       ref: z.string(),
       prompt: z.string(),
@@ -161,7 +178,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Block until the thread finishes its current/queued turn (avoids polling)',
+    'Block until the thread finishes its current/queued turn (avoids polling). Use after send_to_thread to read the agent reply.',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -195,6 +212,93 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'stop_thread',
+    'Stop an in-flight agent turn on a thread (does not archive the worktree)',
+    { ref: z.string() },
+    async ({ ref }) => {
+      const t = orch.getThread(ref);
+      if (!t) {
+        return {
+          content: [{ type: 'text', text: `Thread not found: ${ref}` }],
+          isError: true,
+        };
+      }
+      const stopped = orch.stop(ref);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              id: stopped.id,
+              status: stopped.status,
+            }),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'archive_thread',
+    'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Cannot archive the cloud coordinator — use the Sideboard UI for that.',
+    { ref: z.string() },
+    async ({ ref }) => {
+      const t = orch.getThread(ref);
+      if (!t) {
+        return {
+          content: [{ type: 'text', text: `Thread not found: ${ref}` }],
+          isError: true,
+        };
+      }
+      const blocked = mcpArchiveBlockedReason(t);
+      if (blocked) {
+        return {
+          content: [{ type: 'text', text: blocked }],
+          isError: true,
+        };
+      }
+      const archived = await orch.archive(ref);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              id: archived.id,
+              status: archived.status,
+            }),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'restore_thread',
+    'Restore an archived thread (recreates worktree from branch when needed)',
+    { ref: z.string() },
+    async ({ ref }) => {
+      try {
+        const restored = await orch.restore(ref);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: restored.id,
+                status: restored.status,
+                worktreePath: restored.worktreePath,
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
     'get_diff',
     'Compact diff summary (capped hunks, paginated)',
     {
@@ -219,15 +323,119 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'run_dev_script',
-    'Start the .sideboard (or .conductor fallback) default run script for a thread; returns port',
-    { ref: z.string() },
-    async ({ ref }) => {
-      const { port } = await orch.startDev(ref);
+    'Start a .sideboard/.conductor run script for a thread (default script if name omitted); returns port',
+    {
+      ref: z.string(),
+      name: z.string().optional(),
+    },
+    async ({ ref, name }) => {
+      const result = await orch.startDev(ref, name);
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ port, url: `http://localhost:${port}` }),
+            text: JSON.stringify({
+              port: result.port,
+              scriptName: result.scriptName,
+              ports: result.ports,
+              url: `http://localhost:${result.port}`,
+            }),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'list_run_scripts',
+    'List named run scripts available for a thread',
+    { ref: z.string() },
+    async ({ ref }) => {
+      const scripts = orch.listThreadRunScripts(ref);
+      const active = orch.getActiveRuns(ref);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ scripts, active }, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'stop_dev_script',
+    'Stop a running script for a thread (all scripts if name omitted)',
+    {
+      ref: z.string(),
+      name: z.string().optional(),
+    },
+    async ({ ref, name }) => {
+      orch.stopDev(ref, name);
+      return { content: [{ type: 'text', text: 'ok' }] };
+    },
+  );
+
+  server.tool(
+    'run_setup',
+    'Re-run workspace setup (Sideboard/Conductor settings or .cursor/worktrees.json)',
+    { ref: z.string() },
+    async ({ ref }) => {
+      const result = await orch.runSetup(ref);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result) }],
+      };
+    },
+  );
+
+  server.tool(
+    'add_workspace',
+    'Register a git repo as a Sideboard workspace',
+    { repoPath: z.string() },
+    async ({ repoPath }) => {
+      const ws = await orch.addWorkspace(repoPath);
+      return { content: [{ type: 'text', text: JSON.stringify(ws) }] };
+    },
+  );
+
+  server.tool(
+    'remove_workspace',
+    'Unregister a Sideboard workspace (does not archive threads)',
+    { repoPath: z.string() },
+    async ({ repoPath }) => {
+      orch.removeWorkspace(repoPath);
+      return { content: [{ type: 'text', text: 'ok' }] };
+    },
+  );
+
+  server.tool(
+    'fanout',
+    'Best-of-n: create one thread per agent with the same prompt (parallel attempts)',
+    {
+      prompt: z.string(),
+      agents: z.array(z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor'])),
+      repoPath: z.string(),
+      sourceType: z.enum(['branch', 'pr', 'ticket']).optional(),
+      sourceRef: z.string().optional(),
+      title: z.string().optional(),
+    },
+    async (args) => {
+      const threads = await orch.bestOfN(args);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              threads.map((t) => ({
+                id: t.id,
+                agent: t.agent,
+                branchName: t.branchName,
+                worktreePath: t.worktreePath,
+              })),
+              null,
+              2,
+            ),
           },
         ],
       };
@@ -246,10 +454,16 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_branches',
-    'List git branches in a repo',
-    { repoPath: z.string() },
-    async ({ repoPath }) => {
-      const branches = await listBranches(repoPath);
+    'List git branches in a registered workspace. Pass repoPath from list_workspaces (unmerged into the default branch by default — for create_thread sourceType=branch).',
+    {
+      repoPath: z.string(),
+      unmergedOnly: z.boolean().optional(),
+    },
+    async ({ repoPath, unmergedOnly }) => {
+      const root = await resolveRepoRoot(repoPath);
+      const branches = await listBranches(root, {
+        unmergedOnly: unmergedOnly !== false,
+      });
       return {
         content: [
           {
@@ -263,10 +477,11 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_prs',
-    'List open PRs via gh',
+    'List open GitHub PRs for a registered workspace. Pass repoPath from list_workspaces (uses gh against that repo remote). Then create_thread with sourceType=pr.',
     { repoPath: z.string() },
     async ({ repoPath }) => {
-      const prs = await listPrs(repoPath);
+      const root = await resolveRepoRoot(repoPath);
+      const prs = await listPrs(root);
       return {
         content: [
           {
@@ -285,10 +500,11 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List issues from Sideboard Account connections (Linear API or GitHub Issues; Linear→GitHub fallback when Linear is not connected)',
+    'List issues from Sideboard Account connections (Linear API or GitHub Issues; Linear→GitHub fallback when Linear is not connected). Pass repoPath from list_workspaces — GitHub Issues are scoped to that repo. Then create_thread with sourceType=ticket.',
     { repoPath: z.string() },
     async ({ repoPath }) => {
-      const result = await listIssues(repoPath);
+      const root = await resolveRepoRoot(repoPath);
+      const result = await listIssues(root);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

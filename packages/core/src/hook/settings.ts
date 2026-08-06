@@ -3,12 +3,30 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 
+export type RunMode = 'concurrent' | 'nonconcurrent';
+
+export interface RunScript {
+  name: string;
+  command: string;
+  default?: boolean;
+  /** Lucide-style icon name (Conductor-compatible). */
+  icon?: string;
+  /** Where the script is available: local, cloud, or both. */
+  availableIn?: Array<'local' | 'cloud'>;
+}
+
 export interface RepoSettings {
-  /** Which file was loaded */
+  /** Which file family was loaded */
   source: 'sideboard' | 'conductor';
   setup?: string;
+  /** Script run before archive/purge tears down the worktree. */
+  archive?: string;
+  /** concurrent = multiple workspaces may run scripts; nonconcurrent = one at a time. */
+  runMode: RunMode;
   filesToCopy?: string[];
-  runScripts: Array<{ name: string; command: string; default?: boolean }>;
+  /** Glob patterns from settings (Conductor file_include_globs). */
+  fileIncludeGlobs?: string[];
+  runScripts: RunScript[];
   /** Optional override for worktree root (supports ~) */
   worktreesRoot?: string;
   editor?: string;
@@ -20,6 +38,21 @@ export interface RepoSettings {
   };
 }
 
+/** Parsed file before defaults / merge finalization. */
+interface ParsedSettings {
+  source: 'sideboard' | 'conductor';
+  setup?: string;
+  archive?: string;
+  /** Only set when `scripts.run_mode` is present in the file. */
+  runMode?: RunMode;
+  filesToCopy?: string[];
+  fileIncludeGlobs?: string[];
+  runScripts: RunScript[];
+  worktreesRoot?: string;
+  editor?: string;
+  prompts?: RepoSettings['prompts'];
+}
+
 function expandHome(path: string): string {
   if (path.startsWith('~/') || path === '~') {
     return join(homedir(), path.slice(2));
@@ -27,16 +60,32 @@ function expandHome(path: string): string {
   return path;
 }
 
+function parseAvailableIn(raw: unknown): Array<'local' | 'cloud'> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: Array<'local' | 'cloud'> = [];
+  for (const item of raw) {
+    if (item === 'local' || item === 'cloud') out.push(item);
+  }
+  return out.length ? out : undefined;
+}
+
 function parseSettingsFile(
   path: string,
   source: 'sideboard' | 'conductor',
-): RepoSettings | null {
+): ParsedSettings | null {
   if (!existsSync(path)) return null;
   const raw = readFileSync(path, 'utf8');
   const data = parseToml(raw) as Record<string, unknown>;
 
   const scripts = (data.scripts ?? {}) as Record<string, unknown>;
   const setup = typeof scripts.setup === 'string' ? scripts.setup : undefined;
+  const archive = typeof scripts.archive === 'string' ? scripts.archive : undefined;
+  const runMode: RunMode | undefined =
+    'run_mode' in scripts
+      ? scripts.run_mode === 'nonconcurrent'
+        ? 'nonconcurrent'
+        : 'concurrent'
+      : undefined;
 
   const filesToCopy: string[] = [];
   const files = data.files as { copy?: string[] } | undefined;
@@ -48,15 +97,44 @@ function parseSettingsFile(
     filesToCopy.push(...copySection.paths.map(String));
   }
 
-  const runScripts: RepoSettings['runScripts'] = [];
-  const run = scripts.run as Record<string, { command?: string; default?: boolean }> | undefined;
-  if (run && typeof run === 'object') {
+  const fileIncludeGlobs: string[] = [];
+  if (Array.isArray(data.file_include_globs)) {
+    fileIncludeGlobs.push(...data.file_include_globs.map(String));
+  }
+  const filesGlobs = files as { include?: string[]; include_globs?: string[] } | undefined;
+  if (Array.isArray(filesGlobs?.include)) {
+    fileIncludeGlobs.push(...filesGlobs.include.map(String));
+  }
+  if (Array.isArray(filesGlobs?.include_globs)) {
+    fileIncludeGlobs.push(...filesGlobs.include_globs.map(String));
+  }
+
+  const runScripts: RunScript[] = [];
+  const run = scripts.run as
+    | string
+    | Record<
+        string,
+        {
+          command?: string;
+          default?: boolean;
+          icon?: string;
+          available_in?: unknown;
+        }
+      >
+    | undefined;
+
+  // Legacy single-string scripts.run
+  if (typeof run === 'string' && run.trim()) {
+    runScripts.push({ name: 'dev', command: run, default: true });
+  } else if (run && typeof run === 'object') {
     for (const [name, value] of Object.entries(run)) {
       if (value && typeof value.command === 'string') {
         runScripts.push({
           name,
           command: value.command,
           default: Boolean(value.default),
+          icon: typeof value.icon === 'string' ? value.icon : undefined,
+          availableIn: parseAvailableIn(value.available_in),
         });
       }
     }
@@ -86,7 +164,10 @@ function parseSettingsFile(
   return {
     source,
     setup,
-    filesToCopy,
+    archive,
+    runMode,
+    filesToCopy: filesToCopy.length ? filesToCopy : undefined,
+    fileIncludeGlobs: fileIncludeGlobs.length ? fileIncludeGlobs : undefined,
     runScripts,
     worktreesRoot,
     editor,
@@ -94,42 +175,151 @@ function parseSettingsFile(
   };
 }
 
+function mergeRunScripts(base: RunScript[], overlay: RunScript[]): RunScript[] {
+  const byName = new Map<string, RunScript>();
+  for (const s of base) byName.set(s.name, s);
+  for (const s of overlay) byName.set(s.name, s);
+  return [...byName.values()];
+}
+
+/**
+ * Overlay wins for defined scalar fields; run scripts merge by name (overlay wins).
+ */
+function mergeSettings(
+  base: ParsedSettings | null,
+  overlay: ParsedSettings | null,
+): ParsedSettings | null {
+  if (!base) return overlay;
+  if (!overlay) return base;
+
+  const prompts = {
+    renameBranch: overlay.prompts?.renameBranch ?? base.prompts?.renameBranch,
+    createPr: overlay.prompts?.createPr ?? base.prompts?.createPr,
+    general: overlay.prompts?.general ?? base.prompts?.general,
+  };
+  const hasPrompts = Boolean(prompts.renameBranch || prompts.createPr || prompts.general);
+
+  return {
+    source: overlay.source,
+    setup: overlay.setup ?? base.setup,
+    archive: overlay.archive ?? base.archive,
+    runMode: overlay.runMode ?? base.runMode,
+    filesToCopy: overlay.filesToCopy ?? base.filesToCopy,
+    fileIncludeGlobs: overlay.fileIncludeGlobs ?? base.fileIncludeGlobs,
+    runScripts: mergeRunScripts(base.runScripts, overlay.runScripts),
+    worktreesRoot: overlay.worktreesRoot ?? base.worktreesRoot,
+    editor: overlay.editor ?? base.editor,
+    prompts: hasPrompts ? prompts : undefined,
+  };
+}
+
+function finalizeSettings(parsed: ParsedSettings | null): RepoSettings | null {
+  if (!parsed) return null;
+  return {
+    ...parsed,
+    runMode: parsed.runMode ?? 'concurrent',
+    runScripts: parsed.runScripts,
+  };
+}
+
+function familyFiles(
+  rootPath: string,
+  source: 'sideboard' | 'conductor',
+): { toml: string; local: string } {
+  const dir = join(rootPath, `.${source}`);
+  return {
+    toml: join(dir, 'settings.toml'),
+    local: join(dir, 'settings.local.toml'),
+  };
+}
+
+function familyExists(rootPath: string, source: 'sideboard' | 'conductor'): boolean {
+  const files = familyFiles(rootPath, source);
+  return existsSync(files.toml) || existsSync(files.local);
+}
+
+/** Prefer `.sideboard`, then `.conductor`. */
+function detectFamily(rootPath: string): 'sideboard' | 'conductor' | null {
+  if (familyExists(rootPath, 'sideboard')) return 'sideboard';
+  if (familyExists(rootPath, 'conductor')) return 'conductor';
+  return null;
+}
+
+function loadCommittedToml(
+  rootPath: string,
+  source: 'sideboard' | 'conductor',
+): ParsedSettings | null {
+  return parseSettingsFile(familyFiles(rootPath, source).toml, source);
+}
+
+function loadLocalToml(
+  rootPath: string,
+  source: 'sideboard' | 'conductor',
+): ParsedSettings | null {
+  return parseSettingsFile(familyFiles(rootPath, source).local, source);
+}
+
+/** Any settings.local.toml under .sideboard or .conductor (sideboard wins on conflict). */
+function loadAnyLocal(rootPath: string): ParsedSettings | null {
+  return mergeSettings(
+    loadLocalToml(rootPath, 'conductor'),
+    loadLocalToml(rootPath, 'sideboard'),
+  );
+}
+
 function normPath(p: string): string {
   return p.replace(/\/+$/, '');
 }
 
 /**
- * Prefer `.sideboard/settings.toml`, fall back to `.conductor/settings.toml`.
- * Same schema shape for scripts / files-to-copy / run blocks.
+ * Load settings for a single checkout root.
+ * Prefer `.sideboard`, fall back to `.conductor`. Overlay `settings.local.toml`.
  */
 export function loadRepoSettings(repoPath: string): RepoSettings | null {
-  const sideboard = parseSettingsFile(
-    join(repoPath, '.sideboard', 'settings.toml'),
-    'sideboard',
+  const family = detectFamily(repoPath);
+  if (!family) return null;
+  const merged = mergeSettings(
+    loadCommittedToml(repoPath, family),
+    loadLocalToml(repoPath, family),
   );
-  if (sideboard) return sideboard;
-
-  return parseSettingsFile(join(repoPath, '.conductor', 'settings.toml'), 'conductor');
+  return finalizeSettings(merged);
 }
 
 /**
- * Load settings for a Sideboard thread: prefer the worktree (where the agent
- * edits), then fall back to the main repo checkout.
+ * Settings for a thread workspace.
+ *
+ * Scripts always run with cwd = worktree (not the main repo). Config resolution
+ * matches Conductor:
+ * 1. Committed `settings.toml` from the worktree (branch snapshot), else main repo
+ * 2. Overlay main-repo `settings.local.toml` (machine-local, applies to all workspaces)
+ * 3. Overlay worktree `settings.local.toml` if present
  */
 export function loadWorkspaceSettings(
   worktreePath: string,
   repoPath?: string | null,
 ): RepoSettings | null {
-  const fromWorktree = loadRepoSettings(worktreePath);
-  if (fromWorktree) return fromWorktree;
-  if (
-    repoPath &&
-    normPath(repoPath) &&
-    normPath(repoPath) !== normPath(worktreePath)
-  ) {
-    return loadRepoSettings(repoPath);
+  const wtFamily = detectFamily(worktreePath);
+  const repoFamily =
+    repoPath && normPath(repoPath) !== normPath(worktreePath)
+      ? detectFamily(repoPath)
+      : null;
+
+  const wtToml = wtFamily ? loadCommittedToml(worktreePath, wtFamily) : null;
+  const repoToml =
+    repoPath && repoFamily ? loadCommittedToml(repoPath, repoFamily) : null;
+
+  // Base = worktree committed config, else main repo committed config.
+  let merged: ParsedSettings | null = wtToml ?? repoToml;
+
+  // Conductor: project overrides on the main checkout apply to every workspace.
+  if (repoPath && normPath(repoPath) !== normPath(worktreePath)) {
+    merged = mergeSettings(merged, loadAnyLocal(repoPath));
   }
-  return null;
+
+  // Rare: local overrides inside the worktree itself.
+  merged = mergeSettings(merged, loadAnyLocal(worktreePath));
+
+  return finalizeSettings(merged);
 }
 
 /** @deprecated use loadRepoSettings */
@@ -138,10 +328,7 @@ export function loadConductorSettings(repoPath: string): RepoSettings | null {
 }
 
 export function hasRepoHook(repoPath: string): boolean {
-  return (
-    existsSync(join(repoPath, '.sideboard', 'settings.toml')) ||
-    existsSync(join(repoPath, '.conductor', 'settings.toml'))
-  );
+  return detectFamily(repoPath) !== null;
 }
 
 /** True if either the worktree or (optional) main repo has setup/run config. */
@@ -169,13 +356,14 @@ export function hasConductorHook(
 }
 
 export function settingsSourceLabel(rootPath: string): string | null {
-  if (existsSync(join(rootPath, '.sideboard', 'settings.toml'))) {
-    return '.sideboard/settings.toml';
+  const family = detectFamily(rootPath);
+  if (!family) return null;
+  const files = familyFiles(rootPath, family);
+  if (existsSync(files.toml) && existsSync(files.local)) {
+    return `.${family}/settings.toml + local`;
   }
-  if (existsSync(join(rootPath, '.conductor', 'settings.toml'))) {
-    return '.conductor/settings.toml';
-  }
-  return null;
+  if (existsSync(files.local)) return `.${family}/settings.local.toml`;
+  return `.${family}/settings.toml`;
 }
 
 /** Label including whether config was found in the worktree vs main repo. */
@@ -185,10 +373,7 @@ export function workspaceSettingsSourceLabel(
 ): string | null {
   const wt = settingsSourceLabel(worktreePath);
   if (wt) return `${wt} (worktree)`;
-  if (
-    repoPath &&
-    normPath(repoPath) !== normPath(worktreePath)
-  ) {
+  if (repoPath && normPath(repoPath) !== normPath(worktreePath)) {
     const repo = settingsSourceLabel(repoPath);
     if (repo) return `${repo} (main repo)`;
   }
@@ -196,7 +381,7 @@ export function workspaceSettingsSourceLabel(
 }
 
 export interface RepoSetupInfo {
-  /** `.sideboard/settings.toml` or `.conductor/settings.toml` exists. */
+  /** `.sideboard` or `.conductor` settings exist. */
   hasConfig: boolean;
   /** `[scripts] setup = "..."` is defined in the loaded config. */
   hasSetupScript: boolean;

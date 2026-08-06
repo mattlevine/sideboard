@@ -82,7 +82,10 @@ export interface Thread {
   status: ThreadStatus;
   queue: string[];
   parentThreadId: string | null;
+  /** Port of the default/primary run script (legacy + sidebar). */
   devPort: number | null;
+  /** Named run scripts currently tracked for this thread. */
+  activeRuns?: ActiveRun[];
   prUrl: string | null;
   /** Cached PR title for Conductor-style sidebar labels (PR title > branch). */
   prTitle: string | null;
@@ -317,12 +320,30 @@ export type OrchestratorEvent =
       olderCount: number;
       method: 'claude' | 'extractive';
     }
-  | { type: 'dev_server_started'; threadId: string; port: number }
-  | { type: 'dev_server_stopped'; threadId: string }
+  | { type: 'dev_server_started'; threadId: string; port: number; scriptName?: string }
+  | { type: 'dev_server_stopped'; threadId: string; scriptName?: string }
+  | {
+      type: 'run_output';
+      threadId: string;
+      scriptName: string;
+      line: string;
+    }
   | { type: 'setup_started'; threadId: string }
   | { type: 'setup_output'; threadId: string; line: string }
   | { type: 'setup_finished'; threadId: string; exitCode: number | null }
+  | {
+      type: 'orphan_worktrees';
+      orphans: Array<{ path: string; repoPath: string }>;
+    }
   | { type: 'error'; threadId: string; message: string };
+
+/** Active named run script (in-memory + mirrored on thread for UI). */
+export interface ActiveRun {
+  scriptName: string;
+  port: number;
+  ports: number[];
+  startedAt: string;
+}
 
 /** Live snapshot for the global orchestrator board. */
 export interface OrchestratorRuntime {

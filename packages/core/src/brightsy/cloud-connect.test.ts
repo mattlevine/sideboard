@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_TIMEOUT_REPLY,
   CLOUD_ORCHESTRATOR_GOAL,
   coordinatorSystemPrompt,
   formatWorkspaceInventory,
 } from './cloud-connect.js';
 
 describe('cloud-connect prompts', () => {
-  it('formats workspace inventory', () => {
+  it('re-exports workspace inventory formatter', () => {
     expect(formatWorkspaceInventory([])).toBe('(no registered workspaces)');
     expect(
       formatWorkspaceInventory([
@@ -29,11 +31,11 @@ describe('cloud-connect prompts', () => {
     );
   });
 
-  it('includes all workspaces in the coordinator system prompt', () => {
+  it('includes all workspaces and no home repo in the coordinator system prompt', () => {
     const prompt = coordinatorSystemPrompt({
       goal: CLOUD_ORCHESTRATOR_GOAL,
-      homeRepoPath: '/Users/me/sideboard',
       parentId: 'parent-1',
+      audience: 'cloud',
       workspaces: [
         {
           name: 'sideboard',
@@ -49,9 +51,18 @@ describe('cloud-connect prompts', () => {
     });
     expect(prompt).toContain('ALL registered workspaces');
     expect(prompt).toContain('list_workspaces');
+    expect(prompt).toContain('create_thread');
+    expect(prompt).toContain('send_to_thread');
+    expect(prompt).toContain('no git home directory');
     expect(prompt).toContain('- sideboard: /Users/me/sideboard');
     expect(prompt).toContain('- storycycle-ai: /Users/me/storycycle-ai');
-    expect(prompt).toContain('Coordinator home repo: /Users/me/sideboard');
+    expect(prompt).not.toContain('Coordinator home repo');
     expect(prompt).toContain('parent-1');
+  });
+
+  it('exports fixed busy and timeout replies for cloud agents', () => {
+    expect(CLOUD_COORDINATOR_BUSY_REPLY).toContain('busy');
+    expect(CLOUD_COORDINATOR_BUSY_REPLY).toContain('What do you want');
+    expect(CLOUD_COORDINATOR_TIMEOUT_REPLY).toContain('timed out');
   });
 });

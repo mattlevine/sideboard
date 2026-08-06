@@ -5,8 +5,10 @@ import { mkdirSync } from 'node:fs';
 import { loadRepoSettings } from '../hook/settings.js';
 
 export function appDataDir(): string {
-  const base =
-    process.platform === 'darwin'
+  const override = process.env.SIDEBOARD_APP_DATA?.trim();
+  const base = override
+    ? override
+    : process.platform === 'darwin'
       ? join(homedir(), 'Library', 'Application Support', 'sideboard')
       : process.platform === 'win32'
         ? join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'sideboard')
@@ -76,4 +78,11 @@ export function threadFilePath(id: string): string {
 
 export function threadLockPath(id: string): string {
   return join(locksDir(), `${id}.lock`);
+}
+
+/** Empty synthetic cwd for global orchestration agents (not a git worktree). */
+export function globalAgentCwd(): string {
+  const dir = join(appDataDir(), 'global');
+  mkdirSync(dir, { recursive: true });
+  return dir;
 }

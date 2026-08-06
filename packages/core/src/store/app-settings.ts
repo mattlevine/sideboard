@@ -86,6 +86,17 @@ export interface AdvancedAppSettings {
   deleteBranchOnPurge?: boolean;
   /** Max concurrent agent turns across the orchestrator (default 3). */
   maxConcurrent?: number;
+  /**
+   * Max Sideboard worktrees kept machine-wide before orphan cleanup
+   * (Cursor: cursor.worktreeMaxCount, default 25).
+   */
+  worktreeMaxCount?: number;
+  /** Hours between automatic orphan worktree cleanup passes (default 6). */
+  worktreeCleanupIntervalHours?: number;
+  /** ISO timestamp of last successful orphan cleanup. */
+  worktreeLastCleanupAt?: string;
+  /** When true, reconcile auto-removes excess orphan worktrees. */
+  autoCleanupOrphans?: boolean;
 }
 
 export interface AppSettings {
@@ -187,6 +198,24 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.maxConcurrent === 'number' && Number.isFinite(source.maxConcurrent)) {
     out.maxConcurrent = Math.max(1, Math.min(32, Math.floor(source.maxConcurrent)));
+  }
+  if (typeof source.worktreeMaxCount === 'number' && Number.isFinite(source.worktreeMaxCount)) {
+    out.worktreeMaxCount = Math.max(1, Math.min(500, Math.floor(source.worktreeMaxCount)));
+  }
+  if (
+    typeof source.worktreeCleanupIntervalHours === 'number' &&
+    Number.isFinite(source.worktreeCleanupIntervalHours)
+  ) {
+    out.worktreeCleanupIntervalHours = Math.max(
+      1,
+      Math.min(168, Math.floor(source.worktreeCleanupIntervalHours)),
+    );
+  }
+  if (typeof source.worktreeLastCleanupAt === 'string' && source.worktreeLastCleanupAt.trim()) {
+    out.worktreeLastCleanupAt = source.worktreeLastCleanupAt.trim();
+  }
+  if (typeof source.autoCleanupOrphans === 'boolean') {
+    out.autoCleanupOrphans = source.autoCleanupOrphans;
   }
   return out;
 }
@@ -406,6 +435,24 @@ export function updateAdvancedSettings(
   if (typeof patch.maxConcurrent === 'number' && Number.isFinite(patch.maxConcurrent)) {
     advanced.maxConcurrent = Math.max(1, Math.min(32, Math.floor(patch.maxConcurrent)));
   }
+  if (typeof patch.worktreeMaxCount === 'number' && Number.isFinite(patch.worktreeMaxCount)) {
+    advanced.worktreeMaxCount = Math.max(1, Math.min(500, Math.floor(patch.worktreeMaxCount)));
+  }
+  if (
+    typeof patch.worktreeCleanupIntervalHours === 'number' &&
+    Number.isFinite(patch.worktreeCleanupIntervalHours)
+  ) {
+    advanced.worktreeCleanupIntervalHours = Math.max(
+      1,
+      Math.min(168, Math.floor(patch.worktreeCleanupIntervalHours)),
+    );
+  }
+  if (typeof patch.worktreeLastCleanupAt === 'string') {
+    advanced.worktreeLastCleanupAt = patch.worktreeLastCleanupAt;
+  }
+  if (typeof patch.autoCleanupOrphans === 'boolean') {
+    advanced.autoCleanupOrphans = patch.autoCleanupOrphans;
+  }
   return saveAppSettings({ ...current, advanced });
 }
 
@@ -438,6 +485,12 @@ export function deleteBranchOnPurgeEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.deleteBranchOnPurge);
+}
+
+export function autoCleanupOrphansEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.autoCleanupOrphans);
 }
 
 export function maxConcurrentAgents(

@@ -34,6 +34,35 @@ export async function resolveRepoRoot(cwd: string): Promise<string> {
   return stdout.trim();
 }
 
+/**
+ * Resolve `owner/name` for the GitHub repository connected to a local checkout.
+ * Used so Create-from PR/issue lists always target the selected workspace's remote
+ * (not whatever `gh` might infer from process cwd).
+ */
+export async function resolveGithubRepoSlug(
+  repoPath: string,
+): Promise<string | null> {
+  const viaGh = await gh(
+    ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
+    repoPath,
+    { reject: false },
+  );
+  if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
+    return viaGh.stdout.trim();
+  }
+
+  const remote = await git(['remote', 'get-url', 'origin'], repoPath, {
+    reject: false,
+  });
+  if (remote.exitCode !== 0 || !remote.stdout.trim()) return null;
+  const url = remote.stdout.trim();
+  const match =
+    url.match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/i) ??
+    url.match(/github\.com[:/]([^/]+)\/([^/.]+)/i);
+  if (!match?.[1] || !match[2]) return null;
+  return `${match[1]}/${match[2]}`;
+}
+
 export async function resolveDefaultBranch(repoPath: string): Promise<string> {
   const viaGh = await gh(
     ['repo', 'view', '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name'],
@@ -64,7 +93,10 @@ export async function resolveDefaultBranch(repoPath: string): Promise<string> {
   return 'main';
 }
 
-export async function listBranches(repoPath: string): Promise<BranchInfo[]> {
+export async function listBranches(
+  repoPath: string,
+  opts?: { unmergedOnly?: boolean },
+): Promise<BranchInfo[]> {
   const { stdout } = await git(
     ['for-each-ref', '--format=%(refname:short)|%(HEAD)|%(upstream:short)', 'refs/heads', 'refs/remotes'],
     repoPath,
@@ -82,22 +114,56 @@ export async function listBranches(repoPath: string): Promise<BranchInfo[]> {
       branches.push({ name: short, remote, current: head === '*' });
     }
   }
-  return branches.sort((a, b) => a.name.localeCompare(b.name));
-}
+  const sorted = branches.sort((a, b) => a.name.localeCompare(b.name));
+  if (!opts?.unmergedOnly) return sorted;
 
-export async function listPrs(repoPath: string): Promise<PrInfo[]> {
-  const { stdout, exitCode } = await gh(
+  const defaultBranch = await resolveDefaultBranch(repoPath);
+  // Compare against origin tip when present so local default being behind
+  // doesn't falsely mark remote-tracking feature branches as merged.
+  const originDefault = `origin/${defaultBranch}`;
+  const originCheck = await git(
+    ['rev-parse', '--verify', '--quiet', originDefault],
+    repoPath,
+    { reject: false },
+  );
+  const mergeBase =
+    originCheck.exitCode === 0 ? originDefault : defaultBranch;
+
+  const noMerged = await git(
     [
-      'pr',
-      'list',
-      '--json',
-      'number,title,headRefName,url,isCrossRepository',
-      '--limit',
-      '50',
+      'for-each-ref',
+      `--no-merged=${mergeBase}`,
+      '--format=%(refname:short)',
+      'refs/heads',
+      'refs/remotes/origin',
     ],
     repoPath,
     { reject: false },
   );
+  const keep = new Set<string>();
+  keep.add(defaultBranch);
+  for (const line of noMerged.stdout.split('\n').filter(Boolean)) {
+    const short = line.startsWith('origin/')
+      ? line.replace(/^origin\//, '')
+      : line;
+    if (short && short !== 'HEAD') keep.add(short);
+  }
+
+  return sorted.filter((b) => keep.has(b.name));
+}
+
+export async function listPrs(repoPath: string): Promise<PrInfo[]> {
+  const slug = await resolveGithubRepoSlug(repoPath);
+  const args = [
+    'pr',
+    'list',
+    '--json',
+    'number,title,headRefName,url,isCrossRepository',
+    '--limit',
+    '50',
+  ];
+  if (slug) args.push('--repo', slug);
+  const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) return [];
   return JSON.parse(stdout) as PrInfo[];
 }
@@ -106,17 +172,16 @@ export async function getPr(
   repoPath: string,
   number: number,
 ): Promise<PrInfo | null> {
-  const { stdout, exitCode } = await gh(
-    [
-      'pr',
-      'view',
-      String(number),
-      '--json',
-      'number,title,headRefName,url,isCrossRepository',
-    ],
-    repoPath,
-    { reject: false },
-  );
+  const slug = await resolveGithubRepoSlug(repoPath);
+  const args = [
+    'pr',
+    'view',
+    String(number),
+    '--json',
+    'number,title,headRefName,url,isCrossRepository',
+  ];
+  if (slug) args.push('--repo', slug);
+  const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) return null;
   return JSON.parse(stdout) as PrInfo;
 }
@@ -359,7 +424,7 @@ export async function createThreadWorktree(opts: {
   sourceRef: string;
   slug: string;
 }): Promise<CreateWorktreeResult> {
-  const branchName = `thread/${opts.slug}`;
+  let branchName = `thread/${opts.slug}`;
   const worktreePath = join(worktreesRoot(opts.repoPath), opts.slug);
 
   if (existsSync(worktreePath)) {
@@ -380,10 +445,33 @@ export async function createThreadWorktree(opts: {
     opts.sourceRef,
   );
 
-  await git(
+  // Conductor: one workspace per branch — if branch is already checked out,
+  // create a sibling branch with -2/-3 suffix instead of failing cryptically.
+  const add = await git(
     ['worktree', 'add', '-b', branchName, worktreePath, startPoint],
     opts.repoPath,
+    { reject: false },
   );
+  if (add.exitCode !== 0) {
+    const err = `${add.stderr}\n${add.stdout}`;
+    if (/already used by worktree|already exists|checked out/i.test(err)) {
+      for (let n = 2; n <= 20; n++) {
+        const alt = `${branchName}-${n}`;
+        const retry = await git(
+          ['worktree', 'add', '-b', alt, worktreePath, startPoint],
+          opts.repoPath,
+          { reject: false },
+        );
+        if (retry.exitCode === 0) {
+          branchName = alt;
+          return { branchName, worktreePath };
+        }
+      }
+    }
+    throw new Error(
+      `Failed to create worktree: ${add.stderr.trim() || add.stdout.trim() || `exit ${add.exitCode}`}`,
+    );
+  }
 
   return { branchName, worktreePath };
 }

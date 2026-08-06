@@ -115,6 +115,8 @@ export async function adoptThread(input: AdoptInput): Promise<Thread> {
     messages: input.messages ?? [],
   });
   writeThread(thread);
+  const { ensureWorkspace } = await import('../store/workspaces.js');
+  await ensureWorkspace(repoPath);
   return thread;
 }
 

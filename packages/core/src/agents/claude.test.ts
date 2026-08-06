@@ -109,6 +109,27 @@ describe('claudeAdapter.buildTurn', () => {
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
     expect(cmd.file).toBe('/opt/custom/claude');
   });
+
+  it('orchestrator turns allow Sideboard MCP tools only (no Edit/Write/Bash)', async () => {
+    const cmd = await claudeAdapter.buildTurn(
+      {
+        ...baseThread,
+        sourceType: 'orchestration' as const,
+        repoPath: '__global__',
+        worktreePath: '/tmp/global',
+      },
+      { prompt: 'list threads' },
+    );
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__sideboard');
+    expect(allowed).toContain('mcp__sideboard__*');
+    expect(allowed).not.toContain('Edit');
+    expect(allowed).not.toContain('Write');
+    expect(allowed).not.toContain('Bash');
+    expect(allowed).not.toContain('Read');
+  });
 });
 
 describe('claudeAdapter.parseEvent', () => {

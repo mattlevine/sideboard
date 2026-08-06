@@ -26,6 +26,7 @@ export function normalizeThread(raw: Thread): Thread {
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
     prTitle: raw.prTitle ?? null,
     userSetTitle: Boolean(raw.userSetTitle),
+    activeRuns: Array.isArray(raw.activeRuns) ? raw.activeRuns : [],
   };
 }
 
@@ -39,6 +40,7 @@ export function createEmptyThread(
     | 'queue'
     | 'status'
     | 'devPort'
+    | 'activeRuns'
     | 'prUrl'
     | 'prTitle'
     | 'userSetTitle'
@@ -65,6 +67,7 @@ export function createEmptyThread(
         | 'queue'
         | 'status'
         | 'devPort'
+        | 'activeRuns'
         | 'prUrl'
         | 'prTitle'
         | 'userSetTitle'
@@ -85,6 +88,7 @@ export function createEmptyThread(
     queue: partial.queue ?? [],
     parentThreadId: partial.parentThreadId ?? null,
     devPort: partial.devPort ?? null,
+    activeRuns: partial.activeRuns ?? [],
     prUrl: partial.prUrl ?? null,
     prTitle: partial.prTitle ?? null,
     userSetTitle: partial.userSetTitle ?? false,

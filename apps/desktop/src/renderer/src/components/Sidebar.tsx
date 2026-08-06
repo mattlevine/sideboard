@@ -5,6 +5,11 @@ import {
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
 import type { Thread } from '@sideboard/core';
+import {
+  GLOBAL_WORKSPACE_ID,
+  isCloudCoordinatorThread,
+  threadDisplayTitle,
+} from '../lib/global-workspace';
 import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
@@ -16,7 +21,7 @@ interface Props {
   repoPath: string;
   onShowBoard: () => void;
   onSelect: (id: string, multi: boolean) => void;
-  onNew: (repoPath?: string) => void;
+  onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
   onPickRepo: () => void;
   onRestore: (id: string) => void;
   onCreatePr?: (threadId: string, opts?: { draft?: boolean; web?: boolean }) => void;
@@ -66,9 +71,21 @@ export function Sidebar({
 
   const q = filter.trim().toLowerCase();
 
+  const globalThreads = useMemo(() => {
+    return threads
+      .filter((t) => {
+        if (t.repoPath !== GLOBAL_WORKSPACE_ID) return false;
+        if (!q) return true;
+        const hay = `${t.title} ${t.agent} global`.toLowerCase();
+        return hay.includes(q);
+      })
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }, [threads, q]);
+
   const byRepo = useMemo(() => {
     const map = new Map<string, Thread[]>();
     for (const t of threads) {
+      if (t.repoPath === GLOBAL_WORKSPACE_ID) continue;
       if (q) {
         const hay =
           `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repoName(t.repoPath)}`.toLowerCase();
@@ -79,7 +96,9 @@ export function Sidebar({
       map.set(t.repoPath, list);
     }
     // Ensure current repo shows even with zero threads (unless filtering)
-    if (!q && repoPath && !map.has(repoPath)) map.set(repoPath, []);
+    if (!q && repoPath && repoPath !== GLOBAL_WORKSPACE_ID && !map.has(repoPath)) {
+      map.set(repoPath, []);
+    }
     // When filtering, also show matching workspace names with empty lists if name matches
     if (q && repoPath && repoName(repoPath).toLowerCase().includes(q) && !map.has(repoPath)) {
       map.set(repoPath, []);
@@ -119,7 +138,7 @@ export function Sidebar({
             <span className="nav-glyph home" aria-hidden />
             Home
           </button>
-          <button type="button" className="sidebar-nav-btn" onClick={() => onNew()}>
+          <button type="button" className="sidebar-nav-btn" onClick={() => onNew(repoPath || undefined)}>
             <span className="nav-glyph plus" aria-hidden />
             Create
           </button>
@@ -138,6 +157,59 @@ export function Sidebar({
         className={`thread-list${filteredArchived.length > 0 ? ' has-history' : ''}`}
       >
         <div className="sidebar-projects">
+        {(!q || globalThreads.length > 0 || 'global'.includes(q)) && (
+          <div className="workspace-group">
+            <div className="workspace-header">
+              <button
+                type="button"
+                className="workspace-name-btn"
+                title="Global orchestration workspace"
+                onClick={onShowBoard}
+              >
+                <span className="workspace-glyph" aria-hidden />
+                <span className="workspace-name">Global</span>
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title="New global chat"
+                onClick={() => onNew(undefined, 'orchestration')}
+              >
+                +
+              </button>
+            </div>
+            {globalThreads.length === 0 && (
+              <div className="thread-meta" style={{ padding: '4px 8px' }}>
+                No chats — open Home
+              </div>
+            )}
+            {globalThreads.map((t) => {
+              const active = view === 'thread' && t.id === selectedId;
+              const selected = multiSelected.has(t.id);
+              const isCloud = isCloudCoordinatorThread(t);
+              return (
+                <div
+                  key={t.id}
+                  className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}`}
+                  onClick={(e) => onSelect(t.id, e.metaKey || e.ctrlKey || e.shiftKey)}
+                >
+                  <span className={`dot ${t.status}`} />
+                  <div>
+                    <div className="thread-title">
+                      {threadDisplayTitle(t)}
+                      {isCloud ? ' · cloud' : ''}
+                    </div>
+                    <div className="thread-meta">
+                      {t.agent}
+                      {t.status !== 'idle' ? ` · ${t.status}` : ''}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="projects-header">
           <span className="section-label projects-label">Projects</span>
           <div className="projects-actions">

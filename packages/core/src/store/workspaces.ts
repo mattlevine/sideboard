@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { appDataDir } from './paths.js';
+import { isGlobalRepoPath } from './global-workspace.js';
 import { resolveRepoRoot } from '../git/worktree.js';
 
 export interface Workspace {
@@ -63,7 +64,7 @@ export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
   const byPath = new Map(current.map((w) => [w.path, w]));
   let dirty = false;
   for (const path of repoPaths) {
-    if (!path || byPath.has(path)) continue;
+    if (!path || isGlobalRepoPath(path) || byPath.has(path)) continue;
     if (!existsSync(path)) continue;
     const ws: Workspace = {
       path,
