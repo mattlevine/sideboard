@@ -19,6 +19,8 @@ interface Props {
   onFileReferenceClick?: (link: FilePathLink) => void;
   /** Open a Sideboard thread from a sideboard://thread/<id> markdown link. */
   onThreadLinkClick?: (threadRef: string) => void;
+  /** Open an http(s) URL in a Sideboard preview tab (falls back to external browser). */
+  onUrlClick?: (url: string) => void;
   /** When true, defer mermaid rendering to avoid parse errors on incomplete syntax. */
   isStreaming?: boolean;
 }
@@ -54,6 +56,7 @@ export function MarkdownMessage({
   knownFilePaths,
   onFileReferenceClick,
   onThreadLinkClick,
+  onUrlClick,
   isStreaming = false,
 }: Props) {
   const components: ComponentProps<typeof ReactMarkdown>['components'] = {
@@ -80,12 +83,18 @@ export function MarkdownMessage({
       if (!url || !isSafeExternalUrl(url)) {
         return <span {...props}>{children}</span>;
       }
+      const openInTab = Boolean(onUrlClick) && (url.startsWith('http://') || url.startsWith('https://'));
       return (
         <a
           {...props}
           href={url}
+          title={openInTab ? 'Open in Sideboard preview (⌥/Alt-click for browser)' : undefined}
           onClick={(e) => {
             e.preventDefault();
+            if (openInTab && !e.altKey && !e.metaKey) {
+              onUrlClick?.(url);
+              return;
+            }
             void window.sideboard.openExternal(url);
           }}
         >

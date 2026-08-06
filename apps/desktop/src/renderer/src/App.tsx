@@ -17,6 +17,7 @@ import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal } from './components/SettingsModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { isGlobalThread } from './lib/global-workspace';
+import { normalizePreviewUrl } from './lib/preview-url';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
 const RIGHT_SIDEBAR_DEFAULT = 340;
@@ -84,6 +85,8 @@ export function App() {
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
+  const [openUrls, setOpenUrls] = useState<string[]>([]);
+  const [openUrl, setOpenUrl] = useState<string | null>(null);
   /** Dedicated Changes center tab (not a per-file name tab). */
   const [changesOpen, setChangesOpen] = useState(false);
   const [changesPath, setChangesPath] = useState<string | null>(null);
@@ -108,10 +111,12 @@ export function App() {
       setChangesOpen(true);
       setChangesPath(path);
       setOpenFilePath(null);
+      setOpenUrl(null);
       setOpenFileView('diff');
       return;
     }
     setChangesOpen(false);
+    setOpenUrl(null);
     setOpenFiles((prev) => (prev.includes(path) ? prev : [...prev, path]));
     setOpenFilePath(path);
     setOpenFileView('edit');
@@ -128,6 +133,42 @@ export function App() {
     });
   }
 
+  function openPreviewUrl(raw: string) {
+    const url = normalizePreviewUrl(raw);
+    if (!url) return;
+    setChangesOpen(false);
+    setOpenFilePath(null);
+    setOpenUrls((prev) => (prev.includes(url) ? prev : [...prev, url]));
+    setOpenUrl(url);
+  }
+
+  function selectPreviewUrl(url: string) {
+    setChangesOpen(false);
+    setOpenFilePath(null);
+    setOpenUrl(url);
+  }
+
+  function closePreviewUrl(url: string) {
+    setOpenUrls((prev) => {
+      const next = prev.filter((u) => u !== url);
+      setOpenUrl((active) => {
+        if (active !== url) return active;
+        return next[next.length - 1] ?? null;
+      });
+      return next;
+    });
+  }
+
+  function navigatePreviewUrl(from: string, toRaw: string) {
+    const to = normalizePreviewUrl(toRaw);
+    if (!to) return;
+    setOpenUrls((prev) => {
+      const without = prev.filter((u) => u !== from);
+      return without.includes(to) ? without : [...without, to];
+    });
+    setOpenUrl(to);
+  }
+
   function closeChanges() {
     setChangesOpen(false);
     setChangesPath(null);
@@ -136,6 +177,7 @@ export function App() {
   function selectChangesTab() {
     setChangesOpen(true);
     setOpenFilePath(null);
+    setOpenUrl(null);
   }
   const [pendingLand, setPendingLand] = useState<{ draft?: boolean; web?: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -311,7 +353,7 @@ export function App() {
     [threads, archived, selectedId],
   );
 
-  // File tabs are scoped to the active worktree.
+  // File tabs are scoped to the active worktree; URL tabs stay open across worktrees.
   useEffect(() => {
     setOpenFiles([]);
     setOpenFilePath(null);
@@ -566,14 +608,21 @@ export function App() {
               openFilePath={openFilePath}
               openFiles={openFiles}
               openFileView={openFileView}
+              openUrls={openUrls}
+              openUrl={openUrl}
               changesOpen={changesOpen}
               changesPath={changesPath}
               onSelectFile={openFile}
               onCloseFile={closeFile}
+              onOpenUrl={openPreviewUrl}
+              onSelectUrl={selectPreviewUrl}
+              onCloseUrl={closePreviewUrl}
+              onNavigateUrl={navigatePreviewUrl}
               onSelectChanges={selectChangesTab}
               onCloseChanges={closeChanges}
               onShowChat={() => {
                 setOpenFilePath(null);
+                setOpenUrl(null);
                 setChangesOpen(false);
               }}
               fileChanges={fileChanges}
@@ -599,6 +648,7 @@ export function App() {
                 openFilePath={openFilePath}
                 changesPath={changesPath}
                 onOpenFile={openFile}
+                onOpenUrl={openPreviewUrl}
                 onFileChanges={onFileChanges}
                 onSelectChat={(id, created) => {
                   if (created) upsertThread(created);

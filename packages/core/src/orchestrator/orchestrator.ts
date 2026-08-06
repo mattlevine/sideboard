@@ -1006,7 +1006,13 @@ export class Orchestrator {
   async readFile(
     threadRef: string,
     relativePath: string,
-  ): Promise<{ path: string; content: string; truncated: boolean; binary: boolean }> {
+  ): Promise<{
+    path: string;
+    content: string;
+    truncated: boolean;
+    binary: boolean;
+    encoding: 'utf8' | 'base64';
+  }> {
     const thread = this.requireThread(threadRef);
     // Prevent path escape
     if (relativePath.includes('..') || relativePath.startsWith('/')) {

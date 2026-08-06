@@ -1,20 +1,6 @@
 import type { PrDetails } from '@sideboard/core';
 import { MarkdownMessage } from './MarkdownMessage';
-import { formatShortDate } from '../lib/pr-format';
-
-function formatReviewDecision(decision: string | null): string | null {
-  if (!decision) return null;
-  switch (decision.toUpperCase()) {
-    case 'CHANGES_REQUESTED':
-      return 'Rejected';
-    case 'REVIEW_REQUIRED':
-      return 'Review required';
-    case 'APPROVED':
-      return 'Approved';
-    default:
-      return decision.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
-  }
-}
+import { formatReviewDecision, formatShortDate } from '../lib/pr-format';
 
 function formatReviewState(state: string): string {
   switch (state.toUpperCase()) {

@@ -1,5 +1,50 @@
 import type { PrCheckRun } from '@sideboard/core';
 
+/** Aggregate GitHub `reviewDecision` label for PR pill / Review tab. */
+export function formatReviewDecision(decision: string | null | undefined): string | null {
+  if (!decision) return null;
+  switch (decision.toUpperCase()) {
+    case 'CHANGES_REQUESTED':
+      return 'Rejected';
+    case 'REVIEW_REQUIRED':
+      return 'Needs approval';
+    case 'APPROVED':
+      return 'Approved';
+    default:
+      return decision.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+  }
+}
+
+/** CSS modifier for the top-right PR pill based on lifecycle + review state. */
+export function prPillModifier(opts: {
+  merged: boolean;
+  closed: boolean;
+  draft: boolean;
+  reviewDecision: string | null | undefined;
+}): string {
+  if (opts.merged) return 'merged';
+  if (opts.closed) return 'closed';
+  if (opts.draft) return 'draft';
+  const decision = (opts.reviewDecision ?? '').toUpperCase();
+  if (decision === 'REVIEW_REQUIRED') return 'needs-approval';
+  if (decision === 'CHANGES_REQUESTED') return 'rejected';
+  if (decision === 'APPROVED') return 'approved';
+  return 'open';
+}
+
+/** Status badge text for the top-right PR pill. */
+export function prPillStatusLabel(opts: {
+  merged: boolean;
+  closed: boolean;
+  draft: boolean;
+  reviewDecision: string | null | undefined;
+}): string {
+  if (opts.merged) return 'Merged';
+  if (opts.closed) return 'Closed';
+  if (opts.draft) return 'Draft';
+  return formatReviewDecision(opts.reviewDecision) ?? 'Open';
+}
+
 export function formatCheckDuration(check: PrCheckRun): string {
   if (!check.startedAt || !check.completedAt) return '';
   const start = Date.parse(check.startedAt);
@@ -37,7 +82,7 @@ export function checkStatusLabel(check: Pick<PrCheckRun, 'bucket' | 'state' | 'k
       case 'CHANGES_REQUESTED':
         return 'Rejected';
       case 'REVIEW_REQUIRED':
-        return 'Review required';
+        return 'Needs approval';
       case 'UNKNOWN':
         return 'Checking…';
       default:

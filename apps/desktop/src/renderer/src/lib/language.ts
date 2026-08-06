@@ -73,10 +73,48 @@ export function detectLanguage(filePath: string): string {
   return 'plaintext';
 }
 
-/** Files that support a rendered Preview alongside source. */
-export type DocumentPreviewKind = 'markdown' | 'html';
+/** Keep in sync with core `diff/diff.ts` IMAGE_EXTENSIONS. */
+const IMAGE_EXTENSIONS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'svg',
+  'bmp',
+  'ico',
+]);
+
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  bmp: 'image/bmp',
+  ico: 'image/x-icon',
+};
+
+function fileExtension(filePath: string): string {
+  const base = filePath.split('/').pop()?.toLowerCase() || '';
+  return base.includes('.') ? base.split('.').pop() || '' : '';
+}
+
+export function isImagePath(filePath: string): boolean {
+  return IMAGE_EXTENSIONS.has(fileExtension(filePath));
+}
+
+/** MIME type for image data URLs (e.g. `image/png`). */
+export function imageMimeType(filePath: string): string {
+  return IMAGE_MIME_BY_EXT[fileExtension(filePath)] || 'image/png';
+}
+
+/** Files that support a rendered Preview alongside source (or image-only preview). */
+export type DocumentPreviewKind = 'markdown' | 'html' | 'image';
 
 export function documentPreviewKind(filePath: string): DocumentPreviewKind | null {
+  if (isImagePath(filePath)) return 'image';
   const lang = detectLanguage(filePath);
   if (lang === 'markdown') return 'markdown';
   if (lang === 'html') return 'html';

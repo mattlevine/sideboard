@@ -20,14 +20,20 @@ export function FileReferenceModal({
   onOpenInTab,
 }: Props) {
   const previewKind = documentPreviewKind(link.path);
+  const isImage = previewKind === 'image';
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [binary, setBinary] = useState(false);
+  const [encoding, setEncoding] = useState<'utf8' | 'base64'>('utf8');
   const [mode, setMode] = useState<'code' | 'preview'>('code');
 
   useEffect(() => {
-    // Line links open in Code so the highlight is visible; otherwise prefer Preview.
+    // Images and docs without a line range open in Preview; line links stay in Code.
     const kind = documentPreviewKind(link.path);
+    if (kind === 'image') {
+      setMode('preview');
+      return;
+    }
     setMode(kind && link.startLine == null ? 'preview' : 'code');
   }, [link.path, link.startLine]);
 
@@ -36,11 +42,13 @@ export function FileReferenceModal({
     setContent(null);
     setError(null);
     setBinary(false);
+    setEncoding('utf8');
     void window.sideboard
       .readFile(threadId, link.path)
       .then((r) => {
         if (cancelled) return;
         setBinary(r.binary);
+        setEncoding(r.encoding ?? 'utf8');
         setContent(r.content);
       })
       .catch((err: unknown) => {
@@ -66,6 +74,12 @@ export function FileReferenceModal({
         : `Line ${link.startLine}`
       : null;
 
+  const showImage = isImage && content != null && !error;
+  const showPreview =
+    !error && content != null && !isImage && !binary && mode === 'preview' && previewKind;
+  const showCode =
+    !error && content != null && !isImage && !binary && (mode === 'code' || !previewKind);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -81,7 +95,7 @@ export function FileReferenceModal({
             {lineLabel && <span className="thread-meta">{lineLabel}</span>}
           </div>
           <div className="file-ref-actions">
-            {previewKind && !binary && (
+            {previewKind && !isImage && !binary && (
               <DocumentPreviewModeToggle mode={mode} onChange={setMode} />
             )}
             <button
@@ -101,20 +115,25 @@ export function FileReferenceModal({
         </div>
         {error && <p className="file-ref-error">{error}</p>}
         {!error && content == null && <div className="empty">Loading…</div>}
-        {!error && content != null && binary && (
+        {!error && content != null && binary && !isImage && (
           <pre className="file-ref-preview">(Binary file — open in tab to view)</pre>
         )}
-        {!error && content != null && !binary && mode === 'preview' && previewKind && (
+        {showImage && (
           <div className="file-ref-code">
-            <DocumentPreview path={link.path} content={content} />
+            <DocumentPreview path={link.path} content={content!} encoding={encoding} />
           </div>
         )}
-        {!error && content != null && !binary && (mode === 'code' || !previewKind) && (
+        {showPreview && (
+          <div className="file-ref-code">
+            <DocumentPreview path={link.path} content={content!} />
+          </div>
+        )}
+        {showCode && (
           <div className="file-ref-code">
             <CodeView
               key={`preview:${link.path}`}
               path={link.path}
-              value={content}
+              value={content!}
               worktreePath={worktreePath}
               modelNonce="file-ref-modal"
               readOnly

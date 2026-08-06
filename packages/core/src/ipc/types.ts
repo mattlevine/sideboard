@@ -158,7 +158,13 @@ export interface IpcApi {
   readFile(
     threadRef: string,
     relativePath: string,
-  ): Promise<{ path: string; content: string; truncated: boolean; binary: boolean }>;
+  ): Promise<{
+    path: string;
+    content: string;
+    truncated: boolean;
+    binary: boolean;
+    encoding: 'utf8' | 'base64';
+  }>;
   writeFile(threadRef: string, relativePath: string, content: string): Promise<{ path: string }>;
   /** Watch the open file in the worktree; replaces any previous watch. */
   watchOpenFile(threadRef: string, relativePath: string): Promise<void>;

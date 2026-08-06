@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, Thread } from '@sideboard/core';
 import { threadDisplayTitle } from '../lib/global-workspace';
+import { isImagePath } from '../lib/language';
+import { previewUrlTabLabel } from '../lib/preview-url';
 import { FloatingMenu } from './FloatingMenu';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 
@@ -11,6 +13,10 @@ interface Props {
   openFiles?: string[];
   /** When set, a file tab is active (chat content hidden). */
   activeFilePath?: string | null;
+  /** Open http(s) preview URLs shown as tabs. */
+  openUrls?: string[];
+  /** When set, a URL preview tab is active. */
+  activeUrl?: string | null;
   /** Dedicated Changes tab (not a per-file basename tab). */
   changesOpen?: boolean;
   changesActive?: boolean;
@@ -29,6 +35,8 @@ interface Props {
   onSelectChat: (id: string) => void;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
+  onSelectUrl?: (url: string) => void;
+  onCloseUrl?: (url: string) => void;
   onSelectChanges?: () => void;
   onCloseChanges?: () => void;
   onNewTab: (agent?: AgentKind) => void;
@@ -46,6 +54,8 @@ export function ChatTabs({
   activeChatId,
   openFiles = [],
   activeFilePath = null,
+  openUrls = [],
+  activeUrl = null,
   changesOpen = false,
   changesActive = false,
   changesCount = 0,
@@ -59,6 +69,8 @@ export function ChatTabs({
   onSelectChat,
   onSelectFile,
   onCloseFile,
+  onSelectUrl,
+  onCloseUrl,
   onSelectChanges,
   onCloseChanges,
   onNewTab,
@@ -89,7 +101,8 @@ export function ChatTabs({
     setEditingId(null);
   }
 
-  const fileActive = Boolean(activeFilePath) && !changesActive;
+  const urlActive = Boolean(activeUrl) && !changesActive;
+  const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive;
 
   return (
     <div className="chat-tabs">
@@ -124,7 +137,7 @@ export function ChatTabs({
           </div>
         )}
 
-        {/* Conductor order: file tabs, then chat/agent tabs */}
+        {/* Conductor order: file tabs, URL tabs, then chat/agent tabs */}
         {openFiles.map((path) => {
           const active = fileActive && activeFilePath === path;
           const change = fileChanges[path];
@@ -136,7 +149,7 @@ export function ChatTabs({
               title={path}
             >
               <span className="chat-tab-file-icon" aria-hidden>
-                {'{}'}
+                {isImagePath(path) ? '▣' : '{}'}
               </span>
               <span className="chat-tab-title">{basename(path)}</span>
               {change && <GitChangeBadge change={change} compact />}
@@ -157,8 +170,38 @@ export function ChatTabs({
           );
         })}
 
+        {openUrls.map((url) => {
+          const active = urlActive && activeUrl === url;
+          return (
+            <div
+              key={`url:${url}`}
+              className={`chat-tab file-tab-item url-tab-item${active ? ' active' : ''}`}
+              onClick={() => onSelectUrl?.(url)}
+              title={url}
+            >
+              <span className="chat-tab-file-icon" aria-hidden>
+                ◎
+              </span>
+              <span className="chat-tab-title">{previewUrlTabLabel(url)}</span>
+              {onCloseUrl && (
+                <button
+                  type="button"
+                  className="chat-tab-close"
+                  title="Close URL"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCloseUrl(url);
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          );
+        })}
+
         {chats.map((t) => {
-          const active = !fileActive && !changesActive && t.id === activeChatId;
+          const active = !fileActive && !urlActive && !changesActive && t.id === activeChatId;
           return (
             <div
               key={t.id}

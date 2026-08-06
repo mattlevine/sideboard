@@ -25,16 +25,18 @@ export function FileEditor({
   onSaved,
 }: Props) {
   const previewKind = documentPreviewKind(path);
+  const isImage = previewKind === 'image';
   const [content, setContent] = useState<string | null>(null);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [binary, setBinary] = useState(false);
+  const [encoding, setEncoding] = useState<'utf8' | 'base64'>('utf8');
   const [truncated, setTruncated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [diskNewer, setDiskNewer] = useState(false);
   const [mode, setMode] = useState<'code' | 'preview' | 'diff'>(
-    initialView === 'diff' ? 'diff' : 'code',
+    initialView === 'diff' ? 'diff' : isImage ? 'preview' : 'code',
   );
   const [patch, setPatch] = useState<string | null>(null);
   const [changeMeta, setChangeMeta] = useState<{
@@ -44,8 +46,8 @@ export function FileEditor({
   } | null>(null);
 
   useEffect(() => {
-    setMode(initialView === 'diff' ? 'diff' : 'code');
-  }, [path, initialView]);
+    setMode(initialView === 'diff' ? 'diff' : isImage ? 'preview' : 'code');
+  }, [path, initialView, isImage]);
 
   const loadPatch = useCallback(async () => {
     try {
@@ -80,12 +82,21 @@ export function FileEditor({
   contentRef.current = content;
 
   const applyDiskRead = useCallback(
-    (r: { content: string; truncated: boolean; binary: boolean }, force: boolean) => {
+    (
+      r: {
+        content: string;
+        truncated: boolean;
+        binary: boolean;
+        encoding?: 'utf8' | 'base64';
+      },
+      force: boolean,
+    ) => {
       if (!force && dirtyRef.current) {
         if (r.content !== contentRef.current) setDiskNewer(true);
         return;
       }
       setBinary(r.binary);
+      setEncoding(r.encoding ?? 'utf8');
       setTruncated(r.truncated);
       setContent(r.content);
       setSaved(r.content);
@@ -117,6 +128,7 @@ export function FileEditor({
     setContent(null);
     setError(null);
     setBinary(false);
+    setEncoding('utf8');
     setTruncated(false);
     setDiskNewer(false);
     void window.sideboard
@@ -219,13 +231,13 @@ export function FileEditor({
                 type="button"
                 className={mode === 'code' || mode === 'preview' ? 'active' : ''}
                 aria-pressed={mode === 'code' || mode === 'preview'}
-                onClick={() => setMode('code')}
+                onClick={() => setMode(isImage ? 'preview' : 'code')}
               >
-                Edit
+                {isImage ? 'Preview' : 'Edit'}
               </button>
             </div>
           )}
-          {previewKind && !binary && (mode === 'code' || mode === 'preview') && (
+          {previewKind && !isImage && !binary && (mode === 'code' || mode === 'preview') && (
             <DocumentPreviewModeToggle
               mode={mode}
               onChange={setMode}
@@ -233,7 +245,13 @@ export function FileEditor({
           )}
           {(binary || truncated) && (
             <span className="thread-meta">
-              {binary ? 'Binary — view only' : 'Truncated — view only'}
+              {isImage
+                ? truncated
+                  ? 'Image — truncated'
+                  : 'Image — view only'
+                : binary
+                  ? 'Binary — view only'
+                  : 'Truncated — view only'}
             </span>
           )}
           {dirty && (
@@ -277,10 +295,19 @@ export function FileEditor({
         </div>
       )}
       {!error && content == null && mode !== 'diff' && <div className="empty">Loading…</div>}
-      {!error && content != null && mode === 'preview' && previewKind && !binary && (
-        <DocumentPreview path={path} content={content} className="file-editor-preview" />
-      )}
-      {!error && content != null && mode === 'code' && (
+      {!error &&
+        content != null &&
+        mode === 'preview' &&
+        previewKind &&
+        (isImage || !binary) && (
+          <DocumentPreview
+            path={path}
+            content={content}
+            encoding={encoding}
+            className="file-editor-preview"
+          />
+        )}
+      {!error && content != null && mode === 'code' && !isImage && (
         <CodeView
           path={path}
           worktreePath={worktreePath}

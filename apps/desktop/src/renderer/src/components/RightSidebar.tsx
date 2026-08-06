@@ -15,7 +15,7 @@ import { PrReviewPanel } from './PrReviewPanel';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
-import { summarizeChecks } from '../lib/pr-format';
+import { prPillModifier, prPillStatusLabel, summarizeChecks } from '../lib/pr-format';
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
@@ -31,6 +31,8 @@ interface Props {
   /** Path selected in the dedicated Changes center tab. */
   changesPath?: string | null;
   onOpenFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
+  /** Open an http(s) URL in a center preview tab (e.g. localhost:port). */
+  onOpenUrl?: (url: string) => void;
   onForkWorktree?: () => void;
   /** Select another chat tab in this worktree (e.g. after creating one for setup). */
   onSelectChat?: (id: string, created?: Thread) => void;
@@ -101,6 +103,7 @@ export function RightSidebar({
   openFilePath = null,
   changesPath = null,
   onOpenFile,
+  onOpenUrl,
   onForkWorktree,
   onSelectChat,
   pendingLand = null,
@@ -146,7 +149,7 @@ export function RightSidebar({
   const [prDetails, setPrDetails] = useState<PrDetails | null>(null);
   const [prDetailsError, setPrDetailsError] = useState<string | null>(null);
   const [prDetailsLoading, setPrDetailsLoading] = useState(false);
-  /** Live GitHub PR state for the action bar (OPEN / MERGED / CLOSED). */
+  /** Live GitHub PR state for the action bar (OPEN / MERGED / CLOSED + review). */
   const [prMeta, setPrMeta] = useState<{
     number: number;
     url: string;
@@ -154,6 +157,7 @@ export function RightSidebar({
     isDraft: boolean;
     title: string;
     baseRefName: string;
+    reviewDecision: string | null;
   } | null>(null);
 
   const reloadRunScripts = useCallback(() => {
@@ -365,6 +369,7 @@ export function RightSidebar({
           isDraft: details.isDraft,
           title: details.title,
           baseRefName: details.baseRefName,
+          reviewDecision: details.reviewDecision,
         });
       }
     } catch (err) {
@@ -389,6 +394,7 @@ export function RightSidebar({
         isDraft: details.isDraft,
         title: details.title,
         baseRefName: details.baseRefName,
+        reviewDecision: details.reviewDecision,
       });
     } catch {
       setPrMeta(null);
@@ -466,6 +472,15 @@ export function RightSidebar({
   const prClosed = prState === 'CLOSED';
   const prOpen = Boolean(prUrl) && !prMerged && !prClosed;
   const prDraft = Boolean(prMeta?.isDraft) && prOpen;
+  const prReviewDecision = prOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null;
+  const pillOpts = {
+    merged: prMerged,
+    closed: prClosed,
+    draft: prDraft,
+    reviewDecision: prReviewDecision,
+  };
+  const pillModifier = prUrl ? prPillModifier(pillOpts) : '';
+  const pillStatus = prUrl ? prPillStatusLabel(pillOpts) : '';
   /** Local work that still needs to land before merge. */
   const hasLocalChanges =
     Boolean(diff?.dirty) || (diff?.unpushed ?? 0) > 0;
@@ -505,6 +520,7 @@ export function RightSidebar({
               state: result.state || 'MERGED',
               url: result.url || prev.url,
               isDraft: false,
+              reviewDecision: null,
             }
           : {
               number: Number(num) || 0,
@@ -513,6 +529,7 @@ export function RightSidebar({
               isDraft: false,
               title: thread.prTitle ?? thread.title,
               baseRefName: 'main',
+              reviewDecision: null,
             },
       );
       onRefresh();
@@ -740,14 +757,12 @@ export function RightSidebar({
           {prUrl ? (
             <button
               type="button"
-              className={`pr-pill${prMerged ? ' merged' : ''}${prClosed ? ' closed' : ''}${prDraft ? ' draft' : ''}`}
+              className={`pr-pill${pillModifier ? ` ${pillModifier}` : ''}`}
               onClick={() => void window.sideboard.openExternal(prUrl)}
               title={prUrl}
             >
               {num ? `#${num}` : 'PR'} ↗
-              {prMerged && <span className="pr-status">Merged</span>}
-              {prClosed && <span className="pr-status">Closed</span>}
-              {prDraft && <span className="pr-status">Draft</span>}
+              {pillStatus ? <span className="pr-status">{pillStatus}</span> : null}
             </button>
           ) : (
             <span className="branch-pill" title={thread.branchName}>
@@ -1055,12 +1070,15 @@ export function RightSidebar({
               <button
                 type="button"
                 className="dev-open-port"
-                title={`Open http://localhost:${primaryPort}`}
-                onClick={() =>
-                  void window.sideboard.openExternal(
-                    `http://localhost:${primaryPort}`,
-                  )
-                }
+                title={`Open http://localhost:${primaryPort} in Sideboard (⌥/Alt-click for browser)`}
+                onClick={(e) => {
+                  const url = `http://localhost:${primaryPort}`;
+                  if (e.altKey || !onOpenUrl) {
+                    void window.sideboard.openExternal(url);
+                    return;
+                  }
+                  onOpenUrl(url);
+                }}
               >
                 <RunScriptIcon name="globe" />
                 <span>{`Open :${primaryPort}`}</span>

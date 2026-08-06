@@ -18,6 +18,7 @@ import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';
 import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
+import { UrlPreview } from './UrlPreview';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { isCloudCoordinatorThread, isGlobalThread } from '../lib/global-workspace';
 
@@ -47,11 +48,17 @@ interface Props {
   openFilePath?: string | null;
   openFiles?: string[];
   openFileView?: 'edit' | 'diff';
+  openUrls?: string[];
+  openUrl?: string | null;
   /** Dedicated Changes center tab (file list selection, not a basename tab). */
   changesOpen?: boolean;
   changesPath?: string | null;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
+  onOpenUrl?: (url: string) => void;
+  onSelectUrl?: (url: string) => void;
+  onCloseUrl?: (url: string) => void;
+  onNavigateUrl?: (from: string, to: string) => void;
   onSelectChanges?: () => void;
   onCloseChanges?: () => void;
   onShowChat?: () => void;
@@ -76,10 +83,16 @@ export function ThreadPanel({
   openFilePath = null,
   openFiles = [],
   openFileView = 'edit',
+  openUrls = [],
+  openUrl = null,
   changesOpen = false,
   changesPath = null,
   onSelectFile,
   onCloseFile,
+  onOpenUrl,
+  onSelectUrl,
+  onCloseUrl,
+  onNavigateUrl,
   onSelectChanges,
   onCloseChanges,
   onShowChat,
@@ -433,8 +446,10 @@ export function ThreadPanel({
         activeChatId={thread.id}
         openFiles={openFiles}
         activeFilePath={openFilePath}
+        openUrls={openUrls}
+        activeUrl={openUrl}
         changesOpen={changesOpen}
-        changesActive={changesOpen && !openFilePath}
+        changesActive={changesOpen && !openFilePath && !openUrl}
         changesCount={Object.keys(fileChanges).length}
         fileChanges={fileChanges}
         leftSidebarToggle={leftSidebarToggle}
@@ -506,6 +521,8 @@ export function ThreadPanel({
         }}
         onSelectFile={(path) => onSelectFile?.(path)}
         onCloseFile={(path) => onCloseFile?.(path)}
+        onSelectUrl={(url) => onSelectUrl?.(url)}
+        onCloseUrl={(url) => onCloseUrl?.(url)}
         onSelectChanges={() => onSelectChanges?.()}
         onCloseChanges={() => onCloseChanges?.()}
         onNewTab={(agent) => void newTab(agent)}
@@ -559,6 +576,13 @@ export function ThreadPanel({
           initialView="diff"
           onClose={() => onCloseChanges?.()}
           onSaved={onRefresh}
+        />
+      ) : openUrl ? (
+        <UrlPreview
+          key={openUrl}
+          url={openUrl}
+          onNavigate={(to) => onNavigateUrl?.(openUrl, to)}
+          onClose={() => onCloseUrl?.(openUrl)}
         />
       ) : openFilePath ? (
         <FileEditor
@@ -623,13 +647,18 @@ export function ThreadPanel({
                     worktreePath={thread.worktreePath}
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
+                    onOpenUrl={onOpenUrl}
                     onOpenThread={onOpenThreadLink}
                     onFork={() => void forkToTab(i)}
                   />
                 ) : m.role === 'summary' ? (
                   <div className="msg-summary">
                     <div className="msg-summary-label">Context summarized</div>
-                    <MarkdownMessage text={m.text} onThreadLinkClick={onOpenThreadLink} />
+                    <MarkdownMessage
+                      text={m.text}
+                      onThreadLinkClick={onOpenThreadLink}
+                      onUrlClick={onOpenUrl}
+                    />
                   </div>
                 ) : (
                   <div className="msg-body">{m.text}</div>
@@ -656,6 +685,7 @@ export function ThreadPanel({
                     worktreePath={thread.worktreePath}
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
+                    onOpenUrl={onOpenUrl}
                     onOpenThread={onOpenThreadLink}
                     onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
                   />
@@ -675,6 +705,11 @@ export function ThreadPanel({
                   tone={thread.status === 'queued' ? 'queued' : 'active'}
                   size="sm"
                 />
+                <span className="thinking-indicator-dots" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                </span>
               </div>
             </>
           )}
@@ -688,7 +723,7 @@ export function ThreadPanel({
       )}
 
       <div
-        className={`composer-shell${openFilePath || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}`}
+        className={`composer-shell${openFilePath || openUrl || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}`}
       >
         <div
           ref={composerBoxRef}
@@ -697,7 +732,7 @@ export function ThreadPanel({
             if (!composerExpanded) textareaRef.current?.focus();
           }}
         >
-          {thread.planMode && !openFilePath && !changesOpen && (
+          {thread.planMode && !openFilePath && !openUrl && !changesOpen && (
             <div className="composer-plan-banner">
               Plan mode stays on until you turn it off or click Implement.
             </div>

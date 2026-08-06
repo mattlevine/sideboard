@@ -1,15 +1,27 @@
-import { documentPreviewKind } from '../lib/language';
+import { documentPreviewKind, imageMimeType } from '../lib/language';
 import { MarkdownMessage } from './MarkdownMessage';
 
 interface Props {
   path: string;
   content: string;
+  /** When content is base64 (images from readFile). */
+  encoding?: 'utf8' | 'base64';
   className?: string;
 }
 
-export function DocumentPreview({ path, content, className }: Props) {
+export function DocumentPreview({ path, content, encoding = 'utf8', className }: Props) {
   const kind = documentPreviewKind(path);
   if (!kind) return null;
+
+  if (kind === 'image') {
+    if (encoding !== 'base64' || !content) return null;
+    const src = `data:${imageMimeType(path)};base64,${content}`;
+    return (
+      <div className={`doc-preview doc-preview-image${className ? ` ${className}` : ''}`}>
+        <img src={src} alt={path} className="doc-preview-img" />
+      </div>
+    );
+  }
 
   if (kind === 'markdown') {
     return (

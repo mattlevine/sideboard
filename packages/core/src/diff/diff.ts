@@ -559,12 +559,36 @@ export async function listWorktreeFiles(
   return [...paths].sort((a, b) => a.localeCompare(b)).slice(0, maxFiles);
 }
 
-/** Read a text file from the worktree (capped). */
+/** Keep in sync with renderer `lib/language.ts` IMAGE_EXTENSIONS. */
+const IMAGE_EXTENSIONS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'svg',
+  'bmp',
+  'ico',
+]);
+
+function isImageRelativePath(relativePath: string): boolean {
+  const base = relativePath.split('/').pop()?.toLowerCase() || '';
+  const ext = base.includes('.') ? base.split('.').pop() || '' : '';
+  return IMAGE_EXTENSIONS.has(ext);
+}
+
+/** Read a text (or image) file from the worktree (capped). */
 export function readWorktreeFile(
   worktreePath: string,
   relativePath: string,
   opts?: { maxBytes?: number },
-): { path: string; content: string; truncated: boolean; binary: boolean } {
+): {
+  path: string;
+  content: string;
+  truncated: boolean;
+  binary: boolean;
+  encoding: 'utf8' | 'base64';
+} {
   assertSafeRelativePath(relativePath);
   const maxBytes = opts?.maxBytes ?? 200_000;
   const abs = join(worktreePath, relativePath);
@@ -573,6 +597,22 @@ export function readWorktreeFile(
     throw new Error(`Not a file: ${relativePath}`);
   }
   const buf = readFileSync(abs);
+
+  // Images: return base64 so the renderer can preview them (null-byte binary heuristic
+  // would otherwise stub PNG/JPEG/etc. as unreadable).
+  if (isImageRelativePath(relativePath)) {
+    const maxImageBytes = Math.max(maxBytes, 15_000_000);
+    const truncated = buf.length > maxImageBytes;
+    const slice = buf.subarray(0, maxImageBytes);
+    return {
+      path: relativePath,
+      content: slice.toString('base64'),
+      truncated,
+      binary: true,
+      encoding: 'base64',
+    };
+  }
+
   const sample = buf.subarray(0, Math.min(buf.length, 8_000));
   const binary = sample.includes(0);
   if (binary) {
@@ -581,6 +621,7 @@ export function readWorktreeFile(
       content: `(binary file, ${st.size} bytes)`,
       truncated: false,
       binary: true,
+      encoding: 'utf8',
     };
   }
   const truncated = buf.length > maxBytes;
@@ -592,6 +633,7 @@ export function readWorktreeFile(
       : content,
     truncated,
     binary: false,
+    encoding: 'utf8',
   };
 }
 
