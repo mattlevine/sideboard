@@ -85,8 +85,9 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "sideboard-ai",
-        "repo": "sideboard"
+        "owner": "mattlevine",
+        "repo": "sideboard",
+        "releaseType": "release"
       }
     ]
   }
