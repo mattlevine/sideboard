@@ -80,7 +80,10 @@ export function App() {
   const [livePartsByThread, setLivePartsByThread] = useState<Record<string, MessagePart[]>>({});
   const [turnStartedAtByThread, setTurnStartedAtByThread] = useState<Record<string, number>>({});
   const [runtime, setRuntime] = useState<OrchestratorRuntime | null>(null);
-  const [updateReady, setUpdateReady] = useState(false);
+  const [appUpdate, setAppUpdate] = useState<{
+    phase: 'available' | 'ready';
+    version: string;
+  } | null>(null);
   const [prefill, setPrefill] = useState<string | undefined>();
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
@@ -340,11 +343,31 @@ export function App() {
         void refresh();
       }
     });
-    const offUpdate = window.sideboardUpdate.onReady(() => setUpdateReady(true));
+    const dismissedKey = 'sideboard.dismissedUpdateVersion';
+    const isDismissed = (version: string) => {
+      try {
+        return localStorage.getItem(dismissedKey) === version;
+      } catch {
+        return false;
+      }
+    };
+    const offAvailable = window.sideboardUpdate.onAvailable((info) => {
+      if (isDismissed(info.version)) return;
+      setAppUpdate((prev) =>
+        prev?.phase === 'ready' && prev.version === info.version
+          ? prev
+          : { phase: 'available', version: info.version },
+      );
+    });
+    const offReady = window.sideboardUpdate.onReady((info) => {
+      // Always surface "ready" even if the earlier available toast was dismissed.
+      setAppUpdate({ phase: 'ready', version: info.version });
+    });
     return () => {
       offThreads();
       offEvents();
-      offUpdate();
+      offAvailable();
+      offReady();
     };
   }, [refresh]);
 
@@ -712,12 +735,44 @@ export function App() {
         />
       )}
 
-      {updateReady && (
-        <div className="update-banner">
-          <span>Update ready</span>
-          <button className="primary" onClick={() => void window.sideboardUpdate.install()}>
-            Restart to update
-          </button>
+      {appUpdate && (
+        <div className="update-banner" role="status">
+          <div className="update-banner-text">
+            <strong>
+              {appUpdate.phase === 'ready' ? 'Update ready' : 'Update available'}
+            </strong>
+            <span>
+              {appUpdate.phase === 'ready'
+                ? `Sideboard ${appUpdate.version} is ready to install.`
+                : `Sideboard ${appUpdate.version} is downloading…`}
+            </span>
+          </div>
+          <div className="update-banner-actions">
+            {appUpdate.phase === 'ready' && (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void window.sideboardUpdate.install()}
+              >
+                Restart to update
+              </button>
+            )}
+            <button
+              type="button"
+              className="update-banner-dismiss"
+              title="Dismiss"
+              onClick={() => {
+                try {
+                  localStorage.setItem('sideboard.dismissedUpdateVersion', appUpdate.version);
+                } catch {
+                  /* ignore */
+                }
+                setAppUpdate(null);
+              }}
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
     </div>

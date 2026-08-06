@@ -281,20 +281,40 @@ function createWindow(): void {
   });
 }
 
+function notifyUpdate(title: string, body: string): void {
+  if (!Notification.isSupported()) return;
+  const n = new Notification({ title, body });
+  n.on('click', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+  n.show();
+}
+
 function setupUpdater(): void {
   if (!app.isPackaged) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  // Use checkForUpdates (not AndNotify) so we own in-app + OS notifications.
   const check = () => {
-    void autoUpdater.checkForUpdatesAndNotify().catch(() => undefined);
+    void autoUpdater.checkForUpdates().catch(() => undefined);
   };
   check();
   setInterval(check, 4 * 60 * 60 * 1000);
 
-  autoUpdater.on('update-downloaded', () => {
-    if (!mainWindow) return;
-    mainWindow.webContents.send('update:ready');
+  autoUpdater.on('update-available', (info) => {
+    const version = info.version;
+    mainWindow?.webContents.send('update:available', { version });
+    notifyUpdate('Update available', `Sideboard ${version} is available and downloading.`);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    const version = info.version;
+    mainWindow?.webContents.send('update:ready', { version });
+    notifyUpdate('Update ready', `Sideboard ${version} is ready — restart to update.`);
   });
 }
 

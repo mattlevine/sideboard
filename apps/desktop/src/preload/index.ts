@@ -174,8 +174,13 @@ const api: IpcApi = {
 contextBridge.exposeInMainWorld('sideboard', api);
 
 contextBridge.exposeInMainWorld('sideboardUpdate', {
-  onReady: (listener: () => void) => {
-    const handler = () => listener();
+  onAvailable: (listener: (info: { version: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, info: { version: string }) => listener(info);
+    ipcRenderer.on('update:available', handler);
+    return () => ipcRenderer.removeListener('update:available', handler);
+  },
+  onReady: (listener: (info: { version: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, info: { version: string }) => listener(info);
     ipcRenderer.on('update:ready', handler);
     return () => ipcRenderer.removeListener('update:ready', handler);
   },

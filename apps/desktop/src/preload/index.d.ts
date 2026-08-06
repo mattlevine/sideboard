@@ -4,7 +4,8 @@ declare global {
   interface Window {
     sideboard: IpcApi;
     sideboardUpdate: {
-      onReady: (listener: () => void) => () => void;
+      onAvailable: (listener: (info: { version: string }) => void) => () => void;
+      onReady: (listener: (info: { version: string }) => void) => () => void;
       install: () => Promise<void>;
     };
   }
