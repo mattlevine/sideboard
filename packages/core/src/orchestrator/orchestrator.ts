@@ -5,6 +5,7 @@ import { getAdapter } from '../agents/index.js';
 import {
   getPrChecks,
   getPrDetails,
+  mergePr as mergeGithubPr,
   removeWorktree,
   resolvePrSelector,
 } from '../git/worktree.js';
@@ -1047,6 +1048,17 @@ export class Orchestrator {
       }
       updateThread(thread.id, patch);
       await syncThreadBranchFromGit(thread.id);
+    }
+    return result;
+  }
+
+  async mergePr(threadRef: string): Promise<{ url: string; state: string }> {
+    const { thread, selector, cwd } = await this.withPrSelector(threadRef);
+    this.assertNotGlobal(thread, 'Merge PR');
+    if (!selector) throw new Error('No pull request linked to this thread');
+    const result = await mergeGithubPr(cwd, selector);
+    if (result.url && result.url !== thread.prUrl) {
+      updateThread(thread.id, { prUrl: result.url });
     }
     return result;
   }

@@ -448,6 +448,19 @@ export function App() {
                 .then(openForkedTab)
                 .catch(alert);
             }}
+            onArchive={(id) => {
+              void window.sideboard
+                .archiveThread(id)
+                .then(() => {
+                  if (selectedId === id || multiSelected.has(id)) {
+                    setSelectedId(null);
+                    setMultiSelected(new Set());
+                    setView('board');
+                  }
+                  return refresh();
+                })
+                .catch(alert);
+            }}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />

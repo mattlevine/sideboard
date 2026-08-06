@@ -3,6 +3,8 @@ interface Props {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Disable both actions while an async confirm is in flight. */
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -12,11 +14,12 @@ export function ConfirmDialog({
   message,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
+  busy = false,
   onConfirm,
   onCancel,
 }: Props) {
   return (
-    <div className="modal-backdrop" onClick={onCancel}>
+    <div className="modal-backdrop" onClick={() => { if (!busy) onCancel(); }}>
       <div
         className="modal confirm-modal"
         role="dialog"
@@ -27,10 +30,10 @@ export function ConfirmDialog({
         <h3 id="confirm-dialog-title">{title}</h3>
         <p className="confirm-dialog-message">{message}</p>
         <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
-          <button type="button" onClick={onCancel}>
+          <button type="button" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button type="button" className="primary" onClick={onConfirm}>
+          <button type="button" className="primary" disabled={busy} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>

@@ -729,6 +729,7 @@ function registerIpc(): void {
     (_e, ref: string, opts?: { draft?: boolean; web?: boolean }) =>
       orch.confirmLand(ref, opts),
   );
+  ipcMain.handle('mergePr', (_e, ref: string) => orch.mergePr(ref));
   ipcMain.handle('archiveThread', (_e, ref: string) => orch.archive(ref));
   ipcMain.handle('purgeThread', (_e, ref: string, opts?: { deleteBranch?: boolean }) =>
     orch.purge(ref, opts),

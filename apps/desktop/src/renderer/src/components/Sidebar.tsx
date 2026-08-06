@@ -10,7 +10,9 @@ import {
   isCloudCoordinatorThread,
   threadDisplayTitle,
 } from '../lib/global-workspace';
+import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { BrandMark } from './BrandMark';
+import { ConfirmDialog } from './ConfirmDialog';
 import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
@@ -27,6 +29,7 @@ interface Props {
   onRestore: (id: string) => void;
   onCreatePr?: (threadId: string, opts?: { draft?: boolean; web?: boolean }) => void;
   onForkChat?: (threadId: string) => void;
+  onArchive?: (threadId: string) => void;
   onToggleSidebar: () => void;
   onOpenSettings?: () => void;
 }
@@ -63,12 +66,18 @@ export function Sidebar({
   onRestore,
   onCreatePr,
   onForkChat,
+  onArchive,
   onToggleSidebar,
   onOpenSettings,
 }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [toolsFor, setToolsFor] = useState<string | null>(null);
+  const [archiveConfirm, setArchiveConfirm] = useState<{
+    threadId: string;
+    title: string;
+    chatCount: number;
+  } | null>(null);
 
   const q = filter.trim().toLowerCase();
 
@@ -208,8 +217,15 @@ export function Sidebar({
                       }
                     >
                       <span className={`dot ${primary.status}`} />
-                      <div>
-                        <div className="thread-title">
+                      <div className="thread-item-body">
+                        <div
+                          className="thread-title"
+                          title={
+                            cloud
+                              ? `${threadDisplayTitle(primary)} · Brightsy`
+                              : threadDisplayTitle(primary)
+                          }
+                        >
                           {threadDisplayTitle(primary)}
                           {cloud ? ' · Brightsy' : ''}
                         </div>
@@ -308,8 +324,15 @@ export function Sidebar({
                     onClick={(e) => onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey)}
                   >
                     <span className={`dot ${primary.status}`} />
-                    <div>
-                      <div className="thread-title">
+                    <div className="thread-item-body">
+                      <div
+                        className="thread-title"
+                        title={
+                          primary.sourceType === 'orchestration'
+                            ? `${worktreeLabel} ✦`
+                            : worktreeLabel
+                        }
+                      >
                         {worktreeLabel}
                         {primary.sourceType === 'orchestration' ? ' ✦' : ''}
                       </div>
@@ -323,6 +346,7 @@ export function Sidebar({
                       type="button"
                       className="icon-btn worktree-tools-btn"
                       title="Worktree tools"
+                      aria-expanded={menuOpen}
                       onClick={(e) => {
                         e.stopPropagation();
                         setToolsFor(menuOpen ? null : primary.worktreePath);
@@ -373,6 +397,27 @@ export function Sidebar({
                         <span className="tool-menu-icon">⎇</span>
                         <span>Fork to new tab</span>
                       </button>
+                      {onArchive && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setToolsFor(null);
+                            void window.sideboard
+                              .listWorktreeChats(primary.id)
+                              .then((chats) =>
+                                setArchiveConfirm({
+                                  threadId: primary.id,
+                                  title: worktreeLabel,
+                                  chatCount: chats.length,
+                                }),
+                              )
+                              .catch(alert);
+                          }}
+                        >
+                          <span className="tool-menu-icon">⬚</span>
+                          <span>Archive</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -389,12 +434,15 @@ export function Sidebar({
               {filteredArchived.map((t) => (
                 <div key={t.id} className="thread-item" onClick={() => onSelect(t.id, false)}>
                   <span className="dot archived" />
-                  <div>
-                    <div className="thread-title">{threadDisplayLabel(t)}</div>
+                  <div className="thread-item-body">
+                    <div className="thread-title" title={threadDisplayLabel(t)}>
+                      {threadDisplayLabel(t)}
+                    </div>
                     <div className="thread-meta">archived · {t.agent}</div>
                   </div>
                   <button
                     type="button"
+                    className="icon-btn"
                     onClick={(e) => {
                       e.stopPropagation();
                       onRestore(t.id);
@@ -408,6 +456,20 @@ export function Sidebar({
           </div>
         )}
       </div>
+
+      {archiveConfirm && (
+        <ConfirmDialog
+          title="Archive worktree?"
+          message={closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount)}
+          confirmLabel="Archive"
+          onConfirm={() => {
+            const id = archiveConfirm.threadId;
+            setArchiveConfirm(null);
+            onArchive?.(id);
+          }}
+          onCancel={() => setArchiveConfirm(null)}
+        />
+      )}
 
       <div className="sidebar-footer">
         <button

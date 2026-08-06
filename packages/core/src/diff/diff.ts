@@ -8,7 +8,7 @@ import type {
   DiffScopeStat,
 } from '../types/thread.js';
 import { git } from '../git/run.js';
-import { isDirty, resolveDefaultBranch } from '../git/worktree.js';
+import { isDirty, resolveDefaultBranch, resolveDiffBaseRef } from '../git/worktree.js';
 
 /** Stable codes for the Changes panel (Cursor-style empty states). */
 export type GitWorktreeStatus = 'ok' | 'missing_worktree' | 'not_git';
@@ -101,12 +101,43 @@ function capPatch(patch: string, maxHunk: number): string {
   return `${patch.slice(0, maxHunk)}\n\n… truncated (${patch.length - maxHunk} more chars)`;
 }
 
-async function resolveMergeBase(worktreePath: string, base: string): Promise<string> {
-  const { stdout } = await git(['merge-base', base, 'HEAD'], worktreePath, {
+async function resolveMergeBase(
+  worktreePath: string,
+  base: string,
+  repoPath?: string,
+): Promise<string> {
+  const baseRef = await resolveDiffBaseRef(worktreePath, base, repoPath);
+  const { stdout } = await git(['merge-base', baseRef, 'HEAD'], worktreePath, {
     reject: false,
   });
   const mb = stdout.trim();
-  return mb || base;
+  return mb || baseRef;
+}
+
+/** Commits on HEAD not yet on the remote tracking branch (0 if none/unknown). */
+async function countUnpushedCommits(worktreePath: string): Promise<number> {
+  const upstream = await git(
+    ['rev-list', '--count', '@{upstream}..HEAD'],
+    worktreePath,
+    { reject: false },
+  );
+  if (upstream.exitCode === 0) {
+    const n = Number(upstream.stdout.trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+  const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
+    reject: false,
+  });
+  const branch = head.stdout.trim();
+  if (!branch || branch === 'HEAD') return 0;
+  const remote = await git(
+    ['rev-list', '--count', `origin/${branch}..HEAD`],
+    worktreePath,
+    { reject: false },
+  );
+  if (remote.exitCode !== 0) return 0;
+  const n = Number(remote.stdout.trim());
+  return Number.isFinite(n) ? n : 0;
 }
 
 /** Split a multi-file `git diff` into path → patch. Uses the b/ path. */
@@ -256,7 +287,7 @@ export async function listBranchCommits(
   } catch {
     base = 'HEAD';
   }
-  const mergeBase = await resolveMergeBase(worktreePath, base);
+  const mergeBase = await resolveMergeBase(worktreePath, base, repoPath);
   const max = opts?.max ?? 40;
   const { stdout } = await git(
     [
@@ -333,6 +364,7 @@ export async function getDiff(
         ? files.map((f) => ` ${f.path} | untracked`).join('\n')
         : '(no changes)',
       dirty: files.length > 0,
+      unpushed: 0,
       hasLastTurnBase,
       commits: [],
       scopeStats: {
@@ -351,7 +383,18 @@ export async function getDiff(
   } catch {
     base = 'HEAD';
   }
-  const mergeBase = await resolveMergeBase(worktreePath, base);
+  // Prefer origin/<default> and refresh it so PR/adopt worktrees aren't
+  // compared against a stale local default branch (looks like every file changed).
+  base = await resolveDiffBaseRef(worktreePath, base, repoPath);
+  if (base.startsWith('origin/')) {
+    const short = base.slice('origin/'.length);
+    await git(['fetch', 'origin', short, '--quiet'], worktreePath, {
+      reject: false,
+    });
+    // Re-resolve after fetch in case the tip moved.
+    base = await resolveDiffBaseRef(worktreePath, short, repoPath);
+  }
+  const mergeBase = await resolveMergeBase(worktreePath, base, repoPath);
   const scopeStats = await computeScopeStats(
     worktreePath,
     mergeBase,
@@ -410,6 +453,7 @@ export async function getDiff(
         files: [],
         stat: '(no last agent turn)',
         dirty: await isDirty(worktreePath),
+        unpushed: await countUnpushedCommits(worktreePath),
         hasLastTurnBase: false,
         commits,
         scopeStats,
@@ -487,6 +531,7 @@ export async function getDiff(
     files,
     stat: statOut.trim() || (files.length ? `${files.length} file(s)` : '(no changes)'),
     dirty: await isDirty(worktreePath),
+    unpushed: await countUnpushedCommits(worktreePath),
     hasLastTurnBase,
     commits,
     scopeStats,

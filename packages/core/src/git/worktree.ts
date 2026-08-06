@@ -118,6 +118,33 @@ export async function resolveDefaultBranch(repoPath: string): Promise<string> {
   return 'main';
 }
 
+/**
+ * Prefer `origin/<branch>` for diff/merge-base so Changes / Land don't inflate
+ * against a stale local default-branch tip (common after adopting a PR).
+ * Bare names like `main` upgrade when the remote-tracking ref exists; already-
+ * qualified refs (`origin/main`, `refs/…`) are left alone.
+ *
+ * `fallbackCwd` (usually the main repo) is tried when the worktree can't see
+ * the remote-tracking ref.
+ */
+export async function resolveDiffBaseRef(
+  cwd: string,
+  branchOrRef: string,
+  fallbackCwd?: string,
+): Promise<string> {
+  const ref = branchOrRef.trim();
+  if (!ref) return ref;
+  if (ref.startsWith('origin/') || ref.startsWith('refs/')) return ref;
+  // Feature branches often contain `/` (fix/…); only upgrade simple names.
+  if (ref.includes('/')) return ref;
+  const remote = `origin/${ref}`;
+  for (const dir of [cwd, fallbackCwd].filter(Boolean) as string[]) {
+    const ok = await git(['rev-parse', '--verify', remote], dir, { reject: false });
+    if (ok.exitCode === 0) return remote;
+  }
+  return ref;
+}
+
 export async function listBranches(
   repoPath: string,
   opts?: { unmergedOnly?: boolean },
@@ -574,6 +601,75 @@ export async function pushBranch(
   branchName: string,
 ): Promise<void> {
   await git(['push', '-u', 'origin', branchName], worktreePath);
+}
+
+/** Merge an open pull request via `gh pr merge` (squash by default).
+ * Draft PRs are marked ready first — GitHub rejects merge while still draft. */
+export async function mergePr(
+  cwd: string,
+  selector: string,
+  opts?: { method?: 'merge' | 'squash' | 'rebase' },
+): Promise<{ url: string; state: string }> {
+  const slug = await resolveGithubRepoSlug(cwd);
+  const viewArgs = ['pr', 'view', selector, '--json', 'url,state,isDraft'];
+  if (slug) viewArgs.push('--repo', slug);
+  const before = await gh(viewArgs, cwd, { reject: false });
+  if (before.exitCode !== 0 || !before.stdout.trim()) {
+    throw new Error(before.stderr.trim() || 'Could not load pull request');
+  }
+  let url = '';
+  let isDraft = false;
+  try {
+    const parsed = JSON.parse(before.stdout) as {
+      url?: string;
+      state?: string;
+      isDraft?: boolean;
+    };
+    url = String(parsed.url ?? '');
+    isDraft = Boolean(parsed.isDraft);
+    if (String(parsed.state ?? '').toUpperCase() === 'MERGED') {
+      return { url, state: 'MERGED' };
+    }
+  } catch {
+    throw new Error('Could not parse pull request details');
+  }
+
+  if (isDraft) {
+    const readyArgs = ['pr', 'ready', selector];
+    if (slug) readyArgs.push('--repo', slug);
+    const ready = await gh(readyArgs, cwd, { reject: false });
+    if (ready.exitCode !== 0) {
+      throw new Error(
+        ready.stderr.trim() ||
+          ready.stdout.trim() ||
+          'Could not mark draft pull request as ready',
+      );
+    }
+  }
+
+  const method = opts?.method ?? 'squash';
+  const mergeFlag =
+    method === 'rebase' ? '--rebase' : method === 'merge' ? '--merge' : '--squash';
+  const args = ['pr', 'merge', selector, mergeFlag, '--delete-branch=false'];
+  if (slug) args.push('--repo', slug);
+  const { exitCode, stderr, stdout } = await gh(args, cwd, { reject: false });
+  if (exitCode !== 0) {
+    throw new Error(stderr.trim() || stdout.trim() || 'gh pr merge failed');
+  }
+
+  const after = await gh(viewArgs, cwd, { reject: false });
+  if (after.exitCode === 0 && after.stdout.trim()) {
+    try {
+      const parsed = JSON.parse(after.stdout) as { url?: string; state?: string };
+      return {
+        url: String(parsed.url ?? url),
+        state: String(parsed.state ?? 'MERGED'),
+      };
+    } catch {
+      // fall through
+    }
+  }
+  return { url, state: 'MERGED' };
 }
 
 export async function createOrUpdatePr(

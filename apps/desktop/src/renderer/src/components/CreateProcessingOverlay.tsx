@@ -14,17 +14,27 @@ const STEPS_ORCH = [
   'Almost ready',
 ] as const;
 
-/** Full-modal processing surface while createThread / startOrchestration runs. */
+const STEPS_MERGE = [
+  'Preparing pull request',
+  'Squash merging',
+  'Updating status',
+  'Almost done',
+] as const;
+
+type OverlayMode = 'create' | 'orchestration' | 'merge';
+
+/** Full-modal processing surface while create / merge runs. */
 export function CreateProcessingOverlay({
   mode,
   repoName,
   selectionHint,
 }: {
-  mode: 'create' | 'orchestration';
+  mode: OverlayMode;
   repoName: string;
   selectionHint?: string | null;
 }) {
-  const steps = mode === 'orchestration' ? STEPS_ORCH : STEPS_THREAD;
+  const steps =
+    mode === 'orchestration' ? STEPS_ORCH : mode === 'merge' ? STEPS_MERGE : STEPS_THREAD;
   const [step, setStep] = useState(0);
 
   useEffect(() => {

@@ -1,10 +1,13 @@
 import { execa, type ExecaError } from 'execa';
+import { ensureAgentPath } from '../agents/path.js';
 
 export async function run(
   file: string,
   args: string[],
   opts?: { cwd?: string; reject?: boolean; env?: Record<string, string> },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  // GUI Electron often starts without Homebrew — ensure git/gh resolve.
+  ensureAgentPath();
   try {
     const result = await execa(file, args, {
       cwd: opts?.cwd,

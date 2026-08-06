@@ -264,6 +264,8 @@ export interface DiffResult {
   files: DiffFile[];
   stat: string;
   dirty: boolean;
+  /** Commits on HEAD not yet on the remote tracking branch (0 if none/unknown). */
+  unpushed: number;
   /** Counts for each filter option (for the Changes dropdown). */
   scopeStats: Record<DiffScope, DiffScopeStat>;
   /** True when a last-agent-turn baseline is available. */

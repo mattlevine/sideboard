@@ -203,6 +203,8 @@ export interface IpcApi {
     threadRef: string,
     opts?: { draft?: boolean; web?: boolean },
   ): Promise<LandResult>;
+  /** Merge the thread's linked PR on GitHub (`gh pr merge`). */
+  mergePr(threadRef: string): Promise<{ url: string; state: string }>;
   archiveThread(threadRef: string): Promise<Thread>;
   purgeThread(threadRef: string, opts?: { deleteBranch?: boolean }): Promise<void>;
   restoreThread(threadRef: string): Promise<Thread>;

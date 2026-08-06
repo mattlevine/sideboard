@@ -8,6 +8,7 @@ import type {
 } from '@sideboard/core';
 import { FileTree } from './FileTree';
 import { ConfirmDialog } from './ConfirmDialog';
+import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
@@ -126,11 +127,23 @@ export function RightSidebar({
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState<{ chatCount: number } | null>(null);
+  const [mergeConfirm, setMergeConfirm] = useState(false);
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
   const prMenuRef = useRef<HTMLDivElement>(null);
   const runMenuRef = useRef<HTMLDivElement>(null);
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
   const [prChecksError, setPrChecksError] = useState<string | null>(null);
   const [prChecksLoading, setPrChecksLoading] = useState(false);
+  /** Live GitHub PR state for the action bar (OPEN / MERGED / CLOSED). */
+  const [prMeta, setPrMeta] = useState<{
+    number: number;
+    url: string;
+    state: string;
+    isDraft: boolean;
+    title: string;
+    baseRefName: string;
+  } | null>(null);
 
   const reloadRunScripts = useCallback(() => {
     if (typeof window.sideboard.listRunScripts !== 'function') {
@@ -327,6 +340,30 @@ export function RightSidebar({
     }
   }, [thread.id]);
 
+  const loadPrMeta = useCallback(async () => {
+    try {
+      const details = await window.sideboard.getPrDetails(thread.id);
+      if (!details) {
+        setPrMeta(null);
+        return;
+      }
+      setPrMeta({
+        number: details.number,
+        url: details.url,
+        state: details.state,
+        isDraft: details.isDraft,
+        title: details.title,
+        baseRefName: details.baseRefName,
+      });
+    } catch {
+      setPrMeta(null);
+    }
+  }, [thread.id]);
+
+  useEffect(() => {
+    void loadPrMeta();
+  }, [loadPrMeta, thread.prUrl, thread.branchName, thread.updatedAt]);
+
   useEffect(() => {
     if (upper !== 'checks') return;
     void loadPrChecks();
@@ -379,7 +416,72 @@ export function RightSidebar({
     setSelected(path);
     onOpenFile?.(path, { view: 'diff' });
   }
-  const num = prNumber(thread.prUrl ?? null);
+
+  const prUrl = prMeta?.url ?? thread.prUrl ?? null;
+  const num = prMeta?.number != null ? String(prMeta.number) : prNumber(prUrl);
+  const prState = (prMeta?.state ?? '').toUpperCase();
+  const prMerged = prState === 'MERGED';
+  const prClosed = prState === 'CLOSED';
+  const prOpen = Boolean(prUrl) && !prMerged && !prClosed;
+  const prDraft = Boolean(prMeta?.isDraft) && prOpen;
+  /** Local work that still needs to land before merge. */
+  const hasLocalChanges =
+    Boolean(diff?.dirty) || (diff?.unpushed ?? 0) > 0;
+
+  function primaryGitLabel(): string {
+    if (prMerged) return 'Live';
+    if (prClosed) return 'Closed';
+    if (!prUrl) return 'Create PR';
+    if (hasLocalChanges) return 'Commit & push';
+    return 'Merge';
+  }
+
+  function onPrimaryGitClick() {
+    if (prMerged || prClosed) {
+      if (prUrl) void window.sideboard.openExternal(prUrl);
+      return;
+    }
+    if (prUrl && !hasLocalChanges) {
+      setMergeError(null);
+      setMergeConfirm(true);
+      return;
+    }
+    void openLand();
+  }
+
+  async function confirmMergePr() {
+    if (mergeBusy) return;
+    setMergeBusy(true);
+    setMergeError(null);
+    try {
+      const result = await window.sideboard.mergePr(thread.id);
+      setMergeConfirm(false);
+      setPrMeta((prev) =>
+        prev
+          ? {
+              ...prev,
+              state: result.state || 'MERGED',
+              url: result.url || prev.url,
+              isDraft: false,
+            }
+          : {
+              number: Number(num) || 0,
+              url: result.url || prUrl || '',
+              state: result.state || 'MERGED',
+              isDraft: false,
+              title: thread.prTitle ?? thread.title,
+              baseRefName: 'main',
+            },
+      );
+      onRefresh();
+      void loadPrMeta();
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMergeBusy(false);
+    }
+  }
+
   const checksForBadge = prChecks;
   const checksTabLabel = useMemo(() => {
     if (!checksForBadge || checksForBadge.length === 0) return 'Checks';
@@ -425,6 +527,7 @@ export function RightSidebar({
       const result = await window.sideboard.confirmLand(thread.id, landOpts);
       setLandPreview(null);
       onRefresh();
+      void loadPrMeta();
       if (result.prUrl) {
         void window.sideboard.openExternal(result.prUrl);
       }
@@ -574,14 +677,17 @@ export function RightSidebar({
     <aside className="right-sidebar">
       <div className="right-top">
         <div className="right-top-row">
-          {thread.prUrl ? (
+          {prUrl ? (
             <button
               type="button"
-              className="pr-pill"
-              onClick={() => void window.sideboard.openExternal(thread.prUrl!)}
-              title={thread.prUrl}
+              className={`pr-pill${prMerged ? ' merged' : ''}${prClosed ? ' closed' : ''}${prDraft ? ' draft' : ''}`}
+              onClick={() => void window.sideboard.openExternal(prUrl)}
+              title={prUrl}
             >
               {num ? `#${num}` : 'PR'} ↗
+              {prMerged && <span className="pr-status">Merged</span>}
+              {prClosed && <span className="pr-status">Closed</span>}
+              {prDraft && <span className="pr-status">Draft</span>}
             </button>
           ) : (
             <span className="branch-pill" title={thread.branchName}>
@@ -597,18 +703,29 @@ export function RightSidebar({
             <div className="split-btn" ref={prMenuRef}>
               <button
                 type="button"
-                className="btn-continue split-main"
-                disabled={busy}
-                onClick={() => void openLand()}
+                className={`${prMerged ? 'btn-live' : prClosed ? 'btn-closed' : 'btn-continue'} split-main`}
+                disabled={busy || mergeBusy}
+                onClick={onPrimaryGitClick}
+                title={
+                  prMerged
+                    ? 'Pull request merged — open on GitHub'
+                    : prClosed
+                      ? 'Pull request closed — open on GitHub'
+                      : prUrl && !hasLocalChanges
+                        ? 'Merge pull request on GitHub'
+                        : prUrl
+                          ? 'Commit local changes and push to the pull request'
+                          : undefined
+                }
               >
-                {thread.prUrl ? 'Continue' : 'Create PR'}
+                {primaryGitLabel()}
               </button>
-              {!thread.prUrl && (
+              {!prMerged && !prClosed && (
                 <>
                   <button
                     type="button"
                     className="btn-continue split-caret"
-                    disabled={busy}
+                    disabled={busy || mergeBusy}
                     title="More PR options"
                     onClick={() => setPrMenuOpen((v) => !v)}
                   >
@@ -616,14 +733,45 @@ export function RightSidebar({
                   </button>
                   {prMenuOpen && (
                     <div className="tool-menu">
-                      <button type="button" onClick={() => void openLand({ draft: true })}>
-                        <span className="tool-menu-icon">⎇</span>
-                        <span>Create draft PR</span>
-                      </button>
-                      <button type="button" onClick={() => void openLand({ web: true })}>
-                        <span className="tool-menu-icon">↗</span>
-                        <span>Create PR manually</span>
-                      </button>
+                      {prUrl ? (
+                        <>
+                          {hasLocalChanges ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrMenuOpen(false);
+                                setMergeError(null);
+                                setMergeConfirm(true);
+                              }}
+                            >
+                              <span className="tool-menu-icon">⌥</span>
+                              <span>Merge without pushing</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrMenuOpen(false);
+                                void openLand();
+                              }}
+                            >
+                              <span className="tool-menu-icon">↑</span>
+                              <span>Commit & push</span>
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => void openLand({ draft: true })}>
+                            <span className="tool-menu-icon">⎇</span>
+                            <span>Create draft PR</span>
+                          </button>
+                          <button type="button" onClick={() => void openLand({ web: true })}>
+                            <span className="tool-menu-icon">↗</span>
+                            <span>Create PR manually</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </>
@@ -787,7 +935,7 @@ export function RightSidebar({
             <PrChecksPanel
               checks={prChecks}
               error={prChecksError}
-              prUrl={thread.prUrl ?? null}
+              prUrl={prUrl}
               loading={prChecksLoading}
               onRefresh={() => void loadPrChecks()}
               onFixWithAgent={(check) => void fixCheckWithAgent(check)}
@@ -1164,6 +1312,25 @@ export function RightSidebar({
             </div>
           </div>
         </div>
+      )}
+
+      {mergeConfirm && (
+        <MergeModal
+          prNumber={num}
+          prTitle={prMeta?.title ?? thread.prTitle}
+          branch={thread.branchName}
+          target={prMeta?.baseRefName || 'main'}
+          isDraft={Boolean(prMeta?.isDraft)}
+          busy={mergeBusy}
+          error={mergeError}
+          onConfirm={() => void confirmMergePr()}
+          onCancel={() => {
+            if (!mergeBusy) {
+              setMergeConfirm(false);
+              setMergeError(null);
+            }
+          }}
+        />
       )}
 
       {archiveConfirm && (
