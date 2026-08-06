@@ -322,15 +322,79 @@ body.resizing-panels * {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
+  position: relative;
+}
+
+.brand-mark-sm {
+  width: 22px;
+  height: 22px;
+}
+
+.brand-mark-md {
+  width: 36px;
+  height: 36px;
+}
+
+.brand-mark-lg {
+  width: 44px;
+  height: 44px;
+}
+
+.brand-mark-plate,
+.brand-mark-cube {
+  position: absolute;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.brand-mark-sm .brand-mark-plate,
+.brand-mark-sm .brand-mark-cube {
+  width: 14px;
+  height: 14px;
+}
+
+.brand-mark-md .brand-mark-plate,
+.brand-mark-md .brand-mark-cube {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+}
+
+.brand-mark-lg .brand-mark-plate,
+.brand-mark-lg .brand-mark-cube {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+}
+
+/* Blue offset plate behind the outline cube (matches app icon). */
+.brand-mark-plate {
+  background: #004070;
+  transform: rotate(14deg) translate(2px, 2px);
+}
+
+.brand-mark-sm .brand-mark-plate {
+  transform: rotate(14deg) translate(2.5px, 2.5px);
+}
+
+.brand-mark-md .brand-mark-plate {
+  transform: rotate(14deg) translate(3.5px, 3.5px);
+}
+
+.brand-mark-lg .brand-mark-plate {
+  transform: rotate(14deg) translate(4px, 4px);
 }
 
 .brand-mark-cube {
-  width: 14px;
-  height: 14px;
   border: 1.75px solid var(--text);
-  border-radius: 3px;
+  background: transparent;
   transform: rotate(14deg);
-  box-shadow: 3px 3px 0 rgba(0, 127, 212, 0.45);
+  box-shadow: none;
+}
+
+.brand-mark-md .brand-mark-cube,
+.brand-mark-lg .brand-mark-cube {
+  border-width: 2px;
 }
 
 .brand-name {
@@ -865,6 +929,26 @@ body.resizing-panels * {
 .chat-tab-title {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chat-tab-changes-count {
+  flex-shrink: 0;
+  min-width: 1.1em;
+  padding: 0 5px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-tab.changes-tab.active .chat-tab-changes-count {
+  background: #2a2a2c;
+  color: var(--text);
 }
 
 .chat-tab-edit,
@@ -3612,8 +3696,27 @@ button.linkish:hover {
   border-bottom: 1px solid var(--border);
 }
 
+.right-file-list.changes-file-list {
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+  border-bottom: none;
+}
+
 .right-file-list.tall {
   max-height: 180px;
+}
+
+.file-editor-diff {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.file-diff-lines {
+  min-height: 100%;
+  padding-bottom: 24px;
 }
 
 .worktree-path-bar,
@@ -5074,6 +5177,261 @@ button.linkish:hover {
   border-color: #2c2c2e;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.create-modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  transition: opacity 0.22s ease, filter 0.22s ease;
+}
+
+.create-modal-content.veiled {
+  opacity: 0.22;
+  filter: blur(1.5px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.create-processing {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 28px 24px;
+  border-radius: inherit;
+  background: rgba(28, 28, 30, 0.82);
+  backdrop-filter: blur(2px);
+}
+
+.create-processing-orb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+}
+
+.create-processing-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: var(--accent, #7aa2ff);
+  border-right-color: rgba(122, 162, 255, 0.25);
+  animation: create-spin 1.1s linear infinite;
+}
+
+.create-processing-ring.delay {
+  inset: 8px;
+  border-top-color: rgba(242, 242, 242, 0.55);
+  border-right-color: transparent;
+  animation-duration: 1.7s;
+  animation-direction: reverse;
+}
+
+.create-processing-core {
+  position: relative;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #2a2a2c;
+  border: 1px solid #3a3a3c;
+  color: var(--text);
+  font-size: 16px;
+  animation: create-core-pulse 1.8s ease-in-out infinite;
+}
+
+.create-processing-mark {
+  position: relative;
+  z-index: 1;
+  animation: create-mark-float 2.4s ease-in-out infinite;
+}
+
+.create-processing-mark .brand-mark-plate {
+  animation: create-mark-plate 2.4s ease-in-out infinite;
+}
+
+.create-processing-mark .brand-mark-cube {
+  animation: create-mark-cube 2.4s ease-in-out infinite;
+}
+
+.create-processing-copy {
+  text-align: center;
+  max-width: 320px;
+}
+
+.create-processing-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.01em;
+}
+
+.create-processing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.create-processing-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: thinking-dot 1.2s ease-in-out infinite;
+}
+
+.create-processing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.create-processing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.create-processing-meta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.create-processing-repo {
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.create-processing-sep {
+  margin: 0 6px;
+  opacity: 0.5;
+}
+
+.create-processing-rail {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.create-processing-tick {
+  width: 22px;
+  height: 3px;
+  border-radius: 99px;
+  background: #3a3a3c;
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.create-processing-tick.done {
+  background: rgba(122, 162, 255, 0.35);
+}
+
+.create-processing-tick.active {
+  background: var(--accent, #7aa2ff);
+  transform: scaleY(1.35);
+}
+
+.create-submit-btn.is-busy {
+  opacity: 1;
+  gap: 8px;
+  min-width: 108px;
+  justify-content: center;
+  background: #e8e8e8;
+  color: #222;
+}
+
+.create-submit-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 0, 0, 0.18);
+  border-top-color: #222;
+  animation: create-spin 0.7s linear infinite;
+}
+
+@keyframes create-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes create-core-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(122, 162, 255, 0);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 6px rgba(122, 162, 255, 0.08);
+  }
+}
+
+@keyframes create-mark-float {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes create-mark-plate {
+  0%,
+  100% {
+    transform: rotate(14deg) translate(4px, 4px);
+    opacity: 0.85;
+  }
+  50% {
+    transform: rotate(18deg) translate(6px, 5px);
+    opacity: 1;
+  }
+}
+
+@keyframes create-mark-cube {
+  0%,
+  100% {
+    transform: rotate(14deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-processing-ring,
+  .create-processing-core,
+  .create-processing-mark,
+  .create-processing-mark .brand-mark-plate,
+  .create-processing-mark .brand-mark-cube,
+  .create-processing-dots span,
+  .create-submit-spinner {
+    animation: none !important;
+  }
+
+  .create-processing-dots span {
+    opacity: 0.55;
+  }
+
+  .create-modal-content {
+    transition: none;
+  }
 }
 
 .create-header {

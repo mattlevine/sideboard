@@ -13,6 +13,7 @@ import {
   CreateFromPicker,
   type CreateFromSelection,
 } from './CreateFromPicker';
+import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { FloatingMenu } from './FloatingMenu';
 
 type Mode = 'create' | 'orchestration';
@@ -349,19 +350,45 @@ export function CreateModal({
       : Boolean(repoPath));
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className="modal-backdrop"
+      onClick={() => {
+        if (!busy) onClose();
+      }}
+    >
       <div
-        className="modal create-modal"
+        className={`modal create-modal${busy ? ' is-creating' : ''}`}
         role="dialog"
         aria-label="New thread"
+        aria-busy={busy}
         onClick={(e) => e.stopPropagation()}
       >
+        {busy ? (
+          <CreateProcessingOverlay
+            mode={mode}
+            repoName={repoName}
+            selectionHint={
+              selection
+                ? selection.kind === 'pr'
+                  ? `PR #${selection.ref}`
+                  : selection.kind === 'ticket'
+                    ? selection.ref
+                    : selection.ref === 'default'
+                      ? 'default branch'
+                      : selection.ref
+                : null
+            }
+          />
+        ) : null}
+
+        <div className={`create-modal-content${busy ? ' veiled' : ''}`}>
         <div className="create-header">
           <div className="create-header-left">
             <button
               ref={repoBtnRef}
               type="button"
               className="create-repo-trigger"
+              disabled={busy}
               onClick={() => {
                 setMoreMenuOpen(false);
                 setRepoMenuOpen((v) => !v);
@@ -463,7 +490,7 @@ export function CreateModal({
             <button
               type="button"
               className="create-from-trigger"
-              disabled={!repoPath || mode === 'orchestration'}
+              disabled={!repoPath || mode === 'orchestration' || busy}
               onClick={() => setPickerOpen(true)}
             >
               <span className="composer-picker-icons" aria-hidden>
@@ -495,12 +522,15 @@ export function CreateModal({
             onChange={(e) => setPromptValue(e.target.value)}
             rows={5}
             autoFocus
+            disabled={busy}
+            readOnly={busy}
             placeholder={
               mode === 'orchestration'
                 ? 'Coordination goal across threads…'
                 : 'What do you want to work on?'
             }
             onKeyDown={(e) => {
+              if (busy) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (canSubmit) void submit();
@@ -535,6 +565,7 @@ export function CreateModal({
                     className={`settings-switch create-more-switch${createMore ? ' on' : ''}`}
                     role="switch"
                     aria-checked={createMore}
+                    disabled={busy}
                     onClick={() => setCreateMore((v) => !v)}
                   >
                     <span className="settings-switch-knob" />
@@ -543,11 +574,16 @@ export function CreateModal({
                 </label>
                 <button
                   type="button"
-                  className="create-submit-btn"
+                  className={`create-submit-btn${busy ? ' is-busy' : ''}`}
                   disabled={!canSubmit}
                   onClick={() => void submit()}
                 >
-                  {busy ? 'Creating…' : (
+                  {busy ? (
+                    <>
+                      <span className="create-submit-spinner" aria-hidden />
+                      Creating
+                    </>
+                  ) : (
                     <>
                       Create <kbd>↵</kbd>
                     </>
@@ -557,10 +593,11 @@ export function CreateModal({
             }
           />
         </div>
+        </div>
       </div>
 
       <CreateFromPicker
-        open={pickerOpen}
+        open={pickerOpen && !busy}
         repoPath={repoPath}
         linearConnected={linearConnected}
         hasSelection={Boolean(selection)}

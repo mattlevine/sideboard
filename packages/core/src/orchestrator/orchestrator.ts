@@ -1066,9 +1066,9 @@ export class Orchestrator {
     return { thread, selector, cwd };
   }
 
-  async getPrChecks(threadRef: string): Promise<PrCheckRun[]> {
+  async getPrChecks(threadRef: string): Promise<PrCheckRun[] | null> {
     const { selector, cwd } = await this.withPrSelector(threadRef);
-    if (!selector) return [];
+    if (!selector) return null;
     return getPrChecks(cwd, selector);
   }
 

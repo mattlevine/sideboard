@@ -45,8 +45,14 @@ interface Props {
   onComposerPrefillConsumed?: () => void;
   openFilePath?: string | null;
   openFiles?: string[];
-  onSelectFile?: (path: string) => void;
+  openFileView?: 'edit' | 'diff';
+  /** Dedicated Changes center tab (file list selection, not a basename tab). */
+  changesOpen?: boolean;
+  changesPath?: string | null;
+  onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
+  onSelectChanges?: () => void;
+  onCloseChanges?: () => void;
   onShowChat?: () => void;
   /** Open another thread from a sideboard://thread/<id> markdown link. */
   onOpenThreadLink?: (threadRef: string) => void;
@@ -68,8 +74,13 @@ export function ThreadPanel({
   onComposerPrefillConsumed,
   openFilePath = null,
   openFiles = [],
+  openFileView = 'edit',
+  changesOpen = false,
+  changesPath = null,
   onSelectFile,
   onCloseFile,
+  onSelectChanges,
+  onCloseChanges,
   onShowChat,
   onOpenThreadLink,
   fileChanges = {},
@@ -412,6 +423,9 @@ export function ThreadPanel({
         activeChatId={thread.id}
         openFiles={openFiles}
         activeFilePath={openFilePath}
+        changesOpen={changesOpen}
+        changesActive={changesOpen && !openFilePath}
+        changesCount={Object.keys(fileChanges).length}
         fileChanges={fileChanges}
         leftSidebarToggle={leftSidebarToggle}
         rightSidebarToggle={rightSidebarToggle}
@@ -482,6 +496,8 @@ export function ThreadPanel({
         }}
         onSelectFile={(path) => onSelectFile?.(path)}
         onCloseFile={(path) => onCloseFile?.(path)}
+        onSelectChanges={() => onSelectChanges?.()}
+        onCloseChanges={() => onCloseChanges?.()}
         onNewTab={(agent) => void newTab(agent)}
         onRename={(id, title) =>
           void window.sideboard.renameThread(id, title).then(onRefresh)
@@ -507,11 +523,22 @@ export function ThreadPanel({
         />
       )}
 
-      {openFilePath ? (
+      {changesOpen && changesPath ? (
+        <FileEditor
+          key={`changes:${changesPath}`}
+          threadId={thread.id}
+          path={changesPath}
+          worktreePath={thread.worktreePath}
+          initialView="diff"
+          onClose={() => onCloseChanges?.()}
+          onSaved={onRefresh}
+        />
+      ) : openFilePath ? (
         <FileEditor
           threadId={thread.id}
           path={openFilePath}
           worktreePath={thread.worktreePath}
+          initialView={openFileView}
           onClose={() => onCloseFile?.(openFilePath)}
           onSaved={onRefresh}
         />
@@ -619,7 +646,7 @@ export function ThreadPanel({
       )}
 
       <div
-        className={`composer-shell${openFilePath ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}`}
+        className={`composer-shell${openFilePath || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}`}
       >
         <div
           ref={composerBoxRef}
@@ -628,7 +655,7 @@ export function ThreadPanel({
             if (!composerExpanded) textareaRef.current?.focus();
           }}
         >
-          {thread.planMode && !openFilePath && (
+          {thread.planMode && !openFilePath && !changesOpen && (
             <div className="composer-plan-banner">
               Plan mode stays on until you turn it off or click Implement.
             </div>

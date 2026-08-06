@@ -35,13 +35,43 @@ export async function resolveRepoRoot(cwd: string): Promise<string> {
 }
 
 /**
+ * Parse `owner/name` from a git remote URL (SSH or HTTPS).
+ */
+export function parseGithubSlugFromRemoteUrl(url: string): string | null {
+  const trimmed = url.trim();
+  const match =
+    trimmed.match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/i) ??
+    trimmed.match(/github\.com[:/]([^/]+)\/([^/.]+)/i);
+  if (!match?.[1] || !match[2]) return null;
+  return `${match[1]}/${match[2]}`;
+}
+
+async function slugFromGitRemote(
+  repoPath: string,
+  remote: string,
+): Promise<string | null> {
+  const result = await git(['remote', 'get-url', remote], repoPath, {
+    reject: false,
+  });
+  if (result.exitCode !== 0 || !result.stdout.trim()) return null;
+  return parseGithubSlugFromRemoteUrl(result.stdout);
+}
+
+/**
  * Resolve `owner/name` for the GitHub repository connected to a local checkout.
  * Used so Create-from PR/issue lists always target the selected workspace's remote
- * (not whatever `gh` might infer from process cwd).
+ * (not whatever `gh` might infer from process cwd / upstream).
+ *
+ * Prefer **origin** over `gh repo view`. On Makerkit-style checkouts with both
+ * `origin` (your fork/product) and `upstream` (template), `gh repo view` often
+ * resolves to upstream — which lists the wrong open PRs in the create modal.
  */
 export async function resolveGithubRepoSlug(
   repoPath: string,
 ): Promise<string | null> {
+  const fromOrigin = await slugFromGitRemote(repoPath, 'origin');
+  if (fromOrigin) return fromOrigin;
+
   const viaGh = await gh(
     ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
     repoPath,
@@ -51,16 +81,11 @@ export async function resolveGithubRepoSlug(
     return viaGh.stdout.trim();
   }
 
-  const remote = await git(['remote', 'get-url', 'origin'], repoPath, {
-    reject: false,
-  });
-  if (remote.exitCode !== 0 || !remote.stdout.trim()) return null;
-  const url = remote.stdout.trim();
-  const match =
-    url.match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/i) ??
-    url.match(/github\.com[:/]([^/]+)\/([^/.]+)/i);
-  if (!match?.[1] || !match[2]) return null;
-  return `${match[1]}/${match[2]}`;
+  for (const remote of ['upstream', 'github'] as const) {
+    const slug = await slugFromGitRemote(repoPath, remote);
+    if (slug) return slug;
+  }
+  return null;
 }
 
 export async function resolveDefaultBranch(repoPath: string): Promise<string> {
@@ -223,34 +248,46 @@ function normalizeCheck(raw: Record<string, unknown>): PrCheckRun {
   };
 }
 
-/** CI checks for a PR (`gh pr checks <selector> --json …`). */
+/** CI checks for a PR (`gh pr checks <selector> --json …`).
+ * Returns `null` when no PR exists for the selector (so UI can show “link a PR”
+ * instead of “no checks yet”). Returns `[]` when a PR exists but has no checks. */
 export async function getPrChecks(
   cwd: string,
   selector: string,
-): Promise<PrCheckRun[]> {
-  const { stdout, exitCode, stderr } = await gh(
-    [
-      'pr',
-      'checks',
-      selector,
-      '--json',
-      'name,state,bucket,startedAt,completedAt,link,description,workflow',
-    ],
-    cwd,
-    { reject: false },
-  );
-  // gh exits 1 on failing checks and 8 while pending — still parse JSON.
+): Promise<PrCheckRun[] | null> {
+  const slug = await resolveGithubRepoSlug(cwd);
+  const args = [
+    'pr',
+    'checks',
+    selector,
+    '--json',
+    'name,state,bucket,startedAt,completedAt,link,description,workflow',
+  ];
+  if (slug) args.push('--repo', slug);
+  const { stdout, exitCode, stderr } = await gh(args, cwd, { reject: false });
+  const errText = stderr.trim();
+  // gh exits 1 on failing checks and 8 while pending — still parse JSON when present.
   if (!stdout.trim()) {
-    if (exitCode !== 0 && exitCode !== 1 && exitCode !== 8) {
-      throw new Error(stderr.trim() || `gh pr checks failed (${exitCode})`);
+    if (/no pull requests found/i.test(errText)) return null;
+    if (/auth|login|HTTP\s*401|credentials|token/i.test(errText)) {
+      throw new Error(errText);
     }
-    return [];
+    if (exitCode === 0 || exitCode === 1 || exitCode === 8) {
+      // Empty check list for an existing PR (or pending with nothing reported yet).
+      // Exit 1 + "no pull requests" already handled above.
+      if (exitCode === 1 && errText && !/fail|check/i.test(errText)) {
+        // Unexpected gh error (auth, network, etc.) — don't pretend checks are empty.
+        throw new Error(errText);
+      }
+      return [];
+    }
+    throw new Error(errText || `gh pr checks failed (${exitCode})`);
   }
   try {
     const parsed = JSON.parse(stdout) as Array<Record<string, unknown>>;
     return parsed.map(normalizeCheck);
   } catch {
-    throw new Error(stderr.trim() || 'gh pr checks returned invalid JSON');
+    throw new Error(errText || 'gh pr checks returned invalid JSON');
   }
 }
 
@@ -259,34 +296,33 @@ export async function getPrDetails(
   cwd: string,
   selector: string,
 ): Promise<PrDetails | null> {
-  const { stdout, exitCode, stderr } = await gh(
+  const slug = await resolveGithubRepoSlug(cwd);
+  const viewArgs = [
+    'pr',
+    'view',
+    selector,
+    '--json',
     [
-      'pr',
-      'view',
-      selector,
-      '--json',
-      [
-        'number',
-        'title',
-        'body',
-        'url',
-        'state',
-        'isDraft',
-        'reviewDecision',
-        'author',
-        'baseRefName',
-        'headRefName',
-        'additions',
-        'deletions',
-        'changedFiles',
-        'commits',
-        'comments',
-        'reviews',
-      ].join(','),
-    ],
-    cwd,
-    { reject: false },
-  );
+      'number',
+      'title',
+      'body',
+      'url',
+      'state',
+      'isDraft',
+      'reviewDecision',
+      'author',
+      'baseRefName',
+      'headRefName',
+      'additions',
+      'deletions',
+      'changedFiles',
+      'commits',
+      'comments',
+      'reviews',
+    ].join(','),
+  ];
+  if (slug) viewArgs.push('--repo', slug);
+  const { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) {
     if (stderr.trim()) {
       // No PR for this branch is a soft miss, not a hard error.
@@ -304,7 +340,7 @@ export async function getPrDetails(
 
   let checks: PrCheckRun[] = [];
   try {
-    checks = await getPrChecks(cwd, selector);
+    checks = (await getPrChecks(cwd, selector)) ?? [];
   } catch {
     checks = [];
   }

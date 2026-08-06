@@ -1,17 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { documentPreviewKind } from '../lib/language';
+import { parseUnifiedPatch } from '../lib/tool-diff';
 import { CodeView } from './CodeView';
+import { DiffLines } from './DiffLines';
 import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
+import { GitChangeBadge } from './GitChangeBadge';
 
 interface Props {
   threadId: string;
   path: string;
   worktreePath: string;
+  /** Prefer Diff when opening from the Changes tab. */
+  initialView?: 'edit' | 'diff';
   onClose: () => void;
   onSaved?: () => void;
 }
 
-export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: Props) {
+export function FileEditor({
+  threadId,
+  path,
+  worktreePath,
+  initialView = 'edit',
+  onClose,
+  onSaved,
+}: Props) {
   const previewKind = documentPreviewKind(path);
   const [content, setContent] = useState<string | null>(null);
   const [saved, setSaved] = useState('');
@@ -21,11 +33,45 @@ export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: P
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [diskNewer, setDiskNewer] = useState(false);
-  const [mode, setMode] = useState<'code' | 'preview'>('code');
+  const [mode, setMode] = useState<'code' | 'preview' | 'diff'>(
+    initialView === 'diff' ? 'diff' : 'code',
+  );
+  const [patch, setPatch] = useState<string | null>(null);
+  const [changeMeta, setChangeMeta] = useState<{
+    status: string;
+    additions?: number;
+    deletions?: number;
+  } | null>(null);
 
   useEffect(() => {
-    setMode('code');
-  }, [path]);
+    setMode(initialView === 'diff' ? 'diff' : 'code');
+  }, [path, initialView]);
+
+  const loadPatch = useCallback(async () => {
+    try {
+      const d = await window.sideboard.getDiff(threadId);
+      const file = d.files.find((f) => f.path === path);
+      if (file) {
+        setPatch(file.patch || '');
+        setChangeMeta({
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+        });
+      } else {
+        setPatch(null);
+        setChangeMeta(null);
+        setMode((m) => (m === 'diff' ? 'code' : m));
+      }
+    } catch {
+      setPatch(null);
+      setChangeMeta(null);
+    }
+  }, [path, threadId]);
+
+  useEffect(() => {
+    void loadPatch();
+  }, [loadPatch]);
 
   const dirty = content != null && content !== saved && !binary && !truncated;
   const dirtyRef = useRef(dirty);
@@ -109,12 +155,13 @@ export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: P
       setSaved(content);
       setDiskNewer(false);
       onSaved?.();
+      void loadPatch();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
-  }, [binary, content, onSaved, path, saving, threadId, truncated]);
+  }, [binary, content, loadPatch, onSaved, path, saving, threadId, truncated]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -155,8 +202,34 @@ export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: P
           </span>
         </button>
         <div className="file-editor-actions">
-          {previewKind && !binary && (
-            <DocumentPreviewModeToggle mode={mode} onChange={setMode} />
+          {changeMeta && (
+            <GitChangeBadge change={changeMeta} />
+          )}
+          {patch != null && (
+            <div className="doc-preview-toggle" role="group" aria-label="File view">
+              <button
+                type="button"
+                className={mode === 'diff' ? 'active' : ''}
+                aria-pressed={mode === 'diff'}
+                onClick={() => setMode('diff')}
+              >
+                Diff
+              </button>
+              <button
+                type="button"
+                className={mode === 'code' || mode === 'preview' ? 'active' : ''}
+                aria-pressed={mode === 'code' || mode === 'preview'}
+                onClick={() => setMode('code')}
+              >
+                Edit
+              </button>
+            </div>
+          )}
+          {previewKind && !binary && (mode === 'code' || mode === 'preview') && (
+            <DocumentPreviewModeToggle
+              mode={mode}
+              onChange={setMode}
+            />
           )}
           {(binary || truncated) && (
             <span className="thread-meta">
@@ -195,11 +268,19 @@ export function FileEditor({ threadId, path, worktreePath, onClose, onSaved }: P
       )}
 
       {error && <div className="empty">{error}</div>}
-      {!error && content == null && <div className="empty">Loading…</div>}
+      {!error && mode === 'diff' && patch != null && (
+        <div className="file-editor-diff">
+          <DiffLines
+            className="tool-diff-body file-diff-lines"
+            rows={parseUnifiedPatch(patch)}
+          />
+        </div>
+      )}
+      {!error && content == null && mode !== 'diff' && <div className="empty">Loading…</div>}
       {!error && content != null && mode === 'preview' && previewKind && !binary && (
         <DocumentPreview path={path} content={content} className="file-editor-preview" />
       )}
-      {!error && content != null && (mode === 'code' || !previewKind || binary) && (
+      {!error && content != null && mode === 'code' && (
         <CodeView
           path={path}
           worktreePath={worktreePath}

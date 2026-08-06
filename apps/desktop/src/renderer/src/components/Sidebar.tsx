@@ -10,6 +10,7 @@ import {
   isCloudCoordinatorThread,
   threadDisplayTitle,
 } from '../lib/global-workspace';
+import { BrandMark } from './BrandMark';
 import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
@@ -124,9 +125,7 @@ export function Sidebar({
       </div>
       <div className="sidebar-header">
         <div className="brand">
-          <span className="brand-mark" aria-hidden>
-            <span className="brand-mark-cube" />
-          </span>
+          <BrandMark size="sm" />
           <span className="brand-name">Sideboard</span>
         </div>
         <nav className="sidebar-nav">

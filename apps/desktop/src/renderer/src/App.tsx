@@ -81,6 +81,10 @@ export function App() {
   const [prefill, setPrefill] = useState<string | undefined>();
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
+  const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
+  /** Dedicated Changes center tab (not a per-file name tab). */
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [changesPath, setChangesPath] = useState<string | null>(null);
   const [fileChanges, setFileChanges] = useState<
     Record<string, { status: string; additions?: number; deletions?: number }>
   >({});
@@ -93,11 +97,22 @@ export function App() {
 
   useEffect(() => {
     setFileChanges({});
+    setChangesOpen(false);
+    setChangesPath(null);
   }, [selectedId]);
 
-  function openFile(path: string) {
+  function openFile(path: string, opts?: { view?: 'edit' | 'diff' }) {
+    if (opts?.view === 'diff') {
+      setChangesOpen(true);
+      setChangesPath(path);
+      setOpenFilePath(null);
+      setOpenFileView('diff');
+      return;
+    }
+    setChangesOpen(false);
     setOpenFiles((prev) => (prev.includes(path) ? prev : [...prev, path]));
     setOpenFilePath(path);
+    setOpenFileView('edit');
   }
 
   function closeFile(path: string) {
@@ -109,6 +124,16 @@ export function App() {
       });
       return next;
     });
+  }
+
+  function closeChanges() {
+    setChangesOpen(false);
+    setChangesPath(null);
+  }
+
+  function selectChangesTab() {
+    setChangesOpen(true);
+    setOpenFilePath(null);
   }
   const [pendingLand, setPendingLand] = useState<{ draft?: boolean; web?: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -521,9 +546,17 @@ export function App() {
               thread={selected}
               openFilePath={openFilePath}
               openFiles={openFiles}
+              openFileView={openFileView}
+              changesOpen={changesOpen}
+              changesPath={changesPath}
               onSelectFile={openFile}
               onCloseFile={closeFile}
-              onShowChat={() => setOpenFilePath(null)}
+              onSelectChanges={selectChangesTab}
+              onCloseChanges={closeChanges}
+              onShowChat={() => {
+                setOpenFilePath(null);
+                setChangesOpen(false);
+              }}
               fileChanges={fileChanges}
               {...threadPanelProps}
             />
@@ -543,6 +576,7 @@ export function App() {
                 thread={selected}
                 onRefresh={() => void refresh()}
                 openFilePath={openFilePath}
+                changesPath={changesPath}
                 onOpenFile={openFile}
                 onFileChanges={onFileChanges}
                 onSelectChat={(id, created) => {

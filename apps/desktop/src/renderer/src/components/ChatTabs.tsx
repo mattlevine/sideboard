@@ -11,6 +11,10 @@ interface Props {
   openFiles?: string[];
   /** When set, a file tab is active (chat content hidden). */
   activeFilePath?: string | null;
+  /** Dedicated Changes tab (not a per-file basename tab). */
+  changesOpen?: boolean;
+  changesActive?: boolean;
+  changesCount?: number;
   /** Git change markers keyed by relative path (status letter on dirty file tabs). */
   fileChanges?: Record<string, GitFileChange>;
   /** Compact open-worktree control (replaces the old top header). */
@@ -23,8 +27,10 @@ interface Props {
   usageTotalLabel?: string | null;
   usageTotalTooltip?: string;
   onSelectChat: (id: string) => void;
-  onSelectFile?: (path: string) => void;
+  onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
+  onSelectChanges?: () => void;
+  onCloseChanges?: () => void;
   onNewTab: (agent?: AgentKind) => void;
   onRename: (id: string, title: string) => void;
   onCloseTab?: (id: string) => void;
@@ -40,6 +46,9 @@ export function ChatTabs({
   activeChatId,
   openFiles = [],
   activeFilePath = null,
+  changesOpen = false,
+  changesActive = false,
+  changesCount = 0,
   fileChanges = {},
   openMenu,
   leftSidebarToggle,
@@ -50,6 +59,8 @@ export function ChatTabs({
   onSelectChat,
   onSelectFile,
   onCloseFile,
+  onSelectChanges,
+  onCloseChanges,
   onNewTab,
   onRename,
   onCloseTab,
@@ -78,12 +89,41 @@ export function ChatTabs({
     setEditingId(null);
   }
 
-  const fileActive = Boolean(activeFilePath);
+  const fileActive = Boolean(activeFilePath) && !changesActive;
 
   return (
     <div className="chat-tabs">
       {leftSidebarToggle}
       <div className="chat-tabs-scroll">
+        {changesOpen && (
+          <div
+            className={`chat-tab file-tab-item changes-tab${changesActive ? ' active' : ''}`}
+            onClick={() => onSelectChanges?.()}
+            title="Changes"
+          >
+            <span className="chat-tab-file-icon" aria-hidden>
+              ±
+            </span>
+            <span className="chat-tab-title">Changes</span>
+            {changesCount > 0 && (
+              <span className="chat-tab-changes-count">{changesCount}</span>
+            )}
+            {onCloseChanges && (
+              <button
+                type="button"
+                className="chat-tab-close"
+                title="Close Changes"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCloseChanges();
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Conductor order: file tabs, then chat/agent tabs */}
         {openFiles.map((path) => {
           const active = fileActive && activeFilePath === path;
@@ -118,7 +158,7 @@ export function ChatTabs({
         })}
 
         {chats.map((t) => {
-          const active = !fileActive && t.id === activeChatId;
+          const active = !fileActive && !changesActive && t.id === activeChatId;
           return (
             <div
               key={t.id}

@@ -4,19 +4,15 @@ import type {
   DiffScope,
   LandPreview,
   PrCheckRun,
-  PrDetails,
   Thread,
 } from '@sideboard/core';
 import { FileTree } from './FileTree';
 import { ConfirmDialog } from './ConfirmDialog';
-import { DiffLines } from './DiffLines';
 import { PrChecksPanel } from './PrChecksPanel';
-import { PrReviewPanel } from './PrReviewPanel';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { summarizeChecks } from '../lib/pr-format';
-import { parseUnifiedPatch } from '../lib/tool-diff';
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
@@ -26,7 +22,9 @@ interface Props {
   onRefresh: () => void;
   onAskAboutFile: (path: string) => void;
   openFilePath?: string | null;
-  onOpenFile?: (path: string) => void;
+  /** Path selected in the dedicated Changes center tab. */
+  changesPath?: string | null;
+  onOpenFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onForkWorktree?: () => void;
   /** Select another chat tab in this worktree (e.g. after creating one for setup). */
   onSelectChat?: (id: string, created?: Thread) => void;
@@ -36,7 +34,7 @@ interface Props {
   onFileChanges?: (changes: ReturnType<typeof fileChangeMap>) => void;
 }
 
-type UpperTab = 'changes' | 'files' | 'checks' | 'review';
+type UpperTab = 'changes' | 'files' | 'checks';
 type LowerTab = 'setup' | 'run' | 'terminal';
 
 interface RepoSetupInfo {
@@ -93,6 +91,7 @@ export function RightSidebar({
   onRefresh,
   onAskAboutFile,
   openFilePath = null,
+  changesPath = null,
   onOpenFile,
   onForkWorktree,
   onSelectChat,
@@ -129,13 +128,9 @@ export function RightSidebar({
   const [archiveConfirm, setArchiveConfirm] = useState<{ chatCount: number } | null>(null);
   const prMenuRef = useRef<HTMLDivElement>(null);
   const runMenuRef = useRef<HTMLDivElement>(null);
-  const fileSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
-  const [prDetails, setPrDetails] = useState<PrDetails | null>(null);
   const [prChecksError, setPrChecksError] = useState<string | null>(null);
-  const [prDetailsError, setPrDetailsError] = useState<string | null>(null);
   const [prChecksLoading, setPrChecksLoading] = useState(false);
-  const [prDetailsLoading, setPrDetailsLoading] = useState(false);
 
   const reloadRunScripts = useCallback(() => {
     if (typeof window.sideboard.listRunScripts !== 'function') {
@@ -332,43 +327,20 @@ export function RightSidebar({
     }
   }, [thread.id]);
 
-  const loadPrDetails = useCallback(async () => {
-    setPrDetailsLoading(true);
-    setPrDetailsError(null);
-    try {
-      const details = await window.sideboard.getPrDetails(thread.id);
-      setPrDetails(details);
-      if (details?.checks) setPrChecks(details.checks);
-      if (details?.url && details.url !== thread.prUrl) onRefresh();
-    } catch (err) {
-      setPrDetails(null);
-      setPrDetailsError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPrDetailsLoading(false);
-    }
-  }, [thread.id, thread.prUrl, onRefresh]);
-
   useEffect(() => {
     if (upper !== 'checks') return;
     void loadPrChecks();
   }, [upper, thread.id, thread.prUrl, thread.branchName, thread.updatedAt, loadPrChecks]);
 
-  useEffect(() => {
-    if (upper !== 'review') return;
-    void loadPrDetails();
-  }, [upper, thread.id, thread.prUrl, thread.branchName, thread.updatedAt, loadPrDetails]);
-
   // Light poll while checks are pending
   useEffect(() => {
-    if (upper !== 'checks' && upper !== 'review') return;
-    const list = prChecks ?? prDetails?.checks ?? [];
-    if (!list.some((c) => c.bucket === 'pending')) return;
+    if (upper !== 'checks') return;
+    if (!prChecks?.some((c) => c.bucket === 'pending')) return;
     const id = window.setInterval(() => {
-      if (upper === 'checks') void loadPrChecks();
-      else void loadPrDetails();
+      void loadPrChecks();
     }, 15_000);
     return () => window.clearInterval(id);
-  }, [upper, prChecks, prDetails, loadPrChecks, loadPrDetails]);
+  }, [upper, prChecks, loadPrChecks]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -405,12 +377,10 @@ export function RightSidebar({
 
   function focusChangedFile(path: string) {
     setSelected(path);
-    onOpenFile?.(path);
-    const el = fileSectionRefs.current[path];
-    el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    onOpenFile?.(path, { view: 'diff' });
   }
-  const num = prNumber(thread.prUrl ?? prDetails?.url ?? null);
-  const checksForBadge = prChecks ?? prDetails?.checks ?? null;
+  const num = prNumber(thread.prUrl ?? null);
+  const checksForBadge = prChecks;
   const checksTabLabel = useMemo(() => {
     if (!checksForBadge || checksForBadge.length === 0) return 'Checks';
     const s = summarizeChecks(checksForBadge);
@@ -698,16 +668,6 @@ export function RightSidebar({
           >
             {checksTabLabel}
           </button>
-          <button
-            type="button"
-            className={upper === 'review' ? 'active' : ''}
-            onClick={() => setUpper('review')}
-          >
-            Review
-            {prDetails
-              ? ` (${prDetails.reviews.length + prDetails.comments.length})`
-              : ''}
-          </button>
         </div>
 
         <div className="right-upper-body">
@@ -768,65 +728,25 @@ export function RightSidebar({
                 </div>
               )}
               {diff && diff.files.length > 0 && (
-                <>
-                  <div className="right-file-list">
-                    {diff.files.map((f) => (
-                      <button
-                        key={f.path}
-                        type="button"
-                        className={`right-file${f.path === selected ? ' active' : ''}`}
-                        onClick={() => focusChangedFile(f.path)}
-                      >
-                        <span className="right-file-path">{f.path}</span>
-                        <GitChangeBadge
-                          change={{
-                            status: f.status,
-                            additions: f.additions,
-                            deletions: f.deletions,
-                          }}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                  <div className="right-diff right-diff-all">
-                    {diff.files.map((f) => (
-                      <section
-                        key={f.path}
-                        ref={(el) => {
-                          fileSectionRefs.current[f.path] = el;
+                <div className="right-file-list changes-file-list">
+                  {diff.files.map((f) => (
+                    <button
+                      key={f.path}
+                      type="button"
+                      className={`right-file${f.path === selected || f.path === changesPath || f.path === openFilePath ? ' active' : ''}`}
+                      onClick={() => focusChangedFile(f.path)}
+                    >
+                      <span className="right-file-path">{f.path}</span>
+                      <GitChangeBadge
+                        change={{
+                          status: f.status,
+                          additions: f.additions,
+                          deletions: f.deletions,
                         }}
-                        className={`right-diff-file${f.path === selected ? ' active' : ''}`}
-                      >
-                        <div className="right-diff-toolbar">
-                          <button
-                            type="button"
-                            className="right-diff-path"
-                            title={f.path}
-                            onClick={() => focusChangedFile(f.path)}
-                          >
-                            {f.path}
-                          </button>
-                          <div className="right-diff-toolbar-actions">
-                            <GitChangeBadge
-                              change={{
-                                status: f.status,
-                                additions: f.additions,
-                                deletions: f.deletions,
-                              }}
-                            />
-                            <button type="button" onClick={() => onAskAboutFile(f.path)}>
-                              Ask agent
-                            </button>
-                          </div>
-                        </div>
-                        <DiffLines
-                          className="tool-diff-body right-diff-lines"
-                          rows={parseUnifiedPatch(f.patch || '')}
-                        />
-                      </section>
-                    ))}
-                  </div>
-                </>
+                      />
+                    </button>
+                  ))}
+                </div>
               )}
             </>
           )}
@@ -867,20 +787,9 @@ export function RightSidebar({
             <PrChecksPanel
               checks={prChecks}
               error={prChecksError}
-              prUrl={thread.prUrl ?? prDetails?.url ?? null}
+              prUrl={thread.prUrl ?? null}
               loading={prChecksLoading}
               onRefresh={() => void loadPrChecks()}
-              onFixWithAgent={(check) => void fixCheckWithAgent(check)}
-            />
-          )}
-
-          {upper === 'review' && (
-            <PrReviewPanel
-              details={prDetails}
-              error={prDetailsError}
-              prUrl={thread.prUrl ?? prDetails?.url ?? null}
-              loading={prDetailsLoading}
-              onRefresh={() => void loadPrDetails()}
               onFixWithAgent={(check) => void fixCheckWithAgent(check)}
             />
           )}

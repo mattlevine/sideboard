@@ -47,17 +47,24 @@ export function PrChecksPanel({
     return (
       <div className="pr-panel">
         <p className="thread-meta">
-          CI checks will show here once a PR is linked. Create or open a PR for this branch.
+          {prUrl
+            ? 'Could not load CI checks for this PR yet. Try Refresh, or open the PR on GitHub.'
+            : 'CI checks will show here once a PR is linked. Create or open a PR for this branch.'}
         </p>
-        {prUrl && (
-          <button
-            type="button"
-            className="primary"
-            onClick={() => void window.sideboard.openExternal(prUrl)}
-          >
-            Open PR checks
+        <div className="pr-panel-actions">
+          <button type="button" onClick={onRefresh} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-        )}
+          {prUrl && (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void window.sideboard.openExternal(prUrl)}
+            >
+              Open PR checks
+            </button>
+          )}
+        </div>
       </div>
     );
   }
