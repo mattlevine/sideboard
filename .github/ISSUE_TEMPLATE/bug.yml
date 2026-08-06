@@ -1,0 +1,44 @@
+name: Bug report
+description: Something broken in CLI, MCP, or desktop
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI
+        - MCP
+        - Desktop
+        - Core / agents
+        - Docs
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. sideboard …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: 0.1.0 or git SHA
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: OS, Node, which agent CLIs (claude/codex/…)

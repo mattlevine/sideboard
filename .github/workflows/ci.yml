@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-and-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build core + CLI
+        run: |
+          pnpm --filter @sideboard/core build
+          pnpm --filter @sideboard/cli build
+      - name: Test
+        run: |
+          pnpm --filter @sideboard/core test
+          pnpm --filter @sideboard/cli test
+      - name: CLI smoke (no Electron, no agent auth)
+        run: |
+          node packages/cli/dist/index.js --help
+          node packages/cli/dist/index.js detect || true
+      # Full-repo typecheck currently fails on Thread test fixtures / electron-vite
+      # config typings. Keep this soft until those are cleaned up.
+      - name: Typecheck (soft)
+        continue-on-error: true
+        run: |
+          pnpm --filter @sideboard/core typecheck
+          pnpm --filter @sideboard/cli typecheck
+          pnpm --filter @sideboard/desktop typecheck

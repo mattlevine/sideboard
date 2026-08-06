@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/mattlevine/sideboard/blob/main/CONTRIBUTING.md
+    about: Setup, checks, and where to contribute
+  - name: Remote integrations
+    url: https://github.com/mattlevine/sideboard/blob/main/docs/remote-integrations.md
+    about: Build Slack/Discord bridges on CLI/MCP without Brightsy

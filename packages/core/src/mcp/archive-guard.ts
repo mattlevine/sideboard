@@ -3,7 +3,7 @@ import type { Thread } from '../types/thread.js';
 
 /** Non-null when MCP must refuse archive_thread for this thread. */
 export function mcpArchiveBlockedReason(
-  thread: Pick<Thread, 'sourceType' | 'sourceRef' | 'title'>,
+  thread: Pick<Thread, 'sourceType' | 'sourceRef' | 'title' | 'repoPath'>,
 ): string | null {
   if (isCloudCoordinatorThread(thread)) {
     return 'Refusing to archive the cloud coordinator via MCP. Archive it from the Sideboard UI if needed.';

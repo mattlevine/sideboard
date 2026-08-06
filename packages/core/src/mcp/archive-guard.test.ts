@@ -8,6 +8,7 @@ describe('mcpArchiveBlockedReason', () => {
       sourceType: 'orchestration',
       sourceRef: CLOUD_ORCHESTRATOR_GOAL,
       title: 'Arsenal',
+      repoPath: '',
     });
     expect(reason).toMatch(/cloud coordinator/i);
   });
@@ -18,6 +19,7 @@ describe('mcpArchiveBlockedReason', () => {
         sourceType: 'branch',
         sourceRef: 'main',
         title: 'West Ham',
+        repoPath: '/tmp/repo',
       }),
     ).toBeNull();
   });
@@ -28,6 +30,7 @@ describe('mcpArchiveBlockedReason', () => {
         sourceType: 'orchestration',
         sourceRef: 'Plan the rollout',
         title: 'Plan the rollout',
+        repoPath: '',
       }),
     ).toBeNull();
   });

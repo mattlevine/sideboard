@@ -12,6 +12,8 @@ Sideboard is an open control plane over git worktrees:
 
 Run agents in isolated `thread/*` worktrees from the CLI, desktop app, or MCP — then move in and out of Sideboard as you choose.
 
+**Brightsy is optional.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([docs/remote-integrations.md](docs/remote-integrations.md)).
+
 ## Why it exists
 
 Most multi-agent tools optimize for parallelism. Sideboard optimizes for **visibility and handoff**:
@@ -28,9 +30,12 @@ Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Us
 
 Also true, and useful on the way:
 
-- **Agent-agnostic** — Claude Code, Codex, OpenCode, Cursor (via `@cursor/sdk`, Conductor-style), Brightsy (hosted chat via `brightsy chat --json`; no local file edits)
+- **Agent-agnostic** — Claude Code, Codex, OpenCode, Cursor (via `@cursor/sdk`, Conductor-style); optionally Brightsy (hosted chat via `brightsy chat --json`; no local file edits)
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
+- **Integration-friendly** — remote chat (Slack, etc.) can sit on CLI/MCP without Brightsy; see [docs/remote-integrations.md](docs/remote-integrations.md)
+
+Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Security](SECURITY.md)
 
 ## Install
 
@@ -101,9 +106,9 @@ sideboard detect                     # cursor should show authenticated
 
 Shell env wins if both are set. Docs: [cursor.com/docs/sdk/typescript](https://cursor.com/docs/sdk/typescript)
 
-#### Brightsy
+#### Brightsy (optional)
 
-Hosted agents and models via `brightsy chat --json` (chat-only — no local file edits).
+Hosted agents and models via `brightsy chat --json` (chat-only — no local file edits). Not required for Sideboard.
 
 ```bash
 npm install -g @brightsy/cli
@@ -154,7 +159,13 @@ Point Claude Code, Codex, or any MCP client at that server. Agents get tools to:
 
 Ready-for-review `confirm_land` and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP. Coordinators can also `send_to_thread` asking a worktree agent to run `gh pr create --draft`.
 
-## Brightsy MCP on every Claude thread
+Want Slack (or any chat) without Brightsy? Point your bot at this MCP or the CLI — [docs/remote-integrations.md](docs/remote-integrations.md).
+
+## Optional: Brightsy
+
+Brightsy integrations below are **optional**. Skip this entire section if you only use Claude/Codex/OpenCode/Cursor.
+
+### Brightsy MCP on every Claude thread
 
 When `brightsy login` is active, Sideboard auto-injects Brightsy MCP (`brightsy-mcp` or `npx @brightsy/mcp-server`) into **all Claude thread turns** via `--mcp-config` — no separate Claude MCP registration required. Coordinator threads also get Sideboard MCP.
 
@@ -180,7 +191,9 @@ sideboard brightsy teams
 sideboard brightsy connect-team <slug>   # connect + activate
 sideboard brightsy disconnect-team <slug>
 ```
-## Brightsy remote orchestrator (Slack / Discord / Teams)
+## Optional: Brightsy remote orchestrator (Slack / Discord / Teams)
+
+> **Optional.** This is one remote path. You can build your own Slack/Discord bridge on Sideboard CLI/MCP instead — see [docs/remote-integrations.md](docs/remote-integrations.md).
 
 Brightsy chat channels can drive Sideboard on your machine across **all registered workspaces** — no need to be at the keyboard. Slack is the best-tested path; Discord and Microsoft Teams use the same cloud-task flow but are less battle-tested.
 
@@ -323,4 +336,4 @@ Older threads that already point at a repo-local path keep working; new threads 
 
 ## License
 
-Apache-2.0
+Apache-2.0 — see [LICENSE](LICENSE). Contributions welcome under [CONTRIBUTING.md](CONTRIBUTING.md).
