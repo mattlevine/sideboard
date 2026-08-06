@@ -6,6 +6,7 @@ declare global {
     sideboardUpdate: {
       onAvailable: (listener: (info: { version: string }) => void) => () => void;
       onReady: (listener: (info: { version: string }) => void) => () => void;
+      onError: (listener: (info: { message: string }) => void) => () => void;
       install: () => Promise<void>;
     };
   }

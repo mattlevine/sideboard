@@ -5234,6 +5234,7 @@ button.linkish:hover {
   color: var(--muted);
   background: transparent;
   border: 0;
+  cursor: pointer;
 }
 
 .update-banner-dismiss:hover {

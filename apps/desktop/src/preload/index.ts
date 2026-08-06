@@ -184,5 +184,10 @@ contextBridge.exposeInMainWorld('sideboardUpdate', {
     ipcRenderer.on('update:ready', handler);
     return () => ipcRenderer.removeListener('update:ready', handler);
   },
+  onError: (listener: (info: { message: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, info: { message: string }) => listener(info);
+    ipcRenderer.on('update:error', handler);
+    return () => ipcRenderer.removeListener('update:error', handler);
+  },
   install: () => ipcRenderer.invoke('installUpdate') as Promise<void>,
 });

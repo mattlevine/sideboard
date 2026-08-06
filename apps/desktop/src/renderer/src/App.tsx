@@ -363,11 +363,15 @@ export function App() {
       // Always surface "ready" even if the earlier available toast was dismissed.
       setAppUpdate({ phase: 'ready', version: info.version });
     });
+    const offUpdateError = window.sideboardUpdate.onError(() => {
+      setAppUpdate((prev) => (prev?.phase === 'available' ? null : prev));
+    });
     return () => {
       offThreads();
       offEvents();
       offAvailable();
       offReady();
+      offUpdateError();
     };
   }, [refresh]);
 
@@ -744,7 +748,7 @@ export function App() {
             <span>
               {appUpdate.phase === 'ready'
                 ? `Sideboard ${appUpdate.version} is ready to install.`
-                : `Sideboard ${appUpdate.version} is downloading…`}
+                : `Sideboard ${appUpdate.version} is downloading in the background.`}
             </span>
           </div>
           <div className="update-banner-actions">
@@ -761,11 +765,16 @@ export function App() {
               type="button"
               className="update-banner-dismiss"
               title="Dismiss"
+              aria-label="Dismiss update notification"
               onClick={() => {
-                try {
-                  localStorage.setItem('sideboard.dismissedUpdateVersion', appUpdate.version);
-                } catch {
-                  /* ignore */
+                // Only snooze the "available" phase; ready should reappear next launch
+                // until the user installs (or dismisses that banner for the session).
+                if (appUpdate.phase === 'available') {
+                  try {
+                    localStorage.setItem('sideboard.dismissedUpdateVersion', appUpdate.version);
+                  } catch {
+                    /* ignore */
+                  }
                 }
                 setAppUpdate(null);
               }}

@@ -308,13 +308,19 @@ function setupUpdater(): void {
   autoUpdater.on('update-available', (info) => {
     const version = info.version;
     mainWindow?.webContents.send('update:available', { version });
-    notifyUpdate('Update available', `Sideboard ${version} is available and downloading.`);
+    notifyUpdate('Update available', `Sideboard ${version} is available and downloading in the background.`);
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     const version = info.version;
     mainWindow?.webContents.send('update:ready', { version });
     notifyUpdate('Update ready', `Sideboard ${version} is ready — restart to update.`);
+  });
+
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('update:error', {
+      message: err instanceof Error ? err.message : String(err),
+    });
   });
 }
 
