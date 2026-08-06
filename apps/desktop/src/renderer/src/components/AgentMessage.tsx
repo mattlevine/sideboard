@@ -6,6 +6,7 @@ import { FileReferenceModal } from './FileReferenceModal';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { ActivityMark } from './ActivityMark';
 import { ToolDiffPopover } from './ToolDiffPopover';
 
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
@@ -141,6 +142,13 @@ export function AgentMessage({
   const answer = finalText(text, safeParts);
   const chips = useMemo(() => toolChips(safeParts), [safeParts]);
   const durationLabel = useLiveDuration(startedAt, durationMs);
+  let lastThinkingIdx = -1;
+  for (let j = safeParts.length - 1; j >= 0; j--) {
+    if (safeParts[j]?.type === 'thinking') {
+      lastThinkingIdx = j;
+      break;
+    }
+  }
 
   const summaryBits: string[] = [];
   if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
@@ -183,23 +191,20 @@ export function AgentMessage({
             <div className="turn-details">
               {safeParts.map((part, i) => {
                 if (part.type === 'thinking') {
-                  let lastThinking = -1;
-                  for (let j = safeParts.length - 1; j >= 0; j--) {
-                    if (safeParts[j]?.type === 'thinking') {
-                      lastThinking = j;
-                      break;
-                    }
-                  }
-                  const isLive = Boolean(streaming && i === lastThinking);
+                  const isLive = Boolean(streaming && i === lastThinkingIdx);
                   return (
                     <div
                       key={`th-${i}`}
                       className={`turn-thinking${isLive ? ' live' : ''}`}
                     >
                       <div className="turn-thinking-label">
-                        <span className="turn-icon brain" aria-hidden>
-                          ✶
-                        </span>
+                        {isLive ? (
+                          <ActivityMark tone="active" size="sm" />
+                        ) : (
+                          <span className="turn-icon brain" aria-hidden>
+                            ✶
+                          </span>
+                        )}
                         Thinking
                         {isLive ? (
                           <span className="thinking-indicator-dots" aria-hidden>
@@ -217,18 +222,26 @@ export function AgentMessage({
                 }
                 if (part.type === 'tool') {
                   const clickable = hasCodeDiff(part);
+                  const isRunning = part.status === 'running';
                   return (
-                    <div key={`tool-${part.id}-${i}`} className="turn-tool">
-                      <span className="turn-icon term" aria-hidden>
-                        ›_
-                      </span>
+                    <div
+                      key={`tool-${part.id}-${i}`}
+                      className={`turn-tool${isRunning ? ' running' : ''}`}
+                    >
+                      {isRunning ? (
+                        <ActivityMark tone="active" size="sm" />
+                      ) : (
+                        <span className="turn-icon term" aria-hidden>
+                          ›_
+                        </span>
+                      )}
                       <span className="turn-tool-desc">
                         {part.description ?? part.name}
                       </span>
                       {part.detail && (
                         <button
                           type="button"
-                          className={`turn-tool-pill${clickable ? ' clickable' : ''}`}
+                          className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}
                           title={clickable ? 'Show diff' : part.detail}
                           onClick={(e) => {
                             if (clickable) openDiff(part, e.currentTarget);
@@ -335,9 +348,13 @@ export function AgentMessage({
                   title={hasCodeDiff(t) ? 'Show diff' : 'Show tool input & result'}
                   onClick={(e) => openDiff(t, e.currentTarget)}
                 >
-                  <span className="tool-chip-gear" aria-hidden>
-                    ⚙
-                  </span>
+                  {t.status === 'running' ? (
+                    <ActivityMark tone="active" size="sm" className="tool-chip-activity" />
+                  ) : (
+                    <span className="tool-chip-gear" aria-hidden>
+                      ⚙
+                    </span>
+                  )}
                   <span className="tool-chip-name">
                     {t.filePath ? basename(t.filePath) : t.name}
                   </span>

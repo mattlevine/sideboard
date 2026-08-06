@@ -155,7 +155,7 @@ export interface PrInfo {
   isCrossRepository: boolean;
 }
 
-/** One CI check from `gh pr checks --json`. */
+/** One CI check from `gh pr checks --json`, or a synthetic merge/review gate. */
 export interface PrCheckRun {
   name: string;
   state: string;
@@ -165,6 +165,11 @@ export interface PrCheckRun {
   link: string | null;
   description: string | null;
   workflow: string | null;
+  /**
+   * Origin of the row. Omitted / `ci` = GitHub Actions / check suite.
+   * `mergeability` / `review` are Sideboard synthetics (conflicts, behind, review).
+   */
+  kind?: 'ci' | 'mergeability' | 'review';
 }
 
 export interface PrActor {

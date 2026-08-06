@@ -17,6 +17,7 @@ import {
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
 import { gh, git } from './run.js';
+import { buildMergeGateChecks, type PrMergeGate } from './pr-gates.js';
 
 export type { TeamName } from './teams.js';
 export { allocateTeamName, FAMOUS_SOCCER_TEAMS } from './teams.js';
@@ -272,10 +273,56 @@ function normalizeCheck(raw: Record<string, unknown>): PrCheckRun {
         : null,
     workflow:
       typeof raw.workflow === 'string' && raw.workflow ? raw.workflow : null,
+    kind: 'ci',
   };
 }
 
-/** CI checks for a PR (`gh pr checks <selector> --json …`).
+async function fetchPrMergeGate(
+  cwd: string,
+  selector: string,
+  slug: string | null,
+): Promise<PrMergeGate | null> {
+  const args = [
+    'pr',
+    'view',
+    selector,
+    '--json',
+    'mergeable,mergeStateStatus,reviewDecision,baseRefName,url',
+  ];
+  if (slug) args.push('--repo', slug);
+  const { stdout, exitCode, stderr } = await gh(args, cwd, { reject: false });
+  if (exitCode !== 0 || !stdout.trim()) {
+    if (/no pull requests found/i.test(stderr)) return null;
+    return null;
+  }
+  try {
+    const view = JSON.parse(stdout) as Record<string, unknown>;
+    return {
+      mergeable:
+        typeof view.mergeable === 'string' && view.mergeable
+          ? view.mergeable
+          : null,
+      mergeStateStatus:
+        typeof view.mergeStateStatus === 'string' && view.mergeStateStatus
+          ? view.mergeStateStatus
+          : null,
+      reviewDecision:
+        typeof view.reviewDecision === 'string' && view.reviewDecision
+          ? view.reviewDecision
+          : null,
+      baseRefName:
+        typeof view.baseRefName === 'string' && view.baseRefName
+          ? view.baseRefName
+          : null,
+      url: typeof view.url === 'string' && view.url ? view.url : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** CI checks for a PR (`gh pr checks <selector> --json …`), plus synthetic
+ * mergeability / review rows (conflicts are not reported by `gh pr checks`).
  * Returns `null` when no PR exists for the selector (so UI can show “link a PR”
  * instead of “no checks yet”). Returns `[]` when a PR exists but has no checks. */
 export async function getPrChecks(
@@ -294,6 +341,7 @@ export async function getPrChecks(
   const { stdout, exitCode, stderr } = await gh(args, cwd, { reject: false });
   const errText = stderr.trim();
   // gh exits 1 on failing checks and 8 while pending — still parse JSON when present.
+  let ciChecks: PrCheckRun[] | null;
   if (!stdout.trim()) {
     if (/no pull requests found/i.test(errText)) return null;
     if (/auth|login|HTTP\s*401|credentials|token/i.test(errText)) {
@@ -306,16 +354,35 @@ export async function getPrChecks(
         // Unexpected gh error (auth, network, etc.) — don't pretend checks are empty.
         throw new Error(errText);
       }
-      return [];
+      ciChecks = [];
+    } else {
+      throw new Error(errText || `gh pr checks failed (${exitCode})`);
     }
-    throw new Error(errText || `gh pr checks failed (${exitCode})`);
+  } else {
+    try {
+      const parsed = JSON.parse(stdout) as Array<Record<string, unknown>>;
+      ciChecks = parsed.map(normalizeCheck);
+    } catch {
+      throw new Error(errText || 'gh pr checks returned invalid JSON');
+    }
   }
-  try {
-    const parsed = JSON.parse(stdout) as Array<Record<string, unknown>>;
-    return parsed.map(normalizeCheck);
-  } catch {
-    throw new Error(errText || 'gh pr checks returned invalid JSON');
+
+  const gate = await fetchPrMergeGate(cwd, selector, slug);
+  if (!gate) {
+    // CI succeeded with rows → keep them. Empty CI + no PR view → treat as no PR
+    // only when gh checks already said so (null). Empty CI without gate is still [].
+    return ciChecks;
   }
+
+  const ciFailed = ciChecks.some((c) => c.bucket === 'fail');
+  const review = (gate.reviewDecision ?? '').toUpperCase();
+  const hasReviewRow =
+    review === 'CHANGES_REQUESTED' || review === 'REVIEW_REQUIRED';
+  const gateRows = buildMergeGateChecks(gate, {
+    // Avoid duplicating "blocked" when CI failures or review rows already explain it.
+    suppressGenericBlocked: ciFailed || hasReviewRow,
+  });
+  return [...gateRows, ...ciChecks];
 }
 
 /** PR description / commits / reviews (+ checks) for the Review tab. */

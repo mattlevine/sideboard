@@ -1132,11 +1132,6 @@ body.resizing-panels * {
   margin-bottom: 4px;
 }
 
-.turn-thinking.live .turn-icon.brain {
-  animation: thinking-spin 2.4s ease-in-out infinite;
-  color: var(--accent);
-}
-
 .turn-thinking.live .turn-thinking-pill {
   animation: thinking-pill-pulse 1.8s ease-in-out infinite;
 }
@@ -1228,20 +1223,6 @@ body.resizing-panels * {
   opacity: 0.85;
 }
 
-.thinking-indicator-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.1em;
-  color: var(--accent);
-  animation: thinking-spin 2.4s ease-in-out infinite;
-}
-
-.thinking-indicator.queued .thinking-indicator-mark {
-  color: var(--muted);
-  animation: thinking-breathe 2s ease-in-out infinite;
-}
-
 .thinking-indicator-label {
   font-size: inherit;
 }
@@ -1270,30 +1251,150 @@ body.resizing-panels * {
   animation-delay: 0.3s;
 }
 
-@keyframes thinking-spin {
+/* Claude-style live mark — soft spin + pulse glow on the Sideboard cube. */
+.activity-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* Match brand-mark-sm footprint so the cube doesn't overflow neighbors. */
+  width: 18px;
+  height: 18px;
+}
+
+.activity-mark-md {
+  width: 28px;
+  height: 28px;
+}
+
+.activity-mark-glow {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(117, 190, 255, 0.45) 0%,
+    rgba(117, 190, 255, 0.12) 45%,
+    transparent 70%
+  );
+  animation: activity-glow 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.activity-mark-queued .activity-mark-glow {
+  animation: activity-glow-soft 2.2s ease-in-out infinite;
+  background: radial-gradient(
+    circle,
+    rgba(160, 160, 165, 0.35) 0%,
+    transparent 70%
+  );
+}
+
+.activity-mark-brand {
+  position: relative;
+  z-index: 1;
+  width: 100% !important;
+  height: 100% !important;
+  animation: activity-spin 2.8s ease-in-out infinite;
+}
+
+.activity-mark-brand.brand-mark-sm .brand-mark-plate,
+.activity-mark-brand.brand-mark-sm .brand-mark-cube {
+  width: 11px;
+  height: 11px;
+}
+
+.activity-mark-brand.brand-mark-md .brand-mark-plate,
+.activity-mark-brand.brand-mark-md .brand-mark-cube {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.activity-mark-brand.brand-mark-sm .brand-mark-plate {
+  transform: rotate(14deg) translate(1.5px, 1.5px);
+}
+
+.activity-mark-brand.brand-mark-md .brand-mark-plate {
+  transform: rotate(14deg) translate(2px, 2px);
+}
+
+.activity-mark-queued .activity-mark-brand {
+  animation: activity-breathe 2s ease-in-out infinite;
+  opacity: 0.75;
+}
+
+.turn-tool.running .turn-tool-desc {
+  color: var(--text);
+}
+
+.turn-tool-pill.live {
+  border-color: rgba(117, 190, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(117, 190, 255, 0.12);
+  animation: thinking-pill-pulse 1.8s ease-in-out infinite;
+}
+
+.tool-chip.running {
+  border-color: rgba(117, 190, 255, 0.4);
+}
+
+.tool-chip-activity.activity-mark {
+  width: 16px;
+  height: 16px;
+}
+
+.tool-chip-activity .activity-mark-brand.brand-mark-sm .brand-mark-plate,
+.tool-chip-activity .activity-mark-brand.brand-mark-sm .brand-mark-cube {
+  width: 10px;
+  height: 10px;
+}
+
+@keyframes activity-spin {
   0%,
   100% {
-    transform: rotate(0deg) scale(1);
-    opacity: 0.75;
+    transform: rotate(-6deg) scale(1);
   }
   40% {
-    transform: rotate(18deg) scale(1.08);
-    opacity: 1;
+    transform: rotate(14deg) scale(1.08);
   }
   70% {
-    transform: rotate(-10deg) scale(0.98);
-    opacity: 0.9;
+    transform: rotate(-10deg) scale(0.96);
   }
 }
 
-@keyframes thinking-breathe {
+@keyframes activity-breathe {
   0%,
   100% {
-    opacity: 0.45;
-    transform: scale(0.96);
+    opacity: 0.55;
+    transform: scale(0.94);
   }
   50% {
     opacity: 0.9;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes activity-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes activity-glow-soft {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 0.55;
     transform: scale(1.05);
   }
 }
@@ -1322,10 +1423,11 @@ body.resizing-panels * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thinking-indicator-mark,
   .thinking-indicator-dots span,
-  .turn-thinking.live .turn-icon.brain,
-  .turn-thinking.live .turn-thinking-pill {
+  .turn-thinking.live .turn-thinking-pill,
+  .activity-mark-glow,
+  .activity-mark-brand,
+  .turn-tool-pill.live {
     animation: none !important;
   }
 
@@ -3567,6 +3669,19 @@ body.resizing-panels * {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pr-review-section-title {
+  margin: 0;
+  padding: 12px 12px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .pr-description,

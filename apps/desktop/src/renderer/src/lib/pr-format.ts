@@ -24,8 +24,27 @@ export function formatShortDate(iso: string | null | undefined): string {
   });
 }
 
-export function checkStatusLabel(bucket: string): string {
-  switch (bucket) {
+export function checkStatusLabel(check: Pick<PrCheckRun, 'bucket' | 'state' | 'kind'>): string {
+  if (check.kind === 'mergeability' || check.kind === 'review') {
+    switch ((check.state ?? '').toUpperCase()) {
+      case 'CONFLICTING':
+      case 'DIRTY':
+        return 'Conflict';
+      case 'BEHIND':
+        return 'Behind';
+      case 'BLOCKED':
+        return 'Blocked';
+      case 'CHANGES_REQUESTED':
+        return 'Rejected';
+      case 'REVIEW_REQUIRED':
+        return 'Review required';
+      case 'UNKNOWN':
+        return 'Checking…';
+      default:
+        break;
+    }
+  }
+  switch (check.bucket) {
     case 'pass':
       return 'Passed';
     case 'fail':
@@ -37,7 +56,7 @@ export function checkStatusLabel(bucket: string): string {
     case 'cancel':
       return 'Cancelled';
     default:
-      return bucket || 'Unknown';
+      return check.bucket || 'Unknown';
   }
 }
 

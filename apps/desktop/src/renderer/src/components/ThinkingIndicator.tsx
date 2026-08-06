@@ -1,3 +1,5 @@
+import { ActivityMark } from './ActivityMark';
+
 /** Animated “Thinking…” status used while an agent turn is waiting / streaming. */
 export function ThinkingIndicator({
   label = 'Thinking',
@@ -9,9 +11,7 @@ export function ThinkingIndicator({
 }) {
   return (
     <span className={`thinking-indicator${queued ? ' queued' : ''}`} aria-live="polite">
-      <span className="thinking-indicator-mark" aria-hidden>
-        ✶
-      </span>
+      <ActivityMark tone={queued ? 'queued' : 'active'} size="sm" />
       <span className="thinking-indicator-label">{queued ? 'Queued' : label}</span>
       <span className="thinking-indicator-dots" aria-hidden>
         <span />

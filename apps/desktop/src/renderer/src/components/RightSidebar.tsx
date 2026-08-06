@@ -4,12 +4,14 @@ import type {
   DiffScope,
   LandPreview,
   PrCheckRun,
+  PrDetails,
   Thread,
 } from '@sideboard/core';
 import { FileTree } from './FileTree';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
+import { PrReviewPanel } from './PrReviewPanel';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
@@ -35,7 +37,7 @@ interface Props {
   onFileChanges?: (changes: ReturnType<typeof fileChangeMap>) => void;
 }
 
-type UpperTab = 'changes' | 'files' | 'checks';
+type UpperTab = 'changes' | 'files' | 'checks' | 'review';
 type LowerTab = 'setup' | 'run' | 'terminal';
 
 interface RepoSetupInfo {
@@ -135,6 +137,9 @@ export function RightSidebar({
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
   const [prChecksError, setPrChecksError] = useState<string | null>(null);
   const [prChecksLoading, setPrChecksLoading] = useState(false);
+  const [prDetails, setPrDetails] = useState<PrDetails | null>(null);
+  const [prDetailsError, setPrDetailsError] = useState<string | null>(null);
+  const [prDetailsLoading, setPrDetailsLoading] = useState(false);
   /** Live GitHub PR state for the action bar (OPEN / MERGED / CLOSED). */
   const [prMeta, setPrMeta] = useState<{
     number: number;
@@ -340,6 +345,30 @@ export function RightSidebar({
     }
   }, [thread.id]);
 
+  const loadPrDetails = useCallback(async () => {
+    setPrDetailsLoading(true);
+    setPrDetailsError(null);
+    try {
+      const details = await window.sideboard.getPrDetails(thread.id);
+      setPrDetails(details);
+      if (details) {
+        setPrMeta({
+          number: details.number,
+          url: details.url,
+          state: details.state,
+          isDraft: details.isDraft,
+          title: details.title,
+          baseRefName: details.baseRefName,
+        });
+      }
+    } catch (err) {
+      setPrDetails(null);
+      setPrDetailsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPrDetailsLoading(false);
+    }
+  }, [thread.id]);
+
   const loadPrMeta = useCallback(async () => {
     try {
       const details = await window.sideboard.getPrDetails(thread.id);
@@ -369,15 +398,22 @@ export function RightSidebar({
     void loadPrChecks();
   }, [upper, thread.id, thread.prUrl, thread.branchName, thread.updatedAt, loadPrChecks]);
 
+  useEffect(() => {
+    if (upper !== 'review') return;
+    void loadPrDetails();
+  }, [upper, thread.id, thread.prUrl, thread.branchName, thread.updatedAt, loadPrDetails]);
+
   // Light poll while checks are pending
   useEffect(() => {
-    if (upper !== 'checks') return;
-    if (!prChecks?.some((c) => c.bucket === 'pending')) return;
+    if (upper !== 'checks' && upper !== 'review') return;
+    const list = prChecks ?? prDetails?.checks ?? [];
+    if (!list.some((c) => c.bucket === 'pending')) return;
     const id = window.setInterval(() => {
-      void loadPrChecks();
+      if (upper === 'checks') void loadPrChecks();
+      else void loadPrDetails();
     }, 15_000);
     return () => window.clearInterval(id);
-  }, [upper, prChecks, loadPrChecks]);
+  }, [upper, prChecks, prDetails, loadPrChecks, loadPrDetails]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -482,7 +518,7 @@ export function RightSidebar({
     }
   }
 
-  const checksForBadge = prChecks;
+  const checksForBadge = prChecks ?? prDetails?.checks ?? null;
   const checksTabLabel = useMemo(() => {
     if (!checksForBadge || checksForBadge.length === 0) return 'Checks';
     const s = summarizeChecks(checksForBadge);
@@ -490,12 +526,30 @@ export function RightSidebar({
   }, [checksForBadge]);
 
   async function fixCheckWithAgent(check: PrCheckRun) {
-    const lines = [
-      `Investigate and fix the failing CI check "${check.name}" (${check.state}).`,
-      check.workflow ? `Workflow: ${check.workflow}` : null,
-      check.description ? `Details: ${check.description}` : null,
-      check.link ? `Logs: ${check.link}` : null,
-    ].filter(Boolean);
+    const kind = check.kind ?? 'ci';
+    let lines: string[];
+    if (kind === 'mergeability') {
+      lines = [
+        check.state.toUpperCase() === 'BEHIND'
+          ? `This pull request is behind its base branch (${check.state}). Update the branch (merge or rebase from the base), resolve any conflicts, and push so the PR can merge.`
+          : `This pull request has a mergeability problem (${check.state}). ${check.description ?? 'Resolve merge conflicts with the base branch, commit the resolution, and push.'}`,
+        'Inspect the conflicting files, fix them carefully, and leave the branch in a clean mergeable state.',
+        check.link ? `PR: ${check.link}` : null,
+      ].filter(Boolean) as string[];
+    } else if (kind === 'review') {
+      lines = [
+        `Code review is blocking merge (${check.state}). ${check.description ?? ''}`,
+        'Read the PR review comments, address the requested changes, and push updates.',
+        check.link ? `PR: ${check.link}` : null,
+      ].filter(Boolean) as string[];
+    } else {
+      lines = [
+        `Investigate and fix the failing CI check "${check.name}" (${check.state}).`,
+        check.workflow ? `Workflow: ${check.workflow}` : null,
+        check.description ? `Details: ${check.description}` : null,
+        check.link ? `Logs: ${check.link}` : null,
+      ].filter(Boolean) as string[];
+    }
     try {
       await window.sideboard.sendToThread(thread.id, lines.join('\n'));
       onRefresh();
@@ -816,6 +870,16 @@ export function RightSidebar({
           >
             {checksTabLabel}
           </button>
+          <button
+            type="button"
+            className={upper === 'review' ? 'active' : ''}
+            onClick={() => setUpper('review')}
+          >
+            Review
+            {prDetails
+              ? ` (${prDetails.reviews.length + prDetails.comments.length})`
+              : ''}
+          </button>
         </div>
 
         <div className="right-upper-body">
@@ -939,6 +1003,16 @@ export function RightSidebar({
               loading={prChecksLoading}
               onRefresh={() => void loadPrChecks()}
               onFixWithAgent={(check) => void fixCheckWithAgent(check)}
+            />
+          )}
+
+          {upper === 'review' && (
+            <PrReviewPanel
+              details={prDetails}
+              error={prDetailsError}
+              prUrl={prUrl}
+              loading={prDetailsLoading}
+              onRefresh={() => void loadPrDetails()}
             />
           )}
         </div>

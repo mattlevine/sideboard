@@ -136,7 +136,7 @@ export function PrChecksPanel({
                   )}
                 </div>
                 <div className="pr-check-meta">
-                  <span>{checkStatusLabel(check.bucket)}</span>
+                  <span>{checkStatusLabel(check)}</span>
                   {duration && <span>{duration}</span>}
                   {check.workflow && <span>{check.workflow}</span>}
                 </div>
