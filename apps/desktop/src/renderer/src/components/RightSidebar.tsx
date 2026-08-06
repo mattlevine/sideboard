@@ -23,6 +23,9 @@ import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
 interface Props {
   thread: Thread;
   onRefresh: () => void;
+  /** Archive this worktree/chat tab (parent tracks loading in the sidebar). */
+  onArchiveThread?: (threadId: string) => void | Promise<void>;
+  archiving?: boolean;
   onAskAboutFile: (path: string) => void;
   openFilePath?: string | null;
   /** Path selected in the dedicated Changes center tab. */
@@ -92,6 +95,8 @@ function isMissingWorktreeError(message: string): boolean {
 export function RightSidebar({
   thread,
   onRefresh,
+  onArchiveThread,
+  archiving = false,
   onAskAboutFile,
   openFilePath = null,
   changesPath = null,
@@ -129,6 +134,7 @@ export function RightSidebar({
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState<{ chatCount: number } | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [mergeConfirm, setMergeConfirm] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
@@ -1412,11 +1418,27 @@ export function RightSidebar({
           title="Close chat tab?"
           message={closeChatTabMessage(thread.title, archiveConfirm.chatCount)}
           confirmLabel="Close tab"
+          busy={archiveBusy || archiving}
+          busyMessage="Stopping agents and removing the worktree…"
           onConfirm={() => {
-            setArchiveConfirm(null);
-            void window.sideboard.archiveThread(thread.id).then(onRefresh).catch(alert);
+            setArchiveBusy(true);
+            const run = onArchiveThread
+              ? Promise.resolve(onArchiveThread(thread.id))
+              : window.sideboard.archiveThread(thread.id).then(onRefresh);
+            void run
+              .then(() => {
+                setArchiveConfirm(null);
+              })
+              .catch((err: unknown) => {
+                window.alert(err instanceof Error ? err.message : String(err));
+              })
+              .finally(() => {
+                setArchiveBusy(false);
+              });
           }}
-          onCancel={() => setArchiveConfirm(null)}
+          onCancel={() => {
+            if (!archiveBusy && !archiving) setArchiveConfirm(null);
+          }}
         />
       )}
     </aside>

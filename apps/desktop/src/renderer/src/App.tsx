@@ -72,6 +72,8 @@ export function App() {
   const [view, setView] = useState<'board' | 'thread'>('board');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set());
+  /** Thread currently tearing down via archive (sidebar shows progress). */
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const [createState, setCreateState] = useState<CreateState | null>(null);
   const [liveByThread, setLiveByThread] = useState<Record<string, string>>({});
   const [livePartsByThread, setLivePartsByThread] = useState<Record<string, MessagePart[]>>({});
@@ -368,6 +370,21 @@ export function App() {
     });
   }
 
+  async function archiveThreadAndRefresh(id: string) {
+    setArchivingId(id);
+    try {
+      await window.sideboard.archiveThread(id);
+      if (selectedId === id || multiSelected.has(id)) {
+        setSelectedId(null);
+        setMultiSelected(new Set());
+        setView('board');
+      }
+      await refresh();
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
   function showBoard() {
     setView('board');
     setSelectedId(null);
@@ -448,19 +465,8 @@ export function App() {
                 .then(openForkedTab)
                 .catch(alert);
             }}
-            onArchive={(id) => {
-              void window.sideboard
-                .archiveThread(id)
-                .then(() => {
-                  if (selectedId === id || multiSelected.has(id)) {
-                    setSelectedId(null);
-                    setMultiSelected(new Set());
-                    setView('board');
-                  }
-                  return refresh();
-                })
-                .catch(alert);
-            }}
+            onArchive={archiveThreadAndRefresh}
+            archivingId={archivingId}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -588,6 +594,8 @@ export function App() {
               <RightSidebar
                 thread={selected}
                 onRefresh={() => void refresh()}
+                onArchiveThread={archiveThreadAndRefresh}
+                archiving={archivingId === selected.id}
                 openFilePath={openFilePath}
                 changesPath={changesPath}
                 onOpenFile={openFile}

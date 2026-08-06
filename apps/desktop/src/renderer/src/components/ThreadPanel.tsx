@@ -6,6 +6,7 @@ import { AgentMessage } from './AgentMessage';
 import { BrightsyTargetPicker } from './BrightsyTargetPicker';
 import { ChatTabs } from './ChatTabs';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ActivityMark } from './ActivityMark';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import {
   applyAutocomplete,
@@ -110,6 +111,7 @@ export function ThreadPanel({
     title: string;
     chatCount: number;
   } | null>(null);
+  const [closeBusy, setCloseBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
@@ -245,6 +247,14 @@ export function ThreadPanel({
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [composerPrefill, onComposerPrefillConsumed]);
+
+  // Focus the message input whenever this chat becomes active (open / switch tab).
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      textareaRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [thread.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -514,12 +524,29 @@ export function ThreadPanel({
           title="Close chat tab?"
           message={closeChatTabMessage(closeConfirm.title, closeConfirm.chatCount)}
           confirmLabel="Close tab"
+          busy={closeBusy}
+          busyMessage={
+            closeConfirm.chatCount <= 1
+              ? 'Stopping agents and removing the worktree…'
+              : 'Closing this chat tab…'
+          }
           onConfirm={() => {
             const { id } = closeConfirm;
-            setCloseConfirm(null);
-            void archiveChatTab(id).catch(alert);
+            setCloseBusy(true);
+            void archiveChatTab(id)
+              .then(() => {
+                setCloseConfirm(null);
+              })
+              .catch((err: unknown) => {
+                window.alert(err instanceof Error ? err.message : String(err));
+              })
+              .finally(() => {
+                setCloseBusy(false);
+              });
           }}
-          onCancel={() => setCloseConfirm(null)}
+          onCancel={() => {
+            if (!closeBusy) setCloseConfirm(null);
+          }}
         />
       )}
 
@@ -615,26 +642,41 @@ export function ThreadPanel({
               <div className="msg user pending">{pendingUser}</div>
             )}
           {showStreaming && (
-            <div
-              className={`msg agent streaming${liveOutput || liveParts.length ? '' : ' waiting'}`}
-            >
-              {liveOutput || liveParts.length || turnStartedAt ? (
-                <AgentMessage
-                  text={liveOutput}
-                  parts={liveParts}
-                  streaming
-                  startedAt={turnStartedAt}
-                  threadId={thread.id}
-                  worktreePath={thread.worktreePath}
-                  knownFilePaths={filePaths}
-                  onOpenFile={onSelectFile}
-                  onOpenThread={onOpenThreadLink}
-                  onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
+            <>
+              <div
+                className={`msg agent streaming${liveOutput || liveParts.length ? '' : ' waiting'}`}
+              >
+                {liveOutput || liveParts.length || turnStartedAt ? (
+                  <AgentMessage
+                    text={liveOutput}
+                    parts={liveParts}
+                    streaming
+                    startedAt={turnStartedAt}
+                    threadId={thread.id}
+                    worktreePath={thread.worktreePath}
+                    knownFilePaths={filePaths}
+                    onOpenFile={onSelectFile}
+                    onOpenThread={onOpenThreadLink}
+                    onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
+                  />
+                ) : (
+                  <ThinkingIndicator
+                    queued={thread.status === 'queued'}
+                    showMark={false}
+                  />
+                )}
+              </div>
+              <div
+                className="msg-stream-activity"
+                aria-live="polite"
+                aria-label="Generating"
+              >
+                <ActivityMark
+                  tone={thread.status === 'queued' ? 'queued' : 'active'}
+                  size="sm"
                 />
-              ) : (
-                <ThinkingIndicator queued={thread.status === 'queued'} />
-              )}
-            </div>
+              </div>
+            </>
           )}
           {thread.lastError && (
             <div className="msg error" style={{ color: 'var(--err)' }}>

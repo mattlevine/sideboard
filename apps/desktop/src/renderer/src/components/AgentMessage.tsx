@@ -5,7 +5,6 @@ import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
-import { ThinkingIndicator } from './ThinkingIndicator';
 import { ActivityMark } from './ActivityMark';
 import { ToolDiffPopover } from './ToolDiffPopover';
 
@@ -282,13 +281,17 @@ export function AgentMessage({
             onThreadLinkClick={onOpenThread}
             isStreaming={streaming}
           />
-          {streaming && <span className="stream-caret" />}
         </div>
       )}
 
       {!answer && streaming && !hasTranscript && (
         <div className="msg-body waiting-inline">
-          <ThinkingIndicator />
+          <span className="thinking-indicator-label">Thinking</span>
+          <span className="thinking-indicator-dots" aria-hidden>
+            <span />
+            <span />
+            <span />
+          </span>
         </div>
       )}
 

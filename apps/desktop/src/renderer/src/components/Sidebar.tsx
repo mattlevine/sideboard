@@ -29,7 +29,9 @@ interface Props {
   onRestore: (id: string) => void;
   onCreatePr?: (threadId: string, opts?: { draft?: boolean; web?: boolean }) => void;
   onForkChat?: (threadId: string) => void;
-  onArchive?: (threadId: string) => void;
+  onArchive?: (threadId: string) => void | Promise<void>;
+  /** Thread id currently being archived (shows progress on its worktree row). */
+  archivingId?: string | null;
   onToggleSidebar: () => void;
   onOpenSettings?: () => void;
 }
@@ -67,6 +69,7 @@ export function Sidebar({
   onCreatePr,
   onForkChat,
   onArchive,
+  archivingId = null,
   onToggleSidebar,
   onOpenSettings,
 }: Props) {
@@ -78,6 +81,7 @@ export function Sidebar({
     title: string;
     chatCount: number;
   } | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
 
   const q = filter.trim().toLowerCase();
 
@@ -317,13 +321,22 @@ export function Sidebar({
               const selected =
                 group.some((t) => multiSelected.has(t.id));
               const menuOpen = toolsFor === primary.worktreePath;
+              const archiving = group.some((t) => t.id === archivingId);
               return (
                 <div key={primary.worktreePath} className="worktree-block">
                   <div
-                    className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}`}
-                    onClick={(e) => onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey)}
+                    className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}`}
+                    aria-busy={archiving}
+                    onClick={(e) => {
+                      if (archiving) return;
+                      onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey);
+                    }}
                   >
-                    <span className={`dot ${primary.status}`} />
+                    {archiving ? (
+                      <span className="thread-archive-spinner" aria-hidden />
+                    ) : (
+                      <span className={`dot ${primary.status}`} />
+                    )}
                     <div className="thread-item-body">
                       <div
                         className="thread-title"
@@ -337,11 +350,18 @@ export function Sidebar({
                         {primary.sourceType === 'orchestration' ? ' ✦' : ''}
                       </div>
                       <div className="thread-meta">
-                        {primary.agent}
-                        {group.length > 1 ? ` · ${group.length} chats` : ''}
-                        {primary.devPort ? ` · :${primary.devPort}` : ''}
+                        {archiving
+                          ? 'Archiving…'
+                          : [
+                              primary.agent,
+                              group.length > 1 ? `${group.length} chats` : null,
+                              primary.devPort ? `:${primary.devPort}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                       </div>
                     </div>
+                    {!archiving && (
                     <button
                       type="button"
                       className="icon-btn worktree-tools-btn"
@@ -354,6 +374,7 @@ export function Sidebar({
                     >
                       ▾
                     </button>
+                    )}
                   </div>
                   {menuOpen && (
                     <div className="tool-menu sidebar-tool-menu">
@@ -462,12 +483,26 @@ export function Sidebar({
           title="Archive worktree?"
           message={closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount)}
           confirmLabel="Archive"
+          busy={archiveBusy}
+          busyMessage="Stopping agents and removing the worktree…"
           onConfirm={() => {
             const id = archiveConfirm.threadId;
-            setArchiveConfirm(null);
-            onArchive?.(id);
+            setToolsFor(null);
+            setArchiveBusy(true);
+            void Promise.resolve(onArchive?.(id))
+              .then(() => {
+                setArchiveConfirm(null);
+              })
+              .catch((err: unknown) => {
+                window.alert(err instanceof Error ? err.message : String(err));
+              })
+              .finally(() => {
+                setArchiveBusy(false);
+              });
           }}
-          onCancel={() => setArchiveConfirm(null)}
+          onCancel={() => {
+            if (!archiveBusy) setArchiveConfirm(null);
+          }}
         />
       )}
 

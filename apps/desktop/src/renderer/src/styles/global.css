@@ -731,6 +731,33 @@ body.resizing-panels * {
   background: var(--border);
 }
 
+.thread-item.archiving {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.thread-item.archiving .thread-meta {
+  color: var(--accent);
+}
+
+.thread-archive-spinner {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1.5px solid rgba(117, 190, 255, 0.25);
+  border-top-color: var(--accent);
+  animation: create-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-archive-spinner {
+    animation: none !important;
+    background: var(--accent);
+    border-color: transparent;
+  }
+}
+
 .thread-item-body {
   flex: 1 1 0;
   min-width: 0;
@@ -1207,7 +1234,17 @@ body.resizing-panels * {
 }
 
 .waiting-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--muted);
+}
+
+.msg-stream-activity {
+  display: flex;
+  align-items: center;
+  padding: 6px 4px 2px;
+  min-height: 22px;
 }
 
 .thinking-indicator {
@@ -4769,6 +4806,40 @@ button.linkish:hover {
   margin: 0 0 16px;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.confirm-dialog-busy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.confirm-dialog-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  animation: create-spin 0.7s linear infinite;
+}
+
+.confirm-modal.is-busy .confirm-dialog-message {
+  margin-bottom: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-dialog-spinner {
+    animation: none !important;
+    opacity: 0.7;
+  }
 }
 
 .land-confirm-modal {

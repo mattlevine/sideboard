@@ -321,6 +321,44 @@ async function fetchPrMergeGate(
   }
 }
 
+/**
+ * Local conflict probe for when GitHub reports mergeable=UNKNOWN (common) or
+ * when `gh` can't see mergeability. Merges HEAD into `origin/<base>` via
+ * `git merge-tree --write-tree` (exit 1 + "CONFLICT" ⇒ conflicts).
+ */
+export async function detectLocalMergeConflicts(
+  cwd: string,
+  baseRefName: string | null,
+): Promise<{ conflicting: boolean; base: string; files: string[] }> {
+  const baseName = (baseRefName?.trim() || (await resolveDefaultBranch(cwd))).replace(
+    /^origin\//,
+    '',
+  );
+  const baseRef = await resolveDiffBaseRef(cwd, baseName);
+  // Ensure we have a tip to merge against (best-effort fetch).
+  await git(['fetch', 'origin', baseName], cwd, { reject: false });
+
+  const result = await git(
+    ['merge-tree', '--write-tree', '--name-only', baseRef, 'HEAD'],
+    cwd,
+    { reject: false },
+  );
+  const out = `${result.stdout}\n${result.stderr}`;
+  const conflicting =
+    result.exitCode !== 0 || /\bCONFLICT\b/i.test(out);
+  const files = conflicting
+    ? [
+        ...new Set(
+          out
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l && !l.startsWith('merge-tree:') && !/\bCONFLICT\b/i.test(l)),
+        ),
+      ].slice(0, 20)
+    : [];
+  return { conflicting, base: baseName, files };
+}
+
 /** CI checks for a PR (`gh pr checks <selector> --json …`), plus synthetic
  * mergeability / review rows (conflicts are not reported by `gh pr checks`).
  * Returns `null` when no PR exists for the selector (so UI can show “link a PR”
@@ -367,10 +405,65 @@ export async function getPrChecks(
     }
   }
 
-  const gate = await fetchPrMergeGate(cwd, selector, slug);
+  let gate = await fetchPrMergeGate(cwd, selector, slug);
+  // GitHub often returns mergeable=UNKNOWN; verify with a local merge-tree.
+  // Also probe when gh view fails but CI checks exist (PR is real).
+  const mergeable = (gate?.mergeable ?? '').toUpperCase();
+  const mergeState = (gate?.mergeStateStatus ?? '').toUpperCase();
+  // GitHub often leaves mergeable=UNKNOWN; always verify unless GH already
+  // reports an explicit conflict (local probe is cheap and more reliable).
+  const alreadyConflicting =
+    mergeable === 'CONFLICTING' || mergeState === 'DIRTY';
+  const needsLocalProbe = !alreadyConflicting;
+
+  if (needsLocalProbe) {
+    try {
+      const local = await detectLocalMergeConflicts(cwd, gate?.baseRefName ?? null);
+      if (local.conflicting) {
+        const fileHint =
+          local.files.length > 0
+            ? ` Conflicting paths: ${local.files.slice(0, 8).join(', ')}${local.files.length > 8 ? '…' : ''}.`
+            : '';
+        gate = {
+          mergeable: 'CONFLICTING',
+          mergeStateStatus: 'DIRTY',
+          reviewDecision: gate?.reviewDecision ?? null,
+          baseRefName: local.base,
+          url: gate?.url ?? null,
+        };
+        // Stash file hint on a synthetic description via gate url leave as-is;
+        // buildMergeGateChecks uses base name — enrich after.
+        const ciFailed = ciChecks.some((c) => c.bucket === 'fail');
+        const review = (gate.reviewDecision ?? '').toUpperCase();
+        const hasReviewRow =
+          review === 'CHANGES_REQUESTED' || review === 'REVIEW_REQUIRED';
+        const gateRows = buildMergeGateChecks(gate, {
+          suppressGenericBlocked: ciFailed || hasReviewRow,
+        }).map((row) =>
+          row.kind === 'mergeability' && row.name === 'Merge conflicts'
+            ? {
+                ...row,
+                description: `${row.description ?? ''}${fileHint}`.trim(),
+              }
+            : row,
+        );
+        return [...gateRows, ...ciChecks];
+      }
+      // Local merge is clean — don't surface a useless UNKNOWN pending row.
+      if (gate && (mergeable === 'UNKNOWN' || mergeState === 'UNKNOWN')) {
+        gate = {
+          ...gate,
+          mergeable: gate.mergeable === 'UNKNOWN' ? 'MERGEABLE' : gate.mergeable,
+          mergeStateStatus:
+            gate.mergeStateStatus === 'UNKNOWN' ? 'CLEAN' : gate.mergeStateStatus,
+        };
+      }
+    } catch {
+      // Keep GitHub gate as-is if local probe fails.
+    }
+  }
+
   if (!gate) {
-    // CI succeeded with rows → keep them. Empty CI + no PR view → treat as no PR
-    // only when gh checks already said so (null). Empty CI without gate is still [].
     return ciChecks;
   }
 

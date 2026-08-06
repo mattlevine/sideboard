@@ -126,6 +126,56 @@ describe('getPrChecks', () => {
     expect(checks?.[1]).toMatchObject({ name: 'CI', kind: 'ci' });
   });
 
+  it('detects conflicts locally when GitHub mergeable is UNKNOWN', async () => {
+    gitMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote') {
+        return {
+          stdout: 'git@github.com:acme/widgets.git',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'abc', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === 'fetch') {
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === 'merge-tree') {
+        return {
+          stdout: 'README.md\npackages/core/src/index.ts',
+          stderr: 'CONFLICT (content)',
+          exitCode: 1,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    ghMock
+      .mockResolvedValueOnce({
+        stdout: '[]',
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          mergeable: 'UNKNOWN',
+          mergeStateStatus: 'UNKNOWN',
+          reviewDecision: null,
+          baseRefName: 'main',
+          url: 'https://github.com/acme/widgets/pull/42',
+        }),
+        stderr: '',
+        exitCode: 0,
+      });
+    const checks = await getPrChecks('/tmp/wt', '42');
+    expect(checks?.[0]).toMatchObject({
+      name: 'Merge conflicts',
+      bucket: 'fail',
+      kind: 'mergeability',
+    });
+    expect(checks?.[0]?.description).toMatch(/README\.md/);
+  });
+
   it('throws on auth failures instead of pretending checks are empty', async () => {
     ghMock.mockResolvedValue({
       stdout: '',
