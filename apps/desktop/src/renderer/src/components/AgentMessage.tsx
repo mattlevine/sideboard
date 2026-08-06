@@ -25,6 +25,8 @@ interface Props {
   worktreePath?: string;
   knownFilePaths?: string[];
   onOpenFile?: (path: string) => void;
+  /** Navigate to another Sideboard thread from a markdown deep link. */
+  onOpenThread?: (threadRef: string) => void;
   onFork?: () => void;
 }
 
@@ -117,6 +119,7 @@ export function AgentMessage({
   worktreePath,
   knownFilePaths,
   onOpenFile,
+  onOpenThread,
   onFork,
 }: Props) {
   const [expanded, setExpanded] = useState(Boolean(streaming));
@@ -244,6 +247,7 @@ export function AgentMessage({
                         text={part.text}
                         knownFilePaths={knownFilePaths}
                         onFileReferenceClick={threadId ? openFileReference : undefined}
+                        onThreadLinkClick={onOpenThread}
                         isStreaming={streaming}
                       />
                     </div>
@@ -262,6 +266,7 @@ export function AgentMessage({
             text={answer}
             knownFilePaths={knownFilePaths}
             onFileReferenceClick={threadId ? openFileReference : undefined}
+            onThreadLinkClick={onOpenThread}
             isStreaming={streaming}
           />
           {streaming && <span className="stream-caret" />}

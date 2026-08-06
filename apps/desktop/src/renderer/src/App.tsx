@@ -348,11 +348,27 @@ export function App() {
     setSelectedId(null);
   }
 
+  function openThreadByRef(threadRef: string) {
+    const ref = threadRef.trim();
+    if (!ref) return;
+    const match =
+      threads.find(
+        (t) => t.id === ref || t.id.startsWith(ref) || t.branchName === ref || t.title === ref,
+      ) ?? null;
+    if (!match) {
+      window.alert(`Thread not found: ${ref}`);
+      return;
+    }
+    setSelectedId(match.id);
+    setView('thread');
+    setMultiSelected(new Set([match.id]));
+  }
+
   function openCreate(forRepo?: string, mode: CreateState['mode'] = 'quick') {
     setCreateState({ repoPath: forRepo ?? null, mode });
   }
 
-  /** Global orchestrators have no worktree — Changes/Files/Terminal sidebar is N/A. */
+  /** Orchestration chats have no worktree — Changes/Files/Terminal sidebar is N/A. */
   const showRightSidebar = Boolean(selected && !isGlobalThread(selected));
 
   const appClass = [
@@ -431,16 +447,6 @@ export function App() {
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
-          onOpenCloudCoordinator={async () => {
-            const status = await window.sideboard.getCloudConnectStatus();
-            const t = await window.sideboard.ensureCloudCoordinator(
-              status.agent ?? 'claude',
-            );
-            await refresh();
-            setSelectedId(t.id);
-            setView('thread');
-            setMultiSelected(new Set([t.id]));
-          }}
           onNewGlobalChat={() => openCreate(undefined, 'orchestration')}
           onRefresh={() => void refresh()}
           leftSidebarToggle={
@@ -483,13 +489,9 @@ export function App() {
               onComposerPrefillConsumed: () => setPrefill(undefined),
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
+              onOpenThreadLink: openThreadByRef,
             };
-            // Global orchestrators: same full-width chat layout as worktree agents.
-            // Repo-pinned orchestration still uses OrchestratorPanel (child strip).
-            if (isGlobalThread(selected)) {
-              return <ThreadPanel thread={selected} {...threadPanelProps} />;
-            }
-            return selected.sourceType === 'orchestration' ? (
+            return selected.sourceType === 'orchestration' || isGlobalThread(selected) ? (
             <OrchestratorPanel
               thread={selected}
               childThreads={children}
@@ -500,9 +502,11 @@ export function App() {
               onRefresh={() => void refresh()}
               onSelectChild={(id) => {
                 setSelectedId(id);
+                setView('thread');
                 setMultiSelected(new Set([id]));
               }}
-              onSelectChat={(id) => {
+              onSelectChat={(id, created) => {
+                if (created) upsertThread(created);
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
               }}
@@ -510,6 +514,7 @@ export function App() {
               onComposerPrefillConsumed={() => setPrefill(undefined)}
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
+              onOpenThreadLink={openThreadByRef}
             />
           ) : (
             <ThreadPanel

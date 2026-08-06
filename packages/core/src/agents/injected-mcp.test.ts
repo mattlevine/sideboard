@@ -28,14 +28,25 @@ describe('injected-mcp', () => {
     expect(brightsyMcpServerName('Acme Corp!')).toBe('brightsy_Acme_Corp');
   });
 
-  it('includes sideboard when requested', async () => {
+  it('includes sideboard when requested (absolute node entry when CLI not on PATH)', async () => {
     const servers = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: false,
     });
-    expect(servers).toEqual([
-      { name: 'sideboard', command: 'sideboard', args: ['mcp'] },
-    ]);
+    expect(servers).toHaveLength(1);
+    expect(servers[0]!.name).toBe('sideboard');
+    // Dev machines without a global `sideboard` binary get `node <abs>/mcp/run-stdio.js`.
+    if (servers[0]!.command === 'sideboard') {
+      expect(servers[0]!.args).toEqual(['mcp']);
+    } else {
+      expect(servers[0]!.command).toBe('node');
+      expect(servers[0]!.args?.[0]).toMatch(/run-stdio\.(js|cjs)$|cli[/\\]dist[/\\]index\.js$/);
+    }
+  });
+
+  it('resolves MCP entry without throwing when import.meta.url is unavailable', async () => {
+    const { findSideboardMcpJsEntry } = await import('./injected-mcp.js');
+    expect(() => findSideboardMcpJsEntry()).not.toThrow();
   });
 
   it('skips brightsy when not connected', async () => {

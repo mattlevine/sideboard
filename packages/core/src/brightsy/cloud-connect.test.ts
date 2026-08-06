@@ -3,8 +3,10 @@ import {
   CLOUD_COORDINATOR_BUSY_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
   CLOUD_ORCHESTRATOR_GOAL,
+  SIDEBOARD_FORCE_STOP,
   coordinatorSystemPrompt,
   formatWorkspaceInventory,
+  parseForceStopMessage,
 } from './cloud-connect.js';
 
 describe('cloud-connect prompts', () => {
@@ -53,7 +55,7 @@ describe('cloud-connect prompts', () => {
     expect(prompt).toContain('list_workspaces');
     expect(prompt).toContain('create_thread');
     expect(prompt).toContain('send_to_thread');
-    expect(prompt).toContain('no git home directory');
+    expect(prompt).toContain('no project git home');
     expect(prompt).toContain('- sideboard: /Users/me/sideboard');
     expect(prompt).toContain('- storycycle-ai: /Users/me/storycycle-ai');
     expect(prompt).not.toContain('Coordinator home repo');
@@ -63,6 +65,68 @@ describe('cloud-connect prompts', () => {
   it('exports fixed busy and timeout replies for cloud agents', () => {
     expect(CLOUD_COORDINATOR_BUSY_REPLY).toContain('busy');
     expect(CLOUD_COORDINATOR_BUSY_REPLY).toContain('What do you want');
+    expect(CLOUD_COORDINATOR_BUSY_REPLY).toContain(SIDEBOARD_FORCE_STOP);
     expect(CLOUD_COORDINATOR_TIMEOUT_REPLY).toContain('timed out');
+    expect(CLOUD_COORDINATOR_TIMEOUT_REPLY).toContain(SIDEBOARD_FORCE_STOP);
+  });
+});
+
+describe('parseForceStopMessage', () => {
+  it('parses token-only messages', () => {
+    expect(parseForceStopMessage(SIDEBOARD_FORCE_STOP)).toEqual({
+      forceStop: true,
+      remainder: '',
+    });
+    expect(parseForceStopMessage(`  ${SIDEBOARD_FORCE_STOP}  `)).toEqual({
+      forceStop: true,
+      remainder: '',
+    });
+  });
+
+  it('parses token plus remainder on later lines', () => {
+    expect(
+      parseForceStopMessage(`${SIDEBOARD_FORCE_STOP}\nretry the deploy`),
+    ).toEqual({
+      forceStop: true,
+      remainder: 'retry the deploy',
+    });
+    expect(
+      parseForceStopMessage(
+        `${SIDEBOARD_FORCE_STOP}\n\n  do the thing\nline two  `,
+      ),
+    ).toEqual({
+      forceStop: true,
+      remainder: 'do the thing\nline two',
+    });
+  });
+
+  it('is case-insensitive on the first-line token', () => {
+    expect(parseForceStopMessage('sideboard_force_stop')).toEqual({
+      forceStop: true,
+      remainder: '',
+    });
+    expect(
+      parseForceStopMessage('Sideboard_Force_Stop\ncontinue'),
+    ).toEqual({
+      forceStop: true,
+      remainder: 'continue',
+    });
+  });
+
+  it('does not treat non-token messages as force-stop', () => {
+    expect(parseForceStopMessage('please stop')).toEqual({
+      forceStop: false,
+      remainder: 'please stop',
+    });
+    expect(
+      parseForceStopMessage(`${SIDEBOARD_FORCE_STOP} please`),
+    ).toEqual({
+      forceStop: false,
+      remainder: `${SIDEBOARD_FORCE_STOP} please`,
+    });
+    expect(parseForceStopMessage('')).toEqual({
+      forceStop: false,
+      remainder: '',
+    });
   });
 });

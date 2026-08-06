@@ -7,7 +7,7 @@ describe('mcpArchiveBlockedReason', () => {
     const reason = mcpArchiveBlockedReason({
       sourceType: 'orchestration',
       sourceRef: CLOUD_ORCHESTRATOR_GOAL,
-      title: CLOUD_ORCHESTRATOR_GOAL,
+      title: 'Arsenal',
     });
     expect(reason).toMatch(/cloud coordinator/i);
   });

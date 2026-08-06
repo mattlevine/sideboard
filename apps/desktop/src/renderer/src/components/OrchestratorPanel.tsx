@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { MessagePart, Thread } from '@sideboard/core';
 import { isGlobalThread } from '../lib/global-workspace';
 import { ThreadPanel } from './ThreadPanel';
@@ -12,11 +12,17 @@ interface Props {
   turnStartedAt?: number;
   onRefresh: () => void;
   onSelectChild: (id: string) => void;
-  onSelectChat: (id: string) => void;
+  onSelectChat: (id: string, created?: Thread) => void;
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
+  /** Open another thread from a sideboard://thread/<id> markdown link. */
+  onOpenThreadLink?: (threadRef: string) => void;
+}
+
+function countStatus(threads: Thread[], status: Thread['status']): number {
+  return threads.filter((t) => t.status === status).length;
 }
 
 export function OrchestratorPanel({
@@ -33,8 +39,23 @@ export function OrchestratorPanel({
   onComposerPrefillConsumed,
   leftSidebarToggle,
   rightSidebarToggle,
+  onOpenThreadLink,
 }: Props) {
   const global = isGlobalThread(thread);
+  const childSummary = useMemo(() => {
+    if (childThreads.length === 0) return null;
+    const running = countStatus(childThreads, 'running');
+    const queued = countStatus(childThreads, 'queued');
+    const idle = countStatus(childThreads, 'idle');
+    const error = countStatus(childThreads, 'error');
+    const parts = [
+      running ? `${running} running` : null,
+      queued ? `${queued} queued` : null,
+      idle ? `${idle} idle` : null,
+      error ? `${error} error` : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : `${childThreads.length} agent${childThreads.length === 1 ? '' : 's'}`;
+  }, [childThreads]);
 
   return (
     <div className="panel orchestrator-panel">
@@ -42,10 +63,12 @@ export function OrchestratorPanel({
         <span className="thread-meta">
           {global ? 'Worktree agents' : 'Child threads'}
         </span>
-        {childThreads.length === 0 && (
+        {childThreads.length === 0 ? (
           <span className="thread-meta">
             {global ? '(spawn via Sideboard MCP)' : '(none yet)'}
           </span>
+        ) : (
+          childSummary && <span className="thread-meta">{childSummary}</span>
         )}
         {childThreads.map((c) => (
           <button key={c.id} className="child-chip" onClick={() => onSelectChild(c.id)}>
@@ -67,6 +90,7 @@ export function OrchestratorPanel({
           onComposerPrefillConsumed={onComposerPrefillConsumed}
           leftSidebarToggle={leftSidebarToggle}
           rightSidebarToggle={rightSidebarToggle}
+          onOpenThreadLink={onOpenThreadLink ?? onSelectChild}
         />
       </div>
     </div>

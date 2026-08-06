@@ -33,8 +33,11 @@ export * from './threads/adopt.js';
 export * from './orchestrator/orchestrator.js';
 export {
   coordinatorSystemPrompt,
+  coordinatorTurnReminder,
+  ensureGlobalCoordinatorCwd,
   formatWorkspaceInventory,
   enrichWorkspacesWithGithub,
+  COORDINATOR_TOOL_PLAYBOOK,
 } from './orchestrator/coordinator-prompt.js';
 export type { WorkspaceInventoryEntry } from './orchestrator/coordinator-prompt.js';
 export * from './git/apply-into-main.js';
@@ -51,7 +54,10 @@ export {
 export {
   CLOUD_ORCHESTRATOR_GOAL,
   CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_STOPPED_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
+  SIDEBOARD_FORCE_STOP,
+  parseForceStopMessage,
   runCloudConnect,
 } from './brightsy/cloud-connect.js';
 export type {

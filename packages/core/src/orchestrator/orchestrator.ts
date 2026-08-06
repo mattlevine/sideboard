@@ -86,12 +86,17 @@ import {
 } from '../store/workspaces.js';
 import {
   createGlobalChat,
+  healOrchestrationSoccerTitles,
   isGlobalRepoPath,
   isGlobalThread,
+  isOrchestratorThread,
+  orchestratorSessionPoisonedByBuiltins,
 } from '../store/global-workspace.js';
 import {
   coordinatorSystemPrompt,
+  coordinatorTurnReminder,
   enrichWorkspacesWithGithub,
+  ensureGlobalCoordinatorCwd,
 } from './coordinator-prompt.js';
 
 interface RegisteredProcess {
@@ -107,6 +112,14 @@ export class Orchestrator {
   private readonly processes = new Map<string, RegisteredProcess>();
   private readonly activeTurns = new Map<string, SpawnTurnHandle>();
   private readonly draining = new Set<string>();
+  /** Threads past setStatus(running) but not yet in activeTurns (spawn in flight). */
+  private readonly startingTurns = new Set<string>();
+  /**
+   * Threads intentionally force-stopped. Prevents runTurn from re-asserting
+   * `running` after spawn, and from overwriting `stopped` with idle/error when
+   * the killed turn's handle.done resolves.
+   */
+  private readonly stoppedTurns = new Set<string>();
   /** WIP snapshot SHA at the start of the latest agent turn (per thread). */
   private readonly turnBaselines = new Map<string, string>();
   private maxConcurrent: number;
@@ -125,14 +138,49 @@ export class Orchestrator {
     this.events.emit('event', event);
   }
 
-  async reconcile(repoPath?: string): Promise<void> {
+  /** True when disk says running but this process is not actually turning. */
+  private isStaleRunningThread(threadId: string, status: Thread['status']): boolean {
+    return (
+      status === 'running' &&
+      !this.activeTurns.has(threadId) &&
+      !this.startingTurns.has(threadId)
+    );
+  }
+
+  async reconcile(
+    repoPath?: string,
+    opts?: {
+      /**
+       * When true (default), mark disk-status `running` threads with no in-process
+       * turn as stopped. Must stay false in Sideboard MCP subprocesses — they do
+       * not own agent turns, so every live parent turn looks "dead".
+       */
+      reclaimStaleTurns?: boolean;
+    },
+  ): Promise<void> {
+    const reclaimStaleTurns = opts?.reclaimStaleTurns !== false;
+
+    // Soccer nicknames for orchestration chats (incl. legacy cloud-goal titles).
+    healOrchestrationSoccerTitles();
+
     for (const thread of listThreads({ includeArchived: true })) {
       if (thread.status === 'archived') continue;
       if (isGlobalThread(thread)) {
-        // Ensure synthetic cwd exists; never mark global chats broken for git.
-        const { globalAgentCwd } = await import('../store/paths.js');
-        globalAgentCwd();
-        if (thread.status === 'running' && !this.activeTurns.has(thread.id)) {
+        // Ensure synthetic cwd + identity files; never mark global chats broken for git.
+        ensureGlobalCoordinatorCwd();
+        const heal: Parameters<typeof updateThread>[1] = {};
+        // Heal chat tabs that were demoted from orchestration → branch (soccer-tab bug).
+        if (thread.sourceType !== 'orchestration') {
+          heal.sourceType = 'orchestration';
+        }
+        // Drop Claude --resume after Bash/ls “empty worktree” turns (pre --tools "").
+        if (thread.sessionId && orchestratorSessionPoisonedByBuiltins(thread)) {
+          heal.sessionId = null;
+        }
+        if (Object.keys(heal).length) {
+          updateThread(thread.id, heal);
+        }
+        if (reclaimStaleTurns && this.isStaleRunningThread(thread.id, thread.status)) {
           setStatus(thread.id, 'stopped', 'Process died (reconciled on startup)');
           this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
         }
@@ -143,7 +191,7 @@ export class Orchestrator {
         this.emit({ type: 'status_changed', threadId: thread.id, status: 'broken' });
         continue;
       }
-      if (thread.status === 'running' && !this.activeTurns.has(thread.id)) {
+      if (reclaimStaleTurns && this.isStaleRunningThread(thread.id, thread.status)) {
         setStatus(thread.id, 'stopped', 'Process died (reconciled on startup)');
         this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       }
@@ -303,8 +351,19 @@ export class Orchestrator {
 
   private async runTurn(threadId: string, prompt: string): Promise<void> {
     let thread = this.requireThread(threadId);
+    // Drop Claude --resume when a Global chat previously acted like a worktree coder
+    // (Bash on synthetic home, no Sideboard MCP) so identity prompts can re-seed.
+    if (
+      isGlobalThread(thread) &&
+      thread.sessionId &&
+      orchestratorSessionPoisonedByBuiltins(thread)
+    ) {
+      thread = updateThread(threadId, { sessionId: null });
+    }
     this.runningCount += 1;
     const turnStartedAt = Date.now();
+    // Mark before setStatus so concurrent reconcile (or MCP) won't reclaim us.
+    this.startingTurns.add(threadId);
     setStatus(threadId, 'running');
     this.emit({ type: 'status_changed', threadId, status: 'running' });
     this.emit({ type: 'turn_started', threadId, prompt });
@@ -354,9 +413,21 @@ export class Orchestrator {
     );
     // Re-assert on every turn (incl. Claude --resume, which drops cachedPrefix).
     // Sideboard plan mode stays on until the user toggles it off / Implement.
-    const agentPrompt = thread.planMode
-      ? `${PLAN_MODE_INSTRUCTION}\n\n${expandedPrompt}`
-      : expandedPrompt;
+    // Orchestrators get a short identity reminder the same way — resume strips
+    // the full playbook from cachedPrefix.
+    const orchestrationReminder = isOrchestratorThread(thread)
+      ? coordinatorTurnReminder({
+          parentId: threadId,
+          goal: thread.sourceRef || thread.title,
+        })
+      : null;
+    const agentPrompt = [
+      thread.planMode ? PLAN_MODE_INSTRUCTION : null,
+      orchestrationReminder,
+      expandedPrompt,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
     const instructionFiles = loadAgentInstructions(thread.worktreePath, thread.agent);
     // Attachments are consumed on the first turn (like Conductor transcript chips).
     if (thread.attachments.length > 0) {
@@ -380,7 +451,7 @@ export class Orchestrator {
     // Brightsy agents run hosted — they cannot edit the worktree or open PRs, and
     // stuffing those directives has contributed to empty model responses.
     const isBrightsy = fresh.agent === 'brightsy';
-    const isOrchestration = fresh.sourceType === 'orchestration';
+    const isOrchestration = isOrchestratorThread(fresh);
     // Orchestrators use Sideboard MCP across registered repos — not a single worktree PR playbook.
     const worktreeDirective =
       isBrightsy || isOrchestration ? null : formatWorktreeDirective(fresh);
@@ -411,17 +482,20 @@ export class Orchestrator {
         : buildSessionSeed(prior);
     }
 
-    // Fresh orchestration sessions get the fleet playbook + workspace inventory.
-    // (Claude --resume drops cachedPrefix; cloud-connect also wraps each cloud task.)
+    // Fresh orchestration sessions get the full fleet playbook + workspace inventory.
+    // Every turn also gets coordinatorTurnReminder in agentPrompt; global cwd has CLAUDE.md.
     let coordinatorDirective: string | null = null;
-    if (isOrchestration && !fresh.sessionId) {
-      const inventory = await enrichWorkspacesWithGithub(this.listWorkspaces());
-      coordinatorDirective = coordinatorSystemPrompt({
-        goal: fresh.sourceRef || fresh.title || 'Global orchestration',
-        parentId: fresh.id,
-        workspaces: inventory,
-        audience: 'desktop',
-      });
+    if (isOrchestration) {
+      if (isGlobalThread(fresh)) ensureGlobalCoordinatorCwd();
+      if (!fresh.sessionId) {
+        const inventory = await enrichWorkspacesWithGithub(this.listWorkspaces());
+        coordinatorDirective = coordinatorSystemPrompt({
+          goal: fresh.sourceRef || fresh.title || 'Orchestration',
+          parentId: fresh.id,
+          workspaces: inventory,
+          audience: 'desktop',
+        });
+      }
     }
 
     // Worktree directive for local agents (even on Claude resume). Project
@@ -450,6 +524,18 @@ export class Orchestrator {
         },
       );
       this.activeTurns.set(threadId, handle);
+      this.startingTurns.delete(threadId);
+      // If stop() raced mid-spawn, kill immediately and do not re-assert running.
+      if (this.stoppedTurns.has(threadId)) {
+        handle.kill();
+      } else {
+        // Re-assert if a concurrent reconcile/MCP wiped running → stopped mid-spawn.
+        const live = readThread(threadId);
+        if (live && (live.status !== 'running' || live.lastError)) {
+          setStatus(threadId, 'running');
+          this.emit({ type: 'status_changed', threadId, status: 'running' });
+        }
+      }
       this.processes.set(`${threadId}:agent`, {
         kind: 'agent',
         pid: handle.pid,
@@ -487,29 +573,62 @@ export class Orchestrator {
       }
       // Pick up agent `git branch -m` renames for sidebar labels.
       await syncThreadBranchFromGit(threadId);
-      setStatus(threadId, result.exitCode === 0 ? 'idle' : 'error', result.exitCode === 0 ? null : `exit ${result.exitCode}`);
-      this.emit({
-        type: 'status_changed',
-        threadId,
-        status: result.exitCode === 0 ? 'idle' : 'error',
-      });
-      this.emit({ type: 'turn_finished', threadId, exitCode: result.exitCode });
+      if (this.stoppedTurns.has(threadId)) {
+        // Preserve intentional stop — do not overwrite with idle/error from kill exit.
+        setStatus(threadId, 'stopped');
+        this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+        this.emit({ type: 'turn_finished', threadId, exitCode: result.exitCode });
+      } else {
+        setStatus(threadId, result.exitCode === 0 ? 'idle' : 'error', result.exitCode === 0 ? null : `exit ${result.exitCode}`);
+        this.emit({
+          type: 'status_changed',
+          threadId,
+          status: result.exitCode === 0 ? 'idle' : 'error',
+        });
+        this.emit({ type: 'turn_finished', threadId, exitCode: result.exitCode });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await syncThreadBranchFromGit(threadId).catch(() => undefined);
-      setStatus(threadId, 'error', message);
-      this.emit({ type: 'error', threadId, message });
-      this.emit({ type: 'status_changed', threadId, status: 'error' });
-      this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+      if (this.stoppedTurns.has(threadId)) {
+        setStatus(threadId, 'stopped');
+        this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+        this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+      } else {
+        setStatus(threadId, 'error', message);
+        this.emit({ type: 'error', threadId, message });
+        this.emit({ type: 'status_changed', threadId, status: 'error' });
+        this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+      }
     } finally {
+      this.startingTurns.delete(threadId);
       this.activeTurns.delete(threadId);
       this.processes.delete(`${threadId}:agent`);
+      this.stoppedTurns.delete(threadId);
       this.runningCount = Math.max(0, this.runningCount - 1);
     }
   }
 
-  stop(threadRef: string): Thread {
+  /**
+   * Stop an in-flight agent turn.
+   * Default `clearQueue: true` (force-stop): kills the turn AND empties queued prompts
+   * so drainQueue cannot continue / re-start work after an intentional stop. Desktop,
+   * CLI, MCP, and cloud-connect all share this default.
+   */
+  stop(threadRef: string, opts?: { clearQueue?: boolean }): Thread {
+    const clearQueue = opts?.clearQueue !== false;
     const thread = this.requireThread(threadRef);
+    const inFlight =
+      this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
+    // Only sticky-mark when a turn is in flight — otherwise a later send/runTurn
+    // would inherit a stale stop and treat a normal finish as intentional stop.
+    if (inFlight) {
+      this.stoppedTurns.add(thread.id);
+    }
+    if (clearQueue && thread.queue.length > 0) {
+      updateThread(thread.id, { queue: [] });
+      this.emit({ type: 'queue_changed', threadId: thread.id, queue: [] });
+    }
     const handle = this.activeTurns.get(thread.id);
     if (handle) handle.kill();
     const proc = this.processes.get(`${thread.id}:agent`);
@@ -1176,14 +1295,12 @@ export async function startOrchestration(opts: {
   planMode?: boolean;
   attachments?: Thread['attachments'];
 }): Promise<Thread> {
-  const { titleFromPrompt } = await import('../threads/title.js');
-  const title = titleFromPrompt(opts.goal) || 'Orchestration';
   const repoPath = opts.repoPath?.trim();
 
-  // Default: Global workspace (no git home).
+  // Default: Global workspace (no git home). Soccer-team nickname for the
+  // sidebar title; goal stays on sourceRef.
   if (!repoPath || isGlobalRepoPath(repoPath)) {
     return createGlobalChat({
-      title,
       sourceRef: opts.goal,
       agent: opts.agent,
       autonomy: opts.autonomy,
@@ -1195,6 +1312,8 @@ export async function startOrchestration(opts: {
   }
 
   // Legacy: pinned-repo orchestration (real worktree). Prefer Global for new work.
+  const { titleFromPrompt } = await import('../threads/title.js');
+  const title = titleFromPrompt(opts.goal) || 'Orchestration';
   const createOpts = {
     agent: opts.agent,
     repoPath,

@@ -8,6 +8,7 @@ import {
   normalizeWorktreePath,
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
+import { isGlobalThread } from '../store/global-workspace.js';
 import {
   createEmptyThread,
   findThreadByRef,
@@ -67,7 +68,13 @@ function worktreeBindingFrom(from: Thread): Pick<
     repoPath: from.repoPath,
     branchName: from.branchName,
     sourceRef: from.sourceRef,
-    sourceType: from.sourceType === 'orchestration' ? 'branch' : from.sourceType,
+    // Legacy pinned-repo orchestration: new tabs become normal worktree agents.
+    // Global: keep orchestration so chat tabs stay fleet orchestrators (MCP + Bash).
+    sourceType: isGlobalThread(from)
+      ? 'orchestration'
+      : from.sourceType === 'orchestration'
+        ? 'branch'
+        : from.sourceType,
     sourceIsFork: from.sourceIsFork,
     parentThreadId: from.parentThreadId,
     prUrl: from.prUrl,

@@ -11,17 +11,19 @@ export function isGlobalThread(
 }
 
 export function isCloudCoordinatorThread(
-  thread: Pick<Thread, 'sourceType' | 'sourceRef' | 'title'>,
+  thread: Pick<Thread, 'sourceType' | 'sourceRef' | 'title' | 'repoPath'>,
 ): boolean {
-  return (
-    thread.sourceType === 'orchestration' &&
-    (thread.sourceRef === CLOUD_ORCHESTRATOR_GOAL ||
-      thread.title === CLOUD_ORCHESTRATOR_GOAL)
-  );
+  if (thread.sourceRef === CLOUD_ORCHESTRATOR_GOAL) {
+    return thread.repoPath === GLOBAL_WORKSPACE_ID || thread.sourceType === 'orchestration';
+  }
+  // Legacy: title was the cloud marker before soccer nicknames.
+  if (thread.title === CLOUD_ORCHESTRATOR_GOAL) {
+    return thread.repoPath === GLOBAL_WORKSPACE_ID || thread.sourceType === 'orchestration';
+  }
+  return false;
 }
 
 /** Short label for crowded UI (tabs, board rows). */
 export function threadDisplayTitle(thread: Pick<Thread, 'title' | 'sourceType' | 'sourceRef'>): string {
-  if (isCloudCoordinatorThread(thread)) return 'Cloud coordinator';
-  return thread.title;
+  return thread.title?.trim() || 'Untitled';
 }

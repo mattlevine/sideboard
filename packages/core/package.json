@@ -19,8 +19,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/agents/cursor-runner.ts --format esm,cjs --dts --clean",
-    "dev": "tsup src/index.ts src/agents/cursor-runner.ts --format esm,cjs --dts --watch",
+    "build": "tsup src/index.ts src/agents/cursor-runner.ts src/mcp/run-stdio.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts src/agents/cursor-runner.ts src/mcp/run-stdio.ts --format esm,cjs --dts --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -916,8 +916,8 @@ export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
                         </div>
                         <p className="settings-hint">
                           Let Brightsy cloud agents ask about and drive threads across all
-                          registered Sideboard workspaces via the Global coordinator (no home
-                          repo) — Slack, Discord, or Microsoft Teams (Slack is best-tested).
+                          registered Sideboard workspaces via the Orchestration coordinator (no
+                          home repo) — Slack, Discord, or Microsoft Teams (Slack is best-tested).
                           Requires <code>brightsy login</code> and a chat channel on the Brightsy
                           agent. Keep the desktop app running.
                         </p>

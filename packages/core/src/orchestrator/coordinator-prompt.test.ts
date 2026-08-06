@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CLOUD_ORCHESTRATOR_GOAL } from '../brightsy/cloud-connect-constants.js';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   coordinatorSystemPrompt,
+  coordinatorTurnReminder,
+  ensureGlobalCoordinatorCwd,
   formatWorkspaceInventory,
 } from './coordinator-prompt.js';
 
@@ -44,7 +49,7 @@ describe('coordinator-prompt', () => {
         },
       ],
     });
-    expect(prompt).toContain('global orchestrator');
+    expect(prompt).toContain('orchestration agent');
     expect(prompt).toContain('list_workspaces');
     expect(prompt).toContain('list_branches');
     expect(prompt).toContain('list_prs');
@@ -53,15 +58,24 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('send_to_thread');
     expect(prompt).toContain('wait_for_turn');
     expect(prompt).toContain('stop_thread');
+    expect(prompt).toContain('force-stop');
+    expect(prompt).toContain('force_stop');
     expect(prompt).toContain('archive_thread');
     expect(prompt).toContain('restore_thread');
     expect(prompt).toContain('run_setup');
     expect(prompt).toContain('run_dev_script');
+    expect(prompt).toContain('create_draft_pr');
     expect(prompt).toContain('confirm_land');
     expect(prompt).toContain('purge_thread');
     expect(prompt).toContain('parent-1');
     expect(prompt).toContain('github:acme/sideboard');
-    expect(prompt).toContain('create_thread → send_to_thread → wait_for_turn');
+    expect(prompt).toContain('create_draft_pr');
+    expect(prompt).toContain('Prefer asking the worktree agent');
+    expect(prompt).toContain('gh pr create --draft');
+    expect(prompt).toContain('Greenfield');
+    expect(prompt).toContain('add_workspace');
+    expect(prompt).toContain('sideboard/repos');
+    expect(prompt).toContain('sideboard://thread/');
   });
 
   it('cloud audience keeps Brightsy reply framing', () => {
@@ -73,7 +87,45 @@ describe('coordinator-prompt', () => {
     });
     expect(prompt).toContain('Brightsy cloud agent');
     expect(prompt).toContain('ALL registered workspaces');
-    expect(prompt).toContain('no git home directory');
+    expect(prompt).toContain('synthetic and empty on purpose');
     expect(prompt).not.toContain('Coordinator home repo');
+  });
+
+  it('turn reminder asserts fleet-oversight role every turn', () => {
+    const text = coordinatorTurnReminder({
+      parentId: 'abc-123',
+      goal: 'Cloud-connected Sideboard orchestrator',
+    });
+    expect(text).toContain('oversee Sideboard worktree agents');
+    expect(text).toContain('not yourself checked out');
+    expect(text).toContain('abc-123');
+    expect(text).toContain('synthetic');
+    expect(text).toContain('list_threads');
+    expect(text).toContain('Emptiness here is expected');
+    expect(text).toContain('New repo');
+    expect(text).toContain('add_workspace');
+    expect(text).toContain('sideboard://thread/');
+  });
+
+  it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
+    const prev = process.env.SIDEBOARD_APP_DATA;
+    const root = mkdtempSync(join(tmpdir(), 'sb-global-cwd-'));
+    process.env.SIDEBOARD_APP_DATA = root;
+    try {
+      const cwd = ensureGlobalCoordinatorCwd();
+      const claude = readFileSync(join(cwd, 'CLAUDE.md'), 'utf8');
+      const agents = readFileSync(join(cwd, 'AGENTS.md'), 'utf8');
+      expect(claude).toContain('Orchestration');
+      expect(claude).toContain('create_thread');
+      expect(claude).toContain('oversee worktree agents');
+      expect(claude).toContain('normal');
+      expect(claude).toContain('Greenfield');
+      expect(claude).toContain('add_workspace');
+      expect(agents).toContain('Sideboard MCP');
+    } finally {
+      if (prev === undefined) delete process.env.SIDEBOARD_APP_DATA;
+      else process.env.SIDEBOARD_APP_DATA = prev;
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

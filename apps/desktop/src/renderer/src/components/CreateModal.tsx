@@ -114,7 +114,7 @@ export function CreateModal({
   );
   const repoName =
     mode === 'orchestration'
-      ? 'Global'
+      ? 'Orchestration'
       : selectedWorkspace?.name ||
         (repoPath ? repoPath.split('/').filter(Boolean).pop() : '') ||
         'Select project';

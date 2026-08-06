@@ -110,7 +110,7 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cmd.file).toBe('/opt/custom/claude');
   });
 
-  it('orchestrator turns allow Sideboard MCP tools only (no Edit/Write/Bash)', async () => {
+  it('orchestrator turns get Sideboard MCP plus Bash/Read (fleet oversight)', async () => {
     const cmd = await claudeAdapter.buildTurn(
       {
         ...baseThread,
@@ -125,10 +125,29 @@ describe('claudeAdapter.buildTurn', () => {
       .filter(Boolean);
     expect(allowed).toContain('mcp__sideboard');
     expect(allowed).toContain('mcp__sideboard__*');
-    expect(allowed).not.toContain('Edit');
-    expect(allowed).not.toContain('Write');
-    expect(allowed).not.toContain('Bash');
-    expect(allowed).not.toContain('Read');
+    expect(allowed).toContain('Bash');
+    expect(allowed).toContain('Read');
+    expect(cmd.args).not.toContain('--tools');
+    expect(cmd.args).not.toContain('--disallowedTools');
+  });
+
+  it('Global threads keep Sideboard MCP even if sourceType was demoted to branch', async () => {
+    const cmd = await claudeAdapter.buildTurn(
+      {
+        ...baseThread,
+        sourceType: 'branch' as const,
+        sourceRef: 'Cloud-connected Sideboard orchestrator',
+        title: 'Pittsburgh Riverhounds',
+        repoPath: '__global__',
+        worktreePath: '/tmp/global',
+      },
+      { prompt: "what's going on" },
+    );
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__sideboard__*');
+    expect(allowed).toContain('Bash');
   });
 });
 

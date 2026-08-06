@@ -23,6 +23,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Stay inside the worktree/i);
     expect(text).toMatch(/Worktree folder nickname/i);
     expect(text).toMatch(/soccer-team worktree nickname/i);
+    expect(text).toMatch(/gh pr create --draft/i);
   });
 });
 

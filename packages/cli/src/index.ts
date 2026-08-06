@@ -511,24 +511,30 @@ async function main(): Promise<void> {
   program
     .command('land')
     .argument('<thread>', 'thread id/ref')
-    .action(async (thread) => {
+    .option('--draft', 'create/update as a draft PR')
+    .action(async (thread, opts) => {
       const preview = await orch.previewLand(thread);
       console.log(chalk.bold('Land preview'));
       console.log(`  branch: ${preview.branch}`);
       console.log(`  target: ${preview.target}`);
       console.log(`  dirty:  ${preview.dirty}${preview.dirty ? ' (will auto-commit on confirm)' : ''}`);
+      console.log(`  draft:  ${Boolean(opts.draft)}`);
       console.log(`  stat:\n${preview.diffStat}`);
       if (preview.blocked) {
         console.error(chalk.red(preview.blockReason));
         process.exitCode = 1;
         return;
       }
-      const ok = await confirm('Push and create/update PR?');
+      const ok = await confirm(
+        opts.draft
+          ? 'Push and create/update DRAFT PR?'
+          : 'Push and create/update PR?',
+      );
       if (!ok) {
         console.log('Aborted');
         return;
       }
-      const result = await orch.confirmLand(thread);
+      const result = await orch.confirmLand(thread, { draft: Boolean(opts.draft) });
       console.log(chalk.green(`PR: ${result.prUrl}`));
     });
 

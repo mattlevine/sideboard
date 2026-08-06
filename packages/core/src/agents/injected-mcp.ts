@@ -1,6 +1,8 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { run } from '../git/run.js';
 import { loadBrightsyConfig } from '../brightsy/config.js';
 import {
@@ -91,6 +93,81 @@ export function brightsyMcpAllowedTools(serverNames: string[]): string[] {
   return out;
 }
 
+/**
+ * Directory of the compiled @sideboard/core package (dist/).
+ * Electron main loads the CJS build where `import.meta.url` is empty — prefer __dirname.
+ */
+function corePackageDir(): string {
+  // eslint-disable-next-line camelcase
+  const cjsDir = typeof __dirname !== 'undefined' ? __dirname : '';
+  if (cjsDir) return cjsDir;
+  try {
+    const url = import.meta.url;
+    if (typeof url === 'string' && url.length > 0) {
+      return dirname(fileURLToPath(url));
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const req = createRequire(join(process.cwd(), 'package.json'));
+    return dirname(req.resolve('@sideboard/core'));
+  } catch {
+    return process.cwd();
+  }
+}
+
+/**
+ * Locate a JS entry that can start Sideboard MCP.
+ * Electron GUI PATH often lacks a global `sideboard` binary — prefer absolute paths.
+ */
+export function findSideboardMcpJsEntry(): string | null {
+  const override = process.env.SIDEBOARD_MCP_ENTRY?.trim() || process.env.SIDEBOARD_CLI?.trim();
+  if (override && existsSync(override)) return override;
+
+  let dir = corePackageDir();
+  for (let i = 0; i < 10; i++) {
+    const candidates = [
+      join(dir, 'mcp/run-stdio.js'),
+      join(dir, 'mcp/run-stdio.cjs'),
+      join(dir, 'dist/mcp/run-stdio.js'),
+      join(dir, 'dist/mcp/run-stdio.cjs'),
+      join(dir, 'packages/core/dist/mcp/run-stdio.js'),
+      join(dir, 'packages/cli/dist/index.js'),
+      join(dir, 'cli/dist/index.js'),
+    ];
+    for (const p of candidates) {
+      if (existsSync(p)) return p;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/** Resolve how Claude should spawn the Sideboard MCP stdio server. */
+export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
+  const which = await run('which', ['sideboard'], { reject: false });
+  if (which.exitCode === 0 && which.stdout.trim()) {
+    return { name: 'sideboard', command: which.stdout.trim(), args: ['mcp'] };
+  }
+
+  const entry = findSideboardMcpJsEntry();
+  if (entry) {
+    const isCli = /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry);
+    return {
+      name: 'sideboard',
+      // Use `node` (not process.execPath) — under Electron execPath is Electron itself.
+      command: 'node',
+      args: isCli ? [entry, 'mcp'] : [entry],
+    };
+  }
+
+  // Last resort: bare binary name (fails clearly if still not on PATH).
+  return { name: 'sideboard', command: 'sideboard', args: ['mcp'] };
+}
+
 export async function buildInjectedMcpServers(opts: {
   includeSideboard?: boolean;
   includeBrightsy?: boolean;
@@ -98,11 +175,7 @@ export async function buildInjectedMcpServers(opts: {
   const servers: InjectedMcpServer[] = [];
 
   if (opts.includeSideboard) {
-    servers.push({
-      name: 'sideboard',
-      command: 'sideboard',
-      args: ['mcp'],
-    });
+    servers.push(await resolveSideboardMcpServer());
   }
 
   if (opts.includeBrightsy && isBrightsyConnected()) {
@@ -160,19 +233,20 @@ export async function writeInjectedMcpConfig(opts: {
 
 /** @deprecated Use writeInjectedMcpConfig({ includeSideboard: true }) */
 export function writeSideboardMcpConfig(): string {
+  const entry = findSideboardMcpJsEntry();
+  const sideboard = entry
+    ? {
+        command: 'node',
+        args: /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry)
+          ? [entry, 'mcp']
+          : [entry],
+      }
+    : { command: 'sideboard', args: ['mcp'] };
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-orch-mcp-'));
   const cfgPath = join(dir, 'mcp.json');
   writeFileSync(
     cfgPath,
-    JSON.stringify(
-      {
-        mcpServers: {
-          sideboard: { command: 'sideboard', args: ['mcp'] },
-        },
-      },
-      null,
-      2,
-    ),
+    JSON.stringify({ mcpServers: { sideboard } }, null, 2),
   );
   return cfgPath;
 }

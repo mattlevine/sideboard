@@ -4,6 +4,11 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/vs2015.css';
 import { parseFilePathLink, type FilePathLink } from '../lib/file-path-link';
+import {
+  linkifyThreadUrls,
+  markdownUrlTransform,
+  parseThreadLink,
+} from '../lib/thread-link';
 
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'));
 
@@ -12,6 +17,8 @@ interface Props {
   className?: string;
   knownFilePaths?: string[];
   onFileReferenceClick?: (link: FilePathLink) => void;
+  /** Open a Sideboard thread from a sideboard://thread/<id> markdown link. */
+  onThreadLinkClick?: (threadRef: string) => void;
   /** When true, defer mermaid rendering to avoid parse errors on incomplete syntax. */
   isStreaming?: boolean;
 }
@@ -46,11 +53,30 @@ export function MarkdownMessage({
   className,
   knownFilePaths,
   onFileReferenceClick,
+  onThreadLinkClick,
   isStreaming = false,
 }: Props) {
   const components: ComponentProps<typeof ReactMarkdown>['components'] = {
     a({ href, children, ...props }) {
       const url = typeof href === 'string' ? href : '';
+      const threadRef = parseThreadLink(url);
+      if (threadRef) {
+        return (
+          <a
+            {...props}
+            href={url}
+            className="md-thread-link"
+            title="Open thread in Sideboard"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onThreadLinkClick?.(threadRef);
+            }}
+          >
+            {children}
+          </a>
+        );
+      }
       if (!url || !isSafeExternalUrl(url)) {
         return <span {...props}>{children}</span>;
       }
@@ -150,9 +176,10 @@ export function MarkdownMessage({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
+        urlTransform={markdownUrlTransform}
         components={components}
       >
-        {text}
+        {linkifyThreadUrls(text)}
       </ReactMarkdown>
     </div>
   );

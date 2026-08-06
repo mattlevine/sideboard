@@ -18,7 +18,7 @@ import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
-import { isGlobalThread } from '../lib/global-workspace';
+import { isCloudCoordinatorThread, isGlobalThread } from '../lib/global-workspace';
 
 function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
   switch (kind) {
@@ -48,6 +48,8 @@ interface Props {
   onSelectFile?: (path: string) => void;
   onCloseFile?: (path: string) => void;
   onShowChat?: () => void;
+  /** Open another thread from a sideboard://thread/<id> markdown link. */
+  onOpenThreadLink?: (threadRef: string) => void;
   /** Git markers for open file tabs (from getDiff). */
   fileChanges?: Record<string, { status: string; additions?: number; deletions?: number }>;
   leftSidebarToggle?: ReactNode;
@@ -69,6 +71,7 @@ export function ThreadPanel({
   onSelectFile,
   onCloseFile,
   onShowChat,
+  onOpenThreadLink,
   fileChanges = {},
   leftSidebarToggle,
   rightSidebarToggle,
@@ -352,8 +355,8 @@ export function ThreadPanel({
       fromThreadId: thread.id,
       agent,
     });
+    onSelectChat(t.id, t);
     onRefresh();
-    onSelectChat(t.id);
   }
 
   async function forkToTab(throughIndex: number) {
@@ -527,7 +530,9 @@ export function ThreadPanel({
                     <h3>What should we orchestrate?</h3>
                     <p>
                       {isGlobalThread(thread)
-                        ? 'Steer worktree agents across registered repos with Sideboard MCP. Brightsy cloud tasks land here when this is the cloud coordinator.'
+                        ? isCloudCoordinatorThread(thread)
+                          ? 'Steer worktree agents across registered repos. Brightsy cloud requests land in this chat.'
+                          : 'Steer worktree agents across registered repos with Sideboard MCP.'
                         : 'Coordinate child worktree agents from this orchestration chat.'}{' '}
                       Use <kbd>⌘L</kbd> to focus the composer.
                     </p>
@@ -564,12 +569,13 @@ export function ThreadPanel({
                     worktreePath={thread.worktreePath}
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
+                    onOpenThread={onOpenThreadLink}
                     onFork={() => void forkToTab(i)}
                   />
                 ) : m.role === 'summary' ? (
                   <div className="msg-summary">
                     <div className="msg-summary-label">Context summarized</div>
-                    <MarkdownMessage text={m.text} />
+                    <MarkdownMessage text={m.text} onThreadLinkClick={onOpenThreadLink} />
                   </div>
                 ) : (
                   <div className="msg-body">{m.text}</div>
@@ -595,6 +601,7 @@ export function ThreadPanel({
                   worktreePath={thread.worktreePath}
                   knownFilePaths={filePaths}
                   onOpenFile={onSelectFile}
+                  onOpenThread={onOpenThreadLink}
                   onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
                 />
               ) : (

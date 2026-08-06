@@ -18,11 +18,15 @@ const MAX_ORCH_THREADS = 5;
 
 /**
  * Sideboard MCP server — agent-facing judgment surface.
- * Deliberately excludes confirm_land and purge_thread.
+ * Deliberately excludes ready-for-review confirm_land and purge_thread.
+ * Draft PRs are allowed via create_draft_pr.
  */
 export async function startMcpServer(): Promise<void> {
   const orch = getOrchestrator();
-  await orch.reconcile();
+  // Do not reclaim "stale running" turns — MCP runs in a separate process from
+  // the desktop orchestrator that owns activeTurns. Reclaiming here falsely
+  // marks live parent turns as "Process died (reconciled on startup)".
+  await orch.reconcile(undefined, { reclaimStaleTurns: false });
 
   const server = new McpServer({
     name: 'sideboard',
@@ -53,16 +57,16 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_threads',
-    'List Sideboard threads across all workspaces (one summary line each — token-frugal)',
+    'List Sideboard threads across all workspaces (one summary line each — token-frugal). Each line ends with sideboard://thread/<id> — use that URL in markdown links so the UI can open the chat.',
     {},
     async () => {
       const threads = orch.getThreads(true);
       const lines = threads.map((t) => {
         const repo =
           t.repoPath === GLOBAL_WORKSPACE_ID
-            ? 'Global'
+            ? 'Orchestration'
             : basename(t.repoPath) || t.repoPath;
-        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${t.devPort ? `  http://localhost:${t.devPort}` : ''}`;
+        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}  sideboard://thread/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}`;
       });
       return {
         content: [{ type: 'text', text: lines.join('\n') || '(no threads)' }],
@@ -145,6 +149,7 @@ export async function startMcpServer(): Promise<void> {
               branchName: thread.branchName,
               worktreePath: thread.worktreePath,
               status: thread.status,
+              link: `sideboard://thread/${thread.id}`,
             }),
           },
         ],
@@ -154,12 +159,19 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_thread',
-    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation.',
+    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation. Set force_stop=true to interrupt an in-flight/queued turn (kill + clear queue) before queueing this prompt — use when the thread is mid-turn or has stale queued prompts you need to replace.',
     {
       ref: z.string(),
       prompt: z.string(),
+      force_stop: z.boolean().optional(),
     },
-    async ({ ref, prompt }) => {
+    async ({ ref, prompt, force_stop }) => {
+      if (force_stop) {
+        const existing = orch.getThread(ref);
+        if (existing) {
+          orch.stop(ref, { clearQueue: true });
+        }
+      }
       const thread = await orch.send(ref, prompt);
       return {
         content: [
@@ -169,6 +181,7 @@ export async function startMcpServer(): Promise<void> {
               id: thread.id,
               status: thread.status,
               queueLength: thread.queue.length,
+              forceStopped: Boolean(force_stop),
             }),
           },
         ],
@@ -213,9 +226,12 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'stop_thread',
-    'Stop an in-flight agent turn on a thread (does not archive the worktree)',
-    { ref: z.string() },
-    async ({ ref }) => {
+    'Force-stop a thread: kill any in-flight agent turn AND clear queued prompts so drainQueue cannot continue. Does not archive the worktree. Optional force defaults to true.',
+    {
+      ref: z.string(),
+      force: z.boolean().optional(),
+    },
+    async ({ ref, force }) => {
       const t = orch.getThread(ref);
       if (!t) {
         return {
@@ -223,7 +239,9 @@ export async function startMcpServer(): Promise<void> {
           isError: true,
         };
       }
-      const stopped = orch.stop(ref);
+      const clearQueue = force !== false;
+      const hadQueued = t.queue.length > 0;
+      const stopped = orch.stop(ref, { clearQueue });
       return {
         content: [
           {
@@ -231,6 +249,7 @@ export async function startMcpServer(): Promise<void> {
             text: JSON.stringify({
               id: stopped.id,
               status: stopped.status,
+              clearedQueue: clearQueue && hadQueued,
             }),
           },
         ],
@@ -444,11 +463,42 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'preview_land',
-    'Preview push+PR land (does NOT confirm — humans must confirm via CLI/app)',
+    'Preview push+PR land (does NOT push). Use before create_draft_pr.',
     { ref: z.string() },
     async ({ ref }) => {
       const preview = await orch.previewLand(ref);
       return { content: [{ type: 'text', text: JSON.stringify(preview, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'create_draft_pr',
+    'Commit dirty changes if needed, push the thread branch, and create/update a DRAFT GitHub PR. Ready-for-review / non-draft land stays human-only (CLI/app confirm_land). Prefer this when the orchestrator should open a PR itself; alternatively send_to_thread asking the worktree agent to run `gh pr create --draft`.',
+    { ref: z.string() },
+    async ({ ref }) => {
+      try {
+        const result = await orch.confirmLand(ref, { draft: true });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  prUrl: result.prUrl,
+                  pushed: result.pushed,
+                  committed: result.committed,
+                  draft: true,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
     },
   );
 

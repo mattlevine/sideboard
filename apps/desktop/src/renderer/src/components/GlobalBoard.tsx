@@ -6,6 +6,7 @@ import {
   isCloudCoordinatorThread,
   threadDisplayTitle,
 } from '../lib/global-workspace';
+import { FleetActivityBar } from './FleetActivityBar';
 import { MarkdownMessage } from './MarkdownMessage';
 
 interface Props {
@@ -13,7 +14,6 @@ interface Props {
   runtime: OrchestratorRuntime | null;
   liveByThread: Record<string, string>;
   onOpenThread: (id: string) => void;
-  onOpenCloudCoordinator: () => Promise<void>;
   onNewGlobalChat: () => void;
   onRefresh: () => void;
   /** Left-edge open control when the left sidebar is closed. */
@@ -30,12 +30,28 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function previewForThread(
+  t: Thread,
+  live: string | undefined,
+): { text: string; markdown: boolean } {
+  if (live) return { text: live, markdown: true };
+  if (t.lastError) return { text: t.lastError, markdown: false };
+  const last = t.messages[t.messages.length - 1];
+  if (last?.role === 'agent' || last?.role === 'user') {
+    return { text: last.text, markdown: last.role === 'agent' };
+  }
+  // Don't surface the internal Brightsy marker string as a preview.
+  if (t.sourceRef?.trim() && t.sourceRef !== CLOUD_ORCHESTRATOR_GOAL) {
+    return { text: t.sourceRef, markdown: false };
+  }
+  return { text: '', markdown: false };
+}
+
 export function GlobalBoard({
   threads,
   runtime,
   liveByThread,
   onOpenThread,
-  onOpenCloudCoordinator,
   onNewGlobalChat,
   onRefresh,
   leftSidebarToggle,
@@ -48,8 +64,6 @@ export function GlobalBoard({
     [threads],
   );
 
-  const cloudCoordinator = globalChats.find(isCloudCoordinatorThread) ?? null;
-
   return (
     <section className="panel board">
       {leftSidebarToggle && (
@@ -59,60 +73,42 @@ export function GlobalBoard({
         </div>
       )}
       <div className="panel-header">
-        <h2>Global</h2>
+        <h2>Orchestration</h2>
         <span className="thread-meta">
           {runtime
-            ? `${runtime.running}/${runtime.maxConcurrent} running · ${globalChats.length} global chat${globalChats.length === 1 ? '' : 's'}`
+            ? `${runtime.running}/${runtime.maxConcurrent} running · ${globalChats.length} chat${globalChats.length === 1 ? '' : 's'}`
             : '…'}
         </span>
         <div className="actions">
           <button onClick={onRefresh}>Refresh</button>
           <button onClick={onNewGlobalChat}>New chat</button>
-          <button
-            className="primary"
-            onClick={() => void onOpenCloudCoordinator()}
-          >
-            {cloudCoordinator ? 'Open cloud coordinator' : 'Start cloud coordinator'}
-          </button>
         </div>
       </div>
 
-      <div className="board-stats">
-        <Stat label="Running" value={runtime?.running ?? 0} tone="warn" />
-        <Stat label="Queued" value={runtime?.queued ?? 0} tone="warn" />
-        <Stat label="Idle" value={runtime?.idle ?? 0} tone="ok" />
-        <Stat label="Error" value={runtime?.error ?? 0} tone="err" />
-        <Stat label="Cap" value={runtime?.maxConcurrent ?? 3} />
-      </div>
+      <FleetActivityBar runtime={runtime} compact />
 
-      <p className="thread-meta" style={{ padding: '0 16px 8px' }}>
-        Fleet controller chats — orchestrate worktree agents via Sideboard MCP.
-        Brightsy cloud always uses{' '}
-        <strong>{CLOUD_ORCHESTRATOR_GOAL}</strong>.
+      <p className="thread-meta board-lede">
+        Chats that steer worktree agents across your registered workspaces.
+        Brightsy cloud requests go to the chat marked Brightsy.
       </p>
 
       <div className="board-body">
         {globalChats.length === 0 && (
           <div className="empty">
-            No global chats yet. Start the cloud coordinator or create a new chat.
+            No orchestration chats yet. Create a chat to get started.
           </div>
         )}
         <div className="board-table">
           {globalChats.map((t) => {
-            const live = liveByThread[t.id];
-            const last = t.messages[t.messages.length - 1];
-            const previewText =
-              live ||
-              t.lastError ||
-              (last?.role === 'agent' || last?.role === 'user' ? last.text : null) ||
-              t.sourceRef ||
-              '';
-            const previewIsMarkdown = Boolean(live || (last && last.role === 'agent'));
+            const { text: previewText, markdown: previewIsMarkdown } = previewForThread(
+              t,
+              liveByThread[t.id],
+            );
             const isCloud = isCloudCoordinatorThread(t);
             return (
               <div
                 key={t.id}
-                className={`board-row coordinator${isCloud ? ' cloud-coordinator' : ''}`}
+                className={`board-row${isCloud ? ' cloud-brightsy' : ''}`}
               >
                 <span className={`dot ${t.status}`} title={t.status} />
                 <div
@@ -127,7 +123,14 @@ export function GlobalBoard({
                     }
                   }}
                 >
-                  <div className="thread-title">{threadDisplayTitle(t)}</div>
+                  <div className="thread-title">
+                    {threadDisplayTitle(t)}
+                    {isCloud ? (
+                      <span className="board-badge" title="Receives Brightsy cloud requests">
+                        Brightsy
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="thread-meta">
                     {t.agent} · {t.status}
                     {t.queue.length ? ` · q${t.queue.length}` : ''}
@@ -137,7 +140,11 @@ export function GlobalBoard({
                   {previewText ? (
                     <div className="board-preview">
                       {previewIsMarkdown ? (
-                        <MarkdownMessage text={previewText} className="md md-compact" />
+                        <MarkdownMessage
+                          text={previewText}
+                          className="md md-compact"
+                          onThreadLinkClick={onOpenThread}
+                        />
                       ) : (
                         previewText
                       )}
@@ -162,22 +169,5 @@ export function GlobalBoard({
         </div>
       </div>
     </section>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: 'ok' | 'warn' | 'err';
-}) {
-  return (
-    <div className={`board-stat${tone ? ` ${tone}` : ''}`}>
-      <div className="board-stat-value">{value}</div>
-      <div className="thread-meta">{label}</div>
-    </div>
   );
 }

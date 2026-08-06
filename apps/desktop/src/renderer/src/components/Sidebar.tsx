@@ -76,7 +76,7 @@ export function Sidebar({
       .filter((t) => {
         if (t.repoPath !== GLOBAL_WORKSPACE_ID) return false;
         if (!q) return true;
-        const hay = `${t.title} ${t.agent} global`.toLowerCase();
+        const hay = `${t.title} ${t.agent} global orchestration`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -157,56 +157,76 @@ export function Sidebar({
         className={`thread-list${filteredArchived.length > 0 ? ' has-history' : ''}`}
       >
         <div className="sidebar-projects">
-        {(!q || globalThreads.length > 0 || 'global'.includes(q)) && (
+        {(!q ||
+          globalThreads.length > 0 ||
+          'orchestration'.includes(q) ||
+          'global'.includes(q)) && (
           <div className="workspace-group">
             <div className="workspace-header">
               <button
                 type="button"
                 className="workspace-name-btn"
-                title="Global orchestration workspace"
+                title="Orchestration — coordinate work across registered workspaces"
                 onClick={onShowBoard}
               >
                 <span className="workspace-glyph" aria-hidden />
-                <span className="workspace-name">Global</span>
+                <span className="workspace-name">Orchestration</span>
               </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title="New global chat"
-                onClick={() => onNew(undefined, 'orchestration')}
-              >
-                +
-              </button>
-            </div>
-            {globalThreads.length === 0 && (
-              <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                No chats — open Home
-              </div>
-            )}
-            {globalThreads.map((t) => {
-              const active = view === 'thread' && t.id === selectedId;
-              const selected = multiSelected.has(t.id);
-              const isCloud = isCloudCoordinatorThread(t);
-              return (
-                <div
-                  key={t.id}
-                  className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}`}
-                  onClick={(e) => onSelect(t.id, e.metaKey || e.ctrlKey || e.shiftKey)}
+              {globalThreads.length === 0 && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="New orchestration chat"
+                  onClick={() => onNew(undefined, 'orchestration')}
                 >
-                  <span className={`dot ${t.status}`} />
-                  <div>
-                    <div className="thread-title">
-                      {threadDisplayTitle(t)}
-                      {isCloud ? ' · cloud' : ''}
-                    </div>
-                    <div className="thread-meta">
-                      {t.agent}
-                      {t.status !== 'idle' ? ` · ${t.status}` : ''}
+                  +
+                </button>
+              )}
+            </div>
+            {globalThreads.length === 0 ? (
+              <div className="thread-meta" style={{ padding: '4px 8px' }}>
+                No chats — open Home or use +
+              </div>
+            ) : (
+              (() => {
+                // One sidebar row (like a worktree); sibling chats live in the tab bar.
+                const primary =
+                  globalThreads.find((t) => t.id === selectedId) ??
+                  [...globalThreads].sort((a, b) =>
+                    b.updatedAt.localeCompare(a.updatedAt),
+                  )[0]!;
+                const active =
+                  view === 'thread' &&
+                  globalThreads.some((t) => t.id === selectedId);
+                const selected = globalThreads.some((t) => multiSelected.has(t.id));
+                const cloud = globalThreads.some((t) => isCloudCoordinatorThread(t));
+                return (
+                  <div className="worktree-block">
+                    <div
+                      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}`}
+                      onClick={(e) =>
+                        onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey)
+                      }
+                    >
+                      <span className={`dot ${primary.status}`} />
+                      <div>
+                        <div className="thread-title">
+                          {threadDisplayTitle(primary)}
+                          {cloud ? ' · Brightsy' : ''}
+                        </div>
+                        <div className="thread-meta">
+                          {primary.agent}
+                          {globalThreads.length > 1
+                            ? ` · ${globalThreads.length} chats`
+                            : ''}
+                          {primary.status !== 'idle' ? ` · ${primary.status}` : ''}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })()
+            )}
           </div>
         )}
 

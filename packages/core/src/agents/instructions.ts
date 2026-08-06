@@ -80,7 +80,7 @@ export function formatWorktreeDirective(
     );
   } else {
     lines.push(
-      '- Create the PR from this worktree with `gh pr create` (or update via `gh pr edit`) once the change set is coherent. Title/body must reflect the change purpose, not the worktree name.',
+      '- Prefer a draft PR first: `gh pr create --draft` (or update via `gh pr edit`) once the change set is coherent. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.',
     );
   }
   return lines.join('\n');

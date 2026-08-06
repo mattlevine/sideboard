@@ -121,4 +121,22 @@ describe('createChatTab', () => {
     expect(tab.title).not.toBe('West Ham');
     expect(teamNames.has(tab.title)).toBe(true);
   });
+
+  it('keeps Global orchestration tabs as orchestration (not demoted to branch)', async () => {
+    const { createChatTab } = await import('./chat-tabs.js');
+    const globalSource: Thread = {
+      ...source,
+      id: 'global-orch',
+      title: 'Cloud-connected Sideboard orchestrator',
+      sourceType: 'orchestration',
+      sourceRef: 'Cloud-connected Sideboard orchestrator',
+      branchName: 'global',
+      worktreePath: '/tmp/sideboard-global',
+      repoPath: '__global__',
+    };
+    listed = [globalSource];
+    const tab = createChatTab({ fromThreadId: globalSource.id, title: 'Planning' });
+    expect(tab.sourceType).toBe('orchestration');
+    expect(tab.repoPath).toBe('__global__');
+  });
 });

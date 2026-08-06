@@ -11,8 +11,10 @@ import {
 } from './api.js';
 import {
   CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_STOPPED_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
   CLOUD_ORCHESTRATOR_GOAL,
+  parseForceStopMessage,
 } from './cloud-connect-constants.js';
 import { readThread } from '../store/thread-store.js';
 import {
@@ -23,8 +25,11 @@ import {
 
 export {
   CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_STOPPED_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
   CLOUD_ORCHESTRATOR_GOAL,
+  parseForceStopMessage,
+  SIDEBOARD_FORCE_STOP,
 } from './cloud-connect-constants.js';
 
 export {
@@ -77,7 +82,7 @@ async function handleTask(
   opts: CloudConnectOptions,
 ): Promise<void> {
   const log = opts.onLog ?? (() => undefined);
-  const message = taskMessageText(task);
+  let message = taskMessageText(task);
   if (!message) {
     log(`skip ${task.id.slice(0, 8)}: empty message`);
     return;
@@ -95,7 +100,33 @@ async function handleTask(
 
   // Re-read coordinator after serialization so busy checks see prior sends.
   const coordinator = ensureCloudCoordinator(opts.agent);
-  const fresh = readThread(coordinator.id) ?? coordinator;
+  let fresh = readThread(coordinator.id) ?? coordinator;
+
+  const parsed = parseForceStopMessage(message);
+  if (parsed.forceStop) {
+    // Idempotent stop (poll loop may already have interrupted an in-flight turn).
+    try {
+      getOrchestrator().stop(fresh.id);
+      log(`force-stop ${task.id.slice(0, 8)} → coordinator ${fresh.id.slice(0, 8)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`force-stop ${task.id.slice(0, 8)}: ${msg}`);
+    }
+
+    if (!parsed.remainder) {
+      if (task.task_status === 'awaiting_confirmation') {
+        await api.approveTask(task.id).catch(() => undefined);
+      }
+      await api.markRunning(task.id).catch(() => undefined);
+      await api.submitResponse(task.id, CLOUD_COORDINATOR_STOPPED_REPLY);
+      log(`replied stopped ${task.id.slice(0, 8)}`);
+      return;
+    }
+
+    // Strip token and continue with the follow-up request.
+    message = parsed.remainder;
+    fresh = readThread(coordinator.id) ?? ensureCloudCoordinator(opts.agent);
+  }
 
   // Busy: non-AI reply — do not interrupt, queue, or spawn a sibling.
   // Check before approve so we do not mutate server state when busy.
@@ -217,6 +248,20 @@ export async function runCloudConnect(opts: CloudConnectOptions): Promise<void> 
         // Skip running tasks we didn't start in this process
         if (task.task_status === 'running') continue;
         inFlight.add(task.id);
+        const message = taskMessageText(task);
+        // Force-stop must interrupt immediately — do not wait for the
+        // serialized handleTask queue (unblocks in-flight send/waitForTurn).
+        if (message && parseForceStopMessage(message).forceStop) {
+          try {
+            getOrchestrator().stop(ensureCloudCoordinator(opts.agent).id);
+            log(
+              `force-stop interrupt ${task.id.slice(0, 8)} → coordinator`,
+            );
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log(`force-stop interrupt ${task.id.slice(0, 8)}: ${msg}`);
+          }
+        }
         void enqueueHandleTask(() => handleTask(api, task, opts))
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);

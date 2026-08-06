@@ -91,7 +91,8 @@ textarea {
 
 /* Traffic lights sit over the center column when the left sidebar is closed */
 .app.left-collapsed .chat-tabs,
-.app.left-collapsed .board-chrome {
+.app.left-collapsed .board-chrome,
+.app.left-collapsed .child-list {
   padding-left: 78px;
 }
 
@@ -877,10 +878,23 @@ body.resizing-panels * {
   line-height: 1;
 }
 
+.chat-tab-add {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 6px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
 .chat-tab-edit:hover,
 .chat-tab-close:hover,
 .chat-tab-add:hover {
   color: var(--text);
+}
+
+.chat-tab-add:hover {
+  background: var(--bg-hover);
 }
 
 .chat-tab-input {
@@ -2120,6 +2134,12 @@ body.resizing-panels * {
 
 .md a {
   color: #3794ff;
+}
+
+.md a.md-thread-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 .md code {
@@ -4737,9 +4757,22 @@ button.linkish:hover {
 .child-list {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  min-height: 38px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+
+.child-list .thread-meta {
+  -webkit-app-region: drag;
+}
+
+.child-list button,
+.child-list .child-chip {
+  -webkit-app-region: no-drag;
 }
 
 .child-chip {
@@ -4778,8 +4811,28 @@ button.linkish:hover {
 .board-stats {
   display: flex;
   gap: 8px;
+  align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.board-stats.compact {
+  padding: 8px 12px;
+  gap: 6px;
+}
+
+.board-stats.compact .board-stat {
+  min-width: 56px;
+  padding: 4px 8px;
+}
+
+.board-stats.compact .board-stat-value {
+  font-size: 14px;
+}
+
+.board-stats-meta {
+  margin-left: auto;
 }
 
 .board-stat {
@@ -4858,8 +4911,38 @@ button.linkish:hover {
   background: var(--accent-soft);
 }
 
+.board-row.cloud-brightsy,
 .board-row.cloud-coordinator {
   border-color: var(--accent-dim, var(--accent));
+}
+
+.board-lede {
+  padding: 8px 16px 10px;
+  margin: 0;
+  max-width: 52rem;
+  line-height: 1.45;
+}
+
+.board-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+.board-row .thread-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 0;
 }
 
 .board-open {

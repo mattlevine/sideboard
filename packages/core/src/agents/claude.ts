@@ -178,7 +178,8 @@ export const claudeAdapter: AgentAdapter = {
     }
 
     const mode = permissionMode(thread);
-    const isOrchestrator = thread.sourceType === 'orchestration';
+    const { isOrchestratorThread } = await import('../store/global-workspace.js');
+    const isOrchestrator = isOrchestratorThread(thread);
     // Auto-inject Brightsy MCP for every Claude turn when logged in; Sideboard MCP
     // for coordinator turns. Multi-team: one MCP server per Sideboard-connected team.
     const injectedServers = await buildInjectedMcpServers({
@@ -188,10 +189,13 @@ export const claudeAdapter: AgentAdapter = {
     const injectedBrightsyNames = injectedServers
       .filter((s) => s.name === 'brightsy' || s.name.startsWith('brightsy_'))
       .map((s) => s.name);
-    // Orchestrators: MCP only (no Edit/Write/Bash on a home directory).
+    // Orchestrators keep Bash/Read/etc (inspect child worktrees by absolute path)
+    // plus Sideboard MCP for fleet control. Identity prompts forbid treating the
+    // synthetic global cwd as a project worktree.
     let allowedTools: string[];
     if (isOrchestrator) {
       allowedTools = [
+        ...BASE_ALLOWED_TOOLS,
         ...SIDEBOARD_MCP_ALLOWED_TOOLS,
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
       ];

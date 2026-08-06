@@ -183,16 +183,6 @@ export function ChatTabs({
             </div>
           );
         })}
-      </div>
-      <div className="chat-tabs-actions">
-        {usageTotalLabel && (
-          <span className="thread-meta usage-total" title={usageTotalTooltip}>
-            {usageTotalLabel}
-          </span>
-        )}
-        {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}
-        {rightSidebarToggle}
-        {openMenu}
         <button
           ref={addBtnRef}
           type="button"
@@ -206,7 +196,7 @@ export function ChatTabs({
           open={newOpen}
           onClose={() => setNewOpen(false)}
           anchorRef={addBtnRef}
-          align="right"
+          align="left"
           minWidth={180}
         >
           <div className="menu-section">New tab with agent</div>
@@ -231,6 +221,16 @@ export function ChatTabs({
             </button>
           ))}
         </FloatingMenu>
+      </div>
+      <div className="chat-tabs-actions">
+        {usageTotalLabel && (
+          <span className="thread-meta usage-total" title={usageTotalTooltip}>
+            {usageTotalLabel}
+          </span>
+        )}
+        {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}
+        {rightSidebarToggle}
+        {openMenu}
       </div>
     </div>
   );

@@ -148,11 +148,11 @@ Point Claude Code, Codex, or any MCP client at that server. Agents get tools to:
 
 - **Discover** — `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
 - **Workspaces** — `add_workspace` / `remove_workspace`
-- **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result`; `stop_thread`, `archive_thread`, `restore_thread`
+- **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result`; `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
 - **Setup / run** — `run_setup`, `list_run_scripts`, `run_dev_script`, `stop_dev_script`
-- **Inspect** — `get_diff`, `preview_land`
+- **Inspect / draft PRs** — `get_diff`, `preview_land`, `create_draft_pr` (push + draft PR only)
 
-`confirm_land` and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP.
+Ready-for-review `confirm_land` and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP. Coordinators can also `send_to_thread` asking a worktree agent to run `gh pr create --draft`.
 
 ## Brightsy MCP on every Claude thread
 
@@ -184,20 +184,65 @@ sideboard brightsy disconnect-team <slug>
 
 Brightsy chat channels can drive Sideboard on your machine across **all registered workspaces** — no need to be at the keyboard. Slack is the best-tested path; Discord and Microsoft Teams use the same cloud-task flow but are less battle-tested.
 
+### How the pieces fit together
+
 ```
-Slack / Discord / Teams → Brightsy cloud agent → Brightsy desktop task queue
-                                        │  polled every 5s
-                                        ▼
-              Global workspace coordinator (no git home; Sideboard MCP only)
-                                        │  list_workspaces → branches/PRs/issues → create_thread
-                                        │  send / wait / stop / archive · setup / run · diff
-                                        ▼
-                         any registered workspace + its worktree threads
+┌─────────────────┐     chat      ┌──────────────────┐
+│ Slack / Discord │ ────────────► │ Brightsy cloud   │
+│ / Teams         │               │ agent + desktop  │
+└─────────────────┘               │ task             │
+                                  └────────┬─────────┘
+                                           │ desktop task
+                                           ▼
+                                  ┌──────────────────┐
+                                  │ Cloud connect    │
+                                  │ daemon (poll ~5s)│
+                                  └────────┬─────────┘
+                                           │ send + wait
+                     ┌─────────────────────┼─────────────────────┐
+                     ▼                     ▼                     │
+           ┌─────────────────┐   ┌─────────────────┐             │
+           │ Orchestration   │   │ Local orch chat │             │
+           │ chat (Brightsy- │   │ (desktop New    │             │
+           │ marked)         │   │  chat)          │             │
+           └────────┬────────┘   └────────┬────────┘             │
+                    │ tools               │ tools                │
+                    └──────────┬──────────┘                      │
+                               ▼                                 │
+                     ┌─────────────────┐                         │
+                     │ Sideboard MCP   │                         │
+                     │ fleet control   │                         │
+                     └────────┬────────┘                         │
+                              │ create / send / wait             │
+                              ▼                                  │
+                     ┌─────────────────┐      draft PR / push    │
+                     │ Worktree agents │ ──────────────────────► │ GitHub
+                     │ (repo threads)  │                         │
+                     └─────────────────┘                         │
+                              │                                  │
+           reply text ────────┘                                  │
+           (cloud path only) ────────────────────────────────────┘
+                               back to Brightsy → Slack
 ```
 
-The **Global** workspace is a first-class home-less project: multiple orchestration chats, each using a synthetic empty cwd and Sideboard/Brightsy MCP tools only (no Edit/Write/Bash on a home checkout). Brightsy cloud always routes to one designated chat (`Cloud-connected Sideboard orchestrator`). The Home board lists those Global chats (last responses) — not a fan-out console.
+**Path through a request**
 
-Sideboard uses Brightsy’s existing `/api/v1beta/desktop/*` cloud-to-local API. If the cloud coordinator is already running or queued, the daemon returns a fixed non-AI busy reply (no interrupt, no queue, no sibling chat) so the cloud agent can decide what to do next.
+1. **Chat → Brightsy** — A human asks in Slack (or Discord/Teams). Brightsy’s cloud agent receives it and, when desktop Sideboard access is enabled, creates an inbound desktop task.
+2. **Daemon → orchestration** — Sideboard’s cloud-connect daemon polls Brightsy, routes the task to the singleton Brightsy-marked orchestration chat (soccer nickname in the UI; identity on `sourceRef`), and waits for the turn.
+3. **Orchestrator steers the fleet** — That chat uses Sideboard MCP (`list_workspaces`, `create_thread`, `send_to_thread`, `wait_for_turn`, …). It does not live in a project worktree; it oversees them.
+4. **Worktree agents build** — Child threads are real git worktrees under registered workspaces. They code, run tools, and can open draft PRs (or the orchestrator calls `create_draft_pr`). Deep links: `sideboard://thread/<id>`.
+5. **Reply back up** — Orchestrator text is submitted as the Brightsy task response and relayed back to Slack.
+
+**Two ways in**
+
+| Path | Entry | Then |
+|------|--------|------|
+| **Cloud** | Slack → Brightsy → cloud-connect daemon | Brightsy-marked orchestration chat → same MCP + worktree agents |
+| **Local** | Sideboard Orchestration → New chat | Same MCP + worktree agents (no Brightsy hop) |
+
+**Orchestration** is a first-class home-less surface: multiple orchestration chats, each using a synthetic empty cwd and Sideboard/Brightsy MCP tools only (no Edit/Write/Bash on a home checkout). Brightsy cloud always routes to one designated chat (identity on `sourceRef`, not the tab title). The Home board lists those orchestration chats (last responses) — not a fan-out console.
+
+Sideboard uses Brightsy’s existing `/api/v1beta/desktop/*` cloud-to-local API. If the cloud coordinator is already running or queued, the daemon returns a fixed non-AI busy reply (no queue, no sibling chat) so the cloud agent can decide what to do next. To interrupt an in-progress turn, the cloud agent can send a follow-up desktop task whose first line is exactly `SIDEBOARD_FORCE_STOP` (optional new request on later lines); the daemon stops the coordinator immediately—before the serialized task queue—then either confirms the stop or runs the remainder.
 
 **Setup (desktop UI — preferred)**
 

@@ -40,10 +40,13 @@ export async function spawnAgentTurn(
     );
   }
   // Global orchestration chats use a synthetic empty cwd (not a git worktree).
+  // Keep CLAUDE.md / AGENTS.md identity files fresh so Claude resume still knows its role.
   const { isGlobalThread } = await import('../store/global-workspace.js');
   if (isGlobalThread(thread)) {
-    const { globalAgentCwd } = await import('../store/paths.js');
-    globalAgentCwd();
+    const { ensureGlobalCoordinatorCwd } = await import(
+      '../orchestrator/coordinator-prompt.js'
+    );
+    ensureGlobalCoordinatorCwd();
   }
   const adapter = getAdapter(thread.agent);
   const cmd = await adapter.buildTurn(thread, input);
