@@ -3,7 +3,7 @@ import type {
   AgentKind,
   Autonomy,
   ThreadAttachment,
-} from '@sideboard/core';
+} from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import { BrightsyTargetPicker } from './BrightsyTargetPicker';
 import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';

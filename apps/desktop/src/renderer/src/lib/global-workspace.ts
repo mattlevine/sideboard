@@ -1,6 +1,6 @@
-import type { Thread } from '@sideboard/core';
+import type { Thread } from '@sideboard-ai/core';
 
-/** Keep in sync with `@sideboard/core` GLOBAL_WORKSPACE_ID / CLOUD_ORCHESTRATOR_GOAL. */
+/** Keep in sync with `@sideboard-ai/core` GLOBAL_WORKSPACE_ID / CLOUD_ORCHESTRATOR_GOAL. */
 export const GLOBAL_WORKSPACE_ID = '__global__';
 export const CLOUD_ORCHESTRATOR_GOAL = 'Cloud-connected Sideboard orchestrator';
 

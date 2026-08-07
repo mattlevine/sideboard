@@ -8,7 +8,7 @@ import type {
   CloudConnectStatus,
   GitHubStatus,
   IssueSource,
-} from '@sideboard/core';
+} from '@sideboard-ai/core';
 
 type NavId = 'account' | 'agents' | 'environment' | 'advanced';
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';

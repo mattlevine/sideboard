@@ -1,6 +1,6 @@
 # Agent adapters
 
-Sideboard talks to coding agents through a small `AgentAdapter` interface in `@sideboard/core`. Adding an agent is mostly: implement the adapter, register it, extend `AgentKind`.
+Sideboard talks to coding agents through a small `AgentAdapter` interface in `@sideboard-ai/core`. Adding an agent is mostly: implement the adapter, register it, extend `AgentKind`.
 
 ## Interface
 

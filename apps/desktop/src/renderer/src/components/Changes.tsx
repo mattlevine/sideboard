@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { DiffResult } from '@sideboard/core';
+import type { DiffResult } from '@sideboard-ai/core';
 
 interface Props {
   threadId: string;

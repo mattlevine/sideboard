@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build and publish @sideboard/core + @sideboard/cli to npm.
+ * Build and publish @sideboard-ai/core + @sideboard-ai/cli to npm.
  *
  * Expects versions already bumped (e.g. by apps/desktop/scripts/release.js).
  * Uses NPM_TOKEN / NODE_AUTH_TOKEN when set; otherwise the logged-in npm user.
@@ -72,11 +72,11 @@ try {
   const cliPkg = JSON.parse(
     fs.readFileSync(path.join(repoRoot, 'packages/cli/package.json'), 'utf8'),
   );
-  console.log(`📦 Publishing @sideboard/core@${corePkg.version} and @sideboard/cli@${cliPkg.version}`);
+  console.log(`📦 Publishing @sideboard-ai/core@${corePkg.version} and @sideboard-ai/cli@${cliPkg.version}`);
 
-  run('pnpm --filter @sideboard/core build');
-  run('pnpm --filter @sideboard/cli build');
-  run('pnpm --filter @sideboard/cli test');
+  run('pnpm --filter @sideboard-ai/core build');
+  run('pnpm --filter @sideboard-ai/cli build');
+  run('pnpm --filter @sideboard-ai/cli test');
 
   const publishArgs = [
     '--access public',
@@ -87,15 +87,15 @@ try {
     .join(' ');
 
   // Core first — CLI depends on the published version.
-  run(`pnpm --filter @sideboard/core publish ${publishArgs}`);
-  run(`pnpm --filter @sideboard/cli publish ${publishArgs}`);
+  run(`pnpm --filter @sideboard-ai/core publish ${publishArgs}`);
+  run(`pnpm --filter @sideboard-ai/cli publish ${publishArgs}`);
 
   console.log(
     dryRun
       ? '\n✅ npm dry-run complete'
-      : `\n✅ Published @sideboard/core@${corePkg.version} and @sideboard/cli@${cliPkg.version}`,
+      : `\n✅ Published @sideboard-ai/core@${corePkg.version} and @sideboard-ai/cli@${cliPkg.version}`,
   );
-  console.log('- CLI: npm i -g @sideboard/cli');
+  console.log('- CLI: npm i -g @sideboard-ai/cli');
   console.log('- MCP: sideboard mcp   (or npx sideboard-mcp)');
 } finally {
   cleanup();

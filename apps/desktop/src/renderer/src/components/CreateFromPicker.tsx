@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BranchInfo, IssueInfo, PrInfo } from '@sideboard/core';
+import type { BranchInfo, IssueInfo, PrInfo } from '@sideboard-ai/core';
 
 export type CreateFromTab = 'prs' | 'branches' | 'issues';
 

@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import type { OrchestratorRuntime, Thread } from '@sideboard/core';
+import type { OrchestratorRuntime, Thread } from '@sideboard-ai/core';
 import {
   CLOUD_ORCHESTRATOR_GOAL,
   GLOBAL_WORKSPACE_ID,

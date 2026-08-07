@@ -8,7 +8,9 @@
 
 [scripts]
 setup = "pnpm install"
+run_mode = "concurrent"
 
-# [scripts.run.dev]
-# command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-3000}} pnpm --filter @sideboard/desktop run dev"
-# default = true
+[scripts.run.dev]
+command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-5173}} pnpm --filter @sideboard-ai/desktop run dev"
+default = true
+icon = "play"

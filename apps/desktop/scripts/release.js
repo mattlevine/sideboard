@@ -178,7 +178,7 @@ if (doNpm) {
 if (doDesktop) {
   const notarizeArg = macNotarizeCliArg();
   console.log(`🔨 Building Sideboard desktop ${nextVersion}…`);
-  run('pnpm --filter @sideboard/core build', { cwd: repoRoot });
+  run('pnpm --filter @sideboard-ai/core build', { cwd: repoRoot });
   run('pnpm exec electron-vite build');
 
   const publishFlag = `--publish ${publish}`;
@@ -217,7 +217,7 @@ try {
 console.log('\n✅ Release complete!');
 console.log(`- Version: ${nextVersion}`);
 if (doNpm) {
-  console.log(`- npm: @sideboard/cli@${nextVersion} + @sideboard/core@${nextVersion} (MCP via sideboard mcp / sideboard-mcp)`);
+  console.log(`- npm: @sideboard-ai/cli@${nextVersion} + @sideboard-ai/core@${nextVersion} (MCP via sideboard mcp / sideboard-mcp)`);
 }
 if (doDesktop) {
   const releaseDir = path.join(desktopRoot, 'release');

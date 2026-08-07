@@ -6,7 +6,7 @@ import type {
   PrCheckRun,
   PrDetails,
   Thread,
-} from '@sideboard/core';
+} from '@sideboard-ai/core';
 import { FileTree } from './FileTree';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MergeModal } from './MergeModal';

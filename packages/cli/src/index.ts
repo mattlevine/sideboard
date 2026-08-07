@@ -20,7 +20,7 @@ import {
   connectBrightsyTeam,
   disconnectBrightsyTeam,
   type AgentKind,
-} from '@sideboard/core';
+} from '@sideboard-ai/core';
 
 const VERSION = '0.1.0';
 
@@ -30,7 +30,7 @@ async function printUpgradeHint(): Promise<void> {
     const latest = await new Promise<string>((resolve, reject) => {
       execFile(
         'npm',
-        ['view', '@sideboard/cli', 'version'],
+        ['view', '@sideboard-ai/cli', 'version'],
         { timeout: 2500 },
         (err, stdout) => {
           if (err) reject(err);
@@ -41,7 +41,7 @@ async function printUpgradeHint(): Promise<void> {
     if (latest && latest !== VERSION) {
       console.error(
         chalk.dim(
-          `Upgrade available: ${latest} (you have ${VERSION}). npm i -g @sideboard/cli`,
+          `Upgrade available: ${latest} (you have ${VERSION}). npm i -g @sideboard-ai/cli`,
         ),
       );
     }

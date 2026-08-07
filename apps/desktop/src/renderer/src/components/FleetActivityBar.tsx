@@ -1,4 +1,4 @@
-import type { OrchestratorRuntime } from '@sideboard/core';
+import type { OrchestratorRuntime } from '@sideboard-ai/core';
 
 interface Props {
   runtime: OrchestratorRuntime | null;

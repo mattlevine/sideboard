@@ -1,4 +1,4 @@
-import type { PrDetails } from '@sideboard/core';
+import type { PrDetails } from '@sideboard-ai/core';
 import { MarkdownMessage } from './MarkdownMessage';
 import { formatReviewDecision, formatShortDate } from '../lib/pr-format';
 

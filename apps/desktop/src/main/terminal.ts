@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { BrowserWindow } from 'electron';
-import type { Orchestrator } from '@sideboard/core';
+import type { Orchestrator } from '@sideboard-ai/core';
 
 interface PtyLike {
   write: (data: string) => void;

@@ -5,7 +5,7 @@ import type {
   OrchestratorRuntime,
   Thread,
   Workspace,
-} from '@sideboard/core';
+} from '@sideboard-ai/core';
 import { applyAgentEvent } from '@sideboard/message-parts';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';

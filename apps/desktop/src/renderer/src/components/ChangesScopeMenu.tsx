@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { DiffCommit, DiffScope, DiffScopeStat } from '@sideboard/core';
+import type { DiffCommit, DiffScope, DiffScopeStat } from '@sideboard-ai/core';
 
 const SCOPES: Array<{
   id: DiffScope;

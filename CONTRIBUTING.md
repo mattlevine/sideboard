@@ -16,14 +16,14 @@ CLI and MCP run **independently** of the desktop app. Prefer fixing core + CLI f
 
 ```bash
 pnpm install
-pnpm --filter @sideboard/core build
-pnpm --filter @sideboard/cli build
+pnpm --filter @sideboard-ai/core build
+pnpm --filter @sideboard-ai/cli build
 ```
 
 Optional desktop:
 
 ```bash
-pnpm --filter @sideboard/desktop dev
+pnpm --filter @sideboard-ai/desktop dev
 ```
 
 Node ≥ 20. Package manager: pnpm 9 (see root `packageManager`).
@@ -31,10 +31,10 @@ Node ≥ 20. Package manager: pnpm 9 (see root `packageManager`).
 ## Checks
 
 ```bash
-pnpm --filter @sideboard/core build
-pnpm --filter @sideboard/cli build
-pnpm --filter @sideboard/core test
-pnpm --filter @sideboard/cli test
+pnpm --filter @sideboard-ai/core build
+pnpm --filter @sideboard-ai/cli build
+pnpm --filter @sideboard-ai/core test
+pnpm --filter @sideboard-ai/cli test
 ```
 
 `pnpm typecheck` currently reports known debt in Thread test fixtures and electron-vite config typings; CI runs typecheck as a soft step. Prefer green **build + test** before opening a PR.
@@ -42,7 +42,7 @@ pnpm --filter @sideboard/cli test
 Optional desktop:
 
 ```bash
-pnpm --filter @sideboard/desktop typecheck
+pnpm --filter @sideboard-ai/desktop typecheck
 ```
 
 ## Where to contribute
@@ -63,7 +63,7 @@ pnpm --filter @sideboard/desktop typecheck
 
 1. Keep PRs focused (one adapter, one command, one UI fix).
 2. Include tests when changing adapters, MCP, or git land paths.
-3. Run build + tests before opening the PR (`pnpm --filter @sideboard/core test`, etc.).
+3. Run build + tests before opening the PR (`pnpm --filter @sideboard-ai/core test`, etc.).
 4. Update docs/README when behavior or public CLI/MCP surface changes.
 
 ## License

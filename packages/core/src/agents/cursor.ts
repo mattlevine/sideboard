@@ -37,7 +37,7 @@ function entryDir(): string {
     // Last resort: resolve the package entry and use its directory.
     try {
       const req = createRequire(process.cwd() + '/');
-      return dirname(req.resolve('@sideboard/core'));
+      return dirname(req.resolve('@sideboard-ai/core'));
     } catch {
       return process.cwd();
     }

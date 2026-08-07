@@ -31,7 +31,7 @@ export default defineConfig({
     root: resolve(__dirname, 'src/renderer'),
     resolve: {
       alias: {
-        // Pure helpers only — avoid bundling Node deps (execa) from @sideboard/core.
+        // Pure helpers only — avoid bundling Node deps (execa) from @sideboard-ai/core.
         '@sideboard/message-parts': resolve(
           __dirname,
           '../../packages/core/src/agents/message-parts.ts',

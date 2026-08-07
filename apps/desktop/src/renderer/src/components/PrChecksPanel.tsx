@@ -1,4 +1,4 @@
-import type { PrCheckRun } from '@sideboard/core';
+import type { PrCheckRun } from '@sideboard-ai/core';
 import {
   checkStatusLabel,
   formatCheckDuration,

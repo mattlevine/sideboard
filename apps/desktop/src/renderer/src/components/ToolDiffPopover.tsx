@@ -9,7 +9,7 @@ import css from 'highlight.js/lib/languages/css';
 import markdown from 'highlight.js/lib/languages/markdown';
 import python from 'highlight.js/lib/languages/python';
 import plaintext from 'highlight.js/lib/languages/plaintext';
-import type { MessagePart } from '@sideboard/core';
+import type { MessagePart } from '@sideboard-ai/core';
 import { buildToolDiff } from '../lib/tool-diff';
 import { DiffLines } from './DiffLines';
 import 'highlight.js/styles/vs2015.css';

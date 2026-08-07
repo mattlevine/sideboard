@@ -1,4 +1,4 @@
-import type { TokenUsage } from '@sideboard/core';
+import type { TokenUsage } from '@sideboard-ai/core';
 
 /** Total tokens processed for a turn (input + output + cache reads/writes). */
 export function totalTokens(u: TokenUsage): number {

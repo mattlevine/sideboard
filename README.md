@@ -42,7 +42,7 @@ Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md
 ### CLI (npm)
 
 ```bash
-npm i -g @sideboard/cli
+npm i -g @sideboard-ai/cli
 sideboard detect
 ```
 
@@ -65,14 +65,14 @@ Download a signed DMG from [GitHub Releases](https://github.com/mattlevine/sideb
 cp apps/desktop/.env.example apps/desktop/.env
 
 # From repo root — bump versions, publish npm + Mac desktop, tag
-pnpm release                 # patch → @sideboard/cli + @sideboard/core + desktop
+pnpm release                 # patch → @sideboard-ai/cli + @sideboard-ai/core + desktop
 pnpm release minor
 pnpm release patch npm       # CLI + MCP only (core ships `sideboard-mcp`)
 pnpm release patch mac       # desktop GitHub Release only
 pnpm release patch all never # dry-run / local artifacts
 ```
 
-After `npm i -g @sideboard/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
+After `npm i -g @sideboard-ai/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 
 ### Agent CLIs
 
@@ -310,9 +310,9 @@ apps/desktop      # Electron (electron-vite + React) — global board UI
 
 ```bash
 pnpm install
-pnpm --filter @sideboard/core build
-pnpm --filter @sideboard/cli build
-pnpm --filter @sideboard/desktop dev
+pnpm --filter @sideboard-ai/core build
+pnpm --filter @sideboard-ai/cli build
+pnpm --filter @sideboard-ai/desktop dev
 ```
 
 ## Worktrees & repo config

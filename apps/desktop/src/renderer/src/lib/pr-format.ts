@@ -1,4 +1,4 @@
-import type { PrCheckRun } from '@sideboard/core';
+import type { PrCheckRun } from '@sideboard-ai/core';
 
 /** Aggregate GitHub `reviewDecision` label for PR pill / Review tab. */
 export function formatReviewDecision(decision: string | null | undefined): string | null {

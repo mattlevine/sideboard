@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MessagePart, TokenUsage } from '@sideboard/core';
+import type { MessagePart, TokenUsage } from '@sideboard-ai/core';
 import { formatTokenCount, totalTokens, usageTooltip } from '../lib/tokens';
 import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';

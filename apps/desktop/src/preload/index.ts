@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { IpcApi, OrchestratorEvent } from '@sideboard/core';
+import type { IpcApi, OrchestratorEvent } from '@sideboard-ai/core';
 
 const api: IpcApi = {
   detectAgents: () => ipcRenderer.invoke('detectAgents'),

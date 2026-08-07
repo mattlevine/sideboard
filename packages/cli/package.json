@@ -1,6 +1,6 @@
 {
-  "name": "@sideboard/cli",
-  "version": "0.1.0",
+  "name": "@sideboard-ai/cli",
+  "version": "0.1.9",
   "description": "Sideboard CLI — agent-agnostic worktree orchestration (includes `sideboard mcp`)",
   "license": "Apache-2.0",
   "type": "module",
@@ -21,7 +21,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@sideboard/core": "workspace:*",
+    "@sideboard-ai/core": "workspace:*",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "ora": "^8.2.0"

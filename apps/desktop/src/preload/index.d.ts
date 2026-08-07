@@ -1,4 +1,4 @@
-import type { IpcApi } from '@sideboard/core';
+import type { IpcApi } from '@sideboard-ai/core';
 
 declare global {
   interface Window {

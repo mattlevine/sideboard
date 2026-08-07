@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AgentKind, MessagePart, Thread, ThreadAttachment } from '@sideboard/core';
+import type { AgentKind, MessagePart, Thread, ThreadAttachment } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import { formatTokenCount, sumUsage, totalTokens, usageTooltip } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';

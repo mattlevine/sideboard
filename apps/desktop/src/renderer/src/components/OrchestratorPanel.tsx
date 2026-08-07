@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import type { MessagePart, Thread } from '@sideboard/core';
+import type { MessagePart, Thread } from '@sideboard-ai/core';
 import { isGlobalThread } from '../lib/global-workspace';
 import { ThreadPanel } from './ThreadPanel';
 

@@ -4,7 +4,7 @@ import {
   threadDisplayLabel,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
-import type { Thread } from '@sideboard/core';
+import type { Thread } from '@sideboard-ai/core';
 import {
   GLOBAL_WORKSPACE_ID,
   isCloudCoordinatorThread,

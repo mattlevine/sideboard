@@ -94,7 +94,7 @@ export function brightsyMcpAllowedTools(serverNames: string[]): string[] {
 }
 
 /**
- * Directory of the compiled @sideboard/core package (dist/).
+ * Directory of the compiled @sideboard-ai/core package (dist/).
  * Electron main loads the CJS build where `import.meta.url` is empty — prefer __dirname.
  */
 function corePackageDir(): string {
@@ -111,7 +111,7 @@ function corePackageDir(): string {
   }
   try {
     const req = createRequire(join(process.cwd(), 'package.json'));
-    return dirname(req.resolve('@sideboard/core'));
+    return dirname(req.resolve('@sideboard-ai/core'));
   } catch {
     return process.cwd();
   }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { AgentKind, Thread } from '@sideboard/core';
+import type { AgentKind, Thread } from '@sideboard-ai/core';
 import { threadDisplayTitle } from '../lib/global-workspace';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';

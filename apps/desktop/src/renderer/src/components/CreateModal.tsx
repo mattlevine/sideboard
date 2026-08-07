@@ -3,7 +3,7 @@ import type {
   AgentStatus,
   ThreadAttachment,
   Workspace,
-} from '@sideboard/core';
+} from '@sideboard-ai/core';
 import {
   ComposerAttachmentChips,
   ComposerOptionsToolbar,

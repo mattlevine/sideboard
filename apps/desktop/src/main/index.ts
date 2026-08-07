@@ -60,7 +60,7 @@ import {
   type OrchestratorEvent,
   type ThreadAttachment,
   type ThreadOptionsPatch,
-} from '@sideboard/core';
+} from '@sideboard-ai/core';
 import { closeTsServer, setupTsServer } from './tsserver';
 
 let mainWindow: BrowserWindow | null = null;
