@@ -763,13 +763,7 @@ export function RightSidebar({
               {num ? `#${num}` : 'PR'} ↗
               {pillStatus ? <span className="pr-status">{pillStatus}</span> : null}
             </button>
-          ) : (
-            <span className="branch-pill" title={thread.branchName}>
-              <span className="pill-name-scroll">
-                {thread.branchName.replace(/^thread\//, '')}
-              </span>
-            </span>
-          )}
+          ) : null}
           <div className="right-actions">
             <div className="split-btn" ref={prMenuRef}>
               <button
