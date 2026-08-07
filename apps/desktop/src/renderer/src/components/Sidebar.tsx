@@ -22,6 +22,8 @@ interface Props {
   view: 'board' | 'thread';
   multiSelected: Set<string>;
   repoPath: string;
+  /** Registered workspaces (show even with zero threads). */
+  workspaces?: Array<{ path: string; name: string }>;
   onShowBoard: () => void;
   onSelect: (id: string, multi: boolean) => void;
   onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
@@ -61,6 +63,7 @@ export function Sidebar({
   view,
   multiSelected,
   repoPath,
+  workspaces = [],
   onShowBoard,
   onSelect,
   onNew,
@@ -109,18 +112,26 @@ export function Sidebar({
       list.push(t);
       map.set(t.repoPath, list);
     }
-    // Ensure current repo shows even with zero threads (unless filtering)
-    if (!q && repoPath && repoPath !== GLOBAL_WORKSPACE_ID && !map.has(repoPath)) {
-      map.set(repoPath, []);
+    // Registered workspaces (and current repo) show even with zero threads
+    const ensurePath = (path: string, nameHint?: string) => {
+      if (!path || path === GLOBAL_WORKSPACE_ID || map.has(path)) return;
+      if (
+        q &&
+        !repoName(path).toLowerCase().includes(q) &&
+        !(nameHint ?? '').toLowerCase().includes(q)
+      ) {
+        return;
+      }
+      map.set(path, []);
+    };
+    for (const ws of workspaces) {
+      ensurePath(ws.path, ws.name);
     }
-    // When filtering, also show matching workspace names with empty lists if name matches
-    if (q && repoPath && repoName(repoPath).toLowerCase().includes(q) && !map.has(repoPath)) {
-      map.set(repoPath, []);
-    }
+    ensurePath(repoPath);
     return [...map.entries()].sort(([a], [b]) =>
       repoName(a).localeCompare(repoName(b)),
     );
-  }, [threads, repoPath, q]);
+  }, [threads, repoPath, workspaces, q]);
 
   const filteredArchived = useMemo(() => {
     if (!q) return archived;

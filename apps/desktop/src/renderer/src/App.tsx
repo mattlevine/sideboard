@@ -80,6 +80,7 @@ export function App() {
   const [livePartsByThread, setLivePartsByThread] = useState<Record<string, MessagePart[]>>({});
   const [turnStartedAtByThread, setTurnStartedAtByThread] = useState<Record<string, number>>({});
   const [runtime, setRuntime] = useState<OrchestratorRuntime | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [appUpdate, setAppUpdate] = useState<{
     phase: 'available' | 'ready';
     version: string;
@@ -243,13 +244,24 @@ export function App() {
   }
 
   const refresh = useCallback(async () => {
-    const [all, rt] = await Promise.all([
+    const [all, rt, ws] = await Promise.all([
       window.sideboard.getThreads(true),
       window.sideboard.getRuntime(),
+      window.sideboard.listWorkspaces().catch(() => [] as Workspace[]),
     ]);
     setThreads(all.filter((t) => t.status !== 'archived'));
     setArchived(all.filter((t) => t.status === 'archived'));
     setRuntime(rt);
+    setWorkspaces(Array.isArray(ws) ? ws : []);
+  }, []);
+
+  const refreshWorkspaces = useCallback(async () => {
+    try {
+      const ws = await window.sideboard.listWorkspaces();
+      setWorkspaces(Array.isArray(ws) ? ws : []);
+    } catch {
+      setWorkspaces([]);
+    }
   }, []);
 
   const upsertThread = useCallback((thread: Thread) => {
@@ -405,6 +417,10 @@ export function App() {
 
   const knownWorkspaces = useMemo(() => {
     const byPath = new Map<string, Workspace>();
+    for (const ws of workspaces) {
+      if (!ws.path || byPath.has(ws.path)) continue;
+      byPath.set(ws.path, ws);
+    }
     for (const t of threads) {
       if (!t.repoPath || byPath.has(t.repoPath)) continue;
       const name = t.repoPath.split('/').filter(Boolean).pop() || t.repoPath;
@@ -423,7 +439,7 @@ export function App() {
       });
     }
     return [...byPath.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [threads, repoPath]);
+  }, [workspaces, threads, repoPath]);
 
   useEffect(() => {
     setOpenFilePath(null);
@@ -511,6 +527,7 @@ export function App() {
             view={view}
             multiSelected={multiSelected}
             repoPath={repoPath}
+            workspaces={workspaces}
             onShowBoard={showBoard}
             onSelect={onSelect}
             onNew={(path, mode) => openCreate(path, mode ?? 'quick')}
@@ -519,6 +536,7 @@ export function App() {
                 if (!p) return;
                 setRepoPath(p);
                 await window.sideboard.addWorkspace(p);
+                await refreshWorkspaces();
                 await refresh();
               })
             }
@@ -720,6 +738,9 @@ export function App() {
           knownWorkspaces={knownWorkspaces}
           initialMode={createState.mode}
           onClose={() => setCreateState(null)}
+          onWorkspacesChanged={() => {
+            void refreshWorkspaces();
+          }}
           onOpenAccount={() => {
             setCreateState(null);
             setSettingsOpen(true);

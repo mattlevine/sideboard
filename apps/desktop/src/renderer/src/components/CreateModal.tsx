@@ -26,6 +26,8 @@ interface Props {
   initialMode?: 'quick' | 'orchestration';
   onClose: () => void;
   onCreated: (threadId: string, opts?: { stayOpen?: boolean }) => void;
+  /** Called after a workspace is added so the sidebar can refresh. */
+  onWorkspacesChanged?: () => void;
   /** Open Settings → Account (e.g. Linear setup). */
   onOpenAccount?: () => void;
 }
@@ -79,6 +81,7 @@ export function CreateModal({
   initialMode = 'quick',
   onClose,
   onCreated,
+  onWorkspacesChanged,
   onOpenAccount,
 }: Props) {
   const [mode, setMode] = useState<Mode>(
@@ -234,6 +237,7 @@ export function CreateModal({
       setError(err instanceof Error ? err.message : String(err));
     }
     await refreshWorkspaces(picked);
+    onWorkspacesChanged?.();
   }
 
   function patchOptions(patch: Partial<ComposerDraftOptions>) {
