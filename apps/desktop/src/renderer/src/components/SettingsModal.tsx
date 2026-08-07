@@ -8,9 +8,11 @@ import type {
   CloudConnectStatus,
   GitHubStatus,
   IssueSource,
+  Thread,
 } from '@sideboard-ai/core';
+import { threadDisplayLabel } from '@sideboard/worktree-labels';
 
-type NavId = 'account' | 'agents' | 'environment' | 'advanced';
+type NavId = 'account' | 'agents' | 'environment' | 'advanced' | 'history';
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
 
 const CLOUD_CONNECT_AGENTS: Array<{ id: BrightsyCloudConnectAgent; label: string }> = [
@@ -24,6 +26,10 @@ interface Props {
   onClose: () => void;
   /** Initial sidebar section (e.g. Account from Create-from Linear setup). */
   initialNav?: NavId;
+  /** Archived threads for Settings → History. */
+  archived?: Thread[];
+  onRestoreArchived?: (id: string) => void;
+  onOpenArchived?: (id: string) => void;
 }
 
 const CLAUDE_CHROME_DOCS = 'https://code.claude.com/docs/en/chrome';
@@ -86,9 +92,16 @@ function statusFor(statuses: AgentStatus[], id: AgentPanel): AgentStatus | undef
   return statuses.find((s) => s.agent === id);
 }
 
-export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
+export function SettingsModal({
+  onClose,
+  initialNav = 'agents',
+  archived = [],
+  onRestoreArchived,
+  onOpenArchived,
+}: Props) {
   const [nav, setNav] = useState<NavId>(initialNav);
   const [agentPanel, setAgentPanel] = useState<AgentPanel | null>(null);
+  const [historyQuery, setHistoryQuery] = useState('');
   const [settings, setSettings] = useState<AppSettings>({
     environment: {},
     claude: {},
@@ -298,6 +311,18 @@ export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
   const advanced = settings.advanced ?? {};
   const autoRenameOn = advanced.autoRenameBranch !== false;
 
+  const filteredArchived = useMemo(() => {
+    const q = historyQuery.trim().toLowerCase();
+    const list = [...archived].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    if (!q) return list;
+    return list.filter((t) => {
+      const repo = t.repoPath.split('/').filter(Boolean).pop() ?? t.repoPath;
+      const hay =
+        `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repo}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [archived, historyQuery]);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -374,6 +399,16 @@ export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
               }}
             >
               Advanced
+            </button>
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'history' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('history');
+                setAgentPanel(null);
+              }}
+            >
+              History
             </button>
           </aside>
 
@@ -1313,6 +1348,68 @@ export function SettingsModal({ onClose, initialNav = 'agents' }: Props) {
                     >
                       Add
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {nav === 'history' && (
+              <div className="settings-body">
+                <p className="settings-lead">
+                  Archived chats and worktrees. Restore one to bring it back to the sidebar, or open
+                  it read-only from here.
+                </p>
+                <div className="settings-section settings-section-card">
+                  <label className="settings-section-title" htmlFor="history-search">
+                    Search history
+                  </label>
+                  <input
+                    id="history-search"
+                    className="settings-history-search"
+                    type="search"
+                    placeholder="Filter by title, branch, agent, or project…"
+                    value={historyQuery}
+                    onChange={(e) => setHistoryQuery(e.target.value)}
+                    spellCheck={false}
+                    autoFocus
+                  />
+                  <div className="settings-history-list" role="list">
+                    {filteredArchived.length === 0 ? (
+                      <div className="settings-empty">
+                        {archived.length === 0
+                          ? 'No archived chats yet.'
+                          : 'No archived chats match that search.'}
+                      </div>
+                    ) : (
+                      filteredArchived.map((t) => {
+                        const repo =
+                          t.repoPath.split('/').filter(Boolean).pop() ?? t.repoPath;
+                        return (
+                          <div key={t.id} className="settings-history-row" role="listitem">
+                            <button
+                              type="button"
+                              className="settings-history-open"
+                              onClick={() => onOpenArchived?.(t.id)}
+                              title="Open archived chat"
+                            >
+                              <span className="settings-history-title">
+                                {threadDisplayLabel(t)}
+                              </span>
+                              <span className="settings-history-meta">
+                                {repo} · {t.agent} · archived
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="settings-history-restore"
+                              onClick={() => onRestoreArchived?.(t.id)}
+                            >
+                              Restore
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               </div>

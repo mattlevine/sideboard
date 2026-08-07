@@ -8,7 +8,7 @@ describe('closeChatTabMessage', () => {
   });
 
   it('mentions History when other tabs remain', () => {
-    expect(closeChatTabMessage('Research', 2)).toContain('History');
+    expect(closeChatTabMessage('Research', 2)).toContain('Settings → History');
     expect(closeChatTabMessage('Research', 2)).not.toContain('last tab');
   });
 });

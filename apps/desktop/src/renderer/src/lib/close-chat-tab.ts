@@ -4,5 +4,5 @@ export function closeChatTabMessage(title: string, chatCount: number): string {
   if (chatCount <= 1) {
     return `Close "${label}"? This is the last tab — the worktree will be removed.`;
   }
-  return `Close "${label}"? This chat will be moved to History.`;
+  return `Close "${label}"? This chat will be moved to Settings → History.`;
 }

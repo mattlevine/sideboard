@@ -17,7 +17,6 @@ import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
   threads: Thread[];
-  archived: Thread[];
   selectedId: string | null;
   view: 'board' | 'thread';
   multiSelected: Set<string>;
@@ -28,7 +27,6 @@ interface Props {
   onSelect: (id: string, multi: boolean) => void;
   onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
   onPickRepo: () => void;
-  onRestore: (id: string) => void;
   onCreatePr?: (threadId: string, opts?: { draft?: boolean; web?: boolean }) => void;
   onForkChat?: (threadId: string) => void;
   onArchive?: (threadId: string) => void | Promise<void>;
@@ -58,7 +56,6 @@ function groupByWorktree(threads: Thread[]): Thread[][] {
 
 export function Sidebar({
   threads,
-  archived,
   selectedId,
   view,
   multiSelected,
@@ -68,7 +65,6 @@ export function Sidebar({
   onSelect,
   onNew,
   onPickRepo,
-  onRestore,
   onCreatePr,
   onForkChat,
   onArchive,
@@ -133,15 +129,6 @@ export function Sidebar({
     );
   }, [threads, repoPath, workspaces, q]);
 
-  const filteredArchived = useMemo(() => {
-    if (!q) return archived;
-    return archived.filter((t) =>
-      `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${repoName(t.repoPath)}`
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [archived, q]);
-
   return (
     <aside className="sidebar">
       <div className="sidebar-chrome">
@@ -176,9 +163,7 @@ export function Sidebar({
         </nav>
       </div>
 
-      <div
-        className={`thread-list${filteredArchived.length > 0 ? ' has-history' : ''}`}
-      >
+      <div className="thread-list">
         <div className="sidebar-projects">
         {(!q ||
           globalThreads.length > 0 ||
@@ -458,35 +443,6 @@ export function Sidebar({
           </div>
         ))}
         </div>
-
-        {filteredArchived.length > 0 && (
-          <div className="sidebar-history">
-            <div className="section-label">History</div>
-            <div className="sidebar-history-list">
-              {filteredArchived.map((t) => (
-                <div key={t.id} className="thread-item" onClick={() => onSelect(t.id, false)}>
-                  <span className="dot archived" />
-                  <div className="thread-item-body">
-                    <div className="thread-title" title={threadDisplayLabel(t)}>
-                      {threadDisplayLabel(t)}
-                    </div>
-                    <div className="thread-meta">archived · {t.agent}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRestore(t.id);
-                    }}
-                  >
-                    Restore
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {archiveConfirm && (

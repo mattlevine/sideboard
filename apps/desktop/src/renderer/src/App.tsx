@@ -186,7 +186,7 @@ export function App() {
   const [pendingLand, setPendingLand] = useState<{ draft?: boolean; web?: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<
-    'account' | 'agents' | 'environment' | 'advanced'
+    'account' | 'agents' | 'environment' | 'advanced' | 'history'
   >('agents');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
@@ -522,7 +522,6 @@ export function App() {
         <div className="sidebar-slot">
           <Sidebar
             threads={threads}
-            archived={archived}
             selectedId={selectedId}
             view={view}
             multiSelected={multiSelected}
@@ -540,7 +539,6 @@ export function App() {
                 await refresh();
               })
             }
-            onRestore={(id) => void window.sideboard.restoreThread(id).then(refresh)}
             onCreatePr={(id, opts) => {
               setSelectedId(id);
               setView('thread');
@@ -759,6 +757,19 @@ export function App() {
       {settingsOpen && (
         <SettingsModal
           initialNav={settingsInitialNav}
+          archived={archived}
+          onRestoreArchived={(id) => {
+            void window.sideboard.restoreThread(id).then(() => {
+              void refresh();
+            });
+          }}
+          onOpenArchived={(id) => {
+            setSettingsOpen(false);
+            setSettingsInitialNav('agents');
+            setSelectedId(id);
+            setView('thread');
+            setMultiSelected(new Set([id]));
+          }}
           onClose={() => {
             setSettingsOpen(false);
             setSettingsInitialNav('agents');
