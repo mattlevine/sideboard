@@ -139,6 +139,21 @@ const api: IpcApi = {
     ipcRenderer.invoke('getRepoSetupInfo', worktreePath, repoPath),
   runSetup: (threadRef) => ipcRenderer.invoke('runSetup', threadRef),
   openExternal: (url) => ipcRenderer.invoke('openExternal', url),
+  urlPreview: {
+    show: (opts) => ipcRenderer.invoke('urlPreview:show', opts),
+    setBounds: (bounds) => ipcRenderer.invoke('urlPreview:setBounds', bounds),
+    navigate: (url) => ipcRenderer.invoke('urlPreview:navigate', url),
+    reload: () => ipcRenderer.invoke('urlPreview:reload'),
+    hide: () => ipcRenderer.invoke('urlPreview:hide'),
+    onNavigated: (listener) => {
+      const handler = (_event: IpcRendererEvent, payload: { url: string }) =>
+        listener(payload);
+      ipcRenderer.on('url-preview:navigated', handler);
+      return () => {
+        ipcRenderer.removeListener('url-preview:navigated', handler);
+      };
+    },
+  },
   onEvent: (listener) => {
     const handler = (_event: IpcRendererEvent, payload: OrchestratorEvent) => listener(payload);
     ipcRenderer.on('orchestrator:event', handler);

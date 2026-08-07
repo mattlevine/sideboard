@@ -64,6 +64,8 @@ interface Props {
   onShowChat?: () => void;
   /** Open another thread from a sideboard://thread/<id> markdown link. */
   onOpenThreadLink?: (threadRef: string) => void;
+  /** Hide embedded BrowserView while a modal covers the app (e.g. Settings). */
+  urlPreviewSuspended?: boolean;
   /** Git markers for open file tabs (from getDiff). */
   fileChanges?: Record<string, { status: string; additions?: number; deletions?: number }>;
   leftSidebarToggle?: ReactNode;
@@ -97,6 +99,7 @@ export function ThreadPanel({
   onCloseChanges,
   onShowChat,
   onOpenThreadLink,
+  urlPreviewSuspended = false,
   fileChanges = {},
   leftSidebarToggle,
   rightSidebarToggle,
@@ -581,6 +584,7 @@ export function ThreadPanel({
         <UrlPreview
           key={openUrl}
           url={openUrl}
+          suspended={urlPreviewSuspended}
           onNavigate={(to) => onNavigateUrl?.(openUrl, to)}
           onClose={() => onCloseUrl?.(openUrl)}
         />
@@ -723,7 +727,7 @@ export function ThreadPanel({
       )}
 
       <div
-        className={`composer-shell${openFilePath || openUrl || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}`}
+        className={`composer-shell${openFilePath || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}`}
       >
         <div
           ref={composerBoxRef}

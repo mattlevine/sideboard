@@ -46,14 +46,6 @@ npm i -g @sideboard-ai/cli
 sideboard detect
 ```
 
-### Homebrew (tap stub)
-
-```bash
-brew install sideboard-ai/tap/sideboard
-```
-
-See [`Formula/sideboard.rb`](Formula/sideboard.rb) for the formula stub used by the tap.
-
 ### Desktop
 
 Download the latest Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):

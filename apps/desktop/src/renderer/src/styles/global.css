@@ -5147,7 +5147,7 @@ button.linkish:hover {
   width: 100%;
   border: 0;
   border-top: 1px solid var(--border);
-  background: #fff;
+  background: var(--bg);
 }
 
 .file-ref-code .doc-preview {

@@ -652,6 +652,7 @@ export function App() {
                 setOpenUrl(null);
                 setChangesOpen(false);
               }}
+              urlPreviewSuspended={settingsOpen}
               fileChanges={fileChanges}
               {...threadPanelProps}
             />

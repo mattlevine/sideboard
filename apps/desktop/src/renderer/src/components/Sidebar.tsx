@@ -510,11 +510,11 @@ export function Sidebar({
         <button
           type="button"
           className="sidebar-footer-btn"
-          title="Get a Cursor API key"
-          aria-label="Get a Cursor API key"
+          title="Sideboard on GitHub"
+          aria-label="Sideboard on GitHub"
           onClick={() =>
             void window.sideboard.openExternal(
-              'https://cursor.com/dashboard/integrations',
+              'https://github.com/mattlevine/sideboard',
             )
           }
         >

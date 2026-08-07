@@ -1,4 +1,13 @@
 import { app, BrowserWindow, Notification, dialog, ipcMain, nativeImage, net, shell } from 'electron';
+import {
+  destroyUrlPreview,
+  hideUrlPreview,
+  navigateUrlPreview,
+  reloadUrlPreview,
+  setUrlPreviewBounds,
+  showUrlPreview,
+  type UrlPreviewBounds,
+} from './url-preview';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -277,6 +286,7 @@ function createWindow(): void {
   }
 
   mainWindow.on('closed', () => {
+    hideUrlPreview(mainWindow);
     mainWindow = null;
   });
 }
@@ -845,6 +855,29 @@ function registerIpc(): void {
     autoUpdater.quitAndInstall();
   });
   ipcMain.handle('openExternal', (_e, url: string) => shell.openExternal(url));
+
+  ipcMain.handle(
+    'urlPreview:show',
+    (_e, opts: { url: string; bounds: UrlPreviewBounds }) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      showUrlPreview(mainWindow, opts.url, opts.bounds);
+    },
+  );
+  ipcMain.handle('urlPreview:setBounds', (_e, bounds: UrlPreviewBounds) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    setUrlPreviewBounds(mainWindow, bounds);
+  });
+  ipcMain.handle('urlPreview:navigate', (_e, url: string) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    navigateUrlPreview(mainWindow, url);
+  });
+  ipcMain.handle('urlPreview:reload', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    reloadUrlPreview(mainWindow);
+  });
+  ipcMain.handle('urlPreview:hide', () => {
+    hideUrlPreview(mainWindow);
+  });
 }
 
 app.whenReady().then(async () => {
@@ -890,6 +923,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  destroyUrlPreview();
   stopCloudConnectDaemon();
   stopCaffeinate();
   void stopOpenFileWatcher();

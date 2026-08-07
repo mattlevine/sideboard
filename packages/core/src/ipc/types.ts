@@ -267,6 +267,26 @@ export interface IpcApi {
   }>;
   runSetup(threadRef: string): Promise<{ exitCode: number | null }>;
   openExternal(url: string): Promise<void>;
+  /**
+   * In-app URL preview via BrowserView (top-level navigation — works for
+   * sites that block iframes, e.g. GitHub).
+   */
+  urlPreview: {
+    show(opts: {
+      url: string;
+      bounds: { x: number; y: number; width: number; height: number };
+    }): Promise<void>;
+    setBounds(bounds: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }): Promise<void>;
+    navigate(url: string): Promise<void>;
+    reload(): Promise<void>;
+    hide(): Promise<void>;
+    onNavigated(listener: (payload: { url: string }) => void): () => void;
+  };
   /** Main-process tsserver for real import/type diagnostics in the file UI. */
   tsserver: {
     start(worktreePath?: string): Promise<{ success: boolean; error?: string }>;
