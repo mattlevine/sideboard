@@ -679,7 +679,6 @@ export function App() {
             const urlPreviewProps = {
               openUrls,
               openUrl,
-              onOpenUrl: openPreviewUrl,
               onSelectUrl: selectPreviewUrl,
               onCloseUrl: closePreviewUrl,
               onNavigateUrl: navigatePreviewUrl,

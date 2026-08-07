@@ -57,7 +57,6 @@ interface Props {
   changesPath?: string | null;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
-  onOpenUrl?: (url: string) => void;
   onSelectUrl?: (url: string) => void;
   onCloseUrl?: (url: string) => void;
   onNavigateUrl?: (from: string, to: string) => void;
@@ -93,7 +92,6 @@ export function ThreadPanel({
   changesPath = null,
   onSelectFile,
   onCloseFile,
-  onOpenUrl,
   onSelectUrl,
   onCloseUrl,
   onNavigateUrl,
@@ -702,7 +700,6 @@ export function ThreadPanel({
                     worktreePath={thread.worktreePath}
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
-                    onOpenUrl={onOpenUrl}
                     onOpenThread={onOpenThreadLink}
                     onFork={() => void forkToTab(i)}
                   />
@@ -712,7 +709,6 @@ export function ThreadPanel({
                     <MarkdownMessage
                       text={m.text}
                       onThreadLinkClick={onOpenThreadLink}
-                      onUrlClick={onOpenUrl}
                     />
                   </div>
                 ) : (
@@ -740,7 +736,6 @@ export function ThreadPanel({
                     worktreePath={thread.worktreePath}
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
-                    onOpenUrl={onOpenUrl}
                     onOpenThread={onOpenThreadLink}
                     onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
                   />

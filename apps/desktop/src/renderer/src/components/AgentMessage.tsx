@@ -25,8 +25,6 @@ interface Props {
   worktreePath?: string;
   knownFilePaths?: string[];
   onOpenFile?: (path: string) => void;
-  /** Open an http(s) URL in a Sideboard preview tab. */
-  onOpenUrl?: (url: string) => void;
   /** Navigate to another Sideboard thread from a markdown deep link. */
   onOpenThread?: (threadRef: string) => void;
   onFork?: () => void;
@@ -121,7 +119,6 @@ export function AgentMessage({
   worktreePath,
   knownFilePaths,
   onOpenFile,
-  onOpenUrl,
   onOpenThread,
   onFork,
 }: Props) {
@@ -263,7 +260,6 @@ export function AgentMessage({
                         knownFilePaths={knownFilePaths}
                         onFileReferenceClick={threadId ? openFileReference : undefined}
                         onThreadLinkClick={onOpenThread}
-                        onUrlClick={onOpenUrl}
                         isStreaming={streaming}
                       />
                     </div>
@@ -283,7 +279,6 @@ export function AgentMessage({
             knownFilePaths={knownFilePaths}
             onFileReferenceClick={threadId ? openFileReference : undefined}
             onThreadLinkClick={onOpenThread}
-            onUrlClick={onOpenUrl}
             isStreaming={streaming}
           />
         </div>

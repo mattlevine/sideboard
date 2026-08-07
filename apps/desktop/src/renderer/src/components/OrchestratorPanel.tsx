@@ -21,7 +21,6 @@ interface Props {
   onOpenThreadLink?: (threadRef: string) => void;
   openUrls?: string[];
   openUrl?: string | null;
-  onOpenUrl?: (url: string) => void;
   onSelectUrl?: (url: string) => void;
   onCloseUrl?: (url: string) => void;
   onNavigateUrl?: (from: string, to: string) => void;
@@ -50,7 +49,6 @@ export function OrchestratorPanel({
   onOpenThreadLink,
   openUrls,
   openUrl,
-  onOpenUrl,
   onSelectUrl,
   onCloseUrl,
   onNavigateUrl,
@@ -109,7 +107,6 @@ export function OrchestratorPanel({
           onOpenThreadLink={onOpenThreadLink ?? onSelectChild}
           openUrls={openUrls}
           openUrl={openUrl}
-          onOpenUrl={onOpenUrl}
           onSelectUrl={onSelectUrl}
           onCloseUrl={onCloseUrl}
           onNavigateUrl={onNavigateUrl}

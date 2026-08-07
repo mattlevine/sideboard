@@ -19,7 +19,10 @@ interface Props {
   onFileReferenceClick?: (link: FilePathLink) => void;
   /** Open a Sideboard thread from a sideboard://thread/<id> markdown link. */
   onThreadLinkClick?: (threadRef: string) => void;
-  /** Open an http(s) URL in a Sideboard preview tab (falls back to external browser). */
+  /**
+   * Optional in-app handler for http(s) URLs (e.g. PR review preview tab).
+   * Chat markdown omits this so links open in the system browser.
+   */
   onUrlClick?: (url: string) => void;
   /** When true, defer mermaid rendering to avoid parse errors on incomplete syntax. */
   isStreaming?: boolean;
