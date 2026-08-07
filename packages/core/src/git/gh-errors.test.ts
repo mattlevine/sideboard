@@ -63,6 +63,16 @@ describe('formatGhLandError', () => {
     );
   });
 
+  it('explains missing head when Sideboard already targeted a repo', () => {
+    const msg = formatGhLandError(
+      "GraphQL: Head sha can't be blank, No commits between main and x, Head ref must be a branch",
+      { targetedRepo: 'mattlevine/storycycle-ai', headRef: 'mattlevine:x' },
+    );
+    expect(msg).toContain('mattlevine/storycycle-ai');
+    expect(msg).toContain('mattlevine:x');
+    expect(msg).not.toContain('retry after updating Sideboard');
+  });
+
   it('preserves an already-humanized rate limit notice', () => {
     const human =
       'GitHub API rate limit exceeded. Your branch was already pushed. Try again in about 10 minutes. Or create the pull request in the browser (Push & open on GitHub).';

@@ -23,7 +23,20 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Stay inside the worktree/i);
     expect(text).toMatch(/Worktree folder nickname/i);
     expect(text).toMatch(/soccer-team worktree nickname/i);
-    expect(text).toMatch(/gh pr create --draft/i);
+    expect(text).toMatch(/gh pr create --draft -R/i);
+  });
+
+  it('pins draft PR create to the origin slug when provided', () => {
+    const text = formatWorktreeDirective(
+      {
+        worktreePath: '/tmp/sideboard/workspaces/app/paris',
+        repoPath: '/Users/me/Projects/app',
+        branchName: 'thread/paris',
+      },
+      { githubSlug: 'mattlevine/storycycle-ai' },
+    );
+    expect(text).toContain('gh pr create --draft -R mattlevine/storycycle-ai');
+    expect(text).toMatch(/upstream instead of origin/i);
   });
 });
 

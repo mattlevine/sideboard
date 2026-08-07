@@ -42,6 +42,7 @@ export function formatRenameBranchDirective(
 export function formatWorktreeDirective(
   thread: Pick<Thread, 'worktreePath' | 'repoPath' | 'branchName'> &
     Partial<Pick<Thread, 'title' | 'prUrl'>>,
+  opts?: { githubSlug?: string | null },
 ): string {
   const worktree = normPath(thread.worktreePath);
   const repo = normPath(thread.repoPath);
@@ -78,9 +79,13 @@ export function formatWorktreeDirective(
     lines.push(
       `- A PR already exists (${thread.prUrl}). Update it (push + edit title/body if the purpose drifted) instead of opening a duplicate.`,
     );
+  } else if (opts?.githubSlug) {
+    lines.push(
+      `- Prefer a draft PR first: \`gh pr create --draft -R ${opts.githubSlug}\` (or update via \`gh pr edit -R ${opts.githubSlug}\`) once the change set is coherent. Always pass \`-R ${opts.githubSlug}\` — bare \`gh pr create\` may target upstream instead of origin. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.`,
+    );
   } else {
     lines.push(
-      '- Prefer a draft PR first: `gh pr create --draft` (or update via `gh pr edit`) once the change set is coherent. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.',
+      '- Prefer a draft PR first: `gh pr create --draft -R <origin-owner/name>` (or update via `gh pr edit`) once the change set is coherent. Always pass `-R` from `git remote get-url origin` — bare `gh pr create` may target an `upstream` template repo. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.',
     );
   }
   return lines.join('\n');

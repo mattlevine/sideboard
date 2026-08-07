@@ -39,6 +39,12 @@ describe('parseGithubSlugFromRemoteUrl', () => {
     expect(
       parseGithubSlugFromRemoteUrl('https://github.com/acme/widgets.git'),
     ).toBe('acme/widgets');
+    expect(
+      parseGithubSlugFromRemoteUrl('git@github.com:mattlevine/storycycle-ai'),
+    ).toBe('mattlevine/storycycle-ai');
+    expect(
+      parseGithubSlugFromRemoteUrl('git@github.com-work:acme/widgets.git'),
+    ).toBe('acme/widgets');
   });
 });
 

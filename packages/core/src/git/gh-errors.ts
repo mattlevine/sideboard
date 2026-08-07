@@ -47,6 +47,10 @@ export type FormatGhLandErrorOptions = {
   /** Land push already succeeded before PR create failed. Default true for PR-create path. */
   pushed?: boolean;
   nowMs?: number;
+  /** Repo Sideboard passed to `gh -R` (origin), when known. */
+  targetedRepo?: string;
+  /** Head ref passed to `gh pr create` (often `owner:branch`). */
+  headRef?: string;
 };
 
 /**
@@ -71,11 +75,14 @@ export function formatGhLandError(
       detail,
     )
   ) {
-    return (
-      'Could not create the pull request against the wrong GitHub repo ' +
-      '(often upstream instead of origin). Branch was pushed — retry after updating Sideboard, ' +
-      'or create the PR with: gh pr create --repo <owner/name> --base main --head <branch>.'
-    );
+    const target = opts?.targetedRepo
+      ? ` Targeted ${opts.targetedRepo}`
+      : '';
+    const head = opts?.headRef ? ` with head ${opts.headRef}` : '';
+    const hint = opts?.targetedRepo
+      ? ` Branch was pushed to origin — confirm it exists on GitHub and differs from the base branch.${target}${head}.`
+      : ' Often `gh` targeted upstream instead of origin. Branch was pushed — retry in the latest Sideboard, or run: gh pr create -R <owner/name> --base main --head <branch>.';
+    return `Could not create the pull request.${hint}`;
   }
   if (isGhRateLimitError(raw) || isGhRateLimitError(detail)) {
     const when = opts?.resetAt

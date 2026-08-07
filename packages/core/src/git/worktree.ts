@@ -36,12 +36,23 @@ async function lookupGithubGraphqlReset(cwd: string): Promise<number | undefined
   }
 }
 
-async function formatPrCreateFailure(raw: string, cwd: string): Promise<string> {
+async function formatPrCreateFailure(
+  raw: string,
+  cwd: string,
+  ctx?: { slug?: string; head?: string },
+): Promise<string> {
   if (!isGhRateLimitError(raw)) {
-    return formatGhLandError(raw);
+    return formatGhLandError(raw, {
+      targetedRepo: ctx?.slug,
+      headRef: ctx?.head,
+    });
   }
   const resetAt = await lookupGithubGraphqlReset(cwd);
-  return formatGhLandError(raw, { resetAt });
+  return formatGhLandError(raw, {
+    resetAt,
+    targetedRepo: ctx?.slug,
+    headRef: ctx?.head,
+  });
 }
 
 export type { TeamName } from './teams.js';
@@ -61,15 +72,21 @@ export async function resolveRepoRoot(cwd: string): Promise<string> {
 }
 
 /**
- * Parse `owner/name` from a git remote URL (SSH or HTTPS).
+ * Parse `owner/name` from a git remote URL (SSH, HTTPS, or SSH host aliases).
  */
 export function parseGithubSlugFromRemoteUrl(url: string): string | null {
-  const trimmed = url.trim();
-  const match =
-    trimmed.match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/i) ??
-    trimmed.match(/github\.com[:/]([^/]+)\/([^/.]+)/i);
-  if (!match?.[1] || !match[2]) return null;
-  return `${match[1]}/${match[2]}`;
+  const trimmed = url.trim().replace(/\.git$/i, '');
+  if (!trimmed) return null;
+
+  // github.com HTTPS / SSH / ssh://
+  const github = trimmed.match(/github\.com[:/]([^/]+)\/([^/]+)$/i);
+  if (github?.[1] && github[2]) return `${github[1]}/${github[2]}`;
+
+  // SSH host aliases: git@github.com-work:owner/repo
+  const sshAlias = trimmed.match(/^git@[^:]+:([^/]+)\/([^/]+)$/i);
+  if (sshAlias?.[1] && sshAlias[2]) return `${sshAlias[1]}/${sshAlias[2]}`;
+
+  return null;
 }
 
 async function slugFromGitRemote(
@@ -98,13 +115,21 @@ export async function resolveGithubRepoSlug(
   const fromOrigin = await slugFromGitRemote(repoPath, 'origin');
   if (fromOrigin) return fromOrigin;
 
-  const viaGh = await gh(
-    ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
-    repoPath,
-    { reject: false },
-  );
-  if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
-    return viaGh.stdout.trim();
+  const hasAlt =
+    Boolean(await slugFromGitRemote(repoPath, 'upstream')) ||
+    Boolean(await slugFromGitRemote(repoPath, 'github'));
+
+  // Bare `gh repo view` prefers upstream when present — never use it as a
+  // stand-in for a missing/unparseable origin in dual-remote checkouts.
+  if (!hasAlt) {
+    const viaGh = await gh(
+      ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
+      repoPath,
+      { reject: false },
+    );
+    if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
+      return viaGh.stdout.trim();
+    }
   }
 
   for (const remote of ['upstream', 'github'] as const) {
@@ -112,6 +137,20 @@ export async function resolveGithubRepoSlug(
     if (slug) return slug;
   }
   return null;
+}
+
+/** Global `-R owner/repo` args so gh never targets upstream by accident. */
+export function ghRepoSelectArgs(slug: string): string[] {
+  return ['-R', slug];
+}
+
+/** Same-repo head ref as `owner:branch` (required for reliable `-R` creates). */
+export function ghHeadRef(slug: string, branch: string): string {
+  const owner = slug.split('/')[0];
+  const head = branch.trim().replace(/^refs\/heads\//, '');
+  if (!owner || !head) return head || branch;
+  if (head.includes(':')) return head;
+  return `${owner}:${head}`;
 }
 
 /**
@@ -936,10 +975,18 @@ export async function createOrUpdatePr(
   // origin + upstream otherwise create PRs against the template upstream.
   await ensureGhPreferOrigin(worktreePath);
   const slug = await resolveGithubRepoSlug(worktreePath);
-  const repoArgs = slug ? (['--repo', slug] as const) : ([] as const);
+  if (!slug) {
+    throw new Error(
+      'Could not resolve the origin GitHub repo (owner/name) for this worktree. ' +
+        'Check that `git remote get-url origin` points at github.com.',
+    );
+  }
+  const repoArgs = ghRepoSelectArgs(slug);
+  const headRef = ghHeadRef(slug, opts.head);
+  const branchOnly = opts.head.trim().replace(/^refs\/heads\//, '');
 
   const existing = await gh(
-    ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url', ...repoArgs],
+    [...repoArgs, 'pr', 'view', branchOnly, '--json', 'url', '--jq', '.url'],
     worktreePath,
     { reject: false },
   );
@@ -948,14 +995,14 @@ export async function createOrUpdatePr(
     // Refresh title/body from the latest change purpose (not the thread nickname).
     await gh(
       [
+        ...repoArgs,
         'pr',
         'edit',
-        opts.head,
+        branchOnly,
         '--title',
         opts.title,
         '--body',
         opts.body ?? opts.title,
-        ...repoArgs,
       ],
       worktreePath,
       { reject: false },
@@ -965,6 +1012,7 @@ export async function createOrUpdatePr(
 
   if (opts.web) {
     const args = [
+      ...repoArgs,
       'pr',
       'create',
       '--web',
@@ -975,14 +1023,13 @@ export async function createOrUpdatePr(
       '--base',
       opts.base,
       '--head',
-      opts.head,
-      ...repoArgs,
+      headRef,
     ];
     if (opts.draft) args.push('--draft');
     await gh(args, worktreePath, { reject: false });
     // URL may open in browser; return existing view if available
     const again = await gh(
-      ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url', ...repoArgs],
+      [...repoArgs, 'pr', 'view', branchOnly, '--json', 'url', '--jq', '.url'],
       worktreePath,
       { reject: false },
     );
@@ -990,6 +1037,7 @@ export async function createOrUpdatePr(
   }
 
   const args = [
+    ...repoArgs,
     'pr',
     'create',
     '--title',
@@ -999,8 +1047,7 @@ export async function createOrUpdatePr(
     '--base',
     opts.base,
     '--head',
-    opts.head,
-    ...repoArgs,
+    headRef,
   ];
   if (opts.draft) args.push('--draft');
   const created = await gh(args, worktreePath, { reject: false });
@@ -1009,7 +1056,7 @@ export async function createOrUpdatePr(
       created.stderr.trim() ||
       created.stdout.trim() ||
       'gh pr create failed';
-    throw new Error(await formatPrCreateFailure(raw, worktreePath));
+    throw new Error(await formatPrCreateFailure(raw, worktreePath, { slug, head: headRef }));
   }
   const url =
     created.stdout.trim().split('\n').find((l) => l.startsWith('http')) ??

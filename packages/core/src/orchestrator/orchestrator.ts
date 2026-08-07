@@ -8,6 +8,7 @@ import {
   getPrMeta as fetchPrMeta,
   mergePr as mergeGithubPr,
   removeWorktree,
+  resolveGithubRepoSlug,
   resolvePrSelector,
 } from '../git/worktree.js';
 import { runSetupScript, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
@@ -459,7 +460,13 @@ export class Orchestrator {
     const isOrchestration = isOrchestratorThread(fresh);
     // Orchestrators use Sideboard MCP across registered repos — not a single worktree PR playbook.
     const worktreeDirective =
-      isBrightsy || isOrchestration ? null : formatWorktreeDirective(fresh);
+      isBrightsy || isOrchestration
+        ? null
+        : formatWorktreeDirective(fresh, {
+            githubSlug: await resolveGithubRepoSlug(fresh.worktreePath).catch(
+              () => null,
+            ),
+          });
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     const { autoRenameBranchEnabled } = await import('../store/app-settings.js');
     const renameBranchDirective =
