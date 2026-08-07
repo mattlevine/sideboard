@@ -268,17 +268,6 @@ export function App() {
     setThreads((prev) => [...prev.filter((t) => t.id !== thread.id), thread]);
   }, []);
 
-  const openForkedTab = useCallback(
-    (created: Thread) => {
-      upsertThread(created);
-      setSelectedId(created.id);
-      setView('thread');
-      setMultiSelected(new Set([created.id]));
-      void refresh();
-    },
-    [refresh, upsertThread],
-  );
-
   useEffect(() => {
     void window.sideboard.getRepoPath().then(async (p) => {
       const path = typeof p === 'string' ? p.trim() : '';
@@ -730,15 +719,6 @@ export function App() {
                 }}
                 onAskAboutFile={(path) =>
                   setPrefill(`Look at the changes in ${path} and suggest next steps.`)
-                }
-                onForkWorktree={() =>
-                  void window.sideboard
-                    .forkThreadWorktree({
-                      threadId: selected.id,
-                      throughIndex: Math.max(0, selected.messages.length - 1),
-                    })
-                    .then(openForkedTab)
-                    .catch(alert)
                 }
                 pendingLand={pendingLand}
                 onPendingLandConsumed={() => setPendingLand(null)}

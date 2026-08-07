@@ -3041,12 +3041,21 @@ body.resizing-panels * {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .right-actions {
   display: flex;
+  flex-shrink: 0;
+  align-items: center;
   gap: 6px;
   margin-left: auto;
+}
+
+.right-actions button,
+.right-actions .split-main {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .chat-header {
@@ -3393,9 +3402,42 @@ body.resizing-panels * {
   border-radius: 999px;
   padding: 3px 10px;
   font-size: 12px;
+  line-height: 1.3;
   background: var(--accent-soft);
   border: 1px solid var(--accent-dim);
   color: #75beff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.branch-pill {
+  /* Long branch names yield space to action buttons and scroll. */
+  flex: 1 1 0;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  background: var(--bg-input);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.pill-name-scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.pill-name-scroll::-webkit-scrollbar {
+  height: 3px;
+}
+
+.pill-name-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
 }
 
 .pr-pill .pr-status {
@@ -3459,16 +3501,6 @@ body.resizing-panels * {
 
 .pr-pill.rejected .pr-status {
   color: #ff7b72;
-}
-
-.branch-pill {
-  background: var(--bg-input);
-  border-color: var(--border);
-  color: var(--text);
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .btn-continue {

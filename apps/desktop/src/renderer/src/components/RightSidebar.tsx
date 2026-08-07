@@ -34,7 +34,6 @@ interface Props {
   onOpenFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   /** Open an http(s) URL in a center preview tab (e.g. localhost:port). */
   onOpenUrl?: (url: string) => void;
-  onForkWorktree?: () => void;
   /** Select another chat tab in this worktree (e.g. after creating one for setup). */
   onSelectChat?: (id: string, created?: Thread) => void;
   pendingLand?: { draft?: boolean; web?: boolean } | null;
@@ -105,7 +104,6 @@ export function RightSidebar({
   changesPath = null,
   onOpenFile,
   onOpenUrl,
-  onForkWorktree,
   onSelectChat,
   pendingLand = null,
   onPendingLandConsumed,
@@ -767,15 +765,12 @@ export function RightSidebar({
             </button>
           ) : (
             <span className="branch-pill" title={thread.branchName}>
-              {thread.branchName.replace(/^thread\//, '')}
+              <span className="pill-name-scroll">
+                {thread.branchName.replace(/^thread\//, '')}
+              </span>
             </span>
           )}
           <div className="right-actions">
-            {onForkWorktree && (
-              <button type="button" className="btn-continue" onClick={onForkWorktree} title="Fork worktree">
-                Fork
-              </button>
-            )}
             <div className="split-btn" ref={prMenuRef}>
               <button
                 type="button"
