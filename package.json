@@ -16,6 +16,9 @@
     "cli": "pnpm --filter @sideboard/cli run start",
     "lint": "pnpm -r run typecheck",
     "release": "pnpm --filter @sideboard/desktop run release",
-    "release:local": "pnpm --filter @sideboard/desktop exec node scripts/release.js patch mac never"
+    "release:npm": "pnpm --filter @sideboard/desktop exec node scripts/release.js patch npm",
+    "release:desktop": "pnpm --filter @sideboard/desktop exec node scripts/release.js patch mac",
+    "release:local": "pnpm --filter @sideboard/desktop exec node scripts/release.js patch all never",
+    "publish:npm": "node scripts/publish-npm.js"
   }
 }

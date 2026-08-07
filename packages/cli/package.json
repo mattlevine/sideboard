@@ -1,7 +1,7 @@
 {
   "name": "@sideboard/cli",
   "version": "0.1.0",
-  "description": "Sideboard CLI \u2014 agent-agnostic worktree orchestration",
+  "description": "Sideboard CLI — agent-agnostic worktree orchestration (includes `sideboard mcp`)",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -9,12 +9,14 @@
     "side": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
+    "prepublishOnly": "pnpm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
@@ -30,5 +32,20 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^3.0.9"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mattlevine/sideboard.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "sideboard",
+    "cli",
+    "mcp",
+    "agents",
+    "worktree"
+  ]
 }

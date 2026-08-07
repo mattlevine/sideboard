@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 /**
- * Bump desktop version, build a signed Mac app, and publish to GitHub Releases.
+ * Bump versions, optionally build/publish the Mac desktop app, and/or publish CLI+MCP to npm.
  *
- * Loads CSC_* / APPLE_* / GH_TOKEN from apps/desktop/.env when present.
+ * Loads CSC_* / APPLE_* / GH_TOKEN / NPM_TOKEN from apps/desktop/.env when present.
  *
  * Usage (from repo root):
- *   pnpm release                 # patch bump, mac, publish
- *   pnpm release minor           # minor bump
- *   pnpm release major never     # major bump, local artifacts only
- *   pnpm release patch mac never
+ *   pnpm release                    # patch, desktop + npm, publish
+ *   pnpm release minor
+ *   pnpm release patch npm          # CLI + MCP (core) only
+ *   pnpm release patch mac          # desktop only
+ *   pnpm release patch all never    # both, no publish
  *
  * Usage (from apps/desktop):
  *   pnpm run release
- *   pnpm run release patch mac always
+ *   pnpm run release patch npm always
  */
 
 const fs = require('fs');
@@ -26,6 +27,7 @@ const repoRoot = path.resolve(desktopRoot, '../..');
 const pkgPath = path.join(desktopRoot, 'package.json');
 const rootPkgPath = path.join(repoRoot, 'package.json');
 const corePkgPath = path.join(repoRoot, 'packages/core/package.json');
+const cliPkgPath = path.join(repoRoot, 'packages/cli/package.json');
 
 function loadEnv() {
   const candidates = [
@@ -51,11 +53,10 @@ function loadEnv() {
   }
   if (!loaded) {
     console.warn(
-      '⚠️  No .env found. Copy apps/desktop/.env.example → apps/desktop/.env and set CSC_* / APPLE_* / GH_TOKEN for signed releases.',
+      '⚠️  No .env found. Copy apps/desktop/.env.example → apps/desktop/.env for signed desktop / npm publish creds.',
     );
   }
 
-  // Prefer gh auth token when GH_TOKEN is unset.
   if (!process.env.GH_TOKEN) {
     try {
       const token = execSync('gh auth token', {
@@ -75,17 +76,22 @@ function loadEnv() {
 function parseArgs() {
   const args = process.argv.slice(2).filter(Boolean);
   const bump = ['patch', 'minor', 'major'].includes(args[0]) ? args[0] : 'patch';
-  let platform = 'mac';
+  let target = 'all';
   let publish = 'always';
   for (const arg of args.slice(1)) {
-    if (['mac', 'win', 'linux', 'all'].includes(arg)) platform = arg;
-    else if (['always', 'never'].includes(arg)) publish = arg;
+    if (['mac', 'desktop', 'npm', 'all'].includes(arg)) {
+      target = arg === 'desktop' ? 'mac' : arg;
+    } else if (['always', 'never'].includes(arg)) {
+      publish = arg;
+    }
   }
-  if (platform !== 'mac') {
-    console.warn(`⚠️  Sideboard currently packages Mac only; using mac (requested: ${platform}).`);
-    platform = 'mac';
-  }
-  return { bump, platform, publish };
+  return {
+    bump,
+    publish,
+    doDesktop: target === 'all' || target === 'mac',
+    doNpm: target === 'all' || target === 'npm',
+    target,
+  };
 }
 
 function run(cmd, opts = {}) {
@@ -142,50 +148,60 @@ function syncVersions(version) {
   writePackageVersion(pkgPath, version);
   writePackageVersion(rootPkgPath, version);
   writePackageVersion(corePkgPath, version);
+  writePackageVersion(cliPkgPath, version);
 }
 
 loadEnv();
-const { bump, platform, publish } = parseArgs();
+const { bump, publish, doDesktop, doNpm, target } = parseArgs();
 const pkgBefore = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 const githubTarget = getGithubPublishTarget(pkgBefore);
-const notarizeArg = macNotarizeCliArg();
 
-if (publish === 'always' && !process.env.GH_TOKEN) {
+if (publish === 'always' && doDesktop && !process.env.GH_TOKEN) {
   throw new Error(
-    'GH_TOKEN is required to publish. Set it in apps/desktop/.env, run `gh auth login`, or use: pnpm release patch never',
+    'GH_TOKEN is required to publish the desktop app. Set it in apps/desktop/.env, run `gh auth login`, or use: pnpm release patch never',
   );
 }
 
-printMacNotarizeSummary();
+if (doDesktop) printMacNotarizeSummary();
 
 const nextVersion = bumpSemver(pkgBefore.version, bump);
 console.log(`📦 Bumping version: ${pkgBefore.version} → ${nextVersion} (${bump})`);
+console.log(`🎯 Targets: ${target} (desktop=${doDesktop}, npm=${doNpm}), publish=${publish}`);
 syncVersions(nextVersion);
 
-console.log(`🔨 Building Sideboard ${nextVersion} for ${platform} (publish=${publish})…`);
-run('pnpm --filter @sideboard/core build', { cwd: repoRoot });
-run('pnpm exec electron-vite build');
+if (doNpm) {
+  const npmScript = path.join(repoRoot, 'scripts/publish-npm.js');
+  const dry = publish === 'never' ? ' --dry-run' : '';
+  run(`node ${JSON.stringify(npmScript)}${dry}`, { cwd: repoRoot });
+}
 
-const publishFlag = `--publish ${publish}`;
-const builderCmd = [
-  'pnpm exec electron-builder',
-  `--${platform}`,
-  notarizeArg,
-  publishFlag,
-]
-  .filter(Boolean)
-  .join(' ')
-  .replace(/\s+/g, ' ')
-  .trim();
+if (doDesktop) {
+  const notarizeArg = macNotarizeCliArg();
+  console.log(`🔨 Building Sideboard desktop ${nextVersion}…`);
+  run('pnpm --filter @sideboard/core build', { cwd: repoRoot });
+  run('pnpm exec electron-vite build');
 
-run(builderCmd);
+  const publishFlag = `--publish ${publish}`;
+  const builderCmd = [
+    'pnpm exec electron-builder',
+    '--mac',
+    notarizeArg,
+    publishFlag,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  run(builderCmd);
+}
 
 const tag = `v${nextVersion}`;
+const versionFiles = [pkgPath, rootPkgPath, corePkgPath, cliPkgPath];
 try {
-  run(
-    `git add ${JSON.stringify(pkgPath)} ${JSON.stringify(rootPkgPath)} ${JSON.stringify(corePkgPath)}`,
-    { cwd: repoRoot },
-  );
+  run(`git add ${versionFiles.map((p) => JSON.stringify(p)).join(' ')}`, {
+    cwd: repoRoot,
+  });
   run(`git commit -m ${JSON.stringify(`Release ${tag}`)}`, { cwd: repoRoot });
   run(`git tag -a ${JSON.stringify(tag)} -m ${JSON.stringify(`Sideboard ${tag}`)}`, {
     cwd: repoRoot,
@@ -198,17 +214,22 @@ try {
   console.warn(err instanceof Error ? err.message : String(err));
 }
 
-const releaseDir = path.join(desktopRoot, 'release');
-const files = fs.existsSync(releaseDir) ? fs.readdirSync(releaseDir) : [];
 console.log('\n✅ Release complete!');
 console.log(`- Version: ${nextVersion}`);
-console.log(`- Artifacts: ${releaseDir}`);
-console.log(`- GitHub: https://github.com/${githubTarget.owner}/${githubTarget.repo}/releases`);
-if (files.includes('latest-mac.yml')) {
-  console.log('- Auto-update feed: latest-mac.yml present');
-} else if (publish === 'always') {
-  console.log('- Warning: latest-mac.yml missing — auto-update may not work until publish succeeds');
+if (doNpm) {
+  console.log(`- npm: @sideboard/cli@${nextVersion} + @sideboard/core@${nextVersion} (MCP via sideboard mcp / sideboard-mcp)`);
+}
+if (doDesktop) {
+  const releaseDir = path.join(desktopRoot, 'release');
+  const files = fs.existsSync(releaseDir) ? fs.readdirSync(releaseDir) : [];
+  console.log(`- Desktop artifacts: ${releaseDir}`);
+  console.log(`- GitHub: https://github.com/${githubTarget.owner}/${githubTarget.repo}/releases`);
+  if (files.includes('latest-mac.yml')) {
+    console.log('- Auto-update feed: latest-mac.yml present');
+  } else if (publish === 'always') {
+    console.log('- Warning: latest-mac.yml missing — auto-update may not work until publish succeeds');
+  }
 }
 if (publish === 'never') {
-  console.log('- Publish skipped; upload artifacts manually or rerun with always');
+  console.log('- Publish skipped (dry-run / local only)');
 }

@@ -58,17 +58,21 @@ See [`Formula/sideboard.rb`](Formula/sideboard.rb) for the formula stub used by 
 
 Download a signed DMG from [GitHub Releases](https://github.com/mattlevine/sideboard/releases). The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently).
 
-#### Releasing the desktop app
+#### Releasing
 
 ```bash
-# One-time: copy Brightsy (or your) Developer ID env into apps/desktop/.env
+# One-time: copy Brightsy (or your) Developer ID + npm token into apps/desktop/.env
 cp apps/desktop/.env.example apps/desktop/.env
 
-# From repo root — bump, sign, notarize, publish GitHub Release, tag
-pnpm release              # patch
+# From repo root — bump versions, publish npm + Mac desktop, tag
+pnpm release                 # patch → @sideboard/cli + @sideboard/core + desktop
 pnpm release minor
-pnpm release patch never  # local artifacts only (no publish)
+pnpm release patch npm       # CLI + MCP only (core ships `sideboard-mcp`)
+pnpm release patch mac       # desktop GitHub Release only
+pnpm release patch all never # dry-run / local artifacts
 ```
+
+After `npm i -g @sideboard/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 
 ### Agent CLIs
 
