@@ -5,6 +5,7 @@ export * from './store/thread-store.js';
 export * from './store/workspaces.js';
 export * from './store/global-workspace.js';
 export * from './git/run.js';
+export * from './git/gh-errors.js';
 export * from './git/worktree.js';
 export * from './integrations/github.js';
 export * from './integrations/linear.js';

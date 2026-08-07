@@ -8,6 +8,7 @@ import {
 } from '../git/worktree.js';
 import { getDiff } from '../diff/diff.js';
 import { suggestPrMetadata } from './pr-metadata.js';
+import { formatGhLandError } from '../git/gh-errors.js';
 
 export async function previewLand(thread: Thread): Promise<LandPreview> {
   if (thread.sourceIsFork) {
@@ -88,14 +89,23 @@ export async function confirmLand(
     head && head !== 'HEAD' ? head : thread.branchName;
 
   await pushBranch(thread.worktreePath, branch);
-  const prUrl = await createOrUpdatePr(thread.worktreePath, {
-    title: meta.title,
-    body: meta.body,
-    base: preview.target,
-    head: branch,
-    draft: opts?.draft,
-    web: opts?.web,
-  });
-
-  return { prUrl, pushed: true, committed };
+  try {
+    const prUrl = await createOrUpdatePr(thread.worktreePath, {
+      title: meta.title,
+      body: meta.body,
+      base: preview.target,
+      head: branch,
+      draft: opts?.draft,
+      web: opts?.web,
+    });
+    return { prUrl, pushed: true, committed };
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    // createOrUpdatePr already returns a short notice for rate limits; preserve it.
+    if (raw.startsWith('GitHub API rate limit exceeded.')) throw err;
+    if (/Command failed with exit code|API rate limit/i.test(raw)) {
+      throw new Error(formatGhLandError(raw));
+    }
+    throw err;
+  }
 }

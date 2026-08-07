@@ -5,6 +5,7 @@ import type {
   PrCheckRun,
   PrDetails,
   PrInfo,
+  PrMeta,
   Thread,
 } from '../types/thread.js';
 import { worktreesRoot } from '../store/paths.js';
@@ -16,8 +17,32 @@ import {
   type TeamName,
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
+import { formatGhLandError, isGhRateLimitError } from './gh-errors.js';
 import { gh, git } from './run.js';
 import { buildMergeGateChecks, type PrMergeGate } from './pr-gates.js';
+
+/** Best-effort GraphQL reset time from `gh api rate_limit` (REST; often still available). */
+async function lookupGithubGraphqlReset(cwd: string): Promise<number | undefined> {
+  const result = await gh(['api', 'rate_limit'], cwd, { reject: false });
+  if (result.exitCode !== 0 || !result.stdout.trim()) return undefined;
+  try {
+    const data = JSON.parse(result.stdout) as {
+      resources?: { graphql?: { reset?: number } };
+    };
+    const reset = data.resources?.graphql?.reset;
+    return typeof reset === 'number' ? reset : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function formatPrCreateFailure(raw: string, cwd: string): Promise<string> {
+  if (!isGhRateLimitError(raw)) {
+    return formatGhLandError(raw);
+  }
+  const resetAt = await lookupGithubGraphqlReset(cwd);
+  return formatGhLandError(raw, { resetAt });
+}
 
 export type { TeamName } from './teams.js';
 export { allocateTeamName, FAMOUS_SOCCER_TEAMS } from './teams.js';
@@ -478,7 +503,46 @@ export async function getPrChecks(
   return [...gateRows, ...ciChecks];
 }
 
-/** PR description / commits / reviews (+ checks) for the Review tab. */
+/** Lightweight PR fields for the sidebar pill — avoids nested reviews/checks GraphQL. */
+export async function getPrMeta(
+  cwd: string,
+  selector: string,
+): Promise<PrMeta | null> {
+  const slug = await resolveGithubRepoSlug(cwd);
+  const viewArgs = [
+    'pr',
+    'view',
+    selector,
+    '--json',
+    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName',
+  ];
+  if (slug) viewArgs.push('--repo', slug);
+  const { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
+  if (exitCode !== 0 || !stdout.trim()) {
+    if (/no pull requests found/i.test(stderr)) return null;
+    return null;
+  }
+  try {
+    const view = JSON.parse(stdout) as Record<string, unknown>;
+    return {
+      number: Number(view.number),
+      title: String(view.title ?? ''),
+      url: String(view.url ?? ''),
+      state: String(view.state ?? ''),
+      isDraft: Boolean(view.isDraft),
+      reviewDecision:
+        typeof view.reviewDecision === 'string' && view.reviewDecision
+          ? view.reviewDecision
+          : null,
+      baseRefName: String(view.baseRefName ?? ''),
+      headRefName: String(view.headRefName ?? ''),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** PR description / reviews for the Review tab (no nested CI — use getPrChecks). */
 export async function getPrDetails(
   cwd: string,
   selector: string,
@@ -503,7 +567,6 @@ export async function getPrDetails(
       'additions',
       'deletions',
       'changedFiles',
-      'commits',
       'comments',
       'reviews',
     ].join(','),
@@ -525,15 +588,7 @@ export async function getPrDetails(
     throw new Error(stderr.trim() || 'gh pr view returned invalid JSON');
   }
 
-  let checks: PrCheckRun[] = [];
-  try {
-    checks = (await getPrChecks(cwd, selector)) ?? [];
-  } catch {
-    checks = [];
-  }
-
   const author = (view.author ?? {}) as { login?: string; name?: string | null };
-  const commits = Array.isArray(view.commits) ? view.commits : [];
   const comments = Array.isArray(view.comments) ? view.comments : [];
   const reviews = Array.isArray(view.reviews) ? view.reviews : [];
 
@@ -554,21 +609,8 @@ export async function getPrDetails(
     additions: Number(view.additions ?? 0),
     deletions: Number(view.deletions ?? 0),
     changedFiles: Number(view.changedFiles ?? 0),
-    commits: commits.map((c) => {
-      const row = c as Record<string, unknown>;
-      const authors = Array.isArray(row.authors)
-        ? row.authors.map((a) => {
-            const actor = a as { login?: string; name?: string | null };
-            return { login: actor.login ?? 'unknown', name: actor.name ?? null };
-          })
-        : [];
-      return {
-        oid: String(row.oid ?? ''),
-        messageHeadline: String(row.messageHeadline ?? ''),
-        committedDate: String(row.committedDate ?? ''),
-        authors,
-      };
-    }),
+    // Commits live in Changes; omit from GraphQL to save rate-limit points.
+    commits: [],
     comments: comments.map((c) => {
       const row = c as Record<string, unknown>;
       const a = (row.author ?? {}) as { login?: string };
@@ -588,7 +630,8 @@ export async function getPrDetails(
         submittedAt: normalizeGhTime(row.submittedAt),
       };
     }),
-    checks,
+    // CI lives in Checks tab via getPrChecks — nesting burned GraphQL points.
+    checks: [],
   };
 }
 
@@ -906,8 +949,17 @@ export async function createOrUpdatePr(
     opts.head,
   ];
   if (opts.draft) args.push('--draft');
-  const { stdout } = await gh(args, worktreePath);
-  const url = stdout.trim().split('\n').find((l) => l.startsWith('http')) ?? stdout.trim();
+  const created = await gh(args, worktreePath, { reject: false });
+  if (created.exitCode !== 0) {
+    const raw =
+      created.stderr.trim() ||
+      created.stdout.trim() ||
+      'gh pr create failed';
+    throw new Error(await formatPrCreateFailure(raw, worktreePath));
+  }
+  const url =
+    created.stdout.trim().split('\n').find((l) => l.startsWith('http')) ??
+    created.stdout.trim();
   return url;
 }
 

@@ -20,6 +20,7 @@ import type {
   PrCheckRun,
   PrDetails,
   PrInfo,
+  PrMeta,
   Thread,
   ThreadOptionsPatch,
 } from '../types/thread.js';
@@ -152,7 +153,9 @@ export interface IpcApi {
   initializeGit(threadRef: string): Promise<void>;
   /** CI checks for the thread's linked PR (`gh pr checks`). `null` = no PR. */
   getPrChecks(threadRef: string): Promise<PrCheckRun[] | null>;
-  /** PR description / commits / reviews for the Review tab. */
+  /** Lightweight PR fields for the sidebar pill (cheap GraphQL). */
+  getPrMeta(threadRef: string): Promise<PrMeta | null>;
+  /** PR description / reviews for the Review tab. */
   getPrDetails(threadRef: string): Promise<PrDetails | null>;
   listFiles(threadRef: string): Promise<string[]>;
   readFile(

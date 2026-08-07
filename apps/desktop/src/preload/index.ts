@@ -63,6 +63,7 @@ const api: IpcApi = {
   getDiff: (threadRef, opts) => ipcRenderer.invoke('getDiff', threadRef, opts),
   initializeGit: (threadRef) => ipcRenderer.invoke('initializeGit', threadRef),
   getPrChecks: (threadRef) => ipcRenderer.invoke('getPrChecks', threadRef),
+  getPrMeta: (threadRef) => ipcRenderer.invoke('getPrMeta', threadRef),
   getPrDetails: (threadRef) => ipcRenderer.invoke('getPrDetails', threadRef),
   listFiles: (threadRef) => ipcRenderer.invoke('listFiles', threadRef),
   readFile: (threadRef, relativePath) =>

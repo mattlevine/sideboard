@@ -5,6 +5,7 @@ import { getAdapter } from '../agents/index.js';
 import {
   getPrChecks,
   getPrDetails,
+  getPrMeta as fetchPrMeta,
   mergePr as mergeGithubPr,
   removeWorktree,
   resolvePrSelector,
@@ -29,6 +30,7 @@ import type {
   OrchestratorRuntime,
   PrCheckRun,
   PrDetails,
+  PrMeta,
   Thread,
   ThreadOptionsPatch,
 } from '../types/thread.js';
@@ -1049,8 +1051,8 @@ export class Orchestrator {
     if (result.prUrl) {
       const patch: Partial<Thread> = { prUrl: result.prUrl };
       try {
-        const details = await getPrDetails(thread.worktreePath, result.prUrl);
-        if (details?.title) patch.prTitle = details.title;
+        const meta = await fetchPrMeta(thread.worktreePath, result.prUrl);
+        if (meta?.title) patch.prTitle = meta.title;
       } catch {
         // ignore — URL alone is enough
       }
@@ -1090,6 +1092,25 @@ export class Orchestrator {
     const { selector, cwd } = await this.withPrSelector(threadRef);
     if (!selector) return null;
     return getPrChecks(cwd, selector);
+  }
+
+  async getPrMeta(threadRef: string): Promise<PrMeta | null> {
+    const { thread, selector, cwd } = await this.withPrSelector(threadRef);
+    if (!selector) return null;
+    const meta = await fetchPrMeta(cwd, selector);
+    if (meta) {
+      const patch: Partial<Thread> = {};
+      if (meta.url && meta.url !== thread.prUrl) patch.prUrl = meta.url;
+      if (meta.title && meta.title !== thread.prTitle) patch.prTitle = meta.title;
+      if (Object.keys(patch).length > 0) {
+        updateThread(thread.id, patch);
+        const latest = this.requireThread(thread.id);
+        if (!latest.userSetTitle && meta.title && latest.title !== meta.title) {
+          updateThread(thread.id, { title: meta.title });
+        }
+      }
+    }
+    return meta;
   }
 
   async getPrDetails(threadRef: string): Promise<PrDetails | null> {

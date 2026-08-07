@@ -215,7 +215,20 @@ export interface PrDetails {
   commits: PrCommitInfo[];
   comments: PrCommentInfo[];
   reviews: PrReviewInfo[];
+  /** Prefer `getPrChecks` — kept for callers; often empty to avoid nested GraphQL. */
   checks: PrCheckRun[];
+}
+
+/** Lightweight PR fields for the sidebar pill (cheap GraphQL). */
+export interface PrMeta {
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+  isDraft: boolean;
+  reviewDecision: string | null;
+  baseRefName: string;
+  headRefName: string;
 }
 
 export interface IssueInfo {

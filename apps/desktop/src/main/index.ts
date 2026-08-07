@@ -631,6 +631,7 @@ function registerIpc(): void {
   );
   ipcMain.handle('initializeGit', (_e, ref: string) => orch.initializeGit(ref));
   ipcMain.handle('getPrChecks', (_e, ref: string) => orch.getPrChecks(ref));
+  ipcMain.handle('getPrMeta', (_e, ref: string) => orch.getPrMeta(ref));
   ipcMain.handle('getPrDetails', (_e, ref: string) => orch.getPrDetails(ref));
   ipcMain.handle('listFiles', (_e, ref: string) => orch.listFiles(ref));
   ipcMain.handle('readFile', (_e, ref: string, relativePath: string) =>

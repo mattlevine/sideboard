@@ -44,6 +44,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/agents/brightsy-targets.ts',
         ),
+        '@sideboard/gh-errors': resolve(
+          __dirname,
+          '../../packages/core/src/git/gh-errors.ts',
+        ),
       },
     },
     build: {

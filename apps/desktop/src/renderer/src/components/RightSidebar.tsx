@@ -7,6 +7,7 @@ import type {
   PrDetails,
   Thread,
 } from '@sideboard-ai/core';
+import { formatIpcInvokeError } from '@sideboard/gh-errors';
 import { FileTree } from './FileTree';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MergeModal } from './MergeModal';
@@ -382,19 +383,19 @@ export function RightSidebar({
 
   const loadPrMeta = useCallback(async () => {
     try {
-      const details = await window.sideboard.getPrDetails(thread.id);
-      if (!details) {
+      const meta = await window.sideboard.getPrMeta(thread.id);
+      if (!meta) {
         setPrMeta(null);
         return;
       }
       setPrMeta({
-        number: details.number,
-        url: details.url,
-        state: details.state,
-        isDraft: details.isDraft,
-        title: details.title,
-        baseRefName: details.baseRefName,
-        reviewDecision: details.reviewDecision,
+        number: meta.number,
+        url: meta.url,
+        state: meta.state,
+        isDraft: meta.isDraft,
+        title: meta.title,
+        baseRefName: meta.baseRefName,
+        reviewDecision: meta.reviewDecision,
       });
     } catch {
       setPrMeta(null);
@@ -403,29 +404,29 @@ export function RightSidebar({
 
   useEffect(() => {
     void loadPrMeta();
-  }, [loadPrMeta, thread.prUrl, thread.branchName, thread.updatedAt]);
+    // Intentionally omit thread.updatedAt — agent turns must not re-hit GraphQL.
+  }, [loadPrMeta, thread.prUrl, thread.branchName]);
 
   useEffect(() => {
     if (upper !== 'checks') return;
     void loadPrChecks();
-  }, [upper, thread.id, thread.prUrl, thread.branchName, thread.updatedAt, loadPrChecks]);
+  }, [upper, thread.id, thread.prUrl, thread.branchName, loadPrChecks]);
 
   useEffect(() => {
     if (upper !== 'review') return;
     void loadPrDetails();
-  }, [upper, thread.id, thread.prUrl, thread.branchName, thread.updatedAt, loadPrDetails]);
+  }, [upper, thread.id, thread.prUrl, thread.branchName, loadPrDetails]);
 
-  // Light poll while checks are pending
+  // Light poll while checks are pending (Checks tab only — Review no longer embeds CI)
   useEffect(() => {
-    if (upper !== 'checks' && upper !== 'review') return;
-    const list = prChecks ?? prDetails?.checks ?? [];
+    if (upper !== 'checks') return;
+    const list = prChecks ?? [];
     if (!list.some((c) => c.bucket === 'pending')) return;
     const id = window.setInterval(() => {
-      if (upper === 'checks') void loadPrChecks();
-      else void loadPrDetails();
+      void loadPrChecks();
     }, 15_000);
     return () => window.clearInterval(id);
-  }, [upper, prChecks, prDetails, loadPrChecks, loadPrDetails]);
+  }, [upper, prChecks, loadPrChecks]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -541,7 +542,7 @@ export function RightSidebar({
     }
   }
 
-  const checksForBadge = prChecks ?? prDetails?.checks ?? null;
+  const checksForBadge = prChecks;
   const checksTabLabel = useMemo(() => {
     if (!checksForBadge || checksForBadge.length === 0) return 'Checks';
     const s = summarizeChecks(checksForBadge);
@@ -609,7 +610,7 @@ export function RightSidebar({
         void window.sideboard.openExternal(result.prUrl);
       }
     } catch (err) {
-      setLandError(err instanceof Error ? err.message : String(err));
+      setLandError(formatIpcInvokeError(err));
     } finally {
       setLandBusy(false);
     }

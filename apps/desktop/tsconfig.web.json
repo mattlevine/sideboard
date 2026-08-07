@@ -17,7 +17,8 @@
     "paths": {
       "@sideboard/message-parts": ["../../packages/core/src/agents/message-parts.ts"],
       "@sideboard/worktree-labels": ["../../packages/core/src/git/worktree-labels.ts"],
-      "@sideboard/brightsy-targets": ["../../packages/core/src/agents/brightsy-targets.ts"]
+      "@sideboard/brightsy-targets": ["../../packages/core/src/agents/brightsy-targets.ts"],
+      "@sideboard/gh-errors": ["../../packages/core/src/git/gh-errors.ts"]
     }
   },
   "include": ["src/renderer/src/**/*", "src/preload/index.d.ts"]
