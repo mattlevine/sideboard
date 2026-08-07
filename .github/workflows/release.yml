@@ -21,9 +21,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @sideboard/core build
-      - run: pnpm --filter @sideboard/cli build
-      - run: pnpm --filter @sideboard/cli test
+      - run: pnpm --filter @sideboard-ai/core build
+      - run: pnpm --filter @sideboard-ai/cli build
+      - run: pnpm --filter @sideboard-ai/cli test
       - name: Publish CLI + MCP (core) to npm
         if: ${{ secrets.NPM_TOKEN != '' }}
         run: node scripts/publish-npm.js
@@ -43,7 +43,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @sideboard/core build
+      - run: pnpm --filter @sideboard-ai/core build
       - name: Build & publish Electron (signed)
         working-directory: apps/desktop
         env:
