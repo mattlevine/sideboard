@@ -15,7 +15,9 @@
     "rebuild:native": "electron-rebuild -f -w better-sqlite3,node-pty",
     "dist": "pnpm run build && electron-builder --mac",
     "dist:dir": "pnpm run build && electron-builder --mac --dir",
-    "pack": "pnpm run dist:dir"
+    "dist:mac": "node scripts/release.js patch mac never",
+    "pack": "pnpm run dist:dir",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

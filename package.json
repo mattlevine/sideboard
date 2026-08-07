@@ -14,6 +14,8 @@
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
     "cli": "pnpm --filter @sideboard/cli run start",
-    "lint": "pnpm -r run typecheck"
+    "lint": "pnpm -r run typecheck",
+    "release": "pnpm --filter @sideboard/desktop run release",
+    "release:local": "pnpm --filter @sideboard/desktop exec node scripts/release.js patch mac never"
   }
 }

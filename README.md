@@ -56,7 +56,19 @@ See [`Formula/sideboard.rb`](Formula/sideboard.rb) for the formula stub used by 
 
 ### Desktop
 
-Download a signed DMG from [GitHub Releases](https://github.com/sideboard-ai/sideboard/releases). The app auto-updates via `electron-updater` (checks on launch and every 4 hours; prompts **Restart to update** — never restarts mid-session silently).
+Download a signed DMG from [GitHub Releases](https://github.com/mattlevine/sideboard/releases). The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently).
+
+#### Releasing the desktop app
+
+```bash
+# One-time: copy Brightsy (or your) Developer ID env into apps/desktop/.env
+cp apps/desktop/.env.example apps/desktop/.env
+
+# From repo root — bump, sign, notarize, publish GitHub Release, tag
+pnpm release              # patch
+pnpm release minor
+pnpm release patch never  # local artifacts only (no publish)
+```
 
 ### Agent CLIs
 
