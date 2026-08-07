@@ -12,7 +12,7 @@ import {
 } from '../lib/global-workspace';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { BrandMark } from './BrandMark';
-import { ConfirmDialog } from './ConfirmDialog';
+import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
@@ -419,65 +419,145 @@ export function Sidebar({
       </div>
 
       {archiveConfirm && (
-        <ConfirmDialog
-          title="Archive worktree?"
-          message={closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount)}
-          confirmLabel="Archive"
-          busy={archiveBusy}
-          busyMessage="Stopping agents and removing the worktree…"
-          onConfirm={() => {
-            const id = archiveConfirm.threadId;
-            setArchiveBusy(true);
-            void Promise.resolve(onArchive?.(id))
-              .then(() => {
-                setArchiveConfirm(null);
-              })
-              .catch((err: unknown) => {
-                window.alert(err instanceof Error ? err.message : String(err));
-              })
-              .finally(() => {
-                setArchiveBusy(false);
-              });
-          }}
-          onCancel={() => {
+        <div
+          className="modal-backdrop"
+          onClick={() => {
             if (!archiveBusy) setArchiveConfirm(null);
           }}
-        />
+        >
+          <div
+            className={`modal create-modal merge-modal${archiveBusy ? ' is-creating' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="archive-worktree-title"
+            aria-busy={archiveBusy}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {archiveBusy ? (
+              <CreateProcessingOverlay
+                mode="archive"
+                repoName={archiveConfirm.title}
+                selectionHint={
+                  archiveConfirm.chatCount <= 1
+                    ? 'removing worktree'
+                    : `${archiveConfirm.chatCount} chats`
+                }
+              />
+            ) : null}
+            <div className={`create-modal-content${archiveBusy ? ' veiled' : ''}`}>
+              <h3 id="archive-worktree-title" className="merge-modal-title">
+                Archive worktree?
+              </h3>
+              <p className="confirm-dialog-message">
+                {closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount)}
+              </p>
+              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+                <button
+                  type="button"
+                  disabled={archiveBusy}
+                  onClick={() => {
+                    if (!archiveBusy) setArchiveConfirm(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={archiveBusy}
+                  onClick={() => {
+                    const id = archiveConfirm.threadId;
+                    setArchiveBusy(true);
+                    void Promise.resolve(onArchive?.(id))
+                      .then(() => {
+                        setArchiveConfirm(null);
+                      })
+                      .catch((err: unknown) => {
+                        window.alert(err instanceof Error ? err.message : String(err));
+                      })
+                      .finally(() => {
+                        setArchiveBusy(false);
+                      });
+                  }}
+                >
+                  {archiveBusy ? 'Archiving…' : 'Archive'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {removeConfirm && onRemoveWorkspace && (
-        <ConfirmDialog
-          title={`Remove ${removeConfirm.name}?`}
-          message={
-            removeConfirm.threadCount > 0
-              ? `Archive ${removeConfirm.threadCount} open thread${removeConfirm.threadCount === 1 ? '' : 's'} and remove this project from the sidebar. Chats stay in Settings → History.`
-              : 'Remove this project from the sidebar. You can add it again later.'
-          }
-          confirmLabel="Remove"
-          busy={removeBusy}
-          busyMessage={
-            removeConfirm.threadCount > 0
-              ? 'Archiving threads and removing project…'
-              : 'Removing project…'
-          }
-          onConfirm={() => {
-            const path = removeConfirm.path;
-            setRemoveBusy(true);
-            void Promise.resolve(onRemoveWorkspace(path))
-              .then(() => {
-                setRemoveConfirm(null);
-              })
-              .catch((err: unknown) => {
-                window.alert(err instanceof Error ? err.message : String(err));
-              })
-              .finally(() => {
-                setRemoveBusy(false);
-              });
-          }}
-          onCancel={() => {
+        <div
+          className="modal-backdrop"
+          onClick={() => {
             if (!removeBusy) setRemoveConfirm(null);
           }}
-        />
+        >
+          <div
+            className={`modal create-modal merge-modal${removeBusy ? ' is-creating' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-workspace-title"
+            aria-busy={removeBusy}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {removeBusy ? (
+              <CreateProcessingOverlay
+                mode="remove"
+                repoName={removeConfirm.name}
+                selectionHint={
+                  removeConfirm.threadCount > 0
+                    ? `${removeConfirm.threadCount} thread${removeConfirm.threadCount === 1 ? '' : 's'}`
+                    : 'sidebar'
+                }
+              />
+            ) : null}
+            <div className={`create-modal-content${removeBusy ? ' veiled' : ''}`}>
+              <h3 id="remove-workspace-title" className="merge-modal-title">
+                Remove {removeConfirm.name}?
+              </h3>
+              <p className="confirm-dialog-message">
+                {removeConfirm.threadCount > 0
+                  ? `Archive ${removeConfirm.threadCount} open thread${removeConfirm.threadCount === 1 ? '' : 's'} and remove this project from the sidebar. Chats stay in Settings → History.`
+                  : 'Remove this project from the sidebar. You can add it again later.'}
+              </p>
+              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+                <button
+                  type="button"
+                  disabled={removeBusy}
+                  onClick={() => {
+                    if (!removeBusy) setRemoveConfirm(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={removeBusy}
+                  onClick={() => {
+                    const path = removeConfirm.path;
+                    setRemoveBusy(true);
+                    void Promise.resolve(onRemoveWorkspace(path))
+                      .then(() => {
+                        setRemoveConfirm(null);
+                      })
+                      .catch((err: unknown) => {
+                        window.alert(err instanceof Error ? err.message : String(err));
+                      })
+                      .finally(() => {
+                        setRemoveBusy(false);
+                      });
+                  }}
+                >
+                  {removeBusy ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="sidebar-footer">

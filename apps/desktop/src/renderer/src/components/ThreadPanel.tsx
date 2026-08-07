@@ -5,7 +5,7 @@ import { formatTokenCount, sumUsage, totalTokens, usageTooltip } from '../lib/to
 import { AgentMessage } from './AgentMessage';
 import { BrightsyTargetPicker } from './BrightsyTargetPicker';
 import { ChatTabs } from './ChatTabs';
-import { ConfirmDialog } from './ConfirmDialog';
+import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { ActivityMark } from './ActivityMark';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import {
@@ -540,34 +540,73 @@ export function ThreadPanel({
       />
 
       {closeConfirm && (
-        <ConfirmDialog
-          title="Close chat tab?"
-          message={closeChatTabMessage(closeConfirm.title, closeConfirm.chatCount)}
-          confirmLabel="Close tab"
-          busy={closeBusy}
-          busyMessage={
-            closeConfirm.chatCount <= 1
-              ? 'Stopping agents and removing the worktree…'
-              : 'Closing this chat tab…'
-          }
-          onConfirm={() => {
-            const { id } = closeConfirm;
-            setCloseBusy(true);
-            void archiveChatTab(id)
-              .then(() => {
-                setCloseConfirm(null);
-              })
-              .catch((err: unknown) => {
-                window.alert(err instanceof Error ? err.message : String(err));
-              })
-              .finally(() => {
-                setCloseBusy(false);
-              });
-          }}
-          onCancel={() => {
+        <div
+          className="modal-backdrop"
+          onClick={() => {
             if (!closeBusy) setCloseConfirm(null);
           }}
-        />
+        >
+          <div
+            className={`modal create-modal merge-modal${closeBusy ? ' is-creating' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="close-chat-title"
+            aria-busy={closeBusy}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {closeBusy ? (
+              <CreateProcessingOverlay
+                mode="archive"
+                repoName={closeConfirm.title.trim() || 'Untitled'}
+                selectionHint={
+                  closeConfirm.chatCount <= 1
+                    ? 'removing worktree'
+                    : `${closeConfirm.chatCount} chats`
+                }
+              />
+            ) : null}
+            <div className={`create-modal-content${closeBusy ? ' veiled' : ''}`}>
+              <h3 id="close-chat-title" className="merge-modal-title">
+                Close chat tab?
+              </h3>
+              <p className="confirm-dialog-message">
+                {closeChatTabMessage(closeConfirm.title, closeConfirm.chatCount)}
+              </p>
+              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+                <button
+                  type="button"
+                  disabled={closeBusy}
+                  onClick={() => {
+                    if (!closeBusy) setCloseConfirm(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={closeBusy}
+                  onClick={() => {
+                    const { id } = closeConfirm;
+                    setCloseBusy(true);
+                    void archiveChatTab(id)
+                      .then(() => {
+                        setCloseConfirm(null);
+                      })
+                      .catch((err: unknown) => {
+                        window.alert(err instanceof Error ? err.message : String(err));
+                      })
+                      .finally(() => {
+                        setCloseBusy(false);
+                      });
+                  }}
+                >
+                  {closeBusy ? 'Closing…' : 'Close tab'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {changesOpen && changesPath ? (

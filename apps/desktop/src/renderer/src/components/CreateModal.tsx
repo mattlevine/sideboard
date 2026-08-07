@@ -15,6 +15,7 @@ import {
 } from './CreateFromPicker';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { FloatingMenu } from './FloatingMenu';
+import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
 
 type Mode = 'create' | 'orchestration';
 
@@ -32,12 +33,32 @@ interface Props {
   onOpenAccount?: () => void;
 }
 
+function isRealProjectPath(path: string | null | undefined): path is string {
+  return Boolean(
+    path &&
+      path !== '/' &&
+      path !== '.' &&
+      path !== GLOBAL_WORKSPACE_ID,
+  );
+}
+
 function dedupeWorkspaces(list: Workspace[]): Workspace[] {
   const byPath = new Map<string, Workspace>();
   for (const w of list) {
-    if (w?.path) byPath.set(w.path, w);
+    if (!isRealProjectPath(w?.path)) continue;
+    byPath.set(w.path, w);
   }
   return [...byPath.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function firstProjectPath(
+  list: Workspace[],
+  preferred?: string | null,
+): string {
+  if (isRealProjectPath(preferred) && list.some((w) => w.path === preferred)) {
+    return preferred;
+  }
+  return list[0]?.path ?? '';
 }
 
 const DEFAULT_OPTIONS: ComposerDraftOptions = {
@@ -90,8 +111,8 @@ export function CreateModal({
   const [workspaces, setWorkspaces] = useState<Workspace[]>(() =>
     dedupeWorkspaces(knownWorkspaces),
   );
-  const [repoPath, setRepoPath] = useState(
-    initialRepoPath ?? knownWorkspaces[0]?.path ?? '',
+  const [repoPath, setRepoPath] = useState(() =>
+    firstProjectPath(dedupeWorkspaces(knownWorkspaces), initialRepoPath),
   );
   const [options, setOptions] = useState<ComposerDraftOptions>(DEFAULT_OPTIONS);
   const [attachments, setAttachments] = useState<ThreadAttachment[]>([]);
@@ -136,13 +157,14 @@ export function CreateModal({
     try {
       const threads = await window.sideboard.getThreads(true);
       for (const t of threads) {
-        if (!t.repoPath) continue;
+        if (!isRealProjectPath(t.repoPath)) continue;
         let root = t.repoPath;
         try {
           root = await window.sideboard.resolveRepoRoot(t.repoPath);
         } catch {
           // keep t.repoPath
         }
+        if (!isRealProjectPath(root)) continue;
         const name = root.split('/').filter(Boolean).pop() || root;
         collected.push({
           path: root,
@@ -161,19 +183,23 @@ export function CreateModal({
 
     try {
       const current = await window.sideboard.getRepoPath();
-      if (current) {
+      if (isRealProjectPath(current)) {
         let root = current;
         try {
           root = await window.sideboard.resolveRepoRoot(current);
         } catch {
           // keep current
         }
-        const name = root.split('/').filter(Boolean).pop() || root;
-        collected.push({ path: root, name, addedAt: new Date().toISOString() });
-        try {
-          await window.sideboard.addWorkspace(root);
-        } catch {
-          // ignore
+        if (!isRealProjectPath(root)) {
+          // skip
+        } else {
+          const name = root.split('/').filter(Boolean).pop() || root;
+          collected.push({ path: root, name, addedAt: new Date().toISOString() });
+          try {
+            await window.sideboard.addWorkspace(root);
+          } catch {
+            // ignore
+          }
         }
       }
     } catch {
@@ -182,11 +208,7 @@ export function CreateModal({
 
     const list = dedupeWorkspaces(collected);
     setWorkspaces(list);
-    setRepoPath((current) => {
-      if (preferred && list.some((w) => w.path === preferred)) return preferred;
-      if (current && list.some((w) => w.path === current)) return current;
-      return list[0]?.path ?? '';
-    });
+    setRepoPath((current) => firstProjectPath(list, preferred ?? current));
     return list;
   }
 

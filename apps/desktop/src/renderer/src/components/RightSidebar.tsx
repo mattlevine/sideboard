@@ -9,7 +9,7 @@ import type {
 } from '@sideboard-ai/core';
 import { formatIpcInvokeError } from '@sideboard/gh-errors';
 import { FileTree } from './FileTree';
-import { ConfirmDialog } from './ConfirmDialog';
+import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
 import { PrReviewPanel } from './PrReviewPanel';
@@ -1422,32 +1422,77 @@ export function RightSidebar({
       )}
 
       {archiveConfirm && (
-        <ConfirmDialog
-          title="Close chat tab?"
-          message={closeChatTabMessage(thread.title, archiveConfirm.chatCount)}
-          confirmLabel="Close tab"
-          busy={archiveBusy || archiving}
-          busyMessage="Stopping agents and removing the worktree…"
-          onConfirm={() => {
-            setArchiveBusy(true);
-            const run = onArchiveThread
-              ? Promise.resolve(onArchiveThread(thread.id))
-              : window.sideboard.archiveThread(thread.id).then(onRefresh);
-            void run
-              .then(() => {
-                setArchiveConfirm(null);
-              })
-              .catch((err: unknown) => {
-                window.alert(err instanceof Error ? err.message : String(err));
-              })
-              .finally(() => {
-                setArchiveBusy(false);
-              });
-          }}
-          onCancel={() => {
+        <div
+          className="modal-backdrop"
+          onClick={() => {
             if (!archiveBusy && !archiving) setArchiveConfirm(null);
           }}
-        />
+        >
+          <div
+            className={`modal create-modal merge-modal${archiveBusy || archiving ? ' is-creating' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="archive-chat-title"
+            aria-busy={archiveBusy || archiving}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {archiveBusy || archiving ? (
+              <CreateProcessingOverlay
+                mode="archive"
+                repoName={thread.title.trim() || thread.branchName.replace(/^thread\//, '')}
+                selectionHint={
+                  archiveConfirm.chatCount <= 1
+                    ? 'removing worktree'
+                    : `${archiveConfirm.chatCount} chats`
+                }
+              />
+            ) : null}
+            <div
+              className={`create-modal-content${archiveBusy || archiving ? ' veiled' : ''}`}
+            >
+              <h3 id="archive-chat-title" className="merge-modal-title">
+                Close chat tab?
+              </h3>
+              <p className="confirm-dialog-message">
+                {closeChatTabMessage(thread.title, archiveConfirm.chatCount)}
+              </p>
+              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+                <button
+                  type="button"
+                  disabled={archiveBusy || archiving}
+                  onClick={() => {
+                    if (!archiveBusy && !archiving) setArchiveConfirm(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={archiveBusy || archiving}
+                  onClick={() => {
+                    setArchiveBusy(true);
+                    const run = onArchiveThread
+                      ? Promise.resolve(onArchiveThread(thread.id))
+                      : window.sideboard.archiveThread(thread.id).then(onRefresh);
+                    void run
+                      .then(() => {
+                        setArchiveConfirm(null);
+                      })
+                      .catch((err: unknown) => {
+                        window.alert(err instanceof Error ? err.message : String(err));
+                      })
+                      .finally(() => {
+                        setArchiveBusy(false);
+                      });
+                  }}
+                >
+                  {archiveBusy || archiving ? 'Closing…' : 'Close tab'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </aside>
   );

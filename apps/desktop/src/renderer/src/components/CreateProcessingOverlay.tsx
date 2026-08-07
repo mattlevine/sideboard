@@ -21,9 +21,38 @@ const STEPS_MERGE = [
   'Almost done',
 ] as const;
 
-type OverlayMode = 'create' | 'orchestration' | 'merge';
+const STEPS_REMOVE = [
+  'Archiving threads',
+  'Removing project',
+  'Cleaning up',
+  'Almost done',
+] as const;
 
-/** Full-modal processing surface while create / merge runs. */
+const STEPS_ARCHIVE = [
+  'Stopping agents',
+  'Removing worktree',
+  'Cleaning up',
+  'Almost done',
+] as const;
+
+type OverlayMode = 'create' | 'orchestration' | 'merge' | 'remove' | 'archive';
+
+function stepsForMode(mode: OverlayMode) {
+  switch (mode) {
+    case 'orchestration':
+      return STEPS_ORCH;
+    case 'merge':
+      return STEPS_MERGE;
+    case 'remove':
+      return STEPS_REMOVE;
+    case 'archive':
+      return STEPS_ARCHIVE;
+    default:
+      return STEPS_THREAD;
+  }
+}
+
+/** Full-modal processing surface while create / merge / remove runs. */
 export function CreateProcessingOverlay({
   mode,
   repoName,
@@ -33,8 +62,7 @@ export function CreateProcessingOverlay({
   repoName: string;
   selectionHint?: string | null;
 }) {
-  const steps =
-    mode === 'orchestration' ? STEPS_ORCH : mode === 'merge' ? STEPS_MERGE : STEPS_THREAD;
+  const steps = stepsForMode(mode);
   const [step, setStep] = useState(0);
 
   useEffect(() => {

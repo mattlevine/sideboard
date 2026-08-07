@@ -16,7 +16,7 @@ import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal } from './components/SettingsModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
-import { isGlobalThread } from './lib/global-workspace';
+import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
 import { normalizePreviewUrl } from './lib/preview-url';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
@@ -414,11 +414,11 @@ export function App() {
   const knownWorkspaces = useMemo(() => {
     const byPath = new Map<string, Workspace>();
     for (const ws of workspaces) {
-      if (!ws.path || byPath.has(ws.path)) continue;
+      if (!ws.path || ws.path === GLOBAL_WORKSPACE_ID || byPath.has(ws.path)) continue;
       byPath.set(ws.path, ws);
     }
     for (const t of threads) {
-      if (!t.repoPath || byPath.has(t.repoPath)) continue;
+      if (!t.repoPath || t.repoPath === GLOBAL_WORKSPACE_ID || byPath.has(t.repoPath)) continue;
       const name = t.repoPath.split('/').filter(Boolean).pop() || t.repoPath;
       byPath.set(t.repoPath, {
         path: t.repoPath,
@@ -426,7 +426,7 @@ export function App() {
         addedAt: t.createdAt,
       });
     }
-    if (repoPath && !byPath.has(repoPath)) {
+    if (repoPath && repoPath !== GLOBAL_WORKSPACE_ID && !byPath.has(repoPath)) {
       const name = repoPath.split('/').filter(Boolean).pop() || repoPath;
       byPath.set(repoPath, {
         path: repoPath,
@@ -525,7 +525,9 @@ export function App() {
   }
 
   function openCreate(forRepo?: string, mode: CreateState['mode'] = 'quick') {
-    setCreateState({ repoPath: forRepo ?? null, mode });
+    const repo =
+      forRepo && forRepo !== GLOBAL_WORKSPACE_ID ? forRepo : null;
+    setCreateState({ repoPath: repo, mode });
   }
 
   /** Orchestration chats have no worktree — Changes/Files/Terminal sidebar is N/A. */

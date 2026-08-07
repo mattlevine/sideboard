@@ -65,7 +65,13 @@ function forgetRemoved(repoPath: string): void {
 
 export function listWorkspaces(): Workspace[] {
   const all = readAll();
-  const valid = all.filter((w) => Boolean(w.path) && w.path !== '/' && w.path !== '.');
+  const valid = all.filter(
+    (w) =>
+      Boolean(w.path) &&
+      w.path !== '/' &&
+      w.path !== '.' &&
+      !isGlobalRepoPath(w.path),
+  );
   if (valid.length !== all.length) writeAll(valid);
   return valid.sort((a, b) => a.name.localeCompare(b.name));
 }

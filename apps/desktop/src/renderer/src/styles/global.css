@@ -5641,6 +5641,10 @@ button.linkish:hover {
   position: relative;
 }
 
+.create-modal.is-creating {
+  min-height: 280px;
+}
+
 .merge-modal .create-modal-content {
   padding: 22px 24px 18px;
   gap: 10px;
