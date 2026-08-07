@@ -1,6 +1,8 @@
 import { createInterface } from 'node:readline';
 import { execa } from 'execa';
+import { originGhRepoEnv } from '../git/worktree.js';
 import { childEnvWithAppSettings } from '../store/app-settings.js';
+import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, MessagePart, Thread, TokenUsage } from '../types/thread.js';
 import { parseBrightsyCliLine } from './brightsy.js';
 import { getAdapter } from './index.js';
@@ -56,9 +58,16 @@ export async function spawnAgentTurn(
     );
   }
 
+  // Pin bare `gh` to this worktree's origin (not upstream) for dual-remote repos.
+  const env = childEnvWithAppSettings(cmd.env);
+  if (!isOrchestratorThread(thread)) {
+    const originEnv = await originGhRepoEnv(thread.worktreePath).catch(() => ({}));
+    Object.assign(env, originEnv);
+  }
+
   const child = execa(cmd.file, cmd.args, {
     cwd: cmd.cwd,
-    env: childEnvWithAppSettings(cmd.env),
+    env,
     reject: false,
     stdout: 'pipe',
     stderr: 'pipe',

@@ -176,6 +176,18 @@ export async function ensureGhPreferOrigin(cwd: string): Promise<void> {
   await gh(['repo', 'set-default', 'origin'], cwd, { reject: false });
 }
 
+/**
+ * Env pin so bare `gh` (and agents) target this checkout's **origin**, not
+ * Makerkit-style `upstream`. `GH_REPO` is the CLI's documented override.
+ */
+export async function originGhRepoEnv(
+  cwd: string,
+): Promise<Record<string, string>> {
+  await ensureGhPreferOrigin(cwd);
+  const slug = await resolveGithubRepoSlug(cwd);
+  return slug ? { GH_REPO: slug } : {};
+}
+
 export async function resolveDefaultBranch(repoPath: string): Promise<string> {
   // Prefer origin (same rationale as resolveGithubRepoSlug) so Makerkit-style
   // origin+upstream checkouts don't resolve the template's default branch tip.
@@ -814,6 +826,7 @@ export async function createThreadWorktree(opts: {
         );
         if (retry.exitCode === 0) {
           branchName = alt;
+          await ensureGhPreferOrigin(worktreePath);
           return { branchName, worktreePath };
         }
       }
@@ -823,6 +836,7 @@ export async function createThreadWorktree(opts: {
     );
   }
 
+  await ensureGhPreferOrigin(worktreePath);
   return { branchName, worktreePath };
 }
 

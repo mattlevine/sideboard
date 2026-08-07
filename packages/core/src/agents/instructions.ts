@@ -65,7 +65,13 @@ export function formatWorktreeDirective(
   }
 
   lines.push('');
-  lines.push('Pull requests (when the work is ready to share):');
+  lines.push('Git remotes + pull requests (when the work is ready to share):');
+  lines.push(
+    '- Always use this worktree\'s `origin` remote (`git remote get-url origin` from this cwd). Never push to or open PRs against `upstream` (template remotes).',
+  );
+  lines.push(
+    '- Push with `git push -u origin HEAD` (or the current branch name). Do not `git push upstream`.',
+  );
   lines.push(
     '- Derive the PR title and body from what the changes actually do and why — inspect the diff/commits and the user request. Do not use the soccer-team worktree nickname or placeholder branch as the PR title.',
   );
@@ -81,11 +87,11 @@ export function formatWorktreeDirective(
     );
   } else if (opts?.githubSlug) {
     lines.push(
-      `- Prefer a draft PR first: \`gh pr create --draft -R ${opts.githubSlug}\` (or update via \`gh pr edit -R ${opts.githubSlug}\`) once the change set is coherent. Always pass \`-R ${opts.githubSlug}\` — bare \`gh pr create\` may target upstream instead of origin. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.`,
+      `- Prefer a draft PR first: \`gh pr create --draft -R ${opts.githubSlug}\` (or update via \`gh pr edit -R ${opts.githubSlug}\`) once the change set is coherent. Always pass \`-R ${opts.githubSlug}\` (this worktree's origin). Bare \`gh pr create\` may target upstream instead of origin on dual-remote checkouts. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.`,
     );
   } else {
     lines.push(
-      '- Prefer a draft PR first: `gh pr create --draft -R <origin-owner/name>` (or update via `gh pr edit`) once the change set is coherent. Always pass `-R` from `git remote get-url origin` — bare `gh pr create` may target an `upstream` template repo. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.',
+      '- Prefer a draft PR first: `gh pr create --draft -R <origin-owner/name>` (or update via `gh pr edit -R …`) once the change set is coherent. Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree — never from `upstream`. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.',
     );
   }
   return lines.join('\n');

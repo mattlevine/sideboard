@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+    # Without this, GitHub still queues the workflow on every branch push,
+    # concludes "No jobs were run", and emails that as a failure.
+    branches-ignore:
+      - '**'
 
 permissions:
   contents: write

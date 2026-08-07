@@ -71,7 +71,8 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('github:acme/sideboard');
     expect(prompt).toContain('create_draft_pr');
     expect(prompt).toContain('Prefer asking the worktree agent');
-    expect(prompt).toContain('gh pr create --draft');
+    expect(prompt).toContain('gh pr create --draft -R');
+    expect(prompt).toMatch(/never upstream/i);
     expect(prompt).toContain('Greenfield');
     expect(prompt).toContain('add_workspace');
     expect(prompt).toContain('sideboard/repos');

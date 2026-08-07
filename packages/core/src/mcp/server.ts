@@ -473,7 +473,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_draft_pr',
-    'Commit dirty changes if needed, push the thread branch, and create/update a DRAFT GitHub PR. Ready-for-review / non-draft land stays human-only (CLI/app confirm_land). Prefer this when the orchestrator should open a PR itself; alternatively send_to_thread asking the worktree agent to run `gh pr create --draft`.',
+    'Commit dirty changes if needed, push the thread branch to origin, and create/update a DRAFT GitHub PR against that worktree\'s origin (never upstream). Ready-for-review / non-draft land stays human-only (CLI/app confirm_land). Prefer this when the orchestrator should open a PR itself; alternatively send_to_thread asking the worktree agent to run `gh pr create --draft -R <origin-owner/name>`.',
     { ref: z.string() },
     async ({ ref }) => {
       try {

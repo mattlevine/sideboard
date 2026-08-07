@@ -13,6 +13,7 @@ vi.mock('./run.js', () => ({
 import { gh, git } from './run.js';
 import {
   ensureGhPreferOrigin,
+  originGhRepoEnv,
   parseGithubSlugFromRemoteUrl,
   resolveGithubRepoSlug,
 } from './worktree.js';
@@ -156,6 +157,40 @@ describe('ensureGhPreferOrigin', () => {
 
     await ensureGhPreferOrigin('/tmp/repo');
     expect(ghMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('originGhRepoEnv', () => {
+  it('sets GH_REPO from origin even when upstream exists', async () => {
+    gitMock.mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        const remote = args[2];
+        if (remote === 'origin') {
+          return {
+            stdout: 'git@github.com:mattlevine/storycycle-ai.git',
+            stderr: '',
+            exitCode: 0,
+          };
+        }
+        if (remote === 'upstream') {
+          return {
+            stdout: 'git@github.com:makerkit/next-supabase-saas-kit-turbo.git',
+            stderr: '',
+            exitCode: 0,
+          };
+        }
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+    ghMock.mockResolvedValue({
+      stdout: 'mattlevine/storycycle-ai',
+      stderr: '',
+      exitCode: 0,
+    });
+
+    await expect(originGhRepoEnv('/tmp/storycycle')).resolves.toEqual({
+      GH_REPO: 'mattlevine/storycycle-ai',
+    });
   });
 });
 

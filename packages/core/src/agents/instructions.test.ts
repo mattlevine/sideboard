@@ -37,6 +37,8 @@ describe('formatWorktreeDirective', () => {
     );
     expect(text).toContain('gh pr create --draft -R mattlevine/storycycle-ai');
     expect(text).toMatch(/upstream instead of origin/i);
+    expect(text).toMatch(/git push -u origin HEAD/i);
+    expect(text).toMatch(/Never push to or open PRs against `upstream`/i);
   });
 });
 
