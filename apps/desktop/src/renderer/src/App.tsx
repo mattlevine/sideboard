@@ -281,13 +281,20 @@ export function App() {
 
   useEffect(() => {
     void window.sideboard.getRepoPath().then(async (p) => {
-      setRepoPath(p);
-      if (p) {
-        try {
-          await window.sideboard.addWorkspace(p);
-        } catch {
-          // ignore
+      const path = typeof p === 'string' ? p.trim() : '';
+      // Packaged apps often report cwd `/` — never treat that as a project.
+      if (!path || path === '/') {
+        setRepoPath('');
+        if (path === '/') {
+          void window.sideboard.setRepoPath('').catch(() => undefined);
         }
+        return;
+      }
+      setRepoPath(path);
+      try {
+        await window.sideboard.addWorkspace(path);
+      } catch {
+        // ignore
       }
     });
     void refresh();
@@ -475,6 +482,38 @@ export function App() {
     }
   }
 
+  async function removeWorkspaceAndRefresh(path: string) {
+    const inWorkspace = threads.filter((t) => t.repoPath === path);
+    for (const t of inWorkspace) {
+      setArchivingId(t.id);
+      try {
+        await window.sideboard.archiveThread(t.id);
+      } finally {
+        setArchivingId(null);
+      }
+    }
+    await window.sideboard.removeWorkspace(path);
+    if (repoPath === path || path === '/') {
+      setRepoPath('');
+      try {
+        await window.sideboard.setRepoPath('');
+      } catch {
+        // ignore
+      }
+    }
+    const removedIds = new Set(inWorkspace.map((t) => t.id));
+    if (selectedId && removedIds.has(selectedId)) {
+      setSelectedId(null);
+      setView('board');
+    }
+    setMultiSelected((prev) => {
+      const next = new Set([...prev].filter((id) => !removedIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+    await refreshWorkspaces();
+    await refresh();
+  }
+
   function showBoard() {
     setView('board');
     setSelectedId(null);
@@ -539,24 +578,9 @@ export function App() {
                 await refresh();
               })
             }
-            onCreatePr={(id, opts) => {
-              setSelectedId(id);
-              setView('thread');
-              setMultiSelected(new Set([id]));
-              setPendingLand(opts ?? {});
-            }}
-            onForkChat={(id) => {
-              const t = threads.find((x) => x.id === id);
-              void window.sideboard
-                .forkChatTab({
-                  threadId: id,
-                  throughIndex: Math.max(0, (t?.messages.length ?? 1) - 1),
-                })
-                .then(openForkedTab)
-                .catch(alert);
-            }}
             onArchive={archiveThreadAndRefresh}
             archivingId={archivingId}
+            onRemoveWorkspace={removeWorkspaceAndRefresh}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />

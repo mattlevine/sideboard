@@ -74,7 +74,7 @@ import {
 import { closeTsServer, setupTsServer } from './tsserver';
 
 let mainWindow: BrowserWindow | null = null;
-let repoPath = process.cwd();
+let repoPath = '';
 const orch = getOrchestrator();
 let openFileWatcher: FSWatcher | null = null;
 let openFileWatchKey: string | null = null;
@@ -776,7 +776,12 @@ function registerIpc(): void {
   ipcMain.handle('restoreThread', (_e, ref: string) => orch.restore(ref));
   ipcMain.handle('getRepoPath', () => repoPath);
   ipcMain.handle('setRepoPath', async (_e, path: string) => {
-    repoPath = await resolveRepoRoot(path);
+    const trimmed = typeof path === 'string' ? path.trim() : '';
+    if (!trimmed || trimmed === '/') {
+      repoPath = '';
+      return repoPath;
+    }
+    repoPath = await resolveRepoRoot(trimmed);
     await orch.reconcile(repoPath);
     return repoPath;
   });
@@ -901,16 +906,19 @@ app.whenReady().then(async () => {
   setupUpdater();
   setupApplicationMenu(() => mainWindow);
   try {
-    repoPath = await resolveRepoRoot(process.cwd());
+    const root = await resolveRepoRoot(process.cwd());
+    // Packaged launches often have cwd `/`, which is not a real project.
+    if (root && root !== '/') {
+      repoPath = root;
+      await orch.reconcile(repoPath);
+      try {
+        await orch.addWorkspace(repoPath);
+      } catch {
+        // cwd may not be a usable workspace
+      }
+    }
   } catch {
-    repoPath = process.cwd();
-  }
-  await orch.reconcile(repoPath);
-  // Seed workspace registry from current cwd + any thread repos
-  try {
-    await orch.addWorkspace(repoPath);
-  } catch {
-    // cwd may not be a git repo
+    // Leave repoPath empty when cwd is not inside a git repo (typical for Dock launches).
   }
   orch.listWorkspaces();
   createWindow();

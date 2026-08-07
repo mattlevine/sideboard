@@ -27,11 +27,11 @@ interface Props {
   onSelect: (id: string, multi: boolean) => void;
   onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
   onPickRepo: () => void;
-  onCreatePr?: (threadId: string, opts?: { draft?: boolean; web?: boolean }) => void;
-  onForkChat?: (threadId: string) => void;
   onArchive?: (threadId: string) => void | Promise<void>;
   /** Thread id currently being archived (shows progress on its worktree row). */
   archivingId?: string | null;
+  /** Unregister a project workspace (caller archives threads as needed). */
+  onRemoveWorkspace?: (repoPath: string) => void | Promise<void>;
   onToggleSidebar: () => void;
   onOpenSettings?: () => void;
 }
@@ -39,6 +39,13 @@ interface Props {
 function repoName(repoPath: string): string {
   const parts = repoPath.replace(/\/$/, '').split('/');
   return parts[parts.length - 1] || repoPath;
+}
+
+/** Paths that should never appear as a project row (e.g. packaged-app cwd `/`). */
+function isProjectPath(path: string): boolean {
+  if (!path || path === GLOBAL_WORKSPACE_ID) return false;
+  if (path === '/' || path === '.') return false;
+  return true;
 }
 
 function groupByWorktree(threads: Thread[]): Thread[][] {
@@ -65,22 +72,26 @@ export function Sidebar({
   onSelect,
   onNew,
   onPickRepo,
-  onCreatePr,
-  onForkChat,
   onArchive,
   archivingId = null,
+  onRemoveWorkspace,
   onToggleSidebar,
   onOpenSettings,
 }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState('');
-  const [toolsFor, setToolsFor] = useState<string | null>(null);
   const [archiveConfirm, setArchiveConfirm] = useState<{
     threadId: string;
     title: string;
     chatCount: number;
   } | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState<{
+    path: string;
+    name: string;
+    threadCount: number;
+  } | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
   const q = filter.trim().toLowerCase();
 
@@ -98,7 +109,7 @@ export function Sidebar({
   const byRepo = useMemo(() => {
     const map = new Map<string, Thread[]>();
     for (const t of threads) {
-      if (t.repoPath === GLOBAL_WORKSPACE_ID) continue;
+      if (!isProjectPath(t.repoPath)) continue;
       if (q) {
         const hay =
           `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repoName(t.repoPath)}`.toLowerCase();
@@ -110,7 +121,7 @@ export function Sidebar({
     }
     // Registered workspaces (and current repo) show even with zero threads
     const ensurePath = (path: string, nameHint?: string) => {
-      if (!path || path === GLOBAL_WORKSPACE_ID || map.has(path)) return;
+      if (!isProjectPath(path) || map.has(path)) return;
       if (
         q &&
         !repoName(path).toLowerCase().includes(q) &&
@@ -282,17 +293,36 @@ export function Sidebar({
         {byRepo.map(([path, repoThreads]) => (
           <div key={path} className="workspace-group">
             <div className="workspace-header">
-              <button
-                type="button"
-                className="workspace-name-btn"
-                title={`New thread in ${repoName(path)}`}
-                onClick={() => onNew(path)}
-              >
-                <span className="workspace-glyph" aria-hidden />
-                <span className="workspace-name" title={path}>
-                  {repoName(path)}
-                </span>
-              </button>
+              <div className="workspace-label">
+                <button
+                  type="button"
+                  className="workspace-name-btn"
+                  title={`New thread in ${repoName(path)}`}
+                  onClick={() => onNew(path)}
+                >
+                  <span className="workspace-glyph" aria-hidden />
+                  <span className="workspace-name" title={path}>
+                    {repoName(path)}
+                  </span>
+                </button>
+                {onRemoveWorkspace && (
+                  <button
+                    type="button"
+                    className="icon-btn workspace-remove-btn"
+                    title={`Remove ${repoName(path)}`}
+                    aria-label={`Remove ${repoName(path)}`}
+                    onClick={() =>
+                      setRemoveConfirm({
+                        path,
+                        name: repoName(path),
+                        threadCount: repoThreads.length,
+                      })
+                    }
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 className="icon-btn"
@@ -316,7 +346,6 @@ export function Sidebar({
                 view === 'thread' && group.some((t) => t.id === selectedId);
               const selected =
                 group.some((t) => multiSelected.has(t.id));
-              const menuOpen = toolsFor === primary.worktreePath;
               const archiving = group.some((t) => t.id === archivingId);
               return (
                 <div key={primary.worktreePath} className="worktree-block">
@@ -357,86 +386,30 @@ export function Sidebar({
                               .join(' · ')}
                       </div>
                     </div>
-                    {!archiving && (
-                    <button
-                      type="button"
-                      className="icon-btn worktree-tools-btn"
-                      title="Worktree tools"
-                      aria-expanded={menuOpen}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setToolsFor(menuOpen ? null : primary.worktreePath);
-                      }}
-                    >
-                      ▾
-                    </button>
+                    {!archiving && onArchive && (
+                      <button
+                        type="button"
+                        className="icon-btn worktree-remove-btn"
+                        title={`Archive ${worktreeLabel}`}
+                        aria-label={`Archive ${worktreeLabel}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void window.sideboard
+                            .listWorktreeChats(primary.id)
+                            .then((chats) =>
+                              setArchiveConfirm({
+                                threadId: primary.id,
+                                title: worktreeLabel,
+                                chatCount: chats.length,
+                              }),
+                            )
+                            .catch(alert);
+                        }}
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
-                  {menuOpen && (
-                    <div className="tool-menu sidebar-tool-menu">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToolsFor(null);
-                          onCreatePr?.(primary.id);
-                        }}
-                      >
-                        <span className="tool-menu-icon">⎇</span>
-                        <span>Create PR</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToolsFor(null);
-                          onCreatePr?.(primary.id, { draft: true });
-                        }}
-                      >
-                        <span className="tool-menu-icon">⎇</span>
-                        <span>Create draft PR</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToolsFor(null);
-                          onCreatePr?.(primary.id, { web: true });
-                        }}
-                      >
-                        <span className="tool-menu-icon">↗</span>
-                        <span>Create PR manually</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToolsFor(null);
-                          onForkChat?.(primary.id);
-                        }}
-                      >
-                        <span className="tool-menu-icon">⎇</span>
-                        <span>Fork to new tab</span>
-                      </button>
-                      {onArchive && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setToolsFor(null);
-                            void window.sideboard
-                              .listWorktreeChats(primary.id)
-                              .then((chats) =>
-                                setArchiveConfirm({
-                                  threadId: primary.id,
-                                  title: worktreeLabel,
-                                  chatCount: chats.length,
-                                }),
-                              )
-                              .catch(alert);
-                          }}
-                        >
-                          <span className="tool-menu-icon">⬚</span>
-                          <span>Archive</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -454,7 +427,6 @@ export function Sidebar({
           busyMessage="Stopping agents and removing the worktree…"
           onConfirm={() => {
             const id = archiveConfirm.threadId;
-            setToolsFor(null);
             setArchiveBusy(true);
             void Promise.resolve(onArchive?.(id))
               .then(() => {
@@ -469,6 +441,41 @@ export function Sidebar({
           }}
           onCancel={() => {
             if (!archiveBusy) setArchiveConfirm(null);
+          }}
+        />
+      )}
+
+      {removeConfirm && onRemoveWorkspace && (
+        <ConfirmDialog
+          title={`Remove ${removeConfirm.name}?`}
+          message={
+            removeConfirm.threadCount > 0
+              ? `Archive ${removeConfirm.threadCount} open thread${removeConfirm.threadCount === 1 ? '' : 's'} and remove this project from the sidebar. Chats stay in Settings → History.`
+              : 'Remove this project from the sidebar. You can add it again later.'
+          }
+          confirmLabel="Remove"
+          busy={removeBusy}
+          busyMessage={
+            removeConfirm.threadCount > 0
+              ? 'Archiving threads and removing project…'
+              : 'Removing project…'
+          }
+          onConfirm={() => {
+            const path = removeConfirm.path;
+            setRemoveBusy(true);
+            void Promise.resolve(onRemoveWorkspace(path))
+              .then(() => {
+                setRemoveConfirm(null);
+              })
+              .catch((err: unknown) => {
+                window.alert(err instanceof Error ? err.message : String(err));
+              })
+              .finally(() => {
+                setRemoveBusy(false);
+              });
+          }}
+          onCancel={() => {
+            if (!removeBusy) setRemoveConfirm(null);
           }}
         />
       )}

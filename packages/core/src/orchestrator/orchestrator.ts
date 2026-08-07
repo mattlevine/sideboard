@@ -267,7 +267,9 @@ export class Orchestrator {
   }
 
   listWorkspaces(): Workspace[] {
-    const fromThreads = listThreads({ includeArchived: true }).map((t) => t.repoPath);
+    // Only active threads can discover new workspaces. Explicitly removed paths
+    // stay dismissed (see removed-workspaces.json) even if archived history remains.
+    const fromThreads = listThreads({ includeArchived: false }).map((t) => t.repoPath);
     return syncWorkspacesFromThreads(fromThreads);
   }
 
