@@ -60,7 +60,6 @@
       "out/**/*",
       "package.json"
     ],
-    "artifactName": "${productName}-${arch}.${ext}",
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
