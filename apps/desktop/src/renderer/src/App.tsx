@@ -183,7 +183,6 @@ export function App() {
     setOpenFilePath(null);
     setOpenUrl(null);
   }
-  const [pendingLand, setPendingLand] = useState<{ draft?: boolean; web?: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<
     'account' | 'agents' | 'environment' | 'advanced' | 'history'
@@ -722,8 +721,6 @@ export function App() {
                 onAskAboutFile={(path) =>
                   setPrefill(`Look at the changes in ${path} and suggest next steps.`)
                 }
-                pendingLand={pendingLand}
-                onPendingLandConsumed={() => setPendingLand(null)}
               />
             </div>
           )}

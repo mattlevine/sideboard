@@ -2,12 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   DiffResult,
   DiffScope,
-  LandPreview,
   PrCheckRun,
   PrDetails,
   Thread,
 } from '@sideboard-ai/core';
-import { formatIpcInvokeError } from '@sideboard/gh-errors';
 import { FileTree } from './FileTree';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { MergeModal } from './MergeModal';
@@ -36,8 +34,6 @@ interface Props {
   onOpenUrl?: (url: string) => void;
   /** Select another chat tab in this worktree (e.g. after creating one for setup). */
   onSelectChat?: (id: string, created?: Thread) => void;
-  pendingLand?: { draft?: boolean; web?: boolean } | null;
-  onPendingLandConsumed?: () => void;
   /** Notify parent so file tabs can show the same git markers. */
   onFileChanges?: (changes: ReturnType<typeof fileChangeMap>) => void;
 }
@@ -105,8 +101,6 @@ export function RightSidebar({
   onOpenFile,
   onOpenUrl,
   onSelectChat,
-  pendingLand = null,
-  onPendingLandConsumed,
   onFileChanges,
 }: Props) {
   const [upper, setUpper] = useState<UpperTab>('files');
@@ -128,10 +122,6 @@ export function RightSidebar({
   const setupOutputRef = useRef<HTMLPreElement>(null);
   const [runScripts, setRunScripts] = useState<RunScriptInfo[]>([]);
   const [runLogs, setRunLogs] = useState<Record<string, string>>({});
-  const [landPreview, setLandPreview] = useState<LandPreview | null>(null);
-  const [landOpts, setLandOpts] = useState<{ draft?: boolean; web?: boolean }>({});
-  const [landBusy, setLandBusy] = useState(false);
-  const [landError, setLandError] = useState<string | null>(null);
   const [prMenuOpen, setPrMenuOpen] = useState(false);
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -502,7 +492,11 @@ export function RightSidebar({
       setMergeConfirm(true);
       return;
     }
-    void openLand();
+    if (prUrl) {
+      void askAgentGit('commit-push');
+      return;
+    }
+    void askAgentGit('create-pr');
   }
 
   async function confirmMergePr() {
@@ -580,53 +574,41 @@ export function RightSidebar({
     }
   }
 
-  async function openLand(opts: { draft?: boolean; web?: boolean } = {}) {
-    setLandOpts(opts);
+  /** Conductor-style: git buttons queue a short instruction for the worktree agent. */
+  async function askAgentGit(
+    action: 'create-pr' | 'create-draft' | 'create-web' | 'commit-push',
+  ) {
     setPrMenuOpen(false);
-    setLandError(null);
+    const lines: string[] = [];
+    if (action === 'commit-push') {
+      lines.push(
+        'Commit any uncommitted changes with a good message that states the purpose of the change, then push this branch to origin so the pull request updates.',
+      );
+      if (prUrl) lines.push(`Existing PR: ${prUrl}`);
+    } else if (action === 'create-web') {
+      lines.push(
+        'Commit any uncommitted changes with a good message, push this branch to origin, then open `gh pr create --web` so I can finish the pull request in the browser.',
+      );
+    } else {
+      lines.push(
+        'Commit any uncommitted changes with a good message, push this branch to origin, and open a draft pull request.',
+      );
+      lines.push(
+        'Title and body must reflect what the changes actually do — inspect the diff. Do not use the worktree nickname as the title.',
+      );
+    }
+    lines.push(
+      'Always use this worktree\'s origin remote (never upstream). Prefer `gh pr create --draft -R <origin-owner/name>` when creating a PR.',
+    );
     setBusy(true);
     try {
-      const preview = await window.sideboard.previewLand(thread.id);
-      setLandPreview(preview);
+      await window.sideboard.sendToThread(thread.id, lines.join('\n'));
+      onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }
-
-  async function confirmLandPush() {
-    if (!landPreview || landPreview.blocked || landBusy) return;
-    setLandBusy(true);
-    setLandError(null);
-    try {
-      const result = await window.sideboard.confirmLand(thread.id, landOpts);
-      setLandPreview(null);
-      onRefresh();
-      void loadPrMeta();
-      if (result.prUrl) {
-        void window.sideboard.openExternal(result.prUrl);
-      }
-    } catch (err) {
-      setLandError(formatIpcInvokeError(err));
-    } finally {
-      setLandBusy(false);
-    }
-  }
-
-  function landTitle() {
-    if (thread.prUrl) return 'Update pull request?';
-    if (landOpts.draft) return 'Create draft pull request?';
-    if (landOpts.web) return 'Push and open GitHub?';
-    return 'Create pull request?';
-  }
-
-  function landConfirmLabel() {
-    if (landBusy) return 'Pushing…';
-    if (landOpts.web) return 'Push & open';
-    if (landOpts.draft) return 'Push & draft PR';
-    if (thread.prUrl) return 'Push & update';
-    return 'Push & create PR';
   }
 
   async function runSetupScript() {
@@ -743,12 +725,6 @@ export function RightSidebar({
     void useAgentSetup();
   }
 
-  useEffect(() => {
-    if (pendingLand === null) return;
-    void openLand(pendingLand).finally(() => onPendingLandConsumed?.());
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per pendingLand request
-  }, [pendingLand]);
-
   return (
     <aside className="right-sidebar">
       <div className="right-top">
@@ -779,8 +755,8 @@ export function RightSidebar({
                       : prUrl && !hasLocalChanges
                         ? 'Merge pull request on GitHub'
                         : prUrl
-                          ? 'Commit local changes and push to the pull request'
-                          : undefined
+                          ? 'Ask the agent to commit and push'
+                          : 'Ask the agent to create a pull request'
                 }
               >
                 {primaryGitLabel()}
@@ -815,10 +791,7 @@ export function RightSidebar({
                           ) : (
                             <button
                               type="button"
-                              onClick={() => {
-                                setPrMenuOpen(false);
-                                void openLand();
-                              }}
+                              onClick={() => void askAgentGit('commit-push')}
                             >
                               <span className="tool-menu-icon">↑</span>
                               <span>Commit & push</span>
@@ -827,13 +800,19 @@ export function RightSidebar({
                         </>
                       ) : (
                         <>
-                          <button type="button" onClick={() => void openLand({ draft: true })}>
+                          <button
+                            type="button"
+                            onClick={() => void askAgentGit('create-draft')}
+                          >
                             <span className="tool-menu-icon">⎇</span>
                             <span>Create draft PR</span>
                           </button>
-                          <button type="button" onClick={() => void openLand({ web: true })}>
+                          <button
+                            type="button"
+                            onClick={() => void askAgentGit('create-web')}
+                          >
                             <span className="tool-menu-icon">↗</span>
-                            <span>Create PR manually</span>
+                            <span>Create PR in browser</span>
                           </button>
                         </>
                       )}
@@ -1327,92 +1306,6 @@ export function RightSidebar({
           )}
         </div>
       </div>
-
-      {landPreview && (
-        <div
-          className="modal-backdrop"
-          onClick={() => {
-            if (!landBusy) {
-              setLandPreview(null);
-              setLandError(null);
-            }
-          }}
-        >
-          <div
-            className={`modal create-modal merge-modal land-confirm-modal${landBusy ? ' is-creating' : ''}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="land-confirm-title"
-            aria-busy={landBusy}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {landBusy ? (
-              <CreateProcessingOverlay
-                mode="land"
-                repoName={thread.title.trim() || thread.branchName.replace(/^thread\//, '')}
-                selectionHint={`${landPreview.branch} → ${landPreview.target}`}
-              />
-            ) : null}
-            <div className={`create-modal-content${landBusy ? ' veiled' : ''}`}>
-              <h3 id="land-confirm-title" className="merge-modal-title">
-                {landTitle()}
-              </h3>
-              <p className="confirm-dialog-message">
-                {landOpts.web
-                  ? 'Push this branch, then open GitHub to finish the pull request.'
-                  : thread.prUrl
-                    ? 'Push this branch and update the existing pull request.'
-                    : 'Push this branch and open a pull request on GitHub.'}
-              </p>
-              <dl className="land-confirm-meta">
-                <div>
-                  <dt>Branch</dt>
-                  <dd>
-                    <span className="land-confirm-branch">{landPreview.branch}</span>
-                    <span className="land-confirm-arrow">→</span>
-                    <span>{landPreview.target}</span>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Working tree</dt>
-                  <dd>
-                    {landPreview.dirty ? 'Dirty — will auto-commit before push' : 'Clean'}
-                  </dd>
-                </div>
-              </dl>
-              {landPreview.diffStat.trim() ? (
-                <pre className="land-confirm-stat">{landPreview.diffStat}</pre>
-              ) : (
-                <p className="land-confirm-empty">No diff against {landPreview.target}</p>
-              )}
-              {landPreview.blocked && (
-                <p className="land-confirm-error">{landPreview.blockReason}</p>
-              )}
-              {landError && <p className="land-confirm-error">{landError}</p>}
-              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
-                <button
-                  type="button"
-                  disabled={landBusy}
-                  onClick={() => {
-                    setLandPreview(null);
-                    setLandError(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={landPreview.blocked || landBusy}
-                  onClick={() => void confirmLandPush()}
-                >
-                  {landConfirmLabel()}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {mergeConfirm && (
         <MergeModal
