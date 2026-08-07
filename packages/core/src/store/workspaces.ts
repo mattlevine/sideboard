@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { appDataDir } from './paths.js';
 import { isGlobalRepoPath } from './global-workspace.js';
-import { resolveRepoRoot } from '../git/worktree.js';
+import { ensureGhPreferOrigin, resolveRepoRoot } from '../git/worktree.js';
 
 export interface Workspace {
   path: string;
@@ -81,6 +81,8 @@ export async function addWorkspace(repoPath: string): Promise<Workspace> {
   if (!root || root === '/') throw new Error(`Invalid repo path: ${repoPath}`);
   if (!existsSync(root)) throw new Error(`Repo not found: ${root}`);
   forgetRemoved(root);
+  // Makerkit-style origin+upstream: make `gh` prefer origin for PR/issue commands.
+  await ensureGhPreferOrigin(root);
   const current = readAll();
   const existing = current.find((w) => w.path === root);
   if (existing) return existing;

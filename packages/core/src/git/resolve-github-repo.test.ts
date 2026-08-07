@@ -12,6 +12,7 @@ vi.mock('./run.js', () => ({
 
 import { gh, git } from './run.js';
 import {
+  ensureGhPreferOrigin,
   parseGithubSlugFromRemoteUrl,
   resolveGithubRepoSlug,
 } from './worktree.js';
@@ -91,6 +92,64 @@ describe('resolveGithubRepoSlug', () => {
       exitCode: 0,
     });
     await expect(resolveGithubRepoSlug('/tmp/repo')).resolves.toBe('acme/from-gh');
+  });
+});
+
+describe('ensureGhPreferOrigin', () => {
+  it('sets gh default to origin when upstream exists', async () => {
+    gitMock.mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        const remote = args[2];
+        if (remote === 'origin') {
+          return {
+            stdout: 'git@github.com:mattlevine/storycycle-ai.git',
+            stderr: '',
+            exitCode: 0,
+          };
+        }
+        if (remote === 'upstream') {
+          return {
+            stdout: 'git@github.com:makerkit/next-supabase-saas-kit-turbo.git',
+            stderr: '',
+            exitCode: 0,
+          };
+        }
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+    ghMock.mockImplementation(async (args) => {
+      if (args[0] === 'repo' && args[1] === 'set-default' && args[2] === '--view') {
+        return {
+          stdout: 'makerkit/next-supabase-saas-kit-turbo',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+
+    await ensureGhPreferOrigin('/tmp/storycycle');
+    expect(ghMock).toHaveBeenCalledWith(
+      ['repo', 'set-default', 'origin'],
+      '/tmp/storycycle',
+      { reject: false },
+    );
+  });
+
+  it('skips when only origin is present', async () => {
+    gitMock.mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
+        return {
+          stdout: 'git@github.com:acme/widgets.git',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+
+    await ensureGhPreferOrigin('/tmp/repo');
+    expect(ghMock).not.toHaveBeenCalled();
   });
 });
 

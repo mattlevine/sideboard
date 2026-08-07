@@ -1339,64 +1339,76 @@ export function RightSidebar({
           }}
         >
           <div
-            className="modal confirm-modal land-confirm-modal"
+            className={`modal create-modal merge-modal land-confirm-modal${landBusy ? ' is-creating' : ''}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="land-confirm-title"
+            aria-busy={landBusy}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="land-confirm-title">{landTitle()}</h3>
-            <p className="confirm-dialog-message">
-              {landOpts.web
-                ? 'Push this branch, then open GitHub to finish the pull request.'
-                : thread.prUrl
-                  ? 'Push this branch and update the existing pull request.'
-                  : 'Push this branch and open a pull request on GitHub.'}
-            </p>
-            <dl className="land-confirm-meta">
-              <div>
-                <dt>Branch</dt>
-                <dd>
-                  <span className="land-confirm-branch">{landPreview.branch}</span>
-                  <span className="land-confirm-arrow">→</span>
-                  <span>{landPreview.target}</span>
-                </dd>
+            {landBusy ? (
+              <CreateProcessingOverlay
+                mode="land"
+                repoName={thread.title.trim() || thread.branchName.replace(/^thread\//, '')}
+                selectionHint={`${landPreview.branch} → ${landPreview.target}`}
+              />
+            ) : null}
+            <div className={`create-modal-content${landBusy ? ' veiled' : ''}`}>
+              <h3 id="land-confirm-title" className="merge-modal-title">
+                {landTitle()}
+              </h3>
+              <p className="confirm-dialog-message">
+                {landOpts.web
+                  ? 'Push this branch, then open GitHub to finish the pull request.'
+                  : thread.prUrl
+                    ? 'Push this branch and update the existing pull request.'
+                    : 'Push this branch and open a pull request on GitHub.'}
+              </p>
+              <dl className="land-confirm-meta">
+                <div>
+                  <dt>Branch</dt>
+                  <dd>
+                    <span className="land-confirm-branch">{landPreview.branch}</span>
+                    <span className="land-confirm-arrow">→</span>
+                    <span>{landPreview.target}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Working tree</dt>
+                  <dd>
+                    {landPreview.dirty ? 'Dirty — will auto-commit before push' : 'Clean'}
+                  </dd>
+                </div>
+              </dl>
+              {landPreview.diffStat.trim() ? (
+                <pre className="land-confirm-stat">{landPreview.diffStat}</pre>
+              ) : (
+                <p className="land-confirm-empty">No diff against {landPreview.target}</p>
+              )}
+              {landPreview.blocked && (
+                <p className="land-confirm-error">{landPreview.blockReason}</p>
+              )}
+              {landError && <p className="land-confirm-error">{landError}</p>}
+              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+                <button
+                  type="button"
+                  disabled={landBusy}
+                  onClick={() => {
+                    setLandPreview(null);
+                    setLandError(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={landPreview.blocked || landBusy}
+                  onClick={() => void confirmLandPush()}
+                >
+                  {landConfirmLabel()}
+                </button>
               </div>
-              <div>
-                <dt>Working tree</dt>
-                <dd>
-                  {landPreview.dirty ? 'Dirty — will auto-commit before push' : 'Clean'}
-                </dd>
-              </div>
-            </dl>
-            {landPreview.diffStat.trim() ? (
-              <pre className="land-confirm-stat">{landPreview.diffStat}</pre>
-            ) : (
-              <p className="land-confirm-empty">No diff against {landPreview.target}</p>
-            )}
-            {landPreview.blocked && (
-              <p className="land-confirm-error">{landPreview.blockReason}</p>
-            )}
-            {landError && <p className="land-confirm-error">{landError}</p>}
-            <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
-              <button
-                type="button"
-                disabled={landBusy}
-                onClick={() => {
-                  setLandPreview(null);
-                  setLandError(null);
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={landPreview.blocked || landBusy}
-                onClick={() => void confirmLandPush()}
-              >
-                {landConfirmLabel()}
-              </button>
             </div>
           </div>
         </div>

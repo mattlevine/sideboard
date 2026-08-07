@@ -114,16 +114,32 @@ export async function resolveGithubRepoSlug(
   return null;
 }
 
-export async function resolveDefaultBranch(repoPath: string): Promise<string> {
-  const viaGh = await gh(
-    ['repo', 'view', '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name'],
-    repoPath,
-    { reject: false },
-  );
-  if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
-    return viaGh.stdout.trim();
-  }
+/**
+ * On Makerkit-style checkouts (`origin` product + `upstream` template), `gh`
+ * prefers `upstream` → so bare `gh pr create` hits the wrong GitHub repo.
+ * Pin the CLI default to `origin` once per repo (shared by all worktrees).
+ */
+export async function ensureGhPreferOrigin(cwd: string): Promise<void> {
+  const originSlug = await slugFromGitRemote(cwd, 'origin');
+  if (!originSlug) return;
 
+  const hasAlt =
+    Boolean(await slugFromGitRemote(cwd, 'upstream')) ||
+    Boolean(await slugFromGitRemote(cwd, 'github'));
+  if (!hasAlt) return;
+
+  const view = await gh(['repo', 'set-default', '--view'], cwd, {
+    reject: false,
+  });
+  const current = `${view.stdout}\n${view.stderr}`;
+  if (view.exitCode === 0 && current.includes(originSlug)) return;
+
+  await gh(['repo', 'set-default', 'origin'], cwd, { reject: false });
+}
+
+export async function resolveDefaultBranch(repoPath: string): Promise<string> {
+  // Prefer origin (same rationale as resolveGithubRepoSlug) so Makerkit-style
+  // origin+upstream checkouts don't resolve the template's default branch tip.
   const viaOrigin = await git(
     ['symbolic-ref', 'refs/remotes/origin/HEAD'],
     repoPath,
@@ -133,6 +149,32 @@ export async function resolveDefaultBranch(repoPath: string): Promise<string> {
     return viaOrigin.stdout.trim().replace(/^refs\/remotes\/origin\//, '');
   }
 
+  const slug = await resolveGithubRepoSlug(repoPath);
+  const viaGh = await gh(
+    [
+      'repo',
+      'view',
+      ...(slug ? ['--repo', slug] : []),
+      '--json',
+      'defaultBranchRef',
+      '--jq',
+      '.defaultBranchRef.name',
+    ],
+    repoPath,
+    { reject: false },
+  );
+  if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
+    return viaGh.stdout.trim();
+  }
+
+  for (const candidate of ['main', 'master']) {
+    const check = await git(
+      ['show-ref', '--verify', '--quiet', `refs/remotes/origin/${candidate}`],
+      repoPath,
+      { reject: false },
+    );
+    if (check.exitCode === 0) return candidate;
+  }
   for (const candidate of ['main', 'master']) {
     const check = await git(
       ['show-ref', '--verify', '--quiet', `refs/heads/${candidate}`],
@@ -697,6 +739,9 @@ export async function createThreadWorktree(opts: {
     throw new Error(`Worktree already exists at ${worktreePath}`);
   }
 
+  // Pin gh to origin before agents run `gh pr …` in this worktree.
+  await ensureGhPreferOrigin(opts.repoPath);
+
   // Refresh remotes first so default-branch forks track current origin/main (etc).
   await git(['fetch', 'origin', '--prune'], opts.repoPath, { reject: false });
   // Also fetch the named ref in case prune/fetch missed a new remote branch.
@@ -887,8 +932,14 @@ export async function createOrUpdatePr(
     web?: boolean;
   },
 ): Promise<string> {
+  // Prefer origin over `gh`'s inferred repo — Makerkit-style checkouts with
+  // origin + upstream otherwise create PRs against the template upstream.
+  await ensureGhPreferOrigin(worktreePath);
+  const slug = await resolveGithubRepoSlug(worktreePath);
+  const repoArgs = slug ? (['--repo', slug] as const) : ([] as const);
+
   const existing = await gh(
-    ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url'],
+    ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url', ...repoArgs],
     worktreePath,
     { reject: false },
   );
@@ -904,6 +955,7 @@ export async function createOrUpdatePr(
         opts.title,
         '--body',
         opts.body ?? opts.title,
+        ...repoArgs,
       ],
       worktreePath,
       { reject: false },
@@ -924,12 +976,13 @@ export async function createOrUpdatePr(
       opts.base,
       '--head',
       opts.head,
+      ...repoArgs,
     ];
     if (opts.draft) args.push('--draft');
     await gh(args, worktreePath, { reject: false });
     // URL may open in browser; return existing view if available
     const again = await gh(
-      ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url'],
+      ['pr', 'view', opts.head, '--json', 'url', '--jq', '.url', ...repoArgs],
       worktreePath,
       { reject: false },
     );
@@ -947,6 +1000,7 @@ export async function createOrUpdatePr(
     opts.base,
     '--head',
     opts.head,
+    ...repoArgs,
   ];
   if (opts.draft) args.push('--draft');
   const created = await gh(args, worktreePath, { reject: false });

@@ -35,7 +35,20 @@ const STEPS_ARCHIVE = [
   'Almost done',
 ] as const;
 
-type OverlayMode = 'create' | 'orchestration' | 'merge' | 'remove' | 'archive';
+const STEPS_LAND = [
+  'Preparing push',
+  'Pushing branch',
+  'Opening pull request',
+  'Almost done',
+] as const;
+
+type OverlayMode =
+  | 'create'
+  | 'orchestration'
+  | 'merge'
+  | 'land'
+  | 'remove'
+  | 'archive';
 
 function stepsForMode(mode: OverlayMode) {
   switch (mode) {
@@ -43,6 +56,8 @@ function stepsForMode(mode: OverlayMode) {
       return STEPS_ORCH;
     case 'merge':
       return STEPS_MERGE;
+    case 'land':
+      return STEPS_LAND;
     case 'remove':
       return STEPS_REMOVE;
     case 'archive':
@@ -52,7 +67,7 @@ function stepsForMode(mode: OverlayMode) {
   }
 }
 
-/** Full-modal processing surface while create / merge / remove runs. */
+/** Full-modal processing surface while create / land / merge / remove runs. */
 export function CreateProcessingOverlay({
   mode,
   repoName,

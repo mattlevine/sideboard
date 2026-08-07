@@ -63,6 +63,20 @@ export function formatGhLandError(
   }
 
   const detail = extractGhErrorDetail(raw);
+  if (
+    /Head ref must be a branch|No commits between|Head sha can't be blank/i.test(
+      raw,
+    ) ||
+    /Head ref must be a branch|No commits between|Head sha can't be blank/i.test(
+      detail,
+    )
+  ) {
+    return (
+      'Could not create the pull request against the wrong GitHub repo ' +
+      '(often upstream instead of origin). Branch was pushed — retry after updating Sideboard, ' +
+      'or create the PR with: gh pr create --repo <owner/name> --base main --head <branch>.'
+    );
+  }
   if (isGhRateLimitError(raw) || isGhRateLimitError(detail)) {
     const when = opts?.resetAt
       ? ` Try again ${formatRateLimitResetHint(opts.resetAt, opts.nowMs)}.`
