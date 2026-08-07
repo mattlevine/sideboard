@@ -56,7 +56,18 @@ See [`Formula/sideboard.rb`](Formula/sideboard.rb) for the formula stub used by 
 
 ### Desktop
 
-Download a signed DMG from [GitHub Releases](https://github.com/mattlevine/sideboard/releases). The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently).
+Download the latest Mac build (always points at the newest GitHub Release):
+
+| Chip | DMG |
+|------|-----|
+| Apple Silicon | https://github.com/mattlevine/sideboard/releases/latest/download/Sideboard-arm64.dmg |
+| Intel | https://github.com/mattlevine/sideboard/releases/latest/download/Sideboard-x64.dmg |
+
+Or browse all assets: https://github.com/mattlevine/sideboard/releases/latest
+
+> These `/latest/download/…` links only work while the GitHub repo (or its releases) are **public**. The repo is currently private — make it public (or host the DMGs elsewhere) before sharing the README links.
+
+The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently).
 
 #### Releasing
 
