@@ -6,6 +6,7 @@ import type {
   Thread,
   Workspace,
 } from '@sideboard-ai/core';
+import { lookupSoccerTeam } from '@sideboard/teams';
 import { applyAgentEvent } from '@sideboard/message-parts';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
@@ -16,6 +17,7 @@ import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal } from './components/SettingsModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
+import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
 import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
 import { normalizePreviewUrl } from './lib/preview-url';
 
@@ -85,6 +87,7 @@ export function App() {
     phase: 'available' | 'ready';
     version: string;
   } | null>(null);
+  const [teamToasts, setTeamToasts] = useState<TeamToastItem[]>([]);
   const [prefill, setPrefill] = useState<string | undefined>();
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
@@ -139,7 +142,14 @@ export function App() {
 
   function openPreviewUrl(raw: string) {
     const url = normalizePreviewUrl(raw);
-    if (!url) return;
+    if (!url) {
+      // Chat markdown may still hand us a safe http(s)/mailto URL that the
+      // in-app preview can't load — fall back to the system browser.
+      if (/^https?:\/\//i.test(raw.trim()) || /^mailto:/i.test(raw.trim())) {
+        void window.sideboard.openExternal(raw.trim());
+      }
+      return;
+    }
     setChangesOpen(false);
     setOpenFilePath(null);
     setOpenUrls((prev) => (prev.includes(url) ? prev : [...prev, url]));
@@ -263,9 +273,33 @@ export function App() {
     }
   }, []);
 
+  const notifySoccerNickname = useCallback((title: string | null | undefined) => {
+    if (!title?.trim()) return;
+    const team = lookupSoccerTeam(title);
+    if (!team) return;
+    setTeamToasts((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), team },
+    ]);
+  }, []);
+
+  const dismissTeamToast = useCallback((id: string) => {
+    setTeamToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   const upsertThread = useCallback((thread: Thread) => {
     setThreads((prev) => [...prev.filter((t) => t.id !== thread.id), thread]);
   }, []);
+
+  const selectCreatedThread = useCallback(
+    (thread: Thread) => {
+      upsertThread(thread);
+      notifySoccerNickname(thread.title);
+      setSelectedId(thread.id);
+      setMultiSelected(new Set([thread.id]));
+    },
+    [upsertThread, notifySoccerNickname],
+  );
 
   useEffect(() => {
     void window.sideboard.getRepoPath().then(async (p) => {
@@ -629,7 +663,10 @@ export function App() {
               turnStartedAt: turnStartedAtByThread[selected.id],
               onRefresh: () => void refresh(),
               onSelectChat: (id: string, created?: Thread) => {
-                if (created) upsertThread(created);
+                if (created) {
+                  selectCreatedThread(created);
+                  return;
+                }
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
               },
@@ -638,6 +675,20 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
+            };
+            const urlPreviewProps = {
+              openUrls,
+              openUrl,
+              onOpenUrl: openPreviewUrl,
+              onSelectUrl: selectPreviewUrl,
+              onCloseUrl: closePreviewUrl,
+              onNavigateUrl: navigatePreviewUrl,
+              onShowChat: () => {
+                setOpenFilePath(null);
+                setOpenUrl(null);
+                setChangesOpen(false);
+              },
+              urlPreviewSuspended: settingsOpen,
             };
             return selected.sourceType === 'orchestration' || isGlobalThread(selected) ? (
             <OrchestratorPanel
@@ -654,7 +705,10 @@ export function App() {
                 setMultiSelected(new Set([id]));
               }}
               onSelectChat={(id, created) => {
-                if (created) upsertThread(created);
+                if (created) {
+                  selectCreatedThread(created);
+                  return;
+                }
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
               }}
@@ -663,6 +717,7 @@ export function App() {
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
               onOpenThreadLink={openThreadByRef}
+              {...urlPreviewProps}
             />
           ) : (
             <ThreadPanel
@@ -670,25 +725,14 @@ export function App() {
               openFilePath={openFilePath}
               openFiles={openFiles}
               openFileView={openFileView}
-              openUrls={openUrls}
-              openUrl={openUrl}
               changesOpen={changesOpen}
               changesPath={changesPath}
               onSelectFile={openFile}
               onCloseFile={closeFile}
-              onOpenUrl={openPreviewUrl}
-              onSelectUrl={selectPreviewUrl}
-              onCloseUrl={closePreviewUrl}
-              onNavigateUrl={navigatePreviewUrl}
               onSelectChanges={selectChangesTab}
               onCloseChanges={closeChanges}
-              onShowChat={() => {
-                setOpenFilePath(null);
-                setOpenUrl(null);
-                setChangesOpen(false);
-              }}
-              urlPreviewSuspended={settingsOpen}
               fileChanges={fileChanges}
+              {...urlPreviewProps}
               {...threadPanelProps}
             />
           );
@@ -714,7 +758,10 @@ export function App() {
                 onOpenUrl={openPreviewUrl}
                 onFileChanges={onFileChanges}
                 onSelectChat={(id, created) => {
-                  if (created) upsertThread(created);
+                  if (created) {
+                    selectCreatedThread(created);
+                    return;
+                  }
                   setSelectedId(id);
                   setMultiSelected(new Set([id]));
                 }}
@@ -747,12 +794,14 @@ export function App() {
             setSettingsOpen(true);
             setSettingsInitialNav('account');
           }}
-          onCreated={(id, opts) => {
+          onCreated={(thread, opts) => {
+            upsertThread(thread);
+            notifySoccerNickname(thread.title);
             void refresh();
             if (opts?.stayOpen) return;
-            setSelectedId(id);
+            setSelectedId(thread.id);
             setView('thread');
-            setMultiSelected(new Set([id]));
+            setMultiSelected(new Set([thread.id]));
           }}
         />
       )}
@@ -825,6 +874,11 @@ export function App() {
           </div>
         </div>
       )}
+
+      <TeamToastStack
+        toasts={teamToasts}
+        onDismiss={dismissTeamToast}
+      />
     </div>
   );
 }

@@ -30,6 +30,8 @@ function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
       return 'WS';
     case 'file':
       return 'FILE';
+    case 'diff-comment':
+      return 'DIFF';
     default:
       return 'MD';
   }
@@ -618,6 +620,11 @@ export function ThreadPanel({
           initialView="diff"
           onClose={() => onCloseChanges?.()}
           onSaved={onRefresh}
+          onDiffComment={(att) => {
+            void appendAttachments([att]).then(() => {
+              requestAnimationFrame(() => textareaRef.current?.focus());
+            });
+          }}
         />
       ) : openUrl ? (
         <UrlPreview
@@ -635,6 +642,11 @@ export function ThreadPanel({
           initialView={openFileView}
           onClose={() => onCloseFile?.(openFilePath)}
           onSaved={onRefresh}
+          onDiffComment={(att) => {
+            void appendAttachments([att]).then(() => {
+              requestAnimationFrame(() => textareaRef.current?.focus());
+            });
+          }}
         />
       ) : (
         <div className="chat">

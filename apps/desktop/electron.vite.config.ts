@@ -48,7 +48,20 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/git/gh-errors.ts',
         ),
+        '@sideboard/diff-comment': resolve(
+          __dirname,
+          '../../packages/core/src/composer/diff-comment.ts',
+        ),
+        '@sideboard/teams': resolve(
+          __dirname,
+          '../../packages/core/src/git/teams.ts',
+        ),
       },
+    },
+    optimizeDeps: {
+      // Never prebundle the Cursor SDK into the renderer — it ships broken .d.ts/.map
+      // graphs that blow up esbuild when pulled via the @sideboard-ai/core barrel.
+      exclude: ['@cursor/sdk', '@sideboard-ai/core'],
     },
     build: {
       rollupOptions: {

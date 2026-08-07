@@ -17,7 +17,34 @@ import { flattenTurnInput, normalizeTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 import { permissionMode } from './types.js';
 
-const BASE_ALLOWED_TOOLS = ['Edit', 'Write', 'Bash', 'Read', 'Glob', 'Grep'];
+/**
+ * Tools Sideboard auto-approves on every Claude turn.
+ * `--allowedTools` does not restrict availability — it skips permission prompts.
+ * Non-interactive `-p` turns have no TTY dialog, so anything not listed here
+ * (with default `acceptEdits` autonomy) is denied. Include web tools so agents
+ * can search/fetch without requiring Full autonomy / bypassPermissions.
+ */
+const BASE_ALLOWED_TOOLS = [
+  'Edit',
+  'Write',
+  'Bash',
+  'Read',
+  'Glob',
+  'Grep',
+  'WebFetch',
+  'WebSearch',
+];
+
+/**
+ * When Settings → Agents → Claude → Chrome is on, Sideboard passes `--chrome`
+ * and auto-approves the Claude-in-Chrome MCP + skill (otherwise browser actions
+ * prompt and fail headlessly).
+ */
+export const CLAUDE_CHROME_ALLOWED_TOOLS = [
+  'mcp__claude-in-chrome',
+  'mcp__claude-in-chrome__*',
+  'Skill(claude-in-chrome)',
+] as const;
 
 /** macOS ARG_MAX ~256KiB — keep `-p` prompt args under this (stdin for larger). */
 export const CLAUDE_PROMPT_ARG_MAX = 200_000;
@@ -192,6 +219,7 @@ export const claudeAdapter: AgentAdapter = {
     // Orchestrators keep Bash/Read/etc (inspect child worktrees by absolute path)
     // plus Sideboard MCP for fleet control. Identity prompts forbid treating the
     // synthetic global cwd as a project worktree.
+    const chromeOn = claudeChromeEnabled();
     let allowedTools: string[];
     if (isOrchestrator) {
       allowedTools = [
@@ -208,6 +236,9 @@ export const claudeAdapter: AgentAdapter = {
         ...mcpAllowTools(servers),
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
       ];
+    }
+    if (chromeOn) {
+      allowedTools = [...allowedTools, ...CLAUDE_CHROME_ALLOWED_TOOLS];
     }
     // Plain-text `-p` prompt (not --input-format stream-json). Structured stream-json
     // user messages are merged into the API request where Claude Code already applies
@@ -227,7 +258,7 @@ export const claudeAdapter: AgentAdapter = {
     if (mcpConfigPath) {
       args.push('--mcp-config', mcpConfigPath);
     }
-    if (claudeChromeEnabled()) {
+    if (chromeOn) {
       args.push('--chrome');
     }
     if (useStdin) {

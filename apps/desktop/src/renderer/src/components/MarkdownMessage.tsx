@@ -83,14 +83,18 @@ export function MarkdownMessage({
       if (!url || !isSafeExternalUrl(url)) {
         return <span {...props}>{children}</span>;
       }
-      const openInTab = Boolean(onUrlClick) && (url.startsWith('http://') || url.startsWith('https://'));
+      const openInTab =
+        Boolean(onUrlClick) && (url.startsWith('http://') || url.startsWith('https://'));
       return (
         <a
           {...props}
           href={url}
-          title={openInTab ? 'Open in Sideboard preview (⌥/Alt-click for browser)' : undefined}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={openInTab ? 'Open in Sideboard preview (⌥/Alt-click for browser)' : 'Open in browser'}
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             if (openInTab && !e.altKey && !e.metaKey) {
               onUrlClick?.(url);
               return;

@@ -19,6 +19,14 @@ interface Props {
   rightSidebarToggle?: ReactNode;
   /** Open another thread from a sideboard://thread/<id> markdown link. */
   onOpenThreadLink?: (threadRef: string) => void;
+  openUrls?: string[];
+  openUrl?: string | null;
+  onOpenUrl?: (url: string) => void;
+  onSelectUrl?: (url: string) => void;
+  onCloseUrl?: (url: string) => void;
+  onNavigateUrl?: (from: string, to: string) => void;
+  onShowChat?: () => void;
+  urlPreviewSuspended?: boolean;
 }
 
 function countStatus(threads: Thread[], status: Thread['status']): number {
@@ -40,6 +48,14 @@ export function OrchestratorPanel({
   leftSidebarToggle,
   rightSidebarToggle,
   onOpenThreadLink,
+  openUrls,
+  openUrl,
+  onOpenUrl,
+  onSelectUrl,
+  onCloseUrl,
+  onNavigateUrl,
+  onShowChat,
+  urlPreviewSuspended,
 }: Props) {
   const global = isGlobalThread(thread);
   const childSummary = useMemo(() => {
@@ -91,6 +107,14 @@ export function OrchestratorPanel({
           leftSidebarToggle={leftSidebarToggle}
           rightSidebarToggle={rightSidebarToggle}
           onOpenThreadLink={onOpenThreadLink ?? onSelectChild}
+          openUrls={openUrls}
+          openUrl={openUrl}
+          onOpenUrl={onOpenUrl}
+          onSelectUrl={onSelectUrl}
+          onCloseUrl={onCloseUrl}
+          onNavigateUrl={onNavigateUrl}
+          onShowChat={onShowChat}
+          urlPreviewSuspended={urlPreviewSuspended}
         />
       </div>
     </div>

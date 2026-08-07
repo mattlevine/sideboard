@@ -1003,6 +1003,7 @@ export function RightSidebar({
               prUrl={prUrl}
               loading={prDetailsLoading}
               onRefresh={() => void loadPrDetails()}
+              onOpenUrl={onOpenUrl}
             />
           )}
         </div>

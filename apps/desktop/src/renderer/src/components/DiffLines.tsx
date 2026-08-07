@@ -1,10 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import type { DiffCommentLine } from '@sideboard/diff-comment';
 import { tintLine, type DiffRow } from '../lib/tool-diff';
 
-function DiffLine({ row }: { row: Extract<DiffRow, { kind: 'context' | 'del' | 'add' }> }) {
+type SelectableRow = Extract<DiffRow, { kind: 'context' | 'del' | 'add' }>;
+
+function DiffLine({
+  row,
+  selected,
+  commentable,
+  onSelect,
+}: {
+  row: SelectableRow;
+  selected: boolean;
+  commentable: boolean;
+  onSelect?: (e: MouseEvent | KeyboardEvent) => void;
+}) {
   const tint = tintLine(row.text);
   return (
-    <div className={`tool-diff-line ${row.kind}`}>
+    <div
+      className={`tool-diff-line ${row.kind}${selected ? ' selected' : ''}${commentable ? ' commentable' : ''}`}
+      role={commentable ? 'button' : undefined}
+      tabIndex={commentable ? 0 : undefined}
+      aria-pressed={commentable ? selected : undefined}
+      onClick={commentable ? onSelect : undefined}
+      onKeyDown={
+        commentable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelect?.(e);
+              }
+            }
+          : undefined
+      }
+    >
       <span className="tool-diff-gutter" aria-hidden />
       <span className="tool-diff-lineno">{row.lineNo}</span>
       <span className="tool-diff-code">
@@ -23,24 +52,135 @@ function DiffLine({ row }: { row: Extract<DiffRow, { kind: 'context' | 'del' | '
   );
 }
 
+function flattenSelectable(rows: DiffRow[], expanded: Record<string, boolean>): SelectableRow[] {
+  const out: SelectableRow[] = [];
+  rows.forEach((row, i) => {
+    if (row.kind === 'collapse') {
+      const key = `${row.direction}-${i}`;
+      if (expanded[key]) {
+        for (const r of row.rows) {
+          if (r.kind === 'context' || r.kind === 'del' || r.kind === 'add') out.push(r);
+        }
+      }
+      return;
+    }
+    out.push(row);
+  });
+  return out;
+}
+
+export interface DiffCommentSubmit {
+  lines: DiffCommentLine[];
+  comment: string;
+}
+
 /** Cursor-style inline diff rows (shared by tool popovers + Changes pane). */
 export function DiffLines({
   rows,
   className = 'tool-diff-body',
   emptyLabel = '(binary or empty patch)',
+  commentable = false,
+  onSubmitComment,
 }: {
   rows: DiffRow[];
   className?: string;
   emptyLabel?: string;
+  /** Enable click/shift-click line selection + comment → composer. */
+  commentable?: boolean;
+  onSubmitComment?: (payload: DiffCommentSubmit) => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [anchor, setAnchor] = useState<number | null>(null);
+  const [focus, setFocus] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const formRef = useRef<HTMLTextAreaElement>(null);
+
+  const selectable = useMemo(
+    () => flattenSelectable(rows, expanded),
+    [rows, expanded],
+  );
+
+  const selectedRange = useMemo(() => {
+    if (anchor == null || focus == null) return null;
+    const lo = Math.min(anchor, focus);
+    const hi = Math.max(anchor, focus);
+    return { lo, hi };
+  }, [anchor, focus]);
+
+  const selectedLines = useMemo(() => {
+    if (!selectedRange) return [];
+    return selectable.slice(selectedRange.lo, selectedRange.hi + 1);
+  }, [selectable, selectedRange]);
+
+  useEffect(() => {
+    if (selectedLines.length > 0) {
+      requestAnimationFrame(() => formRef.current?.focus());
+    }
+  }, [selectedLines.length]);
+
+  useEffect(() => {
+    if (!commentable) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && (anchor != null || draft)) {
+        e.preventDefault();
+        setAnchor(null);
+        setFocus(null);
+        setDraft('');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [commentable, anchor, draft]);
+
+  function selectAt(index: number, e: MouseEvent | KeyboardEvent) {
+    if (!commentable) return;
+    if (e.shiftKey && anchor != null) {
+      setFocus(index);
+    } else {
+      setAnchor(index);
+      setFocus(index);
+    }
+  }
+
+  function clearSelection() {
+    setAnchor(null);
+    setFocus(null);
+    setDraft('');
+  }
+
+  function submit() {
+    const comment = draft.trim();
+    if (!comment || selectedLines.length === 0 || !onSubmitComment || submitting) return;
+    setSubmitting(true);
+    try {
+      onSubmitComment({
+        comment,
+        lines: selectedLines.map((r) => ({
+          side: r.kind,
+          lineNo: r.lineNo,
+          text: r.text,
+        })),
+      });
+      clearSelection();
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (rows.length === 0) {
     return <div className="tool-diff-empty">{emptyLabel}</div>;
   }
 
+  let selectCursor = 0;
+
   return (
-    <div className={className}>
+    <div className={`${className}${commentable ? ' is-commentable' : ''}`}>
+      {commentable && (
+        <div className="diff-comment-hint thread-meta">
+          Click a line to comment · Shift-click for a range · Esc to clear
+        </div>
+      )}
       {rows.map((row, i) => {
         if (row.kind === 'collapse') {
           const key = `${row.direction}-${i}`;
@@ -58,16 +198,79 @@ export function DiffLines({
                 {row.count} unmodified line{row.count === 1 ? '' : 's'}
               </button>
               {open &&
-                row.rows.map((r, j) =>
-                  r.kind === 'context' || r.kind === 'del' || r.kind === 'add' ? (
-                    <DiffLine key={`${key}-${j}`} row={r} />
-                  ) : null,
-                )}
+                row.rows.map((r, j) => {
+                  if (r.kind !== 'context' && r.kind !== 'del' && r.kind !== 'add') return null;
+                  const idx = selectCursor++;
+                  const selected =
+                    selectedRange != null && idx >= selectedRange.lo && idx <= selectedRange.hi;
+                  return (
+                    <DiffLine
+                      key={`${key}-${j}`}
+                      row={r}
+                      selected={selected}
+                      commentable={commentable}
+                      onSelect={(e) => selectAt(idx, e)}
+                    />
+                  );
+                })}
             </div>
           );
         }
-        return <DiffLine key={`${row.kind}-${row.lineNo}-${i}`} row={row} />;
+
+        const idx = selectCursor++;
+        const selected =
+          selectedRange != null && idx >= selectedRange.lo && idx <= selectedRange.hi;
+        return (
+          <DiffLine
+            key={`${row.kind}-${row.lineNo}-${i}`}
+            row={row}
+            selected={selected}
+            commentable={commentable}
+            onSelect={(e) => selectAt(idx, e)}
+          />
+        );
       })}
+
+      {commentable && selectedLines.length > 0 && (
+        <div className="diff-comment-form">
+          <div className="diff-comment-form-meta thread-meta">
+            Commenting on{' '}
+            {selectedLines.length === 1
+              ? `line ${selectedLines[0]!.lineNo}`
+              : `lines ${selectedLines[0]!.lineNo}–${selectedLines[selectedLines.length - 1]!.lineNo}`}
+            {' · '}
+            {selectedLines.length} line{selectedLines.length === 1 ? '' : 's'}
+          </div>
+          <textarea
+            ref={formRef}
+            className="diff-comment-textarea"
+            placeholder="Ask the agent to fix or explain these lines…"
+            value={draft}
+            rows={3}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                submit();
+              }
+              e.stopPropagation();
+            }}
+          />
+          <div className="diff-comment-actions">
+            <button type="button" onClick={clearSelection} disabled={submitting}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!draft.trim() || submitting}
+              onClick={submit}
+            >
+              Add to chat ⌘↵
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

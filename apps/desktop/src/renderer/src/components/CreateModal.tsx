@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentStatus,
+  Thread,
   ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
@@ -26,7 +27,7 @@ interface Props {
   knownWorkspaces?: Workspace[];
   initialMode?: 'quick' | 'orchestration';
   onClose: () => void;
-  onCreated: (threadId: string, opts?: { stayOpen?: boolean }) => void;
+  onCreated: (thread: Thread, opts?: { stayOpen?: boolean }) => void;
   /** Called after a workspace is added so the sidebar can refresh. */
   onWorkspacesChanged?: () => void;
   /** Open Settings → Account (e.g. Linear setup). */
@@ -299,10 +300,10 @@ export function CreateModal({
           ...draft,
         });
         if (createMore) {
-          onCreated(t.id, { stayOpen: true });
+          onCreated(t, { stayOpen: true });
           resetDraft();
         } else {
-          onCreated(t.id);
+          onCreated(t);
           onClose();
         }
         return;
@@ -352,10 +353,10 @@ export function CreateModal({
         attachments: createAttachments,
       });
       if (createMore) {
-        onCreated(t.id, { stayOpen: true });
+        onCreated(t, { stayOpen: true });
         resetDraft();
       } else {
-        onCreated(t.id);
+        onCreated(t);
         onClose();
       }
     } catch (err) {

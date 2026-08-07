@@ -664,7 +664,8 @@ export function SettingsModal({
                         <div>
                           <div className="settings-section-title">Use Claude Code with Chrome</div>
                           <p className="settings-hint">
-                            Allow Claude Code to control your Chrome browser. Install the{' '}
+                            Passes <code>--chrome</code> on Sideboard Claude turns and auto-approves
+                            browser tools. Requires the{' '}
                             <button
                               type="button"
                               className="settings-link"
@@ -672,7 +673,7 @@ export function SettingsModal({
                             >
                               Claude in Chrome extension
                             </button>{' '}
-                            first.{' '}
+                            and a claude.ai login (not API-key-only).{' '}
                             <button
                               type="button"
                               className="settings-link"

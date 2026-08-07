@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ThreadAttachment } from '@sideboard-ai/core';
+import {
+  buildDiffCommentAttachment,
+  type DiffCommentLine,
+} from '@sideboard/diff-comment';
 import { documentPreviewKind } from '../lib/language';
 import { parseUnifiedPatch } from '../lib/tool-diff';
 import { CodeView } from './CodeView';
@@ -14,6 +19,8 @@ interface Props {
   initialView?: 'edit' | 'diff';
   onClose: () => void;
   onSaved?: () => void;
+  /** Attach a line-anchored diff comment to the thread composer. */
+  onDiffComment?: (attachment: ThreadAttachment) => void;
 }
 
 export function FileEditor({
@@ -23,6 +30,7 @@ export function FileEditor({
   initialView = 'edit',
   onClose,
   onSaved,
+  onDiffComment,
 }: Props) {
   const previewKind = documentPreviewKind(path);
   const isImage = previewKind === 'image';
@@ -291,6 +299,20 @@ export function FileEditor({
           <DiffLines
             className="tool-diff-body file-diff-lines"
             rows={parseUnifiedPatch(patch)}
+            commentable={Boolean(onDiffComment)}
+            onSubmitComment={
+              onDiffComment
+                ? ({ comment, lines }: { comment: string; lines: DiffCommentLine[] }) => {
+                    onDiffComment(
+                      buildDiffCommentAttachment({
+                        path,
+                        comment,
+                        lines,
+                      }),
+                    );
+                  }
+                : undefined
+            }
           />
         </div>
       )}

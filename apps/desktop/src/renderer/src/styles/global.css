@@ -1730,6 +1730,78 @@ body.resizing-panels * {
   background: #4a9a58;
 }
 
+.tool-diff-line.commentable {
+  cursor: pointer;
+}
+
+.tool-diff-line.commentable:hover {
+  outline: 1px solid rgba(88, 166, 255, 0.35);
+  outline-offset: -1px;
+}
+
+.tool-diff-line.selected {
+  background: rgba(56, 139, 253, 0.22);
+}
+
+.tool-diff-line.selected.del {
+  background: rgba(180, 60, 50, 0.28);
+}
+
+.tool-diff-line.selected.add {
+  background: rgba(60, 140, 70, 0.28);
+}
+
+.tool-diff-line.selected .tool-diff-lineno {
+  color: #9cdcfe;
+}
+
+.diff-comment-hint {
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-comment-form {
+  position: sticky;
+  bottom: 0;
+  margin-top: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated, var(--bg));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2;
+}
+
+.diff-comment-form-meta {
+  font-size: 12px;
+}
+
+.diff-comment-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.diff-comment-textarea:focus {
+  outline: 1px solid rgba(88, 166, 255, 0.55);
+  border-color: rgba(88, 166, 255, 0.55);
+}
+
+.diff-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .tool-diff-lineno {
   padding: 0 8px 0 10px;
   text-align: right;
@@ -2047,6 +2119,11 @@ body.resizing-panels * {
 .attachment-icon.kind-file {
   color: #fcd34d;
   border-color: #d97706;
+}
+
+.attachment-icon.kind-diff-comment {
+  color: #7dd3fc;
+  border-color: #0284c7;
 }
 
 .composer-picker-backdrop {
@@ -2385,6 +2462,9 @@ body.resizing-panels * {
 
 .md a {
   color: #3794ff;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .md a.md-thread-link {
@@ -5253,6 +5333,98 @@ button.linkish:hover {
 
 .update-banner-dismiss:hover {
   color: var(--text);
+}
+
+.team-toast-stack {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+/* Sit above the update banner when both are visible */
+body:has(.update-banner) .team-toast-stack {
+  bottom: 88px;
+}
+
+.team-toast {
+  pointer-events: auto;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  animation: team-toast-in 200ms ease-out;
+}
+
+.team-toast.leaving {
+  animation: team-toast-out 200ms ease-in forwards;
+}
+
+.team-toast-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.team-toast-text strong {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.team-toast-league {
+  color: var(--accent);
+}
+
+.team-toast-dismiss {
+  margin: 0;
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.team-toast-dismiss:hover {
+  color: var(--text);
+}
+
+@keyframes team-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes team-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 
 .orchestrator-panel {

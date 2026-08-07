@@ -865,7 +865,17 @@ function registerIpc(): void {
   });
   ipcMain.handle('checkForUpdates', () => checkForUpdatesManual());
   ipcMain.handle('getAppVersion', () => app.getVersion());
-  ipcMain.handle('openExternal', (_e, url: string) => shell.openExternal(url));
+  ipcMain.handle('openExternal', async (_e, url: string) => {
+    if (typeof url !== 'string' || !url.trim()) return;
+    let parsed: URL;
+    try {
+      parsed = new URL(url.trim());
+    } catch {
+      return;
+    }
+    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+    await shell.openExternal(parsed.href);
+  });
 
   ipcMain.handle(
     'urlPreview:show',

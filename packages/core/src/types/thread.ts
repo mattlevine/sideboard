@@ -57,7 +57,7 @@ export interface ThreadMessage {
 export interface ThreadAttachment {
   id: string;
   name: string;
-  kind: 'transcript' | 'file' | 'issue' | 'workspace';
+  kind: 'transcript' | 'file' | 'issue' | 'workspace' | 'diff-comment';
   content: string;
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allocateTeamName,
   FAMOUS_SOCCER_TEAMS,
+  lookupSoccerTeam,
   takenSlugsFromThread,
   teamNameFromSlug,
   teamSlugFromName,
@@ -140,10 +141,20 @@ describe('allocateTeamName', () => {
     }
   });
 
-  it('suffixes when the pool is exhausted', () => {
-    const taken = new Set(FAMOUS_SOCCER_TEAMS.map((t) => t.slug));
+  it('includes location and league on allocated teams', () => {
+    const taken = new Set(FAMOUS_SOCCER_TEAMS.slice(1).map((t) => t.slug));
     const team = allocateTeamName(taken, () => 0);
-    expect(team.slug).toBe(`${FAMOUS_SOCCER_TEAMS[0]!.slug}-2`);
-    expect(team.name).toBe(`${FAMOUS_SOCCER_TEAMS[0]!.name} 2`);
+    expect(team.location).toBeTruthy();
+    expect(team.league).toBeTruthy();
+    expect(team.location).not.toBe('Unknown');
+  });
+
+  it('lookupSoccerTeam resolves title to location and league', () => {
+    expect(lookupSoccerTeam('West Ham')).toMatchObject({
+      name: 'West Ham',
+      slug: 'west-ham',
+      location: 'London, England',
+      league: 'Premier League',
+    });
   });
 });

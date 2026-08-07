@@ -25,13 +25,15 @@ interface Props {
   prUrl: string | null;
   loading: boolean;
   onRefresh: () => void;
+  /** Open http(s) links from PR markdown in a Sideboard preview tab. */
+  onOpenUrl?: (url: string) => void;
 }
 
 /**
  * PR human-review surface — description + review decision/comments.
  * CI lives in Checks; diffs/commits live in Changes (avoid duplicating those).
  */
-export function PrReviewPanel({ details, error, prUrl, loading, onRefresh }: Props) {
+export function PrReviewPanel({ details, error, prUrl, loading, onRefresh, onOpenUrl }: Props) {
   if (error) {
     return (
       <div className="pr-panel">
@@ -101,7 +103,11 @@ export function PrReviewPanel({ details, error, prUrl, loading, onRefresh }: Pro
           <h4 className="pr-review-section-title">Description</h4>
           <div className="pr-description">
             {details.body.trim() ? (
-              <MarkdownMessage text={details.body} className="pr-markdown" />
+              <MarkdownMessage
+                text={details.body}
+                className="pr-markdown"
+                onUrlClick={onOpenUrl}
+              />
             ) : (
               <div className="empty">No description</div>
             )}
@@ -124,7 +130,11 @@ export function PrReviewPanel({ details, error, prUrl, loading, onRefresh }: Pro
                   <span className="thread-meta">{formatShortDate(r.submittedAt)}</span>
                 </div>
                 {r.body.trim() ? (
-                  <MarkdownMessage text={r.body} className="pr-markdown compact" />
+                  <MarkdownMessage
+                    text={r.body}
+                    className="pr-markdown compact"
+                    onUrlClick={onOpenUrl}
+                  />
                 ) : (
                   <p className="thread-meta">No comment body</p>
                 )}
@@ -137,7 +147,11 @@ export function PrReviewPanel({ details, error, prUrl, loading, onRefresh }: Pro
                   <span className="thread-meta">comment</span>
                   <span className="thread-meta">{formatShortDate(c.createdAt)}</span>
                 </div>
-                <MarkdownMessage text={c.body} className="pr-markdown compact" />
+                <MarkdownMessage
+                  text={c.body}
+                  className="pr-markdown compact"
+                  onUrlClick={onOpenUrl}
+                />
               </div>
             ))}
           </div>

@@ -2,13 +2,33 @@
  * Memorable worktree / thread labels (Conductor-style nicknames).
  * Slug is the directory + `thread/<slug>` branch; `name` is the UI title.
  */
+import { SOCCER_TEAM_META } from './team-meta.js';
+
 export interface TeamName {
   name: string;
   slug: string;
+  /** City / region where the club is based. */
+  location: string;
+  /** Top competition the club plays in. */
+  league: string;
+}
+
+type TeamSeed = { name: string; slug: string };
+
+function withMeta(seed: TeamSeed): TeamName {
+  const baseSlug = seed.slug.replace(/-\d+$/, '');
+  const meta = SOCCER_TEAM_META[baseSlug];
+  return {
+    name: seed.name,
+    slug: seed.slug,
+    location: meta?.location ?? 'Unknown',
+    league: meta?.league ?? 'Unknown league',
+  };
 }
 
 /** Famous soccer clubs — short, recognizable thread labels. */
-export const FAMOUS_SOCCER_TEAMS: readonly TeamName[] = [
+const FAMOUS_SOCCER_TEAM_SEEDS: readonly TeamSeed[] = [
+
   { name: 'Aalborg', slug: 'aalborg' },
   { name: 'Aalesund', slug: 'aalesund' },
   { name: 'Aarhus', slug: 'aarhus' },
@@ -346,13 +366,33 @@ export const FAMOUS_SOCCER_TEAMS: readonly TeamName[] = [
   { name: 'Yokohama Marinos', slug: 'yokohama-marinos' },
 ] as const;
 
+export const FAMOUS_SOCCER_TEAMS: readonly TeamName[] =
+  FAMOUS_SOCCER_TEAM_SEEDS.map(withMeta);
+
+/** Resolve toast-ready club info from a thread title or worktree slug. */
+export function lookupSoccerTeam(titleOrSlug: string): TeamName | null {
+  const trimmed = titleOrSlug.trim();
+  if (!trimmed) return null;
+  const fromName = teamSlugFromName(trimmed);
+  const slug = fromName ?? normalizeTakenSlug(trimmed);
+  const baseSlug = slug.replace(/-\d+$/, '');
+  const seed = FAMOUS_SOCCER_TEAM_SEEDS.find((t) => t.slug === baseSlug);
+  if (!seed) return null;
+  const suffixMatch = slug.match(/-(\d+)$/) || trimmed.match(/\s+(\d+)$/);
+  const suffix = suffixMatch?.[1];
+  return withMeta({
+    name: suffix ? `${seed.name} ${suffix}` : seed.name,
+    slug: suffix ? `${seed.slug}-${suffix}` : seed.slug,
+  });
+}
+
 /** Human-readable label for a worktree dir / `thread/<slug>` branch. */
 export function teamNameFromSlug(slug: string): string {
   const normalized = slug.toLowerCase().replace(/^thread\//, '');
   const suffixMatch = normalized.match(/^(.+)-(\d+)$/);
   const base = suffixMatch?.[1] ?? normalized;
   const suffix = suffixMatch?.[2];
-  const team = FAMOUS_SOCCER_TEAMS.find((t) => t.slug === base);
+  const team = FAMOUS_SOCCER_TEAM_SEEDS.find((t) => t.slug === base);
   if (team) return suffix ? `${team.name} ${suffix}` : team.name;
   return normalized
     .split('-')
@@ -368,7 +408,7 @@ export function teamSlugFromName(name: string): string | null {
   const suffixMatch = trimmed.match(/^(.+?)\s+(\d+)$/);
   const baseName = suffixMatch?.[1] ?? trimmed;
   const suffix = suffixMatch?.[2];
-  const team = FAMOUS_SOCCER_TEAMS.find(
+  const team = FAMOUS_SOCCER_TEAM_SEEDS.find(
     (t) => t.name.toLowerCase() === baseName.toLowerCase(),
   );
   if (!team) return null;
@@ -414,17 +454,17 @@ export function allocateTeamName(
   const takenSet = new Set(
     [...taken].map((s) => normalizeTakenSlug(s)).filter(Boolean),
   );
-  const available = FAMOUS_SOCCER_TEAMS.filter((t) => !takenSet.has(t.slug));
+  const available = FAMOUS_SOCCER_TEAM_SEEDS.filter((t) => !takenSet.has(t.slug));
   if (available.length > 0) {
     const idx = Math.floor(random() * available.length);
-    return available[idx]!;
+    return withMeta(available[idx]!);
   }
 
   for (let n = 2; n < 1000; n++) {
-    for (const t of FAMOUS_SOCCER_TEAMS) {
+    for (const t of FAMOUS_SOCCER_TEAM_SEEDS) {
       const slug = `${t.slug}-${n}`;
       if (!takenSet.has(slug)) {
-        return { name: `${t.name} ${n}`, slug };
+        return withMeta({ name: `${t.name} ${n}`, slug });
       }
     }
   }

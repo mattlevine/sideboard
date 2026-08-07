@@ -56,7 +56,7 @@ async function formatPrCreateFailure(
 }
 
 export type { TeamName } from './teams.js';
-export { allocateTeamName, FAMOUS_SOCCER_TEAMS } from './teams.js';
+export { allocateTeamName, FAMOUS_SOCCER_TEAMS, lookupSoccerTeam } from './teams.js';
 
 export function slugify(input: string): string {
   return input

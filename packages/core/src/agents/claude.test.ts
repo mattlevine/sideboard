@@ -98,10 +98,34 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cmd.stdin).toBe(`${big}\n`);
   });
 
-  it('passes --chrome when Chrome integration is enabled', async () => {
+  it('auto-approves WebFetch and WebSearch so headless turns can use the internet', async () => {
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'search docs' });
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('WebFetch');
+    expect(allowed).toContain('WebSearch');
+  });
+
+  it('passes --chrome and auto-approves Chrome MCP tools when enabled', async () => {
     claudeSettings.chromeEnabled = true;
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'browse' });
     expect(cmd.args).toContain('--chrome');
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__claude-in-chrome');
+    expect(allowed).toContain('mcp__claude-in-chrome__*');
+    expect(allowed).toContain('Skill(claude-in-chrome)');
+  });
+
+  it('omits Chrome flags and allow-list when Chrome is disabled', async () => {
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'no browser' });
+    expect(cmd.args).not.toContain('--chrome');
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).not.toContain('mcp__claude-in-chrome');
   });
 
   it('uses a custom Claude executable path when configured', async () => {
