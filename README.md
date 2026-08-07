@@ -174,9 +174,9 @@ Point Claude Code, Codex, or any MCP client at that server. Agents get tools to:
 - **Workspaces** — `add_workspace` / `remove_workspace`
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result`; `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
 - **Setup / run** — `run_setup`, `list_run_scripts`, `run_dev_script`, `stop_dev_script`
-- **Inspect / draft PRs** — `get_diff`, `preview_land`, `create_draft_pr` (push + draft PR only)
+- **Inspect / PRs** — `get_diff`; ask worktree agents via `send_to_thread` to `gh pr create --draft` (no host draft-PR tool)
 
-Ready-for-review `confirm_land` and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP. Coordinators can also `send_to_thread` asking a worktree agent to run `gh pr create --draft`.
+Ready-for-review land / merge and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP. Coordinators open PRs only by asking the worktree agent.
 
 Want Slack (or any chat) without Brightsy? Point your bot at this MCP or the CLI — [docs/remote-integrations.md](docs/remote-integrations.md).
 
@@ -262,7 +262,7 @@ Brightsy chat channels can drive Sideboard on your machine across **all register
 1. **Chat → Brightsy** — A human asks in Slack (or Discord/Teams). Brightsy’s cloud agent receives it and, when desktop Sideboard access is enabled, creates an inbound desktop task.
 2. **Daemon → orchestration** — Sideboard’s cloud-connect daemon polls Brightsy, routes the task to the singleton Brightsy-marked orchestration chat (soccer nickname in the UI; identity on `sourceRef`), and waits for the turn.
 3. **Orchestrator steers the fleet** — That chat uses Sideboard MCP (`list_workspaces`, `create_thread`, `send_to_thread`, `wait_for_turn`, …). It does not live in a project worktree; it oversees them.
-4. **Worktree agents build** — Child threads are real git worktrees under registered workspaces. They code, run tools, and can open draft PRs (or the orchestrator calls `create_draft_pr`). Deep links: `sideboard://thread/<id>`.
+4. **Worktree agents build** — Child threads are real git worktrees under registered workspaces. They code, run tools, and open draft PRs when asked. Deep links: `sideboard://thread/<id>`.
 5. **Reply back up** — Orchestrator text is submitted as the Brightsy task response and relayed back to Slack.
 
 **Two ways in**

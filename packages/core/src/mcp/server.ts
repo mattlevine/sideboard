@@ -18,8 +18,8 @@ const MAX_ORCH_THREADS = 5;
 
 /**
  * Sideboard MCP server — agent-facing judgment surface.
- * Deliberately excludes ready-for-review confirm_land and purge_thread.
- * Draft PRs are allowed via create_draft_pr.
+ * Deliberately excludes ready-for-review confirm_land, purge_thread, and
+ * host-owned draft PR creation. Orchestrators ask worktree agents to open PRs.
  */
 export async function startMcpServer(): Promise<void> {
   const orch = getOrchestrator();
@@ -458,47 +458,6 @@ export async function startMcpServer(): Promise<void> {
           },
         ],
       };
-    },
-  );
-
-  server.tool(
-    'preview_land',
-    'Preview push+PR land (does NOT push). Use before create_draft_pr.',
-    { ref: z.string() },
-    async ({ ref }) => {
-      const preview = await orch.previewLand(ref);
-      return { content: [{ type: 'text', text: JSON.stringify(preview, null, 2) }] };
-    },
-  );
-
-  server.tool(
-    'create_draft_pr',
-    'Commit dirty changes if needed, push the thread branch to origin, and create/update a DRAFT GitHub PR against that worktree\'s origin (never upstream). Ready-for-review / non-draft land stays human-only (CLI/app confirm_land). Prefer this when the orchestrator should open a PR itself; alternatively send_to_thread asking the worktree agent to run `gh pr create --draft -R <origin-owner/name>`.',
-    { ref: z.string() },
-    async ({ ref }) => {
-      try {
-        const result = await orch.confirmLand(ref, { draft: true });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  prUrl: result.prUrl,
-                  pushed: result.pushed,
-                  committed: result.committed,
-                  draft: true,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { content: [{ type: 'text', text: message }], isError: true };
-      }
     },
   );
 

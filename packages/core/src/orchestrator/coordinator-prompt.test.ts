@@ -64,13 +64,13 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('restore_thread');
     expect(prompt).toContain('run_setup');
     expect(prompt).toContain('run_dev_script');
-    expect(prompt).toContain('create_draft_pr');
-    expect(prompt).toContain('confirm_land');
+    expect(prompt).toContain('get_diff');
+    expect(prompt).not.toContain('create_draft_pr');
+    expect(prompt).not.toContain('preview_land');
     expect(prompt).toContain('purge_thread');
     expect(prompt).toContain('parent-1');
     expect(prompt).toContain('github:acme/sideboard');
-    expect(prompt).toContain('create_draft_pr');
-    expect(prompt).toContain('Prefer asking the worktree agent');
+    expect(prompt).toContain('Ask the worktree agent');
     expect(prompt).toContain('gh pr create --draft -R');
     expect(prompt).toMatch(/never upstream/i);
     expect(prompt).toContain('Greenfield');

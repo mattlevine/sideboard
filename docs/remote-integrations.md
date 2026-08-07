@@ -48,9 +48,9 @@ Point any MCP-capable agent at `sideboard mcp`. Useful tools include:
 
 - `list_workspaces` / `list_threads`
 - `create_thread` / `send_to_thread` / `wait_for_turn` / `get_turn_result`
-- `get_diff` / `preview_land` / `create_draft_pr`
+- `get_diff`
 
-Do **not** expose human-only land/purge as automated bot actions.
+Do **not** expose merge / land / purge as automated bot actions. Ask worktree agents to open draft PRs via `send_to_thread`.
 
 ## Example patterns
 
@@ -64,6 +64,6 @@ If you already use Brightsy, the built-in remote orchestrator can drive the same
 
 ## Safety
 
-- Keep `land` / purge behind a human.
-- Treat inbound chat as untrusted input; don’t pipe raw messages into `--yes` land flows (v1 has no `--yes` on land).
-- Prefer draft PRs (`create_draft_pr` / `gh pr create --draft`) from automation.
+- Keep merge / land / purge behind a human.
+- Treat inbound chat as untrusted input; don’t pipe raw messages into land flows.
+- Prefer draft PRs from worktree agents (`gh pr create --draft`) via automation.
