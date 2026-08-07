@@ -8,6 +8,7 @@ import {
   showUrlPreview,
   type UrlPreviewBounds,
 } from './url-preview';
+import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -304,6 +305,8 @@ function notifyUpdate(title: string, body: string): void {
 }
 
 function setupUpdater(): void {
+  bindUpdaterEvents(() => mainWindow);
+
   if (!app.isPackaged) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -854,6 +857,8 @@ function registerIpc(): void {
   ipcMain.handle('installUpdate', () => {
     autoUpdater.quitAndInstall();
   });
+  ipcMain.handle('checkForUpdates', () => checkForUpdatesManual());
+  ipcMain.handle('getAppVersion', () => app.getVersion());
   ipcMain.handle('openExternal', (_e, url: string) => shell.openExternal(url));
 
   ipcMain.handle(
@@ -885,12 +890,16 @@ app.whenReady().then(async () => {
   ensureAgentPath();
   // Conductor-style Settings → Environment (e.g. CURSOR_API_KEY).
   applyAppEnvironment(process.env);
+  if (process.platform === 'darwin') {
+    app.setName('Sideboard');
+  }
   orch.setMaxConcurrent(maxConcurrentAgents());
   applyDockIcon();
   registerIpc();
   setupNotifications();
   setupStoreWatcher();
   setupUpdater();
+  setupApplicationMenu(() => mainWindow);
   try {
     repoPath = await resolveRepoRoot(process.cwd());
   } catch {

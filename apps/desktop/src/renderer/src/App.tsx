@@ -366,12 +366,17 @@ export function App() {
     const offUpdateError = window.sideboardUpdate.onError(() => {
       setAppUpdate((prev) => (prev?.phase === 'available' ? null : prev));
     });
+    const offOpenSettings = window.sideboardUpdate.onOpenSettings(() => {
+      setSettingsInitialNav('agents');
+      setSettingsOpen(true);
+    });
     return () => {
       offThreads();
       offEvents();
       offAvailable();
       offReady();
       offUpdateError();
+      offOpenSettings();
     };
   }, [refresh]);
 
