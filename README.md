@@ -12,7 +12,7 @@ Sideboard is an open control plane over git worktrees:
 
 Run agents in isolated `thread/*` worktrees from the CLI, desktop app, or MCP — then move in and out of Sideboard as you choose.
 
-![Sideboard desktop — orchestration board with worktree agents](docs/assets/sideboard-desktop.png)
+![Sideboard desktop — worktree chat, Mermaid diagrams, and file tree](docs/assets/sideboard-desktop.png)
 
 **Brightsy is optional.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([docs/remote-integrations.md](docs/remote-integrations.md)).
 
