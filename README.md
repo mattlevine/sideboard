@@ -2,23 +2,23 @@
 
 **Your agent threads aren't trapped anywhere.**
 
-When you run many AI coding agents at once, the hard part isn't spawning worktrees — it's knowing what's going on, and not getting stuck inside someone else's UI.
+When you run many AI coding agents at once, the hard part isn't spawning worktrees — it's knowing what's going on, editing what they produce, and not getting stuck inside someone else's UI.
 
-Sideboard is an open control plane over git worktrees:
+Sideboard is an open control plane over git worktrees — plus a desktop surface where agents can open **structured work beside chat**: documents, schema-driven CMS tables/forms, and file managers.
 
-1. **A global board for you** — see status, live output, and fan-out across every thread in one place
-2. **An MCP for the agents** — Claude Code and Codex can list threads, wait on turns, read diffs, and orchestrate work instead of treating the fleet as a black box
+1. **A global board for you** — status, live output, and fan-out across every thread
+2. **An MCP for the agents** — list threads, wait on turns, read diffs, orchestrate the fleet, and present artifacts / schemas / files in the desktop column
 3. **A door back to the native harness** — `attach` into Claude/Codex/OpenCode mid-flight, or `adopt` sessions that started elsewhere
 
 Run agents in isolated `thread/*` worktrees from the CLI, desktop app, or MCP — then move in and out of Sideboard as you choose.
 
-![Sideboard desktop — worktree chat, Mermaid diagrams, and file tree](docs/assets/sideboard-desktop.png)
+![Sideboard desktop — worktree chat, schema CMS form, and files sidebar](docs/assets/sideboard-desktop.png)
 
-**Brightsy is optional.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([docs/remote-integrations.md](docs/remote-integrations.md)).
+**Agents and CMSes are optional plugs, not the product.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. The structure column is **CMS-agnostic**: tables/forms render from JSON Schema + `schemaUi`; files are a generic manager. Brightsy is the first wired provider — inline schemas and memory files work without it. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([docs/remote-integrations.md](docs/remote-integrations.md)).
 
 ## Why it exists
 
-Most multi-agent tools optimize for parallelism. Sideboard optimizes for **visibility and handoff**:
+Most multi-agent tools optimize for parallelism. Sideboard optimizes for **visibility, handoff, and structured review**:
 
 | Job | Typical tools | Sideboard |
 |-----|---------------|-----------|
@@ -27,12 +27,18 @@ Most multi-agent tools optimize for parallelism. Sideboard optimizes for **visib
 | Let an agent *reason about* other threads | Opaque / none | MCP: list, send, wait, diff |
 | Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
 | Bring existing worktrees / Conductor workspaces in | Stuck or start over | `adopt` + Conductor import |
+| Review HTML / docs the agent built | Copy out, or locked chat UI | `present_artifact` → tabbed side column |
+| Edit records / content next to the coding thread | Separate CMS tab, context lost | `present_schema` → CMS-agnostic table + form from JSON Schema |
+| Pick / upload media for those records | Another app | `present_files` → file manager tabs the form can select from |
 
-Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Use MCP when an agent needs *judgment* across threads. Land and purge stay human-only.
+The fit: coding agents already touch product data, content, and assets — but the review loop usually leaves the chat. Sideboard keeps **code worktrees and structured surfaces in one thread**, so you can approve a PR *and* the record / file it depends on without hopping tools — without locking you into one CMS vendor.
+
+Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Use MCP when an agent needs *judgment* across threads or needs to open a pane. Land and purge stay human-only.
 
 Also true, and useful on the way:
 
 - **Agent-agnostic** — Claude Code, Codex, OpenCode, Cursor (via `@cursor/sdk`, Conductor-style); optionally Brightsy (hosted chat via `brightsy chat --json`; no local file edits)
+- **CMS-agnostic** — UI is schema-driven; Brightsy is one datasource. Inline / memory (and future providers) use the same table, form, and files chrome
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
 - **Integration-friendly** — remote chat (Slack, etc.) can sit on CLI/MCP without Brightsy; see [docs/remote-integrations.md](docs/remote-integrations.md)
@@ -160,7 +166,40 @@ sideboard adopt --from-conductor # import Conductor workspaces + history
 
 Aliases: `side` → `sideboard`.
 
-For the global board and live orchestration UI, run the desktop app.
+For the global board, live orchestration, and structured side column, run the desktop app.
+
+## Desktop — structure beside chat (CMS-agnostic)
+
+Each worktree chat can open a **single resizable right column** with tabs. Agents (or you, via chips) add tabs; they stay open per chat until you close them or a different payload replaces that tab.
+
+The CMS UI is **not Brightsy-shaped chrome**. Sideboard renders a generic resource: JSON Schema + optional `schemaUi`, records, and a file datasource. Providers only implement list/get/save (and publish when the resource declares content states). Swap the backend — same table, form, and files tabs.
+
+| Tab kind | MCP tool | What you get |
+|----------|----------|--------------|
+| **Document** | `present_artifact` | HTML / SVG / markdown preview (Claude-style artifacts, but yours) |
+| **CMS** | `present_schema` | Filterable table + form from JSON Schema / `schemaUi` — rich text, markdown, relationships; Save vs Publish only when `contentStates` (or `ui:contentStates`) say so |
+| **Files** | `present_files` | Browse / upload / pick against whatever file datasource is attached |
+
+**CMS-agnostic features (same UI for every provider)**
+
+- Schema-driven table (filters, open row → form) and form (typed fields from JSON Schema)
+- TipTap rich text + markdown editors wired through `schemaUi`, not vendor widgets
+- Has-one / has-many relationship fields with in-pane navigation
+- Draft / published lifecycle only when the resource opts in — plain records stay save-only
+- Form media fields open a Files tab in **select mode**, then return to the form (works across any open Files tabs)
+- Multiple CMS + Files tabs at once (different resources or storage roots in one column)
+- Per-chat tab memory; message chips reopen panes
+
+**Datasources today**
+
+| Surface | Provider | When to use |
+|---------|----------|-------------|
+| Schema | `brightsy` | Logged-in Brightsy team + `resource_id` (record type) |
+| Schema | `inline` | Embed `resource` / `records` in the tool call — demos, fixtures, or any agent that can supply schema JSON |
+| Files | `brightsy` | Team / account file storage |
+| Files | `memory` | Session-local demo store (no Brightsy) |
+
+Drag onto the file manager from Finder or from Sideboard’s worktree file lists. New providers plug in at the datasource interface — they do not fork the column UI.
 
 ## MCP — agents that can see the fleet
 
@@ -173,6 +212,7 @@ Point Claude Code, Codex, or any MCP client at that server. Agents get tools to:
 - **Discover** — `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
 - **Workspaces** — `add_workspace` / `remove_workspace`
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result`; `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
+- **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (CMS-agnostic table/form from JSON Schema), `present_files` (file manager); open as tabs in the chat’s right column
 - **Setup / run** — `run_setup`, `list_run_scripts`, `run_dev_script`, `stop_dev_script`
 - **Inspect / PRs** — `get_diff`; ask worktree agents via `send_to_thread` to `gh pr create --draft` (no host draft-PR tool)
 
@@ -210,6 +250,9 @@ sideboard brightsy teams
 sideboard brightsy connect-team <slug>   # connect + activate
 sideboard brightsy disconnect-team <slug>
 ```
+
+Connected teams unlock the **Brightsy datasource** for `present_schema` / `present_files` (record types + account file storage). The column UI is the same as inline/memory — Brightsy is a provider, not a required CMS.
+
 ## Optional: Brightsy remote orchestrator (Slack / Discord / Teams)
 
 > **Optional.** This is one remote path. You can build your own Slack/Discord bridge on Sideboard CLI/MCP instead — see [docs/remote-integrations.md](docs/remote-integrations.md).
