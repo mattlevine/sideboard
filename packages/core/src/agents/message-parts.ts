@@ -40,6 +40,12 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/present_artifact$/i.test(name)) {
     return str(input?.title) ? `Present ${str(input?.title)}` : 'Present artifact';
   }
+  if (/present_schema$/i.test(name)) {
+    return str(input?.title) ? `Schema ${str(input?.title)}` : 'Present schema';
+  }
+  if (/present_files$/i.test(name)) {
+    return str(input?.title) ? `Files ${str(input?.title)}` : 'Present files';
+  }
   if (/^(create|update)_artifact$/i.test(name.replace(/^mcp__[^_]+__/, ''))) {
     return str(input?.title) ? `Artifact ${str(input?.title)}` : 'Artifact';
   }

@@ -25,12 +25,14 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
 ] as const;
 
 /**
- * Worktree Claude turns: only auto-approve present_artifact (not fleet control).
- * Sideboard MCP is still injected so the tool is listed; other sideboard tools
- * remain permission-gated.
+ * Worktree Claude turns: only auto-approve present_* UI tools
+ * (not fleet control). Sideboard MCP is still injected so the tools are listed;
+ * other sideboard tools remain permission-gated.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_artifact',
+  'mcp__sideboard__present_schema',
+  'mcp__sideboard__present_files',
 ] as const;
 
 /** Legacy single-server allow list (CLI ~/.brightsy fallback). */

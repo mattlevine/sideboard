@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { extractArtifacts, type ChatArtifact } from '../lib/artifacts';
+import {
+  extractRightPaneContents,
+  isFilesPane,
+  isSchemaPane,
+  type RightPaneContent,
+} from '../lib/right-pane';
 import { formatTokenCount, totalTokens, usageTooltip } from '../lib/tokens';
 import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';
@@ -28,11 +33,11 @@ interface Props {
   onOpenFile?: (path: string) => void;
   /** Navigate to another Sideboard thread from a markdown deep link. */
   onOpenThread?: (threadRef: string) => void;
-  /** Open an HTML/markdown artifact in the side column. */
-  onOpenArtifact?: (artifact: ChatArtifact) => void;
-  /** Currently open artifact id (highlights the matching chip). */
+  /** Open a document or schema pane in the side column. */
+  onOpenArtifact?: (content: RightPaneContent) => void;
+  /** Currently open right-pane id (highlights the matching chip). */
   activeArtifactId?: string | null;
-  /** Prefix for extracted fence artifact ids (must match auto-open logic). */
+  /** Prefix for extracted fence/tool ids (must match auto-open logic). */
   artifactIdPrefix?: string;
   onFork?: () => void;
 }
@@ -151,8 +156,8 @@ export function AgentMessage({
   const answer = finalText(text, safeParts);
   const chips = useMemo(() => toolChips(safeParts), [safeParts]);
   const idPrefix = artifactIdPrefix ?? (streaming ? 'live' : 'msg');
-  const artifacts = useMemo(
-    () => extractArtifacts(answer || text, safeParts, idPrefix),
+  const paneContents = useMemo(
+    () => extractRightPaneContents(answer || text, safeParts, idPrefix),
     [answer, text, safeParts, idPrefix],
   );
   const durationLabel = useLiveDuration(startedAt, durationMs);
@@ -310,7 +315,7 @@ export function AgentMessage({
         </div>
       )}
 
-      {(durationLabel || usage || chips.length > 0 || artifacts.length > 0 || onFork) && (
+      {(durationLabel || usage || chips.length > 0 || paneContents.length > 0 || onFork) && (
         <div className="msg-footer">
           <div className="msg-footer-left">
             {durationLabel && (
@@ -356,19 +361,25 @@ export function AgentMessage({
               )}
             </div>
           </div>
-          {(chips.length > 0 || (artifacts.length > 0 && onOpenArtifact)) && (
+          {(chips.length > 0 || (paneContents.length > 0 && onOpenArtifact)) && (
             <div className="tool-chips">
               {onOpenArtifact &&
-                artifacts.map((a) => (
+                paneContents.map((a) => (
                   <button
                     key={a.id}
                     type="button"
-                    className={`tool-chip artifact-chip${activeArtifactId === a.id ? ' active' : ''}`}
-                    title={`Open artifact: ${a.title}`}
+                    className={`tool-chip artifact-chip${isSchemaPane(a) ? ' schema-chip' : ''}${isFilesPane(a) ? ' files-chip' : ''}${activeArtifactId === a.id ? ' active' : ''}`}
+                    title={
+                      isFilesPane(a)
+                        ? `Open files: ${a.title}`
+                        : isSchemaPane(a)
+                          ? `Open CMS: ${a.title}`
+                          : `Open artifact: ${a.title}`
+                    }
                     onClick={() => onOpenArtifact(a)}
                   >
                     <span className="tool-chip-gear" aria-hidden>
-                      ◫
+                      {isFilesPane(a) ? '▤' : isSchemaPane(a) ? '▦' : '◫'}
                     </span>
                     <span className="tool-chip-name">{a.title}</span>
                   </button>

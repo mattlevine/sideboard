@@ -139,6 +139,86 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'present_schema',
+    'Open Sideboard’s schema-driven CMS side column (filterable table and/or form). Pass JSON Schema + schemaUi (Brightsy extensions supported). Use datasource=brightsy with resource_id (record type UUID) when logged into Brightsy; use datasource=inline with embedded resource/records for any other source.',
+    {
+      title: z.string().describe('Pane title'),
+      mode: z
+        .enum(['table', 'form'])
+        .optional()
+        .describe('table = list/filter records; form = edit one record'),
+      datasource: z
+        .enum(['brightsy', 'inline'])
+        .optional()
+        .describe('brightsy resolves via login; inline uses embedded resource/records'),
+      resource_id: z
+        .string()
+        .optional()
+        .describe('Brightsy record type UUID (or generic resource id)'),
+      record_id: z.string().optional().describe('Record id when opening form mode'),
+      resource: z
+        .record(z.unknown())
+        .optional()
+        .describe('Inline { id, title, schema, schemaUi?, slug? }'),
+      record: z.record(z.unknown()).optional().describe('Inline record { id, data, published_at? }'),
+      records: z
+        .array(z.record(z.unknown()))
+        .optional()
+        .describe('Inline records for table mode'),
+      pane_id: z.string().optional().describe('Stable pane id across updates'),
+    },
+    async (args) => {
+      const id =
+        args.pane_id?.trim() ||
+        `schema_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const payload = {
+        ok: true,
+        pane_id: id,
+        title: args.title,
+        mode: args.mode ?? (args.record_id || args.record ? 'form' : 'table'),
+        datasource: args.datasource ?? (args.resource ? 'inline' : 'brightsy'),
+        resource_id: args.resource_id,
+        record_id: args.record_id,
+        resource: args.resource,
+        record: args.record,
+        records: args.records,
+        message:
+          'Schema pane accepted. Sideboard desktop opens the CMS column beside chat.',
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+    },
+  );
+
+  server.tool(
+    'present_files',
+    'Open Sideboard’s Files column (CMS-style file manager: browse, upload, pick). Use datasource=brightsy when the user is logged into Brightsy account storage; datasource=memory for a session-local demo store. Prefer this over claiming a file manager UI is unavailable. Pair with present_schema when editing records that need media.',
+    {
+      title: z.string().optional().describe('Pane title (default: Files)'),
+      datasource: z
+        .enum(['brightsy', 'memory'])
+        .optional()
+        .describe('brightsy = account storage via login; memory = session demo store'),
+      path: z.string().optional().describe('Initial folder path (e.g. public)'),
+      pane_id: z.string().optional().describe('Stable pane id across updates'),
+    },
+    async (args) => {
+      const id =
+        args.pane_id?.trim() ||
+        `files_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const payload = {
+        ok: true,
+        pane_id: id,
+        title: args.title?.trim() || 'Files',
+        datasource: args.datasource ?? 'brightsy',
+        path: args.path,
+        message:
+          'Files pane accepted. Sideboard desktop opens the Files column beside chat.',
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+    },
+  );
+
+  server.tool(
     'create_thread',
     'Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces and parentThreadId when spawning from an orchestrator. Then use send_to_thread to chat.',
     {

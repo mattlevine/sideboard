@@ -526,6 +526,35 @@ function registerIpc(): void {
   });
   ipcMain.handle('listBrightsyChatTargets', () => listBrightsyChatTargets());
   ipcMain.handle('getBrightsySession', () => getBrightsySession());
+  ipcMain.handle('getBrightsyCmsAuth', async () => {
+    try {
+      const cfg = loadBrightsyConfig();
+      const session = await getBrightsySession();
+      if (!session.connected || !cfg.access_token || !cfg.account_id) {
+        return {
+          endpoint: cfg.endpoint || session.endpoint || 'https://brightsy.ai',
+          accessToken: null,
+          accountId: null,
+          accountSlug: null,
+          reason: session.reason || 'not logged in — run `brightsy login`',
+        };
+      }
+      return {
+        endpoint: (cfg.endpoint || session.endpoint || 'https://brightsy.ai').replace(/\/$/, ''),
+        accessToken: cfg.access_token,
+        accountId: cfg.account_id,
+        accountSlug: session.accountSlug,
+      };
+    } catch (err) {
+      return {
+        endpoint: 'https://brightsy.ai',
+        accessToken: null,
+        accountId: null,
+        accountSlug: null,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
   ipcMain.handle('switchBrightsyAccount', (_e, accountIdOrSlug: string) =>
     switchBrightsyAccount(accountIdOrSlug),
   );
@@ -644,6 +673,9 @@ function registerIpc(): void {
   ipcMain.handle('listFiles', (_e, ref: string) => orch.listFiles(ref));
   ipcMain.handle('readFile', (_e, ref: string, relativePath: string) =>
     orch.readFile(ref, relativePath),
+  );
+  ipcMain.handle('readFileForUpload', (_e, ref: string, relativePath: string) =>
+    orch.readFileForUpload(ref, relativePath),
   );
   ipcMain.handle('writeFile', (_e, ref: string, relativePath: string, content: string) =>
     orch.writeFile(ref, relativePath, content),

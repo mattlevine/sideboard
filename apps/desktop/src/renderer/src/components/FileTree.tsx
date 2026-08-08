@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 
 export interface TreeNode {
@@ -68,6 +69,8 @@ interface Props {
   onSelect: (path: string) => void;
   /** Git change markers keyed by relative path. */
   changes?: Record<string, GitFileChange>;
+  /** When set, files can be dragged onto the CMS file manager. */
+  threadId?: string;
 }
 
 export function FileTree({
@@ -76,6 +79,7 @@ export function FileTree({
   filter = '',
   onSelect,
   changes = {},
+  threadId,
 }: Props) {
   const tree = useMemo(() => buildFileTree(paths), [paths]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['apps', 'packages', 'scripts']));
@@ -106,6 +110,10 @@ export function FileTree({
 
     if (node.kind === 'file') {
       const change = changes[node.path];
+      const onDragStart = (e: DragEvent) => {
+        if (!threadId) return;
+        setSideboardFileDrag(e.dataTransfer, [node.path], threadId);
+      };
       return (
         <button
           key={node.path}
@@ -113,6 +121,8 @@ export function FileTree({
           className={`tree-row${selected === node.path ? ' active' : ''}${change ? ' changed' : ''}`}
           style={{ paddingLeft: 8 + depth * 12 }}
           onClick={() => onSelect(node.path)}
+          draggable={Boolean(threadId)}
+          onDragStart={onDragStart}
         >
           <span className="tree-glyph file">{fileGlyph(node.name)}</span>
           <span className="tree-name">{node.name}</span>

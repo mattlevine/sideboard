@@ -65,6 +65,7 @@ import {
   initializeGitRepository,
   listWorktreeFiles,
   readWorktreeFile,
+  readWorktreeFileForUpload,
   writeWorktreeFile,
 } from '../diff/diff.js';
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
@@ -432,10 +433,12 @@ export class Orchestrator {
     const artifactReminder =
       thread.agent !== 'brightsy'
         ? [
-            'Sideboard artifacts (important):',
+            'Sideboard side column (important):',
             'There is no claude.ai Artifact tool here — that is normal.',
-            'To show HTML/SVG/markdown in Sideboard’s side column, put the FULL document in a ```html (or ```svg / ```markdown) fence in your reply, or call MCP present_artifact if listed.',
-            'Do not say artifacts are unavailable. Do not default to “write a file and open the browser” when a fenced HTML document would work.',
+            'HTML/SVG/markdown: ```html fence or MCP present_artifact.',
+            'CMS forms/tables: MCP present_schema (Brightsy resource_id or inline schema+schemaUi).',
+            'Files column: MCP present_files (brightsy account storage or memory).',
+            'Do not say artifacts/CMS UI are unavailable.',
           ].join(' ')
         : null;
     const agentPrompt = [
@@ -1044,6 +1047,17 @@ export class Orchestrator {
       throw new Error('Invalid path');
     }
     return readWorktreeFile(thread.worktreePath, relativePath);
+  }
+
+  async readFileForUpload(
+    threadRef: string,
+    relativePath: string,
+  ): Promise<{ path: string; contentBase64: string; size: number }> {
+    const thread = this.requireThread(threadRef);
+    if (relativePath.includes('..') || relativePath.startsWith('/')) {
+      throw new Error('Invalid path');
+    }
+    return readWorktreeFileForUpload(thread.worktreePath, relativePath);
   }
 
   async writeFile(threadRef: string, relativePath: string, content: string): Promise<{ path: string }> {

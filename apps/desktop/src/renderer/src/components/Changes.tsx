@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
 import type { DiffResult } from '@sideboard-ai/core';
+import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
 
 interface Props {
   threadId: string;
@@ -50,6 +51,10 @@ export function Changes({ threadId, onAskAboutFile }: Props) {
             key={f.path}
             className={`file-item${f.path === file.path ? ' active' : ''}`}
             onClick={() => setSelected(f.path)}
+            draggable
+            onDragStart={(e: DragEvent) => {
+              setSideboardFileDrag(e.dataTransfer, [f.path], threadId);
+            }}
           >
             <div>{f.path}</div>
             <div className="thread-meta">{f.status}</div>

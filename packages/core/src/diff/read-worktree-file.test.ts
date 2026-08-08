@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readWorktreeFile } from './diff.js';
+import { readWorktreeFile, readWorktreeFileForUpload } from './diff.js';
 
 const dirs: string[] = [];
 
@@ -34,5 +34,18 @@ describe('readWorktreeFile images', () => {
     expect(r.binary).toBe(true);
     expect(r.encoding).toBe('utf8');
     expect(r.content).toMatch(/binary file/);
+  });
+});
+
+describe('readWorktreeFileForUpload', () => {
+  it('returns base64 for non-image binaries', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sideboard-upload-'));
+    dirs.push(dir);
+    const bytes = Buffer.from([0, 1, 2, 3, 4, 5]);
+    writeFileSync(join(dir, 'blob.bin'), bytes);
+
+    const r = readWorktreeFileForUpload(dir, 'blob.bin');
+    expect(r.contentBase64).toBe(bytes.toString('base64'));
+    expect(r.size).toBe(6);
   });
 });

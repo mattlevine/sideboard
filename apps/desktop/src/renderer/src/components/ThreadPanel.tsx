@@ -3,9 +3,23 @@ import type { AgentKind, MessagePart, Thread, ThreadAttachment } from '@sideboar
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
   ARTIFACT_WIDTH_DEFAULT,
-  ArtifactPane,
-} from './ArtifactPane';
-import { latestArtifact, type ChatArtifact } from '../lib/artifacts';
+  RightColumnPane,
+} from './schema/RightColumnPane';
+import {
+  isFilesPane,
+  isSchemaPane,
+  latestRightPaneContent,
+  type RightPaneContent,
+  type SchemaPaneContent,
+} from '../lib/right-pane';
+import {
+  getClosedRightPane,
+  getRememberedRightPane,
+  isRightPaneSuppressed,
+  rememberClosedRightPane,
+  rememberRightPane,
+  setRightPaneSuppressed,
+} from '../lib/right-pane-memory';
 import { formatTokenCount, sumUsage, totalTokens, usageTooltip } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';
 import { BrightsyTargetPicker } from './BrightsyTargetPicker';
@@ -133,10 +147,13 @@ export function ThreadPanel({
     chatCount: number;
   } | null>(null);
   const [closeBusy, setCloseBusy] = useState(false);
-  const [artifact, setArtifact] = useState<ChatArtifact | null>(null);
+  const [rightPane, setRightPane] = useState<RightPaneContent | null>(() => {
+    const remembered = getRememberedRightPane(thread.id);
+    return remembered === undefined ? null : remembered;
+  });
   const [artifactWidth, setArtifactWidth] = useState(ARTIFACT_WIDTH_DEFAULT);
-  /** After the user closes the pane, skip auto-open until the next turn. */
-  const suppressArtifactAutoOpen = useRef(false);
+  /** After the user closes the pane, skip auto-open until a different artifact. */
+  const suppressArtifactAutoOpen = useRef(isRightPaneSuppressed(thread.id));
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
@@ -454,45 +471,111 @@ export function ThreadPanel({
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
 
-  function openArtifact(next: ChatArtifact) {
+  function applyRightPane(next: RightPaneContent | null) {
+    setRightPane(next);
+    rememberRightPane(thread.id, next);
+  }
+
+  function openRightPane(next: RightPaneContent) {
     suppressArtifactAutoOpen.current = false;
-    setArtifact(next);
+    setRightPaneSuppressed(thread.id, false);
+    applyRightPane(next);
     onShowChat?.();
   }
 
-  function closeArtifact() {
+  function closeRightPane() {
+    rememberClosedRightPane(thread.id, rightPane);
     suppressArtifactAutoOpen.current = true;
-    setArtifact(null);
+    setRightPane(null);
   }
+
+  function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean {
+    if (isSchemaPane(a) && isSchemaPane(b)) {
+      return (
+        a.mode === b.mode &&
+        a.resourceId === b.resourceId &&
+        a.recordId === b.recordId &&
+        a.datasource === b.datasource
+      );
+    }
+    if (isFilesPane(a) && isFilesPane(b)) {
+      return (
+        a.datasource === b.datasource &&
+        a.path === b.path &&
+        a.title === b.title
+      );
+    }
+    if (
+      !isSchemaPane(a) &&
+      !isSchemaPane(b) &&
+      !isFilesPane(a) &&
+      !isFilesPane(b)
+    ) {
+      return a.content === b.content && a.title === b.title;
+    }
+    return false;
+  }
+
+  // Restore per-chat pane when switching threads.
+  useEffect(() => {
+    suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
+    const remembered = getRememberedRightPane(thread.id);
+    if (remembered !== undefined) {
+      setRightPane(remembered);
+      return;
+    }
+    if (suppressArtifactAutoOpen.current) {
+      setRightPane(null);
+      return;
+    }
+    let fromHistory: RightPaneContent | null = null;
+    for (let i = thread.messages.length - 1; i >= 0; i--) {
+      const m = thread.messages[i];
+      if (m?.role !== 'agent') continue;
+      fromHistory = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
+      if (fromHistory) break;
+    }
+    setRightPane(fromHistory);
+    if (fromHistory) rememberRightPane(thread.id, fromHistory);
+  }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
 
   // Auto-open while streaming; after the turn, migrate live → persisted ids.
   useEffect(() => {
     if (!chatViewOpen) return;
-    if (suppressArtifactAutoOpen.current) return;
 
     if (showStreaming) {
-      const candidate = latestArtifact(liveOutput, liveParts, 'live');
+      const candidate = latestRightPaneContent(liveOutput, liveParts, 'live');
       if (!candidate) return;
-      setArtifact((prev) => {
-        if (prev?.id === candidate.id && prev.content === candidate.content) return prev;
+      if (suppressArtifactAutoOpen.current) {
+        const closed = getClosedRightPane(thread.id);
+        if (closed && sameRightPane(closed, candidate)) return;
+        suppressArtifactAutoOpen.current = false;
+        setRightPaneSuppressed(thread.id, false);
+      }
+      setRightPane((prev) => {
+        if (prev && sameRightPane(prev, candidate)) return prev;
+        rememberRightPane(thread.id, candidate);
         return candidate;
       });
       return;
     }
 
-    setArtifact((prev) => {
+    setRightPane((prev) => {
       if (!prev) return prev;
       for (let i = thread.messages.length - 1; i >= 0; i--) {
         const m = thread.messages[i];
         if (m?.role !== 'agent') continue;
-        const candidate = latestArtifact(m.text, m.parts, `msg-${i}`);
+        const candidate = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
         if (!candidate) return prev;
         if (
           prev.id === candidate.id ||
           prev.id.startsWith('live') ||
-          prev.content === candidate.content
+          prev.id.startsWith('schema-live') ||
+          prev.id.startsWith('files-live') ||
+          sameRightPane(prev, candidate)
         ) {
-          if (prev.id === candidate.id && prev.content === candidate.content) return prev;
+          if (sameRightPane(prev, candidate) && prev.id === candidate.id) return prev;
+          rememberRightPane(thread.id, candidate);
           return candidate;
         }
         return prev;
@@ -505,13 +588,8 @@ export function ThreadPanel({
     liveOutput,
     liveParts,
     thread.messages,
+    thread.id,
   ]);
-
-  // Drop the pane when switching threads so we don't show stale content.
-  useEffect(() => {
-    setArtifact(null);
-    suppressArtifactAutoOpen.current = false;
-  }, [thread.id]);
 
   return (
     <section className="panel thread-main">
@@ -681,7 +759,7 @@ export function ThreadPanel({
       )}
 
       <div
-        className={`thread-workspace${artifact && chatViewOpen ? ' with-artifact' : ''}`}
+        className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
         <div className="thread-chat-column">
       {changesOpen && changesPath ? (
@@ -776,8 +854,8 @@ export function ThreadPanel({
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
                     onOpenThread={onOpenThreadLink}
-                    onOpenArtifact={openArtifact}
-                    activeArtifactId={artifact?.id}
+                    onOpenArtifact={openRightPane}
+                    activeArtifactId={rightPane?.id}
                     artifactIdPrefix={`msg-${i}`}
                     onFork={() => void forkToTab(i)}
                   />
@@ -815,8 +893,8 @@ export function ThreadPanel({
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
                     onOpenThread={onOpenThreadLink}
-                    onOpenArtifact={openArtifact}
-                    activeArtifactId={artifact?.id}
+                    onOpenArtifact={openRightPane}
+                    activeArtifactId={rightPane?.id}
                     artifactIdPrefix="live"
                     onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
                   />
@@ -1241,12 +1319,14 @@ export function ThreadPanel({
       </div>
         </div>
 
-        {artifact && chatViewOpen ? (
-          <ArtifactPane
-            artifact={artifact}
+        {rightPane && chatViewOpen ? (
+          <RightColumnPane
+            content={rightPane}
             width={artifactWidth}
             onWidthChange={setArtifactWidth}
-            onClose={closeArtifact}
+            onClose={closeRightPane}
+            onSchemaContentChange={(next: SchemaPaneContent) => applyRightPane(next)}
+            worktreeThreadId={thread.id}
           />
         ) : null}
       </div>

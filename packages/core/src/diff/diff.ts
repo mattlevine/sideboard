@@ -577,6 +577,41 @@ function isImageRelativePath(relativePath: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
+const DEFAULT_UPLOAD_MAX_BYTES = 50_000_000;
+
+/**
+ * Read a worktree file as base64 for upload (any type, not the editor stub).
+ * Rejects files larger than maxBytes.
+ */
+export function readWorktreeFileForUpload(
+  worktreePath: string,
+  relativePath: string,
+  opts?: { maxBytes?: number },
+): {
+  path: string;
+  contentBase64: string;
+  size: number;
+} {
+  assertSafeRelativePath(relativePath);
+  const maxBytes = opts?.maxBytes ?? DEFAULT_UPLOAD_MAX_BYTES;
+  const abs = join(worktreePath, relativePath);
+  const st = statSync(abs);
+  if (!st.isFile()) {
+    throw new Error(`Not a file: ${relativePath}`);
+  }
+  if (st.size > maxBytes) {
+    throw new Error(
+      `File too large to upload (${st.size} bytes; max ${maxBytes})`,
+    );
+  }
+  const buf = readFileSync(abs);
+  return {
+    path: relativePath,
+    contentBase64: buf.toString('base64'),
+    size: buf.length,
+  };
+}
+
 /** Read a text (or image) file from the worktree (capped). */
 export function readWorktreeFile(
   worktreePath: string,

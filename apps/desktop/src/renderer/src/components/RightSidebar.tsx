@@ -6,6 +6,7 @@ import type {
   PrDetails,
   Thread,
 } from '@sideboard-ai/core';
+import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
 import { FileTree } from './FileTree';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { MergeModal } from './MergeModal';
@@ -482,6 +483,14 @@ export function RightSidebar({
     return 'Merge';
   }
 
+  function primaryGitIcon(): string {
+    if (prMerged) return '●';
+    if (prClosed) return '✕';
+    if (!prUrl) return '⎇';
+    if (hasLocalChanges) return '↑';
+    return '⤵';
+  }
+
   function onPrimaryGitClick() {
     if (prMerged || prClosed) {
       if (prUrl) void window.sideboard.openExternal(prUrl);
@@ -734,9 +743,9 @@ export function RightSidebar({
               type="button"
               className={`pr-pill${pillModifier ? ` ${pillModifier}` : ''}`}
               onClick={() => void window.sideboard.openExternal(prUrl)}
-              title={prUrl}
+              title={pillStatus ? `${num ? `#${num}` : 'PR'} · ${pillStatus}` : prUrl}
             >
-              {num ? `#${num}` : 'PR'} ↗
+              <span className="pr-pill-num">{num ? `#${num}` : 'PR'} ↗</span>
               {pillStatus ? <span className="pr-status">{pillStatus}</span> : null}
             </button>
           ) : null}
@@ -759,7 +768,10 @@ export function RightSidebar({
                           : 'Ask the agent to create a pull request'
                 }
               >
-                {primaryGitLabel()}
+                <span className="btn-icon" aria-hidden>
+                  {primaryGitIcon()}
+                </span>
+                <span className="btn-text">{primaryGitLabel()}</span>
               </button>
               {!prMerged && !prClosed && (
                 <>
@@ -824,6 +836,7 @@ export function RightSidebar({
             <button
               type="button"
               className="primary btn-archive"
+              title="Archive thread"
               onClick={() => {
                 void window.sideboard
                   .listWorktreeChats(thread.id)
@@ -831,7 +844,10 @@ export function RightSidebar({
                   .catch(alert);
               }}
             >
-              Archive
+              <span className="btn-icon" aria-hidden>
+                ▤
+              </span>
+              <span className="btn-text">Archive</span>
             </button>
           </div>
         </div>
@@ -843,32 +859,51 @@ export function RightSidebar({
             type="button"
             className={upper === 'files' ? 'active' : ''}
             onClick={() => setUpper('files')}
+            title="All files"
           >
-            All files
+            <span className="tab-full">All files</span>
+            <span className="tab-short">Files</span>
           </button>
           <button
             type="button"
             className={upper === 'changes' ? 'active' : ''}
             onClick={() => setUpper('changes')}
+            title={changeCount ? `Changes (${changeCount})` : 'Changes'}
           >
-            Changes{changeCount ? ` ${changeCount}` : ''}
+            <span className="tab-full">Changes{changeCount ? ` ${changeCount}` : ''}</span>
+            <span className="tab-short">Δ{changeCount ? ` ${changeCount}` : ''}</span>
           </button>
           <button
             type="button"
             className={upper === 'checks' ? 'active' : ''}
             onClick={() => setUpper('checks')}
+            title={checksTabLabel}
           >
-            {checksTabLabel}
+            <span className="tab-full">{checksTabLabel}</span>
+            <span className="tab-short">CI</span>
           </button>
           <button
             type="button"
             className={upper === 'review' ? 'active' : ''}
             onClick={() => setUpper('review')}
+            title={
+              prDetails
+                ? `Review (${prDetails.reviews.length + prDetails.comments.length})`
+                : 'Review'
+            }
           >
-            Review
-            {prDetails
-              ? ` (${prDetails.reviews.length + prDetails.comments.length})`
-              : ''}
+            <span className="tab-full">
+              Review
+              {prDetails
+                ? ` (${prDetails.reviews.length + prDetails.comments.length})`
+                : ''}
+            </span>
+            <span className="tab-short">
+              Rev
+              {prDetails
+                ? ` ${prDetails.reviews.length + prDetails.comments.length}`
+                : ''}
+            </span>
           </button>
         </div>
 
@@ -937,6 +972,10 @@ export function RightSidebar({
                       type="button"
                       className={`right-file${f.path === selected || f.path === changesPath || f.path === openFilePath ? ' active' : ''}`}
                       onClick={() => focusChangedFile(f.path)}
+                      draggable
+                      onDragStart={(e) => {
+                        setSideboardFileDrag(e.dataTransfer, [f.path], thread.id);
+                      }}
                     >
                       <span className="right-file-path">{f.path}</span>
                       <GitChangeBadge
@@ -979,6 +1018,7 @@ export function RightSidebar({
                     filter={filter}
                     onSelect={(path) => onOpenFile?.(path)}
                     changes={changeByPath}
+                    threadId={thread.id}
                   />
                 </div>
               )}

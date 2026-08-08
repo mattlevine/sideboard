@@ -67,6 +67,17 @@ export interface IpcApi {
   listBrightsyChatTargets(): Promise<BrightsyChatTargets>;
   /** Brightsy login + connected teams (shared by CLI, Brightsy agent, and Claude MCP). */
   getBrightsySession(): Promise<BrightsySession>;
+  /**
+   * Auth for schema CMS pane (`@brightsy/client` in the renderer).
+   * Returns null fields + reason when not logged in.
+   */
+  getBrightsyCmsAuth(): Promise<{
+    endpoint: string;
+    accessToken: string | null;
+    accountId: string | null;
+    accountSlug: string | null;
+    reason?: string;
+  }>;
   /** Connect/activate a team for CLI + MCP (same as connectBrightsyTeam). */
   switchBrightsyAccount(accountIdOrSlug: string): Promise<BrightsySession>;
   /** Connect a team for CLI + MCP; activates it as the CLI session. */
@@ -168,6 +179,11 @@ export interface IpcApi {
     binary: boolean;
     encoding: 'utf8' | 'base64';
   }>;
+  /** Full file bytes (base64) for CMS / file-manager upload from worktree paths. */
+  readFileForUpload(
+    threadRef: string,
+    relativePath: string,
+  ): Promise<{ path: string; contentBase64: string; size: number }>;
   writeFile(threadRef: string, relativePath: string, content: string): Promise<{ path: string }>;
   /** Watch the open file in the worktree; replaces any previous watch. */
   watchOpenFile(threadRef: string, relativePath: string): Promise<void>;

@@ -56,12 +56,18 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/git/teams.ts',
         ),
+        // Context-only bridge — avoid @brightsy/ui barrel (@kit/ui / TipTap).
+        '@brightsy/ui-context': resolve(
+          __dirname,
+          'node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx',
+        ),
       },
     },
     optimizeDeps: {
       // Never prebundle the Cursor SDK into the renderer — it ships broken .d.ts/.map
       // graphs that blow up esbuild when pulled via the @sideboard-ai/core barrel.
       exclude: ['@cursor/sdk', '@sideboard-ai/core'],
+      include: ['@brightsy/client'],
     },
     build: {
       rollupOptions: {

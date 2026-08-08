@@ -103,15 +103,22 @@ export function formatWorktreeDirective(
  */
 export function formatArtifactDirective(): string {
   return [
-    'Sideboard artifacts (desktop UI) — mandatory when the user wants a rendered page/preview:',
+    'Sideboard side column (desktop UI):',
     'claude.ai’s “Artifact” tool does NOT exist in Claude Code. That is expected.',
-    'Sideboard’s substitute is either:',
-    '1) Emit a fenced code block tagged `html` (preferred), `svg`, or `markdown` containing the FULL document in your assistant reply — Sideboard opens a side column and renders it. Example:',
+    'Documents (HTML/SVG/markdown):',
+    '1) Emit a fenced code block tagged `html` (preferred), `svg`, or `markdown` with the FULL document — Sideboard opens a side column. Example:',
     '```html',
     '<!DOCTYPE html><html><head><title>Demo</title></head><body><h1>Hi</h1></body></html>',
     '```',
-    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown), and content — if that tool is listed.',
-    'Never say artifacts are unavailable. Never offer “write a file and open the browser” as the first option when a side-column HTML preview would satisfy the request — put the HTML in a ```html fence (or present_artifact) instead.',
+    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown), and content.',
+    'CMS / JSON Schema forms & tables (Brightsy or any schema+schemaUi source):',
+    '3) Call Sideboard MCP `present_schema` with title, mode (table|form), and either:',
+    '   - datasource=brightsy + resource_id (record type UUID) after fetching types via Brightsy MCP, or',
+    '   - datasource=inline + resource: { id, title, schema, schemaUi } and optional records/record.',
+    'Files / media browser (CMS file manager column):',
+    '4) Call Sideboard MCP `present_files` with optional title, path, and datasource (brightsy|memory).',
+    '   Opens the Files column for browse/upload/pick. Do NOT say a file manager UI is missing.',
+    'Never say artifacts, CMS UI, or the Files column are unavailable. Prefer present_schema for list/edit/publish; present_files for storage UI; html fences for standalone pages.',
   ].join('\n');
 }
 

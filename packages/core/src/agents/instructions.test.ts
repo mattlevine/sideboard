@@ -11,11 +11,13 @@ import {
 } from './instructions.js';
 
 describe('formatArtifactDirective', () => {
-  it('points agents at present_artifact and html fences', () => {
+  it('points agents at present_artifact, present_schema, present_files, and html fences', () => {
     const text = formatArtifactDirective();
     expect(text).toMatch(/present_artifact/);
+    expect(text).toMatch(/present_schema/);
+    expect(text).toMatch(/present_files/);
     expect(text).toMatch(/```html/);
-    expect(text).toMatch(/Never say artifacts are unavailable/i);
+    expect(text).toMatch(/Never say artifacts, CMS UI, or the Files column are unavailable/i);
   });
 });
 

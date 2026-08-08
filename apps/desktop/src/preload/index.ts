@@ -12,6 +12,7 @@ const api: IpcApi = {
   openClaudeUserSettings: () => ipcRenderer.invoke('openClaudeUserSettings'),
   listBrightsyChatTargets: () => ipcRenderer.invoke('listBrightsyChatTargets'),
   getBrightsySession: () => ipcRenderer.invoke('getBrightsySession'),
+  getBrightsyCmsAuth: () => ipcRenderer.invoke('getBrightsyCmsAuth'),
   switchBrightsyAccount: (accountIdOrSlug) =>
     ipcRenderer.invoke('switchBrightsyAccount', accountIdOrSlug),
   connectBrightsyTeam: (accountIdOrSlug) =>
@@ -68,6 +69,8 @@ const api: IpcApi = {
   listFiles: (threadRef) => ipcRenderer.invoke('listFiles', threadRef),
   readFile: (threadRef, relativePath) =>
     ipcRenderer.invoke('readFile', threadRef, relativePath),
+  readFileForUpload: (threadRef, relativePath) =>
+    ipcRenderer.invoke('readFileForUpload', threadRef, relativePath),
   writeFile: (threadRef, relativePath, content) =>
     ipcRenderer.invoke('writeFile', threadRef, relativePath, content),
   watchOpenFile: (threadRef, relativePath) =>
