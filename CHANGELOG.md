@@ -7,12 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-08-08
+
+### Fixed
+
+- Agent failures (Claude session limits, auth, credits, Codex/OpenCode/Brightsy/Cursor errors) now surface readable `lastError` text instead of bare `exit 1` / `[object Object]`
+- Streaming in one chat no longer scrolls other chats in the workspace to the bottom
+- Desktop Stop preserves the message queue and kills run-script process groups (Electron children no longer orphan)
+
+### Added
+
+- Queue editing / send-now controls; queued messages docked above the composer
+- Per-thread panel isolation for right-column / artifact state
+- Orchestration chats send the goal as the first turn; archive-all from the sidebar
+
+### Changed
+
+- Chat typography closer to Cursor (brighter text, 14px body)
+- Right sidebar refreshes diff / PR meta when a turn finishes
+
+## [0.1.0]
+
+- Initial private pre-release (CLI, MCP, desktop board, agent adapters)
+
+## Docs / process (ongoing)
+
 ### Added
 
 - Contributing guide, agent adapter docs, remote integration docs, compare notes
 - CI workflow (core/CLI build + typecheck + test + CLI smoke; desktop typecheck)
 - Security policy
-
-## [0.1.0]
-
-- Initial private pre-release (CLI, MCP, desktop board, agent adapters)

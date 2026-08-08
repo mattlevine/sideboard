@@ -62,8 +62,8 @@ Download the latest Mac build from [GitHub Releases](https://github.com/mattlevi
 
 | Chip | DMG |
 |------|-----|
-| Apple Silicon | https://github.com/mattlevine/sideboard/releases/download/v0.1.23/Sideboard-0.1.23-arm64.dmg |
-| Intel | https://github.com/mattlevine/sideboard/releases/download/v0.1.23/Sideboard-0.1.23.dmg |
+| Apple Silicon | https://github.com/mattlevine/sideboard/releases/download/v0.1.33/Sideboard-0.1.33-arm64.dmg |
+| Intel | https://github.com/mattlevine/sideboard/releases/download/v0.1.33/Sideboard-0.1.33.dmg |
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**. The repo is currently private — make it public (or host the DMGs elsewhere) before sharing the README links.
 
