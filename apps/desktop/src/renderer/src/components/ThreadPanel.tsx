@@ -665,20 +665,22 @@ export function ThreadPanel({
     }
   }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
 
-  // Collapse the worktree right sidebar while the chat right column is open
-  // (artifact / form / table / files); restore it when every tab is closed.
-  const activeRightColumnId =
-    chatViewOpen && rightSession && rightPane ? rightPane.id : null;
+  // Worktree sidebar: close only on 0→1 right-column panes; reopen on 1→0.
+  // Tab switches (and user reopening the sidebar while panes stay open) are no-ops.
+  const rightColumnVisible = Boolean(
+    chatViewOpen && rightSession && rightSession.tabs.length > 0,
+  );
   const hadRightColumnRef = useRef(false);
   useEffect(() => {
-    const has = Boolean(activeRightColumnId);
-    if (has) {
+    const has = rightColumnVisible;
+    const had = hadRightColumnRef.current;
+    if (has && !had) {
       onRightColumnOpen?.();
-    } else if (hadRightColumnRef.current) {
+    } else if (!has && had) {
       onRightColumnClose?.();
     }
     hadRightColumnRef.current = has;
-  }, [activeRightColumnId, thread.id, onRightColumnOpen, onRightColumnClose]);
+  }, [rightColumnVisible, onRightColumnOpen, onRightColumnClose]);
 
   // Auto-open while streaming; after the turn, migrate live → persisted ids.
   useEffect(() => {
