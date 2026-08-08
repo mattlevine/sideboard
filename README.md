@@ -12,7 +12,7 @@ Sideboard is an open control plane over git worktrees — plus a desktop surface
 
 Run agents in isolated `thread/*` worktrees from the CLI, desktop app, or MCP — then move in and out of Sideboard as you choose.
 
-![Sideboard desktop — worktree chat, schema CMS form, and files sidebar](docs/assets/sideboard-desktop.png)
+![Sideboard desktop — worktree chat, schema CMS form, and files sidebar](docs/assets/sideboard-desktop-cms.png)
 
 **Agents and CMSes are optional plugs, not the product.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. The structure column is **CMS-agnostic**: tables/forms render from JSON Schema + `schemaUi`; files are a generic manager. Brightsy is the first wired provider — inline schemas and memory files work without it. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([docs/remote-integrations.md](docs/remote-integrations.md)).
 
