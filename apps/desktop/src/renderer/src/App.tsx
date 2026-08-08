@@ -20,6 +20,10 @@ import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
 import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
 import { normalizePreviewUrl } from './lib/preview-url';
+import {
+  readRightSidebarOpen,
+  writeRightSidebarOpen,
+} from './lib/right-sidebar-prefs';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
 const RIGHT_SIDEBAR_DEFAULT = 340;
@@ -203,7 +207,7 @@ export function App() {
     readSidebarPref('sideboard.leftSidebar', true),
   );
   const [rightSidebarOpen, setRightSidebarOpen] = useState(() =>
-    readSidebarPref('sideboard.rightSidebar', true),
+    readRightSidebarOpen(null, true),
   );
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() =>
     readSidebarWidth(
@@ -241,42 +245,6 @@ export function App() {
       return next;
     });
   }
-
-  function toggleRightSidebar() {
-    setRightSidebarOpen((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem('sideboard.rightSidebar', next ? '1' : '0');
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  }
-
-  const closeRightSidebarIfOpen = useCallback(() => {
-    setRightSidebarOpen((v) => {
-      if (!v) return v;
-      try {
-        localStorage.setItem('sideboard.rightSidebar', '0');
-      } catch {
-        // ignore
-      }
-      return false;
-    });
-  }, []);
-
-  const openRightSidebarIfClosed = useCallback(() => {
-    setRightSidebarOpen((v) => {
-      if (v) return v;
-      try {
-        localStorage.setItem('sideboard.rightSidebar', '1');
-      } catch {
-        // ignore
-      }
-      return true;
-    });
-  }, []);
 
   const refresh = useCallback(async () => {
     const [all, rt, ws] = await Promise.all([
@@ -455,6 +423,41 @@ export function App() {
     () => threads.find((t) => t.id === selectedId) ?? archived.find((t) => t.id === selectedId) ?? null,
     [threads, archived, selectedId],
   );
+
+  const rightSidebarWorkspaceKey = useMemo(() => {
+    if (!selected || isGlobalThread(selected)) return null;
+    return selected.repoPath || null;
+  }, [selected]);
+
+  // Restore per-workspace open/closed when switching projects.
+  useEffect(() => {
+    if (!rightSidebarWorkspaceKey) return;
+    setRightSidebarOpen(readRightSidebarOpen(rightSidebarWorkspaceKey, true));
+  }, [rightSidebarWorkspaceKey]);
+
+  const toggleRightSidebar = useCallback(() => {
+    setRightSidebarOpen((v) => {
+      const next = !v;
+      writeRightSidebarOpen(rightSidebarWorkspaceKey, next);
+      return next;
+    });
+  }, [rightSidebarWorkspaceKey]);
+
+  const closeRightSidebarIfOpen = useCallback(() => {
+    setRightSidebarOpen((v) => {
+      if (!v) return v;
+      writeRightSidebarOpen(rightSidebarWorkspaceKey, false);
+      return false;
+    });
+  }, [rightSidebarWorkspaceKey]);
+
+  const openRightSidebarIfClosed = useCallback(() => {
+    setRightSidebarOpen((v) => {
+      if (v) return v;
+      writeRightSidebarOpen(rightSidebarWorkspaceKey, true);
+      return true;
+    });
+  }, [rightSidebarWorkspaceKey]);
 
   // File tabs are scoped to the active worktree; URL tabs stay open across worktrees.
   useEffect(() => {
