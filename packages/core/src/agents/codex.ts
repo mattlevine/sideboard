@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
+import { extractJsonErrorMessage } from './error-detail.js';
 import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput, normalizeTurnInput } from './turn-input.js';
 import { permissionMode } from './types.js';
@@ -190,29 +191,73 @@ export const codexAdapter: AgentAdapter = {
     if (!trimmed) return null;
     try {
       const obj = JSON.parse(trimmed) as Record<string, unknown>;
+      const type = typeof obj.type === 'string' ? obj.type : '';
+
+      // Failures first — never let session_id short-circuit an error event.
+      if (type === 'turn.failed' || type === 'turn_failed') {
+        const detail =
+          extractJsonErrorMessage(obj) ||
+          extractJsonErrorMessage((obj.error as Record<string, unknown>) ?? {}) ||
+          'Codex turn failed';
+        return { type: 'stderr', data: detail };
+      }
+      if (type === 'error') {
+        const detail = extractJsonErrorMessage(obj) || trimmed;
+        // Non-fatal reconnect notices — ignore for lastError / chat noise.
+        if (/^reconnecting\.\.\./i.test(detail)) return null;
+        return { type: 'stderr', data: detail };
+      }
+      if (typeof obj.item === 'object' && obj.item !== null) {
+        const item = obj.item as {
+          type?: string;
+          text?: string;
+          message?: string;
+          status?: string;
+        };
+        if (item.type === 'error') {
+          const detail = item.message?.trim() || extractJsonErrorMessage(obj) || 'Codex item error';
+          // Stream-lag warnings are non-fatal; still surface but prefer real failures later.
+          return { type: 'stderr', data: detail };
+        }
+        if (item.type === 'agent_message' && item.text) {
+          return { type: 'stdout', data: item.text };
+        }
+        if (item.status === 'failed') {
+          const detail =
+            item.message?.trim() ||
+            extractJsonErrorMessage(item as Record<string, unknown>) ||
+            `Codex ${item.type ?? 'item'} failed`;
+          return { type: 'stderr', data: detail };
+        }
+      }
+
       const sid =
         (typeof obj.session_id === 'string' && obj.session_id) ||
         (typeof obj.thread_id === 'string' && obj.thread_id) ||
         (typeof (obj as { session?: { id?: string } }).session?.id === 'string' &&
           (obj as { session: { id: string } }).session.id);
-      if (sid) return { type: 'session_id', data: sid };
+      if (sid && (type === 'thread.started' || type === 'session' || !type)) {
+        return { type: 'session_id', data: sid };
+      }
+      if (sid && type.endsWith('.started')) {
+        return { type: 'session_id', data: sid };
+      }
 
-      if (obj.type === 'turn.completed' || obj.type === 'turn_completed') {
+      if (type === 'turn.completed' || type === 'turn_completed') {
         const usage = usageFromCodex((obj as { usage?: CodexUsage }).usage);
         return usage ? { type: 'usage', data: usage } : null;
       }
 
-      if (typeof obj.item === 'object' && obj.item !== null) {
-        const item = obj.item as { type?: string; text?: string };
-        if (item.type === 'agent_message' && item.text) {
-          return { type: 'stdout', data: item.text };
-        }
-      }
-      if (typeof obj.content === 'string') {
+      if (typeof obj.content === 'string' && obj.content.trim()) {
         return { type: 'stdout', data: obj.content };
       }
-      return { type: 'stdout', data: trimmed };
+      // Avoid dumping unknown JSON blobs into the chat / lastError path.
+      return null;
     } catch {
+      // Plain stderr-ish lines from the CLI (non-JSON).
+      if (/error|failed|unauthorized|quota|limit/i.test(trimmed)) {
+        return { type: 'stderr', data: trimmed };
+      }
       return { type: 'stdout', data: line };
     }
   },

@@ -373,6 +373,21 @@ export function RightSidebar({
     // Intentionally omit thread.updatedAt — agent turns must not re-hit GraphQL.
   }, [loadPrMeta, thread.prUrl, thread.branchName]);
 
+  // After a turn ends, re-check commits/push state and whether a PR now exists.
+  useEffect(() => {
+    const off = window.sideboard.onEvent((event) => {
+      if (event.type !== 'turn_finished') return;
+      if (event.threadId !== thread.id) return;
+      reloadDiff();
+      void loadPrMeta().then(() => {
+        // getPrMeta may persist a newly discovered prUrl — refresh thread props.
+        onRefresh();
+      });
+      if (upper === 'checks') void loadPrChecks();
+    });
+    return off;
+  }, [thread.id, reloadDiff, loadPrMeta, loadPrChecks, upper, onRefresh]);
+
   useEffect(() => {
     if (upper !== 'checks') return;
     void loadPrChecks();

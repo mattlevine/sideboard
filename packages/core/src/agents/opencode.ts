@@ -1,5 +1,6 @@
 import { run } from '../git/run.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
+import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
 import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
@@ -174,6 +175,17 @@ export const opencodeAdapter: AgentAdapter = {
     if (!trimmed) return null;
     try {
       const obj = JSON.parse(trimmed) as Record<string, unknown>;
+
+      // Failures first — never let session_id short-circuit an error event.
+      if (obj.type === 'error') {
+        const detail =
+          extractJsonErrorMessage(obj) ||
+          formatUnknownDetail(obj.error) ||
+          formatUnknownDetail(obj.message) ||
+          trimmed;
+        return { type: 'stderr', data: detail };
+      }
+
       const sid =
         (typeof obj.sessionID === 'string' && obj.sessionID) ||
         (typeof obj.sessionId === 'string' && obj.sessionId) ||
@@ -222,12 +234,6 @@ export const opencodeAdapter: AgentAdapter = {
           content: part?.output ?? part?.content ?? (obj as { output?: string; content?: string }).output ?? (obj as { content?: string }).content,
         };
       }
-      if (obj.type === 'error') {
-        return {
-          type: 'stderr',
-          data: String((obj as { error?: string }).error ?? trimmed),
-        };
-      }
       // Usage is reported incrementally per agentic step; spawn sums these.
       if (obj.type === 'step_finish' || obj.type === 'step-finish') {
         const part = (obj as { part?: { tokens?: OpencodeTokens } }).part;
@@ -236,8 +242,12 @@ export const opencodeAdapter: AgentAdapter = {
         );
         return usage ? { type: 'usage', data: usage } : null;
       }
-      return { type: 'stdout', data: trimmed };
+      // Avoid dumping unknown JSON into the chat transcript / lastError path.
+      return null;
     } catch {
+      if (/error|failed|unauthorized|quota|limit/i.test(trimmed)) {
+        return { type: 'stderr', data: trimmed };
+      }
       return { type: 'stdout', data: line };
     }
   },

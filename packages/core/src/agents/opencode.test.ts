@@ -85,4 +85,25 @@ describe('opencodeAdapter.parseEvent', () => {
     const event = opencodeAdapter.parseEvent(JSON.stringify({ sessionID: 'ses_123' }));
     expect(event).toEqual({ type: 'session_id', data: 'ses_123' });
   });
+
+  it('maps error events to stderr (including nested objects)', () => {
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({ type: 'error', error: { message: 'Unauthorized' } }),
+      ),
+    ).toEqual({ type: 'stderr', data: 'Unauthorized' });
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'error',
+          sessionID: 'ses_keep',
+          message: 'Credit balance is too low',
+        }),
+      ),
+    ).toEqual({ type: 'stderr', data: 'Credit balance is too low' });
+  });
+
+  it('does not dump unknown JSON into stdout', () => {
+    expect(opencodeAdapter.parseEvent(JSON.stringify({ type: 'mystery', foo: 1 }))).toBeNull();
+  });
 });

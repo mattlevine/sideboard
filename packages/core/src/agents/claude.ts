@@ -6,6 +6,7 @@ import {
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { mcpAllowTools, mcpAuthWarnings, parseMcpList } from './claude-mcp.js';
+import { looksLikeAgentFailureMessage } from './error-detail.js';
 import {
   brightsyMcpAllowedTools,
   buildInjectedMcpServers,
@@ -89,6 +90,40 @@ function usageFromClaude(usage: ClaudeUsage | undefined): TokenUsage | null {
       ? Number(usage.cache_creation_input_tokens)
       : undefined,
   };
+}
+
+/** Pull a human-readable error out of a Claude stream-json `result` event. */
+export function claudeResultErrorDetail(obj: Record<string, unknown>): string | null {
+  const isError =
+    Boolean(obj.is_error) ||
+    (typeof obj.subtype === 'string' && /^error/i.test(obj.subtype));
+
+  const fromResult = typeof obj.result === 'string' ? obj.result.trim() : '';
+  // Session/weekly limits often arrive as normal result text (no is_error), then exit 1.
+  if (fromResult && (isError || looksLikeAgentFailureMessage(fromResult))) {
+    return fromResult;
+  }
+  if (!isError) return null;
+
+  const errors = obj.errors;
+  if (Array.isArray(errors)) {
+    const parts = errors
+      .map((e) => {
+        if (typeof e === 'string') return e.trim();
+        if (e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string') {
+          return (e as { message: string }).message.trim();
+        }
+        return '';
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join('; ');
+  }
+
+  if (typeof obj.error === 'string' && obj.error.trim()) return obj.error.trim();
+  if (typeof obj.subtype === 'string' && obj.subtype) {
+    return obj.subtype.replace(/^error[_-]?/i, '').replace(/_/g, ' ') || 'Claude turn failed';
+  }
+  return 'Claude turn failed';
 }
 
 function eventsFromContentBlocks(blocks: ContentBlock[] | undefined): AgentEvent[] {
@@ -362,10 +397,17 @@ export const claudeAdapter: AgentAdapter = {
 
       // Final result mirrors assistant text; spawn dedupes when both appear. It also
       // carries the turn's total usage (aggregated across every API call Claude made).
+      // Error results (credits, limits, API failures, …) must land on stderr so
+      // lastError isn't just a bare "exit 1".
       if (obj.type === 'result') {
         const events: AgentEvent[] = [];
-        const text = (obj as { result?: unknown }).result;
-        if (typeof text === 'string' && text) events.push({ type: 'stdout', data: text });
+        const errorDetail = claudeResultErrorDetail(obj);
+        if (errorDetail) {
+          events.push({ type: 'stderr', data: errorDetail });
+        } else {
+          const text = (obj as { result?: unknown }).result;
+          if (typeof text === 'string' && text) events.push({ type: 'stdout', data: text });
+        }
         const usage = usageFromClaude((obj as { usage?: ClaudeUsage }).usage);
         if (usage) events.push({ type: 'usage', data: usage });
         if (events.length === 0) return null;

@@ -218,6 +218,56 @@ export interface ScriptHandle {
   child: ResultPromise;
 }
 
+/** Kill a workspace script and its descendants (pnpm → electron-vite → Electron, etc.). */
+function killScriptTree(child: ResultPromise, ports: number[] = []): void {
+  const pid = child.pid;
+  if (pid) {
+    try {
+      if (process.platform === 'win32') {
+        void execa('taskkill', ['/pid', String(pid), '/T', '/F'], { reject: false });
+      } else {
+        // Negative PID targets the process group created by `detached: true`.
+        process.kill(-pid, 'SIGTERM');
+        setTimeout(() => {
+          try {
+            process.kill(-pid, 'SIGKILL');
+          } catch {
+            // already exited
+          }
+        }, 2500).unref?.();
+      }
+    } catch {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // ignore
+      }
+    }
+  }
+  // Backstop: Electron sometimes leaves the shell's process group; free listeners
+  // on the ports we allocated for this run.
+  for (const port of ports) {
+    if (!Number.isFinite(port) || port <= 0) continue;
+    if (process.platform === 'win32') {
+      void execa(
+        'powershell',
+        [
+          '-NoProfile',
+          '-Command',
+          `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
+        ],
+        { reject: false },
+      );
+    } else {
+      void execa(
+        'zsh',
+        ['-lc', `pids=$(lsof -tiTCP:${port} -sTCP:LISTEN 2>/dev/null); [ -n "$pids" ] && kill -TERM $pids 2>/dev/null; true`],
+        { reject: false },
+      );
+    }
+  }
+}
+
 async function spawnWorkspaceScript(
   command: string,
   opts: {
@@ -246,20 +296,18 @@ async function spawnWorkspaceScript(
     cwd: opts.worktreePath,
     reject: false,
     env,
+    // Own process group so Stop can tear down the whole tree (not just the shell).
+    // There is no settings.toml `stop=` / teardown hook for run scripts.
+    ...(process.platform === 'win32' ? {} : { detached: true }),
   });
 
   pipeLines(child.stdout, opts.onLine);
   pipeLines(child.stderr, opts.onLine);
 
+  const ports = opts.ports ?? [];
   return {
     pid: child.pid,
-    kill: () => {
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        // ignore
-      }
-    },
+    kill: () => killScriptTree(child, ports),
     done: child.then((r) => r.exitCode ?? null),
     child,
   };

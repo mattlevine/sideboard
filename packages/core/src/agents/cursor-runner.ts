@@ -13,6 +13,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { appDataDir } from '../store/paths.js';
+import { formatUnknownDetail } from './error-detail.js';
 import { cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
 
 function emit(event: unknown): void {
@@ -103,12 +104,17 @@ async function main(): Promise<number> {
 
       const result = await run.wait();
       if (result.status === 'error') {
+        const detail = formatUnknownDetail(result.error);
         emit({
           type: 'stderr',
-          data: `Cursor run failed (${result.id})${result.error ? `: ${String(result.error)}` : ''}`,
+          data: detail
+            ? `Cursor run failed (${result.id}): ${detail}`
+            : `Cursor run failed (${result.id})`,
         });
         return 2;
       }
+      // User stop / abort — not a failure for lastError.
+      if (result.status === 'cancelled') return 0;
       return 0;
     } finally {
       await agent[Symbol.asyncDispose]();

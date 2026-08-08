@@ -84,6 +84,9 @@ export function Sidebar({
     threadId: string;
     title: string;
     chatCount: number;
+    /** When set, archive every id (orchestration group). */
+    threadIds?: string[];
+    removesWorktree?: boolean;
   } | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState<{
@@ -191,16 +194,14 @@ export function Sidebar({
                 <span className="workspace-glyph" aria-hidden />
                 <span className="workspace-name">Orchestration</span>
               </button>
-              {globalThreads.length === 0 && (
-                <button
-                  type="button"
-                  className="icon-btn"
-                  title="New orchestration chat"
-                  onClick={() => onNew(undefined, 'orchestration')}
-                >
-                  +
-                </button>
-              )}
+              <button
+                type="button"
+                className="icon-btn"
+                title="New orchestration chat"
+                onClick={() => onNew(undefined, 'orchestration')}
+              >
+                +
+              </button>
             </div>
             {globalThreads.length === 0 ? (
               <div className="thread-meta" style={{ padding: '4px 8px' }}>
@@ -248,6 +249,26 @@ export function Sidebar({
                           {primary.status !== 'idle' ? ` · ${primary.status}` : ''}
                         </div>
                       </div>
+                      {onArchive && (
+                        <button
+                          type="button"
+                          className="icon-btn worktree-remove-btn"
+                          title="Archive orchestration chats"
+                          aria-label="Archive orchestration chats"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setArchiveConfirm({
+                              threadId: primary.id,
+                              title: 'Orchestration',
+                              chatCount: globalThreads.length,
+                              threadIds: globalThreads.map((t) => t.id),
+                              removesWorktree: false,
+                            });
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -438,7 +459,7 @@ export function Sidebar({
                 mode="archive"
                 repoName={archiveConfirm.title}
                 selectionHint={
-                  archiveConfirm.chatCount <= 1
+                  archiveConfirm.chatCount <= 1 && archiveConfirm.removesWorktree !== false
                     ? 'removing worktree'
                     : `${archiveConfirm.chatCount} chats`
                 }
@@ -446,10 +467,14 @@ export function Sidebar({
             ) : null}
             <div className={`create-modal-content${archiveBusy ? ' veiled' : ''}`}>
               <h3 id="archive-worktree-title" className="merge-modal-title">
-                Archive worktree?
+                {archiveConfirm.removesWorktree === false
+                  ? 'Archive orchestration?'
+                  : 'Archive worktree?'}
               </h3>
               <p className="confirm-dialog-message">
-                {closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount)}
+                {closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount, {
+                  removesWorktree: archiveConfirm.removesWorktree !== false,
+                })}
               </p>
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
                 <button
@@ -466,9 +491,15 @@ export function Sidebar({
                   className="primary"
                   disabled={archiveBusy}
                   onClick={() => {
-                    const id = archiveConfirm.threadId;
+                    const ids = archiveConfirm.threadIds?.length
+                      ? archiveConfirm.threadIds
+                      : [archiveConfirm.threadId];
                     setArchiveBusy(true);
-                    void Promise.resolve(onArchive?.(id))
+                    void (async () => {
+                      for (const id of ids) {
+                        await Promise.resolve(onArchive?.(id));
+                      }
+                    })()
                       .then(() => {
                         setArchiveConfirm(null);
                       })

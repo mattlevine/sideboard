@@ -118,6 +118,23 @@ describe('cursorSdkMessageToEvents', () => {
       },
     ]);
   });
+
+  it('maps ERROR status and error events to stderr', () => {
+    expect(
+      cursorSdkMessageToEvents({
+        type: 'status',
+        status: 'ERROR',
+        message: 'Invalid User API Key' as never,
+      }),
+    ).toEqual([{ type: 'stderr', data: 'Invalid User API Key' }]);
+
+    expect(
+      cursorSdkMessageToEvents({
+        type: 'error',
+        error: { message: 'Model unavailable' },
+      } as never),
+    ).toEqual([{ type: 'stderr', data: 'Model unavailable' }]);
+  });
 });
 
 describe('parseCursorRunnerLine', () => {

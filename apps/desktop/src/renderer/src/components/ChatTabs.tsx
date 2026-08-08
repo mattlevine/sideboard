@@ -256,7 +256,7 @@ export function ChatTabs({
                   )}
                 </>
               )}
-              {onCloseTab && chats.length > 1 && (
+              {onCloseTab && (
                 <button
                   type="button"
                   className="chat-tab-close"

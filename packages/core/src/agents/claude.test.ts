@@ -221,6 +221,48 @@ describe('claudeAdapter.parseEvent', () => {
     expect(event).toEqual({ type: 'stdout', data: 'Hi there!' });
   });
 
+  it('maps error result events to stderr (credits / limits / API failures)', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'error_during_execution',
+        is_error: true,
+        result: 'Credit balance is too low',
+        session_id: 'sess-123',
+      }),
+    );
+    expect(event).toEqual({ type: 'stderr', data: 'Credit balance is too low' });
+  });
+
+  it('maps session-limit result text to stderr even without is_error', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        result:
+          "You've hit your session limit · resets 7:10pm (America/Los_Angeles)",
+        session_id: 'sess-123',
+      }),
+    );
+    expect(event).toEqual({
+      type: 'stderr',
+      data: "You've hit your session limit · resets 7:10pm (America/Los_Angeles)",
+    });
+  });
+
+  it('maps error subtype without result text to a readable stderr', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'error_max_turns',
+        is_error: true,
+        session_id: 'sess-123',
+      }),
+    );
+    expect(event).toEqual({ type: 'stderr', data: 'max turns' });
+  });
+
   it('extracts usage from the final result event', () => {
     const event = claudeAdapter.parseEvent(
       JSON.stringify({

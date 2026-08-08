@@ -1,4 +1,5 @@
 import type { AgentEvent, TokenUsage } from '../types/thread.js';
+import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
 
 /** JSON payload written to the Cursor runner on stdin. */
 export type CursorTurnRequest = {
@@ -119,10 +120,22 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
   }
 
   if (msg.type === 'status' && msg.status === 'ERROR') {
+    const rawMessage = (msg as { message?: unknown }).message;
     const detail =
-      (msg as { message?: string }).message ||
+      (typeof rawMessage === 'string' ? rawMessage.trim() : '') ||
+      extractJsonErrorMessage(msg as unknown as Record<string, unknown>) ||
+      formatUnknownDetail((msg as { error?: unknown }).error) ||
       msg.text ||
       'Cursor run entered ERROR status';
+    return [{ type: 'stderr', data: detail }];
+  }
+
+  if (msg.type === 'error') {
+    const detail =
+      extractJsonErrorMessage(msg as unknown as Record<string, unknown>) ||
+      formatUnknownDetail((msg as { error?: unknown }).error) ||
+      msg.text ||
+      'Cursor run error';
     return [{ type: 'stderr', data: detail }];
   }
 

@@ -13,6 +13,7 @@ import {
   type BrightsyChatTargets,
   type BrightsyTeamTargets,
 } from './brightsy-targets.js';
+import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
 import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
@@ -58,7 +59,11 @@ export function parseBrightsyCliLine(line: string): AgentEvent | AgentEvent[] | 
       return { type: 'thinking', data: obj.text };
     }
     if (obj.type === 'error') {
-      const msg = String(obj.error ?? trimmed);
+      const msg =
+        extractJsonErrorMessage(obj) ||
+        formatUnknownDetail(obj.error) ||
+        formatUnknownDetail(obj.message) ||
+        trimmed;
       return [
         { type: 'stderr', data: msg },
         { type: 'stdout', data: `Error: ${msg}` },
@@ -113,6 +118,12 @@ export function parseBrightsyCliLine(line: string): AgentEvent | AgentEvent[] | 
       /"type"\s*:\s*"(tool_use|tool_result|tool|text|thinking|usage|done|error)"/.test(trimmed)
     ) {
       return null;
+    }
+    if (/error|failed|unauthorized|quota|limit|not logged in/i.test(trimmed)) {
+      return [
+        { type: 'stderr', data: trimmed },
+        { type: 'stdout', data: `Error: ${trimmed}` },
+      ] satisfies AgentEvent[];
     }
     return { type: 'stdout', data: line };
   }

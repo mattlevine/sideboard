@@ -734,7 +734,9 @@ function registerIpc(): void {
   ipcMain.handle('ensureCloudCoordinator', (_e, agent: AgentKind) =>
     ensureCloudCoordinator(agent),
   );
-  ipcMain.handle('stopThread', (_e, ref: string) => orch.stop(ref));
+  ipcMain.handle('stopThread', (_e, ref: string) =>
+    orch.stop(ref, { clearQueue: false }),
+  );
   ipcMain.handle(
     'getDiff',
     (_e, ref: string, opts?: { scope?: DiffScope; commitSha?: string | null }) =>

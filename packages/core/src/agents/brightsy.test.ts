@@ -132,6 +132,17 @@ describe('brightsyAdapter.parseEvent', () => {
     ]);
   });
 
+  it('maps nested error objects to a readable message', () => {
+    expect(
+      brightsyAdapter.parseEvent(
+        JSON.stringify({ type: 'error', error: { message: 'Invalid API key' } }),
+      ),
+    ).toEqual([
+      { type: 'stderr', data: 'Invalid API key' },
+      { type: 'stdout', data: 'Error: Invalid API key' },
+    ]);
+  });
+
   it('extracts token usage', () => {
     const event = brightsyAdapter.parseEvent(
       JSON.stringify({

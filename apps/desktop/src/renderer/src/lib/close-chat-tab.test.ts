@@ -7,6 +7,15 @@ describe('closeChatTabMessage', () => {
     expect(closeChatTabMessage('Fix sidebar', 1)).toContain('Fix sidebar');
   });
 
+  it('skips worktree warning for global / orchestration chats', () => {
+    expect(closeChatTabMessage('Monaco', 1, { removesWorktree: false })).toContain(
+      'Settings → History',
+    );
+    expect(closeChatTabMessage('Monaco', 1, { removesWorktree: false })).not.toContain(
+      'worktree',
+    );
+  });
+
   it('mentions History when other tabs remain', () => {
     expect(closeChatTabMessage('Research', 2)).toContain('Settings → History');
     expect(closeChatTabMessage('Research', 2)).not.toContain('last tab');

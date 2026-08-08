@@ -95,4 +95,40 @@ describe('codexAdapter.parseEvent', () => {
     );
     expect(event).toEqual({ type: 'session_id', data: 'thread-123' });
   });
+
+  it('maps turn.failed to stderr with nested error message', () => {
+    const event = codexAdapter.parseEvent(
+      JSON.stringify({
+        type: 'turn.failed',
+        error: { message: 'Invalid User API Key' },
+      }),
+    );
+    expect(event).toEqual({ type: 'stderr', data: 'Invalid User API Key' });
+  });
+
+  it('maps type=error to stderr and ignores Reconnecting notices', () => {
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({ type: 'error', message: 'quota exceeded for org' }),
+      ),
+    ).toEqual({ type: 'stderr', data: 'quota exceeded for org' });
+    expect(
+      codexAdapter.parseEvent(JSON.stringify({ type: 'error', message: 'Reconnecting...' })),
+    ).toBeNull();
+  });
+
+  it('maps failed items to stderr', () => {
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.completed',
+          item: { type: 'command_execution', status: 'failed', message: 'exit 127' },
+        }),
+      ),
+    ).toEqual({ type: 'stderr', data: 'exit 127' });
+  });
+
+  it('does not dump unknown JSON into stdout', () => {
+    expect(codexAdapter.parseEvent(JSON.stringify({ type: 'mystery', foo: 1 }))).toBeNull();
+  });
 });

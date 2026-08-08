@@ -109,11 +109,54 @@ interface Props {
   onRightColumnClose?: () => void;
 }
 
+const queuedIconStroke = {
+  fill: 'none' as const,
+  stroke: 'currentColor',
+  strokeWidth: 1.75,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
+function QueuedIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden>
+      {children}
+    </svg>
+  );
+}
+
+function QueuedSendNowIcon() {
+  return (
+    <QueuedIcon>
+      <polygon points="5 3 19 12 5 21 5 3" {...queuedIconStroke} fill="currentColor" stroke="none" />
+    </QueuedIcon>
+  );
+}
+
+function QueuedEditIcon() {
+  return (
+    <QueuedIcon>
+      <path d="M12 20h9" {...queuedIconStroke} />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" {...queuedIconStroke} />
+    </QueuedIcon>
+  );
+}
+
+function QueuedRemoveIcon() {
+  return (
+    <QueuedIcon>
+      <path d="M18 6 6 18M6 6l12 12" {...queuedIconStroke} />
+    </QueuedIcon>
+  );
+}
+
+const EMPTY_LIVE_PARTS: MessagePart[] = [];
+
 export function ThreadPanel({
   thread,
   worktreeChats,
   liveOutput,
-  liveParts = [],
+  liveParts = EMPTY_LIVE_PARTS,
   turnStartedAt,
   onRefresh,
   onSelectChat,
@@ -192,7 +235,8 @@ export function ThreadPanel({
     rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??
     rightSession?.tabs[0] ??
     null;
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
@@ -351,8 +395,29 @@ export function ThreadPanel({
     return () => window.cancelAnimationFrame(frame);
   }, [thread.id]);
 
+  // Reset stick-to-bottom when switching chats (show latest for the newly opened thread).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    stickToBottomRef.current = true;
+  }, [thread.id]);
+
+  useEffect(() => {
+    const el = chatRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickToBottomRef.current = gap < 80;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [thread.id]);
+
+  // Scroll only this chat's overflow container — never scrollIntoView (that
+  // yanks shared ancestors when another thread's live chunks re-render App).
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const el = chatRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
   }, [thread.messages, thread.queue, liveOutput, liveParts, pendingUser]);
 
   useEffect(() => {
@@ -539,6 +604,14 @@ export function ThreadPanel({
 
   async function removeQueued(index: number) {
     setQueueBusyIndex(index);
+    // Remap or clear the open editor before the queue shifts.
+    if (editingQueueIndex !== null) {
+      if (editingQueueIndex === index) {
+        cancelEditQueued();
+      } else if (editingQueueIndex > index) {
+        setEditingQueueIndex(editingQueueIndex - 1);
+      }
+    }
     try {
       await window.sideboard.removeQueuedMessage(thread.id, index);
       onRefresh();
@@ -551,6 +624,8 @@ export function ThreadPanel({
 
   async function sendQueuedNow(index: number) {
     setQueueBusyIndex(index);
+    // Promote reorders the queue — drop any open edit so we don't save against the wrong item.
+    cancelEditQueued();
     try {
       await window.sideboard.sendQueuedMessageNow(thread.id, index);
       onRefresh();
@@ -1060,7 +1135,7 @@ export function ThreadPanel({
                 mode="archive"
                 repoName={closeConfirm.title.trim() || 'Untitled'}
                 selectionHint={
-                  closeConfirm.chatCount <= 1
+                  closeConfirm.chatCount <= 1 && !isGlobalThread(thread)
                     ? 'removing worktree'
                     : `${closeConfirm.chatCount} chats`
                 }
@@ -1071,7 +1146,9 @@ export function ThreadPanel({
                 Close chat tab?
               </h3>
               <p className="confirm-dialog-message">
-                {closeChatTabMessage(closeConfirm.title, closeConfirm.chatCount)}
+                {closeChatTabMessage(closeConfirm.title, closeConfirm.chatCount, {
+                  removesWorktree: !isGlobalThread(thread),
+                })}
               </p>
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
                 <button
@@ -1211,7 +1288,7 @@ export function ThreadPanel({
           }}
         />
       ) : (
-        <div className="chat">
+        <div className="chat" ref={chatRef}>
           {thread.messages.length === 0 &&
             !pendingUser &&
             !showStreaming &&
@@ -1349,86 +1426,100 @@ export function ThreadPanel({
               </div>
             </>
           )}
-          {turnInFlight && (thread.queue.length > 0 || pendingOptimistic) && (
-            <div className="queued-messages">
-              {thread.queue.map((text, i) => (
-                <div key={`queued-${i}`} className="msg user queued">
-                  {editingQueueIndex === i ? (
-                    <div className="queued-msg-edit">
-                      <textarea
-                        autoFocus
-                        rows={Math.min(6, Math.max(2, text.split('\n').length))}
-                        value={queueEditText}
-                        onChange={(e) => setQueueEditText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            void saveEditQueued(i);
-                          }
-                          if (e.key === 'Escape') {
-                            e.preventDefault();
-                            cancelEditQueued();
-                          }
-                        }}
-                      />
-                      <div className="queued-msg-edit-actions">
-                        <button type="button" onClick={cancelEditQueued}>
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          className="primary"
-                          disabled={queueBusyIndex === i || !queueEditText.trim()}
-                          onClick={() => void saveEditQueued(i)}
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {text}
-                      <div className="queued-msg-actions">
-                        <button
-                          type="button"
-                          title="Send now — interrupts the current response"
-                          disabled={queueBusyIndex === i}
-                          onClick={() => void sendQueuedNow(i)}
-                        >
-                          Send now
-                        </button>
-                        <button
-                          type="button"
-                          title="Edit"
-                          disabled={queueBusyIndex === i}
-                          onClick={() => startEditQueued(i, text)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          title="Remove"
-                          disabled={queueBusyIndex === i}
-                          onClick={() => void removeQueued(i)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-              {pendingOptimistic && (
-                <div className="msg user queued pending">{pendingOptimistic}</div>
-              )}
-            </div>
-          )}
           {thread.lastError && (
             <div className="msg error" style={{ color: 'var(--err)' }}>
               {thread.lastError}
             </div>
           )}
-          <div ref={bottomRef} />
+        </div>
+      )}
+
+      {(thread.queue.length > 0 || pendingOptimistic) && (
+        <div className="queued-messages" aria-label="Queued messages">
+          <div className="queued-messages-label">Queued</div>
+          <div className="queued-messages-list">
+            {thread.queue.map((text, i) => (
+              <div
+                key={`queued-${i}`}
+                className={`queued-msg${editingQueueIndex === i ? ' editing' : ''}`}
+              >
+                {editingQueueIndex === i ? (
+                  <div className="queued-msg-edit">
+                    <textarea
+                      autoFocus
+                      rows={Math.min(6, Math.max(2, text.split('\n').length))}
+                      value={queueEditText}
+                      onChange={(e) => setQueueEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          void saveEditQueued(i);
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          cancelEditQueued();
+                        }
+                      }}
+                    />
+                    <div className="queued-msg-edit-actions">
+                      <button type="button" onClick={cancelEditQueued}>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={queueBusyIndex === i || !queueEditText.trim()}
+                        onClick={() => void saveEditQueued(i)}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="queued-msg-text">{text}</div>
+                    <div className="queued-msg-actions">
+                      <button
+                        type="button"
+                        className="queued-msg-icon-btn"
+                        title="Send now — interrupts the current response"
+                        aria-label="Send now"
+                        disabled={queueBusyIndex === i}
+                        onClick={() => void sendQueuedNow(i)}
+                      >
+                        <QueuedSendNowIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className="queued-msg-icon-btn"
+                        title="Edit"
+                        aria-label="Edit"
+                        disabled={queueBusyIndex === i}
+                        onClick={() => startEditQueued(i, text)}
+                      >
+                        <QueuedEditIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className="queued-msg-icon-btn danger"
+                        title="Remove"
+                        aria-label="Remove"
+                        disabled={queueBusyIndex === i}
+                        onClick={() => void removeQueued(i)}
+                      >
+                        <QueuedRemoveIcon />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+            {pendingOptimistic && (
+              <div className="queued-msg pending">
+                <div className="queued-msg-text">{pendingOptimistic}</div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

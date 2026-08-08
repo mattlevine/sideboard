@@ -55,6 +55,58 @@ describe('Orchestrator.stop force-stop', () => {
     expect(stopped.queue).toEqual(['keep-me']);
   });
 
+  it('halts drain when preserving the queue so the next prompt does not auto-start', async () => {
+    const thread = seedThread(['next-prompt']);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      haltDrain: Set<string>;
+      draining: Set<string>;
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      startingTurns: Set<string>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+
+    let resolveDone!: () => void;
+    const done = new Promise<void>((resolve) => {
+      resolveDone = resolve;
+    });
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill: () => resolveDone(),
+      done: done.then(() => ({
+        exitCode: 143,
+        sessionId: null,
+        assistantText: '',
+        parts: [],
+        usage: null,
+      })),
+    });
+    internal.startingTurns.add(thread.id);
+    internal.draining.add(thread.id);
+
+    orch.stop(thread.id, { clearQueue: false });
+    expect(internal.haltDrain.has(thread.id)).toBe(true);
+    expect(readThread(thread.id)?.queue).toEqual(['next-prompt']);
+
+    // Simulate drain loop checking halt after the turn unwinds.
+    internal.activeTurns.delete(thread.id);
+    internal.startingTurns.delete(thread.id);
+    internal.draining.delete(thread.id);
+    await internal.drainQueue(thread.id);
+    expect(readThread(thread.id)?.queue).toEqual(['next-prompt']);
+    expect(readThread(thread.id)?.status).toBe('stopped');
+  });
+
+  it('continues the queue when continueQueue is true (Send now)', () => {
+    const thread = seedThread(['keep-me']);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as { haltDrain: Set<string> };
+    internal.haltDrain.add(thread.id);
+    orch.stop(thread.id, { clearQueue: false, continueQueue: true });
+    expect(internal.haltDrain.has(thread.id)).toBe(false);
+    expect(readThread(thread.id)?.queue).toEqual(['keep-me']);
+  });
+
   it('marks stoppedTurns and kills the in-flight handle', () => {
     const thread = seedThread(['queued-after']);
     const orch = new Orchestrator();

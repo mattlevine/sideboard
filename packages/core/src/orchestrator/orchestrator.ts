@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage } from '../agents/error-detail.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -133,6 +134,11 @@ export class Orchestrator {
    * the killed turn's handle.done resolves.
    */
   private readonly stoppedTurns = new Set<string>();
+  /**
+   * Pause drainQueue after the in-flight turn unwinds (Stop with a preserved
+   * queue). Cleared when the user sends or promotes a queued message again.
+   */
+  private readonly haltDrain = new Set<string>();
   /** WIP snapshot SHA at the start of the latest agent turn (per thread). */
   private readonly turnBaselines = new Map<string, string>();
   private maxConcurrent: number;
@@ -236,9 +242,9 @@ export class Orchestrator {
       // Best-effort orphan discovery
     }
 
-    // Drain any persisted queues
+    // Drain any persisted queues (skip stopped — Stop parks the queue until the user resumes).
     for (const thread of listThreads()) {
-      if (thread.queue.length > 0) {
+      if (thread.queue.length > 0 && thread.status !== 'stopped') {
         void this.drainQueue(thread.id);
       }
     }
@@ -314,6 +320,7 @@ export class Orchestrator {
     return withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       const queue = [...current.queue, prompt];
+      this.haltDrain.delete(thread.id);
       updateThread(thread.id, { queue, status: 'queued' });
       this.emit({ type: 'queue_changed', threadId: thread.id, queue });
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'queued' });
@@ -379,6 +386,7 @@ export class Orchestrator {
       const item = current.queue[index]!;
       const rest = current.queue.filter((_, i) => i !== index);
       const queue = [item, ...rest];
+      this.haltDrain.delete(thread.id);
       updateThread(thread.id, { queue });
       this.emit({ type: 'queue_changed', threadId: thread.id, queue });
       return true;
@@ -386,7 +394,7 @@ export class Orchestrator {
     if (!promoted) return this.requireThread(thread.id);
     const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
     if (inFlight) {
-      this.stop(thread.id, { clearQueue: false });
+      this.stop(thread.id, { clearQueue: false, continueQueue: true });
     } else {
       void this.drainQueue(thread.id);
     }
@@ -398,6 +406,10 @@ export class Orchestrator {
     this.draining.add(threadId);
     try {
       while (true) {
+        if (this.haltDrain.has(threadId)) {
+          // Stop preserved the queue — leave it parked until the user resumes.
+          break;
+        }
         const thread = readThread(threadId);
         if (!thread || thread.queue.length === 0) {
           if (thread && thread.status === 'queued') {
@@ -411,7 +423,7 @@ export class Orchestrator {
           await new Promise((r) => setTimeout(r, 250));
           continue;
         }
-        if (this.activeTurns.has(threadId)) {
+        if (this.activeTurns.has(threadId) || this.startingTurns.has(threadId)) {
           await new Promise((r) => setTimeout(r, 100));
           continue;
         }
@@ -612,7 +624,7 @@ export class Orchestrator {
       .join('\n\n---\n\n');
 
     try {
-      let lastStderr = '';
+      const stderrTail: string[] = [];
       const handle = await spawnAgentTurn(
         fresh,
         { cachedPrefix, prompt: agentPrompt },
@@ -621,8 +633,8 @@ export class Orchestrator {
           if (event.type === 'session_id') {
             updateThread(threadId, { sessionId: event.data });
           }
-          if (event.type === 'stderr' && typeof event.data === 'string' && event.data.trim()) {
-            lastStderr = event.data.trim();
+          if (event.type === 'stderr' && typeof event.data === 'string') {
+            pushTurnStderr(stderrTail, event.data);
           }
         },
       );
@@ -650,10 +662,16 @@ export class Orchestrator {
       if (result.sessionId) {
         updateThread(threadId, { sessionId: result.sessionId });
       }
-      if (result.assistantText.trim() || result.parts.length > 0) {
+      const assistantText = result.assistantText.trim();
+      const failureOnlyMessage =
+        result.exitCode !== 0 &&
+        looksLikeAgentFailureMessage(assistantText) &&
+        !result.parts.some((p) => p.type === 'tool' || p.type === 'thinking');
+      // Quota/auth failures already surface as lastError — skip a duplicate agent bubble.
+      if (!failureOnlyMessage && (assistantText || result.parts.length > 0)) {
         appendMessage(threadId, {
           role: 'agent',
-          text: result.assistantText.trim(),
+          text: assistantText,
           parts: result.parts.length > 0 ? result.parts : undefined,
           durationMs: Math.max(0, Date.now() - turnStartedAt),
           usage: result.usage ?? undefined,
@@ -682,9 +700,11 @@ export class Orchestrator {
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         this.emit({ type: 'turn_finished', threadId, exitCode: result.exitCode });
       } else {
-        const failDetail = lastStderr
-          ? `exit ${result.exitCode}: ${lastStderr.slice(0, 500)}`
-          : `exit ${result.exitCode}`;
+        const lastStderr = summarizeTurnStderr(stderrTail);
+        const detail =
+          lastStderr ||
+          (result.exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
+        const failDetail = formatTurnExitError(result.exitCode, detail);
         setStatus(
           threadId,
           result.exitCode === 0 ? 'idle' : 'error',
@@ -721,12 +741,20 @@ export class Orchestrator {
 
   /**
    * Stop an in-flight agent turn.
-   * Default `clearQueue: true` (force-stop): kills the turn AND empties queued prompts
-   * so drainQueue cannot continue / re-start work after an intentional stop. Desktop,
-   * CLI, MCP, and cloud-connect all share this default.
+   *
+   * - Default `clearQueue: true` (force-stop): empties queued prompts so nothing
+   *   resumes. Used by MCP force-stop, archive, and cloud-connect.
+   * - Desktop Stop uses `{ clearQueue: false }` so follow-ups stay editable.
+   * - `continueQueue: true` (Send now): keep the queue and let drainQueue resume
+   *   after the interrupted turn unwinds. Without it, drain pauses until send /
+   *   promote.
    */
-  stop(threadRef: string, opts?: { clearQueue?: boolean }): Thread {
+  stop(
+    threadRef: string,
+    opts?: { clearQueue?: boolean; continueQueue?: boolean },
+  ): Thread {
     const clearQueue = opts?.clearQueue !== false;
+    const continueQueue = opts?.continueQueue === true;
     const thread = this.requireThread(threadRef);
     const inFlight =
       this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
@@ -736,8 +764,14 @@ export class Orchestrator {
       this.stoppedTurns.add(thread.id);
     }
     if (clearQueue && thread.queue.length > 0) {
+      this.haltDrain.delete(thread.id);
       updateThread(thread.id, { queue: [] });
       this.emit({ type: 'queue_changed', threadId: thread.id, queue: [] });
+    } else if (!clearQueue && !continueQueue) {
+      // Preserve queue but do not auto-start the next prompt after this stop.
+      this.haltDrain.add(thread.id);
+    } else if (continueQueue) {
+      this.haltDrain.delete(thread.id);
     }
     const handle = this.activeTurns.get(thread.id);
     if (handle) handle.kill();
@@ -1485,12 +1519,14 @@ export async function startOrchestration(opts: {
   attachments?: Thread['attachments'];
 }): Promise<Thread> {
   const repoPath = opts.repoPath?.trim();
+  const goal = opts.goal.trim();
+  const orch = getOrchestrator();
 
   // Default: Global workspace (no git home). Soccer-team nickname for the
-  // sidebar title; goal stays on sourceRef.
+  // sidebar title; goal stays on sourceRef and is also the first chat turn.
   if (!repoPath || isGlobalRepoPath(repoPath)) {
-    return createGlobalChat({
-      sourceRef: opts.goal,
+    const thread = createGlobalChat({
+      sourceRef: goal,
       agent: opts.agent,
       autonomy: opts.autonomy,
       model: opts.model,
@@ -1498,11 +1534,15 @@ export async function startOrchestration(opts: {
       planMode: opts.planMode,
       attachments: opts.attachments,
     });
+    if (goal) {
+      return orch.send(thread.id, goal);
+    }
+    return thread;
   }
 
   // Legacy: pinned-repo orchestration (real worktree). Prefer Global for new work.
   const { titleFromPrompt } = await import('../threads/title.js');
-  const title = titleFromPrompt(opts.goal) || 'Orchestration';
+  const title = titleFromPrompt(goal) || 'Orchestration';
   const createOpts = {
     agent: opts.agent,
     repoPath,
@@ -1530,9 +1570,13 @@ export async function startOrchestration(opts: {
   });
 
   const { updateThread: upd } = await import('../store/thread-store.js');
-  return upd(thread.id, {
+  const updated = upd(thread.id, {
     sourceType: 'orchestration',
-    sourceRef: opts.goal,
+    sourceRef: goal,
   });
+  if (goal) {
+    return orch.send(updated.id, goal);
+  }
+  return updated;
 }
 

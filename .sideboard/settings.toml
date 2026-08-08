@@ -1,6 +1,9 @@
 # Sideboard repo settings (preferred over .conductor/settings.toml).
 # Schema mirrors Conductor's scripts/files-to-copy conventions so existing
 # repos keep working via fallback.
+#
+# Right-sidebar Stop does NOT run a settings teardown — it kills the process
+# group for `scripts.run.*`. Optional `scripts.archive` only runs on Close/Archive.
 
 [worktrees]
 # Optional override. Default: ~/sideboard/workspaces/<repo-slug>
@@ -9,6 +12,7 @@
 [scripts]
 setup = "pnpm install"
 run_mode = "concurrent"
+# archive = "echo cleanup"  # optional; Close/Archive only — not Stop
 
 [scripts.run.dev]
 command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-5173}} pnpm --filter @sideboard-ai/desktop run dev"

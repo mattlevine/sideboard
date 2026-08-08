@@ -27,6 +27,8 @@ const LEFT_SIDEBAR_MIN = 180;
 const LEFT_SIDEBAR_MAX = 480;
 const RIGHT_SIDEBAR_MIN = 240;
 const RIGHT_SIDEBAR_MAX = 560;
+/** Stable empty parts — `?? []` in render would retrigger chat auto-scroll on every live chunk. */
+const EMPTY_LIVE_PARTS: MessagePart[] = [];
 
 function sameWorktreePath(a: string, b: string): boolean {
   const norm = (p: string) => p.replace(/\/$/, '');
@@ -687,7 +689,7 @@ export function App() {
             const threadPanelProps = {
               worktreeChats,
               liveOutput: liveByThread[selected.id] ?? '',
-              liveParts: livePartsByThread[selected.id] ?? [],
+              liveParts: livePartsByThread[selected.id] ?? EMPTY_LIVE_PARTS,
               turnStartedAt: turnStartedAtByThread[selected.id],
               onRefresh: () => void refresh(),
               onSelectChat: (id: string, created?: Thread) => {
@@ -726,7 +728,7 @@ export function App() {
               childThreads={children}
               worktreeChats={worktreeChats}
               liveOutput={liveByThread[selected.id] ?? ''}
-              liveParts={livePartsByThread[selected.id] ?? []}
+              liveParts={livePartsByThread[selected.id] ?? EMPTY_LIVE_PARTS}
               turnStartedAt={turnStartedAtByThread[selected.id]}
               onRefresh={() => void refresh()}
               onSelectChild={(id) => {

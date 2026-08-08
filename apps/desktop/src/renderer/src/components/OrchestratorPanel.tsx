@@ -3,6 +3,8 @@ import type { MessagePart, Thread } from '@sideboard-ai/core';
 import { isGlobalThread } from '../lib/global-workspace';
 import { ThreadPanel } from './ThreadPanel';
 
+const EMPTY_LIVE_PARTS: MessagePart[] = [];
+
 interface Props {
   thread: Thread;
   childThreads: Thread[];
@@ -37,7 +39,7 @@ export function OrchestratorPanel({
   childThreads,
   worktreeChats,
   liveOutput,
-  liveParts = [],
+  liveParts = EMPTY_LIVE_PARTS,
   turnStartedAt,
   onRefresh,
   onSelectChild,
