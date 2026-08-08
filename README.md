@@ -4,7 +4,7 @@
 
 When you run many AI coding agents at once, the hard part isn't spawning worktrees — it's knowing what's going on, working with what they produce, and not getting stuck inside someone else's UI.
 
-Sideboard is an open control plane over git worktrees — and a desktop **union of agent code and data**: chat in the middle, schema-driven forms / artifacts / a file manager in a tabbed column, and the connected git repo on the far right.
+Sideboard is **repo + worktree + CMS** (optional): an open control plane over git worktrees, with a desktop surface that is a **union of agent code and data** — chat in the middle, schema-driven forms / artifacts / a file manager in a tabbed column, and the connected repo on the far right.
 
 1. **A global board for you** — status, live output, and fan-out across every thread
 2. **An MCP for the agents** — list threads, wait on turns, read diffs, orchestrate the fleet, and present artifacts, schemas, and files in the desktop UI
@@ -32,6 +32,8 @@ Most multi-agent tools optimize for parallelism. Sideboard optimizes for **visib
 | Files for that data + the git worktree | Two other windows | File manager tabs + far-right repo Files / Changes / CI |
 
 The fit: agents already write code **and** invent the shapes of data (content, configs, feedback, ops rows). Sideboard is where those meet — **code in the worktree, data in schema UI**, without forcing a CMS product or leaving the thread.
+
+A concrete loop: pull or edit page content and media in schema + files tabs, then have the agent write it into a **static site** in the same worktree (Astro, Next export, Eleventy, plain HTML) — review the data and the generated pages before you land.
 
 Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Use MCP when an agent needs *judgment* across threads or needs to open a pane. Land and purge stay human-only.
 
@@ -170,19 +172,19 @@ For the global board, live orchestration, and the code + data desktop layout, ru
 
 ## Desktop — union of agent code and data
 
-A worktree chat is three zones:
+A worktree chat is **repo + worktree + CMS** in one view:
 
-| Zone | What it is |
-|------|------------|
-| **Chat** | The agent thread |
-| **Structure column** (tabs) | Artifacts, schema → form/table, file manager — data the agent needs you to see or edit |
-| **Far right** | Connected git repo — Files / Changes / CI / Review, Setup / Run / Terminal |
+| Zone | Layer | What it is |
+|------|-------|------------|
+| **Far right** | Repo | Connected git worktree — Files / Changes / CI / Review, Setup / Run / Terminal |
+| **Chat** | Worktree agent | The thread driving that worktree |
+| **Structure column** (tabs) | CMS / data | Artifacts, schema → form/table, file manager — content and files the agent needs you to see or edit |
 
 Agents open structure tabs via MCP (or you reopen them from message chips). Tabs stick per chat until you close them.
 
 ### Schema → form (not “a CMS product”)
 
-`present_schema` takes **JSON Schema + optional `schemaUi`** and renders a filterable table and/or form. The agent can **create the schema** for whatever it needs — articles, feedback, config, checklists, research rows — then hand you a UI to fill or correct it. That might back a CMS, or it might be a one-off shape for the turn.
+`present_schema` takes **JSON Schema + optional `schemaUi`** and renders a filterable table and/or form. The agent can **create the schema** for whatever it needs — articles, feedback, config, checklists, research rows — then hand you a UI to fill or correct it. That might back a CMS, feed a **static website** build in the worktree, or be a one-off shape for the turn.
 
 Same chrome for every backend:
 
