@@ -14,7 +14,7 @@ Run agents in isolated `thread/*` worktrees from the CLI, desktop app, or MCP �
 
 ![Sideboard desktop — chat, schema form, and git repo files](docs/assets/sideboard-desktop-cms.png)
 
-**Agents and backends are plugs, not the product.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is not a Brightsy (or any) CMS shell — it's **JSON Schema → table/form**. The agent can invent a schema for whatever data it needs; wire Brightsy, inline JSON, or another datasource later. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([docs/remote-integrations.md](docs/remote-integrations.md)).
+**Agents and backends are plugs, not the product.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is not a Brightsy (or any) CMS shell — it's **JSON Schema → table/form**. The agent can invent a schema for whatever data it needs; wire Brightsy, inline JSON, or another datasource later. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([how to create a Slack connector](docs/remote-integrations.md)).
 
 ## Why it exists
 
@@ -43,9 +43,9 @@ Also true, and useful on the way:
 - **Schema-agnostic / CMS-optional** — render any JSON Schema + `schemaUi`; Brightsy is one datasource, not the UI. CMS is a use case, not the category
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
-- **Integration-friendly** — remote chat (Slack, etc.) can sit on CLI/MCP without Brightsy; see [docs/remote-integrations.md](docs/remote-integrations.md)
+- **Integration-friendly** — remote chat (Slack, etc.) can sit on CLI/MCP without Brightsy; see [create your own Slack connector](docs/remote-integrations.md)
 
-Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Security](SECURITY.md)
+Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [DIY Slack connector](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Security](SECURITY.md)
 
 ## Install
 
@@ -222,7 +222,7 @@ Point Claude Code, Codex, or any MCP client at that server. Agents get tools to:
 
 Ready-for-review land / merge and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP. Coordinators open PRs only by asking the worktree agent.
 
-Want Slack (or any chat) without Brightsy? Point your bot at this MCP or the CLI — [docs/remote-integrations.md](docs/remote-integrations.md).
+Want Slack (or any chat) without Brightsy? Point your bot at this MCP or the CLI — [create your own Slack connector](docs/remote-integrations.md).
 
 ## Optional: Brightsy
 
@@ -259,7 +259,7 @@ Connected teams unlock the **Brightsy datasource** for `present_schema` / `prese
 
 ## Optional: Brightsy remote orchestrator (Slack / Discord / Teams)
 
-> **Optional.** This is one remote path. You can build your own Slack/Discord bridge on Sideboard CLI/MCP instead — see [docs/remote-integrations.md](docs/remote-integrations.md).
+> **Optional.** This is one remote path. To build your own Slack/Discord bridge on Sideboard CLI/MCP (no Brightsy), see [create your own Slack connector](docs/remote-integrations.md).
 
 Brightsy chat channels can drive Sideboard on your machine across **all registered workspaces** — no need to be at the keyboard. Slack is the best-tested path; Discord and Microsoft Teams use the same cloud-task flow but are less battle-tested.
 
