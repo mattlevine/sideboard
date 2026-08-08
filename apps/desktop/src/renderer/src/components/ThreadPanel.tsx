@@ -145,6 +145,9 @@ export function ThreadPanel({
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
+  const [editingQueueIndex, setEditingQueueIndex] = useState<number | null>(null);
+  const [queueEditText, setQueueEditText] = useState('');
+  const [queueBusyIndex, setQueueBusyIndex] = useState<number | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(null);
@@ -350,15 +353,23 @@ export function ThreadPanel({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [thread.messages, liveOutput, liveParts, pendingUser]);
+  }, [thread.messages, thread.queue, liveOutput, liveParts, pendingUser]);
 
   useEffect(() => {
     if (!pendingUser) return;
-    const matched = thread.messages.some(
-      (m) => m.role === 'user' && m.text === pendingUser,
-    );
+    const matched =
+      thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) ||
+      thread.queue.includes(pendingUser);
     if (matched) setPendingUser(null);
-  }, [thread.messages, pendingUser]);
+  }, [thread.messages, thread.queue, pendingUser]);
+
+  useEffect(() => {
+    if (editingQueueIndex === null) return;
+    if (editingQueueIndex >= thread.queue.length) {
+      setEditingQueueIndex(null);
+      setQueueEditText('');
+    }
+  }, [thread.queue, editingQueueIndex]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -446,6 +457,16 @@ export function ThreadPanel({
     thread.status === 'running' ||
     (thread.status === 'queued' && Boolean(pendingUser));
 
+  /** True from `turn_started` to `turn_finished` — a turn is actively in flight. */
+  const turnInFlight = Boolean(turnStartedAt);
+  const pendingOptimistic =
+    turnInFlight &&
+    pendingUser &&
+    !thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) &&
+    !thread.queue.includes(pendingUser)
+      ? pendingUser
+      : null;
+
   function pickAutocomplete(item: AutocompleteItem) {
     if (!acQuery) return;
     const next = applyAutocomplete(prompt, acQuery.start, acQuery.end, item.insert);
@@ -487,6 +508,56 @@ export function ThreadPanel({
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function startEditQueued(index: number, text: string) {
+    setEditingQueueIndex(index);
+    setQueueEditText(text);
+  }
+
+  function cancelEditQueued() {
+    setEditingQueueIndex(null);
+    setQueueEditText('');
+  }
+
+  async function saveEditQueued(index: number) {
+    const text = queueEditText.trim();
+    if (!text) return;
+    setQueueBusyIndex(index);
+    try {
+      await window.sideboard.editQueuedMessage(thread.id, index, text);
+      onRefresh();
+      setEditingQueueIndex(null);
+      setQueueEditText('');
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setQueueBusyIndex(null);
+    }
+  }
+
+  async function removeQueued(index: number) {
+    setQueueBusyIndex(index);
+    try {
+      await window.sideboard.removeQueuedMessage(thread.id, index);
+      onRefresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setQueueBusyIndex(null);
+    }
+  }
+
+  async function sendQueuedNow(index: number) {
+    setQueueBusyIndex(index);
+    try {
+      await window.sideboard.sendQueuedMessageNow(thread.id, index);
+      onRefresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setQueueBusyIndex(null);
     }
   }
 
@@ -1219,6 +1290,7 @@ export function ThreadPanel({
             );
           })}
           {pendingUser &&
+            !turnInFlight &&
             !thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) && (
               <div className="msg user pending">{pendingUser}</div>
             )}
@@ -1276,6 +1348,80 @@ export function ThreadPanel({
                 </span>
               </div>
             </>
+          )}
+          {turnInFlight && (thread.queue.length > 0 || pendingOptimistic) && (
+            <div className="queued-messages">
+              {thread.queue.map((text, i) => (
+                <div key={`queued-${i}`} className="msg user queued">
+                  {editingQueueIndex === i ? (
+                    <div className="queued-msg-edit">
+                      <textarea
+                        autoFocus
+                        rows={Math.min(6, Math.max(2, text.split('\n').length))}
+                        value={queueEditText}
+                        onChange={(e) => setQueueEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void saveEditQueued(i);
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelEditQueued();
+                          }
+                        }}
+                      />
+                      <div className="queued-msg-edit-actions">
+                        <button type="button" onClick={cancelEditQueued}>
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={queueBusyIndex === i || !queueEditText.trim()}
+                          onClick={() => void saveEditQueued(i)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {text}
+                      <div className="queued-msg-actions">
+                        <button
+                          type="button"
+                          title="Send now — interrupts the current response"
+                          disabled={queueBusyIndex === i}
+                          onClick={() => void sendQueuedNow(i)}
+                        >
+                          Send now
+                        </button>
+                        <button
+                          type="button"
+                          title="Edit"
+                          disabled={queueBusyIndex === i}
+                          onClick={() => startEditQueued(i, text)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          title="Remove"
+                          disabled={queueBusyIndex === i}
+                          onClick={() => void removeQueued(i)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {pendingOptimistic && (
+                <div className="msg user queued pending">{pendingOptimistic}</div>
+              )}
+            </div>
           )}
           {thread.lastError && (
             <div className="msg error" style={{ color: 'var(--err)' }}>
