@@ -8,13 +8,7 @@ import {
 import { PanelResizeHandle } from '../PanelResizeHandle';
 import { createBrightsyDatasource } from './BrightsyDatasource';
 import { BrightsyUiRenderer } from './BrightsyUiRenderer';
-import {
-  FILE_COLUMN_MAX,
-  FILE_COLUMN_MIN,
-  FILE_COLUMN_WIDTH,
-  FileManagerColumn,
-  type FilePickerRequest,
-} from './FileManagerColumn';
+import type { FilePickerRequest } from './FileManagerColumn';
 import type { RelatedNavigation } from './RelationshipFields';
 import {
   createBrightsyAIDatasource,
@@ -45,6 +39,13 @@ interface Props {
   /** Notify parent when mode/record changes (keeps chips in sync). */
   onContentChange?: (next: SchemaPaneContent) => void;
   worktreeThreadId?: string;
+  /** Fill parent tab body (no outer width/resize). */
+  embedded?: boolean;
+  /**
+   * Open / focus a Files tab for browse or form field selection.
+   * When `picker` is set, selection returns to this schema tab.
+   */
+  onRequestFilesTab?: (picker?: FilePickerRequest | null) => void;
 }
 
 export function SchemaPane({
@@ -52,8 +53,10 @@ export function SchemaPane({
   width = SCHEMA_WIDTH_DEFAULT,
   onWidthChange,
   onClose,
-  worktreeThreadId,
+  worktreeThreadId: _worktreeThreadId,
   onContentChange,
+  embedded = false,
+  onRequestFilesTab,
 }: Props) {
   const [mode, setMode] = useState<'table' | 'form'>(content.mode);
   const [resource, setResource] = useState<SchemaResource | null>(content.resource ?? null);
@@ -63,8 +66,6 @@ export function SchemaPane({
   const [datasource, setDatasource] = useState<SchemaDatasource | null>(null);
   const [fileDatasource, setFileDatasource] = useState<SchemaFileDatasource | null>(null);
   const [aiDatasource, setAiDatasource] = useState<SchemaAIDatasource | null>(null);
-  const [filePicker, setFilePicker] = useState<FilePickerRequest | null>(null);
-  const [filesWidth, setFilesWidth] = useState(FILE_COLUMN_WIDTH);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -321,18 +322,123 @@ export function SchemaPane({
     () => Math.min(SCHEMA_WIDTH_MAX, Math.max(SCHEMA_WIDTH_MIN, width)),
     [width],
   );
-  const clampedFilesWidth = useMemo(
-    () => Math.min(FILE_COLUMN_MAX, Math.max(FILE_COLUMN_MIN, filesWidth)),
-    [filesWidth],
+
+  function handleFilePickerChange(request: FilePickerRequest | null) {
+    if (request) onRequestFilesTab?.(request);
+  }
+
+  const body = (
+    <aside
+      className={`artifact-pane schema-pane${embedded ? ' schema-pane-embedded' : ''}`}
+      style={embedded ? undefined : { width: schemaWidth }}
+    >
+      <div className="artifact-pane-header">
+        <div className="artifact-pane-title-block">
+          <span className="artifact-pane-kind">CMS</span>
+          <h3 className="artifact-pane-title" title={title}>
+            {title}
+          </h3>
+        </div>
+        <div className="artifact-pane-actions schema-pane-actions">
+          {navStack.length > 0 ? (
+            <button type="button" className="schema-mode-btn" onClick={() => void goBack()}>
+              ← Back
+            </button>
+          ) : null}
+          {mode === 'form' && rootResourceId ? (
+            <button type="button" className="schema-mode-btn" onClick={backToTable}>
+              Table
+            </button>
+          ) : null}
+          {mode === 'table' ? (
+            <button
+              type="button"
+              className="schema-mode-btn"
+              onClick={startCreate}
+              disabled={!datasource || !resource}
+            >
+              New
+            </button>
+          ) : null}
+          {fileDatasource || onRequestFilesTab ? (
+            <button
+              type="button"
+              className="schema-mode-btn"
+              title="Open Files tab"
+              onClick={() => onRequestFilesTab?.(null)}
+            >
+              Files
+            </button>
+          ) : null}
+          {!embedded ? (
+            <button
+              type="button"
+              className="artifact-pane-close"
+              title="Close"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="artifact-pane-body schema-pane-body">
+        {loading ? (
+          <div className="artifact-pane-loading">Loading schema…</div>
+        ) : error ? (
+          <div className="schema-error-panel">
+            <p>{error}</p>
+            {content.datasource === 'brightsy' ? (
+              <p className="schema-muted">
+                Connect a Brightsy team in Settings, then ask the agent to open the
+                schema again.
+              </p>
+            ) : null}
+          </div>
+        ) : datasource && resource ? (
+          <BrightsyUiRenderer
+            mode={mode}
+            resource={resource}
+            record={record}
+            datasource={datasource}
+            fileDatasource={fileDatasource}
+            aiDatasource={aiDatasource}
+            busy={busy}
+            createDefaults={createDefaults}
+            onOpenRecord={openRecord}
+            onCreate={startCreate}
+            onSave={handleSave}
+            onOpenRelated={(nav) => void openRelated(nav)}
+            filePicker={null}
+            onFilePickerChange={handleFilePickerChange}
+            onPublish={
+              resourceHasContentStates(resource) &&
+              datasource.publishRecord &&
+              record?.id
+                ? handlePublish
+                : undefined
+            }
+            onUnpublish={
+              resourceHasContentStates(resource) &&
+              datasource.unpublishRecord &&
+              record?.id
+                ? handleUnpublish
+                : undefined
+            }
+          />
+        ) : (
+          <div className="artifact-pane-loading">No schema</div>
+        )}
+      </div>
+    </aside>
   );
-  const filesOpen = Boolean(filePicker && fileDatasource);
-  const shellWidth = schemaWidth + (filesOpen ? clampedFilesWidth : 0);
+
+  if (embedded) {
+    return <div className="schema-pane-embedded-wrap">{body}</div>;
+  }
 
   return (
-    <div
-      className={`schema-pane-shell${filesOpen ? ' with-files' : ''}`}
-      style={{ width: shellWidth }}
-    >
+    <div className="schema-pane-shell" style={{ width: schemaWidth }}>
       {onWidthChange ? (
         <PanelResizeHandle
           edge="left"
@@ -342,133 +448,7 @@ export function SchemaPane({
           onChange={onWidthChange}
         />
       ) : null}
-      <aside className="artifact-pane schema-pane" style={{ width: schemaWidth }}>
-        <div className="artifact-pane-header">
-          <div className="artifact-pane-title-block">
-            <span className="artifact-pane-kind">CMS</span>
-            <h3 className="artifact-pane-title" title={title}>
-              {title}
-            </h3>
-          </div>
-          <div className="artifact-pane-actions schema-pane-actions">
-            {navStack.length > 0 ? (
-              <button type="button" className="schema-mode-btn" onClick={() => void goBack()}>
-                ← Back
-              </button>
-            ) : null}
-            {mode === 'form' && rootResourceId ? (
-              <button type="button" className="schema-mode-btn" onClick={backToTable}>
-                Table
-              </button>
-            ) : null}
-            {mode === 'table' ? (
-              <button
-                type="button"
-                className="schema-mode-btn"
-                onClick={startCreate}
-                disabled={!datasource || !resource}
-              >
-                New
-              </button>
-            ) : null}
-            {fileDatasource ? (
-              <button
-                type="button"
-                className={`schema-mode-btn${filesOpen ? ' active' : ''}`}
-                title="Files column"
-                onClick={() =>
-                  setFilePicker((prev) =>
-                    prev
-                      ? null
-                      : {
-                          title: 'Files',
-                          accept: 'all',
-                          onSelect: () => {},
-                        },
-                  )
-                }
-              >
-                Files
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="artifact-pane-close"
-              title="Close"
-              onClick={onClose}
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        <div className="artifact-pane-body schema-pane-body">
-          {loading ? (
-            <div className="artifact-pane-loading">Loading schema…</div>
-          ) : error ? (
-            <div className="schema-error-panel">
-              <p>{error}</p>
-              {content.datasource === 'brightsy' ? (
-                <p className="schema-muted">
-                  Connect a Brightsy team in Settings, then ask the agent to open the
-                  schema again.
-                </p>
-              ) : null}
-            </div>
-          ) : datasource && resource ? (
-            <BrightsyUiRenderer
-              mode={mode}
-              resource={resource}
-              record={record}
-              datasource={datasource}
-              fileDatasource={fileDatasource}
-              aiDatasource={aiDatasource}
-              busy={busy}
-              createDefaults={createDefaults}
-              onOpenRecord={openRecord}
-              onCreate={startCreate}
-              onSave={handleSave}
-              onOpenRelated={(nav) => void openRelated(nav)}
-              filePicker={filePicker}
-              onFilePickerChange={setFilePicker}
-              onPublish={
-                resourceHasContentStates(resource) &&
-                datasource.publishRecord &&
-                record?.id
-                  ? handlePublish
-                  : undefined
-              }
-              onUnpublish={
-                resourceHasContentStates(resource) &&
-                datasource.unpublishRecord &&
-                record?.id
-                  ? handleUnpublish
-                  : undefined
-              }
-            />
-          ) : (
-            <div className="artifact-pane-loading">No schema</div>
-          )}
-        </div>
-      </aside>
-
-      {filesOpen && fileDatasource && filePicker ? (
-        <div className="schema-files-slot" style={{ width: clampedFilesWidth }}>
-          <PanelResizeHandle
-            edge="left"
-            value={clampedFilesWidth}
-            min={FILE_COLUMN_MIN}
-            max={FILE_COLUMN_MAX}
-            onChange={setFilesWidth}
-          />
-          <FileManagerColumn
-            datasource={fileDatasource}
-            request={filePicker}
-            onClose={() => setFilePicker(null)}
-            worktreeThreadId={worktreeThreadId}
-            width={clampedFilesWidth}
-          />
-        </div>
-      ) : null}
+      {body}
     </div>
   );
 }

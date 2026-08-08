@@ -2,23 +2,27 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, Thread, ThreadAttachment } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
-  ARTIFACT_WIDTH_DEFAULT,
+  RIGHT_COLUMN_WIDTH_DEFAULT,
   RightColumnPane,
+  type RightColumnFilePicker,
 } from './schema/RightColumnPane';
+import type { FilePickerRequest } from './schema/FileManagerColumn';
 import {
   isFilesPane,
   isSchemaPane,
   latestRightPaneContent,
+  type FilesPaneContent,
   type RightPaneContent,
   type SchemaPaneContent,
 } from '../lib/right-pane';
 import {
   getClosedRightPane,
-  getRememberedRightPane,
+  getRememberedRightPaneSession,
   isRightPaneSuppressed,
   rememberClosedRightPane,
-  rememberRightPane,
+  rememberRightPaneSession,
   setRightPaneSuppressed,
+  type RightPaneSession,
 } from '../lib/right-pane-memory';
 import { formatTokenCount, sumUsage, totalTokens, usageTooltip } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';
@@ -147,13 +151,18 @@ export function ThreadPanel({
     chatCount: number;
   } | null>(null);
   const [closeBusy, setCloseBusy] = useState(false);
-  const [rightPane, setRightPane] = useState<RightPaneContent | null>(() => {
-    const remembered = getRememberedRightPane(thread.id);
+  const [rightSession, setRightSession] = useState<RightPaneSession | null>(() => {
+    const remembered = getRememberedRightPaneSession(thread.id);
     return remembered === undefined ? null : remembered;
   });
-  const [artifactWidth, setArtifactWidth] = useState(ARTIFACT_WIDTH_DEFAULT);
+  const [artifactWidth, setArtifactWidth] = useState(RIGHT_COLUMN_WIDTH_DEFAULT);
+  const [filePicker, setFilePicker] = useState<RightColumnFilePicker | null>(null);
   /** After the user closes the pane, skip auto-open until a different artifact. */
   const suppressArtifactAutoOpen = useRef(isRightPaneSuppressed(thread.id));
+  const rightPane =
+    rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??
+    rightSession?.tabs[0] ??
+    null;
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
@@ -471,39 +480,16 @@ export function ThreadPanel({
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
 
-  function applyRightPane(next: RightPaneContent | null) {
-    setRightPane(next);
-    rememberRightPane(thread.id, next);
-  }
-
-  function openRightPane(next: RightPaneContent) {
-    suppressArtifactAutoOpen.current = false;
-    setRightPaneSuppressed(thread.id, false);
-    applyRightPane(next);
-    onShowChat?.();
-  }
-
-  function closeRightPane() {
-    rememberClosedRightPane(thread.id, rightPane);
-    suppressArtifactAutoOpen.current = true;
-    setRightPane(null);
-  }
-
   function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean {
     if (isSchemaPane(a) && isSchemaPane(b)) {
       return (
-        a.mode === b.mode &&
         a.resourceId === b.resourceId &&
-        a.recordId === b.recordId &&
-        a.datasource === b.datasource
+        a.datasource === b.datasource &&
+        (a.recordId ?? null) === (b.recordId ?? null)
       );
     }
     if (isFilesPane(a) && isFilesPane(b)) {
-      return (
-        a.datasource === b.datasource &&
-        a.path === b.path &&
-        a.title === b.title
-      );
+      return a.datasource === b.datasource && (a.path ?? '') === (b.path ?? '');
     }
     if (
       !isSchemaPane(a) &&
@@ -516,16 +502,137 @@ export function ThreadPanel({
     return false;
   }
 
+  function upsertTab(
+    tabs: RightPaneContent[],
+    next: RightPaneContent,
+  ): RightPaneSession {
+    const matchIdx = tabs.findIndex(
+      (t) => t.id === next.id || sameRightPane(t, next),
+    );
+    if (matchIdx >= 0) {
+      const matchedId = tabs[matchIdx]!.id;
+      const cleaned = tabs
+        .filter((t) => t.id === matchedId || !sameRightPane(t, next))
+        .map((t) => (t.id === matchedId ? next : t));
+      return { tabs: cleaned, activeId: next.id };
+    }
+    return { tabs: [...tabs, next], activeId: next.id };
+  }
+
+  function openRightPane(next: RightPaneContent) {
+    suppressArtifactAutoOpen.current = false;
+    setRightPaneSuppressed(thread.id, false);
+    setRightSession((prev) => {
+      const session = upsertTab(prev?.tabs ?? [], next);
+      rememberRightPaneSession(thread.id, session);
+      return session;
+    });
+    onShowChat?.();
+  }
+
+  function closeRightTab(id: string) {
+    setFilePicker((fp) => (fp?.returnTabId === id ? null : fp));
+    setRightSession((prev) => {
+      if (!prev) return prev;
+      const closed = prev.tabs.find((t) => t.id === id) ?? null;
+      const tabs = prev.tabs.filter((t) => t.id !== id);
+      if (!tabs.length) {
+        rememberClosedRightPane(thread.id, closed);
+        suppressArtifactAutoOpen.current = true;
+        rememberRightPaneSession(thread.id, null);
+        return null;
+      }
+      const activeId =
+        prev.activeId === id ? tabs[tabs.length - 1]!.id : prev.activeId;
+      const session = { tabs, activeId };
+      rememberRightPaneSession(thread.id, session);
+      return session;
+    });
+  }
+
+  function activateRightTab(id: string) {
+    setRightSession((prev) => {
+      if (!prev) return prev;
+      const session = { ...prev, activeId: id };
+      rememberRightPaneSession(thread.id, session);
+      return session;
+    });
+  }
+
+  function updateSchemaTab(next: SchemaPaneContent) {
+    setRightSession((prev) => {
+      if (!prev) {
+        const session = { tabs: [next], activeId: next.id };
+        rememberRightPaneSession(thread.id, session);
+        return session;
+      }
+      const tabs = prev.tabs.map((t) => {
+        if (t.id === next.id) return next;
+        if (t.id === prev.activeId && isSchemaPane(t) && !prev.tabs.some((x) => x.id === next.id)) {
+          return next;
+        }
+        return t;
+      });
+      const session = { tabs, activeId: next.id };
+      rememberRightPaneSession(thread.id, session);
+      return session;
+    });
+  }
+
+  function defaultFilesTab(): FilesPaneContent {
+    return {
+      kind: 'files',
+      id: 'files-brightsy-default',
+      title: 'Files',
+      datasource: 'brightsy',
+      path: 'public',
+      source: 'tool',
+    };
+  }
+
+  function requestFilesTab(opts: {
+    returnTabId: string;
+    picker?: FilePickerRequest | null;
+  }) {
+    setRightSession((prev) => {
+      const tabs = prev?.tabs ?? [];
+      const filesTabs = tabs.filter(isFilesPane);
+      let filesTab = filesTabs[0];
+      let nextTabs = tabs;
+      if (!filesTab) {
+        filesTab = defaultFilesTab();
+        nextTabs = [...tabs, filesTab];
+      } else if (opts.picker && prev?.activeId) {
+        // Prefer the files tab the user already has focused, if any.
+        const activeFiles = filesTabs.find((t) => t.id === prev.activeId);
+        if (activeFiles) filesTab = activeFiles;
+      }
+      const session = { tabs: nextTabs, activeId: filesTab.id };
+      rememberRightPaneSession(thread.id, session);
+      if (opts.picker) {
+        setFilePicker({
+          request: opts.picker,
+          returnTabId: opts.returnTabId,
+        });
+      } else {
+        setFilePicker(null);
+      }
+      return session;
+    });
+    onShowChat?.();
+  }
+
   // Restore per-chat pane when switching threads.
   useEffect(() => {
     suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
-    const remembered = getRememberedRightPane(thread.id);
+    setFilePicker(null);
+    const remembered = getRememberedRightPaneSession(thread.id);
     if (remembered !== undefined) {
-      setRightPane(remembered);
+      setRightSession(remembered);
       return;
     }
     if (suppressArtifactAutoOpen.current) {
-      setRightPane(null);
+      setRightSession(null);
       return;
     }
     let fromHistory: RightPaneContent | null = null;
@@ -535,8 +642,13 @@ export function ThreadPanel({
       fromHistory = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
       if (fromHistory) break;
     }
-    setRightPane(fromHistory);
-    if (fromHistory) rememberRightPane(thread.id, fromHistory);
+    if (fromHistory) {
+      const session = { tabs: [fromHistory], activeId: fromHistory.id };
+      setRightSession(session);
+      rememberRightPaneSession(thread.id, session);
+    } else {
+      setRightSession(null);
+    }
   }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
 
   // Auto-open while streaming; after the turn, migrate live → persisted ids.
@@ -552,33 +664,37 @@ export function ThreadPanel({
         suppressArtifactAutoOpen.current = false;
         setRightPaneSuppressed(thread.id, false);
       }
-      setRightPane((prev) => {
-        if (prev && sameRightPane(prev, candidate)) return prev;
-        rememberRightPane(thread.id, candidate);
-        return candidate;
+      setRightSession((prev) => {
+        const session = upsertTab(prev?.tabs ?? [], candidate);
+        rememberRightPaneSession(thread.id, session);
+        return session;
       });
       return;
     }
 
-    setRightPane((prev) => {
-      if (!prev) return prev;
+    setRightSession((prev) => {
+      if (!prev?.tabs.length) return prev;
       for (let i = thread.messages.length - 1; i >= 0; i--) {
         const m = thread.messages[i];
         if (m?.role !== 'agent') continue;
         const candidate = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
         if (!candidate) return prev;
-        if (
-          prev.id === candidate.id ||
-          prev.id.startsWith('live') ||
-          prev.id.startsWith('schema-live') ||
-          prev.id.startsWith('files-live') ||
-          sameRightPane(prev, candidate)
-        ) {
-          if (sameRightPane(prev, candidate) && prev.id === candidate.id) return prev;
-          rememberRightPane(thread.id, candidate);
-          return candidate;
-        }
-        return prev;
+        const liveIdx = prev.tabs.findIndex(
+          (t) =>
+            t.id.startsWith('live') ||
+            t.id.startsWith('schema-live') ||
+            t.id.startsWith('files-live') ||
+            sameRightPane(t, candidate),
+        );
+        if (liveIdx < 0) return prev;
+        const wasActive = prev.tabs[liveIdx]?.id === prev.activeId;
+        const session = upsertTab(prev.tabs, candidate);
+        const next = {
+          tabs: session.tabs,
+          activeId: wasActive ? session.activeId : prev.activeId,
+        };
+        rememberRightPaneSession(thread.id, next);
+        return next;
       }
       return prev;
     });
@@ -1319,14 +1435,19 @@ export function ThreadPanel({
       </div>
         </div>
 
-        {rightPane && chatViewOpen ? (
+        {rightSession && rightSession.tabs.length > 0 && chatViewOpen ? (
           <RightColumnPane
-            content={rightPane}
+            tabs={rightSession.tabs}
+            activeId={rightSession.activeId}
             width={artifactWidth}
             onWidthChange={setArtifactWidth}
-            onClose={closeRightPane}
-            onSchemaContentChange={(next: SchemaPaneContent) => applyRightPane(next)}
+            onActivate={activateRightTab}
+            onCloseTab={closeRightTab}
+            onSchemaContentChange={updateSchemaTab}
             worktreeThreadId={thread.id}
+            filePicker={filePicker}
+            onFilePickerChange={setFilePicker}
+            onRequestFilesTab={requestFilesTab}
           />
         ) : null}
       </div>

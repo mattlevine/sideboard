@@ -1,26 +1,32 @@
 import type { RightPaneContent } from './right-pane';
 
+/** Open right-column tabs for one chat (session memory). */
+export interface RightPaneSession {
+  tabs: RightPaneContent[];
+  activeId: string | null;
+}
+
 /**
  * Per-chat right-column state for the session.
  * `null` = explicitly closed; missing = never set this session.
  */
-const contentByThread = new Map<string, RightPaneContent | null>();
+const sessionByThread = new Map<string, RightPaneSession | null>();
 const suppressedByThread = new Map<string, boolean>();
 /** Last content the user closed — used to ignore the same payload reappearing. */
 const closedByThread = new Map<string, RightPaneContent>();
 
-export function getRememberedRightPane(
+export function getRememberedRightPaneSession(
   threadId: string,
-): RightPaneContent | null | undefined {
-  if (!contentByThread.has(threadId)) return undefined;
-  return contentByThread.get(threadId);
+): RightPaneSession | null | undefined {
+  if (!sessionByThread.has(threadId)) return undefined;
+  return sessionByThread.get(threadId);
 }
 
-export function rememberRightPane(
+export function rememberRightPaneSession(
   threadId: string,
-  content: RightPaneContent | null,
+  session: RightPaneSession | null,
 ): void {
-  contentByThread.set(threadId, content);
+  sessionByThread.set(threadId, session);
 }
 
 export function isRightPaneSuppressed(threadId: string): boolean {
@@ -37,11 +43,33 @@ export function rememberClosedRightPane(
   content: RightPaneContent | null,
 ): void {
   suppressedByThread.set(threadId, true);
-  contentByThread.set(threadId, null);
+  sessionByThread.set(threadId, null);
   if (content) closedByThread.set(threadId, content);
   else closedByThread.delete(threadId);
 }
 
 export function getClosedRightPane(threadId: string): RightPaneContent | undefined {
   return closedByThread.get(threadId);
+}
+
+/** @deprecated use getRememberedRightPaneSession */
+export function getRememberedRightPane(
+  threadId: string,
+): RightPaneContent | null | undefined {
+  const s = getRememberedRightPaneSession(threadId);
+  if (s === undefined) return undefined;
+  if (s === null) return null;
+  return s.tabs.find((t) => t.id === s.activeId) ?? s.tabs[0] ?? null;
+}
+
+/** @deprecated use rememberRightPaneSession */
+export function rememberRightPane(
+  threadId: string,
+  content: RightPaneContent | null,
+): void {
+  if (content == null) {
+    rememberRightPaneSession(threadId, null);
+    return;
+  }
+  rememberRightPaneSession(threadId, { tabs: [content], activeId: content.id });
 }

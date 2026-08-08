@@ -13,6 +13,8 @@ interface Props {
   width?: number;
   onWidthChange?: (width: number) => void;
   onClose: () => void;
+  /** Fill parent tab body (no outer width/resize/close). */
+  embedded?: boolean;
 }
 
 function kindBadge(kind: ChatArtifact['kind']): string {
@@ -36,6 +38,7 @@ export function ArtifactPane({
   width = ARTIFACT_WIDTH_DEFAULT,
   onWidthChange,
   onClose,
+  embedded = false,
 }: Props) {
   const canPreview =
     artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'markdown';
@@ -101,17 +104,19 @@ export function ArtifactPane({
 
   return (
     <aside
-      className="artifact-pane"
-      style={{ width }}
+      className={`artifact-pane${embedded ? ' artifact-pane-embedded' : ''}`}
+      style={embedded ? undefined : { width }}
       aria-label={`Artifact: ${artifact.title}`}
     >
-      <PanelResizeHandle
-        edge="left"
-        value={width}
-        min={ARTIFACT_WIDTH_MIN}
-        max={ARTIFACT_WIDTH_MAX}
-        onChange={(w) => onWidthChange?.(w)}
-      />
+      {!embedded && onWidthChange ? (
+        <PanelResizeHandle
+          edge="left"
+          value={width}
+          min={ARTIFACT_WIDTH_MIN}
+          max={ARTIFACT_WIDTH_MAX}
+          onChange={(w) => onWidthChange(w)}
+        />
+      ) : null}
       <div className="artifact-pane-header">
         <div className="artifact-pane-title-block">
           <span className="artifact-pane-kind">{kindBadge(artifact.kind)}</span>
@@ -123,15 +128,17 @@ export function ArtifactPane({
           {canPreview && (
             <DocumentPreviewModeToggle mode={effectiveMode} onChange={setMode} />
           )}
-          <button
-            type="button"
-            className="artifact-pane-close"
-            title="Close artifact"
-            aria-label="Close artifact"
-            onClick={onClose}
-          >
-            ×
-          </button>
+          {!embedded ? (
+            <button
+              type="button"
+              className="artifact-pane-close"
+              title="Close artifact"
+              aria-label="Close artifact"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="artifact-pane-body">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface Props {
   /** Edge of the panel this handle sits on (`right` = left sidebar, `left` = right sidebar). */
@@ -55,40 +56,45 @@ export function PanelResizeHandle({
   }, [dragging, edge, min, max, onChange, onChangeEnd]);
 
   return (
-    <div
-      className={`panel-resize-handle edge-${edge}${dragging ? ' dragging' : ''}`}
-      role="separator"
-      aria-orientation="vertical"
-      aria-valuenow={value}
-      aria-valuemin={min}
-      aria-valuemax={max}
-      tabIndex={0}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        startX.current = e.clientX;
-        startW.current = value;
-        setDragging(true);
-      }}
-      onKeyDown={(e) => {
-        const step = e.shiftKey ? 32 : 8;
-        let next = value;
-        if (e.key === 'ArrowLeft') {
-          next = edge === 'right' ? value - step : value + step;
-        } else if (e.key === 'ArrowRight') {
-          next = edge === 'right' ? value + step : value - step;
-        } else if (e.key === 'Home') {
-          next = min;
-        } else if (e.key === 'End') {
-          next = max;
-        } else {
-          return;
-        }
-        e.preventDefault();
-        const clamped = clamp(next, min, max);
-        onChange(clamped);
-        onChangeEnd?.(clamped);
-      }}
-    />
+    <>
+      <div
+        className={`panel-resize-handle edge-${edge}${dragging ? ' dragging' : ''}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-valuenow={value}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        tabIndex={0}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          startX.current = e.clientX;
+          startW.current = value;
+          setDragging(true);
+        }}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 32 : 8;
+          let next = value;
+          if (e.key === 'ArrowLeft') {
+            next = edge === 'right' ? value - step : value + step;
+          } else if (e.key === 'ArrowRight') {
+            next = edge === 'right' ? value + step : value - step;
+          } else if (e.key === 'Home') {
+            next = min;
+          } else if (e.key === 'End') {
+            next = max;
+          } else {
+            return;
+          }
+          e.preventDefault();
+          const clamped = clamp(next, min, max);
+          onChange(clamped);
+          onChangeEnd?.(clamped);
+        }}
+      />
+      {dragging
+        ? createPortal(<div className="panel-resize-shield" aria-hidden />, document.body)
+        : null}
+    </>
   );
 }

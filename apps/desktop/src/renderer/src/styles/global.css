@@ -185,6 +185,20 @@ body.resizing-panels * {
   user-select: none !important;
 }
 
+/* Artifact / preview iframes steal mousemove otherwise and stall the drag. */
+body.resizing-panels iframe,
+body.resizing-panels webview {
+  pointer-events: none !important;
+}
+
+.panel-resize-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  cursor: col-resize;
+  user-select: none;
+}
+
 .sidebar-toggle {
   display: inline-flex;
   align-items: center;
@@ -817,7 +831,143 @@ body.resizing-panels * {
   gap: 6px;
 }
 
-/* Schema + files columns: chat | CMS | Files */
+/* Tabbed right column: chat | (CMS / Files / Artifact tabs) */
+.right-column-shell {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  max-width: 85%;
+  border-left: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.right-column-shell > .panel-resize-handle {
+  position: absolute;
+  left: -2px;
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+  width: 8px;
+}
+
+.right-column-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.right-column-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.right-column-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.right-column-tab:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.right-column-tab.active {
+  color: var(--text);
+  background: var(--bg);
+  border-color: var(--border);
+  margin-bottom: -1px;
+}
+
+.right-column-tab-kind {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.right-column-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.right-column-tab-close {
+  flex-shrink: 0;
+  opacity: 0.55;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.right-column-tab-close:hover {
+  opacity: 1;
+  background: var(--bg-input);
+}
+
+.right-column-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.right-column-body .schema-pane-embedded-wrap,
+.right-column-body .files-pane-embedded,
+.right-column-body .artifact-pane-embedded,
+.right-column-body .schema-pane-embedded,
+.right-column-body .file-pane-fill,
+.right-column-body .artifact-pane,
+.right-column-body .schema-pane,
+.right-column-body .file-pane {
+  flex: 1 1 auto !important;
+  flex-shrink: 1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 0;
+}
+
+.right-column-body .artifact-pane-body,
+.right-column-body .schema-pane-body,
+.right-column-body .brightsy-ui-renderer,
+.right-column-body .schema-table,
+.right-column-body .schema-form,
+.right-column-body .file-pane-list {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.file-pane-selecting .artifact-pane-kind {
+  color: var(--accent);
+}
+
+/* Schema + files columns (legacy standalone shells) */
 .schema-pane-shell,
 .files-pane-shell {
   position: relative;
@@ -4055,10 +4205,21 @@ body.resizing-panels * {
 }
 
 .right-top {
+  position: relative;
+  z-index: 30;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
-  overflow: hidden;
+  /* Keep visible so the PR split-menu can overlay the files panel below. */
+  overflow: visible;
+}
+
+.right-top .split-btn {
+  z-index: 31;
+}
+
+.right-top .tool-menu {
+  z-index: 40;
 }
 
 .right-top button,

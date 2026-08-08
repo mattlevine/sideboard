@@ -27,8 +27,12 @@ interface Props {
   initialPath?: string;
   /** Active thread for resolving Sideboard worktree file drags. */
   worktreeThreadId?: string;
-  /** Column width in px (default FILE_COLUMN_WIDTH). */
+  /** Column width in px (default FILE_COLUMN_WIDTH). Ignored when `fill`. */
   width?: number;
+  /** Stretch to parent (tab body). */
+  fill?: boolean;
+  /** Highlight selection mode (form file picker). */
+  selecting?: boolean;
 }
 
 function matchesAccept(entry: SchemaFileEntry, accept: FileAccept): boolean {
@@ -64,6 +68,8 @@ export function FileManagerColumn({
   initialPath,
   worktreeThreadId,
   width = FILE_COLUMN_WIDTH,
+  fill = false,
+  selecting = false,
 }: Props) {
   const accept = request.accept ?? 'all';
   const mode = request.mode ?? 'media';
@@ -247,8 +253,10 @@ export function FileManagerColumn({
 
   return (
     <aside
-      className={`file-pane${dragOver ? ' file-pane-dragover' : ''}`}
-      style={{ width }}
+      className={`file-pane${dragOver ? ' file-pane-dragover' : ''}${
+        fill ? ' file-pane-fill' : ''
+      }${selecting ? ' file-pane-selecting' : ''}`}
+      style={fill ? undefined : { width }}
       aria-label={title}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
@@ -257,15 +265,17 @@ export function FileManagerColumn({
     >
       <div className="artifact-pane-header">
         <div className="artifact-pane-title-block">
-          <span className="artifact-pane-kind">FILES</span>
+          <span className="artifact-pane-kind">
+            {selecting ? 'SELECT' : 'FILES'}
+          </span>
           <h3 className="artifact-pane-title" title={title}>
-            {title}
+            {selecting ? `Choose file · ${title}` : title}
           </h3>
         </div>
         <button
           type="button"
           className="artifact-pane-close"
-          title="Close files"
+          title={selecting ? 'Cancel selection' : 'Close files'}
           onClick={onClose}
         >
           ×
