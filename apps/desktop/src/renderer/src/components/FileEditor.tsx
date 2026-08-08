@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ThreadAttachment } from '@sideboard-ai/core';
 import {
   buildDiffCommentAttachment,
@@ -6,6 +6,7 @@ import {
 } from '@sideboard/diff-comment';
 import { documentPreviewKind } from '../lib/language';
 import { parseUnifiedPatch } from '../lib/tool-diff';
+import { ActivityMark } from './ActivityMark';
 import { CodeView } from './CodeView';
 import { DiffLines } from './DiffLines';
 import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
@@ -47,6 +48,9 @@ export function FileEditor({
     initialView === 'diff' ? 'diff' : isImage ? 'preview' : 'code',
   );
   const [patch, setPatch] = useState<string | null>(null);
+  const [diffLoading, setDiffLoading] = useState(initialView === 'diff');
+  /** False until after paint so the preload shows before heavy DiffLines mount. */
+  const [diffReady, setDiffReady] = useState(false);
   const [changeMeta, setChangeMeta] = useState<{
     status: string;
     additions?: number;
@@ -58,6 +62,9 @@ export function FileEditor({
   }, [path, initialView, isImage]);
 
   const loadPatch = useCallback(async () => {
+    setDiffLoading(true);
+    setDiffReady(false);
+    setPatch(null);
     try {
       const d = await window.sideboard.getDiff(threadId);
       const file = d.files.find((f) => f.path === path);
@@ -76,12 +83,38 @@ export function FileEditor({
     } catch {
       setPatch(null);
       setChangeMeta(null);
+    } finally {
+      setDiffLoading(false);
     }
   }, [path, threadId]);
 
   useEffect(() => {
     void loadPatch();
   }, [loadPatch]);
+
+  // Let the loading UI paint, then parse/mount the diff on the next tick.
+  useEffect(() => {
+    if (mode !== 'diff' || patch == null || diffLoading) {
+      setDiffReady(false);
+      return;
+    }
+    setDiffReady(false);
+    let cancelled = false;
+    const raf = window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        if (!cancelled) setDiffReady(true);
+      }, 0);
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+    };
+  }, [mode, patch, diffLoading, path]);
+
+  const diffRows = useMemo(
+    () => (mode === 'diff' && patch != null && diffReady ? parseUnifiedPatch(patch) : null),
+    [mode, patch, diffReady],
+  );
 
   const dirty = content != null && content !== saved && !binary && !truncated;
   const dirtyRef = useRef(dirty);
@@ -294,26 +327,46 @@ export function FileEditor({
       )}
 
       {error && <div className="empty">{error}</div>}
-      {!error && mode === 'diff' && patch != null && (
+      {!error && mode === 'diff' && (
         <div className="file-editor-diff">
-          <DiffLines
-            className="tool-diff-body file-diff-lines"
-            rows={parseUnifiedPatch(patch)}
-            commentable={Boolean(onDiffComment)}
-            onSubmitComment={
-              onDiffComment
-                ? ({ comment, lines }: { comment: string; lines: DiffCommentLine[] }) => {
-                    onDiffComment(
-                      buildDiffCommentAttachment({
-                        path,
-                        comment,
-                        lines,
-                      }),
-                    );
-                  }
-                : undefined
-            }
-          />
+          {diffLoading || (patch != null && (!diffReady || diffRows == null)) ? (
+            <div className="file-diff-loading" role="status" aria-live="polite">
+              <ActivityMark tone="active" size="md" className="file-diff-loading-mark" />
+              <span className="file-diff-loading-caption">
+                <span className="thinking-indicator-label">
+                  {diffLoading || patch == null ? 'Loading diff' : 'Rendering diff'}
+                </span>
+                <span className="thinking-indicator-dots" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </span>
+            </div>
+          ) : patch == null || diffRows == null ? (
+            <div className="file-diff-loading" role="status">
+              No diff available
+            </div>
+          ) : (
+            <DiffLines
+              className="tool-diff-body file-diff-lines"
+              rows={diffRows}
+              commentable={Boolean(onDiffComment)}
+              onSubmitComment={
+                onDiffComment
+                  ? ({ comment, lines }: { comment: string; lines: DiffCommentLine[] }) => {
+                      onDiffComment(
+                        buildDiffCommentAttachment({
+                          path,
+                          comment,
+                          lines,
+                        }),
+                      );
+                    }
+                  : undefined
+              }
+            />
+          )}
         </div>
       )}
       {!error && content == null && mode !== 'diff' && <div className="empty">Loading…</div>}
