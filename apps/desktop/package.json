@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@brightsy/client": "^1.0.26",
-    "@brightsy/ui": "file:../../../brightsy-ai/packages/brightsy-ui",
     "@monaco-editor/react": "^4.7.0",
     "@sideboard-ai/core": "workspace:*",
     "@tiptap/extension-color": "^3.8.0",

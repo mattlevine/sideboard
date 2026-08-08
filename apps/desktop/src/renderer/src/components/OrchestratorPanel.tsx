@@ -93,6 +93,7 @@ export function OrchestratorPanel({
       </div>
       <div className="orchestrator-panel-main">
         <ThreadPanel
+          key={thread.id}
           thread={thread}
           worktreeChats={worktreeChats}
           liveOutput={liveOutput}

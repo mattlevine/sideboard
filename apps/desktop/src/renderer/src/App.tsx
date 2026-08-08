@@ -721,6 +721,7 @@ export function App() {
             };
             return selected.sourceType === 'orchestration' || isGlobalThread(selected) ? (
             <OrchestratorPanel
+              key={selected.id}
               thread={selected}
               childThreads={children}
               worktreeChats={worktreeChats}
@@ -750,6 +751,7 @@ export function App() {
             />
           ) : (
             <ThreadPanel
+              key={selected.id}
               thread={selected}
               openFilePath={openFilePath}
               openFiles={openFiles}

@@ -5,7 +5,7 @@
 import {
   UIComponentsProvider,
   defaultUIComponents,
-} from '@brightsy/ui-context';
+} from '../../lib/vendor/ui-components-context';
 import type { SchemaRecord, SchemaResource } from '../../lib/right-pane';
 import type { FilePickerRequest } from './FileManagerColumn';
 import type { SchemaAIDatasource, SchemaFileDatasource } from './SchemaFileDatasource';

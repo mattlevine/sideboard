@@ -1,6 +1,6 @@
 import type { MessagePart } from '@sideboard-ai/core';
 
-export type ArtifactKind = 'html' | 'markdown' | 'svg' | 'code';
+export type ArtifactKind = 'html' | 'markdown' | 'svg' | 'react' | 'code';
 
 export interface ChatArtifact {
   id: string;
@@ -80,6 +80,10 @@ function titleFromContent(kind: ArtifactKind, content: string, fallback: string)
     const heading = /^#\s+(.+)$/m.exec(content)?.[1]?.trim();
     if (heading) return heading;
   }
+  if (kind === 'react') {
+    const name = /export\s+default\s+(?:function|class)\s+([A-Za-z_$][\w$]*)/.exec(content)?.[1];
+    if (name) return name;
+  }
   return fallback;
 }
 
@@ -95,8 +99,8 @@ function kindForLanguage(language: string, content: string): ArtifactKind | null
   if (SVG_LANGS.has(lang)) return 'svg';
   if (MD_LANGS.has(lang)) return 'markdown';
   if (SKIP_LANGS.has(lang)) return null;
-  // React / JSX often shipped as artifact-style previews in Claude.
-  if (lang === 'jsx' || lang === 'tsx' || lang === 'react') return 'code';
+  // React / JSX often shipped as artifact-style previews in Claude — render live.
+  if (lang === 'jsx' || lang === 'tsx' || lang === 'react') return 'react';
   // Only promote substantial non-trivial code fences when they look intentional.
   if (content.trim().length >= 200) return 'code';
   return null;
@@ -140,7 +144,15 @@ export function extractFenceArtifacts(
     const title = titleFromContent(
       kind,
       content,
-      kind === 'html' ? 'HTML artifact' : kind === 'svg' ? 'SVG artifact' : kind === 'markdown' ? 'Document' : `${lang} artifact`,
+      kind === 'html'
+        ? 'HTML artifact'
+        : kind === 'svg'
+          ? 'SVG artifact'
+          : kind === 'markdown'
+            ? 'Document'
+            : kind === 'react'
+              ? 'React artifact'
+              : `${lang} artifact`,
     );
     out.push({
       id: `${idPrefix}-${index}`,
@@ -174,7 +186,8 @@ function kindFromArtifactType(type: string | undefined, content: string): Artifa
   const t = (type ?? '').toLowerCase();
   if (t.includes('svg')) return 'svg';
   if (t.includes('markdown') || t === 'md') return 'markdown';
-  if (t.includes('html') || t.includes('react') || t.includes('page')) return 'html';
+  if (t.includes('react') || t.includes('jsx') || t.includes('tsx')) return 'react';
+  if (t.includes('html') || t.includes('page')) return 'html';
   if (looksLikeHtmlDocument(content)) {
     return content.trim().toLowerCase().startsWith('<svg') ? 'svg' : 'html';
   }
@@ -254,6 +267,66 @@ export function extractArtifacts(
   const toolContents = new Set(fromTools.map((a) => a.content.trim()));
   const fences = fromFences.filter((a) => !toolContents.has(a.content.trim()));
   return [...fromTools, ...fences];
+}
+
+/**
+ * Wrap a React component module (JSX/TSX, `export default`) into a standalone
+ * HTML page that loads React/ReactDOM/Babel from a CDN and renders it client-side.
+ * Fed through the same sandboxed iframe pipeline as `html` artifacts.
+ */
+export function wrapReactArtifactHtml(source: string): string {
+  const safeSource = JSON.stringify(source).replace(/<\/script/gi, '<\\/script');
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>html,body,#root{height:100%;margin:0;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+.artifact-react-error{color:#b91c1c;padding:16px;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;}</style>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function () {
+  var source = ${safeSource};
+  function showError(err) {
+    document.getElementById('root').innerHTML =
+      '<div class="artifact-react-error"></div>';
+    document.querySelector('.artifact-react-error').textContent =
+      (err && err.stack) || String(err);
+  }
+  try {
+    var transformed = Babel.transform(source, {
+      presets: [['typescript', { isTSX: true, allExtensions: true }], 'react'],
+      plugins: ['transform-modules-commonjs'],
+      filename: 'artifact.tsx',
+    }).code;
+    var moduleObj = { exports: {} };
+    function requireShim(name) {
+      if (name === 'react') return window.React;
+      if (name === 'react-dom' || name === 'react-dom/client') return window.ReactDOM;
+      throw new Error('Module not available in Sideboard React preview: ' + name);
+    }
+    var run = new Function('module', 'exports', 'require', 'React', 'ReactDOM', transformed);
+    run(moduleObj, moduleObj.exports, requireShim, window.React, window.ReactDOM);
+    var Component = moduleObj.exports.default || moduleObj.exports.App || moduleObj.exports;
+    if (typeof Component !== 'function') {
+      throw new Error(
+        'No default export component found. Export a React component, e.g. export default function App() { ... }',
+      );
+    }
+    var root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(Component));
+  } catch (err) {
+    showError(err);
+  }
+})();
+</script>
+</body>
+</html>`;
 }
 
 /** Pick the newest artifact worth showing in the side column. */

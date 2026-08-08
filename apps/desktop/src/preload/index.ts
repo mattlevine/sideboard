@@ -67,6 +67,12 @@ const api: IpcApi = {
   listConductor: () => ipcRenderer.invoke('listConductor'),
   adoptFromConductor: (workspaceId) => ipcRenderer.invoke('adoptFromConductor', workspaceId),
   sendToThread: (threadRef, prompt) => ipcRenderer.invoke('sendToThread', threadRef, prompt),
+  editQueuedMessage: (threadRef, index, text) =>
+    ipcRenderer.invoke('editQueuedMessage', threadRef, index, text),
+  removeQueuedMessage: (threadRef, index) =>
+    ipcRenderer.invoke('removeQueuedMessage', threadRef, index),
+  sendQueuedMessageNow: (threadRef, index) =>
+    ipcRenderer.invoke('sendQueuedMessageNow', threadRef, index),
   setAutonomy: (threadRef, autonomy) => ipcRenderer.invoke('setAutonomy', threadRef, autonomy),
   setThreadOptions: (threadRef, patch) =>
     ipcRenderer.invoke('setThreadOptions', threadRef, patch),

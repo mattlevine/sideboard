@@ -330,6 +330,69 @@ export class Orchestrator {
     return results;
   }
 
+  /** Edit the text of a not-yet-started queued message. */
+  async editQueuedMessage(threadRef: string, index: number, text: string): Promise<Thread> {
+    const thread = this.requireThread(threadRef);
+    return withThreadLock(thread.id, async () => {
+      const current = this.requireThread(thread.id);
+      const trimmed = text.trim();
+      if (!trimmed || index < 0 || index >= current.queue.length) {
+        return current;
+      }
+      const queue = current.queue.map((p, i) => (i === index ? trimmed : p));
+      updateThread(thread.id, { queue });
+      this.emit({ type: 'queue_changed', threadId: thread.id, queue });
+      return this.requireThread(thread.id);
+    });
+  }
+
+  /** Remove a not-yet-started queued message. */
+  async removeQueuedMessage(threadRef: string, index: number): Promise<Thread> {
+    const thread = this.requireThread(threadRef);
+    return withThreadLock(thread.id, async () => {
+      const current = this.requireThread(thread.id);
+      if (index < 0 || index >= current.queue.length) return current;
+      const queue = current.queue.filter((_, i) => i !== index);
+      const stillQueued = queue.length > 0;
+      const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
+      updateThread(thread.id, {
+        queue,
+        status: !stillQueued && !inFlight && current.status === 'queued' ? 'idle' : current.status,
+      });
+      this.emit({ type: 'queue_changed', threadId: thread.id, queue });
+      const next = this.requireThread(thread.id);
+      this.emit({ type: 'status_changed', threadId: thread.id, status: next.status });
+      return next;
+    });
+  }
+
+  /**
+   * Promote a queued message to run next, interrupting the in-flight turn (if any).
+   * The current turn is stopped without clearing the rest of the queue — drainQueue
+   * picks the promoted message up as soon as the interrupted turn unwinds.
+   */
+  async sendQueuedMessageNow(threadRef: string, index: number): Promise<Thread> {
+    const thread = this.requireThread(threadRef);
+    const promoted = await withThreadLock(thread.id, async () => {
+      const current = this.requireThread(thread.id);
+      if (index < 0 || index >= current.queue.length) return false;
+      const item = current.queue[index]!;
+      const rest = current.queue.filter((_, i) => i !== index);
+      const queue = [item, ...rest];
+      updateThread(thread.id, { queue });
+      this.emit({ type: 'queue_changed', threadId: thread.id, queue });
+      return true;
+    });
+    if (!promoted) return this.requireThread(thread.id);
+    const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
+    if (inFlight) {
+      this.stop(thread.id, { clearQueue: false });
+    } else {
+      void this.drainQueue(thread.id);
+    }
+    return this.requireThread(thread.id);
+  }
+
   private async drainQueue(threadId: string): Promise<void> {
     if (this.draining.has(threadId)) return;
     this.draining.add(threadId);

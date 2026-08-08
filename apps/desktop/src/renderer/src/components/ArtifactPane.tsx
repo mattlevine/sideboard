@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ChatArtifact } from '../lib/artifacts';
+import { wrapReactArtifactHtml, type ChatArtifact } from '../lib/artifacts';
 import { CodeView } from './CodeView';
 import { DocumentPreviewModeToggle } from './DocumentPreview';
 import { MarkdownMessage } from './MarkdownMessage';
@@ -25,6 +25,7 @@ function kindBadge(kind: ChatArtifact['kind']): string {
   if (kind === 'html') return 'HTML';
   if (kind === 'svg') return 'SVG';
   if (kind === 'markdown') return 'MD';
+  if (kind === 'react') return 'REACT';
   return kind.toUpperCase();
 }
 
@@ -85,7 +86,10 @@ export function ArtifactPane({
   headerAction,
 }: Props) {
   const canPreview =
-    artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'markdown';
+    artifact.kind === 'html' ||
+    artifact.kind === 'svg' ||
+    artifact.kind === 'markdown' ||
+    artifact.kind === 'react';
   const [mode, setMode] = useState<'code' | 'preview'>(canPreview ? 'preview' : 'code');
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
@@ -133,6 +137,9 @@ export function ArtifactPane({
         return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:16px;background:#fff;}</style></head><body>${trimmed}</body></html>`;
       }
     }
+    if (artifact.kind === 'react') {
+      return wrapReactArtifactHtml(artifact.content);
+    }
     return artifact.content;
   }, [artifact.content, artifact.kind]);
 
@@ -140,7 +147,7 @@ export function ArtifactPane({
   const debouncedHtml = useDebounced(previewSrcDoc, 280);
 
   useEffect(() => {
-    if (artifact.kind !== 'html' && artifact.kind !== 'svg') {
+    if (artifact.kind !== 'html' && artifact.kind !== 'svg' && artifact.kind !== 'react') {
       setFrameUrl(null);
       setFrameError(null);
       return;
@@ -187,7 +194,7 @@ export function ArtifactPane({
 
   const effectiveMode = canPreview ? mode : 'code';
   const isHtmlPreview =
-    artifact.kind === 'html' || artifact.kind === 'svg';
+    artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'react';
   const codePath = useMemo(() => artifactCodePath(artifact), [artifact.kind, artifact.language]);
 
   // Let the preloader paint before mounting Monaco / markdown.

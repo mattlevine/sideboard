@@ -21,3 +21,5 @@ apps/desktop/dist/
 # Conductor-style machine-local overrides (apply to all worktrees of this repo)
 .sideboard/settings.local.toml
 .conductor/settings.local.toml
+# Per-worktree dev app-data (thread store) — see apps/desktop/src/main/index.ts
+.sideboard/dev-app-data/
