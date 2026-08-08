@@ -6,11 +6,11 @@ import {
 } from '@sideboard/diff-comment';
 import { documentPreviewKind } from '../lib/language';
 import { parseUnifiedPatch } from '../lib/tool-diff';
-import { ActivityMark } from './ActivityMark';
 import { CodeView } from './CodeView';
 import { DiffLines } from './DiffLines';
 import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
 import { GitChangeBadge } from './GitChangeBadge';
+import { PanePreloader } from './PanePreloader';
 
 interface Props {
   threadId: string;
@@ -330,21 +330,11 @@ export function FileEditor({
       {!error && mode === 'diff' && (
         <div className="file-editor-diff">
           {diffLoading || (patch != null && (!diffReady || diffRows == null)) ? (
-            <div className="file-diff-loading" role="status" aria-live="polite">
-              <ActivityMark tone="active" size="md" className="file-diff-loading-mark" />
-              <span className="file-diff-loading-caption">
-                <span className="thinking-indicator-label">
-                  {diffLoading || patch == null ? 'Loading diff' : 'Rendering diff'}
-                </span>
-                <span className="thinking-indicator-dots" aria-hidden>
-                  <span />
-                  <span />
-                  <span />
-                </span>
-              </span>
-            </div>
+            <PanePreloader
+              label={diffLoading || patch == null ? 'Loading diff' : 'Rendering diff'}
+            />
           ) : patch == null || diffRows == null ? (
-            <div className="file-diff-loading" role="status">
+            <div className="pane-preloader" role="status">
               No diff available
             </div>
           ) : (

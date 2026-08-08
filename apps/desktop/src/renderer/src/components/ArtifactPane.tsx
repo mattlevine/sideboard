@@ -3,6 +3,7 @@ import type { ChatArtifact } from '../lib/artifacts';
 import { CodeView } from './CodeView';
 import { DocumentPreviewModeToggle } from './DocumentPreview';
 import { MarkdownMessage } from './MarkdownMessage';
+import { PanePreloader } from './PanePreloader';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
 const ARTIFACT_WIDTH_MIN = 320;
@@ -89,12 +90,15 @@ export function ArtifactPane({
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /** Defer Monaco / markdown mount so the preloader can paint first. */
+  const [bodyReady, setBodyReady] = useState(false);
   const clearTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setMode(canPreview ? 'preview' : 'code');
     setCopied(false);
+    setBodyReady(false);
     if (copiedTimerRef.current != null) {
       window.clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = null;
@@ -185,7 +189,28 @@ export function ArtifactPane({
   const isHtmlPreview =
     artifact.kind === 'html' || artifact.kind === 'svg';
   const codePath = useMemo(() => artifactCodePath(artifact), [artifact.kind, artifact.language]);
-  const codeView = (
+
+  // Let the preloader paint before mounting Monaco / markdown.
+  useEffect(() => {
+    if (effectiveMode === 'preview' && isHtmlPreview) {
+      // HTML/SVG preview has its own frameUrl loading state.
+      setBodyReady(true);
+      return;
+    }
+    setBodyReady(false);
+    let cancelled = false;
+    const raf = window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        if (!cancelled) setBodyReady(true);
+      }, 0);
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+    };
+  }, [effectiveMode, isHtmlPreview, artifact.id]);
+
+  const codeView = bodyReady ? (
     <CodeView
       className="artifact-pane-codeview"
       path={codePath}
@@ -194,6 +219,8 @@ export function ArtifactPane({
       modelNonce={`artifact-${artifact.id}`}
       height="100%"
     />
+  ) : (
+    <PanePreloader label="Loading code" />
   );
 
   return (
@@ -247,9 +274,13 @@ export function ArtifactPane({
       </div>
       <div className="artifact-pane-body">
         {effectiveMode === 'preview' && artifact.kind === 'markdown' ? (
-          <div className="artifact-pane-md">
-            <MarkdownMessage text={artifact.content} className="md" />
-          </div>
+          bodyReady ? (
+            <div className="artifact-pane-md">
+              <MarkdownMessage text={artifact.content} className="md" />
+            </div>
+          ) : (
+            <PanePreloader label="Loading preview" />
+          )
         ) : isHtmlPreview ? (
           <>
             {/* Keep the iframe mounted across Code/Preview toggles so we don't
@@ -268,7 +299,7 @@ export function ArtifactPane({
               frameError ? (
                 <div className="artifact-pane-loading">Preview failed: {frameError}</div>
               ) : (
-                <div className="artifact-pane-loading">Loading preview…</div>
+                <PanePreloader label="Loading preview" />
               )
             ) : null}
             {effectiveMode === 'code' ? codeView : null}

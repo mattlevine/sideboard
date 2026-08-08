@@ -9,6 +9,7 @@ import {
   disableMonacoTsDiagnostics,
 } from '../lib/monacoTsDefaults';
 import { joinWorktreePath, shutdownTsDiagnostics } from '../lib/tsserverLanguageService';
+import { PanePreloader } from './PanePreloader';
 
 loader.config({ monaco });
 // Disable worker diagnostics before any model is created.
@@ -122,7 +123,7 @@ export function CodeView({
         onChange={(next) => {
           if (next != null) onChange?.(next);
         }}
-        loading={<div className="empty">Loading editor…</div>}
+        loading={<PanePreloader label="Loading editor" />}
         options={{
           readOnly,
           domReadOnly: readOnly,
