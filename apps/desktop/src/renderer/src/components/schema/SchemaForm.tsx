@@ -8,7 +8,19 @@ import type { SchemaDatasource } from './SchemaDatasource';
 import { MarkdownEditor } from './MarkdownEditor';
 import { HasManyField, HasOneField, type RelatedNavigation } from './RelationshipFields';
 import { RichTextEditor } from './RichTextEditor';
-import { describeFields, type FieldDef } from './schema-utils';
+import {
+  defaultValueForSchema,
+  describeFields,
+  describeItemField,
+  getFieldUi,
+  getItemsSchema,
+  getItemsUi,
+  isArraySchema,
+  isObjectSchema,
+  MAX_SCHEMA_NESTING_DEPTH,
+  type FieldDef,
+  type JsonSchema,
+} from './schema-utils';
 
 interface Props {
   resource: SchemaResource;
@@ -24,7 +36,17 @@ interface Props {
   onOpenRelated?: (nav: RelatedNavigation) => void;
 }
 
-function FieldInput({
+type SharedFieldProps = {
+  datasource: SchemaDatasource;
+  currentRecordId?: string | null;
+  onOpenRelated?: (nav: RelatedNavigation) => void;
+  showContentStates?: boolean;
+  depth?: number;
+};
+
+const FALLBACK_STRING_ITEMS: JsonSchema = { type: 'string' };
+
+function ScalarFieldInput({
   field,
   value,
   onChange,
@@ -36,11 +58,7 @@ function FieldInput({
   field: FieldDef;
   value: unknown;
   onChange: (v: unknown) => void;
-  datasource: SchemaDatasource;
-  currentRecordId?: string | null;
-  onOpenRelated?: (nav: RelatedNavigation) => void;
-  showContentStates?: boolean;
-}) {
+} & SharedFieldProps) {
   if (field.readOnly) {
     return (
       <input
@@ -213,6 +231,402 @@ function FieldInput({
   );
 }
 
+function ObjectFields({
+  schema,
+  schemaUi,
+  value,
+  onChange,
+  shared,
+  depth,
+}: {
+  schema: JsonSchema;
+  schemaUi?: JsonSchema;
+  value: unknown;
+  onChange: (v: Record<string, unknown>) => void;
+  shared: SharedFieldProps;
+  depth: number;
+}) {
+  const fields = useMemo(() => describeFields(schema, schemaUi), [schema, schemaUi]);
+  const obj =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  return (
+    <div className="schema-object">
+      {fields.map((field) => {
+        const fieldUi = getFieldUi(schemaUi, field.name);
+        const isRel = field.format === 'has-one' || field.format === 'has-many';
+        const hideOuterLabel =
+          field.type === 'boolean' ||
+          field.widget === 'checkbox' ||
+          isRel;
+        return (
+          <div key={field.name} className="schema-field">
+            {hideOuterLabel ? null : (
+              <label className="schema-label">
+                {field.title}
+                {field.required ? <span className="schema-req">*</span> : null}
+              </label>
+            )}
+            {!isRel && field.description ? (
+              <div className="schema-help">{field.description}</div>
+            ) : null}
+            <FieldInput
+              field={field}
+              fieldUi={fieldUi}
+              value={obj[field.name]}
+              onChange={(v) => onChange({ ...obj, [field.name]: v })}
+              {...shared}
+              depth={depth}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EnumMultiSelect({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldDef;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const selected = new Set(
+    Array.isArray(value) ? value.map(String) : [],
+  );
+  const options =
+    field.enumValues?.map((v, i) => ({
+      id: v,
+      label: field.enumNames?.[i] ?? v,
+    })) ?? [];
+
+  return (
+    <div className="schema-enum-multi">
+      {options.map((o) => (
+        <label key={o.id} className="schema-check">
+          <input
+            type="checkbox"
+            checked={selected.has(o.id)}
+            disabled={field.readOnly}
+            onChange={(e) => {
+              const next = new Set(selected);
+              if (e.target.checked) next.add(o.id);
+              else next.delete(o.id);
+              onChange([...next]);
+            }}
+          />
+          <span>{o.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function ArrayFieldEditor({
+  field,
+  fieldUi,
+  value,
+  onChange,
+  shared,
+  depth,
+}: {
+  field: FieldDef;
+  fieldUi: JsonSchema;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  shared: SharedFieldProps;
+  depth: number;
+}) {
+  const items = Array.isArray(value) ? value : [];
+  const itemsSchema = getItemsSchema(field.schema) ?? FALLBACK_STRING_ITEMS;
+  const itemsUi = getItemsUi(fieldUi);
+  const itemField = useMemo(
+    () => describeItemField(itemsSchema, itemsUi),
+    [itemsSchema, itemsUi],
+  );
+  const isEnumMulti =
+    Boolean(itemField.enumValues?.length) && !isObjectSchema(itemsSchema);
+
+  // Brightsy-style multi-select: array of enum scalars
+  if (isEnumMulti) {
+    return (
+      <EnumMultiSelect
+        field={{ ...itemField, readOnly: field.readOnly || itemField.readOnly }}
+        value={items}
+        onChange={onChange}
+      />
+    );
+  }
+
+  function updateAt(index: number, next: unknown) {
+    const copy = [...items];
+    copy[index] = next;
+    onChange(copy);
+  }
+
+  function removeAt(index: number) {
+    onChange(items.filter((_, i) => i !== index));
+  }
+
+  function move(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    const copy = [...items];
+    const tmp = copy[index];
+    copy[index] = copy[target];
+    copy[target] = tmp;
+    onChange(copy);
+  }
+
+  function addItem() {
+    onChange([...items, defaultValueForSchema(itemsSchema)]);
+  }
+
+  return (
+    <div className="schema-array">
+      {items.length === 0 ? (
+        <div className="schema-array-empty">
+          No items yet. Add one below.
+        </div>
+      ) : (
+        <div className="schema-array-list">
+          {items.map((item, index) => (
+            <div key={`${field.name}-${index}`} className="schema-array-item">
+              <div className="schema-array-item-head">
+                <span className="schema-array-item-title">
+                  {field.title} #{index + 1}
+                </span>
+                <div className="schema-array-item-actions">
+                  <button
+                    type="button"
+                    className="schema-array-btn"
+                    disabled={field.readOnly || index === 0}
+                    onClick={() => move(index, -1)}
+                    aria-label="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="schema-array-btn"
+                    disabled={field.readOnly || index >= items.length - 1}
+                    onClick={() => move(index, 1)}
+                    aria-label="Move down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="schema-array-btn danger"
+                    disabled={field.readOnly}
+                    onClick={() => removeAt(index)}
+                    aria-label="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              {isObjectSchema(itemsSchema) ? (
+                <ObjectFields
+                  schema={itemsSchema}
+                  schemaUi={itemsUi}
+                  value={item}
+                  onChange={(v) => updateAt(index, v)}
+                  shared={shared}
+                  depth={depth + 1}
+                />
+              ) : isArraySchema(itemsSchema) ? (
+                <FieldInput
+                  field={itemField}
+                  fieldUi={itemsUi}
+                  value={item}
+                  onChange={(v) => updateAt(index, v)}
+                  {...shared}
+                  depth={depth + 1}
+                />
+              ) : (
+                <FieldInput
+                  field={itemField}
+                  fieldUi={itemsUi}
+                  value={item}
+                  onChange={(v) => updateAt(index, v)}
+                  {...shared}
+                  depth={depth + 1}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        className="schema-array-add"
+        disabled={field.readOnly}
+        onClick={addItem}
+      >
+        Add {field.title}
+      </button>
+    </div>
+  );
+}
+
+function JsonFallbackEditor({
+  value,
+  onChange,
+  readOnly,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  readOnly?: boolean;
+}) {
+  const [text, setText] = useState(() => {
+    try {
+      return value == null ? '' : JSON.stringify(value, null, 2);
+    } catch {
+      return '';
+    }
+  });
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      setText(value == null ? '' : JSON.stringify(value, null, 2));
+      setParseError(null);
+    } catch {
+      /* keep */
+    }
+  }, [value]);
+
+  return (
+    <div className="schema-json-fallback">
+      <textarea
+        className="schema-input schema-textarea schema-json-textarea"
+        rows={6}
+        disabled={readOnly}
+        value={text}
+        onChange={(e) => {
+          const next = e.target.value;
+          setText(next);
+          if (!next.trim()) {
+            setParseError(null);
+            onChange(null);
+            return;
+          }
+          try {
+            onChange(JSON.parse(next));
+            setParseError(null);
+          } catch (err) {
+            setParseError(err instanceof Error ? err.message : 'Invalid JSON');
+          }
+        }}
+      />
+      {parseError ? (
+        <div className="schema-help schema-json-error">{parseError}</div>
+      ) : (
+        <div className="schema-help">JSON object / array</div>
+      )}
+    </div>
+  );
+}
+
+function FieldInput({
+  field,
+  fieldUi,
+  value,
+  onChange,
+  datasource,
+  currentRecordId,
+  onOpenRelated,
+  showContentStates,
+  depth = 0,
+}: {
+  field: FieldDef;
+  fieldUi?: JsonSchema;
+  value: unknown;
+  onChange: (v: unknown) => void;
+} & SharedFieldProps) {
+  const shared: SharedFieldProps = {
+    datasource,
+    currentRecordId,
+    onOpenRelated,
+    showContentStates,
+  };
+  const ui = fieldUi ?? {};
+
+  if (depth >= MAX_SCHEMA_NESTING_DEPTH) {
+    return (
+      <JsonFallbackEditor
+        value={value}
+        onChange={onChange}
+        readOnly={field.readOnly}
+      />
+    );
+  }
+
+  // Structured object (skip relationship / richtext object shapes handled as scalars)
+  const richObject =
+    field.format === 'richtext' ||
+    field.format === 'rich-text' ||
+    field.format === 'html' ||
+    field.widget === 'richtext' ||
+    field.widget === 'markdown';
+  if (
+    field.type === 'object' &&
+    !richObject &&
+    field.format !== 'has-one' &&
+    field.format !== 'has-many' &&
+    isObjectSchema(field.schema)
+  ) {
+    return (
+      <ObjectFields
+        schema={field.schema}
+        schemaUi={ui}
+        value={value}
+        onChange={onChange}
+        shared={shared}
+        depth={depth + 1}
+      />
+    );
+  }
+
+  if (field.type === 'object' && !richObject && field.format !== 'has-one') {
+    return (
+      <JsonFallbackEditor
+        value={value}
+        onChange={onChange}
+        readOnly={field.readOnly}
+      />
+    );
+  }
+
+  if (field.type === 'array' && field.format !== 'has-many') {
+    return (
+      <ArrayFieldEditor
+        field={field}
+        fieldUi={ui}
+        value={value}
+        onChange={onChange}
+        shared={shared}
+        depth={depth}
+      />
+    );
+  }
+
+  return (
+    <ScalarFieldInput
+      field={field}
+      value={value}
+      onChange={onChange}
+      {...shared}
+    />
+  );
+}
+
 export function SchemaForm({
   resource,
   record,
@@ -244,6 +658,12 @@ export function SchemaForm({
 
   const hasContentStates = resourceHasContentStates(resource);
   const published = Boolean(record?.publishedAt);
+  const shared: SharedFieldProps = {
+    datasource,
+    currentRecordId: record?.id,
+    onOpenRelated,
+    showContentStates: hasContentStates,
+  };
 
   async function save() {
     setSaving(true);
@@ -260,6 +680,7 @@ export function SchemaForm({
   return (
     <div className="schema-form">
       {fields.map((field) => {
+        const fieldUi = getFieldUi(resource.schemaUi, field.name);
         const isRel =
           field.format === 'has-one' || field.format === 'has-many';
         const hideOuterLabel =
@@ -279,12 +700,11 @@ export function SchemaForm({
             ) : null}
             <FieldInput
               field={field}
+              fieldUi={fieldUi}
               value={data[field.name]}
               onChange={(v) => setData((prev) => ({ ...prev, [field.name]: v }))}
-              datasource={datasource}
-              currentRecordId={record?.id}
-              onOpenRelated={onOpenRelated}
-              showContentStates={hasContentStates}
+              {...shared}
+              depth={0}
             />
           </div>
         );
