@@ -134,10 +134,15 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     userSetTitle: true,
     ...binding,
     agent: input.agent ?? from.agent,
-    model: input.agent && input.agent !== from.agent ? null : from.model,
+    model:
+      input.model !== undefined
+        ? input.model
+        : input.agent && input.agent !== from.agent
+          ? null
+          : from.model,
     fast: from.fast,
     planMode: from.planMode,
-    autonomy: from.autonomy,
+    autonomy: input.autonomy ?? from.autonomy,
     attachments: input.attachments ?? [],
     status: 'idle',
   });

@@ -34,6 +34,11 @@ import type {
 } from '../store/app-settings.js';
 import type { Workspace } from '../store/workspaces.js';
 import type { BrightsyChatTargets } from '../agents/brightsy-targets.js';
+import type { AgentModelInfo, CursorModelInfo } from '../agents/model-info.js';
+import type {
+  AgentSetupActionResult,
+  AgentSetupInfo,
+} from '../agents/install.js';
 import type { BrightsySession } from '../brightsy/accounts.js';
 import type { GitHubStatus } from '../integrations/github.js';
 import type { ListIssuesResult } from '../integrations/issues.js';
@@ -52,6 +57,12 @@ export interface CloudConnectStatus {
 /** Shared typed surface for Electron preload ↔ renderer (and docs). */
 export interface IpcApi {
   detectAgents(): Promise<AgentStatus[]>;
+  /** Install recipe + docs for Settings → Agents. */
+  getAgentSetupInfo(agent: AgentKind): Promise<AgentSetupInfo>;
+  /** Install a CLI agent (npm in-process or Terminal for curl installers). */
+  installAgent(agent: AgentKind): Promise<AgentSetupActionResult>;
+  /** Open the agent’s login/auth command in the system terminal. */
+  loginAgent(agent: AgentKind): Promise<AgentSetupActionResult>;
   getAppSettings(): Promise<AppSettings>;
   saveAppSettings(settings: AppSettings): Promise<AppSettings>;
   updateAppEnvironment(patch: Record<string, string | null | undefined>): Promise<AppSettings>;
@@ -65,6 +76,12 @@ export interface IpcApi {
   /** Ensure `~/.claude/settings.json` exists and open it in the OS default app. */
   openClaudeUserSettings(): Promise<void>;
   listBrightsyChatTargets(): Promise<BrightsyChatTargets>;
+  /** Models from `Cursor.models.list` for the composer picker. */
+  listCursorModels(): Promise<CursorModelInfo[]>;
+  /** Models from `codex debug models` for the composer picker. */
+  listCodexModels(): Promise<AgentModelInfo[]>;
+  /** Models from `opencode models` for the composer picker. */
+  listOpencodeModels(): Promise<AgentModelInfo[]>;
   /** Brightsy login + connected teams (shared by CLI, Brightsy agent, and Claude MCP). */
   getBrightsySession(): Promise<BrightsySession>;
   /**

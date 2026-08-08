@@ -34,9 +34,14 @@ import {
   claudeUserSettingsPath,
   detectAgents,
   ensureAgentPath,
+  getAgentSetupInfo,
   getOrchestrator,
+  installAgent,
   listBranches,
   listBrightsyChatTargets,
+  listCursorModels,
+  listCodexModels,
+  listOpencodeModels,
   getBrightsySession,
   switchBrightsyAccount,
   connectBrightsyTeam,
@@ -47,6 +52,7 @@ import {
   getGitHubStatus,
   loadAppSettings,
   loadBrightsyConfig,
+  loginAgent,
   maxConcurrentAgents,
   resolveRepoRoot,
   run,
@@ -432,6 +438,17 @@ function registerIpc(): void {
     applyAppEnvironment(process.env);
     return detectAgents();
   });
+  ipcMain.handle('getAgentSetupInfo', (_e, agent: AgentKind) => getAgentSetupInfo(agent));
+  ipcMain.handle('installAgent', async (_e, agent: AgentKind) => {
+    ensureAgentPath();
+    applyAppEnvironment(process.env);
+    return installAgent(agent);
+  });
+  ipcMain.handle('loginAgent', async (_e, agent: AgentKind) => {
+    ensureAgentPath();
+    applyAppEnvironment(process.env);
+    return loginAgent(agent);
+  });
   ipcMain.handle('getAppSettings', () => loadAppSettings());
   ipcMain.handle('saveAppSettings', (_e, settings: AppSettings) => {
     const saved = saveAppSettings(settings);
@@ -526,6 +543,20 @@ function registerIpc(): void {
     if (err) throw new Error(err);
   });
   ipcMain.handle('listBrightsyChatTargets', () => listBrightsyChatTargets());
+  ipcMain.handle('listCursorModels', () => {
+    applyAppEnvironment(process.env);
+    return listCursorModels();
+  });
+  ipcMain.handle('listCodexModels', () => {
+    ensureAgentPath();
+    applyAppEnvironment(process.env);
+    return listCodexModels();
+  });
+  ipcMain.handle('listOpencodeModels', () => {
+    ensureAgentPath();
+    applyAppEnvironment(process.env);
+    return listOpencodeModels();
+  });
   ipcMain.handle('getBrightsySession', () => getBrightsySession());
   ipcMain.handle('getBrightsyCmsAuth', async () => {
     try {

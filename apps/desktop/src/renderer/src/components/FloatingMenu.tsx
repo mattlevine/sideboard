@@ -15,6 +15,8 @@ interface Props {
   /** Element to anchor against (button or wrapper). */
   anchorRef: RefObject<HTMLElement | null>;
   children: ReactNode;
+  /** Pinned below the scrollable body (e.g. Brightsy + Permissions). */
+  footer?: ReactNode;
   className?: string;
   /** Prefer aligning menu's left edge to anchor left (default). */
   align?: 'left' | 'right';
@@ -30,6 +32,7 @@ export function FloatingMenu({
   onClose,
   anchorRef,
   children,
+  footer,
   className = '',
   align = 'left',
   placement = 'auto',
@@ -37,6 +40,7 @@ export function FloatingMenu({
   maxMenuHeight,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const hasFooter = Boolean(footer);
   const [style, setStyle] = useState<CSSProperties>({
     position: 'fixed',
     visibility: 'hidden',
@@ -59,6 +63,11 @@ export function FloatingMenu({
       // Temporarily unconstrain to measure natural size
       menu.style.maxHeight = 'none';
       menu.style.height = 'auto';
+      const scrollEl = menu.querySelector('.floating-menu-scroll') as HTMLElement | null;
+      if (scrollEl) {
+        scrollEl.style.maxHeight = 'none';
+        scrollEl.style.overflow = 'visible';
+      }
       const naturalH = Math.max(menu.scrollHeight, 1);
       const naturalW = Math.max(menu.offsetWidth, minWidth);
 
@@ -87,6 +96,11 @@ export function FloatingMenu({
       // Keep the menu fully inside the viewport even when space is tight.
       top = Math.max(pad, Math.min(top, window.innerHeight - height - pad));
 
+      if (scrollEl) {
+        scrollEl.style.maxHeight = '';
+        scrollEl.style.overflow = '';
+      }
+
       setStyle({
         position: 'fixed',
         top,
@@ -97,7 +111,9 @@ export function FloatingMenu({
         maxHeight: maxH,
         zIndex: 10000,
         visibility: 'visible',
-        overflow: 'auto',
+        overflow: hasFooter ? 'hidden' : 'auto',
+        display: hasFooter ? 'flex' : undefined,
+        flexDirection: hasFooter ? 'column' : undefined,
       });
     };
 
@@ -110,7 +126,7 @@ export function FloatingMenu({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [open, anchorRef, align, placement, minWidth, maxMenuHeight]);
+  }, [open, anchorRef, align, placement, minWidth, maxMenuHeight, hasFooter]);
 
   useEffect(() => {
     if (!open) return;
@@ -135,7 +151,8 @@ export function FloatingMenu({
 
   return createPortal(
     <div ref={menuRef} className={`tool-menu floating-menu ${className}`.trim()} style={style}>
-      {children}
+      {hasFooter ? <div className="floating-menu-scroll">{children}</div> : children}
+      {hasFooter ? <div className="floating-menu-footer">{footer}</div> : null}
     </div>,
     document.body,
   );

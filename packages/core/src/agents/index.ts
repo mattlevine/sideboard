@@ -21,15 +21,29 @@ export type {
   BrightsyTeamTargets,
 } from './brightsy-targets.js';
 export { claudeAdapter } from './claude.js';
-export { codexAdapter } from './codex.js';
+export { codexAdapter, listCodexModels } from './codex.js';
 export { cursorAdapter } from './cursor.js';
 export {
   cursorSdkMessageToEvents,
   parseCursorRunnerLine,
 } from './cursor-events.js';
 export type { CursorSdkStreamMessage, CursorTurnRequest } from './cursor-events.js';
-export { opencodeAdapter } from './opencode.js';
+export {
+  isCursorAutoModel,
+  listCursorModels,
+  resolveCursorModelId,
+} from './cursor.js';
+export type { AgentModelInfo, CursorModelInfo } from './model-info.js';
+export { opencodeAdapter, listOpencodeModels } from './opencode.js';
 export { ensureAgentPath } from './path.js';
+export {
+  getAgentSetupInfo,
+  listAgentSetupInfo,
+  installAgent,
+  loginAgent,
+  openInSystemTerminal,
+} from './install.js';
+export type { AgentSetupInfo, AgentSetupKind, AgentSetupActionResult } from './install.js';
 
 const adapters: Record<AgentKind, AgentAdapter> = {
   claude: claudeAdapter,

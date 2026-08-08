@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   AdvancedAppSettings,
+  AgentSetupActionResult,
   AgentStatus,
   AppSettings,
   BrightsyCloudConnectAgent,
@@ -42,6 +43,8 @@ const AGENT_PANELS: Array<{
   envKey: string | null;
   blurb: string;
   docsUrl: string;
+  /** True when Sideboard embeds the runtime (no CLI package to install). */
+  bundled?: boolean;
 }> = [
   {
     id: 'claude',
@@ -69,8 +72,9 @@ const AGENT_PANELS: Array<{
     label: 'Cursor',
     envKey: 'CURSOR_API_KEY',
     blurb:
-      'Runs through the Cursor API (same as Conductor). There is no local Cursor executable to configure.',
+      'No CLI to install — Sideboard ships the Cursor SDK (same as Conductor). Add a CURSOR_API_KEY from the Cursor dashboard.',
     docsUrl: 'https://cursor.com/dashboard/integrations',
+    bundled: true,
   },
   {
     id: 'brightsy',
@@ -124,6 +128,8 @@ export function SettingsModal({
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
   const [linearKeyDraft, setLinearKeyDraft] = useState('');
   const [showLinearKey, setShowLinearKey] = useState(false);
+  const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
+  const [setupLog, setSetupLog] = useState<string | null>(null);
 
   async function reload() {
     const cloudApi = window.sideboard.getCloudConnectStatus;
@@ -173,6 +179,11 @@ export function SettingsModal({
   }, [agentPanel]);
 
   useEffect(() => {
+    setSetupLog(null);
+    setSetupBusy(null);
+  }, [agentPanel]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -192,6 +203,45 @@ export function SettingsModal({
   const activeEnvValue =
     activeAgent?.envKey != null ? settings.environment[activeAgent.envKey] ?? '' : '';
 
+  function formatSetupResult(result: AgentSetupActionResult): string {
+    const parts = [result.message];
+    if (result.stdout?.trim()) parts.push(result.stdout.trim());
+    if (result.stderr?.trim()) parts.push(result.stderr.trim());
+    return parts.filter(Boolean).join('\n\n');
+  }
+
+  async function runInstall() {
+    if (!activeAgent || setupBusy) return;
+    setSetupBusy('install');
+    setSetupLog(null);
+    setError(null);
+    try {
+      const result = await window.sideboard.installAgent(activeAgent.id);
+      setSetupLog(formatSetupResult(result));
+      if (!result.ok) setError(result.message);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSetupBusy(null);
+    }
+  }
+
+  async function runLogin() {
+    if (!activeAgent || setupBusy) return;
+    setSetupBusy('login');
+    setSetupLog(null);
+    setError(null);
+    try {
+      const result = await window.sideboard.loginAgent(activeAgent.id);
+      setSetupLog(formatSetupResult(result));
+      if (!result.ok) setError(result.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSetupBusy(null);
+    }
+  }
   async function saveEnvPatch(patch: Record<string, string | null>) {
     setBusy(true);
     setError(null);
@@ -612,8 +662,15 @@ export function SettingsModal({
                           ? `Ready · ${connectedCount} team${connectedCount === 1 ? '' : 's'} connected${cloudBit}`
                           : `Ready · select teams to connect${cloudBit}`
                         : ready
-                          ? 'Ready'
-                          : st?.reason || (st?.installed ? 'Needs auth' : 'Not installed');
+                          ? a.bundled
+                            ? 'Ready · SDK (no CLI install)'
+                            : 'Ready'
+                          : st?.reason ||
+                            (st?.installed
+                              ? 'Needs auth'
+                              : a.bundled
+                                ? 'Needs API key'
+                                : 'Not installed');
                     return (
                       <button
                         key={a.id}
@@ -644,17 +701,61 @@ export function SettingsModal({
                     <div className="settings-label">Status</div>
                     <div className="settings-status-text">
                       {activeStatus?.installed && activeStatus.authenticated
-                        ? 'Authenticated'
+                        ? activeAgent.bundled
+                          ? 'Authenticated (Cursor SDK)'
+                          : 'Authenticated'
                         : activeStatus?.reason || 'Not ready'}
                     </div>
                   </div>
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || setupBusy != null}
                     onClick={() => void reload()}
                   >
                     Refresh
                   </button>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-section-title">Setup</div>
+                  <p className="settings-hint">
+                    {activeAgent.bundled
+                      ? 'Cursor is bundled with Sideboard — paste a CURSOR_API_KEY below (no package install).'
+                      : 'Install the CLI if missing, then authenticate. Install uses npm when possible; login opens Terminal.'}
+                  </p>
+                  <div className="settings-actions">
+                    {!activeAgent.bundled && (
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy || setupBusy != null}
+                        onClick={() => void runInstall()}
+                      >
+                        {setupBusy === 'install' ? 'Installing…' : 'Install'}
+                      </button>
+                    )}
+                    {!activeAgent.bundled && (
+                      <button
+                        type="button"
+                        disabled={busy || setupBusy != null}
+                        onClick={() => void runLogin()}
+                      >
+                        {setupBusy === 'login' ? 'Opening…' : 'Log in'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void window.sideboard.openExternal(activeAgent.docsUrl)}
+                    >
+                      {activeAgent.bundled ? 'Get API key' : 'Docs'}
+                    </button>
+                  </div>
+                  {setupLog && (
+                    <pre className="settings-setup-log" tabIndex={0}>
+                      {setupLog}
+                    </pre>
+                  )}
                 </div>
 
                 {activeAgent.id === 'claude' && (

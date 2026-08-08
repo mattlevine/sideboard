@@ -3290,6 +3290,27 @@ body.resizing-panels webview {
   overflow: auto;
 }
 
+.floating-menu-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.floating-menu-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  padding-top: 2px;
+}
+
+/* Async agent model catalogs (Cursor/Codex/OpenCode) — fixed budget so late
+   results scroll here instead of shoving Brightsy / Permissions down. */
+.agent-model-list--async {
+  max-height: 200px;
+  min-height: 200px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .floating-menu.tool-diff-floating {
   width: min(640px, calc(100vw - 16px));
   padding: 0;
@@ -3598,6 +3619,86 @@ body.resizing-panels webview {
   border-radius: 12px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   padding: 8px;
+}
+
+.agent-options-picker {
+  width: min(520px, 94vw);
+  max-height: min(78vh, 640px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 10px 8px;
+  gap: 6px;
+}
+
+.agent-options-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 4px;
+}
+
+.agent-options-picker-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.agent-options-picker-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agent-options-picker-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.agent-options-agent-chips,
+.agent-options-perm-chips {
+  padding: 0 2px;
+  flex-wrap: wrap;
+}
+
+.agent-options-perm-chips {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-options-picker-body {
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: min(48vh, 380px);
+  overflow: auto;
+}
+
+.agent-options-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 2px 2px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-options-picker-done {
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agent-options-picker-done:hover {
+  border-color: var(--accent, #6cb6ff);
 }
 
 .composer-picker-teams {
@@ -8343,6 +8444,21 @@ body:has(.update-banner) .team-toast-stack {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.settings-setup-log {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  max-height: 160px;
+  overflow: auto;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sb-fg, #1a1a1a) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sb-fg, #1a1a1a) 12%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .settings-hint {

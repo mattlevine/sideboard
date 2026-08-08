@@ -3,12 +3,73 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
+import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput, normalizeTurnInput } from './turn-input.js';
 import { permissionMode } from './types.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
 /** macOS ARG_MAX ~256KiB — use `codex exec -` + stdin for larger prompts. */
 export const CODEX_PROMPT_ARG_MAX = 200_000;
+
+const FALLBACK_CODEX_MODELS: AgentModelInfo[] = [
+  { id: 'gpt-5.6-sol', displayName: 'GPT-5.6 Sol' },
+  { id: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra' },
+  { id: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna' },
+  { id: 'gpt-5.5', displayName: 'GPT-5.5' },
+  { id: 'gpt-5.2', displayName: 'GPT-5.2' },
+];
+
+let cachedCodexModels: { at: number; models: AgentModelInfo[] } | null = null;
+const CODEX_MODEL_CACHE_MS = 5 * 60 * 1000;
+
+/**
+ * Models from `codex debug models` (JSON catalog). Prefers visibility=list.
+ * Falls back to a small static list when Codex isn't installed / command fails.
+ */
+export async function listCodexModels(): Promise<AgentModelInfo[]> {
+  const now = Date.now();
+  if (cachedCodexModels && now - cachedCodexModels.at < CODEX_MODEL_CACHE_MS) {
+    return cachedCodexModels.models;
+  }
+
+  const which = await run('which', ['codex'], { reject: false });
+  if (which.exitCode !== 0) return FALLBACK_CODEX_MODELS;
+
+  const listed = await run('codex', ['debug', 'models'], { reject: false });
+  if (listed.exitCode !== 0 || !listed.stdout.trim()) {
+    return cachedCodexModels?.models ?? FALLBACK_CODEX_MODELS;
+  }
+
+  try {
+    const parsed = JSON.parse(listed.stdout) as {
+      models?: Array<{
+        slug?: string;
+        display_name?: string;
+        description?: string;
+        visibility?: string;
+        priority?: number;
+      }>;
+    };
+    const rows = Array.isArray(parsed.models) ? parsed.models : [];
+    const preferred = rows.filter((m) => (m.visibility ?? 'list') === 'list');
+    const source = preferred.length > 0 ? preferred : rows;
+    const models = source
+      .map((m) => ({
+        id: (m.slug || '').trim(),
+        displayName: (m.display_name || m.slug || '').trim(),
+        description: m.description,
+        priority: typeof m.priority === 'number' ? m.priority : 999,
+      }))
+      .filter((m) => m.id)
+      .sort((a, b) => a.priority - b.priority)
+      .map(({ id, displayName, description }) => ({ id, displayName, description }));
+    if (models.length === 0) return FALLBACK_CODEX_MODELS;
+    cachedCodexModels = { at: now, models };
+    return models;
+  } catch {
+    return cachedCodexModels?.models ?? FALLBACK_CODEX_MODELS;
+  }
+}
 
 type CodexUsage = {
   input_tokens?: number;
@@ -101,6 +162,7 @@ export const codexAdapter: AgentAdapter = {
     }
 
     const mode = permissionMode(thread);
+    const model = thread.model?.trim();
     const args = [
       'exec',
       ...(sessionId ? (['resume', sessionId] as const) : []),
@@ -112,6 +174,7 @@ export const codexAdapter: AgentAdapter = {
       mode.codexSandbox,
       '--ask-for-approval',
       'never',
+      ...(model ? (['--model', model] as const) : []),
     ];
 
     return {

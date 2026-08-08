@@ -10,13 +10,67 @@ import {
   parseCursorRunnerLine,
   type CursorTurnRequest,
 } from './cursor-events.js';
+import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
+
+export type { AgentModelInfo, CursorModelInfo } from './model-info.js';
+
+const FALLBACK_CURSOR_MODELS: AgentModelInfo[] = [
+  { id: 'default', displayName: 'Auto' },
+  { id: 'composer-2.5', displayName: 'Composer 2.5' },
+  { id: 'composer-2', displayName: 'Composer 2' },
+];
+
+let cachedModels: { at: number; models: AgentModelInfo[] } | null = null;
+const MODEL_CACHE_MS = 5 * 60 * 1000;
 
 function resolveCursorApiKey(): string {
   const fromEnv = (process.env.CURSOR_API_KEY || '').trim();
   if (fromEnv) return fromEnv;
   return (loadAppSettings().environment.CURSOR_API_KEY || '').trim();
+}
+
+/** True when the thread uses Cursor Auto (`default` / null / `auto`). */
+export function isCursorAutoModel(model: string | null | undefined): boolean {
+  const id = (model ?? '').trim().toLowerCase();
+  return !id || id === 'default' || id === 'auto';
+}
+
+/** Resolve SDK model id for a turn (null → Auto). */
+export function resolveCursorModelId(model: string | null | undefined): string {
+  if (isCursorAutoModel(model)) return 'default';
+  return model!.trim();
+}
+
+/**
+ * List models available to the configured CURSOR_API_KEY.
+ * Cached briefly; falls back to a small static list when unauthenticated / offline.
+ */
+export async function listCursorModels(): Promise<AgentModelInfo[]> {
+  const now = Date.now();
+  if (cachedModels && now - cachedModels.at < MODEL_CACHE_MS) {
+    return cachedModels.models;
+  }
+
+  const apiKey = resolveCursorApiKey();
+  if (!apiKey) return FALLBACK_CURSOR_MODELS;
+
+  try {
+    const listed = await Cursor.models.list({ apiKey });
+    const models: AgentModelInfo[] = listed
+      .map((m) => ({
+        id: m.id,
+        displayName: m.displayName || m.id,
+        description: m.description,
+      }))
+      .filter((m) => Boolean(m.id));
+    if (models.length === 0) return FALLBACK_CURSOR_MODELS;
+    cachedModels = { at: now, models };
+    return models;
+  } catch {
+    return cachedModels?.models ?? FALLBACK_CURSOR_MODELS;
+  }
 }
 
 export {
@@ -118,12 +172,22 @@ export const cursorAdapter: AgentAdapter = {
 
     const runner = cursorRunnerPath();
     const isTs = runner.endsWith('.ts');
+    // Prefer a real Node on PATH when available — Electron's embedded Node
+    // (process.execPath under the desktop app) is often too old for node:sqlite.
+    // The runner still uses JsonlLocalAgentStore so ELECTRON_RUN_AS_NODE works too.
+    const whichNode = await run('which', ['node'], { reject: false });
+    const nodeBin =
+      whichNode.exitCode === 0 && whichNode.stdout.trim()
+        ? whichNode.stdout.trim()
+        : null;
+    const file = nodeBin || process.execPath;
     return {
-      file: process.execPath,
+      file,
       args: isTs ? ['--import', 'tsx', runner] : [runner],
       cwd: thread.worktreePath,
       stdin: JSON.stringify(req),
       env: {
+        ...(nodeBin ? {} : { ELECTRON_RUN_AS_NODE: '1' }),
         ...(apiKey ? { CURSOR_API_KEY: apiKey } : {}),
       },
     };

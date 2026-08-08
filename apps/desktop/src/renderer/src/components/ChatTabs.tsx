@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { AgentKind, Thread } from '@sideboard-ai/core';
+import type { AgentKind, Autonomy, Thread } from '@sideboard-ai/core';
 import { threadDisplayTitle } from '../lib/global-workspace';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
-import { FloatingMenu } from './FloatingMenu';
+import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
+
+export type NewChatTabOptions = {
+  agent?: AgentKind;
+  model?: string | null;
+  autonomy?: Autonomy;
+};
 
 interface Props {
   chats: Thread[];
@@ -39,7 +45,7 @@ interface Props {
   onCloseUrl?: (url: string) => void;
   onSelectChanges?: () => void;
   onCloseChanges?: () => void;
-  onNewTab: (agent?: AgentKind) => void;
+  onNewTab: (opts?: NewChatTabOptions) => void;
   onRename: (id: string, title: string) => void;
   onCloseTab?: (id: string) => void;
 }
@@ -81,7 +87,7 @@ export function ChatTabs({
   const [draft, setDraft] = useState('');
   const [newOpen, setNewOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const addBtnRef = useRef<HTMLButtonElement>(null);
+  const activeChat = chats.find((c) => c.id === activeChatId) ?? chats[0] ?? null;
 
   useEffect(() => {
     if (editingId) inputRef.current?.focus();
@@ -267,43 +273,31 @@ export function ChatTabs({
           );
         })}
         <button
-          ref={addBtnRef}
           type="button"
           className="chat-tab-add"
           title="New chat tab"
-          onClick={() => setNewOpen((v) => !v)}
+          onClick={() => setNewOpen(true)}
         >
           +
         </button>
-        <FloatingMenu
+        <AgentOptionsPicker
           open={newOpen}
+          value={{
+            agent: activeChat?.agent ?? 'claude',
+            model: activeChat?.model ?? null,
+            autonomy: activeChat?.autonomy ?? 'default',
+          }}
+          title="New chat tab"
+          confirmLabel="Create tab"
           onClose={() => setNewOpen(false)}
-          anchorRef={addBtnRef}
-          align="left"
-          minWidth={180}
-        >
-          <div className="menu-section">New tab with agent</div>
-          {(
-            [
-              { id: 'claude' as const, label: 'Claude' },
-              { id: 'codex' as const, label: 'Codex' },
-              { id: 'opencode' as const, label: 'OpenCode' },
-              { id: 'cursor' as const, label: 'Cursor' },
-              { id: 'brightsy' as const, label: 'Brightsy' },
-            ] as const
-          ).map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => {
-                setNewOpen(false);
-                onNewTab(a.id);
-              }}
-            >
-              <span>{a.label}</span>
-            </button>
-          ))}
-        </FloatingMenu>
+          onApply={(next) => {
+            onNewTab({
+              agent: next.agent,
+              model: next.model,
+              autonomy: next.autonomy,
+            });
+          }}
+        />
       </div>
       <div className="chat-tabs-actions">
         {usageTotalLabel && (

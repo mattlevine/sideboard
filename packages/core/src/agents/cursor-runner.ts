@@ -4,9 +4,15 @@
  * Reads a JSON turn request from stdin; emits Sideboard AgentEvent NDJSON on stdout.
  *
  * Exit codes: 0 finished, 1 startup/config failure, 2 run failed mid-flight.
+ *
+ * Uses {@link JsonlLocalAgentStore} instead of the SDK's default SQLite store:
+ * Electron's embedded Node (used via ELECTRON_RUN_AS_NODE) lacks `node:sqlite`.
  */
-import { Agent, CursorAgentError } from '@cursor/sdk';
+import { Agent, CursorAgentError, JsonlLocalAgentStore } from '@cursor/sdk';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { appDataDir } from '../store/paths.js';
 import { cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
 
 function emit(event: unknown): void {
@@ -14,11 +20,23 @@ function emit(event: unknown): void {
 }
 
 function modelSelection(model: string | null | undefined, fast: boolean) {
-  const id = (model && model.trim()) || 'composer-2.5';
+  // Cursor.models.list uses id "default" for Auto.
+  const raw = (model && model.trim()) || '';
+  const id =
+    !raw || raw.toLowerCase() === 'auto' || raw.toLowerCase() === 'default'
+      ? 'default'
+      : raw;
   if (fast) {
     return { id, params: [{ id: 'fast', value: 'true' as const }] };
   }
   return { id };
+}
+
+/** Durable local agent metadata (Conductor-style JSONL, not SQLite). */
+function localAgentStore(): JsonlLocalAgentStore {
+  const root = join(appDataDir(), 'cursor-sdk-store');
+  mkdirSync(root, { recursive: true });
+  return new JsonlLocalAgentStore(root);
 }
 
 async function readStdinJson(): Promise<CursorTurnRequest> {
@@ -54,6 +72,8 @@ async function main(): Promise<number> {
   const apiKey = (req.apiKey || process.env.CURSOR_API_KEY || '').trim() || undefined;
   const model = modelSelection(req.model, Boolean(req.fast));
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
+  const store = localAgentStore();
+  const local = { cwd: req.cwd, store };
 
   try {
     const agent = req.agentId
@@ -61,13 +81,13 @@ async function main(): Promise<number> {
           apiKey,
           model,
           mode,
-          local: { cwd: req.cwd },
+          local,
         })
       : await Agent.create({
           apiKey,
           model,
           mode,
-          local: { cwd: req.cwd },
+          local,
           name: 'Sideboard',
         });
 

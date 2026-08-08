@@ -1,8 +1,81 @@
 import { run } from '../git/run.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
+import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 import { permissionMode } from './types.js';
+
+const FALLBACK_OPENCODE_MODELS: AgentModelInfo[] = [
+  { id: 'opencode/big-pickle', displayName: 'opencode · big-pickle' },
+  {
+    id: 'openrouter/~anthropic/claude-sonnet-latest',
+    displayName: 'openrouter · claude-sonnet-latest',
+  },
+  {
+    id: 'openrouter/~openai/gpt-latest',
+    displayName: 'openrouter · gpt-latest',
+  },
+];
+
+let cachedOpencodeModels: { at: number; models: AgentModelInfo[] } | null = null;
+const OPENCODE_MODEL_CACHE_MS = 5 * 60 * 1000;
+
+function displayNameFromOpencodeId(id: string): string {
+  const slash = id.indexOf('/');
+  if (slash <= 0) return id;
+  const provider = id.slice(0, slash);
+  const name = id.slice(slash + 1);
+  return `${provider} · ${name}`;
+}
+
+function sortOpencodeModelIds(ids: string[]): string[] {
+  return [...ids].sort((a, b) => {
+    const aLatest = /latest|~/.test(a) ? 0 : 1;
+    const bLatest = /latest|~/.test(b) ? 0 : 1;
+    if (aLatest !== bLatest) return aLatest - bLatest;
+    const aOc = a.startsWith('opencode/') ? 0 : 1;
+    const bOc = b.startsWith('opencode/') ? 0 : 1;
+    if (aOc !== bOc) return aOc - bOc;
+    return a.localeCompare(b);
+  });
+}
+
+/**
+ * Models from `opencode models` (`provider/model` lines).
+ * Falls back to a small static list when OpenCode isn't installed.
+ */
+export async function listOpencodeModels(): Promise<AgentModelInfo[]> {
+  const now = Date.now();
+  if (cachedOpencodeModels && now - cachedOpencodeModels.at < OPENCODE_MODEL_CACHE_MS) {
+    return cachedOpencodeModels.models;
+  }
+
+  const which = await run('which', ['opencode'], { reject: false });
+  if (which.exitCode !== 0) return FALLBACK_OPENCODE_MODELS;
+
+  const listed = await run('opencode', ['models'], { reject: false });
+  if (listed.exitCode !== 0 || !listed.stdout.trim()) {
+    return cachedOpencodeModels?.models ?? FALLBACK_OPENCODE_MODELS;
+  }
+
+  const ids = listed.stdout
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^[\w.~@+-]+\/[\w.~@+/-]+$/.test(l));
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return FALLBACK_OPENCODE_MODELS;
+
+  // Full catalog can be hundreds of rows — keep a short, sorted shortlist for the picker.
+  const OPENCODE_PICKER_LIMIT = 60;
+  const models = sortOpencodeModelIds(unique)
+    .slice(0, OPENCODE_PICKER_LIMIT)
+    .map((id) => ({
+      id,
+      displayName: displayNameFromOpencodeId(id),
+    }));
+  cachedOpencodeModels = { at: now, models };
+  return models;
+}
 
 type OpencodeTokens = {
   input?: number;
@@ -68,6 +141,7 @@ export const opencodeAdapter: AgentAdapter = {
     const prompt = flattenTurnInput(input);
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
     const mode = permissionMode(thread);
+    const model = thread.model?.trim();
     // Never use --continue — it's global under concurrency. Always --session <id>.
     const args = [
       'run',
@@ -78,6 +152,9 @@ export const opencodeAdapter: AgentAdapter = {
     ];
     if (sessionId) {
       args.push('--session', sessionId);
+    }
+    if (model) {
+      args.push('--model', model);
     }
     return {
       file: 'opencode',

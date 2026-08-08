@@ -33,9 +33,15 @@ import {
 } from '../lib/right-pane-memory';
 import { formatTokenCount, sumUsage, totalTokens, usageTooltip } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';
-import { BrightsyTargetPicker } from './BrightsyTargetPicker';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
+import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
+import {
+  agentModelLabel,
+  cursorModelLabel,
+  useAgentModels,
+  useCursorModels,
+} from './CursorModelMenu';
 import { ActivityMark } from './ActivityMark';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import {
@@ -136,9 +142,14 @@ export function ThreadPanel({
   const [busy, setBusy] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [brightsyPickerOpen, setBrightsyPickerOpen] = useState(false);
+  const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(null);
+  const cursorModelsEnabled = thread.agent === 'cursor';
+  const { models: cursorModels } = useCursorModels(cursorModelsEnabled);
+  const codexModelsEnabled = thread.agent === 'codex';
+  const { models: codexModels } = useAgentModels('codex', codexModelsEnabled);
+  const opencodeModelsEnabled = thread.agent === 'opencode';
+  const { models: opencodeModels } = useAgentModels('opencode', opencodeModelsEnabled);
   const [openMenu, setOpenMenu] = useState(false);
   const [issuePickerOpen, setIssuePickerOpen] = useState(false);
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
@@ -178,14 +189,12 @@ export function ThreadPanel({
   const composerBoxRef = useRef<HTMLDivElement>(null);
   const [composerDragOver, setComposerDragOver] = useState(false);
   const plusBtnRef = useRef<HTMLButtonElement>(null);
-  const modelBtnRef = useRef<HTMLButtonElement>(null);
   const openBtnRef = useRef<HTMLButtonElement>(null);
   const composerExpanded =
     composerFocused ||
     Boolean(prompt.trim()) ||
     plusOpen ||
-    modelOpen ||
-    brightsyPickerOpen ||
+    agentPickerOpen ||
     issuePickerOpen ||
     workspacePickerOpen ||
     (thread.attachments?.length ?? 0) > 0;
@@ -250,6 +259,15 @@ export function ThreadPanel({
             : target.id.slice(0, 8));
       return teamLabel ? `Brightsy · ${teamLabel} · ${name}` : `Brightsy · ${name}`;
     }
+    if (thread.agent === 'cursor') {
+      return `Cursor · ${cursorModelLabel(thread.model, cursorModels)}`;
+    }
+    if (thread.agent === 'codex') {
+      return `Codex · ${agentModelLabel(thread.model, codexModels, { fallback: 'Codex' })}`;
+    }
+    if (thread.agent === 'opencode') {
+      return `OpenCode · ${agentModelLabel(thread.model, opencodeModels, { fallback: 'OpenCode' })}`;
+    }
     if (thread.agent !== 'claude') return thread.agent;
     if (!thread.model) return 'Auto';
     const labels: Record<string, string> = {
@@ -259,7 +277,14 @@ export function ThreadPanel({
       haiku: 'Haiku',
     };
     return labels[thread.model] ?? thread.model;
-  }, [thread.agent, thread.model, brightsyTargets]);
+  }, [
+    thread.agent,
+    thread.model,
+    brightsyTargets,
+    cursorModels,
+    codexModels,
+    opencodeModels,
+  ]);
 
   // Warm the label cache when Brightsy is active so the chip shows a name.
   useEffect(() => {
@@ -356,7 +381,9 @@ export function ThreadPanel({
   }, [thread.id]);
 
   function patchOptions(patch: Parameters<typeof window.sideboard.setThreadOptions>[1]) {
-    void window.sideboard.setThreadOptions(thread.id, patch).then(onRefresh);
+    void window.sideboard.setThreadOptions(thread.id, patch).then(onRefresh).catch((err) => {
+      window.alert(err instanceof Error ? err.message : String(err));
+    });
   }
 
   /** Toggle a chip without collapsing the composer (blur would otherwise minimize it). */
@@ -364,6 +391,47 @@ export function ThreadPanel({
     setComposerFocused(true);
     patchOptions(patch);
     requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  /**
+   * Agent providers can't be swapped mid-conversation (session/history is
+   * provider-specific). Switching after messages exist opens a new chat tab.
+   * Same-provider model changes stay on this thread.
+   */
+  async function applyAgentOptions(next: AgentOptionsValue) {
+    setComposerFocused(true);
+    const sameProvider = next.agent === thread.agent;
+    const midChat = thread.messages.length > 0;
+
+    if (sameProvider) {
+      patchOptions({ model: next.model, autonomy: next.autonomy });
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
+
+    if (!midChat) {
+      patchOptions({
+        agent: next.agent,
+        model: next.model,
+        autonomy: next.autonomy,
+      });
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
+
+    try {
+      const t = await window.sideboard.createChatTab({
+        fromThreadId: thread.id,
+        agent: next.agent,
+        model: next.model,
+        autonomy: next.autonomy,
+      });
+      onSelectChat(t.id, t);
+      onRefresh();
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   const showStreaming =
@@ -433,10 +501,16 @@ export function ThreadPanel({
     }
   }
 
-  async function newTab(agent?: AgentKind) {
+  async function newTab(opts?: {
+    agent?: AgentKind;
+    model?: string | null;
+    autonomy?: Thread['autonomy'];
+  }) {
     const t = await window.sideboard.createChatTab({
       fromThreadId: thread.id,
-      agent,
+      agent: opts?.agent,
+      model: opts?.model,
+      autonomy: opts?.autonomy,
     });
     onSelectChat(t.id, t);
     onRefresh();
@@ -874,7 +948,7 @@ export function ThreadPanel({
         onCloseUrl={(url) => onCloseUrl?.(url)}
         onSelectChanges={() => onSelectChanges?.()}
         onCloseChanges={() => onCloseChanges?.()}
-        onNewTab={(agent) => void newTab(agent)}
+        onNewTab={(opts) => void newTab(opts)}
         onRename={(id, title) =>
           void window.sideboard.renameThread(id, title).then(onRefresh)
         }
@@ -1360,13 +1434,12 @@ export function ThreadPanel({
             >
               <div className="composer-left">
                 <button
-                  ref={modelBtnRef}
                   type="button"
                   className="chip active"
                   title="Choose model / agent"
                   onClick={() => {
                     setPlusOpen(false);
-                    setModelOpen((v) => !v);
+                    setAgentPickerOpen(true);
                   }}
                 >
                   ▦ {modelLabel}
@@ -1393,106 +1466,6 @@ export function ThreadPanel({
                   </span>{' '}
                   Fast
                 </button>
-                <FloatingMenu
-                  open={modelOpen}
-                  onClose={() => setModelOpen(false)}
-                  anchorRef={modelBtnRef}
-                  align="left"
-                  placement="up"
-                  minWidth={260}
-                >
-                  <div className="menu-section">Claude</div>
-                  {(
-                    [
-                      { id: null, label: 'Auto' },
-                      { id: 'fable', label: 'Fable' },
-                      { id: 'opus', label: 'Opus' },
-                      { id: 'sonnet', label: 'Sonnet' },
-                      { id: 'haiku', label: 'Haiku' },
-                    ] as const
-                  ).map((m, i) => (
-                    <button
-                      key={m.label}
-                      type="button"
-                      className={
-                        thread.agent === 'claude' && thread.model === m.id ? 'selected' : ''
-                      }
-                      onClick={() => {
-                        setModelOpen(false);
-                        patchOptions({ agent: 'claude', model: m.id });
-                      }}
-                    >
-                      <span>
-                        {thread.agent === 'claude' && thread.model === m.id ? '✓ ' : ''}
-                        {m.label}
-                      </span>
-                      <kbd>{i + 1}</kbd>
-                    </button>
-                  ))}
-                  <div className="menu-section">Agents</div>
-                  <button
-                    type="button"
-                    className={thread.agent === 'codex' ? 'selected' : ''}
-                    onClick={() => {
-                      setModelOpen(false);
-                      patchOptions({ agent: 'codex', model: null });
-                    }}
-                  >
-                    <span>{thread.agent === 'codex' ? '✓ ' : ''}Codex</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={thread.agent === 'opencode' ? 'selected' : ''}
-                    onClick={() => {
-                      setModelOpen(false);
-                      patchOptions({ agent: 'opencode', model: null });
-                    }}
-                  >
-                    <span>{thread.agent === 'opencode' ? '✓ ' : ''}OpenCode</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={thread.agent === 'cursor' ? 'selected' : ''}
-                    onClick={() => {
-                      setModelOpen(false);
-                      patchOptions({ agent: 'cursor', model: null });
-                    }}
-                  >
-                    <span>{thread.agent === 'cursor' ? '✓ ' : ''}Cursor</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={thread.agent === 'brightsy' ? 'selected' : ''}
-                    onClick={() => {
-                      setModelOpen(false);
-                      setBrightsyPickerOpen(true);
-                    }}
-                  >
-                    <span>{thread.agent === 'brightsy' ? '✓ ' : ''}Brightsy</span>
-                    <kbd>…</kbd>
-                  </button>
-                  <div className="menu-section">Permissions</div>
-                  <button
-                    type="button"
-                    className={thread.autonomy === 'default' ? 'selected' : ''}
-                    onClick={() => {
-                      setModelOpen(false);
-                      patchOptions({ autonomy: 'default' });
-                    }}
-                  >
-                    <span>Default permissions</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={thread.autonomy === 'full' ? 'selected' : ''}
-                    onClick={() => {
-                      setModelOpen(false);
-                      patchOptions({ autonomy: 'full' });
-                    }}
-                  >
-                    <span>Full autonomy</span>
-                  </button>
-                </FloatingMenu>
               </div>
               <div className="composer-right">
                 {thread.planMode && thread.messages.some((m) => m.role === 'agent') && (
@@ -1512,7 +1485,7 @@ export function ThreadPanel({
                   className="icon-round"
                   title="More"
                   onClick={() => {
-                    setModelOpen(false);
+                    setAgentPickerOpen(false);
                     setPlusOpen((v) => !v);
                   }}
                 >
@@ -1630,23 +1603,22 @@ export function ThreadPanel({
           void appendAttachments([att]);
         }}
       />
-      <BrightsyTargetPicker
-        open={brightsyPickerOpen}
-        currentModel={thread.agent === 'brightsy' ? thread.model : null}
-        onClose={() => setBrightsyPickerOpen(false)}
-        onPick={(model) => {
-          patchOptions({ agent: 'brightsy', model });
-          if (model) {
-            // Refresh label cache after picking a less-common agent.
-            void window.sideboard.listBrightsyChatTargets().then(setBrightsyTargets).catch(() => {});
+      <AgentOptionsPicker
+        open={agentPickerOpen}
+        value={{
+          agent: thread.agent,
+          model: thread.model,
+          autonomy: thread.autonomy,
+        }}
+        onClose={() => setAgentPickerOpen(false)}
+        onApply={(next) => {
+          void applyAgentOptions(next);
+          if (next.agent === 'brightsy' && next.model) {
+            void window.sideboard
+              .listBrightsyChatTargets()
+              .then(setBrightsyTargets)
+              .catch(() => {});
           }
-          // Win the race against textarea onBlur's setTimeout(0), which would
-          // otherwise collapse the composer when the picker unmounts.
-          setComposerFocused(true);
-          window.setTimeout(() => {
-            setComposerFocused(true);
-            textareaRef.current?.focus();
-          }, 0);
         }}
       />
     </section>

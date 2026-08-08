@@ -1,8 +1,51 @@
 import { describe, expect, it } from 'vitest';
+import { cursorAdapter } from './cursor.js';
 import {
   cursorSdkMessageToEvents,
   parseCursorRunnerLine,
 } from './cursor-events.js';
+import type { Thread } from '../types/thread.js';
+
+const baseThread = {
+  id: 't1',
+  worktreePath: '/tmp/wt',
+  sessionId: null,
+  model: null,
+  fast: false,
+  planMode: false,
+  agent: 'cursor',
+} as unknown as Thread;
+
+describe('cursor model helpers', () => {
+  it('treats null/default/auto as Auto', async () => {
+    const { isCursorAutoModel, resolveCursorModelId } = await import('./cursor.js');
+    expect(isCursorAutoModel(null)).toBe(true);
+    expect(isCursorAutoModel('default')).toBe(true);
+    expect(isCursorAutoModel('auto')).toBe(true);
+    expect(isCursorAutoModel('composer-2.5')).toBe(false);
+    expect(resolveCursorModelId(null)).toBe('default');
+    expect(resolveCursorModelId('composer-2.5')).toBe('composer-2.5');
+  });
+});
+
+describe('cursorAdapter.buildTurn', () => {
+  it('runs the SDK runner via node when available (else Electron RUN_AS_NODE)', async () => {
+    const cmd = await cursorAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    expect(cmd.args.at(-1)).toMatch(/cursor-runner\.(js|cjs|ts)$/);
+    expect(cmd.cwd).toBe('/tmp/wt');
+    expect(JSON.parse(cmd.stdin!)).toMatchObject({
+      prompt: 'hi',
+      cwd: '/tmp/wt',
+    });
+    // Dev machines usually have `node` on PATH; Electron-only hosts fall back.
+    if (cmd.file === process.execPath) {
+      expect(cmd.env?.ELECTRON_RUN_AS_NODE).toBe('1');
+    } else {
+      expect(cmd.file).toMatch(/node/);
+      expect(cmd.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    }
+  });
+});
 
 describe('cursorSdkMessageToEvents', () => {
   it('maps system init to session_id', () => {

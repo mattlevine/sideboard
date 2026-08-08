@@ -549,6 +549,7 @@ export class Orchestrator {
       .join('\n\n---\n\n');
 
     try {
+      let lastStderr = '';
       const handle = await spawnAgentTurn(
         fresh,
         { cachedPrefix, prompt: agentPrompt },
@@ -556,6 +557,9 @@ export class Orchestrator {
           this.emit({ type: 'turn_output', threadId, event });
           if (event.type === 'session_id') {
             updateThread(threadId, { sessionId: event.data });
+          }
+          if (event.type === 'stderr' && typeof event.data === 'string' && event.data.trim()) {
+            lastStderr = event.data.trim();
           }
         },
       );
@@ -615,7 +619,14 @@ export class Orchestrator {
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         this.emit({ type: 'turn_finished', threadId, exitCode: result.exitCode });
       } else {
-        setStatus(threadId, result.exitCode === 0 ? 'idle' : 'error', result.exitCode === 0 ? null : `exit ${result.exitCode}`);
+        const failDetail = lastStderr
+          ? `exit ${result.exitCode}: ${lastStderr.slice(0, 500)}`
+          : `exit ${result.exitCode}`;
+        setStatus(
+          threadId,
+          result.exitCode === 0 ? 'idle' : 'error',
+          result.exitCode === 0 ? null : failDetail,
+        );
         this.emit({
           type: 'status_changed',
           threadId,
@@ -1187,12 +1198,19 @@ export class Orchestrator {
     if (patch.planMode !== undefined) next.planMode = patch.planMode;
     if (patch.model !== undefined) next.model = patch.model;
     if (patch.agent !== undefined) {
-      next.agent = patch.agent;
-      // Model aliases are agent-specific; clear when switching unless the patch
-      // also sets a new model (Brightsy uses model for agent:/model: targets).
-      if (patch.agent !== 'claude' && patch.model === undefined) next.model = null;
-      // Session ids are agent-specific — never resume Claude/Codex under Brightsy.
-      next.sessionId = null;
+      if (patch.agent !== thread.agent) {
+        if (thread.messages.length > 0) {
+          throw new Error(
+            `Cannot switch agent provider mid-chat (${thread.agent} → ${patch.agent}). Start a new chat tab instead.`,
+          );
+        }
+        next.agent = patch.agent;
+        // Model aliases are agent-specific; clear when switching unless the patch
+        // also sets a new model (Brightsy uses model for agent:/model: targets).
+        if (patch.agent !== 'claude' && patch.model === undefined) next.model = null;
+        // Session ids are agent-specific — never resume Claude/Codex under Brightsy.
+        next.sessionId = null;
+      }
     }
     return updateThread(thread.id, next);
   }

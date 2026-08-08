@@ -107,6 +107,8 @@ export interface CreateChatTabInput {
   /** Existing thread in the worktree to clone workspace metadata from. */
   fromThreadId: string;
   agent?: AgentKind;
+  model?: string | null;
+  autonomy?: Autonomy;
   title?: string;
   attachments?: ThreadAttachment[];
 }

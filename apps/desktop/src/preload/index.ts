@@ -10,6 +10,9 @@ const api: IpcApi = {
     }
   },
   detectAgents: () => ipcRenderer.invoke('detectAgents'),
+  getAgentSetupInfo: (agent) => ipcRenderer.invoke('getAgentSetupInfo', agent),
+  installAgent: (agent) => ipcRenderer.invoke('installAgent', agent),
+  loginAgent: (agent) => ipcRenderer.invoke('loginAgent', agent),
   getAppSettings: () => ipcRenderer.invoke('getAppSettings'),
   saveAppSettings: (settings) => ipcRenderer.invoke('saveAppSettings', settings),
   updateAppEnvironment: (patch) => ipcRenderer.invoke('updateAppEnvironment', patch),
@@ -18,6 +21,9 @@ const api: IpcApi = {
   resolveSystemClaudePath: () => ipcRenderer.invoke('resolveSystemClaudePath'),
   openClaudeUserSettings: () => ipcRenderer.invoke('openClaudeUserSettings'),
   listBrightsyChatTargets: () => ipcRenderer.invoke('listBrightsyChatTargets'),
+  listCursorModels: () => ipcRenderer.invoke('listCursorModels'),
+  listCodexModels: () => ipcRenderer.invoke('listCodexModels'),
+  listOpencodeModels: () => ipcRenderer.invoke('listOpencodeModels'),
   getBrightsySession: () => ipcRenderer.invoke('getBrightsySession'),
   getBrightsyCmsAuth: () => ipcRenderer.invoke('getBrightsyCmsAuth'),
   switchBrightsyAccount: (accountIdOrSlug) =>
