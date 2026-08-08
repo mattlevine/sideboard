@@ -404,10 +404,33 @@ body.resizing-panels webview {
   justify-content: center;
 }
 
+.artifact-pane-copy {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
 .artifact-pane-close:hover {
   background: var(--bg-hover);
   color: var(--text);
   border-color: var(--border);
+}
+
+.artifact-pane-copy:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .artifact-pane-body {
@@ -457,6 +480,18 @@ body.resizing-panels webview {
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.artifact-pane-codeview {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.artifact-pane-codeview.code-view > section,
+.artifact-pane-codeview.code-view > div {
+  height: 100% !important;
 }
 
 .tool-chip.artifact-chip {
@@ -3716,6 +3751,7 @@ body.resizing-panels webview {
 .md ul,
 .md ol,
 .md pre,
+.md .md-codeblock,
 .md blockquote {
   margin: 0 0 0.75em;
 }
@@ -3723,7 +3759,8 @@ body.resizing-panels webview {
 .md p:last-child,
 .md ul:last-child,
 .md ol:last-child,
-.md pre:last-child {
+.md pre:last-child,
+.md .md-codeblock:last-child {
   margin-bottom: 0;
 }
 
@@ -3772,6 +3809,11 @@ body.resizing-panels webview {
   padding: 0.1em 0.35em;
 }
 
+.md-codeblock {
+  position: relative;
+}
+
+.md-codeblock > pre,
 .md pre {
   overflow: auto;
   background: var(--bg);
@@ -3780,6 +3822,37 @@ body.resizing-panels webview {
   padding: 10px 12px;
 }
 
+.md-codeblock > pre {
+  margin: 0;
+  padding-right: 36px;
+}
+
+.md-codeblock-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.md-codeblock-copy:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.md-codeblock > pre code,
 .md pre code {
   background: transparent;
   border: none;
@@ -3855,7 +3928,33 @@ body.resizing-panels webview {
   font-size: 11px;
 }
 
-.md-mermaid-expand {
+.md-image {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 0 0 0.75em;
+  vertical-align: top;
+}
+
+.md-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.md-image-dialog-body img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(90vh - 56px);
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.md-mermaid-expand,
+.md-image-expand {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -3873,12 +3972,14 @@ body.resizing-panels webview {
   cursor: pointer;
 }
 
-.md-mermaid-expand:hover {
+.md-mermaid-expand:hover,
+.md-image-expand:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
 
-.md-mermaid-overlay {
+.md-mermaid-overlay,
+.md-image-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
@@ -3889,7 +3990,8 @@ body.resizing-panels webview {
   background: rgba(0, 0, 0, 0.75);
 }
 
-.md-mermaid-dialog {
+.md-mermaid-dialog,
+.md-image-dialog {
   position: relative;
   width: min(96vw, 1600px);
   max-height: 90vh;
@@ -3900,7 +4002,8 @@ body.resizing-panels webview {
   background: var(--bg-elevated);
 }
 
-.md-mermaid-close {
+.md-mermaid-close,
+.md-image-close {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -3914,12 +4017,14 @@ body.resizing-panels webview {
   cursor: pointer;
 }
 
-.md-mermaid-close:hover {
+.md-mermaid-close:hover,
+.md-image-close:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
 
-.md-mermaid-dialog-body {
+.md-mermaid-dialog-body,
+.md-image-dialog-body {
   padding-top: 28px;
 }
 

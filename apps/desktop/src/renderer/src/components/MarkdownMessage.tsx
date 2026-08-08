@@ -9,6 +9,8 @@ import {
   markdownUrlTransform,
   parseThreadLink,
 } from '../lib/thread-link';
+import { MarkdownCodeBlock } from './MarkdownCodeBlock';
+import { MarkdownImage } from './MarkdownImage';
 
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'));
 
@@ -63,6 +65,18 @@ export function MarkdownMessage({
   isStreaming = false,
 }: Props) {
   const components: ComponentProps<typeof ReactMarkdown>['components'] = {
+    img({ src, alt, title, className }) {
+      const srcStr = typeof src === 'string' ? src : '';
+      if (!srcStr) return null;
+      return (
+        <MarkdownImage
+          src={srcStr}
+          alt={typeof alt === 'string' ? alt : ''}
+          title={typeof title === 'string' ? title : undefined}
+          className={typeof className === 'string' ? className : undefined}
+        />
+      );
+    },
     a({ href, children, ...props }) {
       const url = typeof href === 'string' ? href : '';
       const threadRef = parseThreadLink(url);
@@ -144,7 +158,7 @@ export function MarkdownMessage({
           );
         }
       }
-      return <pre {...props}>{children}</pre>;
+      return <MarkdownCodeBlock {...props}>{children}</MarkdownCodeBlock>;
     },
     ...(onFileReferenceClick
       ? {

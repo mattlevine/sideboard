@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ChatArtifact } from '../lib/artifacts';
+import { CodeView } from './CodeView';
 import { DocumentPreviewModeToggle } from './DocumentPreview';
 import { MarkdownMessage } from './MarkdownMessage';
 import { PanelResizeHandle } from './PanelResizeHandle';
@@ -26,6 +27,45 @@ function kindBadge(kind: ChatArtifact['kind']): string {
   return kind.toUpperCase();
 }
 
+const ARTIFACT_LANG_EXT: Record<string, string> = {
+  html: 'html',
+  htm: 'html',
+  xhtml: 'html',
+  svg: 'html',
+  markdown: 'md',
+  md: 'md',
+  mdx: 'md',
+  typescript: 'ts',
+  ts: 'ts',
+  tsx: 'tsx',
+  javascript: 'js',
+  js: 'js',
+  mjs: 'js',
+  cjs: 'js',
+  jsx: 'jsx',
+  react: 'jsx',
+  python: 'py',
+  py: 'py',
+  json: 'json',
+  jsonc: 'json',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  yaml: 'yml',
+  yml: 'yml',
+  shell: 'sh',
+  bash: 'sh',
+  sh: 'sh',
+  zsh: 'sh',
+};
+
+/** Synthetic path so CodeView / Monaco can pick a language from the fence. */
+function artifactCodePath(artifact: ChatArtifact): string {
+  const raw = (artifact.language || artifact.kind || 'txt').toLowerCase();
+  const ext = ARTIFACT_LANG_EXT[raw] ?? (/^[a-z0-9_+-]+$/.test(raw) ? raw : 'txt');
+  return `artifact.${ext}`;
+}
+
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -48,11 +88,39 @@ export function ArtifactPane({
   const [mode, setMode] = useState<'code' | 'preview'>(canPreview ? 'preview' : 'code');
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const clearTimerRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setMode(canPreview ? 'preview' : 'code');
+    setCopied(false);
+    if (copiedTimerRef.current != null) {
+      window.clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = null;
+    }
   }, [artifact.id, canPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current != null) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+    };
+  }, []);
+
+  function copyContent() {
+    void navigator.clipboard?.writeText(artifact.content).then(() => {
+      setCopied(true);
+      if (copiedTimerRef.current != null) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+      copiedTimerRef.current = window.setTimeout(() => {
+        copiedTimerRef.current = null;
+        setCopied(false);
+      }, 1200);
+    });
+  }
 
   const previewSrcDoc = useMemo(() => {
     if (artifact.kind === 'svg') {
@@ -116,6 +184,17 @@ export function ArtifactPane({
   const effectiveMode = canPreview ? mode : 'code';
   const isHtmlPreview =
     artifact.kind === 'html' || artifact.kind === 'svg';
+  const codePath = useMemo(() => artifactCodePath(artifact), [artifact.kind, artifact.language]);
+  const codeView = (
+    <CodeView
+      className="artifact-pane-codeview"
+      path={codePath}
+      value={artifact.content}
+      readOnly
+      modelNonce={`artifact-${artifact.id}`}
+      height="100%"
+    />
+  );
 
   return (
     <aside
@@ -143,6 +222,15 @@ export function ArtifactPane({
           {canPreview && (
             <DocumentPreviewModeToggle mode={effectiveMode} onChange={setMode} />
           )}
+          <button
+            type="button"
+            className="artifact-pane-copy"
+            title={copied ? 'Copied' : 'Copy code'}
+            aria-label={copied ? 'Copied' : 'Copy code to clipboard'}
+            onClick={copyContent}
+          >
+            {copied ? '✓' : '⧉'}
+          </button>
           {headerAction}
           {!embedded ? (
             <button
@@ -183,16 +271,10 @@ export function ArtifactPane({
                 <div className="artifact-pane-loading">Loading preview…</div>
               )
             ) : null}
-            {effectiveMode === 'code' ? (
-              <pre className="artifact-pane-code">
-                <code>{artifact.content}</code>
-              </pre>
-            ) : null}
+            {effectiveMode === 'code' ? codeView : null}
           </>
         ) : (
-          <pre className="artifact-pane-code">
-            <code>{artifact.content}</code>
-          </pre>
+          codeView
         )}
       </div>
     </aside>
