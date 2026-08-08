@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatArtifact } from '../lib/artifacts';
 import { DocumentPreviewModeToggle } from './DocumentPreview';
 import { MarkdownMessage } from './MarkdownMessage';
@@ -45,6 +45,7 @@ export function ArtifactPane({
   const [mode, setMode] = useState<'code' | 'preview'>(canPreview ? 'preview' : 'code');
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
+  const clearTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setMode(canPreview ? 'preview' : 'code');
@@ -89,18 +90,29 @@ export function ArtifactPane({
     };
   }, [artifact.id, artifact.kind, debouncedHtml]);
 
-  // Clear only when the pane unmounts or the artifact id is replaced — not on
-  // React Strict Mode remount races mid-load.
+  // Clear preview HTML only after a real unmount. Cancel on remount so React
+  // Strict Mode (and brief remounts) don't wipe the map while the pane is open —
+  // otherwise Code→Preview remounts the iframe and hits "preview missing".
   useEffect(() => {
+    if (clearTimerRef.current != null) {
+      window.clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = null;
+    }
     const id = artifact.id;
     return () => {
-      window.setTimeout(() => {
+      if (clearTimerRef.current != null) {
+        window.clearTimeout(clearTimerRef.current);
+      }
+      clearTimerRef.current = window.setTimeout(() => {
+        clearTimerRef.current = null;
         void window.sideboard.clearArtifactPreview(id).catch(() => {});
       }, 2_000);
     };
   }, [artifact.id]);
 
   const effectiveMode = canPreview ? mode : 'code';
+  const isHtmlPreview =
+    artifact.kind === 'html' || artifact.kind === 'svg';
 
   return (
     <aside
@@ -146,22 +158,33 @@ export function ArtifactPane({
           <div className="artifact-pane-md">
             <MarkdownMessage text={artifact.content} className="md" />
           </div>
-        ) : effectiveMode === 'preview' &&
-          (artifact.kind === 'html' || artifact.kind === 'svg') ? (
-          frameUrl ? (
-            <iframe
-              className="artifact-pane-frame"
-              title={artifact.title}
-              // Custom protocol is isolated from the app origin; same-origin here
-              // only means the artifact can use its own localStorage / etc.
-              sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
-              src={frameUrl}
-            />
-          ) : frameError ? (
-            <div className="artifact-pane-loading">Preview failed: {frameError}</div>
-          ) : (
-            <div className="artifact-pane-loading">Loading preview…</div>
-          )
+        ) : isHtmlPreview ? (
+          <>
+            {/* Keep the iframe mounted across Code/Preview toggles so we don't
+                re-fetch (and don't depend on preview HTML still being in main). */}
+            {frameUrl ? (
+              <iframe
+                className="artifact-pane-frame"
+                title={artifact.title}
+                hidden={effectiveMode !== 'preview'}
+                // Custom protocol is isolated from the app origin; same-origin here
+                // only means the artifact can use its own localStorage / etc.
+                sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                src={frameUrl}
+              />
+            ) : effectiveMode === 'preview' ? (
+              frameError ? (
+                <div className="artifact-pane-loading">Preview failed: {frameError}</div>
+              ) : (
+                <div className="artifact-pane-loading">Loading preview…</div>
+              )
+            ) : null}
+            {effectiveMode === 'code' ? (
+              <pre className="artifact-pane-code">
+                <code>{artifact.content}</code>
+              </pre>
+            ) : null}
+          </>
         ) : (
           <pre className="artifact-pane-code">
             <code>{artifact.content}</code>

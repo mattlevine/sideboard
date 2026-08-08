@@ -252,6 +252,30 @@ export function App() {
     });
   }
 
+  const closeRightSidebarIfOpen = useCallback(() => {
+    setRightSidebarOpen((v) => {
+      if (!v) return v;
+      try {
+        localStorage.setItem('sideboard.rightSidebar', '0');
+      } catch {
+        // ignore
+      }
+      return false;
+    });
+  }, []);
+
+  const openRightSidebarIfClosed = useCallback(() => {
+    setRightSidebarOpen((v) => {
+      if (v) return v;
+      try {
+        localStorage.setItem('sideboard.rightSidebar', '1');
+      } catch {
+        // ignore
+      }
+      return true;
+    });
+  }, []);
+
   const refresh = useCallback(async () => {
     const [all, rt, ws] = await Promise.all([
       window.sideboard.getThreads(true),
@@ -675,6 +699,8 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
+              onRightColumnOpen: closeRightSidebarIfOpen,
+              onRightColumnClose: openRightSidebarIfClosed,
             };
             const urlPreviewProps = {
               openUrls,

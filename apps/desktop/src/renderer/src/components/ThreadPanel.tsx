@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { AgentKind, MessagePart, Thread, ThreadAttachment } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
@@ -94,6 +101,10 @@ interface Props {
   fileChanges?: Record<string, { status: string; additions?: number; deletions?: number }>;
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
+  /** Fired when the right column (artifact / schema / files) is showing. */
+  onRightColumnOpen?: () => void;
+  /** Fired when every right-column tab has been closed. */
+  onRightColumnClose?: () => void;
 }
 
 export function ThreadPanel({
@@ -126,6 +137,8 @@ export function ThreadPanel({
   fileChanges = {},
   leftSidebarToggle,
   rightSidebarToggle,
+  onRightColumnOpen,
+  onRightColumnClose,
 }: Props) {
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
@@ -622,8 +635,9 @@ export function ThreadPanel({
     onShowChat?.();
   }
 
-  // Restore per-chat pane when switching threads.
-  useEffect(() => {
+  // Restore per-chat pane before paint so sidebar-collapse sees the new chat's
+  // pane (not the previous chat's) when switching threads.
+  useLayoutEffect(() => {
     suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
     setFilePicker(null);
     const remembered = getRememberedRightPaneSession(thread.id);
@@ -650,6 +664,21 @@ export function ThreadPanel({
       setRightSession(null);
     }
   }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
+
+  // Collapse the worktree right sidebar while the chat right column is open
+  // (artifact / form / table / files); restore it when every tab is closed.
+  const activeRightColumnId =
+    chatViewOpen && rightSession && rightPane ? rightPane.id : null;
+  const hadRightColumnRef = useRef(false);
+  useEffect(() => {
+    const has = Boolean(activeRightColumnId);
+    if (has) {
+      onRightColumnOpen?.();
+    } else if (hadRightColumnRef.current) {
+      onRightColumnClose?.();
+    }
+    hadRightColumnRef.current = has;
+  }, [activeRightColumnId, thread.id, onRightColumnOpen, onRightColumnClose]);
 
   // Auto-open while streaming; after the turn, migrate live → persisted ids.
   useEffect(() => {

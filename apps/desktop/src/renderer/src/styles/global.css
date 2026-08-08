@@ -417,6 +417,11 @@ body.resizing-panels webview {
   background: #fff;
 }
 
+/* Keep iframe mounted across Code/Preview; author flex rules must not override [hidden]. */
+.artifact-pane-frame[hidden] {
+  display: none !important;
+}
+
 .artifact-pane-loading {
   flex: 1;
   display: flex;
