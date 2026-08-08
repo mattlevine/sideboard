@@ -2,7 +2,14 @@
  * CMS file manager as a Sideboard column (not a modal).
  * Reference: Brightsy web FileManager features over SchemaFileDatasource.
  */
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import {
   getSideboardFileDrag,
   hasSideboardFileDrag,
@@ -33,6 +40,8 @@ interface Props {
   fill?: boolean;
   /** Highlight selection mode (form file picker). */
   selecting?: boolean;
+  /** Extra header control (e.g. maximize). */
+  headerAction?: ReactNode;
 }
 
 function matchesAccept(entry: SchemaFileEntry, accept: FileAccept): boolean {
@@ -70,6 +79,7 @@ export function FileManagerColumn({
   width = FILE_COLUMN_WIDTH,
   fill = false,
   selecting = false,
+  headerAction,
 }: Props) {
   const accept = request.accept ?? 'all';
   const mode = request.mode ?? 'media';
@@ -272,14 +282,21 @@ export function FileManagerColumn({
             {selecting ? `Choose file · ${title}` : title}
           </h3>
         </div>
-        <button
-          type="button"
-          className="artifact-pane-close"
-          title={selecting ? 'Cancel selection' : 'Close files'}
-          onClick={onClose}
-        >
-          ×
-        </button>
+        <div className="artifact-pane-actions">
+          {headerAction}
+          {/* Embedded column: tab × closes the pane. Keep × only for picker cancel
+              or standalone (non-fill) column. */}
+          {selecting || !fill ? (
+            <button
+              type="button"
+              className="artifact-pane-close"
+              title={selecting ? 'Cancel selection' : 'Close files'}
+              onClick={onClose}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="file-pane-toolbar">

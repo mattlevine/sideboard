@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ChatArtifact } from '../lib/artifacts';
 import { DocumentPreviewModeToggle } from './DocumentPreview';
 import { MarkdownMessage } from './MarkdownMessage';
@@ -15,6 +15,8 @@ interface Props {
   onClose: () => void;
   /** Fill parent tab body (no outer width/resize/close). */
   embedded?: boolean;
+  /** Extra header control (e.g. maximize), shown before Code/Preview. */
+  headerAction?: ReactNode;
 }
 
 function kindBadge(kind: ChatArtifact['kind']): string {
@@ -39,6 +41,7 @@ export function ArtifactPane({
   onWidthChange,
   onClose,
   embedded = false,
+  headerAction,
 }: Props) {
   const canPreview =
     artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'markdown';
@@ -140,6 +143,7 @@ export function ArtifactPane({
           {canPreview && (
             <DocumentPreviewModeToggle mode={effectiveMode} onChange={setMode} />
           )}
+          {headerAction}
           {!embedded ? (
             <button
               type="button"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   resourceHasContentStates,
   type SchemaPaneContent,
@@ -41,6 +41,8 @@ interface Props {
   worktreeThreadId?: string;
   /** Fill parent tab body (no outer width/resize). */
   embedded?: boolean;
+  /** Extra header control (e.g. maximize). */
+  headerAction?: ReactNode;
   /**
    * Open / focus a Files tab for browse or form field selection.
    * When `picker` is set, selection returns to this schema tab.
@@ -56,6 +58,7 @@ export function SchemaPane({
   worktreeThreadId: _worktreeThreadId,
   onContentChange,
   embedded = false,
+  headerAction,
   onRequestFilesTab,
 }: Props) {
   const [mode, setMode] = useState<'table' | 'form'>(content.mode);
@@ -370,6 +373,7 @@ export function SchemaPane({
               Files
             </button>
           ) : null}
+          {headerAction}
           {!embedded ? (
             <button
               type="button"

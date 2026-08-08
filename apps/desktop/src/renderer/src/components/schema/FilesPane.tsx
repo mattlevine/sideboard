@@ -1,7 +1,7 @@
 /**
  * Files tab — CMS file manager (standalone or embedded in the right column).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { FilesPaneContent } from '../../lib/right-pane';
 import { PanelResizeHandle } from '../PanelResizeHandle';
 import {
@@ -28,6 +28,8 @@ interface Props {
   worktreeThreadId?: string;
   /** Fill parent tab body (no outer width/resize). */
   embedded?: boolean;
+  /** Extra header control (e.g. maximize). */
+  headerAction?: ReactNode;
   /** When set, Use/select returns a file to the caller. */
   pickerRequest?: FilePickerRequest | null;
   onPickerSelect?: (fileUrl: string, file?: SchemaFileEntry) => void;
@@ -41,6 +43,7 @@ export function FilesPane({
   onClose,
   worktreeThreadId,
   embedded = false,
+  headerAction,
   pickerRequest = null,
   onPickerSelect,
   onPickerCancel,
@@ -111,11 +114,14 @@ export function FilesPane({
               <span className="artifact-pane-kind">FILES</span>
               <h3 className="artifact-pane-title">{content.title}</h3>
             </div>
-            {!embedded ? (
-              <button type="button" className="artifact-pane-close" onClick={onClose}>
-                ×
-              </button>
-            ) : null}
+            <div className="artifact-pane-actions">
+              {headerAction}
+              {!embedded ? (
+                <button type="button" className="artifact-pane-close" onClick={onClose}>
+                  ×
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="schema-error-panel">
             <p>{error || 'No file datasource'}</p>
@@ -139,6 +145,7 @@ export function FilesPane({
         width={embedded ? undefined : clamped}
         fill={embedded}
         selecting={Boolean(pickerRequest)}
+        headerAction={headerAction}
       />
     );
   })();
