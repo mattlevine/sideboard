@@ -166,6 +166,12 @@ export interface IpcApi {
   listConductor(): Promise<ConductorWorkspace[]>;
   adoptFromConductor(workspaceId: string): Promise<Thread>;
   sendToThread(threadRef: string, prompt: string): Promise<Thread>;
+  /** Edit the text of a not-yet-started queued message. */
+  editQueuedMessage(threadRef: string, index: number, text: string): Promise<Thread>;
+  /** Remove a not-yet-started queued message. */
+  removeQueuedMessage(threadRef: string, index: number): Promise<Thread>;
+  /** Promote a queued message to run next, interrupting the in-flight turn (if any). */
+  sendQueuedMessageNow(threadRef: string, index: number): Promise<Thread>;
   setAutonomy(threadRef: string, autonomy: Autonomy): Promise<Thread>;
   setThreadOptions(threadRef: string, patch: ThreadOptionsPatch): Promise<Thread>;
   fanOut(threadRefs: string[], prompt: string): Promise<Thread[]>;

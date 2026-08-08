@@ -88,6 +88,31 @@ import {
 } from '@sideboard-ai/core';
 import { closeTsServer, setupTsServer } from './tsserver';
 
+/** Walk up from `startDir` to the nearest `.git` (worktree root or repo checkout). */
+function findWorktreeRoot(startDir: string): string | null {
+  let dir = startDir;
+  for (;;) {
+    if (existsSync(join(dir, '.git'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+// Unpackaged (dev) builds default to a per-worktree app-data directory
+// (Conductor-style — session data lives under a dotfolder in the worktree)
+// instead of the shared ~/Library/.../sideboard store. Two orchestrators
+// draining the same thread's queue race and produce out-of-order turns, and
+// that happens both against an installed Sideboard.app and between two
+// worktrees' `pnpm dev` runs — scoping to the worktree root fixes both.
+// Explicit SIDEBOARD_APP_DATA still wins.
+if (!app.isPackaged && !process.env.SIDEBOARD_APP_DATA?.trim()) {
+  const worktreeRoot = findWorktreeRoot(process.cwd());
+  process.env.SIDEBOARD_APP_DATA = worktreeRoot
+    ? join(worktreeRoot, '.sideboard', 'dev-app-data')
+    : join(app.getPath('appData'), 'sideboard-dev');
+}
+
 let mainWindow: BrowserWindow | null = null;
 let repoPath = '';
 const orch = getOrchestrator();
@@ -659,6 +684,15 @@ function registerIpc(): void {
   ipcMain.handle('listConductor', () => orch.listConductor());
   ipcMain.handle('adoptFromConductor', (_e, id: string) => orch.adoptFromConductor(id));
   ipcMain.handle('sendToThread', (_e, ref: string, prompt: string) => orch.send(ref, prompt));
+  ipcMain.handle('editQueuedMessage', (_e, ref: string, index: number, text: string) =>
+    orch.editQueuedMessage(ref, index, text),
+  );
+  ipcMain.handle('removeQueuedMessage', (_e, ref: string, index: number) =>
+    orch.removeQueuedMessage(ref, index),
+  );
+  ipcMain.handle('sendQueuedMessageNow', (_e, ref: string, index: number) =>
+    orch.sendQueuedMessageNow(ref, index),
+  );
   ipcMain.handle('setAutonomy', (_e, ref: string, autonomy: Autonomy) =>
     orch.setAutonomy(ref, autonomy),
   );

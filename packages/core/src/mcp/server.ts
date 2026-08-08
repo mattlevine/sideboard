@@ -105,15 +105,19 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'present_artifact',
-    'Show an HTML, SVG, or markdown document in Sideboard’s Claude-style side column (desktop). Use instead of claude.ai’s artifact tool — pass the full document content. Prefer type=html for interactive pages.',
+    'Show an HTML, SVG, markdown, or React document in Sideboard’s Claude-style side column (desktop). Use instead of claude.ai’s artifact tool — pass the full document content. Prefer type=html for interactive pages. For type=react, pass a single component module that `export default`s a component (JSX/TSX ok) — Sideboard bootstraps React/ReactDOM/Babel and renders it; only `react`/`react-dom` imports are available, no other npm packages.',
     {
       title: z.string().describe('Short title shown in the artifact pane header'),
       type: z
-        .enum(['html', 'svg', 'markdown'])
-        .describe('Artifact kind — html opens an iframe preview'),
+        .enum(['html', 'svg', 'markdown', 'react'])
+        .describe(
+          'Artifact kind — html opens an iframe preview; react transpiles and renders a default-exported component in a sandboxed iframe',
+        ),
       content: z
         .string()
-        .describe('Full document body (complete HTML page, SVG markup, or markdown)'),
+        .describe(
+          'Full document body (complete HTML page, SVG markup, markdown, or a React component module with a default export)',
+        ),
       artifact_id: z
         .string()
         .optional()

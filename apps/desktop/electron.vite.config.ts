@@ -29,6 +29,10 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
+    server: {
+      port: Number(process.env.PORT) || 5173,
+      strictPort: true,
+    },
     resolve: {
       alias: {
         // Pure helpers only — avoid bundling Node deps (execa) from @sideboard-ai/core.
@@ -55,11 +59,6 @@ export default defineConfig({
         '@sideboard/teams': resolve(
           __dirname,
           '../../packages/core/src/git/teams.ts',
-        ),
-        // Context-only bridge — avoid @brightsy/ui barrel (@kit/ui / TipTap).
-        '@brightsy/ui-context': resolve(
-          __dirname,
-          'node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx',
         ),
       },
     },
