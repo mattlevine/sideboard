@@ -64,6 +64,10 @@ import {
 } from '../lib/composer-file-drop';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { isCloudCoordinatorThread, isGlobalThread } from '../lib/global-workspace';
+import {
+  readRightColumnWidth,
+  writeRightColumnWidth,
+} from '../lib/panel-widths';
 
 interface Props {
   thread: Thread;
@@ -175,7 +179,9 @@ export function ThreadPanel({
     const remembered = getRememberedRightPaneSession(thread.id);
     return remembered === undefined ? null : remembered;
   });
-  const [artifactWidth, setArtifactWidth] = useState(RIGHT_COLUMN_WIDTH_DEFAULT);
+  const [artifactWidth, setArtifactWidth] = useState(() =>
+    readRightColumnWidth(thread.id, RIGHT_COLUMN_WIDTH_DEFAULT),
+  );
   const [filePicker, setFilePicker] = useState<RightColumnFilePicker | null>(null);
   /** After the user closes the pane, skip auto-open until a different artifact. */
   const suppressArtifactAutoOpen = useRef(isRightPaneSuppressed(thread.id));
@@ -764,6 +770,7 @@ export function ThreadPanel({
   useLayoutEffect(() => {
     suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
     setFilePicker(null);
+    setArtifactWidth(readRightColumnWidth(thread.id, RIGHT_COLUMN_WIDTH_DEFAULT));
     const remembered = getRememberedRightPaneSession(thread.id);
     if (remembered !== undefined) {
       setRightSession(remembered);
@@ -789,6 +796,9 @@ export function ThreadPanel({
     }
   }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
 
+  function setPersistedArtifactWidth(width: number) {
+    writeRightColumnWidth(thread.id, width);
+  }
   // Worktree sidebar: close only on 0→1 right-column panes; reopen on 1→0.
   // Tab switches (and user reopening the sidebar while panes stay open) are no-ops.
   const rightColumnVisible = Boolean(
@@ -1576,6 +1586,7 @@ export function ThreadPanel({
             activeId={rightSession.activeId}
             width={artifactWidth}
             onWidthChange={setArtifactWidth}
+            onWidthChangeEnd={setPersistedArtifactWidth}
             onActivate={activateRightTab}
             onCloseTab={closeRightTab}
             onSchemaContentChange={updateSchemaTab}

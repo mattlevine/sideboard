@@ -68,6 +68,8 @@ interface Props {
   activeId: string | null;
   width?: number;
   onWidthChange?: (width: number) => void;
+  /** Fired when the user finishes resizing (mouseup / keyboard). */
+  onWidthChangeEnd?: (width: number) => void;
   onActivate: (id: string) => void;
   onCloseTab: (id: string) => void;
   onSchemaContentChange?: (next: SchemaPaneContent) => void;
@@ -94,6 +96,7 @@ export function RightColumnPane({
   activeId,
   width = RIGHT_COLUMN_WIDTH_DEFAULT,
   onWidthChange,
+  onWidthChangeEnd,
   onActivate,
   onCloseTab,
   onSchemaContentChange,
@@ -226,6 +229,7 @@ export function RightColumnPane({
             min={COLUMN_WIDTH_MIN}
             max={COLUMN_WIDTH_MAX}
             onChange={onWidthChange}
+            onChangeEnd={onWidthChangeEnd ?? onWidthChange}
           />
         ) : null}
         <div className="right-column-toolbar">
