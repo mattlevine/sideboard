@@ -123,6 +123,24 @@ export interface IpcApi {
   forkThreadWorktree(input: ForkThreadWorktreeInput): Promise<Thread>;
   renameThread(threadRef: string, title: string): Promise<Thread>;
   setAttachments(threadRef: string, attachments: ThreadAttachment[]): Promise<Thread>;
+  /**
+   * Stage dropped/picked files into composer attachments. External files are
+   * copied into `.sideboard/attachments/` in the thread worktree.
+   */
+  attachComposerFiles(
+    threadRef: string,
+    opts: {
+      absolutePaths?: string[];
+      relativePaths?: string[];
+      /** When Electron hides File.path, renderer sends file bytes instead. */
+      buffers?: Array<{ name: string; dataBase64: string }>;
+    },
+  ): Promise<ThreadAttachment[]>;
+  /**
+   * Resolve an absolute filesystem path for a File from a drag/drop or picker.
+   * Uses Electron `webUtils.getPathForFile` (File.path is unavailable under contextIsolation).
+   */
+  getPathForFile(file: File): string;
   listWorktreeChats(threadRef: string): Promise<Thread[]>;
   listWorkspaces(): Promise<Workspace[]>;
   addWorkspace(repoPath: string): Promise<Workspace>;
@@ -272,8 +290,17 @@ export interface IpcApi {
   getRepoPath(): Promise<string>;
   setRepoPath(path: string): Promise<string>;
   pickRepoPath(): Promise<string | null>;
-  /** Native file picker; returns attachments ready for the composer. */
-  pickFiles(): Promise<ThreadAttachment[]>;
+  /**
+   * Native file picker; returns attachments ready for the composer.
+   * When `threadRef` is set, files are staged into the worktree (same as drop).
+   */
+  pickFiles(threadRef?: string | null): Promise<ThreadAttachment[]>;
+  /** Build composer attachments from absolute paths without a worktree (create modal). */
+  attachmentsFromPaths(absolutePaths: string[]): Promise<ThreadAttachment[]>;
+  /** Build composer attachments from in-memory file buffers (create modal drop fallback). */
+  attachmentsFromBuffers(
+    buffers: Array<{ name: string; dataBase64: string }>,
+  ): Promise<ThreadAttachment[]>;
   /** Prefer worktree settings; optional main-repo fallback. */
   hasConductorHook(worktreePath: string, repoPath?: string | null): Promise<boolean>;
   getRepoSetupInfo(

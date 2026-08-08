@@ -3,7 +3,6 @@ import type {
   DiffResult,
   DiffScope,
   PrCheckRun,
-  PrDetails,
   Thread,
 } from '@sideboard-ai/core';
 import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
@@ -11,11 +10,16 @@ import { FileTree } from './FileTree';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
-import { PrReviewPanel } from './PrReviewPanel';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { prPillModifier, prPillStatusLabel, summarizeChecks } from '../lib/pr-format';
+import {
+  REVIEW_REQUEST_NAME,
+  REVIEW_REQUEST_PREFILL,
+  buildReviewRequestAttachment,
+  ensureReviewRequestFile,
+} from '../lib/review-request';
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
@@ -39,7 +43,7 @@ interface Props {
   onFileChanges?: (changes: ReturnType<typeof fileChangeMap>) => void;
 }
 
-type UpperTab = 'changes' | 'files' | 'checks' | 'review';
+type UpperTab = 'changes' | 'files' | 'checks';
 type LowerTab = 'setup' | 'run' | 'terminal';
 
 interface RepoSetupInfo {
@@ -105,6 +109,7 @@ export function RightSidebar({
   onFileChanges,
 }: Props) {
   const [upper, setUpper] = useState<UpperTab>('files');
+  const [reviewBusy, setReviewBusy] = useState(false);
   const [lower, setLower] = useState<LowerTab>('run');
   const [diff, setDiff] = useState<DiffResult | null>(null);
   const [diffScope, setDiffScope] = useState<DiffScope>('commits');
@@ -136,9 +141,6 @@ export function RightSidebar({
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
   const [prChecksError, setPrChecksError] = useState<string | null>(null);
   const [prChecksLoading, setPrChecksLoading] = useState(false);
-  const [prDetails, setPrDetails] = useState<PrDetails | null>(null);
-  const [prDetailsError, setPrDetailsError] = useState<string | null>(null);
-  const [prDetailsLoading, setPrDetailsLoading] = useState(false);
   /** Live GitHub PR state for the action bar (OPEN / MERGED / CLOSED + review). */
   const [prMeta, setPrMeta] = useState<{
     number: number;
@@ -345,31 +347,6 @@ export function RightSidebar({
     }
   }, [thread.id]);
 
-  const loadPrDetails = useCallback(async () => {
-    setPrDetailsLoading(true);
-    setPrDetailsError(null);
-    try {
-      const details = await window.sideboard.getPrDetails(thread.id);
-      setPrDetails(details);
-      if (details) {
-        setPrMeta({
-          number: details.number,
-          url: details.url,
-          state: details.state,
-          isDraft: details.isDraft,
-          title: details.title,
-          baseRefName: details.baseRefName,
-          reviewDecision: details.reviewDecision,
-        });
-      }
-    } catch (err) {
-      setPrDetails(null);
-      setPrDetailsError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPrDetailsLoading(false);
-    }
-  }, [thread.id]);
-
   const loadPrMeta = useCallback(async () => {
     try {
       const meta = await window.sideboard.getPrMeta(thread.id);
@@ -401,12 +378,7 @@ export function RightSidebar({
     void loadPrChecks();
   }, [upper, thread.id, thread.prUrl, thread.branchName, loadPrChecks]);
 
-  useEffect(() => {
-    if (upper !== 'review') return;
-    void loadPrDetails();
-  }, [upper, thread.id, thread.prUrl, thread.branchName, loadPrDetails]);
-
-  // Light poll while checks are pending (Checks tab only — Review no longer embeds CI)
+  // Light poll while checks are pending (Checks tab only)
   useEffect(() => {
     if (upper !== 'checks') return;
     const list = prChecks ?? [];
@@ -626,6 +598,27 @@ export function RightSidebar({
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /** Conductor-style: attach Review request.md and send to the agent immediately. */
+  async function startAgentReview() {
+    if (reviewBusy) return;
+    setReviewBusy(true);
+    try {
+      const content = await ensureReviewRequestFile(thread.id);
+      const attachment = buildReviewRequestAttachment(content);
+      const latest = await window.sideboard.getThread(thread.id);
+      const prev = (latest?.attachments ?? []).filter(
+        (a) => !(a.kind === 'file' && a.name === REVIEW_REQUEST_NAME),
+      );
+      await window.sideboard.setAttachments(thread.id, [...prev, attachment]);
+      await window.sideboard.sendToThread(thread.id, REVIEW_REQUEST_PREFILL);
+      onRefresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReviewBusy(false);
     }
   }
 
@@ -884,26 +877,28 @@ export function RightSidebar({
           </button>
           <button
             type="button"
-            className={upper === 'review' ? 'active' : ''}
-            onClick={() => setUpper('review')}
-            title={
-              prDetails
-                ? `Review (${prDetails.reviews.length + prDetails.comments.length})`
-                : 'Review'
-            }
+            className="right-tabs-review-btn"
+            title="Ask the agent to review these changes"
+            disabled={reviewBusy || !changeCount}
+            onClick={() => void startAgentReview()}
           >
-            <span className="tab-full">
-              Review
-              {prDetails
-                ? ` (${prDetails.reviews.length + prDetails.comments.length})`
-                : ''}
-            </span>
-            <span className="tab-short">
-              Rev
-              {prDetails
-                ? ` ${prDetails.reviews.length + prDetails.comments.length}`
-                : ''}
-            </span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              aria-hidden
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"
+              />
+              <circle cx="12" cy="12" r="2.75" />
+            </svg>
+            <span className="tab-full">{reviewBusy ? 'Reviewing…' : 'Review'}</span>
           </button>
         </div>
 
@@ -1036,16 +1031,6 @@ export function RightSidebar({
             />
           )}
 
-          {upper === 'review' && (
-            <PrReviewPanel
-              details={prDetails}
-              error={prDetailsError}
-              prUrl={prUrl}
-              loading={prDetailsLoading}
-              onRefresh={() => void loadPrDetails()}
-              onOpenUrl={onOpenUrl}
-            />
-          )}
         </div>
       </div>
 

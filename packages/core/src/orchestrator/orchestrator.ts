@@ -33,6 +33,7 @@ import type {
   PrDetails,
   PrMeta,
   Thread,
+  ThreadAttachment,
   ThreadOptionsPatch,
 } from '../types/thread.js';
 import {
@@ -70,6 +71,12 @@ import {
 } from '../diff/diff.js';
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
 import { expandComposerPrompt } from '../composer/expand.js';
+import {
+  attachmentsFromWorktreePaths,
+  stageAbsolutePathsAsAttachments,
+  stageBuffersAsAttachments,
+  type ComposerFileBuffer,
+} from '../composer/stage-files.js';
 import {
   buildSessionSeed,
   maybeCompactContext,
@@ -1236,6 +1243,31 @@ export class Orchestrator {
     attachments: Thread['attachments'],
   ): Thread {
     return updateThread(this.requireThread(threadRef).id, { attachments });
+  }
+
+  /**
+   * Stage OS / worktree files into composer attachments (copies external files
+   * into `.sideboard/attachments/` so agents can Read images and binaries).
+   */
+  attachComposerFiles(
+    threadRef: string,
+    opts: {
+      absolutePaths?: string[];
+      relativePaths?: string[];
+      buffers?: ComposerFileBuffer[];
+    },
+  ): ThreadAttachment[] {
+    const thread = this.requireThread(threadRef);
+    const fromAbs = stageAbsolutePathsAsAttachments(
+      thread.worktreePath,
+      opts.absolutePaths ?? [],
+    );
+    const fromRel = attachmentsFromWorktreePaths(
+      thread.worktreePath,
+      opts.relativePaths ?? [],
+    );
+    const fromBuf = stageBuffersAsAttachments(thread.worktreePath, opts.buffers ?? []);
+    return [...fromAbs, ...fromRel, ...fromBuf];
   }
 
   listWorktreeChats(threadRef: string): Thread[] {

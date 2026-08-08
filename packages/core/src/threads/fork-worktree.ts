@@ -1,4 +1,4 @@
-import { findThreadByRef, updateThread } from '../store/thread-store.js';
+import { findThreadByRef } from '../store/thread-store.js';
 import type { ForkThreadWorktreeInput, Thread } from '../types/thread.js';
 import {
   buildForkTranscriptAttachment,
@@ -21,6 +21,8 @@ export async function forkThreadWorktree(
   const slice = forkMessageSlice(from, input.throughIndex);
   const attachment = buildForkTranscriptAttachment(from.title || 'Chat', slice);
 
+  // Same createThread path as ticket/branch create (worktree + setup scripts),
+  // branched from the source workspace's current branch.
   const thread = await createThread(
     {
       sourceType: 'branch',
@@ -28,11 +30,15 @@ export async function forkThreadWorktree(
       repoPath: from.repoPath,
       agent: input.agent ?? from.agent,
       autonomy: from.autonomy,
+      model: from.model,
+      fast: from.fast,
+      planMode: from.planMode,
       title: input.title?.trim() || undefined,
       parentThreadId: from.id,
+      attachments: [attachment],
     },
     onSetupLine,
   );
 
-  return updateThread(thread.id, { attachments: [attachment] });
+  return thread;
 }

@@ -42,27 +42,23 @@ const newWorktreeThread: Thread = {
   sessionId: null,
 };
 
-let updated: Thread | null = null;
-
 vi.mock('../store/thread-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../store/thread-store.js')>();
   return {
     ...actual,
     findThreadByRef: (ref: string) => (ref === source.id ? source : null),
-    updateThread: (_id: string, patch: Partial<Thread>) => {
-      updated = { ...newWorktreeThread, ...patch };
-      return updated;
-    },
   };
 });
 
 vi.mock('./create.js', () => ({
-  createThread: vi.fn(async () => newWorktreeThread),
+  createThread: vi.fn(async (input: { attachments?: Thread['attachments'] }) => ({
+    ...newWorktreeThread,
+    attachments: input.attachments ?? [],
+  })),
 }));
 
 describe('forkThreadWorktree', () => {
   beforeEach(() => {
-    updated = null;
     vi.clearAllMocks();
   });
 
@@ -78,7 +74,13 @@ describe('forkThreadWorktree', () => {
         sourceRef: 'thread/west-ham',
         repoPath: source.repoPath,
         agent: source.agent,
+        model: source.model,
+        fast: source.fast,
+        planMode: source.planMode,
         parentThreadId: source.id,
+        attachments: [
+          expect.objectContaining({ kind: 'transcript' }),
+        ],
       }),
       undefined,
     );
@@ -86,9 +88,6 @@ describe('forkThreadWorktree', () => {
     expect(forked.branchName).not.toBe(source.branchName);
     expect(forked.worktreePath).toBe(newWorktreeThread.worktreePath);
     expect(forked.branchName).toBe(newWorktreeThread.branchName);
-    expect(forked.attachments).toHaveLength(1);
-    expect(forked.attachments[0]?.kind).toBe('transcript');
-    expect(updated?.worktreePath).toBe(newWorktreeThread.worktreePath);
   });
 });
 

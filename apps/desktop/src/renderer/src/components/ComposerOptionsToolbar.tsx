@@ -5,6 +5,7 @@ import type {
   ThreadAttachment,
 } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
+import { attachmentOpenPath } from '../lib/attachment-path';
 import { BrightsyTargetPicker } from './BrightsyTargetPicker';
 import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';
 import { FloatingMenu } from './FloatingMenu';
@@ -49,32 +50,95 @@ function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
 export function ComposerAttachmentChips({
   attachments,
   onRemove,
+  onOpen,
 }: {
   attachments: ThreadAttachment[];
   onRemove: (id: string) => void;
+  /** Open a worktree file tab when the chip is clicked (if resolvable). */
+  onOpen?: (path: string) => void;
 }) {
   if (attachments.length === 0) return null;
+  const images = attachments.filter((a) => Boolean(a.previewDataUrl));
+  const rest = attachments.filter((a) => !a.previewDataUrl);
   return (
     <div className="composer-attachments">
-      {attachments.map((a) => (
-        <span key={a.id} className="attachment-chip" title={a.kind}>
-          <span className={`attachment-icon kind-${a.kind}`}>
-            {attachmentIconLabel(a.kind)}
-          </span>
-          <span className="attachment-name">{a.name}</span>
-          <button
-            type="button"
-            className="attachment-remove"
-            title="Remove"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove(a.id);
+      {images.length > 0 && (
+        <div className="composer-attachment-images">
+          {images.map((a) => {
+            const openPath = onOpen ? attachmentOpenPath(a) : null;
+            return (
+              <span
+                key={a.id}
+                className={`attachment-image${openPath ? ' is-openable' : ''}`}
+                title={openPath ? `Open ${openPath}` : a.name}
+                role={openPath ? 'button' : undefined}
+                tabIndex={openPath ? 0 : undefined}
+                onClick={() => {
+                  if (openPath) onOpen?.(openPath);
+                }}
+                onKeyDown={(e) => {
+                  if (!openPath) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpen?.(openPath);
+                  }
+                }}
+              >
+                <img src={a.previewDataUrl} alt={a.name} draggable={false} />
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  title="Remove"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(a.id);
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {rest.map((a) => {
+        const openPath = onOpen ? attachmentOpenPath(a) : null;
+        return (
+          <span
+            key={a.id}
+            className={`attachment-chip${openPath ? ' is-openable' : ''}`}
+            title={openPath ? `Open ${openPath}` : a.kind}
+            role={openPath ? 'button' : undefined}
+            tabIndex={openPath ? 0 : undefined}
+            onClick={() => {
+              if (openPath) onOpen?.(openPath);
+            }}
+            onKeyDown={(e) => {
+              if (!openPath) return;
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen?.(openPath);
+              }
             }}
           >
-            ×
-          </button>
-        </span>
-      ))}
+            <span className={`attachment-icon kind-${a.kind}`}>
+              {attachmentIconLabel(a.kind)}
+            </span>
+            <span className="attachment-name">{a.name}</span>
+            <button
+              type="button"
+              className="attachment-remove"
+              title="Remove"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(a.id);
+              }}
+            >
+              ×
+            </button>
+          </span>
+        );
+      })}
     </div>
   );
 }

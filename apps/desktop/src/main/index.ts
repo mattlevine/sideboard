@@ -17,14 +17,15 @@ import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from '
 // Must run before app.ready so artifact iframes can load outside renderer CSP.
 registerArtifactPreviewScheme();
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { watch, type FSWatcher } from 'chokidar';
 import { autoUpdater } from 'electron-updater';
 import {
   applyAppEnvironment,
+  attachmentFromAbsolutePath,
+  attachmentsFromBuffers,
   brightsyCloudConnectAgent,
   brightsyCloudConnectEnabled,
   BrightsySideboardApi,
@@ -602,6 +603,14 @@ function registerIpc(): void {
   ipcMain.handle('setAttachments', (_e, ref: string, attachments) =>
     orch.setAttachments(ref, attachments),
   );
+  ipcMain.handle(
+    'attachComposerFiles',
+    (
+      _e,
+      ref: string,
+      opts: { absolutePaths?: string[]; relativePaths?: string[] },
+    ) => orch.attachComposerFiles(ref, opts ?? {}),
+  );
   ipcMain.handle('listWorktreeChats', (_e, ref: string) => orch.listWorktreeChats(ref));
   ipcMain.handle('listWorkspaces', () => {
     try {
@@ -847,59 +856,29 @@ function registerIpc(): void {
     await orch.reconcile(repoPath);
     return repoPath;
   });
-  ipcMain.handle('pickFiles', async () => {
+  ipcMain.handle('pickFiles', async (_e, threadRef?: string | null) => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
     });
     if (result.canceled || result.filePaths.length === 0) return [];
-    const maxBytes = 400_000;
-    const out: Array<{
-      id: string;
-      name: string;
-      kind: 'file';
-      content: string;
-    }> = [];
-    for (const filePath of result.filePaths) {
-      try {
-        const st = statSync(filePath);
-        if (!st.isFile()) continue;
-        if (st.size > maxBytes) {
-          out.push({
-            id: randomUUID(),
-            name: basename(filePath),
-            kind: 'file',
-            content: `(file too large to attach inline: ${filePath}, ${st.size} bytes)`,
-          });
-          continue;
-        }
-        const buf = readFileSync(filePath);
-        // Skip obvious binary
-        if (buf.includes(0)) {
-          out.push({
-            id: randomUUID(),
-            name: basename(filePath),
-            kind: 'file',
-            content: `(binary file attached by path only: ${filePath})`,
-          });
-          continue;
-        }
-        out.push({
-          id: randomUUID(),
-          name: basename(filePath),
-          kind: 'file',
-          content: buf.toString('utf8'),
-        });
-      } catch (err) {
-        out.push({
-          id: randomUUID(),
-          name: basename(filePath),
-          kind: 'file',
-          content: `(could not read ${filePath}: ${err instanceof Error ? err.message : String(err)})`,
-        });
-      }
+    if (typeof threadRef === 'string' && threadRef.trim()) {
+      return orch.attachComposerFiles(threadRef, { absolutePaths: result.filePaths });
     }
-    return out;
+    return result.filePaths.map((p) => attachmentFromAbsolutePath(p));
   });
+  ipcMain.handle('attachmentsFromPaths', (_e, absolutePaths: string[]) => {
+    const paths = Array.isArray(absolutePaths)
+      ? absolutePaths.filter((p): p is string => typeof p === 'string' && p.length > 0)
+      : [];
+    return paths.map((p) => attachmentFromAbsolutePath(p));
+  });
+  ipcMain.handle(
+    'attachmentsFromBuffers',
+    (_e, buffers: Array<{ name: string; dataBase64: string }>) => {
+      const list = Array.isArray(buffers) ? buffers : [];
+      return attachmentsFromBuffers(list);
+    },
+  );
   ipcMain.handle('installUpdate', () => {
     autoUpdater.quitAndInstall();
   });

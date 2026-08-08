@@ -58,6 +58,9 @@ export function expandComposerPrompt(
     parts.push('');
     parts.push(`## Attachment: ${att.name}`);
     parts.push(`Kind: ${att.kind}`);
+    if (att.path) {
+      parts.push(`Path in worktree: \`${att.path}\``);
+    }
     parts.push('');
     parts.push(att.content);
   }

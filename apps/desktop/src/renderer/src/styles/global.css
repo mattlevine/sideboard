@@ -3381,6 +3381,7 @@ body.resizing-panels webview {
   width: 100%;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   text-align: left;
   background: transparent;
@@ -3395,11 +3396,22 @@ body.resizing-panels webview {
   background: var(--bg-hover);
 }
 
+/* Beat `.right-actions button` (center + gap: 5px) when this menu sits in the PR split. */
+.right-actions .tool-menu button {
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
 .tool-menu-icon {
-  width: 14px;
+  width: 16px;
   color: var(--muted);
   text-align: center;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .worktree-block {
@@ -3445,6 +3457,72 @@ body.resizing-panels webview {
   flex-wrap: wrap;
   gap: 6px;
   padding: 0 2px 6px;
+  align-items: flex-start;
+}
+
+.composer-attachment-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.attachment-image {
+  position: relative;
+  display: inline-block;
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.attachment-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.attachment-image.is-openable {
+  cursor: pointer;
+}
+
+.attachment-image.is-openable:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.attachment-image .attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.attachment-image:hover .attachment-remove,
+.attachment-image:focus-within .attachment-remove {
+  opacity: 1;
+}
+
+.composer-box.drag-over {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+  outline-offset: -3px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-elevated));
 }
 
 .attachment-chip {
@@ -3458,6 +3536,15 @@ body.resizing-panels webview {
   background: var(--bg);
   font-size: 12px;
   color: var(--text);
+}
+
+.attachment-chip.is-openable {
+  cursor: pointer;
+}
+
+.attachment-chip.is-openable:hover {
+  background: var(--bg-hover);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
 .attachment-icon {
@@ -5562,6 +5649,7 @@ button.linkish:hover {
 
 .right-tabs {
   display: flex;
+  align-items: flex-end;
   gap: 2px;
   padding: 8px 8px 0;
   border-bottom: 1px solid var(--border);
@@ -5583,6 +5671,40 @@ button.linkish:hover {
   border: 1px solid var(--border);
   border-bottom-color: var(--bg);
   margin-bottom: -1px;
+}
+
+/* Conductor-style action on the right of the Files/Changes/Checks row */
+.right-tabs-review-btn {
+  margin-left: auto;
+  margin-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  padding: 5px 8px !important;
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.right-tabs-review-btn:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
+  color: var(--text) !important;
+}
+
+.right-tabs-review-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@container right-sidebar (max-width: 360px) {
+  /* Keep Review label when possible; eye alone is fine if space is tight */
+  .right-tabs-review-btn .tab-full {
+    display: inline;
+  }
 }
 
 .right-upper-body,
@@ -7739,6 +7861,13 @@ body:has(.update-banner) .team-toast-stack {
   padding: 18px 18px 8px;
   min-height: 160px;
   flex: 1;
+  border-radius: 10px;
+}
+
+.create-body.drag-over {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+  outline-offset: -3px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .create-composer-input {

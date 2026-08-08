@@ -16,6 +16,13 @@ import {
 } from './CreateFromPicker';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { FloatingMenu } from './FloatingMenu';
+import {
+  absolutePathsFromFiles,
+  buffersFromFiles,
+  canAcceptComposerFileDrop,
+  preventComposerFileDrag,
+  snapshotComposerDrop,
+} from '../lib/composer-file-drop';
 import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
 
 type Mode = 'create' | 'orchestration';
@@ -128,6 +135,7 @@ export function CreateModal({
   const [goal, setGoal] = useState('');
   const [createMore, setCreateMore] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [createDragOver, setCreateDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const repoBtnRef = useRef<HTMLButtonElement>(null);
@@ -530,7 +538,42 @@ export function CreateModal({
           </div>
         </div>
 
-        <div className="create-body">
+        <div
+          className={`create-body${createDragOver ? ' drag-over' : ''}`}
+          onDragEnter={(e) => {
+            if (!preventComposerFileDrag(e)) return;
+            setCreateDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            const next = e.relatedTarget as Node | null;
+            if (next && e.currentTarget.contains(next)) return;
+            setCreateDragOver(false);
+          }}
+          onDragOver={(e) => {
+            if (!canAcceptComposerFileDrop(e.dataTransfer)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'copy';
+            if (!createDragOver) setCreateDragOver(true);
+          }}
+          onDrop={(e) => {
+            if (!preventComposerFileDrag(e)) return;
+            setCreateDragOver(false);
+            const snap = snapshotComposerDrop(e.dataTransfer);
+            void (async () => {
+              const paths = absolutePathsFromFiles(snap.files);
+              const files =
+                paths.length > 0
+                  ? await window.sideboard.attachmentsFromPaths(paths)
+                  : await window.sideboard.attachmentsFromBuffers(
+                      await buffersFromFiles(snap.files),
+                    );
+              if (files.length) setAttachments((prev) => [...prev, ...files]);
+            })().catch((err) => {
+              setError(err instanceof Error ? err.message : String(err));
+            });
+          }}
+        >
           {options.planMode && (
             <div className="composer-plan-banner">
               Plan mode stays on until you turn it off (no file edits).

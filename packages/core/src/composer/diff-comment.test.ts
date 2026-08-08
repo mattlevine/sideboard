@@ -21,6 +21,7 @@ describe('buildDiffCommentAttachment', () => {
       id: 'fixed-id',
       name: 'src/app.ts:L10',
       kind: 'diff-comment',
+      path: 'src/app.ts',
       content: expect.stringContaining('Guard against null here.'),
     });
     expect(att.content).toContain('```diff');

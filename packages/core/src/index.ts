@@ -25,6 +25,7 @@ export * from './diff/diff.js';
 export * from './skills/discover.js';
 export * from './composer/expand.js';
 export * from './composer/diff-comment.js';
+export * from './composer/stage-files.js';
 export * from './composer/context-compact.js';
 export * from './composer/summarize.js';
 export * from './land/land.js';

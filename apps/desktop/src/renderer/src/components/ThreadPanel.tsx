@@ -45,27 +45,19 @@ import {
   type AutocompleteItem,
 } from './ComposerAutocomplete';
 import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';
+import { ComposerAttachmentChips } from './ComposerOptionsToolbar';
 import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { UrlPreview } from './UrlPreview';
+import {
+  canAcceptComposerFileDrop,
+  composerDropSourcesFromSnapshot,
+  preventComposerFileDrag,
+  snapshotComposerDrop,
+} from '../lib/composer-file-drop';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { isCloudCoordinatorThread, isGlobalThread } from '../lib/global-workspace';
-
-function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
-  switch (kind) {
-    case 'issue':
-      return 'ISS';
-    case 'workspace':
-      return 'WS';
-    case 'file':
-      return 'FILE';
-    case 'diff-comment':
-      return 'DIFF';
-    default:
-      return 'MD';
-  }
-}
 
 interface Props {
   thread: Thread;
@@ -164,6 +156,10 @@ export function ThreadPanel({
     chatCount: number;
   } | null>(null);
   const [closeBusy, setCloseBusy] = useState(false);
+  const [forkWorkspaceConfirm, setForkWorkspaceConfirm] = useState<{
+    throughIndex: number;
+  } | null>(null);
+  const [forkWorkspaceBusy, setForkWorkspaceBusy] = useState(false);
   const [rightSession, setRightSession] = useState<RightPaneSession | null>(() => {
     const remembered = getRememberedRightPaneSession(thread.id);
     return remembered === undefined ? null : remembered;
@@ -180,6 +176,7 @@ export function ThreadPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
+  const [composerDragOver, setComposerDragOver] = useState(false);
   const plusBtnRef = useRef<HTMLButtonElement>(null);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
   const openBtnRef = useRef<HTMLButtonElement>(null);
@@ -454,6 +451,35 @@ export function ThreadPanel({
     onRefresh();
   }
 
+  const canForkWorkspace =
+    !isGlobalThread(thread) &&
+    thread.sourceType !== 'orchestration' &&
+    Boolean(thread.repoPath && thread.branchName);
+
+  function requestForkWorkspace(throughIndex: number) {
+    if (forkWorkspaceBusy || !canForkWorkspace) return;
+    setForkWorkspaceConfirm({ throughIndex });
+  }
+
+  async function confirmForkWorkspace() {
+    if (!forkWorkspaceConfirm || forkWorkspaceBusy || !canForkWorkspace) return;
+    const { throughIndex } = forkWorkspaceConfirm;
+    setForkWorkspaceBusy(true);
+    try {
+      const t = await window.sideboard.forkThreadWorktree({
+        threadId: thread.id,
+        throughIndex,
+      });
+      setForkWorkspaceConfirm(null);
+      // Select before clearing busy so App focuses the new workspace like CreateModal.
+      onSelectChat(t.id, t);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setForkWorkspaceBusy(false);
+    }
+  }
+
   async function removeAttachment(id: string) {
     const next = (thread.attachments ?? []).filter((a) => a.id !== id);
     await window.sideboard.setAttachments(thread.id, next);
@@ -471,8 +497,32 @@ export function ThreadPanel({
 
   async function addAttachmentsFromPicker() {
     setPlusOpen(false);
-    const files = await window.sideboard.pickFiles();
+    const files = await window.sideboard.pickFiles(thread.id);
     await appendAttachments(files);
+  }
+
+  async function attachDroppedSnapshot(
+    snap: ReturnType<typeof snapshotComposerDrop>,
+  ) {
+    try {
+      const { absolutePaths, relativePaths, buffers } =
+        await composerDropSourcesFromSnapshot(snap, thread.id);
+      if (
+        absolutePaths.length === 0 &&
+        relativePaths.length === 0 &&
+        buffers.length === 0
+      ) {
+        return;
+      }
+      const files = await window.sideboard.attachComposerFiles(thread.id, {
+        absolutePaths,
+        relativePaths,
+        buffers,
+      });
+      await appendAttachments(files);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   const chats = worktreeChats.length > 0 ? worktreeChats : [thread];
@@ -905,6 +955,65 @@ export function ThreadPanel({
         </div>
       )}
 
+      {forkWorkspaceConfirm && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            if (!forkWorkspaceBusy) setForkWorkspaceConfirm(null);
+          }}
+        >
+          <div
+            className={`modal create-modal merge-modal${forkWorkspaceBusy ? ' is-creating' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fork-workspace-title"
+            aria-busy={forkWorkspaceBusy}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {forkWorkspaceBusy ? (
+              <CreateProcessingOverlay
+                mode="create"
+                repoName={
+                  thread.repoPath.split('/').filter(Boolean).pop() ||
+                  thread.title.trim() ||
+                  'Workspace'
+                }
+                selectionHint="Fork to new workspace"
+              />
+            ) : null}
+            <div className={`create-modal-content${forkWorkspaceBusy ? ' veiled' : ''}`}>
+              <h3 id="fork-workspace-title" className="merge-modal-title">
+                Fork to new workspace?
+              </h3>
+              <p className="confirm-dialog-message">
+                Creates a new git worktree from{' '}
+                <code>{thread.branchName || 'this branch'}</code> and opens it with
+                the chat history through this message attached as a transcript.
+              </p>
+              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+                <button
+                  type="button"
+                  disabled={forkWorkspaceBusy}
+                  onClick={() => {
+                    if (!forkWorkspaceBusy) setForkWorkspaceConfirm(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={forkWorkspaceBusy}
+                  onClick={() => void confirmForkWorkspace()}
+                >
+                  {forkWorkspaceBusy ? 'Creating…' : 'Fork workspace'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
@@ -1005,6 +1114,11 @@ export function ThreadPanel({
                     activeArtifactId={rightPane?.id}
                     artifactIdPrefix={`msg-${i}`}
                     onFork={() => void forkToTab(i)}
+                    onForkWorkspace={
+                      canForkWorkspace
+                        ? () => requestForkWorkspace(i)
+                        : undefined
+                    }
                   />
                 ) : m.role === 'summary' ? (
                   <div className="msg-summary">
@@ -1043,7 +1157,17 @@ export function ThreadPanel({
                     onOpenArtifact={openRightPane}
                     activeArtifactId={rightPane?.id}
                     artifactIdPrefix="live"
-                    onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
+                    onFork={() =>
+                      void forkToTab(Math.max(0, thread.messages.length - 1))
+                    }
+                    onForkWorkspace={
+                      canForkWorkspace
+                        ? () =>
+                            requestForkWorkspace(
+                              Math.max(0, thread.messages.length - 1),
+                            )
+                        : undefined
+                    }
                   />
                 ) : (
                   <ThinkingIndicator
@@ -1083,9 +1207,34 @@ export function ThreadPanel({
       >
         <div
           ref={composerBoxRef}
-          className={`composer-box${composerExpanded ? ' expanded' : ' collapsed'}`}
+          className={`composer-box${composerExpanded ? ' expanded' : ' collapsed'}${
+            composerDragOver ? ' drag-over' : ''
+          }`}
           onClick={() => {
             if (!composerExpanded) textareaRef.current?.focus();
+          }}
+          onDragEnter={(e) => {
+            if (!preventComposerFileDrag(e)) return;
+            setComposerDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            const next = e.relatedTarget as Node | null;
+            if (next && e.currentTarget.contains(next)) return;
+            setComposerDragOver(false);
+          }}
+          onDragOver={(e) => {
+            if (!canAcceptComposerFileDrop(e.dataTransfer)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'copy';
+            if (!composerDragOver) setComposerDragOver(true);
+          }}
+          onDrop={(e) => {
+            if (!preventComposerFileDrag(e)) return;
+            setComposerDragOver(false);
+            // Snapshot before DataTransfer is cleared after this handler returns.
+            const snap = snapshotComposerDrop(e.dataTransfer);
+            void attachDroppedSnapshot(snap);
           }}
         >
           {thread.planMode && !openFilePath && !openUrl && !changesOpen && (
@@ -1093,29 +1242,11 @@ export function ThreadPanel({
               Plan mode stays on until you turn it off or click Implement.
             </div>
           )}
-          {attachments.length > 0 && (
-            <div className="composer-attachments">
-              {attachments.map((a) => (
-                <span key={a.id} className="attachment-chip" title={a.kind}>
-                  <span className={`attachment-icon kind-${a.kind}`}>
-                    {attachmentIconLabel(a.kind)}
-                  </span>
-                  <span className="attachment-name">{a.name}</span>
-                  <button
-                    type="button"
-                    className="attachment-remove"
-                    title="Remove"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void removeAttachment(a.id);
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+          <ComposerAttachmentChips
+            attachments={attachments}
+            onRemove={(id) => void removeAttachment(id)}
+            onOpen={onSelectFile}
+          />
           <div className="composer-input-row" ref={acRef}>
             <span className="composer-cube" aria-hidden />
             {acItems.length > 0 && (

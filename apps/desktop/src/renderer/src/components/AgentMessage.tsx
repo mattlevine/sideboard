@@ -39,7 +39,10 @@ interface Props {
   activeArtifactId?: string | null;
   /** Prefix for extracted fence/tool ids (must match auto-open logic). */
   artifactIdPrefix?: string;
+  /** Fork chat history into a new tab in the same worktree. */
   onFork?: () => void;
+  /** Fork into a new git worktree (Conductor-style new workspace). */
+  onForkWorkspace?: () => void;
 }
 
 function basename(path: string): string {
@@ -136,6 +139,7 @@ export function AgentMessage({
   activeArtifactId = null,
   artifactIdPrefix,
   onFork,
+  onForkWorkspace,
 }: Props) {
   const [expanded, setExpanded] = useState(Boolean(streaming));
   const [menuOpen, setMenuOpen] = useState(false);
@@ -315,7 +319,12 @@ export function AgentMessage({
         </div>
       )}
 
-      {(durationLabel || usage || chips.length > 0 || paneContents.length > 0 || onFork) && (
+      {(durationLabel ||
+        usage ||
+        chips.length > 0 ||
+        paneContents.length > 0 ||
+        onFork ||
+        onForkWorkspace) && (
         <div className="msg-footer">
           <div className="msg-footer-left">
             {durationLabel && (
@@ -329,37 +338,51 @@ export function AgentMessage({
             <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>
               ⎘
             </button>
-            <div className="msg-footer-more">
-              <button
-                ref={moreBtnRef}
-                type="button"
-                className="msg-foot-btn"
-                title="More"
-                onClick={() => setMenuOpen((v) => !v)}
-              >
-                ···
-              </button>
-              {onFork && (
+            {(onFork || onForkWorkspace) && (
+              <div className="msg-footer-more">
+                <button
+                  ref={moreBtnRef}
+                  type="button"
+                  className="msg-foot-btn"
+                  title="More"
+                  onClick={() => setMenuOpen((v) => !v)}
+                >
+                  ···
+                </button>
                 <FloatingMenu
                   open={menuOpen}
                   onClose={() => setMenuOpen(false)}
                   anchorRef={moreBtnRef}
                   align="left"
-                  minWidth={180}
+                  minWidth={200}
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onFork();
-                    }}
-                  >
-                    <span className="tool-menu-icon">⎇</span>
-                    <span>Fork to new tab</span>
-                  </button>
+                  {onFork && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onFork();
+                      }}
+                    >
+                      <span className="tool-menu-icon">⎇</span>
+                      <span>Fork to new tab</span>
+                    </button>
+                  )}
+                  {onForkWorkspace && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onForkWorkspace();
+                      }}
+                    >
+                      <span className="tool-menu-icon">⧉</span>
+                      <span>Fork to new workspace</span>
+                    </button>
+                  )}
                 </FloatingMenu>
-              )}
-            </div>
+              </div>
+            )}
           </div>
           {(chips.length > 0 || (paneContents.length > 0 && onOpenArtifact)) && (
             <div className="tool-chips">

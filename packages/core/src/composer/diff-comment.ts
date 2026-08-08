@@ -67,6 +67,7 @@ export function buildDiffCommentAttachment(input: DiffCommentInput): ThreadAttac
       `diff-comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
     kind: 'diff-comment',
+    path: input.path.trim(),
     content,
   };
 }

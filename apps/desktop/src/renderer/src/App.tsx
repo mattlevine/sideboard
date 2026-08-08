@@ -317,12 +317,16 @@ export function App() {
 
   const selectCreatedThread = useCallback(
     (thread: Thread) => {
+      // Same focus path as CreateModal → ticket/branch create.
       upsertThread(thread);
       notifySoccerNickname(thread.title);
+      void refresh();
       setSelectedId(thread.id);
+      setView('thread');
       setMultiSelected(new Set([thread.id]));
+      setLeftSidebarOpen(true);
     },
-    [upsertThread, notifySoccerNickname],
+    [upsertThread, notifySoccerNickname, refresh],
   );
 
   useEffect(() => {

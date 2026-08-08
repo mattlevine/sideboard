@@ -59,6 +59,10 @@ export interface ThreadAttachment {
   name: string;
   kind: 'transcript' | 'file' | 'issue' | 'workspace' | 'diff-comment';
   content: string;
+  /** Worktree-relative path when this attachment is a real file that can be opened in a tab. */
+  path?: string;
+  /** data: URL thumbnail for image attachments shown in the composer (pending only). */
+  previewDataUrl?: string;
 }
 
 export interface Thread {

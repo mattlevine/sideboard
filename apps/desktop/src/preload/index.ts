@@ -1,7 +1,14 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { IpcApi, OrchestratorEvent } from '@sideboard-ai/core';
 
 const api: IpcApi = {
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || '';
+    } catch {
+      return '';
+    }
+  },
   detectAgents: () => ipcRenderer.invoke('detectAgents'),
   getAppSettings: () => ipcRenderer.invoke('getAppSettings'),
   saveAppSettings: (settings) => ipcRenderer.invoke('saveAppSettings', settings),
@@ -44,6 +51,8 @@ const api: IpcApi = {
   renameThread: (threadRef, title) => ipcRenderer.invoke('renameThread', threadRef, title),
   setAttachments: (threadRef, attachments) =>
     ipcRenderer.invoke('setAttachments', threadRef, attachments),
+  attachComposerFiles: (threadRef, opts) =>
+    ipcRenderer.invoke('attachComposerFiles', threadRef, opts),
   listWorktreeChats: (threadRef) => ipcRenderer.invoke('listWorktreeChats', threadRef),
   listWorkspaces: () => ipcRenderer.invoke('listWorkspaces'),
   addWorkspace: (repoPath) => ipcRenderer.invoke('addWorkspace', repoPath),
@@ -136,7 +145,11 @@ const api: IpcApi = {
   getRepoPath: () => ipcRenderer.invoke('getRepoPath'),
   setRepoPath: (path) => ipcRenderer.invoke('setRepoPath', path),
   pickRepoPath: () => ipcRenderer.invoke('pickRepoPath'),
-  pickFiles: () => ipcRenderer.invoke('pickFiles'),
+  pickFiles: (threadRef) => ipcRenderer.invoke('pickFiles', threadRef ?? null),
+  attachmentsFromPaths: (absolutePaths) =>
+    ipcRenderer.invoke('attachmentsFromPaths', absolutePaths),
+  attachmentsFromBuffers: (buffers) =>
+    ipcRenderer.invoke('attachmentsFromBuffers', buffers),
   hasConductorHook: (worktreePath, repoPath) =>
     ipcRenderer.invoke('hasConductorHook', worktreePath, repoPath),
   getRepoSetupInfo: (worktreePath, repoPath) =>
