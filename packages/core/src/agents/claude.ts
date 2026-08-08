@@ -9,6 +9,7 @@ import { mcpAllowTools, mcpAuthWarnings, parseMcpList } from './claude-mcp.js';
 import {
   brightsyMcpAllowedTools,
   buildInjectedMcpServers,
+  SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS,
   SIDEBOARD_MCP_ALLOWED_TOOLS,
   isBrightsyConnected,
   writeMcpServersConfig,
@@ -208,9 +209,9 @@ export const claudeAdapter: AgentAdapter = {
     const { isOrchestratorThread } = await import('../store/global-workspace.js');
     const isOrchestrator = isOrchestratorThread(thread);
     // Auto-inject Brightsy MCP for every Claude turn when logged in; Sideboard MCP
-    // for coordinator turns. Multi-team: one MCP server per Sideboard-connected team.
+    // always (worktrees get present_artifact; coordinators get the full fleet).
     const injectedServers = await buildInjectedMcpServers({
-      includeSideboard: isOrchestrator,
+      includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
     });
     const injectedBrightsyNames = injectedServers
@@ -234,6 +235,7 @@ export const claudeAdapter: AgentAdapter = {
       allowedTools = [
         ...BASE_ALLOWED_TOOLS,
         ...mcpAllowTools(servers),
+        ...SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS,
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
       ];
     }

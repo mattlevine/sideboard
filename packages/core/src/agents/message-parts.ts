@@ -37,6 +37,12 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/connectedAgentRequest/i.test(name)) {
     return str(input?.agent_id) ? `Ask connected agent` : 'Ask connected agent';
   }
+  if (/present_artifact$/i.test(name)) {
+    return str(input?.title) ? `Present ${str(input?.title)}` : 'Present artifact';
+  }
+  if (/^(create|update)_artifact$/i.test(name.replace(/^mcp__[^_]+__/, ''))) {
+    return str(input?.title) ? `Artifact ${str(input?.title)}` : 'Artifact';
+  }
   if (!input) return n;
   if (/bash|shell|terminal/i.test(name) && str(input.command)) {
     const cmd = str(input.command)!;

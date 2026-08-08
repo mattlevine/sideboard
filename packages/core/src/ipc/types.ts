@@ -271,6 +271,12 @@ export interface IpcApi {
   runSetup(threadRef: string): Promise<{ exitCode: number | null }>;
   openExternal(url: string): Promise<void>;
   /**
+   * Publish HTML for the artifact side-column iframe (custom protocol bypasses
+   * renderer CSP so inline scripts can run).
+   */
+  publishArtifactPreview(id: string, html: string): Promise<{ url: string }>;
+  clearArtifactPreview(id: string): Promise<void>;
+  /**
    * In-app URL preview via BrowserView (top-level navigation — works for
    * sites that block iframes, e.g. GitHub).
    */

@@ -3,11 +3,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  formatArtifactDirective,
   formatRenameBranchDirective,
   formatWorktreeDirective,
   loadAgentInstructions,
   withAgentInstructions,
 } from './instructions.js';
+
+describe('formatArtifactDirective', () => {
+  it('points agents at present_artifact and html fences', () => {
+    const text = formatArtifactDirective();
+    expect(text).toMatch(/present_artifact/);
+    expect(text).toMatch(/```html/);
+    expect(text).toMatch(/Never say artifacts are unavailable/i);
+  });
+});
 
 describe('formatWorktreeDirective', () => {
   it('requires agents to stay in the worktree and avoid the main repo', () => {

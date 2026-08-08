@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, Thread, ThreadAttachment } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
+import {
+  ARTIFACT_WIDTH_DEFAULT,
+  ArtifactPane,
+} from './ArtifactPane';
+import { latestArtifact, type ChatArtifact } from '../lib/artifacts';
 import { formatTokenCount, sumUsage, totalTokens, usageTooltip } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';
 import { BrightsyTargetPicker } from './BrightsyTargetPicker';
@@ -128,6 +133,10 @@ export function ThreadPanel({
     chatCount: number;
   } | null>(null);
   const [closeBusy, setCloseBusy] = useState(false);
+  const [artifact, setArtifact] = useState<ChatArtifact | null>(null);
+  const [artifactWidth, setArtifactWidth] = useState(ARTIFACT_WIDTH_DEFAULT);
+  /** After the user closes the pane, skip auto-open until the next turn. */
+  const suppressArtifactAutoOpen = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
@@ -349,6 +358,7 @@ export function ThreadPanel({
     setPendingUser(text);
     setPrompt('');
     setCursor(0);
+    suppressArtifactAutoOpen.current = false;
     try {
       await window.sideboard.sendToThread(thread.id, text);
       onRefresh();
@@ -441,6 +451,67 @@ export function ThreadPanel({
     () => sumUsage(thread.messages.map((m) => m.usage)),
     [thread.messages],
   );
+
+  const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
+
+  function openArtifact(next: ChatArtifact) {
+    suppressArtifactAutoOpen.current = false;
+    setArtifact(next);
+    onShowChat?.();
+  }
+
+  function closeArtifact() {
+    suppressArtifactAutoOpen.current = true;
+    setArtifact(null);
+  }
+
+  // Auto-open while streaming; after the turn, migrate live → persisted ids.
+  useEffect(() => {
+    if (!chatViewOpen) return;
+    if (suppressArtifactAutoOpen.current) return;
+
+    if (showStreaming) {
+      const candidate = latestArtifact(liveOutput, liveParts, 'live');
+      if (!candidate) return;
+      setArtifact((prev) => {
+        if (prev?.id === candidate.id && prev.content === candidate.content) return prev;
+        return candidate;
+      });
+      return;
+    }
+
+    setArtifact((prev) => {
+      if (!prev) return prev;
+      for (let i = thread.messages.length - 1; i >= 0; i--) {
+        const m = thread.messages[i];
+        if (m?.role !== 'agent') continue;
+        const candidate = latestArtifact(m.text, m.parts, `msg-${i}`);
+        if (!candidate) return prev;
+        if (
+          prev.id === candidate.id ||
+          prev.id.startsWith('live') ||
+          prev.content === candidate.content
+        ) {
+          if (prev.id === candidate.id && prev.content === candidate.content) return prev;
+          return candidate;
+        }
+        return prev;
+      }
+      return prev;
+    });
+  }, [
+    chatViewOpen,
+    showStreaming,
+    liveOutput,
+    liveParts,
+    thread.messages,
+  ]);
+
+  // Drop the pane when switching threads so we don't show stale content.
+  useEffect(() => {
+    setArtifact(null);
+    suppressArtifactAutoOpen.current = false;
+  }, [thread.id]);
 
   return (
     <section className="panel thread-main">
@@ -609,6 +680,10 @@ export function ThreadPanel({
         </div>
       )}
 
+      <div
+        className={`thread-workspace${artifact && chatViewOpen ? ' with-artifact' : ''}`}
+      >
+        <div className="thread-chat-column">
       {changesOpen && changesPath ? (
         <FileEditor
           key={`changes:${changesPath}`}
@@ -701,6 +776,9 @@ export function ThreadPanel({
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
                     onOpenThread={onOpenThreadLink}
+                    onOpenArtifact={openArtifact}
+                    activeArtifactId={artifact?.id}
+                    artifactIdPrefix={`msg-${i}`}
                     onFork={() => void forkToTab(i)}
                   />
                 ) : m.role === 'summary' ? (
@@ -737,6 +815,9 @@ export function ThreadPanel({
                     knownFilePaths={filePaths}
                     onOpenFile={onSelectFile}
                     onOpenThread={onOpenThreadLink}
+                    onOpenArtifact={openArtifact}
+                    activeArtifactId={artifact?.id}
+                    artifactIdPrefix="live"
                     onFork={() => void forkToTab(Math.max(0, thread.messages.length - 1))}
                   />
                 ) : (
@@ -1157,6 +1238,17 @@ export function ThreadPanel({
             </div>
           )}
         </div>
+      </div>
+        </div>
+
+        {artifact && chatViewOpen ? (
+          <ArtifactPane
+            artifact={artifact}
+            width={artifactWidth}
+            onWidthChange={setArtifactWidth}
+            onClose={closeArtifact}
+          />
+        ) : null}
       </div>
 
       <LinkIssuePicker

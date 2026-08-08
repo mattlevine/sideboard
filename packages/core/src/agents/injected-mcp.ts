@@ -18,10 +18,19 @@ export type InjectedMcpServer = {
   env?: Record<string, string>;
 };
 
-/** Claude --allowedTools entries for Sideboard MCP. */
+/** Claude --allowedTools entries for Sideboard MCP (full fleet). */
 export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard',
   'mcp__sideboard__*',
+] as const;
+
+/**
+ * Worktree Claude turns: only auto-approve present_artifact (not fleet control).
+ * Sideboard MCP is still injected so the tool is listed; other sideboard tools
+ * remain permission-gated.
+ */
+export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
+  'mcp__sideboard__present_artifact',
 ] as const;
 
 /** Legacy single-server allow list (CLI ~/.brightsy fallback). */
@@ -148,11 +157,9 @@ export function findSideboardMcpJsEntry(): string | null {
 
 /** Resolve how Claude should spawn the Sideboard MCP stdio server. */
 export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
-  const which = await run('which', ['sideboard'], { reject: false });
-  if (which.exitCode === 0 && which.stdout.trim()) {
-    return { name: 'sideboard', command: which.stdout.trim(), args: ['mcp'] };
-  }
-
+  // Prefer the MCP bundled with this @sideboard-ai/core install (Electron / monorepo).
+  // A global `sideboard` on PATH is often an older npm publish and will miss new tools
+  // like present_artifact.
   const entry = findSideboardMcpJsEntry();
   if (entry) {
     const isCli = /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry);
@@ -162,6 +169,11 @@ export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
       command: 'node',
       args: isCli ? [entry, 'mcp'] : [entry],
     };
+  }
+
+  const which = await run('which', ['sideboard'], { reject: false });
+  if (which.exitCode === 0 && which.stdout.trim()) {
+    return { name: 'sideboard', command: which.stdout.trim(), args: ['mcp'] };
   }
 
   // Last resort: bare binary name (fails clearly if still not on PATH).

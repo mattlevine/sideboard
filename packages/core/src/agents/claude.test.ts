@@ -134,6 +134,19 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cmd.file).toBe('/opt/custom/claude');
   });
 
+  it('worktree turns inject Sideboard MCP but only auto-approve present_artifact', async () => {
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'make a page' });
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__sideboard__present_artifact');
+    expect(allowed).not.toContain('mcp__sideboard__*');
+    const mcpIdx = cmd.args.indexOf('--mcp-config');
+    expect(mcpIdx).toBeGreaterThan(-1);
+    const cfgPath = cmd.args[mcpIdx + 1];
+    expect(cfgPath).toBeTruthy();
+  });
+
   it('orchestrator turns get Sideboard MCP plus Bash/Read (fleet oversight)', async () => {
     const cmd = await claudeAdapter.buildTurn(
       {

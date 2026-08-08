@@ -140,6 +140,9 @@ const api: IpcApi = {
     ipcRenderer.invoke('getRepoSetupInfo', worktreePath, repoPath),
   runSetup: (threadRef) => ipcRenderer.invoke('runSetup', threadRef),
   openExternal: (url) => ipcRenderer.invoke('openExternal', url),
+  publishArtifactPreview: (id, html) =>
+    ipcRenderer.invoke('artifactPreview:publish', id, html),
+  clearArtifactPreview: (id) => ipcRenderer.invoke('artifactPreview:clear', id),
   urlPreview: {
     show: (opts) => ipcRenderer.invoke('urlPreview:show', opts),
     setBounds: (bounds) => ipcRenderer.invoke('urlPreview:setBounds', bounds),

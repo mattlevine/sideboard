@@ -104,6 +104,41 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'present_artifact',
+    'Show an HTML, SVG, or markdown document in Sideboard’s Claude-style side column (desktop). Use instead of claude.ai’s artifact tool — pass the full document content. Prefer type=html for interactive pages.',
+    {
+      title: z.string().describe('Short title shown in the artifact pane header'),
+      type: z
+        .enum(['html', 'svg', 'markdown'])
+        .describe('Artifact kind — html opens an iframe preview'),
+      content: z
+        .string()
+        .describe('Full document body (complete HTML page, SVG markup, or markdown)'),
+      artifact_id: z
+        .string()
+        .optional()
+        .describe('Stable id when updating the same artifact across turns'),
+    },
+    async ({ title, type, content, artifact_id }) => {
+      const id =
+        artifact_id?.trim() ||
+        `artifact_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      // Echo the payload so Sideboard’s stream parser can open the side column from
+      // the tool_use input / tool_result (MCP has no direct UI channel).
+      const payload = {
+        ok: true,
+        artifact_id: id,
+        title,
+        type,
+        content,
+        message:
+          'Artifact accepted. Sideboard desktop opens it in the side column beside chat.',
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+    },
+  );
+
+  server.tool(
     'create_thread',
     'Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces and parentThreadId when spawning from an orchestrator. Then use send_to_thread to chat.',
     {

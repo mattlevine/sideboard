@@ -75,6 +75,7 @@ import {
 } from '../composer/context-compact.js';
 import {
   formatAgentInstructions,
+  formatArtifactDirective,
   formatRenameBranchDirective,
   formatWorktreeDirective,
   loadAgentInstructions,
@@ -427,9 +428,20 @@ export class Orchestrator {
           goal: thread.sourceRef || thread.title,
         })
       : null;
+    // Re-assert on every turn (incl. Claude --resume, which drops cachedPrefix).
+    const artifactReminder =
+      thread.agent !== 'brightsy'
+        ? [
+            'Sideboard artifacts (important):',
+            'There is no claude.ai Artifact tool here — that is normal.',
+            'To show HTML/SVG/markdown in Sideboard’s side column, put the FULL document in a ```html (or ```svg / ```markdown) fence in your reply, or call MCP present_artifact if listed.',
+            'Do not say artifacts are unavailable. Do not default to “write a file and open the browser” when a fenced HTML document would work.',
+          ].join(' ')
+        : null;
     const agentPrompt = [
       thread.planMode ? PLAN_MODE_INSTRUCTION : null,
       orchestrationReminder,
+      artifactReminder,
       expandedPrompt,
     ]
       .filter(Boolean)
@@ -467,6 +479,7 @@ export class Orchestrator {
               () => null,
             ),
           });
+    const artifactDirective = isBrightsy ? null : formatArtifactDirective();
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     const { autoRenameBranchEnabled } = await import('../store/app-settings.js');
     const renameBranchDirective =
@@ -516,6 +529,7 @@ export class Orchestrator {
     const cachedPrefix = [
       coordinatorDirective,
       worktreeDirective,
+      artifactDirective,
       renameBranchDirective,
       ...(fresh.agent === 'claude' && fresh.sessionId
         ? []

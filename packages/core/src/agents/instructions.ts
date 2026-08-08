@@ -97,6 +97,24 @@ export function formatWorktreeDirective(
   return lines.join('\n');
 }
 
+/**
+ * Tell agents how Sideboard renders Claude-style artifacts (side column).
+ * Claude Code has no claude.ai `artifact` tool — fences / present_artifact instead.
+ */
+export function formatArtifactDirective(): string {
+  return [
+    'Sideboard artifacts (desktop UI) — mandatory when the user wants a rendered page/preview:',
+    'claude.ai’s “Artifact” tool does NOT exist in Claude Code. That is expected.',
+    'Sideboard’s substitute is either:',
+    '1) Emit a fenced code block tagged `html` (preferred), `svg`, or `markdown` containing the FULL document in your assistant reply — Sideboard opens a side column and renders it. Example:',
+    '```html',
+    '<!DOCTYPE html><html><head><title>Demo</title></head><body><h1>Hi</h1></body></html>',
+    '```',
+    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown), and content — if that tool is listed.',
+    'Never say artifacts are unavailable. Never offer “write a file and open the browser” as the first option when a side-column HTML preview would satisfy the request — put the HTML in a ```html fence (or present_artifact) instead.',
+  ].join('\n');
+}
+
 export interface AgentInstructionFile {
   relativePath: string;
   content: string;

@@ -8,7 +8,15 @@ import {
   showUrlPreview,
   type UrlPreviewBounds,
 } from './url-preview';
+import {
+  bindArtifactPreviewProtocol,
+  registerArtifactPreviewScheme,
+} from './artifact-preview';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
+
+// Must run before app.ready so artifact iframes can load outside renderer CSP.
+registerArtifactPreviewScheme();
+
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -911,6 +919,7 @@ app.whenReady().then(async () => {
   }
   orch.setMaxConcurrent(maxConcurrentAgents());
   applyDockIcon();
+  bindArtifactPreviewProtocol();
   registerIpc();
   setupNotifications();
   setupStoreWatcher();
