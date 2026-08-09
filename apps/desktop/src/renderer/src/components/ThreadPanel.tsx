@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { AgentKind, MessagePart, ThinkingEffort, Thread, ThreadAttachment } from '@sideboard-ai/core';
-import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
   RIGHT_COLUMN_WIDTH_DEFAULT,

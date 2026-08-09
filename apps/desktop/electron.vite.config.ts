@@ -60,6 +60,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/git/teams.ts',
         ),
+        '@sideboard/orchestrator-capable': resolve(
+          __dirname,
+          '../../packages/core/src/agents/orchestrator-capable.ts',
+        ),
       },
     },
     optimizeDeps: {

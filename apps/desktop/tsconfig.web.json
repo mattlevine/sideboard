@@ -19,6 +19,7 @@
       "@sideboard/worktree-labels": ["../../packages/core/src/git/worktree-labels.ts"],
       "@sideboard/brightsy-targets": ["../../packages/core/src/agents/brightsy-targets.ts"],
       "@sideboard/gh-errors": ["../../packages/core/src/git/gh-errors.ts"],
+      "@sideboard/orchestrator-capable": ["../../packages/core/src/agents/orchestrator-capable.ts"],
       "@brightsy/ui-context": ["./node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx"]
     }
   },

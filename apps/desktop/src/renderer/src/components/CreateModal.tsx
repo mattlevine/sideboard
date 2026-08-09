@@ -5,7 +5,7 @@ import type {
   ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
-import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import {
   ComposerAttachmentChips,
   ComposerOptionsToolbar,

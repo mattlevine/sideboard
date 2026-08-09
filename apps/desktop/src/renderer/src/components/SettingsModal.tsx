@@ -14,7 +14,7 @@ import type {
   ThinkingEffort,
   Thread,
 } from '@sideboard-ai/core';
-import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
-import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { isOrchestratorThread, threadDisplayTitle } from '../lib/global-workspace';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
