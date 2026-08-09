@@ -22,7 +22,9 @@ import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
 import { normalizePreviewUrl } from './lib/preview-url';
 import {
   readRightSidebarOpen,
+  readRightSidebarWidth,
   writeRightSidebarOpen,
+  writeRightSidebarWidth,
 } from './lib/right-sidebar-prefs';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
@@ -209,6 +211,8 @@ export function App() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(() =>
     readRightSidebarOpen(null, true),
   );
+  /** Temporary hide while the artifact/schema column is open — not persisted. */
+  const [rightSidebarSuppressed, setRightSidebarSuppressed] = useState(false);
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() =>
     readSidebarWidth(
       'sideboard.leftSidebarWidth',
@@ -218,20 +222,11 @@ export function App() {
     ),
   );
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
-    readSidebarWidth(
-      'sideboard.rightSidebarWidth',
-      RIGHT_SIDEBAR_DEFAULT,
-      RIGHT_SIDEBAR_MIN,
-      RIGHT_SIDEBAR_MAX,
-    ),
+    readRightSidebarWidth(null, RIGHT_SIDEBAR_DEFAULT),
   );
 
   const persistLeftSidebarWidth = useCallback((width: number) => {
     writeSidebarWidth('sideboard.leftSidebarWidth', width);
-  }, []);
-
-  const persistRightSidebarWidth = useCallback((width: number) => {
-    writeSidebarWidth('sideboard.rightSidebarWidth', width);
   }, []);
 
   function toggleLeftSidebar() {
@@ -424,40 +419,47 @@ export function App() {
     [threads, archived, selectedId],
   );
 
-  const rightSidebarWorkspaceKey = useMemo(() => {
+  const rightSidebarWorktreeKey = useMemo(() => {
     if (!selected || isGlobalThread(selected)) return null;
-    return selected.repoPath || null;
+    return selected.worktreePath?.trim() || null;
   }, [selected]);
 
-  // Restore per-workspace open/closed when switching projects.
+  // Restore per-worktree open/closed + width when switching worktrees.
   useEffect(() => {
-    if (!rightSidebarWorkspaceKey) return;
-    setRightSidebarOpen(readRightSidebarOpen(rightSidebarWorkspaceKey, true));
-  }, [rightSidebarWorkspaceKey]);
+    if (!rightSidebarWorktreeKey) return;
+    setRightSidebarOpen(readRightSidebarOpen(rightSidebarWorktreeKey, true));
+    setRightSidebarWidth(
+      readRightSidebarWidth(rightSidebarWorktreeKey, RIGHT_SIDEBAR_DEFAULT),
+    );
+    setRightSidebarSuppressed(false);
+  }, [rightSidebarWorktreeKey]);
 
   const toggleRightSidebar = useCallback(() => {
+    if (rightSidebarSuppressed) {
+      setRightSidebarSuppressed(false);
+      return;
+    }
     setRightSidebarOpen((v) => {
       const next = !v;
-      writeRightSidebarOpen(rightSidebarWorkspaceKey, next);
+      writeRightSidebarOpen(rightSidebarWorktreeKey, next);
       return next;
     });
-  }, [rightSidebarWorkspaceKey]);
+  }, [rightSidebarWorktreeKey, rightSidebarSuppressed]);
 
-  const closeRightSidebarIfOpen = useCallback(() => {
-    setRightSidebarOpen((v) => {
-      if (!v) return v;
-      writeRightSidebarOpen(rightSidebarWorkspaceKey, false);
-      return false;
-    });
-  }, [rightSidebarWorkspaceKey]);
+  const persistRightSidebarWidth = useCallback(
+    (width: number) => {
+      writeRightSidebarWidth(rightSidebarWorktreeKey, width);
+    },
+    [rightSidebarWorktreeKey],
+  );
 
-  const openRightSidebarIfClosed = useCallback(() => {
-    setRightSidebarOpen((v) => {
-      if (v) return v;
-      writeRightSidebarOpen(rightSidebarWorkspaceKey, true);
-      return true;
-    });
-  }, [rightSidebarWorkspaceKey]);
+  const suppressRightSidebarForColumn = useCallback(() => {
+    setRightSidebarSuppressed(true);
+  }, []);
+
+  const unsuppressRightSidebarForColumn = useCallback(() => {
+    setRightSidebarSuppressed(false);
+  }, []);
 
   // File tabs are scoped to the active worktree; URL tabs stay open across worktrees.
   useEffect(() => {
@@ -598,6 +600,7 @@ export function App() {
 
   /** Orchestration chats have no worktree — Changes/Files/Terminal sidebar is N/A. */
   const showRightSidebar = Boolean(selected && !isGlobalThread(selected));
+  const rightSidebarVisible = showRightSidebar && rightSidebarOpen && !rightSidebarSuppressed;
 
   const appClass = [
     'app',
@@ -675,7 +678,7 @@ export function App() {
       {view === 'thread' && selected && (
         <div
           className={`thread-workspace${
-            showRightSidebar && rightSidebarOpen ? ' has-right' : ''
+            showRightSidebar && rightSidebarVisible ? ' has-right' : ''
           }`}
         >
           {(() => {
@@ -685,7 +688,7 @@ export function App() {
             const rightToggle = showRightSidebar ? (
               <SidebarToggle
                 side="right"
-                open={rightSidebarOpen}
+                open={rightSidebarVisible}
                 onClick={toggleRightSidebar}
               />
             ) : undefined;
@@ -708,8 +711,8 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
-              onRightColumnOpen: closeRightSidebarIfOpen,
-              onRightColumnClose: openRightSidebarIfClosed,
+              onRightColumnOpen: suppressRightSidebarForColumn,
+              onRightColumnClose: unsuppressRightSidebarForColumn,
             };
             const urlPreviewProps = {
               openUrls,
@@ -773,7 +776,7 @@ export function App() {
             />
           );
           })()}
-          {showRightSidebar && rightSidebarOpen && (
+          {showRightSidebar && rightSidebarVisible && (
             <div className="right-sidebar-slot">
               <PanelResizeHandle
                 edge="left"

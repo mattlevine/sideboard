@@ -1,11 +1,19 @@
-/** Persist resizable panel widths so returning to a thread keeps layout. */
+/**
+ * Persist the chat right-column (artifact/schema/files) width per worktree.
+ * Unset worktrees use a stable default — not another worktree's last drag.
+ */
 
-const RIGHT_COLUMN_BY_THREAD_KEY = 'sideboard.rightColumnWidthByThread';
+const RIGHT_COLUMN_BY_WORKTREE_KEY = 'sideboard.rightColumnWidthByWorktree';
+/** Legacy fallback when no worktree key is available. */
 const RIGHT_COLUMN_GLOBAL_KEY = 'sideboard.rightColumnWidth';
 
 const RIGHT_COLUMN_MIN = 320;
 const RIGHT_COLUMN_MAX = 900;
 export const RIGHT_COLUMN_WIDTH_FALLBACK = 420;
+
+function normalizeWorktreeKey(key: string): string {
+  return key.replace(/\/+$/, '');
+}
 
 function clampRightColumnWidth(n: number): number {
   return Math.min(RIGHT_COLUMN_MAX, Math.max(RIGHT_COLUMN_MIN, Math.round(n)));
@@ -13,14 +21,14 @@ function clampRightColumnWidth(n: number): number {
 
 function readMap(): Record<string, number> {
   try {
-    const raw = localStorage.getItem(RIGHT_COLUMN_BY_THREAD_KEY);
+    const raw = localStorage.getItem(RIGHT_COLUMN_BY_WORKTREE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const out: Record<string, number> = {};
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
       if (typeof v === 'number' && Number.isFinite(v)) {
-        out[k] = clampRightColumnWidth(v);
+        out[normalizeWorktreeKey(k)] = clampRightColumnWidth(v);
       }
     }
     return out;
@@ -31,7 +39,7 @@ function readMap(): Record<string, number> {
 
 function writeMap(map: Record<string, number>): void {
   try {
-    localStorage.setItem(RIGHT_COLUMN_BY_THREAD_KEY, JSON.stringify(map));
+    localStorage.setItem(RIGHT_COLUMN_BY_WORKTREE_KEY, JSON.stringify(map));
   } catch {
     // ignore quota / private mode
   }
@@ -49,23 +57,33 @@ function readGlobalRightColumnWidth(): number | null {
   }
 }
 
-/** Per-thread right column width, falling back to last global width then default. */
+/** Per-worktree right column width; missing keys use fallback (then legacy global). */
 export function readRightColumnWidth(
-  threadId: string,
+  worktreeKey: string | null | undefined,
   fallback: number = RIGHT_COLUMN_WIDTH_FALLBACK,
 ): number {
-  const map = readMap();
-  const hit = map[threadId];
-  if (typeof hit === 'number') return hit;
+  if (worktreeKey) {
+    const map = readMap();
+    const key = normalizeWorktreeKey(worktreeKey);
+    const hit = map[key];
+    if (typeof hit === 'number') return hit;
+    return clampRightColumnWidth(fallback);
+  }
   return readGlobalRightColumnWidth() ?? clampRightColumnWidth(fallback);
 }
 
-/** Remember width for this thread and as the global default for new threads. */
-export function writeRightColumnWidth(threadId: string, width: number): void {
+/** Remember width for this worktree only. */
+export function writeRightColumnWidth(
+  worktreeKey: string | null | undefined,
+  width: number,
+): void {
   const clamped = clampRightColumnWidth(width);
-  const map = readMap();
-  map[threadId] = clamped;
-  writeMap(map);
+  if (worktreeKey) {
+    const map = readMap();
+    map[normalizeWorktreeKey(worktreeKey)] = clamped;
+    writeMap(map);
+    return;
+  }
   try {
     localStorage.setItem(RIGHT_COLUMN_GLOBAL_KEY, String(clamped));
   } catch {

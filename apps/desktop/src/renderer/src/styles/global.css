@@ -4998,7 +4998,9 @@ body.resizing-panels webview {
   display: inline;
 }
 
-@container right-sidebar (max-width: 360px) {
+/* Compact only when the pane is genuinely narrow — default width (340) must
+   keep "Commit & push" / "Changes" / "Archive" text, not icons. */
+@container right-sidebar (max-width: 280px) {
   .right-top {
     padding: 8px 8px;
   }
@@ -6002,7 +6004,7 @@ button.linkish:hover {
   cursor: default;
 }
 
-@container right-sidebar (max-width: 360px) {
+@container right-sidebar (max-width: 280px) {
   /* Keep Review label when possible; eye alone is fine if space is tight */
   .right-tabs-review-btn .tab-full {
     display: inline;

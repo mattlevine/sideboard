@@ -39,20 +39,20 @@ describe('panel-widths', () => {
     localStorage.clear();
   });
 
-  it('falls back to default then remembers per thread', () => {
-    expect(readRightColumnWidth('t1')).toBe(RIGHT_COLUMN_WIDTH_FALLBACK);
-    writeRightColumnWidth('t1', 560);
-    expect(readRightColumnWidth('t1')).toBe(560);
-    expect(readRightColumnWidth('t2')).toBe(560); // global last-used for new threads
-    writeRightColumnWidth('t2', 720);
-    expect(readRightColumnWidth('t1')).toBe(560);
-    expect(readRightColumnWidth('t2')).toBe(720);
+  it('defaults, then remembers per worktree without cross-bleed', () => {
+    expect(readRightColumnWidth('/wt/monaco')).toBe(RIGHT_COLUMN_WIDTH_FALLBACK);
+    writeRightColumnWidth('/wt/monaco', 560);
+    expect(readRightColumnWidth('/wt/monaco')).toBe(560);
+    expect(readRightColumnWidth('/wt/cruzeiro')).toBe(RIGHT_COLUMN_WIDTH_FALLBACK);
+    writeRightColumnWidth('/wt/cruzeiro/', 720);
+    expect(readRightColumnWidth('/wt/monaco')).toBe(560);
+    expect(readRightColumnWidth('/wt/cruzeiro')).toBe(720);
   });
 
   it('clamps out-of-range widths', () => {
-    writeRightColumnWidth('t1', 50);
-    expect(readRightColumnWidth('t1')).toBe(320);
-    writeRightColumnWidth('t1', 5000);
-    expect(readRightColumnWidth('t1')).toBe(900);
+    writeRightColumnWidth('/wt/monaco', 50);
+    expect(readRightColumnWidth('/wt/monaco')).toBe(320);
+    writeRightColumnWidth('/wt/monaco', 5000);
+    expect(readRightColumnWidth('/wt/monaco')).toBe(900);
   });
 });

@@ -226,7 +226,7 @@ export function ThreadPanel({
     return remembered === undefined ? null : remembered;
   });
   const [artifactWidth, setArtifactWidth] = useState(() =>
-    readRightColumnWidth(thread.id, RIGHT_COLUMN_WIDTH_DEFAULT),
+    readRightColumnWidth(thread.worktreePath, RIGHT_COLUMN_WIDTH_DEFAULT),
   );
   const [filePicker, setFilePicker] = useState<RightColumnFilePicker | null>(null);
   /** After the user closes the pane, skip auto-open until a different artifact. */
@@ -916,7 +916,7 @@ export function ThreadPanel({
   useLayoutEffect(() => {
     suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
     setFilePicker(null);
-    setArtifactWidth(readRightColumnWidth(thread.id, RIGHT_COLUMN_WIDTH_DEFAULT));
+    setArtifactWidth(readRightColumnWidth(thread.worktreePath, RIGHT_COLUMN_WIDTH_DEFAULT));
     const remembered = getRememberedRightPaneSession(thread.id);
     if (remembered !== undefined) {
       setRightSession(remembered);
@@ -943,7 +943,7 @@ export function ThreadPanel({
   }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
 
   function setPersistedArtifactWidth(width: number) {
-    writeRightColumnWidth(thread.id, width);
+    writeRightColumnWidth(thread.worktreePath, width);
   }
   // Worktree sidebar: close only on 0→1 right-column panes; reopen on 1→0.
   // Tab switches (and user reopening the sidebar while panes stay open) are no-ops.

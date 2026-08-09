@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { readRightSidebarOpen, writeRightSidebarOpen } from './right-sidebar-prefs';
+import {
+  readRightSidebarOpen,
+  readRightSidebarWidth,
+  RIGHT_SIDEBAR_WIDTH_FALLBACK,
+  writeRightSidebarOpen,
+  writeRightSidebarWidth,
+} from './right-sidebar-prefs';
 
 function installLocalStorageMock() {
   const store = new Map<string, string>();
@@ -35,20 +41,32 @@ describe('right-sidebar-prefs', () => {
     localStorage.clear();
   });
 
-  it('defaults open, then remembers per workspace', () => {
-    expect(readRightSidebarOpen('/repos/a')).toBe(true);
-    writeRightSidebarOpen('/repos/a', false);
-    expect(readRightSidebarOpen('/repos/a')).toBe(false);
-    expect(readRightSidebarOpen('/repos/b')).toBe(false); // global last-used
-    writeRightSidebarOpen('/repos/b', true);
-    expect(readRightSidebarOpen('/repos/a')).toBe(false);
-    expect(readRightSidebarOpen('/repos/b')).toBe(true);
+  it('defaults open, then remembers per worktree without cross-bleed', () => {
+    expect(readRightSidebarOpen('/wt/monaco')).toBe(true);
+    writeRightSidebarOpen('/wt/monaco', false);
+    expect(readRightSidebarOpen('/wt/monaco')).toBe(false);
+    expect(readRightSidebarOpen('/wt/cruzeiro')).toBe(true);
+    writeRightSidebarOpen('/wt/cruzeiro/', true);
+    expect(readRightSidebarOpen('/wt/monaco')).toBe(false);
+    expect(readRightSidebarOpen('/wt/cruzeiro')).toBe(true);
   });
 
-  it('falls back to legacy global key when workspace is unset', () => {
+  it('remembers width per worktree without cross-bleed', () => {
+    expect(readRightSidebarWidth('/wt/monaco')).toBe(RIGHT_SIDEBAR_WIDTH_FALLBACK);
+    writeRightSidebarWidth('/wt/monaco', 400);
+    expect(readRightSidebarWidth('/wt/monaco')).toBe(400);
+    expect(readRightSidebarWidth('/wt/cruzeiro')).toBe(RIGHT_SIDEBAR_WIDTH_FALLBACK);
+    writeRightSidebarWidth('/wt/cruzeiro', 500);
+    expect(readRightSidebarWidth('/wt/monaco')).toBe(400);
+    expect(readRightSidebarWidth('/wt/cruzeiro')).toBe(500);
+  });
+
+  it('falls back to legacy global key only when worktree is unset', () => {
     localStorage.setItem('sideboard.rightSidebar', '0');
     expect(readRightSidebarOpen(null)).toBe(false);
     writeRightSidebarOpen(null, true);
+    expect(localStorage.getItem('sideboard.rightSidebar')).toBe('1');
+    writeRightSidebarOpen('/wt/monaco', false);
     expect(localStorage.getItem('sideboard.rightSidebar')).toBe('1');
   });
 });
