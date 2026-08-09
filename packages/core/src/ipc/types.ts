@@ -181,6 +181,8 @@ export interface IpcApi {
   sendQueuedMessageNow(threadRef: string, index: number): Promise<Thread>;
   setAutonomy(threadRef: string, autonomy: Autonomy): Promise<Thread>;
   setThreadOptions(threadRef: string, patch: ThreadOptionsPatch): Promise<Thread>;
+  /** Open a Review chat tab on a worktree thread (merge-readiness). */
+  requestReview(threadRef: string): Promise<Thread>;
   fanOut(threadRefs: string[], prompt: string): Promise<Thread[]>;
   startOrchestration(opts: {
     goal: string;

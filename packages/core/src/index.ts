@@ -36,6 +36,7 @@ export * from './threads/chat-tabs.js';
 export * from './threads/fork-worktree.js';
 export * from './threads/adopt.js';
 export * from './orchestrator/orchestrator.js';
+export * from './review/request-review.js';
 export {
   coordinatorSystemPrompt,
   coordinatorTurnReminder,

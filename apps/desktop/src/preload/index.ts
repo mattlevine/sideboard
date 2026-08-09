@@ -54,6 +54,7 @@ const api: IpcApi = {
   setMaxConcurrent: (n) => ipcRenderer.invoke('setMaxConcurrent', n),
   createThread: (input) => ipcRenderer.invoke('createThread', input),
   createChatTab: (input) => ipcRenderer.invoke('createChatTab', input),
+  requestReview: (threadRef) => ipcRenderer.invoke('requestReview', threadRef),
   forkChatTab: (input) => ipcRenderer.invoke('forkChatTab', input),
   forkThreadWorktree: (input) => ipcRenderer.invoke('forkThreadWorktree', input),
   renameThread: (threadRef, title) => ipcRenderer.invoke('renameThread', threadRef, title),

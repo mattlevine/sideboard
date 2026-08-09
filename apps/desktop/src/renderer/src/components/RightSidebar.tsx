@@ -16,10 +16,7 @@ import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { prPillModifier, prPillStatusLabel, summarizeChecks } from '../lib/pr-format';
 import {
   REVIEW_REQUEST_PATH,
-  REVIEW_REQUEST_PREFILL,
-  buildReviewRequestAttachment,
   ensureReviewRequestFile,
-  readExistingReviewRequestFile,
 } from '../lib/review-request';
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
@@ -595,25 +592,15 @@ export function RightSidebar({
 
   /**
    * Open a fresh Review chat and ask for a merge-readiness recommendation.
-   * Does not create Review request.md. If a custom guidelines file already
-   * exists, attach it; otherwise Review runs on the default prefill alone.
+   * Same path as MCP `request_review` (optional attach of existing guidelines).
    */
   async function startAgentReview() {
     if (reviewBusy) return;
     setReviewBusy(true);
     setReviewMenuOpen(false);
     try {
-      const existing = await readExistingReviewRequestFile(thread.id);
-      const attachments = existing
-        ? [buildReviewRequestAttachment(existing)]
-        : [];
-      const tab = await window.sideboard.createChatTab({
-        fromThreadId: thread.id,
-        title: 'Review',
-        attachments,
-      });
+      const tab = await window.sideboard.requestReview(thread.id);
       onSelectChat?.(tab.id, tab);
-      await window.sideboard.sendToThread(tab.id, REVIEW_REQUEST_PREFILL);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));

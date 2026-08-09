@@ -64,6 +64,7 @@ import {
   forkChatTab as forkChatTabImpl,
   threadsSharingWorktree,
 } from '../threads/chat-tabs.js';
+import { requestReview } from '../review/request-review.js';
 import { forkThreadWorktree as forkThreadWorktreeImpl } from '../threads/fork-worktree.js';
 import {
   adoptThread,
@@ -1365,6 +1366,16 @@ export class Orchestrator {
 
   setAutonomy(threadRef: string, autonomy: Autonomy): Thread {
     return this.setThreadOptions(threadRef, { autonomy });
+  }
+
+  /**
+   * Open a Review chat tab on a worktree thread (same as the desktop Review button)
+   * and send the merge-readiness prefill.
+   */
+  async requestReview(threadRef: string): Promise<Thread> {
+    const { tab } = await requestReview(threadRef, (ref, prompt) => this.send(ref, prompt));
+    this.emit({ type: 'status_changed', threadId: tab.id, status: tab.status });
+    return tab;
   }
 
   setThreadOptions(threadRef: string, patch: ThreadOptionsPatch): Thread {

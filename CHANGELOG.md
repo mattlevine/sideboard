@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.44] - 2026-08-09
+
+### Added
+
+- MCP `request_review` — orchestration agents can start a merge-readiness Review on a worktree thread (same as the desktop Review button)
+
+### Fixed
+
+- HTML artifact preview no longer goes white when clicking links (external links open outside the iframe)
+
 ## [0.1.43] - 2026-08-08
 
 ### Added

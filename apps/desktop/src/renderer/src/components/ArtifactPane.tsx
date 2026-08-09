@@ -117,6 +117,19 @@ export function ArtifactPane({
     };
   }, []);
 
+  // Links inside the sandboxed iframe would navigate it away (relative → white 404).
+  // Main injects a guard that postMessages http(s)/mailto here for openExternal.
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      const data = event.data as { type?: unknown; url?: unknown } | null;
+      if (!data || data.type !== 'sideboard-artifact-open-external') return;
+      if (typeof data.url !== 'string' || !data.url.trim()) return;
+      void window.sideboard.openExternal(data.url.trim());
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
   function copyContent() {
     void navigator.clipboard?.writeText(artifact.content).then(() => {
       setCopied(true);

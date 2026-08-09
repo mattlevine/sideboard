@@ -662,6 +662,7 @@ function registerIpc(): void {
     return orch.createThread(input);
   });
   ipcMain.handle('createChatTab', (_e, input) => orch.createChatTab(input));
+  ipcMain.handle('requestReview', (_e, ref: string) => orch.requestReview(ref));
   ipcMain.handle('forkChatTab', (_e, input) => orch.forkChatTab(input));
   ipcMain.handle('forkThreadWorktree', async (_e, input) => {
     const source = orch.getThread(input.threadId);

@@ -133,6 +133,7 @@ MCP tools commonly used by a coordinator:
 - `create_thread` / `send_to_thread` / `wait_for_turn` / `get_turn_result`
 - `stop_thread` (interrupt) — `send_to_thread` also accepts `force_stop`
 - `get_diff`
+- `request_review` (worktree thread → Review chat tab; then `wait_for_turn`)
 
 Ask worktree agents to open draft PRs via `send_to_thread` (`gh pr create --draft`), not via a host land tool.
 

@@ -1,6 +1,11 @@
 import { ipcMain, protocol } from 'electron';
+import { injectArtifactNavigationGuard } from './artifact-nav-guard';
 
 export const ARTIFACT_PREVIEW_SCHEME = 'sideboard-artifact';
+export {
+  ARTIFACT_OPEN_EXTERNAL_MSG,
+  injectArtifactNavigationGuard,
+} from './artifact-nav-guard';
 
 const htmlById = new Map<string, string>();
 const MAX_HTML_CHARS = 5_000_000;
@@ -52,7 +57,7 @@ export function bindArtifactPreviewProtocol(): void {
         },
       );
     }
-    return new Response(html, {
+    return new Response(injectArtifactNavigationGuard(html), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         // Artifacts are agent-authored demos; allow typical inline JS/CSS + CDNs.

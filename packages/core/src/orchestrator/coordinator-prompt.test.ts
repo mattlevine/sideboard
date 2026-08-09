@@ -65,6 +65,7 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('run_setup');
     expect(prompt).toContain('run_dev_script');
     expect(prompt).toContain('get_diff');
+    expect(prompt).toContain('request_review');
     expect(prompt).not.toContain('create_draft_pr');
     expect(prompt).not.toContain('preview_land');
     expect(prompt).toContain('purge_thread');

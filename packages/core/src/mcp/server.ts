@@ -461,6 +461,35 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'request_review',
+    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, optionally attaches .sideboard/attachments/Review request.md when present, and asks for Approve / Approve with nits / Request changes / Needs more information. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn / get_turn_result on the returned review tab id.',
+    { ref: z.string().describe('Worktree thread id/ref to review') },
+    async ({ ref }) => {
+      try {
+        const tab = await orch.requestReview(ref);
+        const from = orch.getThread(ref);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: tab.id,
+                title: tab.title,
+                status: tab.status,
+                fromThreadId: from?.id ?? ref,
+                link: `sideboard://thread/${tab.id}`,
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
     'run_dev_script',
     'Start a .sideboard/.conductor run script for a thread (default script if name omitted); returns port',
     {
