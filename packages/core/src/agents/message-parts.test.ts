@@ -51,6 +51,43 @@ describe('applyAgentEvent', () => {
       deletions: 1,
     });
   });
+
+  it('does not treat MCP JSON payloads as git diff stats', () => {
+    let parts = applyAgentEvent([], {
+      type: 'tool_use',
+      id: 'm1',
+      name: 'mcp__brightsy_brightsy-ai-examples__list_record_types',
+      input: {},
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'tool_result',
+      id: 'm1',
+      content:
+        '{"ok":true,"types":[{"slug":"task","phone":"+15551212","priority":-2}]}',
+    });
+    expect(parts[0]).toMatchObject({ type: 'tool', status: 'done' });
+    expect(parts[0]).not.toHaveProperty('additions');
+    expect(parts[0]).not.toHaveProperty('deletions');
+  });
+
+  it('still parses paired git-style +N -M stats from results', () => {
+    let parts = applyAgentEvent([], {
+      type: 'tool_use',
+      id: 'e2',
+      name: 'Bash',
+      input: { command: 'git diff --stat' },
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'tool_result',
+      id: 'e2',
+      content: ' file.ts | 5 ++++-\n 1 file changed, +4 -1',
+    });
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      additions: 4,
+      deletions: 1,
+    });
+  });
 });
 
 describe('toolDetail', () => {

@@ -425,7 +425,8 @@ export function AgentMessage({
                   <span className="tool-chip-name">
                     {t.filePath ? basename(t.filePath) : t.name}
                   </span>
-                  {(t.additions != null || t.deletions != null) && (
+                  {hasCodeDiff(t) &&
+                    (t.additions != null || t.deletions != null) && (
                     <span className="tool-chip-diff">
                       {t.additions != null && (
                         <span className="add">+{t.additions}</span>

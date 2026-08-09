@@ -62,6 +62,7 @@ import {
   preventComposerFileDrag,
   snapshotComposerDrop,
 } from '../lib/composer-file-drop';
+import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { isCloudCoordinatorThread, isGlobalThread } from '../lib/global-workspace';
 import {
@@ -1607,6 +1608,20 @@ export function ThreadPanel({
                   if (acRef.current?.contains(active)) return;
                   setComposerFocused(false);
                 }, 0);
+              }}
+              onPaste={(e) => {
+                const buf = largePasteBufferFromEvent(e, attachments);
+                if (!buf) return;
+                void (async () => {
+                  try {
+                    const files = await window.sideboard.attachComposerFiles(thread.id, {
+                      buffers: [buf],
+                    });
+                    await appendAttachments(files);
+                  } catch (err) {
+                    window.alert(err instanceof Error ? err.message : String(err));
+                  }
+                })();
               }}
               onKeyDown={(e) => {
                 if (acItems.length > 0) {

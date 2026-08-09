@@ -2925,6 +2925,8 @@ body.resizing-panels webview {
   color: var(--text);
   max-width: 220px;
   cursor: pointer;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .tool-chip:hover,
@@ -3239,13 +3241,16 @@ body.resizing-panels webview {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .tool-chip-diff {
   display: inline-flex;
+  flex-shrink: 0;
   gap: 4px;
   font-variant-numeric: tabular-nums;
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .tool-chip-diff .add {
@@ -3589,10 +3594,10 @@ body.resizing-panels webview {
   max-width: 100%;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg) 55%, var(--bg-elevated));
   font-size: 12px;
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 .attachment-chip.is-openable {
@@ -3607,32 +3612,33 @@ body.resizing-panels webview {
 .attachment-icon {
   font-family: var(--mono);
   font-size: 10px;
-  font-weight: 700;
-  color: #89d185;
-  background: #2d2d2d;
-  border: 1px solid #6a9955;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, var(--bg));
+  border: 1px solid var(--border-subtle);
   border-radius: 3px;
-  padding: 1px 3px;
+  padding: 1px 4px;
 }
 
 .attachment-icon.kind-issue {
-  color: #c4b5fd;
-  border-color: #7c3aed;
+  color: color-mix(in srgb, #c4b5fd 55%, var(--muted));
+  border-color: color-mix(in srgb, #7c3aed 35%, var(--border));
 }
 
 .attachment-icon.kind-workspace {
-  color: #93c5fd;
-  border-color: #3b82f6;
+  color: color-mix(in srgb, var(--accent) 45%, var(--muted));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
 }
 
 .attachment-icon.kind-file {
-  color: #fcd34d;
-  border-color: #d97706;
+  color: color-mix(in srgb, #d4a574 70%, var(--muted));
+  border-color: color-mix(in srgb, #b8956a 40%, var(--border));
 }
 
 .attachment-icon.kind-diff-comment {
-  color: #7dd3fc;
-  border-color: #0284c7;
+  color: color-mix(in srgb, #7dd3fc 50%, var(--muted));
+  border-color: color-mix(in srgb, #0284c7 30%, var(--border));
 }
 
 .composer-picker-backdrop {
@@ -3963,7 +3969,9 @@ body.resizing-panels webview {
 }
 
 .msg.user {
+  /* Same accent family as Draft / Merge / Archive chrome */
   background: var(--accent-soft);
+  border-color: var(--accent-dim);
   align-self: flex-end;
   white-space: pre-wrap;
   font-family: var(--font);
@@ -3972,6 +3980,7 @@ body.resizing-panels webview {
 
 .msg.agent {
   background: var(--bg-elevated);
+  border-color: var(--border-subtle);
   align-self: flex-start;
   width: min(100%, 820px);
   padding: 10px 12px 8px;
@@ -4331,6 +4340,33 @@ body.resizing-panels webview {
   background: var(--bg);
 }
 
+/* Chat tables: quieter header + hairlines (test soften) */
+.msg.agent .md table {
+  font-size: 12.5px;
+}
+
+.msg.agent .md th,
+.msg.agent .md td {
+  border-color: var(--border-subtle);
+  padding: 7px 10px;
+}
+
+.msg.agent .md th {
+  background: color-mix(in srgb, var(--bg-elevated) 70%, var(--bg-hover));
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.msg.agent .md tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg) 35%, transparent);
+}
+
+.msg.agent .md code {
+  background: color-mix(in srgb, var(--bg) 55%, var(--bg-elevated));
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
 .msg.user.pending {
   opacity: 0.75;
 }
@@ -4484,7 +4520,8 @@ body.resizing-panels webview {
 }
 
 .msg.agent.streaming {
-  border-color: var(--accent-dim);
+  /* Quiet live hint — avoid neon outline on elevated cards */
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-subtle));
 }
 
 .msg.agent.waiting {
@@ -4497,7 +4534,7 @@ body.resizing-panels webview {
   width: 0.55ch;
   height: 1em;
   margin-left: 2px;
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 55%, var(--muted));
   vertical-align: text-bottom;
   animation: caret-blink 1s step-end infinite;
 }
@@ -4571,7 +4608,7 @@ body.resizing-panels webview {
 
 .composer-box:focus-within,
 .composer-box.expanded {
-  border-color: var(--accent-dim);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
 }
 
 .composer-input-row {

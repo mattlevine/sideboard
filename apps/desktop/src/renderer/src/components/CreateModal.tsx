@@ -23,6 +23,7 @@ import {
   preventComposerFileDrag,
   snapshotComposerDrop,
 } from '../lib/composer-file-drop';
+import { attachmentsFromLargePaste } from '../lib/paste-attachment';
 import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 
@@ -607,6 +608,16 @@ export function CreateModal({
                 ? 'Coordination goal across threads…'
                 : 'What do you want to work on?'
             }
+            onPaste={(e) => {
+              if (busy) return;
+              void attachmentsFromLargePaste(e, attachments)
+                .then((files) => {
+                  if (files?.length) setAttachments((prev) => [...prev, ...files]);
+                })
+                .catch((err) => {
+                  setError(err instanceof Error ? err.message : String(err));
+                });
+            }}
             onKeyDown={(e) => {
               if (busy) return;
               if (e.key === 'Enter' && !e.shiftKey) {

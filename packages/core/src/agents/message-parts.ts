@@ -103,12 +103,23 @@ function parseDiffStat(result: string | undefined): {
   deletions?: number;
 } {
   if (!result) return {};
-  const plus = result.match(/\+(\d+)/);
-  const minus = result.match(/-(\d+)/);
-  if (plus || minus) {
+  // Only trust git-style stats ("+12 -3" / "12 insertions, 3 deletions").
+  // Bare +N / -N matches almost any JSON (phones, ids, timestamps) and
+  // wrongly paints MCP tool chips as file diffs.
+  const paired = result.match(/\+(\d+)\s+-(\d+)/);
+  if (paired) {
     return {
-      additions: plus ? Number(plus[1]) : undefined,
-      deletions: minus ? Number(minus[1]) : undefined,
+      additions: Number(paired[1]),
+      deletions: Number(paired[2]),
+    };
+  }
+  const verbose = result.match(
+    /(\d+)\s+insertions?(?:,\s*(\d+)\s+deletions?)?/i,
+  );
+  if (verbose) {
+    return {
+      additions: Number(verbose[1]),
+      deletions: verbose[2] != null ? Number(verbose[2]) : undefined,
     };
   }
   return {};
@@ -185,8 +196,8 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         ...p,
         status: event.isError ? ('error' as const) : ('done' as const),
         result: event.content,
-        additions: fromResult.additions ?? p.additions,
-        deletions: fromResult.deletions ?? p.deletions,
+        ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
+        ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
       };
     });
     return next;
