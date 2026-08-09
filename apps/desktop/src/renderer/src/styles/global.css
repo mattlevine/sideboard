@@ -6917,7 +6917,8 @@ button.linkish:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 20;
+  /* Above composer-shell (25) and chat chrome; below composer pickers (11000) */
+  z-index: 100;
 }
 
 .modal {
