@@ -5,6 +5,7 @@ import type {
   ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
 import {
   ComposerAttachmentChips,
   ComposerOptionsToolbar,
@@ -28,6 +29,17 @@ import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 
 type Mode = 'create' | 'orchestration';
+
+function coerceOptionsForMode(
+  next: ComposerDraftOptions,
+  mode: Mode,
+): ComposerDraftOptions {
+  if (mode !== 'orchestration') return next;
+  if ((ORCHESTRATOR_AGENT_KINDS as readonly string[]).includes(next.agent)) {
+    return next;
+  }
+  return { ...next, agent: 'claude', model: null };
+}
 
 interface Props {
   /** Preselected workspace path (from per-repo +). */
@@ -232,12 +244,17 @@ export function CreateModal({
       .finally(() => setAgentsLoaded(true));
     void refreshWorkspaces(initialRepoPath);
     void loadThreadDefaults().then((defaults) => {
-      setOptions((prev) => ({
-        ...prev,
-        agent: defaults.agent,
-        model: defaults.model,
-        effort: defaults.effort,
-      }));
+      setOptions((prev) =>
+        coerceOptionsForMode(
+          {
+            ...prev,
+            agent: defaults.agent,
+            model: defaults.model,
+            effort: defaults.effort,
+          },
+          initialMode === 'orchestration' ? 'orchestration' : 'create',
+        ),
+      );
     });
     void window.sideboard
       .getAppSettings()
@@ -282,7 +299,12 @@ export function CreateModal({
   }
 
   function patchOptions(patch: Partial<ComposerDraftOptions>) {
-    setOptions((prev) => ({ ...prev, ...patch }));
+    setOptions((prev) => coerceOptionsForMode({ ...prev, ...patch }, mode));
+  }
+
+  function setModeAndCoerce(next: Mode) {
+    setMode(next);
+    setOptions((prev) => coerceOptionsForMode(prev, next));
   }
 
   function resetDraft() {
@@ -508,7 +530,7 @@ export function CreateModal({
                 type="button"
                 className={mode === 'create' ? 'selected' : ''}
                 onClick={() => {
-                  setMode('create');
+                  setModeAndCoerce('create');
                   setMoreMenuOpen(false);
                 }}
               >
@@ -518,7 +540,7 @@ export function CreateModal({
                 type="button"
                 className={mode === 'orchestration' ? 'selected' : ''}
                 onClick={() => {
-                  setMode('orchestration');
+                  setModeAndCoerce('orchestration');
                   setMoreMenuOpen(false);
                 }}
               >
@@ -647,6 +669,9 @@ export function CreateModal({
             repoPath={repoPath || undefined}
             menuPlacement="auto"
             variant="create"
+            allowedAgents={
+              mode === 'orchestration' ? ORCHESTRATOR_AGENT_KINDS : undefined
+            }
             rightSlot={
               <>
                 <label className="create-more-toggle" title="Keep dialog open after create">

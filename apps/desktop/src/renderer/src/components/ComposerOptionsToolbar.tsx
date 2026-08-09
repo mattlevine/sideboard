@@ -39,6 +39,8 @@ interface Props {
   rightSlot?: ReactNode;
   /** Conductor-style create dialog chrome (paperclip, quieter chips). */
   variant?: 'default' | 'create';
+  /** Limit agents in the picker (orchestration excludes Brightsy). */
+  allowedAgents?: readonly AgentKind[];
 }
 
 function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
@@ -161,6 +163,7 @@ export function ComposerOptionsToolbar({
   menuPlacement = 'auto',
   rightSlot,
   variant = 'default',
+  allowedAgents,
 }: Props) {
   const isCreate = variant === 'create';
   const [plusOpen, setPlusOpen] = useState(false);
@@ -410,6 +413,7 @@ export function ComposerOptionsToolbar({
           effort: options.effort,
         }}
         title={isCreate ? 'Agent for new chat' : 'Choose agent'}
+        allowedAgents={allowedAgents}
         onClose={() => setAgentPickerOpen(false)}
         onApply={(next) => {
           patch({

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
-import { threadDisplayTitle } from '../lib/global-workspace';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
+import { isOrchestratorThread, threadDisplayTitle } from '../lib/global-workspace';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
@@ -101,15 +102,27 @@ export function ChatTabs({
   });
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const activeChat = useMemo(
+    () => chats.find((c) => c.id === activeChatId) ?? chats[0],
+    [chats, activeChatId],
+  );
+  const orchAgentsOnly = isOrchestratorThread(activeChat);
+
   useEffect(() => {
     if (editingId) inputRef.current?.focus();
   }, [editingId]);
 
   async function openNewTabPicker() {
     const defaults = await loadThreadDefaults();
+    let agent = defaults.agent;
+    let model = defaults.model;
+    if (orchAgentsOnly && !(ORCHESTRATOR_AGENT_KINDS as readonly string[]).includes(agent)) {
+      agent = 'claude';
+      model = null;
+    }
     setNewTabDefaults({
-      agent: defaults.agent,
-      model: defaults.model,
+      agent,
+      model,
       autonomy: 'default',
       effort: defaults.effort,
     });
@@ -308,6 +321,7 @@ export function ChatTabs({
           value={newTabDefaults}
           title="New chat tab"
           confirmLabel="Create tab"
+          allowedAgents={orchAgentsOnly ? ORCHESTRATOR_AGENT_KINDS : undefined}
           onClose={() => setNewOpen(false)}
           onApply={(next) => {
             onNewTab({

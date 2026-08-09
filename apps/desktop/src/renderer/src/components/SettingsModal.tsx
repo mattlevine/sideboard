@@ -14,6 +14,7 @@ import type {
   ThinkingEffort,
   Thread,
 } from '@sideboard-ai/core';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
@@ -1434,11 +1435,13 @@ export function SettingsModal({
                         disabled={busy}
                         onChange={(e) => {
                           const v = e.target.value as AgentKind;
-                          if (!(v in DEFAULT_AGENT_LABELS)) return;
+                          if (!(ORCHESTRATOR_AGENT_KINDS as readonly string[]).includes(v)) {
+                            return;
+                          }
                           void saveAdvancedPatch({ orchestrationQuotaFallbackAgent: v });
                         }}
                       >
-                        {(Object.keys(DEFAULT_AGENT_LABELS) as AgentKind[]).map((id) => (
+                        {ORCHESTRATOR_AGENT_KINDS.map((id) => (
                           <option key={id} value={id}>
                             {DEFAULT_AGENT_LABELS[id]}
                           </option>

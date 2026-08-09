@@ -12,6 +12,18 @@ export type CursorTurnRequest = {
   fast?: boolean;
   planMode?: boolean;
   apiKey?: string;
+  /**
+   * Inline MCP servers for this turn (Sideboard / Brightsy).
+   * Must be passed on create and resume — Cursor does not persist them.
+   */
+  mcpServers?: Record<
+    string,
+    {
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+    }
+  >;
 };
 
 /** Subset of Cursor SDK stream messages we care about (keeps tests free of the SDK). */

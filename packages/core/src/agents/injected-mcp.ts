@@ -216,6 +216,75 @@ export async function buildInjectedMcpServers(opts: {
   return servers;
 }
 
+/** Shape expected by `@cursor/sdk` `Agent.create` / `resume` / `send` mcpServers. */
+export type CursorMcpServers = Record<
+  string,
+  {
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }
+>;
+
+/** Convert injected MCP launches into Cursor SDK `mcpServers` map. */
+export function toCursorMcpServers(servers: InjectedMcpServer[]): CursorMcpServers {
+  const out: CursorMcpServers = {};
+  for (const s of servers) {
+    out[s.name] = {
+      command: s.command,
+      ...(s.args ? { args: s.args } : {}),
+      ...(s.env ? { env: s.env } : {}),
+    };
+  }
+  return out;
+}
+
+/**
+ * Codex CLI `-c key=value` overrides for mcp_servers (merged over ~/.codex/config.toml).
+ * @see https://developers.openai.com/codex/mcp
+ */
+export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
+  const args: string[] = [];
+  for (const s of servers) {
+    const prefix = `mcp_servers.${s.name}`;
+    args.push('-c', `${prefix}.command=${JSON.stringify(s.command)}`);
+    if (s.args?.length) {
+      args.push('-c', `${prefix}.args=${JSON.stringify(s.args)}`);
+    }
+    if (s.env) {
+      for (const [key, value] of Object.entries(s.env)) {
+        args.push('-c', `${prefix}.env.${key}=${JSON.stringify(value)}`);
+      }
+    }
+  }
+  return args;
+}
+
+/**
+ * OpenCode `OPENCODE_CONFIG_CONTENT` JSON fragment (merges over project/global config).
+ * Uses the v1 `mcp.<name>` shape (`type` + `command` array + `enabled`) used by current CLI.
+ */
+export function toOpencodeMcpConfigContent(servers: InjectedMcpServer[]): string {
+  const mcp: Record<
+    string,
+    {
+      type: 'local';
+      command: string[];
+      enabled: boolean;
+      environment?: Record<string, string>;
+    }
+  > = {};
+  for (const s of servers) {
+    mcp[s.name] = {
+      type: 'local',
+      command: [s.command, ...(s.args ?? [])],
+      enabled: true,
+      ...(s.env && Object.keys(s.env).length > 0 ? { environment: s.env } : {}),
+    };
+  }
+  return JSON.stringify({ mcp });
+}
+
 /** Persist injected MCP servers to a temp Claude `--mcp-config` JSON. */
 export function writeMcpServersConfig(servers: InjectedMcpServer[]): string | null {
   if (servers.length === 0) return null;

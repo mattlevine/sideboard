@@ -566,7 +566,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fork_chat',
-    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Remote coordinators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
+    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Remote coordinators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
     {
       ref: z.string().describe('Thread id/ref to fork (worktree agent or orchestration chat)'),
       through_index: z

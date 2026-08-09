@@ -42,6 +42,13 @@ export {
   parseSessionQuotaResetAt,
   resolveQuotaFallbackAgent,
 } from './session-quota.js';
+export {
+  ORCHESTRATOR_AGENT_KINDS,
+  isOrchestratorCapableAgent,
+  assertOrchestratorCapableAgent,
+  coerceOrchestratorAgent,
+} from './orchestrator-capable.js';
+export type { OrchestratorAgentKind } from './orchestrator-capable.js';
 export { ensureAgentPath } from './path.js';
 export {
   getAgentSetupInfo,

@@ -59,6 +59,13 @@ describe('codexAdapter.buildTurn', () => {
     expect(cmd.args[1]).toBe('-');
     expect(cmd.stdin).toBe(`${big}\n`);
   });
+
+  it('injects Sideboard MCP via -c mcp_servers overrides', async () => {
+    const cmd = await codexAdapter.buildTurn(baseThread, { prompt: 'list threads' });
+    expect(cmd.args).toContain('-c');
+    const cfg = cmd.args.filter((_, i) => cmd.args[i - 1] === '-c');
+    expect(cfg.some((c) => c.startsWith('mcp_servers.sideboard.command='))).toBe(true);
+  });
 });
 
 describe('codexAdapter.parseEvent', () => {

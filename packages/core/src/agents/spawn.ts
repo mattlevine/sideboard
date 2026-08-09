@@ -6,6 +6,7 @@ import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, MessagePart, Thread, TokenUsage } from '../types/thread.js';
 import { parseBrightsyCliLine } from './brightsy.js';
 import { getAdapter } from './index.js';
+import { assertOrchestratorCapableAgent } from './orchestrator-capable.js';
 import {
   applyAgentEvent,
   finalizeParts,
@@ -49,6 +50,9 @@ export async function spawnAgentTurn(
       '../orchestrator/coordinator-prompt.js'
     );
     ensureGlobalCoordinatorCwd();
+  }
+  if (isOrchestratorThread(thread)) {
+    assertOrchestratorCapableAgent(thread.agent);
   }
   const adapter = getAdapter(thread.agent);
   const cmd = await adapter.buildTurn(thread, input);

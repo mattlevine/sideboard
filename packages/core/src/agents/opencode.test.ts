@@ -54,6 +54,18 @@ describe('opencodeAdapter.buildTurn', () => {
     expect(cmd.args).not.toContain('--continue');
     expect(cmd.stdin).toBe('follow up');
   });
+
+  it('injects Sideboard MCP via OPENCODE_CONFIG_CONTENT', async () => {
+    const cmd = await opencodeAdapter.buildTurn(baseThread, { prompt: 'list threads' });
+    const content = cmd.env?.OPENCODE_CONFIG_CONTENT;
+    expect(content).toBeTruthy();
+    const parsed = JSON.parse(content!) as {
+      mcp?: Record<string, { type?: string; command?: string[]; enabled?: boolean }>;
+    };
+    expect(parsed.mcp?.sideboard?.type).toBe('local');
+    expect(parsed.mcp?.sideboard?.enabled).toBe(true);
+    expect(parsed.mcp?.sideboard?.command?.length).toBeGreaterThan(0);
+  });
 });
 
 describe('opencodeAdapter.parseEvent', () => {

@@ -46,6 +46,15 @@ describe('cursorAdapter.buildTurn', () => {
       expect(cmd.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
     }
   });
+
+  it('injects Sideboard MCP into the Cursor turn request', async () => {
+    const cmd = await cursorAdapter.buildTurn(baseThread, { prompt: 'list threads' });
+    const req = JSON.parse(cmd.stdin!) as {
+      mcpServers?: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(req.mcpServers?.sideboard).toBeTruthy();
+    expect(req.mcpServers!.sideboard.command).toBeTruthy();
+  });
 });
 
 describe('cursorSdkMessageToEvents', () => {

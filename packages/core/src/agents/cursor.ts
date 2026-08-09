@@ -10,6 +10,11 @@ import {
   parseCursorRunnerLine,
   type CursorTurnRequest,
 } from './cursor-events.js';
+import {
+  buildInjectedMcpServers,
+  isBrightsyConnected,
+  toCursorMcpServers,
+} from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
 import { resolveNodeLaunch } from './node-launch.js';
 import { flattenTurnInput } from './turn-input.js';
@@ -161,6 +166,13 @@ export const cursorAdapter: AgentAdapter = {
     const prompt = flattenTurnInput(input);
     const agentId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
     const apiKey = resolveCursorApiKey() || undefined;
+    // Same injection as Claude: Sideboard always; Brightsy when logged in.
+    // Cursor does not persist mcpServers across resume — include every turn.
+    const injected = await buildInjectedMcpServers({
+      includeSideboard: true,
+      includeBrightsy: isBrightsyConnected(),
+    });
+    const mcpServers = toCursorMcpServers(injected);
     const req: CursorTurnRequest = {
       prompt,
       cwd: thread.worktreePath,
@@ -170,6 +182,7 @@ export const cursorAdapter: AgentAdapter = {
       fast: thread.fast,
       planMode: thread.planMode,
       apiKey,
+      ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
     };
 
     const runner = cursorRunnerPath();

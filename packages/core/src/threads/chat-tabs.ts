@@ -9,6 +9,7 @@ import {
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
 import { isGlobalThread, isOrchestratorThread } from '../store/global-workspace.js';
+import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 import {
   createEmptyThread,
   findThreadByRef,
@@ -126,6 +127,11 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     explicitTitle ||
     allocateTeamName(takenTeamSlugsForChatTab(binding.worktreePath)).name;
 
+  const nextAgent = input.agent ?? from.agent;
+  if (isOrchestratorThread(from) || binding.sourceType === 'orchestration') {
+    assertOrchestratorCapableAgent(nextAgent);
+  }
+
   const thread = createEmptyThread({
     title,
     // Chat-tab nicknames (soccer team or explicit) must stick. Post-turn
@@ -133,7 +139,7 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     // shared worktree folder name (e.g. fork "Arsenal" → "Monaco").
     userSetTitle: true,
     ...binding,
-    agent: input.agent ?? from.agent,
+    agent: nextAgent,
     model:
       input.model !== undefined
         ? input.model

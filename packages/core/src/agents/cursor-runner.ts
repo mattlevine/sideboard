@@ -96,6 +96,11 @@ async function main(): Promise<number> {
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
   const store = localAgentStore();
   const local = { cwd: req.cwd, store };
+  // Inline MCP is not persisted on resume — pass every turn (create + resume + send).
+  const mcpServers =
+    req.mcpServers && Object.keys(req.mcpServers).length > 0
+      ? req.mcpServers
+      : undefined;
 
   try {
     let agent;
@@ -106,6 +111,7 @@ async function main(): Promise<number> {
             model,
             mode,
             local,
+            ...(mcpServers ? { mcpServers } : {}),
           })
         : await Agent.create({
             apiKey,
@@ -113,6 +119,7 @@ async function main(): Promise<number> {
             mode,
             local,
             name: 'Sideboard',
+            ...(mcpServers ? { mcpServers } : {}),
           });
     } catch (err) {
       // Stale / purged cloud agent ids fail resume with "Agent … not found".
@@ -129,13 +136,17 @@ async function main(): Promise<number> {
         mode,
         local,
         name: 'Sideboard',
+        ...(mcpServers ? { mcpServers } : {}),
       });
     }
 
     try {
       emit({ type: 'session_id', data: agent.agentId });
 
-      const run = await agent.send(req.prompt);
+      const run = await agent.send(
+        req.prompt,
+        mcpServers ? { mcpServers } : undefined,
+      );
       for await (const msg of run.stream()) {
         for (const event of cursorSdkMessageToEvents(msg as never)) {
           emit(event);

@@ -4,6 +4,11 @@ import { join } from 'node:path';
 import { run } from '../git/run.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage } from './error-detail.js';
+import {
+  buildInjectedMcpServers,
+  isBrightsyConnected,
+  toCodexMcpConfigArgs,
+} from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput, normalizeTurnInput } from './turn-input.js';
 import { permissionMode } from './types.js';
@@ -164,6 +169,11 @@ export const codexAdapter: AgentAdapter = {
 
     const mode = permissionMode(thread);
     const model = thread.model?.trim();
+    const injected = await buildInjectedMcpServers({
+      includeSideboard: true,
+      includeBrightsy: isBrightsyConnected(),
+    });
+    const mcpOverrides = toCodexMcpConfigArgs(injected);
     const args = [
       'exec',
       ...(sessionId ? (['resume', sessionId] as const) : []),
@@ -176,6 +186,7 @@ export const codexAdapter: AgentAdapter = {
       '--ask-for-approval',
       'never',
       ...(model ? (['--model', model] as const) : []),
+      ...mcpOverrides,
     ];
 
     return {

@@ -47,6 +47,23 @@ describe('injected-mcp', () => {
       ).toBe(true);
       expect(servers[0]!.args?.[0]).toMatch(/run-stdio\.(js|cjs)$|cli[/\\]dist[/\\]index\.js$/);
     }
+
+    const { toCursorMcpServers, toCodexMcpConfigArgs, toOpencodeMcpConfigContent } =
+      await import('./injected-mcp.js');
+    const cursorMap = toCursorMcpServers(servers);
+    expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
+
+    const codexArgs = toCodexMcpConfigArgs(servers);
+    expect(codexArgs).toContain('-c');
+    expect(codexArgs.some((a) => a.startsWith('mcp_servers.sideboard.command='))).toBe(
+      true,
+    );
+
+    const oc = JSON.parse(toOpencodeMcpConfigContent(servers)) as {
+      mcp: { sideboard: { type: string; command: string[] } };
+    };
+    expect(oc.mcp.sideboard.type).toBe('local');
+    expect(oc.mcp.sideboard.command[0]).toBe(servers[0]!.command);
   });
 
   it('resolves MCP entry without throwing when import.meta.url is unavailable', async () => {

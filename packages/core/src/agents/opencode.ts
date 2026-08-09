@@ -1,6 +1,11 @@
 import { run } from '../git/run.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
+import {
+  buildInjectedMcpServers,
+  isBrightsyConnected,
+  toOpencodeMcpConfigContent,
+} from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
@@ -157,6 +162,12 @@ export const opencodeAdapter: AgentAdapter = {
     if (model) {
       args.push('--model', model);
     }
+    const injected = await buildInjectedMcpServers({
+      includeSideboard: true,
+      includeBrightsy: isBrightsyConnected(),
+    });
+    const mcpContent =
+      injected.length > 0 ? toOpencodeMcpConfigContent(injected) : null;
     return {
       file: 'opencode',
       args,
@@ -166,6 +177,7 @@ export const opencodeAdapter: AgentAdapter = {
       stdin: prompt,
       env: {
         OPENCODE_PERMISSION: mode.opencodePermission,
+        ...(mcpContent ? { OPENCODE_CONFIG_CONTENT: mcpContent } : {}),
       },
     };
   },

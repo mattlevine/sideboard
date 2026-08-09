@@ -48,6 +48,7 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { createThread } from '../threads/create.js';
+import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 
 /** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
 export function isPidAlive(pid: number): boolean {
@@ -1544,6 +1545,9 @@ export class Orchestrator {
           throw new Error(
             `Cannot switch agent provider mid-chat (${thread.agent} → ${patch.agent}). Start a new chat tab instead.`,
           );
+        }
+        if (isOrchestratorThread(thread)) {
+          assertOrchestratorCapableAgent(patch.agent);
         }
         next.agent = patch.agent;
         // Model aliases are agent-specific; clear when switching unless the patch

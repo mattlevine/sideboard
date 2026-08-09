@@ -1,4 +1,5 @@
 import { CLOUD_ORCHESTRATOR_GOAL } from '../brightsy/cloud-connect-constants.js';
+import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 import {
   allocateTeamName,
   takenSlugsFromThread,
@@ -145,6 +146,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
       : allocateTeamName(takenTeamSlugsForOrchestration()).name;
   const sourceRef =
     opts.sourceRef?.trim() || (isCloud ? CLOUD_ORCHESTRATOR_GOAL : title);
+  const agent = assertOrchestratorCapableAgent(opts.agent);
   const thread = createEmptyThread({
     title,
     // Stick nicknames the same way chat tabs do (avoid later sync overwrites).
@@ -154,7 +156,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     branchName: 'global',
     worktreePath: globalAgentCwd(),
     repoPath: GLOBAL_WORKSPACE_ID,
-    agent: opts.agent,
+    agent,
     autonomy: opts.autonomy ?? 'default',
     model: opts.model ?? null,
     effort: opts.effort ?? 'high',

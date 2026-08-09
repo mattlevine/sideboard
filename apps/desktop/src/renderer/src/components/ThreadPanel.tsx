@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { AgentKind, MessagePart, ThinkingEffort, Thread, ThreadAttachment } from '@sideboard-ai/core';
+import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
   RIGHT_COLUMN_WIDTH_DEFAULT,
@@ -65,7 +66,7 @@ import {
 } from '../lib/composer-file-drop';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
-import { isCloudCoordinatorThread, isGlobalThread } from '../lib/global-workspace';
+import { isCloudCoordinatorThread, isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
 import {
   readRightColumnWidth,
   writeRightColumnWidth,
@@ -1885,6 +1886,9 @@ export function ThreadPanel({
           autonomy: thread.autonomy,
           effort: displayEffort,
         }}
+        allowedAgents={
+          isOrchestratorThread(thread) ? ORCHESTRATOR_AGENT_KINDS : undefined
+        }
         onClose={() => setAgentPickerOpen(false)}
         onApply={(next) => {
           void applyAgentOptions(next);

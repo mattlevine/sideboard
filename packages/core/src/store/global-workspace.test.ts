@@ -55,6 +55,15 @@ describe('global-workspace', () => {
     expect(chat.userSetTitle).toBe(true);
   });
 
+  it('rejects Brightsy as a Global orchestrator agent', () => {
+    expect(() =>
+      createGlobalChat({
+        agent: 'brightsy',
+        sourceRef: 'Should fail',
+      }),
+    ).toThrow(/does not support Sideboard MCP/);
+  });
+
   it('ensureCloudCoordinator is a singleton under Global with a soccer nickname', () => {
     const cloud = ensureCloudCoordinator('claude');
     expect(cloud.sourceRef).toBe(CLOUD_ORCHESTRATOR_GOAL);

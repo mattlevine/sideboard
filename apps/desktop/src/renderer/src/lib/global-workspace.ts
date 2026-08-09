@@ -23,6 +23,16 @@ export function isCloudCoordinatorThread(
   return false;
 }
 
+/** True for Global chats and legacy pinned-repo orchestration threads. */
+export function isOrchestratorThread(
+  thread: Pick<Thread, 'sourceType' | 'repoPath'> | null | undefined,
+): boolean {
+  return Boolean(
+    thread &&
+      (thread.sourceType === 'orchestration' || isGlobalThread(thread)),
+  );
+}
+
 /** Short label for crowded UI (tabs, board rows). */
 export function threadDisplayTitle(thread: Pick<Thread, 'title' | 'sourceType' | 'sourceRef'>): string {
   return thread.title?.trim() || 'Untitled';

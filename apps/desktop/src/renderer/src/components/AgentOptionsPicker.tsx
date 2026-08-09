@@ -51,6 +51,11 @@ interface Props {
   title?: string;
   /** Primary button label (e.g. "Create tab"). Defaults to "Done". */
   confirmLabel?: string;
+  /**
+   * Limit visible agents (e.g. orchestration: Claude / Cursor / Codex / OpenCode only —
+   * Brightsy cannot inject Sideboard MCP).
+   */
+  allowedAgents?: readonly AgentKind[];
 }
 
 type CatalogRow = {
@@ -89,7 +94,14 @@ export function AgentOptionsPicker({
   onApply,
   title = 'Choose agent',
   confirmLabel = 'Done',
+  allowedAgents,
 }: Props) {
+  const agents = useMemo(() => {
+    if (!allowedAgents?.length) return AGENTS;
+    const allow = new Set(allowedAgents);
+    return AGENTS.filter((a) => allow.has(a.id));
+  }, [allowedAgents]);
+
   const [agent, setAgent] = useState<AgentKind>(value.agent);
   const [model, setModel] = useState<string | null>(value.model);
   const [autonomy, setAutonomy] = useState<Autonomy>(value.autonomy);
@@ -105,13 +117,15 @@ export function AgentOptionsPicker({
 
   useEffect(() => {
     if (!open) return;
-    setAgent(value.agent);
-    setModel(value.model);
+    const nextAgent =
+      agents.some((a) => a.id === value.agent) ? value.agent : (agents[0]?.id ?? 'claude');
+    setAgent(nextAgent);
+    setModel(nextAgent === value.agent ? value.model : defaultModelFor(nextAgent));
     setAutonomy(value.autonomy);
     setEffort(value.effort ?? 'high');
     setQuery('');
     prefetchAgentModels();
-  }, [open, value.agent, value.model, value.autonomy, value.effort]);
+  }, [open, value.agent, value.model, value.autonomy, value.effort, agents]);
 
   useEffect(() => {
     if (!open || agent !== 'brightsy') return;
@@ -323,7 +337,7 @@ export function AgentOptionsPicker({
         </div>
 
         <div className="composer-picker-team-chips agent-options-agent-chips" role="tablist">
-          {AGENTS.map((a) => (
+          {agents.map((a) => (
             <button
               key={a.id}
               type="button"

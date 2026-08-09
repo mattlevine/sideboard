@@ -128,17 +128,20 @@ const FALLBACK_ORDER: AgentKind[] = [
   'cursor',
   'codex',
   'opencode',
-  'brightsy',
   'claude',
 ];
 
-/** Pick a different agent for quota failover (preferred first, then stable order). */
+/** Pick a different orchestrator-capable agent for quota failover. */
 export function resolveQuotaFallbackAgent(
   current: AgentKind,
   preferred?: AgentKind | null,
 ): AgentKind {
-  const ordered = preferred
-    ? [preferred, ...FALLBACK_ORDER.filter((a) => a !== preferred)]
-    : FALLBACK_ORDER;
-  return ordered.find((a) => a !== current) ?? (current === 'cursor' ? 'codex' : 'cursor');
+  const ordered = [
+    ...(preferred && preferred !== 'brightsy' ? [preferred] : []),
+    ...FALLBACK_ORDER.filter((a) => a !== preferred),
+  ];
+  return (
+    ordered.find((a) => a !== current) ??
+    (current === 'cursor' ? 'codex' : 'cursor')
+  );
 }

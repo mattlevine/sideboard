@@ -287,7 +287,8 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (
     typeof source.orchestrationQuotaFallbackAgent === 'string' &&
-    DEFAULT_AGENTS.has(source.orchestrationQuotaFallbackAgent as AgentKind)
+    DEFAULT_AGENTS.has(source.orchestrationQuotaFallbackAgent as AgentKind) &&
+    source.orchestrationQuotaFallbackAgent !== 'brightsy'
   ) {
     out.orchestrationQuotaFallbackAgent =
       source.orchestrationQuotaFallbackAgent as AgentKind;
@@ -625,7 +626,8 @@ export function updateAdvancedSettings(
   }
   if (
     typeof patch.orchestrationQuotaFallbackAgent === 'string' &&
-    DEFAULT_AGENTS.has(patch.orchestrationQuotaFallbackAgent)
+    DEFAULT_AGENTS.has(patch.orchestrationQuotaFallbackAgent) &&
+    patch.orchestrationQuotaFallbackAgent !== 'brightsy'
   ) {
     advanced.orchestrationQuotaFallbackAgent = patch.orchestrationQuotaFallbackAgent;
   }
@@ -681,7 +683,10 @@ export function orchestrationQuotaFallbackAgent(
   settings: AppSettings = loadAppSettings(),
 ): AgentKind {
   const preferred = settings.advanced.orchestrationQuotaFallbackAgent;
-  return preferred && DEFAULT_AGENTS.has(preferred) ? preferred : 'cursor';
+  if (preferred && DEFAULT_AGENTS.has(preferred) && preferred !== 'brightsy') {
+    return preferred;
+  }
+  return 'cursor';
 }
 
 export function maxConcurrentAgents(
