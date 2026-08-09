@@ -733,11 +733,95 @@ export async function fetchPrHead(
   number: number,
   localBranch: string,
 ): Promise<void> {
-  await git(
-    ['fetch', 'origin', `pull/${number}/head:${localBranch}`],
-    repoPath,
-    { reject: false },
-  );
+  const slug = await resolveGithubRepoSlug(repoPath);
+  const refspec = `+pull/${number}/head:${localBranch}`;
+  const errors: string[] = [];
+
+  const tryFetch = async (remote: string): Promise<boolean> => {
+    const result = await git(['fetch', remote, refspec], repoPath, {
+      reject: false,
+    });
+    if (result.exitCode === 0) return true;
+    const detail = (result.stderr || result.stdout).trim();
+    if (detail) errors.push(`${remote}: ${detail}`);
+    return false;
+  };
+
+  let fetched = await tryFetch('origin');
+  if (!fetched && slug) {
+    // Origin may be a fork / mirror that doesn't expose pull/*/head — fetch from
+    // the GitHub repo Sideboard listed the PR against.
+    fetched = await tryFetch(`https://github.com/${slug}.git`);
+  }
+
+  const localOk = async () => {
+    const verify = await git(['rev-parse', '--verify', localBranch], repoPath, {
+      reject: false,
+    });
+    return verify.exitCode === 0;
+  };
+
+  if (!(await localOk())) {
+    // Last resort: resolve the PR head SHA via gh and point a local branch at it.
+    const viewArgs = [
+      'pr',
+      'view',
+      String(number),
+      '--json',
+      'headRefOid',
+    ];
+    if (slug) viewArgs.push('--repo', slug);
+    const view = await gh(viewArgs, repoPath, { reject: false });
+    let oid = '';
+    if (view.exitCode === 0 && view.stdout.trim()) {
+      try {
+        oid = String(
+          (JSON.parse(view.stdout) as { headRefOid?: string }).headRefOid ?? '',
+        ).trim();
+      } catch {
+        oid = '';
+      }
+    }
+    if (oid) {
+      // Ensure the object exists locally before branching.
+      const ensureOid = async (remote: string) => {
+        const got = await git(['fetch', remote, oid], repoPath, {
+          reject: false,
+        });
+        return got.exitCode === 0;
+      };
+      let haveObject =
+        (
+          await git(['cat-file', '-e', `${oid}^{commit}`], repoPath, {
+            reject: false,
+          })
+        ).exitCode === 0;
+      if (!haveObject) haveObject = await ensureOid('origin');
+      if (!haveObject && slug) {
+        haveObject = await ensureOid(`https://github.com/${slug}.git`);
+      }
+      if (haveObject) {
+        const branched = await git(['branch', '-f', localBranch, oid], repoPath, {
+          reject: false,
+        });
+        if (branched.exitCode !== 0) {
+          const detail = (branched.stderr || branched.stdout).trim();
+          if (detail) errors.push(`branch -f: ${detail}`);
+        }
+      } else {
+        errors.push(`could not fetch commit ${oid.slice(0, 12)}`);
+      }
+    } else if (view.stderr.trim()) {
+      errors.push(view.stderr.trim());
+    }
+  }
+
+  if (!(await localOk())) {
+    const hint = errors.length ? ` (${errors.join(' | ')})` : '';
+    throw new Error(
+      `Failed to fetch PR #${number} head into ${localBranch}${hint}`,
+    );
+  }
 }
 
 export interface CreateWorktreeResult {
@@ -762,6 +846,7 @@ export async function resolveWorktreeStartPoint(
       reject: false,
     });
     if (ok.exitCode === 0) return ref;
+    throw new Error(`Invalid git reference: ${ref}`);
   }
 
   const remote = `origin/${ref}`;
@@ -775,7 +860,12 @@ export async function resolveWorktreeStartPoint(
   });
   if (localOk.exitCode === 0) return ref;
 
-  return ref;
+  throw new Error(`Invalid git reference: ${ref}`);
+}
+
+/** Local-only refs created by fetchPrHead — never exist on origin. */
+function isLocalPrFetchBranch(ref: string): boolean {
+  return /^sideboard-pr-\d+$/.test(ref.trim());
 }
 
 export async function createThreadWorktree(opts: {
@@ -794,9 +884,15 @@ export async function createThreadWorktree(opts: {
   await ensureGhPreferOrigin(opts.repoPath);
 
   // Refresh remotes first so default-branch forks track current origin/main (etc).
+  // Skip prune when starting from a local PR fetch branch — prune is unrelated,
+  // and a following `fetch origin sideboard-pr-N` would never succeed.
   await git(['fetch', 'origin', '--prune'], opts.repoPath, { reject: false });
   // Also fetch the named ref in case prune/fetch missed a new remote branch.
-  if (!opts.sourceRef.startsWith('origin/') && !opts.sourceRef.startsWith('refs/')) {
+  if (
+    !isLocalPrFetchBranch(opts.sourceRef) &&
+    !opts.sourceRef.startsWith('origin/') &&
+    !opts.sourceRef.startsWith('refs/')
+  ) {
     await git(['fetch', 'origin', opts.sourceRef], opts.repoPath, {
       reject: false,
     });
