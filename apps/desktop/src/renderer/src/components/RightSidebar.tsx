@@ -15,7 +15,6 @@ import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { prPillModifier, prPillStatusLabel, summarizeChecks } from '../lib/pr-format';
 import {
-  REVIEW_REQUEST_NAME,
   REVIEW_REQUEST_PREFILL,
   buildReviewRequestAttachment,
   ensureReviewRequestFile,
@@ -616,19 +615,24 @@ export function RightSidebar({
     }
   }
 
-  /** Conductor-style: attach Review request.md and send to the agent immediately. */
+  /**
+   * Conductor-style: open a fresh Review chat tab, attach Review request.md,
+   * and send immediately. Always a new tab so we don't resume a stale Cursor
+   * agent session or interrupt the current chat.
+   */
   async function startAgentReview() {
     if (reviewBusy) return;
     setReviewBusy(true);
     try {
       const content = await ensureReviewRequestFile(thread.id);
       const attachment = buildReviewRequestAttachment(content);
-      const latest = await window.sideboard.getThread(thread.id);
-      const prev = (latest?.attachments ?? []).filter(
-        (a) => !(a.kind === 'file' && a.name === REVIEW_REQUEST_NAME),
-      );
-      await window.sideboard.setAttachments(thread.id, [...prev, attachment]);
-      await window.sideboard.sendToThread(thread.id, REVIEW_REQUEST_PREFILL);
+      const tab = await window.sideboard.createChatTab({
+        fromThreadId: thread.id,
+        title: 'Review',
+        attachments: [attachment],
+      });
+      onSelectChat?.(tab.id, tab);
+      await window.sideboard.sendToThread(tab.id, REVIEW_REQUEST_PREFILL);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));

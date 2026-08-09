@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Orchestration chat layout keeps the Queued dock + composer in view; fleet bar shows coordinator/child queue counts
+- Review opens a new chat tab instead of sending into the current one
+- Cursor `Agent … not found` on resume starts a fresh session instead of failing with exit 1
 
 ## [0.1.40] - 2026-08-08
 

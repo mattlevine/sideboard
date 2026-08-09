@@ -77,20 +77,39 @@ async function main(): Promise<number> {
   const local = { cwd: req.cwd, store };
 
   try {
-    const agent = req.agentId
-      ? await Agent.resume(req.agentId, {
-          apiKey,
-          model,
-          mode,
-          local,
-        })
-      : await Agent.create({
-          apiKey,
-          model,
-          mode,
-          local,
-          name: 'Sideboard',
-        });
+    let agent;
+    try {
+      agent = req.agentId
+        ? await Agent.resume(req.agentId, {
+            apiKey,
+            model,
+            mode,
+            local,
+          })
+        : await Agent.create({
+            apiKey,
+            model,
+            mode,
+            local,
+            name: 'Sideboard',
+          });
+    } catch (err) {
+      // Stale / purged cloud agent ids fail resume with "Agent … not found".
+      // Start a fresh agent so follow-ups (and Review) aren't stuck on exit 1.
+      const message = err instanceof Error ? err.message : String(err);
+      if (!req.agentId || !/not found/i.test(message)) throw err;
+      emit({
+        type: 'stderr',
+        data: `Cursor agent ${req.agentId} not found — starting a new session`,
+      });
+      agent = await Agent.create({
+        apiKey,
+        model,
+        mode,
+        local,
+        name: 'Sideboard',
+      });
+    }
 
     try {
       emit({ type: 'session_id', data: agent.agentId });
