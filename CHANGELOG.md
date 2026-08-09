@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-08-08
+
+### Changed
+
+- Review request instructions require an explicit merge-readiness recommendation (Approve / Approve with nits / Request changes), not findings alone
+- Opening an artifact / schema / files panel no longer closes the right sidebar
+- Review no longer auto-creates or attaches `Review request.md`; customize guidelines is opt-in from the Review menu
+- Git sidebar actions send short chat prompts (`Commit and push.`, `Commit, push, and open a draft PR.`, …); the worktree core prompt expands them
+
 ## [0.1.41] - 2026-08-08
 
 ### Fixed

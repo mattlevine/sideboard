@@ -104,10 +104,6 @@ interface Props {
   fileChanges?: Record<string, { status: string; additions?: number; deletions?: number }>;
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
-  /** Fired when the right column (artifact / schema / files) is showing. */
-  onRightColumnOpen?: () => void;
-  /** Fired when every right-column tab has been closed. */
-  onRightColumnClose?: () => void;
 }
 
 const queuedIconStroke = {
@@ -183,8 +179,6 @@ export function ThreadPanel({
   fileChanges = {},
   leftSidebarToggle,
   rightSidebarToggle,
-  onRightColumnOpen,
-  onRightColumnClose,
 }: Props) {
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
@@ -946,23 +940,6 @@ export function ThreadPanel({
   function setPersistedArtifactWidth(width: number) {
     writeRightColumnWidth(thread.worktreePath, width);
   }
-  // Worktree sidebar: close only on 0→1 right-column panes; reopen on 1→0.
-  // Tab switches (and user reopening the sidebar while panes stay open) are no-ops.
-  const rightColumnVisible = Boolean(
-    chatViewOpen && rightSession && rightSession.tabs.length > 0,
-  );
-  const hadRightColumnRef = useRef(false);
-  useEffect(() => {
-    const has = rightColumnVisible;
-    const had = hadRightColumnRef.current;
-    if (has && !had) {
-      onRightColumnOpen?.();
-    } else if (!has && had) {
-      onRightColumnClose?.();
-    }
-    hadRightColumnRef.current = has;
-  }, [rightColumnVisible, onRightColumnOpen, onRightColumnClose]);
-
   // Auto-open while streaming; after the turn, migrate live → persisted ids.
   useEffect(() => {
     if (!chatViewOpen) return;

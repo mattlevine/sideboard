@@ -211,8 +211,6 @@ export function App() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(() =>
     readRightSidebarOpen(null, true),
   );
-  /** Temporary hide while the artifact/schema column is open — not persisted. */
-  const [rightSidebarSuppressed, setRightSidebarSuppressed] = useState(false);
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() =>
     readSidebarWidth(
       'sideboard.leftSidebarWidth',
@@ -431,20 +429,15 @@ export function App() {
     setRightSidebarWidth(
       readRightSidebarWidth(rightSidebarWorktreeKey, RIGHT_SIDEBAR_DEFAULT),
     );
-    setRightSidebarSuppressed(false);
   }, [rightSidebarWorktreeKey]);
 
   const toggleRightSidebar = useCallback(() => {
-    if (rightSidebarSuppressed) {
-      setRightSidebarSuppressed(false);
-      return;
-    }
     setRightSidebarOpen((v) => {
       const next = !v;
       writeRightSidebarOpen(rightSidebarWorktreeKey, next);
       return next;
     });
-  }, [rightSidebarWorktreeKey, rightSidebarSuppressed]);
+  }, [rightSidebarWorktreeKey]);
 
   const persistRightSidebarWidth = useCallback(
     (width: number) => {
@@ -452,14 +445,6 @@ export function App() {
     },
     [rightSidebarWorktreeKey],
   );
-
-  const suppressRightSidebarForColumn = useCallback(() => {
-    setRightSidebarSuppressed(true);
-  }, []);
-
-  const unsuppressRightSidebarForColumn = useCallback(() => {
-    setRightSidebarSuppressed(false);
-  }, []);
 
   // File tabs are scoped to the active worktree; URL tabs stay open across worktrees.
   useEffect(() => {
@@ -600,7 +585,7 @@ export function App() {
 
   /** Orchestration chats have no worktree — Changes/Files/Terminal sidebar is N/A. */
   const showRightSidebar = Boolean(selected && !isGlobalThread(selected));
-  const rightSidebarVisible = showRightSidebar && rightSidebarOpen && !rightSidebarSuppressed;
+  const rightSidebarVisible = showRightSidebar && rightSidebarOpen;
 
   const appClass = [
     'app',
@@ -711,8 +696,6 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
-              onRightColumnOpen: suppressRightSidebarForColumn,
-              onRightColumnClose: unsuppressRightSidebarForColumn,
             };
             const urlPreviewProps = {
               openUrls,

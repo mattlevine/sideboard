@@ -15,12 +15,15 @@ import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { prPillModifier, prPillStatusLabel, summarizeChecks } from '../lib/pr-format';
 import {
+  REVIEW_REQUEST_PATH,
   REVIEW_REQUEST_PREFILL,
   buildReviewRequestAttachment,
   ensureReviewRequestFile,
+  readExistingReviewRequestFile,
 } from '../lib/review-request';
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
+import { FloatingMenu } from './FloatingMenu';
 import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
 
 interface Props {
@@ -109,6 +112,8 @@ export function RightSidebar({
 }: Props) {
   const [upper, setUpper] = useState<UpperTab>('files');
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewMenuOpen, setReviewMenuOpen] = useState(false);
+  const reviewBtnRef = useRef<HTMLButtonElement>(null);
   const [lower, setLower] = useState<LowerTab>('run');
   const [diff, setDiff] = useState<DiffResult | null>(null);
   const [diffScope, setDiffScope] = useState<DiffScope>('commits');
@@ -538,31 +543,19 @@ export function RightSidebar({
 
   async function fixCheckWithAgent(check: PrCheckRun) {
     const kind = check.kind ?? 'ci';
-    let lines: string[];
+    let prompt: string;
     if (kind === 'mergeability') {
-      lines = [
+      prompt =
         check.state.toUpperCase() === 'BEHIND'
-          ? `This pull request is behind its base branch (${check.state}). Update the branch (merge or rebase from the base), resolve any conflicts, and push so the PR can merge.`
-          : `This pull request has a mergeability problem (${check.state}). ${check.description ?? 'Resolve merge conflicts with the base branch, commit the resolution, and push.'}`,
-        'Inspect the conflicting files, fix them carefully, and leave the branch in a clean mergeable state.',
-        check.link ? `PR: ${check.link}` : null,
-      ].filter(Boolean) as string[];
+          ? 'Update the branch.'
+          : 'Fix merge conflicts.';
     } else if (kind === 'review') {
-      lines = [
-        `Code review is blocking merge (${check.state}). ${check.description ?? ''}`,
-        'Read the PR review comments, address the requested changes, and push updates.',
-        check.link ? `PR: ${check.link}` : null,
-      ].filter(Boolean) as string[];
+      prompt = 'Address review comments.';
     } else {
-      lines = [
-        `Investigate and fix the failing CI check "${check.name}" (${check.state}).`,
-        check.workflow ? `Workflow: ${check.workflow}` : null,
-        check.description ? `Details: ${check.description}` : null,
-        check.link ? `Logs: ${check.link}` : null,
-      ].filter(Boolean) as string[];
+      prompt = `Fix CI: ${check.name}.`;
     }
     try {
-      await window.sideboard.sendToThread(thread.id, lines.join('\n'));
+      await window.sideboard.sendToThread(thread.id, prompt);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
@@ -574,30 +567,15 @@ export function RightSidebar({
     action: 'create-pr' | 'create-draft' | 'create-web' | 'commit-push',
   ) {
     setPrMenuOpen(false);
-    const lines: string[] = [];
-    if (action === 'commit-push') {
-      lines.push(
-        'Commit any uncommitted changes with a good message that states the purpose of the change, then push this branch to origin so the pull request updates.',
-      );
-      if (prUrl) lines.push(`Existing PR: ${prUrl}`);
-    } else if (action === 'create-web') {
-      lines.push(
-        'Commit any uncommitted changes with a good message, push this branch to origin, then open `gh pr create --web` so I can finish the pull request in the browser.',
-      );
-    } else {
-      lines.push(
-        'Commit any uncommitted changes with a good message, push this branch to origin, and open a draft pull request.',
-      );
-      lines.push(
-        'Title and body must reflect what the changes actually do — inspect the diff. Do not use the worktree nickname as the title.',
-      );
-    }
-    lines.push(
-      'Always use this worktree\'s origin remote (never upstream). Prefer `gh pr create --draft -R <origin-owner/name>` when creating a PR.',
-    );
+    const prompt =
+      action === 'commit-push'
+        ? 'Commit and push.'
+        : action === 'create-web'
+          ? 'Commit, push, and open a PR in the browser.'
+          : 'Commit, push, and open a draft PR.';
     setBusy(true);
     try {
-      await window.sideboard.sendToThread(thread.id, lines.join('\n'));
+      await window.sideboard.sendToThread(thread.id, prompt);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
@@ -616,20 +594,23 @@ export function RightSidebar({
   }
 
   /**
-   * Conductor-style: open a fresh Review chat tab, attach Review request.md,
-   * and send immediately. Always a new tab so we don't resume a stale Cursor
-   * agent session or interrupt the current chat.
+   * Open a fresh Review chat and ask for a merge-readiness recommendation.
+   * Does not create Review request.md. If a custom guidelines file already
+   * exists, attach it; otherwise Review runs on the default prefill alone.
    */
   async function startAgentReview() {
     if (reviewBusy) return;
     setReviewBusy(true);
+    setReviewMenuOpen(false);
     try {
-      const content = await ensureReviewRequestFile(thread.id);
-      const attachment = buildReviewRequestAttachment(content);
+      const existing = await readExistingReviewRequestFile(thread.id);
+      const attachments = existing
+        ? [buildReviewRequestAttachment(existing)]
+        : [];
       const tab = await window.sideboard.createChatTab({
         fromThreadId: thread.id,
         title: 'Review',
-        attachments: [attachment],
+        attachments,
       });
       onSelectChat?.(tab.id, tab);
       await window.sideboard.sendToThread(tab.id, REVIEW_REQUEST_PREFILL);
@@ -638,6 +619,17 @@ export function RightSidebar({
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
       setReviewBusy(false);
+    }
+  }
+
+  /** Opt-in: create/open editable Review request.md for custom guidelines. */
+  async function customizeReviewGuidelines() {
+    setReviewMenuOpen(false);
+    try {
+      await ensureReviewRequestFile(thread.id);
+      onOpenFile?.(REVIEW_REQUEST_PATH, { view: 'edit' });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -894,31 +886,64 @@ export function RightSidebar({
             <span className="tab-full">{checksTabLabel}</span>
             <span className="tab-short">CI</span>
           </button>
-          <button
-            type="button"
-            className="right-tabs-review-btn"
-            title="Ask the agent to review these changes"
-            disabled={reviewBusy || !changeCount}
-            onClick={() => void startAgentReview()}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              aria-hidden
+          <div className="right-tabs-review">
+            <button
+              ref={reviewBtnRef}
+              type="button"
+              className="right-tabs-review-btn"
+              title="Ask the agent to review these changes"
+              disabled={reviewBusy || !changeCount}
+              onClick={() => void startAgentReview()}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"
-              />
-              <circle cx="12" cy="12" r="2.75" />
-            </svg>
-            <span className="tab-full">{reviewBusy ? 'Reviewing…' : 'Review'}</span>
-          </button>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                aria-hidden
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"
+                />
+                <circle cx="12" cy="12" r="2.75" />
+              </svg>
+              <span className="tab-full">{reviewBusy ? 'Reviewing…' : 'Review'}</span>
+            </button>
+            <button
+              type="button"
+              className="right-tabs-review-more"
+              title="Review options"
+              aria-label="Review options"
+              aria-haspopup="menu"
+              aria-expanded={reviewMenuOpen}
+              disabled={reviewBusy}
+              onClick={() => setReviewMenuOpen((v) => !v)}
+            >
+              ▾
+            </button>
+            <FloatingMenu
+              open={reviewMenuOpen}
+              onClose={() => setReviewMenuOpen(false)}
+              anchorRef={reviewBtnRef}
+              align="right"
+              minWidth={220}
+            >
+              <button
+                type="button"
+                disabled={!changeCount}
+                onClick={() => void startAgentReview()}
+              >
+                Review changes
+              </button>
+              <button type="button" onClick={() => void customizeReviewGuidelines()}>
+                Customize guidelines…
+              </button>
+            </FloatingMenu>
+          </div>
         </div>
 
         <div className="right-upper-body">

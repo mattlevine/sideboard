@@ -94,6 +94,31 @@ export function formatWorktreeDirective(
       '- Prefer a draft PR first: `gh pr create --draft -R <origin-owner/name>` (or update via `gh pr edit -R …`) once the change set is coherent. Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree — never from `upstream`. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.',
     );
   }
+  lines.push('');
+  lines.push(
+    'Short git requests from the Sideboard UI are complete instructions — expand them using the rules above without asking for clarification:',
+  );
+  lines.push(
+    '- "Commit and push." → commit any uncommitted work with a purpose-stating message, then push to origin (updates an existing PR if one is linked).',
+  );
+  lines.push(
+    '- "Commit, push, and open a draft PR." → commit, push, then create a draft PR with `gh pr create --draft -R …` (title/body from the change purpose).',
+  );
+  lines.push(
+    '- "Commit, push, and open a PR in the browser." → commit, push, then `gh pr create --web -R …`.',
+  );
+  lines.push(
+    '- "Fix CI: <name>." → investigate that failing check, fix it, commit, and push.',
+  );
+  lines.push(
+    '- "Update the branch." / "Fix merge conflicts." → sync with the PR base (merge or rebase), resolve conflicts carefully, commit, and push until the PR is mergeable.',
+  );
+  lines.push(
+    '- "Address review comments." → read PR review feedback, make the requested changes, commit, and push.',
+  );
+  lines.push(
+    '- "Merge PR." → merge this thread\'s open pull request with `gh pr merge` (respect repo defaults / squash vs merge); do not force-push main/master.',
+  );
   return lines.join('\n');
 }
 

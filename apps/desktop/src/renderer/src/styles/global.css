@@ -6015,28 +6015,51 @@ button.linkish:hover {
 }
 
 /* Conductor-style action on the right of the Files/Changes/Checks row */
-.right-tabs-review-btn {
+.right-tabs-review {
   margin-left: auto;
   margin-bottom: 4px;
+  display: inline-flex;
+  align-items: stretch;
+  position: relative;
+}
+
+.right-tabs-review-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   border: none !important;
-  border-radius: 6px !important;
+  border-radius: 6px 0 0 6px !important;
   background: transparent !important;
   color: var(--muted) !important;
-  padding: 5px 8px !important;
+  padding: 5px 6px 5px 8px !important;
   font-size: 12px;
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
-.right-tabs-review-btn:hover:not(:disabled) {
+.right-tabs-review-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none !important;
+  border-radius: 0 6px 6px 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  padding: 5px 6px !important;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.right-tabs-review-btn:hover:not(:disabled),
+.right-tabs-review-more:hover:not(:disabled) {
   background: var(--bg-hover) !important;
   color: var(--text) !important;
 }
 
-.right-tabs-review-btn:disabled {
+.right-tabs-review-btn:disabled,
+.right-tabs-review-more:disabled {
   opacity: 0.4;
   cursor: default;
 }
