@@ -289,14 +289,14 @@ export function ComposerOptionsToolbar({
           />
           <button
             type="button"
-            className={`chip${options.planMode ? ' active plan' : ''}${isCreate ? ' icon-only' : ''}`}
+            className={`chip${options.planMode ? ' active plan' : ''}`}
             title="Plan mode — analyze and plan without editing files"
             onClick={() => patch({ planMode: !options.planMode })}
           >
             <span className="chip-plan-icon" aria-hidden>
               ◫
-            </span>
-            {isCreate ? null : ' Plan'}
+            </span>{' '}
+            Plan
           </button>
         </div>
         <div className="composer-right">

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Settings opens on the Account tab by default
+- Create modal Plan chip shows the **Plan** label beside the icon (same as thread composer)
 
 ### Fixed
 

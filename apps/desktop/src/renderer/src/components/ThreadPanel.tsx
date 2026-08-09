@@ -1685,14 +1685,14 @@ export function ThreadPanel({
               </button>
             )}
           </div>
-          {/* agent → effort → plan: effort opens a picker (change without model modal). */}
-          <div
-            className="composer-toolbar"
-            onMouseDown={(e) => {
-              // Prevent textarea blur so toolbar toggles don't collapse the composer.
-              e.preventDefault();
-            }}
-          >
+          {composerExpanded && (
+            <div
+              className="composer-toolbar"
+              onMouseDown={(e) => {
+                // Prevent textarea blur so toolbar toggles don't collapse the composer.
+                e.preventDefault();
+              }}
+            >
               <div className="composer-left">
                 <button
                   type="button"
@@ -1818,7 +1818,8 @@ export function ThreadPanel({
                   ↑
                 </button>
               </div>
-          </div>
+            </div>
+          )}
         </div>
       </div>
         </div>

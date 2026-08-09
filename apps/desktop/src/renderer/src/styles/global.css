@@ -4603,13 +4603,7 @@ body.resizing-panels webview {
 .composer-box.collapsed {
   border-radius: 12px;
   padding: 6px 8px 6px 10px;
-  gap: 4px;
-}
-
-/* Keep agent → effort → plan visible while collapsed (Conductor-style). */
-.composer-box.collapsed .composer-toolbar {
-  margin-top: 0;
-  padding-top: 2px;
+  gap: 0;
 }
 
 .composer-box:focus-within,
@@ -8366,13 +8360,6 @@ body:has(.update-banner) .team-toast-stack {
 
 .create-footer .composer-toolbar.create-variant .chip.active.plan {
   color: #b8d4f5;
-}
-
-.create-footer .composer-toolbar.create-variant .chip.icon-only {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  justify-content: center;
 }
 
 .create-footer .composer-toolbar.create-variant .chip-model-icon,
