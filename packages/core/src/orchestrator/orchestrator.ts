@@ -653,9 +653,12 @@ export class Orchestrator {
       thread = this.requireThread(threadId);
     }
 
+    const sentAttachments =
+      thread.attachments.length > 0 ? [...thread.attachments] : undefined;
     appendMessage(threadId, {
       role: 'user',
       text: prompt,
+      ...(sentAttachments ? { attachments: sentAttachments } : {}),
       ts: new Date().toISOString(),
     });
 
@@ -664,7 +667,7 @@ export class Orchestrator {
       thread.worktreePath,
       prompt,
       {
-        attachments: thread.attachments,
+        attachments: sentAttachments ?? thread.attachments,
       },
     );
     // Re-assert on every turn (incl. Claude --resume, which drops cachedPrefix).

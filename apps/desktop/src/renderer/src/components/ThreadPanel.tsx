@@ -449,7 +449,10 @@ export function ThreadPanel({
     const matched =
       thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) ||
       thread.queue.includes(pendingUser);
-    if (matched) setPendingUser(null);
+    if (matched) {
+      setPendingUser(null);
+      setPendingAttachments([]);
+    }
   }, [thread.messages, thread.queue, pendingUser]);
 
   useEffect(() => {
@@ -581,12 +584,17 @@ export function ThreadPanel({
   }
 
   const agentActive = thread.status === 'running' || thread.status === 'queued';
+  const [pendingAttachments, setPendingAttachments] = useState<ThreadAttachment[]>(
+    [],
+  );
 
   async function send() {
     const text = prompt.trim();
     if (!text || busy) return;
+    const snapshotAttachments = [...(thread.attachments ?? [])];
     setBusy(true);
     setPendingUser(text);
+    setPendingAttachments(snapshotAttachments);
     setPrompt('');
     setCursor(0);
     suppressArtifactAutoOpen.current = false;
@@ -595,6 +603,7 @@ export function ThreadPanel({
       onRefresh();
     } catch (err) {
       setPendingUser(null);
+      setPendingAttachments([]);
       setPrompt(text);
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1381,7 +1390,17 @@ export function ThreadPanel({
                     />
                   </div>
                 ) : (
-                  <div className="msg-body">{m.text}</div>
+                  <div className="msg-user-body">
+                    {(m.attachments?.length ?? 0) > 0 && (
+                      <ComposerAttachmentChips
+                        attachments={m.attachments!}
+                        className="msg-attachments"
+                        expandImages
+                        onOpen={onSelectFile}
+                      />
+                    )}
+                    {m.text ? <div className="msg-body">{m.text}</div> : null}
+                  </div>
                 )}
               </div>
             );
@@ -1389,7 +1408,19 @@ export function ThreadPanel({
           {pendingUser &&
             !turnInFlight &&
             !thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) && (
-              <div className="msg user pending">{pendingUser}</div>
+              <div className="msg user pending">
+                <div className="msg-user-body">
+                  {pendingAttachments.length > 0 && (
+                    <ComposerAttachmentChips
+                      attachments={pendingAttachments}
+                      className="msg-attachments"
+                      expandImages
+                      onOpen={onSelectFile}
+                    />
+                  )}
+                  <div className="msg-body">{pendingUser}</div>
+                </div>
+              </div>
             )}
           {showStreaming && (
             <>
@@ -1587,6 +1618,7 @@ export function ThreadPanel({
             attachments={attachments}
             onRemove={(id) => void removeAttachment(id)}
             onOpen={onSelectFile}
+            expandImages={false}
           />
           <div className="composer-input-row" ref={acRef}>
             <span className="composer-cube" aria-hidden />

@@ -25,12 +25,12 @@
   --mono:
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --font-size: 13px;
-  --font-size-chat: 14px;
+  --font-size-chat: 17px;
   --font-size-ui: 13px;
   --font-size-meta: 12px;
   --font-size-tiny: 11px;
   --line-height: 1.45;
-  --line-height-chat: 1.55;
+  --line-height-chat: 1.6;
   --letter-tight: -0.011em;
 }
 
@@ -2589,7 +2589,7 @@ body.resizing-panels webview {
 }
 
 .turn-text {
-  font-size: 13px;
+  font-size: var(--font-size-chat);
 }
 
 .turn-icon {
@@ -3976,6 +3976,22 @@ body.resizing-panels webview {
   white-space: pre-wrap;
   font-family: var(--font);
   color: var(--text);
+}
+
+.msg-user-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.msg.user .msg-attachments {
+  margin: 0;
+}
+
+.msg.user .msg-attachments .attachment-chip,
+.msg.user .msg-attachments .attachment-image {
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .msg.agent {

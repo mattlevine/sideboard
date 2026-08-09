@@ -52,6 +52,11 @@ export interface ThreadMessage {
   durationMs?: number;
   /** Token usage for this turn, when the agent CLI reports it. */
   usage?: TokenUsage;
+  /**
+   * Snapshot of composer attachments sent with this user turn (chips stay visible
+   * in chat history after pending thread.attachments are cleared).
+   */
+  attachments?: ThreadAttachment[];
   ts: string;
 }
 
@@ -63,7 +68,7 @@ export interface ThreadAttachment {
   content: string;
   /** Worktree-relative path when this attachment is a real file that can be opened in a tab. */
   path?: string;
-  /** data: URL thumbnail for image attachments shown in the composer (pending only). */
+  /** data: URL thumbnail for image attachments (composer + sent user messages). */
   previewDataUrl?: string;
 }
 
