@@ -78,6 +78,34 @@ describe('forkChatTab', () => {
     expect(forked.title).not.toBe(source.title);
     expect(forked.userSetTitle).toBe(true);
   });
+
+  it('forks Global orchestration chats into another orchestration tab', async () => {
+    const { GLOBAL_WORKSPACE_ID } = await import('../store/global-workspace.js');
+    const orch: Thread = {
+      ...source,
+      id: 'orch-source',
+      title: 'Arsenal',
+      sourceType: 'orchestration',
+      sourceRef: 'Ship it',
+      branchName: 'global',
+      worktreePath: '/tmp/sideboard-global',
+      repoPath: GLOBAL_WORKSPACE_ID,
+      parentThreadId: null,
+    };
+    listed = [orch];
+    const { forkChatTab } = await import('./chat-tabs.js');
+    const forked = forkChatTab({
+      threadId: orch.id,
+      agent: 'cursor',
+      model: null,
+    });
+    expect(forked.sourceType).toBe('orchestration');
+    expect(forked.repoPath).toBe(GLOBAL_WORKSPACE_ID);
+    expect(forked.agent).toBe('cursor');
+    expect(forked.model).toBeNull();
+    expect(forked.parentThreadId).toBe(orch.id);
+    expect(forked.attachments[0]?.kind).toBe('transcript');
+  });
 });
 
 describe('createChatTab', () => {

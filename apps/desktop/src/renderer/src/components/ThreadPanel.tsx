@@ -71,6 +71,25 @@ import {
   writeRightColumnWidth,
 } from '../lib/panel-widths';
 
+/** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
+function isRedundantLastError(thread: Thread): boolean {
+  const err = thread.lastError?.trim();
+  if (!err) return false;
+  const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+  const body = lastAgent?.text?.trim() ?? '';
+  if (!body) return false;
+  const lower = body.toLowerCase();
+  const looksLikeLimit =
+    /you've hit your|hit your (session|weekly|opus) limit|usage limit|rate.?limit|credit balance|out of credits|too many requests/.test(
+      lower,
+    );
+  if (!looksLikeLimit) return false;
+  // Bare exit code, or the same message duplicated under the bubble.
+  if (/^exit\s*\d+\b/i.test(err)) return true;
+  if (body.includes(err) || err.includes(body)) return true;
+  return false;
+}
+
 interface Props {
   thread: Thread;
   worktreeChats: Thread[];
@@ -1426,7 +1445,7 @@ export function ThreadPanel({
               </div>
             </>
           )}
-          {thread.lastError && (
+          {thread.lastError && !isRedundantLastError(thread) && (
             <div className="msg error" style={{ color: 'var(--err)' }}>
               {thread.lastError}
             </div>

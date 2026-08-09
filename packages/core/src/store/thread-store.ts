@@ -45,6 +45,8 @@ export function normalizeThread(raw: Thread): Thread {
     prTitle: raw.prTitle ?? null,
     userSetTitle: Boolean(raw.userSetTitle),
     activeRuns: Array.isArray(raw.activeRuns) ? raw.activeRuns : [],
+    quotaResumeAt: raw.quotaResumeAt ?? null,
+    quotaContinuedFromId: raw.quotaContinuedFromId ?? null,
   };
 }
 

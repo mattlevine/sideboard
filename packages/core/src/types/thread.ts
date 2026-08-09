@@ -116,6 +116,16 @@ export interface Thread {
    * Used so other processes (MCP) do not reclaim a live turn as dead.
    */
   agentPid?: number | null;
+  /**
+   * When set, host auto-retries this orchestration chat after a provider
+   * session/usage quota reset (ISO timestamp).
+   */
+  quotaResumeAt?: string | null;
+  /**
+   * Orchestration chat this one was auto-continued from after a session quota
+   * limit (prevents infinite agent-switch cascades).
+   */
+  quotaContinuedFromId?: string | null;
 }
 
 export interface CreateChatTabInput {
@@ -137,6 +147,8 @@ export interface ForkChatTabInput {
   /** Inclusive message index to fork through; default = all messages. */
   throughIndex?: number;
   agent?: AgentKind;
+  /** Model for the forked chat; omit to inherit or Auto when agent changes. */
+  model?: string | null;
   title?: string;
 }
 
@@ -146,6 +158,8 @@ export interface ForkThreadWorktreeInput {
   /** Inclusive message index to seed transcript through; default = all messages. */
   throughIndex?: number;
   agent?: AgentKind;
+  /** Model for the forked chat; omit to inherit or Auto when agent changes. */
+  model?: string | null;
   title?: string;
 }
 
@@ -360,11 +374,20 @@ export type OrchestratorEvent =
   | { type: 'turn_finished'; threadId: string; exitCode: number | null }
   | { type: 'status_changed'; threadId: string; status: ThreadStatus }
   | { type: 'queue_changed'; threadId: string; queue: string[] }
-  | {
-      type: 'context_compacted';
+  | { type: 'context_compacted';
       threadId: string;
       olderCount: number;
       method: 'claude' | 'extractive';
+    }
+  | {
+      type: 'quota_failover';
+      threadId: string;
+      action: 'switch_agent' | 'wait_reset';
+      message: string;
+      /** New orchestration chat when action is switch_agent. */
+      toThreadId?: string;
+      /** When action is wait_reset — ISO resume time. */
+      resumeAt?: string;
     }
   | { type: 'dev_server_started'; threadId: string; port: number; scriptName?: string }
   | { type: 'dev_server_stopped'; threadId: string; scriptName?: string }

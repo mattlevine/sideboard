@@ -131,6 +131,10 @@ MCP tools commonly used by a coordinator:
 
 - `list_workspaces` / `list_threads` / `get_thread`
 - `create_thread` / `send_to_thread` / `wait_for_turn` / `get_turn_result`
+- `list_models` (optional `agent` — only when pinning a model; default is Auto)
+- `fork_worktree` / `fork_chat` (optional `agent`; leave `model` unset for Auto unless you have a reason)
+  - `fork_chat` also forks **Global orchestration** chats (new orchestration tab) — remote coordinators use this to continue after session limits
+  - `fork_worktree` is worktree-only
 - `stop_thread` (interrupt) — `send_to_thread` also accepts `force_stop`
 - `get_diff`
 - `request_review` (worktree thread → Review chat tab; then `wait_for_turn`)

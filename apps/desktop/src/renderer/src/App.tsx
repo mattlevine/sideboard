@@ -365,6 +365,12 @@ export function App() {
         void refresh();
         return;
       }
+      if (event.type === 'quota_failover') {
+        void refresh().then(() => {
+          if (event.toThreadId) setSelectedId(event.toThreadId);
+        });
+        return;
+      }
       if (
         event.type === 'status_changed' ||
         event.type === 'queue_changed' ||

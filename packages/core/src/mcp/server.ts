@@ -12,6 +12,7 @@ import {
 import { listIssues } from '../integrations/issues.js';
 import { listLinearIssues } from '../threads/create.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
+import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 
 const MAX_ORCH_THREADS = 5;
@@ -477,6 +478,138 @@ export async function startMcpServer(): Promise<void> {
                 title: tab.title,
                 status: tab.status,
                 fromThreadId: from?.id ?? ref,
+                link: `sideboard://thread/${tab.id}`,
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  const agentEnum = z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor']);
+
+  server.tool(
+    'list_models',
+    'List models for an agent. Prefer Auto: do not call this unless you have a reason to pin a specific model (user request, cost/latency, capability). Omit agent to list all.',
+    {
+      agent: agentEnum.optional().describe('Limit to one agent; omit for all'),
+    },
+    async ({ agent }) => {
+      try {
+        const catalogs = await listModelsForAgent(agent);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(catalogs, null, 2) }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    'fork_worktree',
+    'Fork a worktree agent chat into a NEW git worktree + chat (desktop “Fork to new workspace”). Seeds a transcript (through through_index, default all). Optional agent override. Leave model unset for Auto (default) — only pass model when you have a reason. Not for the orchestrator. Then send_to_thread / wait_for_turn on the returned id.',
+    {
+      ref: z.string().describe('Worktree thread id/ref to fork'),
+      through_index: z
+        .number()
+        .optional()
+        .describe('Inclusive message index to include in the transcript (default: all)'),
+      agent: agentEnum.optional().describe('Agent for the forked chat (default: same as source)'),
+      model: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Usually omit (Auto). Only set from list_models when you need a specific model'),
+      title: z.string().optional(),
+    },
+    async ({ ref, through_index, agent, model, title }) => {
+      try {
+        const source = orch.getThread(ref);
+        if (source) await orch.reconcile(source.repoPath);
+        const thread = await orch.forkThreadWorktree({
+          threadId: ref,
+          throughIndex: through_index,
+          agent,
+          model,
+          title,
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: thread.id,
+                title: thread.title,
+                status: thread.status,
+                agent: thread.agent,
+                model: thread.model,
+                branchName: thread.branchName,
+                worktreePath: thread.worktreePath,
+                fromThreadId: source?.id ?? ref,
+                link: `sideboard://thread/${thread.id}`,
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    'fork_chat',
+    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Remote coordinators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
+    {
+      ref: z.string().describe('Thread id/ref to fork (worktree agent or orchestration chat)'),
+      through_index: z
+        .number()
+        .optional()
+        .describe('Inclusive message index to include in the transcript (default: all)'),
+      agent: agentEnum.optional().describe('Agent for the forked chat (default: same as source)'),
+      model: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Usually omit (Auto). Only set from list_models when you need a specific model'),
+      title: z.string().optional(),
+    },
+    async ({ ref, through_index, agent, model, title }) => {
+      try {
+        const source = orch.getThread(ref);
+        if (!source) {
+          return {
+            content: [{ type: 'text', text: `Thread not found: ${ref}` }],
+            isError: true,
+          };
+        }
+        const tab = orch.forkChatTab({
+          threadId: source.id,
+          throughIndex: through_index,
+          agent,
+          model,
+          title,
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: tab.id,
+                title: tab.title,
+                status: tab.status,
+                agent: tab.agent,
+                model: tab.model,
+                sourceType: tab.sourceType,
+                worktreePath: tab.worktreePath,
+                fromThreadId: source.id,
                 link: `sideboard://thread/${tab.id}`,
               }),
             },

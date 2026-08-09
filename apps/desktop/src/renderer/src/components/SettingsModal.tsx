@@ -1397,6 +1397,58 @@ export function SettingsModal({
                 </div>
 
                 <div className="settings-section">
+                  <div className="settings-section-title">Orchestration session limit</div>
+                  <p className="settings-hint">
+                    When a Global orchestration chat hits a provider session/usage limit (not
+                    context size), Sideboard continues automatically.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
+                    <label className="settings-hint" htmlFor="orch-quota-action">
+                      On limit
+                    </label>
+                    <select
+                      id="orch-quota-action"
+                      value={advanced.orchestrationQuotaOnLimit ?? 'switch_agent'}
+                      disabled={busy}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v !== 'switch_agent' && v !== 'wait_reset') return;
+                        void saveAdvancedPatch({ orchestrationQuotaOnLimit: v });
+                      }}
+                    >
+                      <option value="switch_agent">Continue on another agent (Auto)</option>
+                      <option value="wait_reset">Wait for reset, then retry</option>
+                    </select>
+                  </div>
+                  {(advanced.orchestrationQuotaOnLimit ?? 'switch_agent') === 'switch_agent' && (
+                    <div
+                      className="settings-key-row"
+                      style={{ marginTop: '0.5rem', gap: '0.75rem' }}
+                    >
+                      <label className="settings-hint" htmlFor="orch-quota-fallback">
+                        Fallback agent
+                      </label>
+                      <select
+                        id="orch-quota-fallback"
+                        value={advanced.orchestrationQuotaFallbackAgent ?? 'cursor'}
+                        disabled={busy}
+                        onChange={(e) => {
+                          const v = e.target.value as AgentKind;
+                          if (!(v in DEFAULT_AGENT_LABELS)) return;
+                          void saveAdvancedPatch({ orchestrationQuotaFallbackAgent: v });
+                        }}
+                      >
+                        {(Object.keys(DEFAULT_AGENT_LABELS) as AgentKind[]).map((id) => (
+                          <option key={id} value={id}>
+                            {DEFAULT_AGENT_LABELS[id]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="settings-section">
                   <label className="settings-section-title" htmlFor="max-concurrent-agents">
                     Max concurrent agents
                   </label>

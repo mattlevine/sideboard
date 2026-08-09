@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, humanizeAgentFailDetail } from '../agents/error-detail.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -66,6 +66,12 @@ import {
 } from '../threads/chat-tabs.js';
 import { requestReview } from '../review/request-review.js';
 import { forkThreadWorktree as forkThreadWorktreeImpl } from '../threads/fork-worktree.js';
+import {
+  createQuotaFailoverChat,
+  planOrchestrationQuotaFailover,
+  QUOTA_CONTINUE_PROMPT,
+  QUOTA_RESUME_PROMPT,
+} from './quota-failover.js';
 import {
   adoptThread,
   importConductorWorkspaceAsync,
@@ -153,6 +159,8 @@ export class Orchestrator {
   private readonly haltDrain = new Set<string>();
   /** WIP snapshot SHA at the start of the latest agent turn (per thread). */
   private readonly turnBaselines = new Map<string, string>();
+  /** Timers for orchestration session-quota auto-resume. */
+  private readonly quotaResumeTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private maxConcurrent: number;
   private runningCount = 0;
 
@@ -271,6 +279,132 @@ export class Orchestrator {
       if (thread.queue.length > 0 && thread.status !== 'stopped') {
         void this.drainQueue(thread.id);
       }
+    }
+
+    // Re-arm session-quota wait timers (and fire any that are already due).
+    this.schedulePendingQuotaResumes();
+  }
+
+  private clearQuotaResumeTimer(threadId: string): void {
+    const timer = this.quotaResumeTimers.get(threadId);
+    if (timer) clearTimeout(timer);
+    this.quotaResumeTimers.delete(threadId);
+  }
+
+  /** Schedule (or fire) auto-retry after a provider session/usage limit reset. */
+  private scheduleQuotaResume(threadId: string, resumeAt: Date): void {
+    this.clearQuotaResumeTimer(threadId);
+    updateThread(threadId, { quotaResumeAt: resumeAt.toISOString() });
+    const delay = Math.max(5_000, resumeAt.getTime() - Date.now());
+    // setTimeout overflow guard (~24.8 days).
+    const capped = Math.min(delay, 2_147_483_647);
+    const timer = setTimeout(() => {
+      this.quotaResumeTimers.delete(threadId);
+      void this.resumeAfterQuotaWait(threadId);
+    }, capped);
+    this.quotaResumeTimers.set(threadId, timer);
+  }
+
+  private schedulePendingQuotaResumes(): void {
+    for (const thread of listThreads({ includeArchived: false })) {
+      if (!thread.quotaResumeAt) continue;
+      const at = new Date(thread.quotaResumeAt);
+      if (Number.isNaN(at.getTime())) continue;
+      if (at.getTime() <= Date.now()) {
+        void this.resumeAfterQuotaWait(thread.id);
+      } else if (!this.quotaResumeTimers.has(thread.id)) {
+        this.scheduleQuotaResume(thread.id, at);
+      }
+    }
+  }
+
+  private async resumeAfterQuotaWait(threadId: string): Promise<void> {
+    const thread = findThreadByRef(threadId);
+    if (!thread || thread.status === 'archived') return;
+    this.clearQuotaResumeTimer(threadId);
+    try {
+      updateThread(threadId, { quotaResumeAt: null });
+    } catch {
+      return;
+    }
+    if (
+      thread.status === 'running' ||
+      this.activeTurns.has(threadId) ||
+      this.startingTurns.has(threadId)
+    ) {
+      return;
+    }
+    await this.send(threadId, QUOTA_RESUME_PROMPT);
+  }
+
+  /**
+   * Host-side continue when an orchestration chat hits a provider session/usage
+   * limit (not context size): switch agent (Auto) or wait until reset.
+   */
+  private async maybeHandleOrchestrationQuotaFailover(
+    threadId: string,
+    limitText: string,
+  ): Promise<void> {
+    const thread = findThreadByRef(threadId);
+    if (!thread) return;
+    const plan = planOrchestrationQuotaFailover(thread, limitText);
+    if (!plan || plan.action === 'none') return;
+
+    if (plan.action === 'wait_reset' && plan.resumeAt) {
+      // Don't keep draining prompts against the limited account.
+      this.haltDrain.add(threadId);
+      this.scheduleQuotaResume(threadId, plan.resumeAt);
+      setStatus(threadId, 'idle', null);
+      appendMessage(threadId, {
+        role: 'agent',
+        text: `Sideboard will auto-retry this orchestration around ${plan.resumeAt.toLocaleString()} when the session limit resets.`,
+        ts: new Date().toISOString(),
+      });
+      this.emit({
+        type: 'quota_failover',
+        threadId,
+        action: 'wait_reset',
+        message: plan.reason,
+        resumeAt: plan.resumeAt.toISOString(),
+      });
+      this.emit({ type: 'status_changed', threadId, status: 'idle' });
+      return;
+    }
+
+    if (plan.action === 'switch_agent' && plan.fallbackAgent) {
+      this.haltDrain.add(threadId);
+      const next = createQuotaFailoverChat(
+        thread,
+        plan.fallbackAgent,
+        plan.limitText,
+      );
+      this.clearQuotaResumeTimer(threadId);
+      try {
+        updateThread(threadId, { quotaResumeAt: null });
+      } catch {
+        // ignore
+      }
+      appendMessage(threadId, {
+        role: 'agent',
+        text: `Session limit on ${thread.agent}. Sideboard continued on ${plan.fallbackAgent} (Auto) in [${next.title}](sideboard://thread/${next.id}).`,
+        ts: new Date().toISOString(),
+      });
+      this.emit({
+        type: 'quota_failover',
+        threadId,
+        action: 'switch_agent',
+        toThreadId: next.id,
+        message: plan.reason,
+      });
+      this.emit({
+        type: 'status_changed',
+        threadId: next.id,
+        status: next.status,
+      });
+      await this.send(
+        next.id,
+        QUOTA_CONTINUE_PROMPT(thread.agent, plan.fallbackAgent),
+      );
     }
   }
 
@@ -739,15 +873,24 @@ export class Orchestrator {
         }
       }
 
-      const failureOnlyMessage =
+      const lastStderr = summarizeTurnStderr(stderrTail);
+      const detail =
+        lastStderr ||
+        (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
+      // Prefer putting human-readable limit/auth failures in the agent bubble
+      // (keeps duration/usage chips) instead of a bare lastError footer.
+      let chatText = assistantText;
+      if (
         exitCode !== 0 &&
-        looksLikeAgentFailureMessage(assistantText) &&
-        !parts.some((p) => p.type === 'tool' || p.type === 'thinking');
-      // Quota/auth failures already surface as lastError — skip a duplicate agent bubble.
-      if (!failureOnlyMessage && (assistantText || parts.length > 0)) {
+        !chatText &&
+        looksLikeAgentFailureMessage(detail)
+      ) {
+        chatText = humanizeAgentFailDetail(detail);
+      }
+      if (chatText || parts.length > 0) {
         appendMessage(threadId, {
           role: 'agent',
-          text: assistantText,
+          text: chatText,
           parts: parts.length > 0 ? parts : undefined,
           durationMs: Math.max(0, Date.now() - turnStartedAt),
           usage,
@@ -776,15 +919,19 @@ export class Orchestrator {
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         this.emit({ type: 'turn_finished', threadId, exitCode });
       } else {
-        const lastStderr = summarizeTurnStderr(stderrTail);
-        const detail =
-          lastStderr ||
-          (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
         const failDetail = formatTurnExitError(exitCode, detail);
+        // When the agent bubble already shows the session/rate-limit (or similar)
+        // message, skip the redundant "exit 1" / duplicate lastError footer.
+        const explainedInChat =
+          exitCode !== 0 &&
+          Boolean(chatText) &&
+          (looksLikeAgentFailureMessage(chatText) ||
+            (failDetail &&
+              chatText.includes(failDetail.replace(/^exit\s*\d+:\s*/i, '').trim())));
         setStatus(
           threadId,
           exitCode === 0 ? 'idle' : 'error',
-          exitCode === 0 ? null : failDetail,
+          exitCode === 0 || explainedInChat ? null : failDetail,
         );
         this.emit({
           type: 'status_changed',
@@ -792,6 +939,10 @@ export class Orchestrator {
           status: exitCode === 0 ? 'idle' : 'error',
         });
         this.emit({ type: 'turn_finished', threadId, exitCode });
+        if (exitCode !== 0) {
+          const blob = [chatText, detail].filter(Boolean).join('\n');
+          void this.maybeHandleOrchestrationQuotaFailover(threadId, blob);
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -805,6 +956,7 @@ export class Orchestrator {
         this.emit({ type: 'error', threadId, message });
         this.emit({ type: 'status_changed', threadId, status: 'error' });
         this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+        void this.maybeHandleOrchestrationQuotaFailover(threadId, message);
       }
     } finally {
       this.startingTurns.delete(threadId);
@@ -1421,6 +1573,7 @@ export class Orchestrator {
     threadId: string;
     throughIndex?: number;
     agent?: Thread['agent'];
+    model?: string | null;
     title?: string;
   }): Thread {
     return forkChatTabImpl(input);
@@ -1430,6 +1583,7 @@ export class Orchestrator {
     threadId: string;
     throughIndex?: number;
     agent?: Thread['agent'];
+    model?: string | null;
     title?: string;
   }): Promise<Thread> {
     const thread = await forkThreadWorktreeImpl(input, (line) => {

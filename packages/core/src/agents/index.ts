@@ -35,6 +35,13 @@ export {
 } from './cursor.js';
 export type { AgentModelInfo, CursorModelInfo } from './model-info.js';
 export { opencodeAdapter, listOpencodeModels } from './opencode.js';
+export { listModelsForAgent, CLAUDE_MODEL_CATALOG } from './list-models.js';
+export type { AgentModelCatalog } from './list-models.js';
+export {
+  isSessionQuotaLimit,
+  parseSessionQuotaResetAt,
+  resolveQuotaFallbackAgent,
+} from './session-quota.js';
 export { ensureAgentPath } from './path.js';
 export {
   getAgentSetupInfo,

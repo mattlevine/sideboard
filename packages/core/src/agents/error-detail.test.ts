@@ -111,6 +111,10 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(formatTurnExitError(1, fallbackTurnFailDetail(msg))).toBe(msg);
   });
 
+  it('treats a bare exit code on stderr as empty detail', () => {
+    expect(formatTurnExitError(1, 'exit 1')).toMatch(/without details/i);
+  });
+
   it('keeps exit code for opaque CLI failures', () => {
     expect(formatTurnExitError(2, 'segfault at 0x0')).toBe('exit 2: segfault at 0x0');
   });

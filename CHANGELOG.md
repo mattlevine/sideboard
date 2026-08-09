@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-08-09
+
+### Added
+
+- MCP `list_models` — list models per agent when pinning a specific model (default remains Auto)
+- MCP `fork_worktree` / `fork_chat` — fork a worktree chat into a new worktree or same-worktree tab (optional `agent`; `model` only when needed — otherwise Auto); `fork_chat` also forks Global orchestration chats (for remote coordinators continuing after session limits)
+- Orchestration session-limit failover — on provider session/usage limit, auto-continue on another agent (Auto) or wait until reset (Settings → Advanced)
+
+### Fixed
+
+- Session/rate-limit failures show in the agent bubble without a redundant `exit 1` footer (orchestrator and worktree)
+
 ## [0.1.44] - 2026-08-09
 
 ### Added

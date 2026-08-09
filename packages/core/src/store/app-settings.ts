@@ -85,6 +85,8 @@ export interface IntegrationsSettings {
  * Conductor-inspired power-user preferences (Settings → Advanced).
  * Defaults match Conductor where applicable (auto-rename on, others off).
  */
+export type OrchestrationQuotaOnLimit = 'switch_agent' | 'wait_reset';
+
 export interface AdvancedAppSettings {
   /**
    * Ask the agent to rename the temporary `thread/<team>` branch on first send.
@@ -124,6 +126,14 @@ export interface AdvancedAppSettings {
   worktreeLastCleanupAt?: string;
   /** When true, reconcile auto-removes excess orphan worktrees. */
   autoCleanupOrphans?: boolean;
+  /**
+   * When an orchestration chat hits a provider session/usage limit:
+   * - `switch_agent` (default): continue on {@link AdvancedAppSettings.orchestrationQuotaFallbackAgent} with Auto
+   * - `wait_reset`: schedule auto-retry when the limit message’s reset time arrives
+   */
+  orchestrationQuotaOnLimit?: OrchestrationQuotaOnLimit;
+  /** Agent to continue on after a session limit (default: cursor). Ignored when equal to the limited agent. */
+  orchestrationQuotaFallbackAgent?: AgentKind;
 }
 
 export interface AppSettings {
@@ -268,6 +278,19 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.autoCleanupOrphans === 'boolean') {
     out.autoCleanupOrphans = source.autoCleanupOrphans;
+  }
+  if (
+    source.orchestrationQuotaOnLimit === 'switch_agent' ||
+    source.orchestrationQuotaOnLimit === 'wait_reset'
+  ) {
+    out.orchestrationQuotaOnLimit = source.orchestrationQuotaOnLimit;
+  }
+  if (
+    typeof source.orchestrationQuotaFallbackAgent === 'string' &&
+    DEFAULT_AGENTS.has(source.orchestrationQuotaFallbackAgent as AgentKind)
+  ) {
+    out.orchestrationQuotaFallbackAgent =
+      source.orchestrationQuotaFallbackAgent as AgentKind;
   }
   return out;
 }
@@ -594,6 +617,18 @@ export function updateAdvancedSettings(
   if (typeof patch.autoCleanupOrphans === 'boolean') {
     advanced.autoCleanupOrphans = patch.autoCleanupOrphans;
   }
+  if (
+    patch.orchestrationQuotaOnLimit === 'switch_agent' ||
+    patch.orchestrationQuotaOnLimit === 'wait_reset'
+  ) {
+    advanced.orchestrationQuotaOnLimit = patch.orchestrationQuotaOnLimit;
+  }
+  if (
+    typeof patch.orchestrationQuotaFallbackAgent === 'string' &&
+    DEFAULT_AGENTS.has(patch.orchestrationQuotaFallbackAgent)
+  ) {
+    advanced.orchestrationQuotaFallbackAgent = patch.orchestrationQuotaFallbackAgent;
+  }
   return saveAppSettings({ ...current, advanced });
 }
 
@@ -632,6 +667,21 @@ export function autoCleanupOrphansEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.autoCleanupOrphans);
+}
+
+/** Default: switch to another agent (Auto) when orchestration hits a session limit. */
+export function orchestrationQuotaOnLimit(
+  settings: AppSettings = loadAppSettings(),
+): OrchestrationQuotaOnLimit {
+  return settings.advanced.orchestrationQuotaOnLimit ?? 'switch_agent';
+}
+
+/** Default fallback agent for orchestration session-limit continue (cursor). */
+export function orchestrationQuotaFallbackAgent(
+  settings: AppSettings = loadAppSettings(),
+): AgentKind {
+  const preferred = settings.advanced.orchestrationQuotaFallbackAgent;
+  return preferred && DEFAULT_AGENTS.has(preferred) ? preferred : 'cursor';
 }
 
 export function maxConcurrentAgents(

@@ -90,6 +90,27 @@ describe('forkThreadWorktree', () => {
     expect(forked.worktreePath).toBe(newWorktreeThread.worktreePath);
     expect(forked.branchName).toBe(newWorktreeThread.branchName);
   });
+
+  it('rejects orchestrator threads', async () => {
+    const orchSource: Thread = {
+      ...source,
+      id: 'orch-id',
+      sourceType: 'orchestration',
+      repoPath: '__global__',
+    };
+    vi.doMock('../store/thread-store.js', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../store/thread-store.js')>();
+      return {
+        ...actual,
+        findThreadByRef: (ref: string) => (ref === orchSource.id ? orchSource : null),
+      };
+    });
+    vi.resetModules();
+    const { forkThreadWorktree } = await import('./fork-worktree.js');
+    await expect(forkThreadWorktree({ threadId: orchSource.id })).rejects.toThrow(
+      /worktree agent thread/,
+    );
+  });
 });
 
 describe('forkChatTab vs forkThreadWorktree', () => {

@@ -8,7 +8,7 @@ import {
   normalizeWorktreePath,
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
-import { isGlobalThread } from '../store/global-workspace.js';
+import { isGlobalThread, isOrchestratorThread } from '../store/global-workspace.js';
 import {
   createEmptyThread,
   findThreadByRef,
@@ -151,16 +151,28 @@ export function createChatTab(input: CreateChatTabInput): Thread {
   return thread;
 }
 
-/** Fork chat into a new tab with transcript attached in the composer. */
+/** Fork chat into a new tab with transcript attached in the composer.
+ * Works for worktree agents and Global orchestration chats (same global home).
+ */
 export function forkChatTab(input: ForkChatTabInput): Thread {
   const from = requireThread(input.threadId);
   const slice = forkMessageSlice(from, input.throughIndex);
   const attachment = buildForkTranscriptAttachment(from.title || 'Chat', slice);
 
-  return createChatTab({
+  const tab = createChatTab({
     fromThreadId: input.threadId,
     agent: input.agent ?? from.agent,
+    model: input.model,
     title: input.title?.trim() || undefined,
     attachments: [attachment],
   });
+
+  // Orchestration forks: lineage points at the source orchestrator chat.
+  // Worktree tabs keep the shared parentThreadId from the worktree binding.
+  if (isOrchestratorThread(from) && tab.parentThreadId !== from.id) {
+    const next = { ...tab, parentThreadId: from.id };
+    writeThread(next);
+    return next;
+  }
+  return tab;
 }

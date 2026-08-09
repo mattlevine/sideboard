@@ -176,11 +176,16 @@ export function formatTurnExitError(
   stderrSummary: string,
 ): string {
   const code = exitCode ?? 1;
-  const detail = humanizeAgentFailDetail(stderrSummary);
+  const raw = stderrSummary.trim();
+  // Bare "exit 1" from a child process is useless — treat as empty.
+  if (/^exit\s*\d+$/i.test(raw)) {
+    return `exit ${code}: agent exited without details (credits, auth, rate limits, or a CLI error)`;
+  }
+  const detail = humanizeAgentFailDetail(raw);
   if (!detail) {
     return `exit ${code}: agent exited without details (credits, auth, rate limits, or a CLI error)`;
   }
   // Known user-facing failures already explain themselves — don't lead with "exit 1:".
-  if (looksLikeAgentFailureMessage(stderrSummary)) return detail;
+  if (looksLikeAgentFailureMessage(raw)) return detail;
   return `exit ${code}: ${detail}`;
 }

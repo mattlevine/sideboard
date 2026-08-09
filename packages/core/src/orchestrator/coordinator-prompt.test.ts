@@ -55,6 +55,10 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('list_prs');
     expect(prompt).toContain('list_issues');
     expect(prompt).toContain('create_thread');
+    expect(prompt).toContain('list_models');
+    expect(prompt).toContain('fork_worktree');
+    expect(prompt).toContain('fork_chat');
+    expect(prompt).toMatch(/orchestration chat/i);
     expect(prompt).toContain('send_to_thread');
     expect(prompt).toContain('wait_for_turn');
     expect(prompt).toContain('stop_thread');
