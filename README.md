@@ -207,11 +207,73 @@ New datasources implement list/get/save (and optional publish). They do not fork
 
 ## MCP — agents that can see the fleet
 
+Install the CLI (ships the stdio server), then register it with your MCP client:
+
 ```bash
-sideboard mcp
+npm i -g @sideboard-ai/cli
+sideboard mcp          # same as: npx sideboard-mcp
 ```
 
-Point Claude Code, Codex, or any MCP client at that server. Agents get tools to:
+Sideboard desktop **auto-injects** this MCP into Claude / Cursor / Codex / OpenCode turns (orchestration and worktree). Use the steps below when you want Sideboard fleet tools from an agent **outside** Sideboard — Claude Code in a project, Cursor IDE Agent, Codex CLI, etc.
+
+### Connect Claude Code
+
+```bash
+# All projects (user scope)
+claude mcp add --scope user sideboard -- sideboard mcp
+
+# Or one project only (omit --scope, or use --scope project)
+claude mcp add sideboard -- sideboard mcp
+```
+
+Confirm with `/mcp` inside a Claude session, or `claude mcp list`.
+
+### Connect Cursor
+
+Add a project or global MCP entry (Cursor → Settings → MCP, or `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "sideboard": {
+      "command": "sideboard",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Prefer `npx -y sideboard-mcp` for `command` / `args` if `sideboard` is not on Cursor’s PATH.
+
+### Connect Codex
+
+Add to `~/.codex/config.toml` (or pass equivalent `-c` overrides):
+
+```toml
+[mcp_servers.sideboard]
+command = "sideboard"
+args = ["mcp"]
+```
+
+### Connect OpenCode
+
+Add to `~/.config/opencode/opencode.jsonc` (or a project `opencode.jsonc`) under `mcp`, or merge via `OPENCODE_CONFIG_CONTENT`:
+
+```json
+{
+  "mcp": {
+    "sideboard": {
+      "type": "local",
+      "command": ["sideboard", "mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### What agents get
+
+Once connected, agents get tools to:
 
 - **Discover** — `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
 - **Workspaces** — `add_workspace` / `remove_workspace`

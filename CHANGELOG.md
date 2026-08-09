@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.47] - 2026-08-09
+
+### Fixed
+
+- Desktop 0.1.46 would not launch: asar packing raced with MCP bin shebang rewriting and corrupted `package.json` — shebang is now emitted by tsup at build time; release verifies asar health
+- README: how to connect Sideboard MCP from Claude Code, Cursor, Codex, and OpenCode
+
 ## [0.1.46] - 2026-08-09
 
 ### Changed

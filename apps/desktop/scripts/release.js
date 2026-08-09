@@ -194,6 +194,23 @@ if (doDesktop) {
     .trim();
 
   run(builderCmd);
+
+  // Guard against asar corruption (e.g. file size races while packing).
+  const asarPath = path.join(desktopRoot, 'release/mac-arm64/Sideboard.app/Contents/Resources/app.asar');
+  if (fs.existsSync(asarPath)) {
+    const { createRequire } = require('module');
+    const requireFromDesktop = createRequire(path.join(desktopRoot, 'package.json'));
+    const asar = requireFromDesktop('@electron/asar');
+    const pkgBuf = asar.extractFile(asarPath, 'package.json');
+    const text = pkgBuf.toString('utf8');
+    if (!text.trimStart().startsWith('{')) {
+      throw new Error(
+        `Packaged app.asar package.json is corrupt (starts with ${JSON.stringify(text.slice(0, 40))}). Aborting release.`,
+      );
+    }
+    JSON.parse(text);
+    console.log('✅ Verified app.asar package.json');
+  }
 }
 
 const tag = `v${nextVersion}`;
