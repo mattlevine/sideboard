@@ -361,7 +361,12 @@ export function AgentOptionsPicker({
               type="button"
               className={`composer-picker-team-chip${effort === level ? ' active' : ''}`}
               title={`Thinking effort: ${thinkingEffortLabel(level)}`}
-              onClick={() => setEffort(level)}
+              onClick={() => {
+                setEffort(level);
+                // Persist effort immediately without closing — change it without
+                // needing a model pick or Done.
+                onApply({ agent, model, autonomy, effort: level });
+              }}
             >
               <ThinkingEffortIcon effort={level} />{' '}
               {level === 'xhigh' ? 'Extra' : thinkingEffortLabel(level)}

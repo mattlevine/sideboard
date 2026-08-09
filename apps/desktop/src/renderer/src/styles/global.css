@@ -4603,7 +4603,13 @@ body.resizing-panels webview {
 .composer-box.collapsed {
   border-radius: 12px;
   padding: 6px 8px 6px 10px;
-  gap: 0;
+  gap: 4px;
+}
+
+/* Keep agent → effort → plan visible while collapsed (Conductor-style). */
+.composer-box.collapsed .composer-toolbar {
+  margin-top: 0;
+  padding-top: 2px;
 }
 
 .composer-box:focus-within,
@@ -4827,6 +4833,26 @@ body.resizing-panels webview {
   background: rgba(201, 148, 66, 0.1);
   border-color: rgba(201, 148, 66, 0.28);
   color: #d8c4a0;
+}
+
+.effort-picker-menu .menu-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.effort-picker-menu button {
+  justify-content: space-between;
+}
+
+.effort-picker-menu .chip-effort-bars {
+  color: inherit;
+}
+
+.effort-picker-check {
+  margin-left: auto;
+  opacity: 0.7;
+  font-size: 12px;
 }
 
 .chip.plan.active {

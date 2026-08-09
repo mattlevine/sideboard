@@ -1,4 +1,6 @@
+import { useRef, useState } from 'react';
 import type { ThinkingEffort } from '@sideboard-ai/core';
+import { FloatingMenu } from './FloatingMenu';
 
 /**
  * Keep in sync with @sideboard-ai/core ThinkingEffort.
@@ -81,17 +83,66 @@ interface ChipProps {
   className?: string;
 }
 
-/** Composer chip that cycles Low → Medium → High → Extra High → Max. */
+/** Compact chip label (Extra High → Extra) for the send toolbar. */
+export function thinkingEffortChipLabel(effort: ThinkingEffort): string {
+  return effort === 'xhigh' ? 'Extra' : thinkingEffortLabel(effort);
+}
+
+/**
+ * Composer chip: click opens a picker so effort can change without the model modal.
+ */
 export function ThinkingEffortChip({ effort, onChange, className }: ChipProps) {
-  const label = thinkingEffortLabel(effort);
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const label = thinkingEffortChipLabel(effort);
+
   return (
-    <button
-      type="button"
-      className={`chip${effort !== 'high' ? ' active effort' : ''}${className ? ` ${className}` : ''}`}
-      title={`Thinking effort: ${label} (click to cycle)`}
-      onClick={() => onChange(nextThinkingEffort(effort))}
-    >
-      <ThinkingEffortIcon effort={effort} /> {label}
-    </button>
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`chip${effort !== 'high' ? ' active effort' : ''}${className ? ` ${className}` : ''}`}
+        title={`Thinking effort: ${thinkingEffortLabel(effort)} (click to change)`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        <ThinkingEffortIcon effort={effort} /> {label}
+      </button>
+      <FloatingMenu
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={btnRef}
+        align="left"
+        placement="up"
+        minWidth={168}
+        className="effort-picker-menu"
+      >
+        {THINKING_EFFORTS.map((level) => {
+          const selected = level === effort;
+          return (
+            <button
+              key={level}
+              type="button"
+              className={selected ? 'selected' : undefined}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(level);
+                setOpen(false);
+              }}
+            >
+              <span className="menu-item-label">
+                <ThinkingEffortIcon effort={level} />
+                {thinkingEffortLabel(level)}
+              </span>
+              {selected ? <span className="effort-picker-check">✓</span> : null}
+            </button>
+          );
+        })}
+      </FloatingMenu>
+    </>
   );
 }

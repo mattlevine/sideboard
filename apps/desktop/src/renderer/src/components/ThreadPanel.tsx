@@ -200,6 +200,8 @@ export function ThreadPanel({
   const [issuePickerOpen, setIssuePickerOpen] = useState(false);
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
+  /** Optimistic effort so the chip updates before refresh lands. */
+  const [optimisticEffort, setOptimisticEffort] = useState<ThinkingEffort | null>(null);
   const [filePaths, setFilePaths] = useState<string[]>([]);
   const [skills, setSkills] = useState<
     Array<{ id: string; name: string; command: string; description: string; source: string }>
@@ -282,6 +284,12 @@ export function ThreadPanel({
     setAcIndex(0);
     setAcSuppressed(false);
   }, [acQuery?.kind, acQuery?.query]);
+
+  useEffect(() => {
+    setOptimisticEffort(null);
+  }, [thread.id, thread.effort]);
+
+  const displayEffort: ThinkingEffort = optimisticEffort ?? thread.effort ?? 'high';
 
   const modelLabel = useMemo(() => {
     if (thread.agent === 'brightsy') {
@@ -459,14 +467,21 @@ export function ThreadPanel({
   }, [thread.id]);
 
   function patchOptions(patch: Parameters<typeof window.sideboard.setThreadOptions>[1]) {
-    void window.sideboard.setThreadOptions(thread.id, patch).then(onRefresh).catch((err) => {
-      window.alert(err instanceof Error ? err.message : String(err));
-    });
+    void window.sideboard
+      .setThreadOptions(thread.id, patch)
+      .then(() => {
+        onRefresh();
+      })
+      .catch((err) => {
+        setOptimisticEffort(null);
+        window.alert(err instanceof Error ? err.message : String(err));
+      });
   }
 
   /** Toggle a chip without collapsing the composer (blur would otherwise minimize it). */
   function toggleComposerOption(patch: Parameters<typeof window.sideboard.setThreadOptions>[1]) {
     setComposerFocused(true);
+    if (patch.effort !== undefined) setOptimisticEffort(patch.effort);
     patchOptions(patch);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
@@ -482,12 +497,14 @@ export function ThreadPanel({
     const midChat = thread.messages.length > 0;
 
     if (sameProvider) {
+      setOptimisticEffort(next.effort);
       patchOptions({ model: next.model, autonomy: next.autonomy, effort: next.effort });
       requestAnimationFrame(() => textareaRef.current?.focus());
       return;
     }
 
     if (!midChat) {
+      setOptimisticEffort(next.effort);
       patchOptions({
         agent: next.agent,
         model: next.model,
@@ -1668,14 +1685,14 @@ export function ThreadPanel({
               </button>
             )}
           </div>
-          {composerExpanded && (
-            <div
-              className="composer-toolbar"
-              onMouseDown={(e) => {
-                // Prevent textarea blur so toolbar toggles (Plan, Fast, etc.) don't collapse the composer.
-                e.preventDefault();
-              }}
-            >
+          {/* agent → effort → plan: effort opens a picker (change without model modal). */}
+          <div
+            className="composer-toolbar"
+            onMouseDown={(e) => {
+              // Prevent textarea blur so toolbar toggles don't collapse the composer.
+              e.preventDefault();
+            }}
+          >
               <div className="composer-left">
                 <button
                   type="button"
@@ -1689,7 +1706,7 @@ export function ThreadPanel({
                   ▦ {modelLabel}
                 </button>
                 <ThinkingEffortChip
-                  effort={thread.effort ?? 'high'}
+                  effort={displayEffort}
                   onChange={(effort) => toggleComposerOption({ effort })}
                 />
                 <button
@@ -1801,8 +1818,7 @@ export function ThreadPanel({
                   ↑
                 </button>
               </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
         </div>
@@ -1847,7 +1863,7 @@ export function ThreadPanel({
           agent: thread.agent,
           model: thread.model,
           autonomy: thread.autonomy,
-          effort: thread.effort ?? 'high',
+          effort: displayEffort,
         }}
         onClose={() => setAgentPickerOpen(false)}
         onApply={(next) => {
