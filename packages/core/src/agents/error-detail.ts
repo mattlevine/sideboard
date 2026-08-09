@@ -89,6 +89,15 @@ export function pushTurnStderr(tail: string[], line: string, maxLines = 12): voi
 /** Join recent stderr lines into a single lastError-friendly string. */
 export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
   if (tail.length === 0) return '';
+  // Prefer the actionable MODULE_NOT_FOUND line over the stack frames that follow.
+  const moduleMissing = [...tail]
+    .reverse()
+    .find((line) => /cannot find module/i.test(line));
+  if (moduleMissing) {
+    return moduleMissing.length <= maxChars
+      ? moduleMissing
+      : moduleMissing.slice(0, maxChars);
+  }
   // Prefer the last non-empty meaningful chunk; keep a bit of prior context.
   const joined = tail.slice(-6).join('\n').trim();
   if (joined.length <= maxChars) return joined;

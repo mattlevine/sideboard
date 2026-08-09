@@ -10,6 +10,7 @@ import {
   ensureConnectedBrightsyTeamTokens,
   type ConnectedBrightsyTeam,
 } from '../brightsy/connected-teams.js';
+import { resolveNodeLaunch } from './node-launch.js';
 
 export type InjectedMcpServer = {
   name: string;
@@ -165,11 +166,14 @@ export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
   const entry = findSideboardMcpJsEntry();
   if (entry) {
     const isCli = /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry);
+    const scriptArgs = isCli ? [entry, 'mcp'] : [entry];
+    // System `node` cannot read Electron app.asar — use Electron-as-Node there.
+    const launch = await resolveNodeLaunch(entry);
     return {
       name: 'sideboard',
-      // Use `node` (not process.execPath) — under Electron execPath is Electron itself.
-      command: 'node',
-      args: isCli ? [entry, 'mcp'] : [entry],
+      command: launch.file,
+      args: scriptArgs,
+      ...(Object.keys(launch.env).length > 0 ? { env: launch.env } : {}),
     };
   }
 

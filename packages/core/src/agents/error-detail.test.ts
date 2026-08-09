@@ -46,6 +46,20 @@ describe('pushTurnStderr / summarizeTurnStderr', () => {
     expect(summarizeTurnStderr(tail)).not.toMatch(/Node\.js v23/);
   });
 
+  it('prefers Cannot find module over trailing stack frames', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      "Error: Cannot find module '/Apps/Sideboard.app/Contents/Resources/app.asar/…/cursor-runner.js'",
+    );
+    pushTurnStderr(tail, 'at wrapModuleLoad (node:internal/modules/cjs/loader:234:24)');
+    pushTurnStderr(tail, 'at Function.executeUserEntryPoint [as runMain]');
+    pushTurnStderr(tail, "code: 'MODULE_NOT_FOUND'");
+    pushTurnStderr(tail, 'requireStack: []');
+    expect(summarizeTurnStderr(tail)).toMatch(/Cannot find module.*cursor-runner/);
+    expect(summarizeTurnStderr(tail)).not.toMatch(/wrapModuleLoad/);
+  });
+
   it('keeps recent context from multiple stderr lines', () => {
     const tail: string[] = [];
     pushTurnStderr(tail, 'cursor-runner: empty stdin');

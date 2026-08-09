@@ -35,11 +35,16 @@ describe('injected-mcp', () => {
     });
     expect(servers).toHaveLength(1);
     expect(servers[0]!.name).toBe('sideboard');
-    // Dev machines without a global `sideboard` binary get `node <abs>/mcp/run-stdio.js`.
+    // Dev machines without a global `sideboard` binary get `node <abs>/mcp/run-stdio.js`
+    // (absolute node from PATH, or Electron-as-Node for asar installs).
     if (servers[0]!.command === 'sideboard') {
       expect(servers[0]!.args).toEqual(['mcp']);
     } else {
-      expect(servers[0]!.command).toBe('node');
+      expect(
+        servers[0]!.command === 'node' ||
+          /[/\\]node$/.test(servers[0]!.command) ||
+          servers[0]!.command === process.execPath,
+      ).toBe(true);
       expect(servers[0]!.args?.[0]).toMatch(/run-stdio\.(js|cjs)$|cli[/\\]dist[/\\]index\.js$/);
     }
   });

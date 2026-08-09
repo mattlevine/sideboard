@@ -11,6 +11,7 @@ import {
   type CursorTurnRequest,
 } from './cursor-events.js';
 import type { AgentModelInfo } from './model-info.js';
+import { resolveNodeLaunch } from './node-launch.js';
 import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
@@ -172,22 +173,18 @@ export const cursorAdapter: AgentAdapter = {
 
     const runner = cursorRunnerPath();
     const isTs = runner.endsWith('.ts');
-    // Prefer a real Node on PATH when available — Electron's embedded Node
-    // (process.execPath under the desktop app) is often too old for node:sqlite.
-    // The runner still uses JsonlLocalAgentStore so ELECTRON_RUN_AS_NODE works too.
-    const whichNode = await run('which', ['node'], { reject: false });
-    const nodeBin =
-      whichNode.exitCode === 0 && whichNode.stdout.trim()
-        ? whichNode.stdout.trim()
-        : null;
-    const file = nodeBin || process.execPath;
+    // Prefer a real Node on PATH when the runner is on a normal filesystem.
+    // Scripts inside Electron's app.asar are invisible to system Node
+    // (MODULE_NOT_FOUND) — use ELECTRON_RUN_AS_NODE in that case. The runner
+    // uses JsonlLocalAgentStore so Electron's Node (no node:sqlite) is fine.
+    const launch = await resolveNodeLaunch(runner);
     return {
-      file,
+      file: launch.file,
       args: isTs ? ['--import', 'tsx', runner] : [runner],
       cwd: thread.worktreePath,
       stdin: JSON.stringify(req),
       env: {
-        ...(nodeBin ? {} : { ELECTRON_RUN_AS_NODE: '1' }),
+        ...launch.env,
         ...(apiKey ? { CURSOR_API_KEY: apiKey } : {}),
       },
     };
