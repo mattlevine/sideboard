@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-08-08
+
+### Added
+
+- Settings → Account default agent and model for Create and new chat tabs
+
+### Changed
+
+- Run script Configure opens `.sideboard` / `.conductor` settings in Sideboard file tabs instead of an external editor
+
 ## [0.1.35] - 2026-08-08
 
 ### Changed
