@@ -204,7 +204,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<
     'account' | 'agents' | 'environment' | 'advanced' | 'history'
-  >('agents');
+  >('account');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -399,7 +399,7 @@ export function App() {
       setAppUpdate((prev) => (prev?.phase === 'available' ? null : prev));
     });
     const offOpenSettings = window.sideboardUpdate.onOpenSettings(() => {
-      setSettingsInitialNav('agents');
+      setSettingsInitialNav('account');
       setSettingsOpen(true);
     });
     return () => {
@@ -839,14 +839,14 @@ export function App() {
           }}
           onOpenArchived={(id) => {
             setSettingsOpen(false);
-            setSettingsInitialNav('agents');
+            setSettingsInitialNav('account');
             setSelectedId(id);
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
           onClose={() => {
             setSettingsOpen(false);
-            setSettingsInitialNav('agents');
+            setSettingsInitialNav('account');
           }}
         />
       )}

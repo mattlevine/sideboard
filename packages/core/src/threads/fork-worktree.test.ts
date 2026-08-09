@@ -11,6 +11,7 @@ const source: Thread = {
   repoPath: '/Users/me/Projects/sideboard',
   agent: 'claude',
   model: null,
+  effort: 'high',
   fast: false,
   planMode: false,
   sessionId: 'sess-1',

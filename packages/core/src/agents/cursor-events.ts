@@ -7,6 +7,8 @@ export type CursorTurnRequest = {
   cwd: string;
   agentId?: string | null;
   model?: string | null;
+  /** Reasoning effort (independent of {@link CursorTurnRequest.fast}). */
+  effort?: string | null;
   fast?: boolean;
   planMode?: boolean;
   apiKey?: string;

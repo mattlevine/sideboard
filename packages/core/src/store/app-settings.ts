@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentKind } from '../types/thread.js';
+import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { appDataDir } from './paths.js';
 
 /** Well-known env keys managed from Settings → Agents (Conductor-style harnesses). */
@@ -25,12 +26,19 @@ const DEFAULT_AGENTS = new Set<AgentKind>([
 
 /**
  * Account-level defaults for Create / new chat tabs (Settings → Account).
- * Omitted fields fall back to Claude + Auto at runtime.
+ * Omitted fields fall back to Claude + Auto + High thinking at runtime.
  */
 export interface DefaultsAppSettings {
   agent?: AgentKind;
   /** Model / Brightsy target id. Empty or omitted = Auto / agent default. */
   model?: string;
+  /** Thinking / reasoning effort. Omitted = High. */
+  effort?: ThinkingEffort;
+  /**
+   * Prefer a faster model variant when supported (Cursor `fast` param).
+   * Independent of {@link DefaultsAppSettings.effort}.
+   */
+  fast?: boolean;
 }
 
 /** Claude Code harness options (executable override + Chrome). */
@@ -211,6 +219,12 @@ function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   if (typeof source.model === 'string') {
     const model = source.model.trim();
     if (model) out.model = model;
+  }
+  if (normalizeThinkingEffort(source.effort)) {
+    out.effort = normalizeThinkingEffort(source.effort)!;
+  }
+  if (typeof source.fast === 'boolean') {
+    out.fast = source.fast;
   }
   return out;
 }
@@ -414,6 +428,9 @@ export function updateDefaultsSettings(
   patch: {
     agent?: AgentKind | null;
     model?: string | null;
+    /** Effort level, or Conductor's `normal` (stored as medium). */
+    effort?: ThinkingEffort | 'normal' | null;
+    fast?: boolean | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -430,6 +447,21 @@ export function updateDefaultsSettings(
       delete defaults.model;
     } else {
       defaults.model = patch.model.trim();
+    }
+  }
+  if ('effort' in patch) {
+    if (patch.effort == null) {
+      delete defaults.effort;
+    } else {
+      const effort = normalizeThinkingEffort(patch.effort);
+      if (effort) defaults.effort = effort;
+    }
+  }
+  if ('fast' in patch) {
+    if (patch.fast == null) {
+      delete defaults.fast;
+    } else {
+      defaults.fast = Boolean(patch.fast);
     }
   }
   return saveAppSettings({ ...current, defaults });
@@ -450,13 +482,29 @@ export function getDefaultModel(
   return model || null;
 }
 
-/** Resolved Create / new-chat agent + model pair. */
+/** Default thinking effort for Create / new chats (`high` when unset). */
+export function getDefaultEffort(
+  settings: AppSettings = loadAppSettings(),
+): ThinkingEffort {
+  return normalizeThinkingEffort(settings.defaults.effort) ?? 'high';
+}
+
+/** Default fast-mode flag for Create / new chats (`true` = Fast). */
+export function getDefaultFast(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return settings.defaults.fast === true;
+}
+
+/** Resolved Create / new-chat agent + model + thinking defaults. */
 export function resolveThreadDefaults(
   settings: AppSettings = loadAppSettings(),
-): { agent: AgentKind; model: string | null } {
+): { agent: AgentKind; model: string | null; effort: ThinkingEffort; fast: boolean } {
   return {
     agent: getDefaultAgent(settings),
     model: getDefaultModel(settings),
+    effort: getDefaultEffort(settings),
+    fast: getDefaultFast(settings),
   };
 }
 

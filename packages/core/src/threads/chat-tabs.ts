@@ -140,7 +140,8 @@ export function createChatTab(input: CreateChatTabInput): Thread {
         : input.agent && input.agent !== from.agent
           ? null
           : from.model,
-    fast: from.fast,
+    effort: input.effort !== undefined ? input.effort : from.effort,
+    fast: input.fast !== undefined ? Boolean(input.fast) : from.fast,
     planMode: from.planMode,
     autonomy: input.autonomy ?? from.autonomy,
     attachments: input.attachments ?? [],

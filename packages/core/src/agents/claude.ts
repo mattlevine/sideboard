@@ -307,9 +307,9 @@ export const claudeAdapter: AgentAdapter = {
     if (thread.model) {
       args.push('--model', thread.model);
     }
-    if (thread.fast) {
-      args.push('--effort', 'low');
-    }
+    const effort =
+      thread.effort ?? (thread.fast ? ('low' as const) : ('high' as const));
+    args.push('--effort', effort);
     if (sessionId) {
       args.push('--resume', sessionId);
     }

@@ -6,6 +6,7 @@ import {
 } from '../git/teams.js';
 import { ensureGlobalCoordinatorCwd } from '../orchestrator/coordinator-prompt.js';
 import type { AgentKind, Thread, ThreadAttachment, Autonomy } from '../types/thread.js';
+import type { ThinkingEffort } from '../types/thinking-effort.js';
 import { globalAgentCwd } from './paths.js';
 import {
   createEmptyThread,
@@ -110,6 +111,7 @@ export interface CreateGlobalChatOpts {
   sourceRef?: string;
   autonomy?: Autonomy;
   model?: string | null;
+  effort?: ThinkingEffort;
   fast?: boolean;
   planMode?: boolean;
   attachments?: ThreadAttachment[];
@@ -155,6 +157,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     agent: opts.agent,
     autonomy: opts.autonomy ?? 'default',
     model: opts.model ?? null,
+    effort: opts.effort ?? 'high',
     fast: Boolean(opts.fast),
     planMode: Boolean(opts.planMode),
     attachments: opts.attachments ?? [],

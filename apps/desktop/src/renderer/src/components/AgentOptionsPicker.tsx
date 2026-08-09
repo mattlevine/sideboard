@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AgentKind, Autonomy } from '@sideboard-ai/core';
+import type { AgentKind, Autonomy, ThinkingEffort } from '@sideboard-ai/core';
 import {
   decodeBrightsyTarget,
   encodeBrightsyTarget,
@@ -11,6 +11,11 @@ import {
   useAgentModels,
   useCursorModels,
 } from './CursorModelMenu';
+import {
+  THINKING_EFFORTS,
+  ThinkingEffortIcon,
+  thinkingEffortLabel,
+} from './ThinkingEffortChip';
 
 const CLAUDE_MODELS = [
   { id: null as string | null, label: 'Auto' },
@@ -34,6 +39,8 @@ export interface AgentOptionsValue {
   agent: AgentKind;
   model: string | null;
   autonomy: Autonomy;
+  /** Thinking / reasoning effort (Conductor-style). */
+  effort: ThinkingEffort;
 }
 
 interface Props {
@@ -86,6 +93,7 @@ export function AgentOptionsPicker({
   const [agent, setAgent] = useState<AgentKind>(value.agent);
   const [model, setModel] = useState<string | null>(value.model);
   const [autonomy, setAutonomy] = useState<Autonomy>(value.autonomy);
+  const [effort, setEffort] = useState<ThinkingEffort>(value.effort ?? 'high');
   const [query, setQuery] = useState('');
 
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(
@@ -100,9 +108,10 @@ export function AgentOptionsPicker({
     setAgent(value.agent);
     setModel(value.model);
     setAutonomy(value.autonomy);
+    setEffort(value.effort ?? 'high');
     setQuery('');
     prefetchAgentModels();
-  }, [open, value.agent, value.model, value.autonomy]);
+  }, [open, value.agent, value.model, value.autonomy, value.effort]);
 
   useEffect(() => {
     if (!open || agent !== 'brightsy') return;
@@ -244,7 +253,7 @@ export function AgentOptionsPicker({
   }
 
   function pickModel(id: string | null) {
-    commit({ agent, model: id, autonomy });
+    commit({ agent, model: id, autonomy, effort });
   }
 
   function pickBrightsy(target: BrightsyChatTarget) {
@@ -259,7 +268,7 @@ export function AgentOptionsPicker({
     } else {
       encoded = encodeBrightsyTarget(target.type, target.id, accountId);
     }
-    commit({ agent: 'brightsy', model: encoded, autonomy });
+    commit({ agent: 'brightsy', model: encoded, autonomy, effort });
   }
 
   const catalogLoading =
@@ -343,6 +352,21 @@ export function AgentOptionsPicker({
           >
             Full autonomy
           </button>
+        </div>
+
+        <div className="composer-picker-team-chips agent-options-thinking-chips">
+          {THINKING_EFFORTS.map((level) => (
+            <button
+              key={level}
+              type="button"
+              className={`composer-picker-team-chip${effort === level ? ' active' : ''}`}
+              title={`Thinking effort: ${thinkingEffortLabel(level)}`}
+              onClick={() => setEffort(level)}
+            >
+              <ThinkingEffortIcon effort={level} />{' '}
+              {level === 'xhigh' ? 'Extra' : thinkingEffortLabel(level)}
+            </button>
+          ))}
         </div>
 
         {agent === 'brightsy' && showTeamNav && (
@@ -544,7 +568,7 @@ export function AgentOptionsPicker({
           <button
             type="button"
             className="agent-options-picker-done"
-            onClick={() => commit({ agent, model, autonomy })}
+            onClick={() => commit({ agent, model, autonomy, effort })}
           >
             {confirmLabel}
           </button>

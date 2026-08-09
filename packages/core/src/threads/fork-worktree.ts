@@ -31,6 +31,7 @@ export async function forkThreadWorktree(
       agent: input.agent ?? from.agent,
       autonomy: from.autonomy,
       model: from.model,
+      effort: from.effort,
       fast: from.fast,
       planMode: from.planMode,
       title: input.title?.trim() || undefined,

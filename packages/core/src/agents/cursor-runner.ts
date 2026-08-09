@@ -20,17 +20,35 @@ function emit(event: unknown): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
-function modelSelection(model: string | null | undefined, fast: boolean) {
+function modelSelection(
+  model: string | null | undefined,
+  opts: { effort?: string | null; fast?: boolean },
+) {
   // Cursor.models.list uses id "default" for Auto.
   const raw = (model && model.trim()) || '';
   const id =
     !raw || raw.toLowerCase() === 'auto' || raw.toLowerCase() === 'default'
       ? 'default'
       : raw;
-  if (fast) {
-    return { id, params: [{ id: 'fast', value: 'true' as const }] };
+  const params: Array<{ id: string; value: string }> = [];
+  const effort = (opts.effort ?? '').trim().toLowerCase();
+  const normalized =
+    effort === 'normal'
+      ? 'medium'
+      : effort === 'low' ||
+          effort === 'medium' ||
+          effort === 'high' ||
+          effort === 'xhigh' ||
+          effort === 'max'
+        ? effort
+        : '';
+  if (normalized) {
+    params.push({ id: 'effort', value: normalized });
   }
-  return { id };
+  if (opts.fast) {
+    params.push({ id: 'fast', value: 'true' });
+  }
+  return params.length > 0 ? { id, params } : { id };
 }
 
 /** Durable local agent metadata (Conductor-style JSONL, not SQLite). */
@@ -71,7 +89,10 @@ async function main(): Promise<number> {
   }
 
   const apiKey = (req.apiKey || process.env.CURSOR_API_KEY || '').trim() || undefined;
-  const model = modelSelection(req.model, Boolean(req.fast));
+  const model = modelSelection(req.model, {
+    effort: req.effort,
+    fast: Boolean(req.fast),
+  });
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
   const store = localAgentStore();
   const local = { cwd: req.cwd, store };

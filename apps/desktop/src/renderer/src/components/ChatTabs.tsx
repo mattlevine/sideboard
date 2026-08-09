@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { AgentKind, Autonomy, Thread } from '@sideboard-ai/core';
+import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { threadDisplayTitle } from '../lib/global-workspace';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
@@ -11,6 +11,7 @@ export type NewChatTabOptions = {
   agent?: AgentKind;
   model?: string | null;
   autonomy?: Autonomy;
+  effort?: ThinkingEffort;
 };
 
 interface Props {
@@ -91,10 +92,12 @@ export function ChatTabs({
     agent: AgentKind;
     model: string | null;
     autonomy: Autonomy;
+    effort: ThinkingEffort;
   }>({
     agent: 'claude',
     model: null,
     autonomy: 'default',
+    effort: 'high',
   });
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -108,6 +111,7 @@ export function ChatTabs({
       agent: defaults.agent,
       model: defaults.model,
       autonomy: 'default',
+      effort: defaults.effort,
     });
     setNewOpen(true);
   }
@@ -310,6 +314,7 @@ export function ChatTabs({
               agent: next.agent,
               model: next.model,
               autonomy: next.autonomy,
+              effort: next.effort,
             });
           }}
         />

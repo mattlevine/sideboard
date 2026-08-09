@@ -12,6 +12,7 @@ const primary: Thread = {
   repoPath: '/Users/me/Projects/sideboard',
   agent: 'claude',
   model: null,
+  effort: 'high',
   fast: false,
   planMode: false,
   sessionId: null,

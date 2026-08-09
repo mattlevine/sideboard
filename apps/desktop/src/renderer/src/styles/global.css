@@ -4783,6 +4783,52 @@ body.resizing-panels webview {
   color: #d4a84b;
 }
 
+.chip-effort-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 12px;
+  vertical-align: -1px;
+}
+
+.chip-effort-bar {
+  display: block;
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.28;
+}
+
+.chip-effort-bar.on {
+  opacity: 0.92;
+}
+
+.chip-effort-bar:nth-child(1) {
+  height: 3px;
+}
+.chip-effort-bar:nth-child(2) {
+  height: 5px;
+}
+.chip-effort-bar:nth-child(3) {
+  height: 7px;
+}
+.chip-effort-bar:nth-child(4) {
+  height: 9px;
+}
+.chip-effort-bar:nth-child(5) {
+  height: 12px;
+}
+
+.agent-options-thinking-chips .chip-effort-bars {
+  margin-right: 4px;
+}
+
+.chip.active.effort {
+  background: rgba(201, 148, 66, 0.1);
+  border-color: rgba(201, 148, 66, 0.28);
+  color: #d8c4a0;
+}
+
 .chip.plan.active {
   background: rgba(92, 142, 211, 0.14);
   border-color: rgba(92, 142, 211, 0.42);
@@ -8304,7 +8350,7 @@ body:has(.update-banner) .team-toast-stack {
 }
 
 .create-footer .composer-toolbar.create-variant .chip-model-icon,
-.create-footer .composer-toolbar.create-variant .chip-effort-icon {
+.create-footer .composer-toolbar.create-variant .chip-effort-bars {
   font-size: 11px;
   opacity: 0.9;
 }

@@ -46,6 +46,7 @@ describe('claudeAdapter.buildTurn', () => {
     sessionId: null as string | null,
     autonomy: 'default' as const,
     model: null,
+    effort: 'high',
     fast: false,
     planMode: false,
     messages: [],

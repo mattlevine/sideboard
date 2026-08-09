@@ -91,31 +91,51 @@ describe('app settings', () => {
     expect(mod.resolveEffectiveIssueSource()).toBe('github');
   });
 
-  it('round-trips default agent and model', async () => {
+  it('round-trips default agent, model, and effort', async () => {
     const mod = await load();
     expect(mod.getDefaultAgent()).toBe('claude');
     expect(mod.getDefaultModel()).toBeNull();
-    expect(mod.resolveThreadDefaults()).toEqual({ agent: 'claude', model: null });
+    expect(mod.getDefaultEffort()).toBe('high');
+    expect(mod.getDefaultFast()).toBe(false);
+    expect(mod.resolveThreadDefaults()).toEqual({
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      fast: false,
+    });
 
     const saved = mod.updateDefaultsSettings({
       agent: 'cursor',
       model: 'gpt-5',
+      effort: 'xhigh',
     });
-    expect(saved.defaults).toEqual({ agent: 'cursor', model: 'gpt-5' });
+    expect(saved.defaults).toEqual({
+      agent: 'cursor',
+      model: 'gpt-5',
+      effort: 'xhigh',
+    });
     expect(mod.getDefaultAgent()).toBe('cursor');
     expect(mod.getDefaultModel()).toBe('gpt-5');
+    expect(mod.getDefaultEffort()).toBe('xhigh');
     expect(mod.resolveThreadDefaults()).toEqual({
       agent: 'cursor',
       model: 'gpt-5',
+      effort: 'xhigh',
+      fast: false,
     });
 
     const clearedModel = mod.updateDefaultsSettings({ model: null });
-    expect(clearedModel.defaults).toEqual({ agent: 'cursor' });
+    expect(clearedModel.defaults).toEqual({ agent: 'cursor', effort: 'xhigh' });
     expect(mod.getDefaultModel()).toBeNull();
 
-    const resetAgent = mod.updateDefaultsSettings({ agent: null });
-    expect(resetAgent.defaults).toEqual({});
+    const fromNormal = mod.updateDefaultsSettings({ effort: 'normal' });
+    expect(fromNormal.defaults.effort).toBe('medium');
+    expect(mod.getDefaultEffort()).toBe('medium');
+
+    const reset = mod.updateDefaultsSettings({ agent: null, effort: null });
+    expect(reset.defaults).toEqual({});
     expect(mod.getDefaultAgent()).toBe('claude');
+    expect(mod.getDefaultEffort()).toBe('high');
   });
 
   it('round-trips Advanced preferences with Conductor-like defaults', async () => {

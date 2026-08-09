@@ -1,4 +1,5 @@
 export * from './types/thread.js';
+export * from './types/thinking-effort.js';
 export * from './store/paths.js';
 export * from './store/app-settings.js';
 export * from './store/thread-store.js';

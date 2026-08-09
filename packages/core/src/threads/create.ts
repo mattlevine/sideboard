@@ -88,6 +88,7 @@ export async function createThread(
     agent: input.agent,
     autonomy: input.autonomy ?? 'default',
     model: input.model ?? null,
+    effort: input.effort ?? 'high',
     fast: Boolean(input.fast),
     planMode: Boolean(input.planMode),
     attachments: input.attachments ?? [],

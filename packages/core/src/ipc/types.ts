@@ -24,6 +24,7 @@ import type {
   Thread,
   ThreadOptionsPatch,
 } from '../types/thread.js';
+import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
   AdvancedAppSettings,
   AppSettings,
@@ -121,6 +122,8 @@ export interface IpcApi {
   updateDefaultsSettings(patch: {
     agent?: AgentKind | null;
     model?: string | null;
+    effort?: ThinkingEffort | 'normal' | null;
+    fast?: boolean | null;
   }): Promise<AppSettings>;
   /** Machine-global GitHub status via `gh`. */
   getGitHubStatus(): Promise<GitHubStatus>;
@@ -186,6 +189,7 @@ export interface IpcApi {
     repoPath?: string;
     autonomy?: Autonomy;
     model?: string | null;
+    effort?: ThinkingEffort;
     fast?: boolean;
     planMode?: boolean;
     attachments?: ThreadAttachment[];
@@ -195,6 +199,7 @@ export interface IpcApi {
     agent: AgentKind;
     autonomy?: Autonomy;
     model?: string | null;
+    effort?: ThinkingEffort;
     fast?: boolean;
     planMode?: boolean;
     attachments?: ThreadAttachment[];

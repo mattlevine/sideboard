@@ -11,10 +11,12 @@ import type {
   CloudConnectStatus,
   GitHubStatus,
   IssueSource,
+  ThinkingEffort,
   Thread,
 } from '@sideboard-ai/core';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
+import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
 
 type NavId = 'account' | 'agents' | 'environment' | 'advanced' | 'history';
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
@@ -41,19 +43,26 @@ const CLAUDE_DEFAULT_MODEL_LABELS: Record<string, string> = {
   haiku: 'Haiku',
 };
 
-function defaultAgentModelLabel(agent: AgentKind, model: string | null): string {
+function defaultAgentModelLabel(
+  agent: AgentKind,
+  model: string | null,
+  effort: ThinkingEffort,
+): string {
   const agentLabel = DEFAULT_AGENT_LABELS[agent] ?? agent;
+  const thinking = thinkingEffortLabel(effort);
   if (agent === 'claude') {
-    if (!model) return `${agentLabel} · Auto`;
-    return `${agentLabel} · ${CLAUDE_DEFAULT_MODEL_LABELS[model] ?? model}`;
+    if (!model) return `${agentLabel} · Auto · ${thinking}`;
+    return `${agentLabel} · ${CLAUDE_DEFAULT_MODEL_LABELS[model] ?? model} · ${thinking}`;
   }
   if (agent === 'cursor') {
     const m = (model ?? '').trim().toLowerCase();
-    if (!m || m === 'default' || m === 'auto') return `${agentLabel} · Auto`;
-    return `${agentLabel} · ${model}`;
+    if (!m || m === 'default' || m === 'auto') {
+      return `${agentLabel} · Auto · ${thinking}`;
+    }
+    return `${agentLabel} · ${model} · ${thinking}`;
   }
-  if (!model) return `${agentLabel} · Auto`;
-  return `${agentLabel} · ${model}`;
+  if (!model) return `${agentLabel} · Auto · ${thinking}`;
+  return `${agentLabel} · ${model} · ${thinking}`;
 }
 
 interface Props {
@@ -131,7 +140,7 @@ function statusFor(statuses: AgentStatus[], id: AgentPanel): AgentStatus | undef
 
 export function SettingsModal({
   onClose,
-  initialNav = 'agents',
+  initialNav = 'account',
   archived = [],
   onRestoreArchived,
   onOpenArchived,
@@ -388,6 +397,7 @@ export function SettingsModal({
   async function saveDefaultsPatch(patch: {
     agent?: AgentKind | null;
     model?: string | null;
+    effort?: ThinkingEffort | null;
   }) {
     setBusy(true);
     setError(null);
@@ -418,6 +428,7 @@ export function SettingsModal({
   const autoRenameOn = advanced.autoRenameBranch !== false;
   const defaultAgent: AgentKind = settings.defaults?.agent ?? 'claude';
   const defaultModel = settings.defaults?.model?.trim() || null;
+  const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
 
   const filteredArchived = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
@@ -550,12 +561,14 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
                     <div>
-                      <div className="settings-section-title">Default agent &amp; model</div>
+                      <div className="settings-section-title">
+                        Default agent, model &amp; effort
+                      </div>
                       <p className="settings-hint">
                         Used when creating a new workspace chat or chat tab.
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
-                        {defaultAgentModelLabel(defaultAgent, defaultModel)}
+                        {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort)}
                       </p>
                     </div>
                     <button
@@ -1605,14 +1618,16 @@ export function SettingsModal({
           agent: defaultAgent,
           model: defaultModel,
           autonomy: 'default' as Autonomy,
+          effort: defaultEffort,
         }}
-        title="Default agent & model"
+        title="Default agent, model & effort"
         confirmLabel="Save"
         onClose={() => setDefaultsPickerOpen(false)}
         onApply={(next) => {
           void saveDefaultsPatch({
             agent: next.agent,
             model: next.model,
+            effort: next.effort,
           });
         }}
       />

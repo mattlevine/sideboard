@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   AgentKind,
   Autonomy,
+  ThinkingEffort,
   ThreadAttachment,
 } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
@@ -16,11 +17,12 @@ import {
 } from './CursorModelMenu';
 import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';
 import { FloatingMenu } from './FloatingMenu';
+import { ThinkingEffortChip } from './ThinkingEffortChip';
 
 export interface ComposerDraftOptions {
   agent: AgentKind;
   model: string | null;
-  fast: boolean;
+  effort: ThinkingEffort;
   planMode: boolean;
   autonomy: Autonomy;
 }
@@ -281,31 +283,10 @@ export function ComposerOptionsToolbar({
             </span>{' '}
             {modelLabel}
           </button>
-          {isCreate ? (
-            <button
-              type="button"
-              className={`chip${options.fast ? ' active fast' : ''}`}
-              title={options.fast ? 'Fast mode (lower effort)' : 'High effort'}
-              onClick={() => patch({ fast: !options.fast })}
-            >
-              <span className="chip-effort-icon" aria-hidden>
-                ▮▮▮
-              </span>{' '}
-              {options.fast ? 'Fast' : 'High'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={`chip${options.fast ? ' active fast' : ''}`}
-              title="Fast mode (lower effort)"
-              onClick={() => patch({ fast: !options.fast })}
-            >
-              <span className="chip-bolt" aria-hidden>
-                ⚡
-              </span>{' '}
-              Fast
-            </button>
-          )}
+          <ThinkingEffortChip
+            effort={options.effort}
+            onChange={(effort) => patch({ effort })}
+          />
           <button
             type="button"
             className={`chip${options.planMode ? ' active plan' : ''}${isCreate ? ' icon-only' : ''}`}
@@ -426,6 +407,7 @@ export function ComposerOptionsToolbar({
           agent: options.agent,
           model: options.model,
           autonomy: options.autonomy,
+          effort: options.effort,
         }}
         title={isCreate ? 'Agent for new chat' : 'Choose agent'}
         onClose={() => setAgentPickerOpen(false)}
@@ -434,6 +416,7 @@ export function ComposerOptionsToolbar({
             agent: next.agent,
             model: next.model,
             autonomy: next.autonomy,
+            effort: next.effort,
           });
           if (next.agent === 'brightsy' && next.model) {
             void window.sideboard

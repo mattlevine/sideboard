@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.43] - 2026-08-08
+
+### Added
+
+- Conductor-style thinking **effort** with 5 levels (`low` / `medium` / `high` / `xhigh` / `max`) on composer, agent picker, and Settings → Account defaults (agent → effort → plan)
+
+### Changed
+
+- Settings opens on the Account tab by default
+
+### Fixed
+
+- Renderer white screen from importing Node-backed `@sideboard-ai/core` values into the UI (effort helpers stay local)
+
 ## [0.1.42] - 2026-08-08
 
 ### Changed

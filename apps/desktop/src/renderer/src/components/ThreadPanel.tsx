@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AgentKind, MessagePart, Thread, ThreadAttachment } from '@sideboard-ai/core';
+import type { AgentKind, MessagePart, ThinkingEffort, Thread, ThreadAttachment } from '@sideboard-ai/core';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
   RIGHT_COLUMN_WIDTH_DEFAULT,
@@ -36,6 +36,7 @@ import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
+import { ThinkingEffortChip } from './ThinkingEffortChip';
 import {
   agentModelLabel,
   cursorModelLabel,
@@ -481,7 +482,7 @@ export function ThreadPanel({
     const midChat = thread.messages.length > 0;
 
     if (sameProvider) {
-      patchOptions({ model: next.model, autonomy: next.autonomy });
+      patchOptions({ model: next.model, autonomy: next.autonomy, effort: next.effort });
       requestAnimationFrame(() => textareaRef.current?.focus());
       return;
     }
@@ -491,6 +492,7 @@ export function ThreadPanel({
         agent: next.agent,
         model: next.model,
         autonomy: next.autonomy,
+        effort: next.effort,
       });
       requestAnimationFrame(() => textareaRef.current?.focus());
       return;
@@ -502,6 +504,7 @@ export function ThreadPanel({
         agent: next.agent,
         model: next.model,
         autonomy: next.autonomy,
+        effort: next.effort,
       });
       onSelectChat(t.id, t);
       onRefresh();
@@ -652,12 +655,14 @@ export function ThreadPanel({
     agent?: AgentKind;
     model?: string | null;
     autonomy?: Thread['autonomy'];
+    effort?: ThinkingEffort;
   }) {
     const t = await window.sideboard.createChatTab({
       fromThreadId: thread.id,
       agent: opts?.agent,
       model: opts?.model,
       autonomy: opts?.autonomy,
+      effort: opts?.effort,
     });
     onSelectChat(t.id, t);
     onRefresh();
@@ -1683,6 +1688,10 @@ export function ThreadPanel({
                 >
                   ▦ {modelLabel}
                 </button>
+                <ThinkingEffortChip
+                  effort={thread.effort ?? 'high'}
+                  onChange={(effort) => toggleComposerOption({ effort })}
+                />
                 <button
                   type="button"
                   className={`chip${thread.planMode ? ' active plan' : ''}`}
@@ -1693,17 +1702,6 @@ export function ThreadPanel({
                     ◫
                   </span>{' '}
                   Plan
-                </button>
-                <button
-                  type="button"
-                  className={`chip${thread.fast ? ' active fast' : ''}`}
-                  title="Fast mode (lower effort)"
-                  onClick={() => toggleComposerOption({ fast: !thread.fast })}
-                >
-                  <span className="chip-bolt" aria-hidden>
-                    ⚡
-                  </span>{' '}
-                  Fast
                 </button>
               </div>
               <div className="composer-right">
@@ -1849,6 +1847,7 @@ export function ThreadPanel({
           agent: thread.agent,
           model: thread.model,
           autonomy: thread.autonomy,
+          effort: thread.effort ?? 'high',
         }}
         onClose={() => setAgentPickerOpen(false)}
         onApply={(next) => {

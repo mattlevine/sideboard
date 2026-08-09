@@ -104,6 +104,7 @@ describe('context compact', () => {
       repoPath: '/tmp',
       agent: 'claude',
       model: null,
+      effort: 'high',
       fast: false,
       planMode: false,
       sessionId: 'sess-123',

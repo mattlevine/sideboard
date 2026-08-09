@@ -9,16 +9,33 @@ import {
 } from 'node:fs';
 import lockfile from 'proper-lockfile';
 import type { Thread, ThreadMessage, ThreadStatus } from '../types/thread.js';
+import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { threadFilePath, threadLockPath, threadsDir } from './paths.js';
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Resolve thinking effort for persisted threads.
+ * Legacy threads only had `fast` (which also drove Claude `--effort low`);
+ * map that to `effort: 'low'` when `effort` was never stored.
+ * Accepts Conductor's `normal` as medium.
+ */
+export function resolveThreadEffort(
+  raw: { effort?: unknown; fast?: unknown },
+): ThinkingEffort {
+  const fromField = normalizeThinkingEffort(raw.effort);
+  if (fromField) return fromField;
+  if (raw.fast) return 'low';
+  return 'high';
+}
+
 export function normalizeThread(raw: Thread): Thread {
   return {
     ...raw,
     model: raw.model ?? null,
+    effort: resolveThreadEffort(raw),
     fast: Boolean(raw.fast),
     planMode: Boolean(raw.planMode),
     autonomy: raw.autonomy ?? 'default',
@@ -50,6 +67,7 @@ export function createEmptyThread(
     | 'parentThreadId'
     | 'autonomy'
     | 'model'
+    | 'effort'
     | 'fast'
     | 'planMode'
     | 'attachments'
@@ -62,6 +80,7 @@ export function createEmptyThread(
         | 'parentThreadId'
         | 'autonomy'
         | 'model'
+        | 'effort'
         | 'fast'
         | 'planMode'
         | 'messages'
@@ -82,6 +101,7 @@ export function createEmptyThread(
     sessionId: partial.sessionId ?? null,
     autonomy: partial.autonomy ?? 'default',
     model: partial.model ?? null,
+    effort: partial.effort ?? 'high',
     fast: partial.fast ?? false,
     planMode: partial.planMode ?? false,
     sourceIsFork: partial.sourceIsFork ?? false,

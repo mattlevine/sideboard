@@ -11,7 +11,8 @@ const baseThread = {
   worktreePath: '/tmp/wt',
   sessionId: null,
   model: null,
-  fast: false,
+  effort: 'high',
+    fast: false,
   planMode: false,
   agent: 'cursor',
 } as unknown as Thread;

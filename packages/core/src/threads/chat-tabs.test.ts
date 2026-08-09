@@ -12,6 +12,7 @@ const source: Thread = {
   repoPath: '/Users/me/Projects/sideboard',
   agent: 'claude',
   model: null,
+  effort: 'high' as const,
   fast: false,
   planMode: false,
   sessionId: 'sess-1',
@@ -104,6 +105,13 @@ describe('createChatTab', () => {
     expect(teamNames.has(tab.title)).toBe(true);
     expect(tab.title).not.toBe(source.title);
     expect(tab.userSetTitle).toBe(true);
+  });
+
+  it('can override thinking effort from account / picker defaults', async () => {
+    const { createChatTab } = await import('./chat-tabs.js');
+    const tab = createChatTab({ fromThreadId: source.id, effort: 'low' });
+    expect(tab.effort).toBe('low');
+    expect(source.effort).toBe('high');
   });
 
   it('does not reuse the worktree folder soccer team as a new tab title', async () => {

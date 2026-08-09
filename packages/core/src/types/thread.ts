@@ -1,3 +1,5 @@
+import type { ThinkingEffort } from './thinking-effort.js';
+
 export type AgentKind = 'claude' | 'codex' | 'opencode' | 'brightsy' | 'cursor';
 
 export type SourceType = 'branch' | 'pr' | 'ticket' | 'orchestration' | 'adopt';
@@ -76,7 +78,15 @@ export interface Thread {
   agent: AgentKind;
   /** Agent model alias (e.g. sonnet, opus). null = Auto / CLI default. */
   model: string | null;
-  /** Prefer faster/cheaper turns (Claude: --effort low). */
+  /**
+   * Thinking / reasoning effort (Claude: `--effort`, Cursor: `effort` param).
+   * Independent of {@link Thread.fast}.
+   */
+  effort: ThinkingEffort;
+  /**
+   * Prefer a faster model variant when the agent supports it (Cursor: `fast` param).
+   * Independent of {@link Thread.effort}.
+   */
   fast: boolean;
   /** Plan-only turns — analyze and plan without editing files (Conductor-style). */
   planMode: boolean;
@@ -114,6 +124,10 @@ export interface CreateChatTabInput {
   agent?: AgentKind;
   model?: string | null;
   autonomy?: Autonomy;
+  /** Thinking effort; omit to inherit from source thread. */
+  effort?: ThinkingEffort;
+  /** Prefer faster model variant; omit to inherit from source thread. */
+  fast?: boolean;
   title?: string;
   attachments?: ThreadAttachment[];
 }
@@ -138,6 +152,7 @@ export interface ForkThreadWorktreeInput {
 export interface ThreadOptionsPatch {
   agent?: AgentKind;
   model?: string | null;
+  effort?: ThinkingEffort;
   fast?: boolean;
   planMode?: boolean;
   autonomy?: Autonomy;
@@ -396,6 +411,7 @@ export interface CreateThreadInput {
   autonomy?: Autonomy;
   /** Claude model id, or Brightsy `agent:` / `model:` target encoding. */
   model?: string | null;
+  effort?: ThinkingEffort;
   fast?: boolean;
   planMode?: boolean;
   /** Attachments available to the first prompt (and subsequent turns). */

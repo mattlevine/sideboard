@@ -166,6 +166,7 @@ export const cursorAdapter: AgentAdapter = {
       cwd: thread.worktreePath,
       agentId,
       model: thread.model,
+      effort: thread.effort,
       fast: thread.fast,
       planMode: thread.planMode,
       apiKey,

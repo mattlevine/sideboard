@@ -1371,6 +1371,7 @@ export class Orchestrator {
     const thread = this.requireThread(threadRef);
     const next: Partial<Thread> = {};
     if (patch.autonomy !== undefined) next.autonomy = patch.autonomy;
+    if (patch.effort !== undefined) next.effort = patch.effort;
     if (patch.fast !== undefined) next.fast = patch.fast;
     if (patch.planMode !== undefined) next.planMode = patch.planMode;
     if (patch.model !== undefined) next.model = patch.model;
@@ -1395,7 +1396,12 @@ export class Orchestrator {
   createChatTab(input: {
     fromThreadId: string;
     agent?: Thread['agent'];
+    model?: string | null;
+    autonomy?: Thread['autonomy'];
+    effort?: Thread['effort'];
+    fast?: boolean;
     title?: string;
+    attachments?: Thread['attachments'];
   }): Thread {
     return createChatTabImpl(input);
   }
@@ -1594,6 +1600,7 @@ export async function startOrchestration(opts: {
   repoPath?: string;
   autonomy?: Thread['autonomy'];
   model?: string | null;
+  effort?: Thread['effort'];
   fast?: boolean;
   planMode?: boolean;
   attachments?: Thread['attachments'];
@@ -1610,6 +1617,7 @@ export async function startOrchestration(opts: {
       agent: opts.agent,
       autonomy: opts.autonomy,
       model: opts.model,
+      effort: opts.effort,
       fast: opts.fast,
       planMode: opts.planMode,
       attachments: opts.attachments,
@@ -1629,6 +1637,7 @@ export async function startOrchestration(opts: {
     title,
     autonomy: opts.autonomy,
     model: opts.model,
+    effort: opts.effort,
     fast: opts.fast,
     planMode: opts.planMode,
     attachments: opts.attachments,

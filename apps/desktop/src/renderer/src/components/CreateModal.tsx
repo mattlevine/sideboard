@@ -74,7 +74,7 @@ function firstProjectPath(
 const DEFAULT_OPTIONS: ComposerDraftOptions = {
   agent: 'claude',
   model: null,
-  fast: false,
+  effort: 'high',
   planMode: false,
   autonomy: 'default',
 };
@@ -236,6 +236,7 @@ export function CreateModal({
         ...prev,
         agent: defaults.agent,
         model: defaults.model,
+        effort: defaults.effort,
       }));
     });
     void window.sideboard
@@ -305,7 +306,7 @@ export function CreateModal({
         agent: options.agent,
         autonomy: options.autonomy,
         model: options.model,
-        fast: options.fast,
+        effort: options.effort,
         planMode: options.planMode,
         attachments,
       };

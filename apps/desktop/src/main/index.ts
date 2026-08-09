@@ -82,6 +82,7 @@ import {
   type DefaultsAppSettings,
   type IntegrationsSettings,
   type IssueSource,
+  type ThinkingEffort,
   type CreateThreadInput,
   type DiffScope,
   type OrchestratorEvent,
@@ -540,6 +541,8 @@ function registerIpc(): void {
       patch: Partial<DefaultsAppSettings> & {
         agent?: AgentKind | null;
         model?: string | null;
+        effort?: ThinkingEffort | null;
+        fast?: boolean | null;
       },
     ) => updateDefaultsSettings(patch),
   );
@@ -722,6 +725,7 @@ function registerIpc(): void {
         repoPath?: string;
         autonomy?: Autonomy;
         model?: string | null;
+        effort?: ThinkingEffort;
         fast?: boolean;
         planMode?: boolean;
         attachments?: ThreadAttachment[];
@@ -737,6 +741,7 @@ function registerIpc(): void {
         agent: AgentKind;
         autonomy?: Autonomy;
         model?: string | null;
+        effort?: ThinkingEffort;
         fast?: boolean;
         planMode?: boolean;
         attachments?: ThreadAttachment[];
