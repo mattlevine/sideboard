@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.39] - 2026-08-08
+
+### Added
+
+- Large composer pastes become `Pasted text #N.txt` file attachments instead of flooding the input
+
+### Changed
+
+- Attachment chips, composer focus, and chat table/streaming accents are quieter; user messages use the same accent family as Draft / Archive
+
+### Fixed
+
+- Tool chips no longer show fake `+/-` counts from JSON numbers in MCP tool results
+- Settings and other modals no longer sit behind the message composer
+
 ## [0.1.38] - 2026-08-08
 
 ### Fixed
