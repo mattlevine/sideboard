@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   AdvancedAppSettings,
+  AgentKind,
   AgentSetupActionResult,
   AgentStatus,
   AppSettings,
+  Autonomy,
   BrightsyCloudConnectAgent,
   BrightsySession,
   CloudConnectStatus,
@@ -12,6 +14,7 @@ import type {
   Thread,
 } from '@sideboard-ai/core';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
+import { AgentOptionsPicker } from './AgentOptionsPicker';
 
 type NavId = 'account' | 'agents' | 'environment' | 'advanced' | 'history';
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
@@ -22,6 +25,36 @@ const CLOUD_CONNECT_AGENTS: Array<{ id: BrightsyCloudConnectAgent; label: string
   { id: 'opencode', label: 'OpenCode' },
   { id: 'cursor', label: 'Cursor' },
 ];
+
+const DEFAULT_AGENT_LABELS: Record<AgentKind, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+  cursor: 'Cursor',
+  brightsy: 'Brightsy',
+};
+
+const CLAUDE_DEFAULT_MODEL_LABELS: Record<string, string> = {
+  fable: 'Fable',
+  opus: 'Opus',
+  sonnet: 'Sonnet',
+  haiku: 'Haiku',
+};
+
+function defaultAgentModelLabel(agent: AgentKind, model: string | null): string {
+  const agentLabel = DEFAULT_AGENT_LABELS[agent] ?? agent;
+  if (agent === 'claude') {
+    if (!model) return `${agentLabel} · Auto`;
+    return `${agentLabel} · ${CLAUDE_DEFAULT_MODEL_LABELS[model] ?? model}`;
+  }
+  if (agent === 'cursor') {
+    const m = (model ?? '').trim().toLowerCase();
+    if (!m || m === 'default' || m === 'auto') return `${agentLabel} · Auto`;
+    return `${agentLabel} · ${model}`;
+  }
+  if (!model) return `${agentLabel} · Auto`;
+  return `${agentLabel} · ${model}`;
+}
 
 interface Props {
   onClose: () => void;
@@ -111,6 +144,7 @@ export function SettingsModal({
     claude: {},
     brightsy: {},
     integrations: {},
+    defaults: {},
     advanced: {},
   });
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
@@ -128,6 +162,7 @@ export function SettingsModal({
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
   const [linearKeyDraft, setLinearKeyDraft] = useState('');
   const [showLinearKey, setShowLinearKey] = useState(false);
+  const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
   const [setupLog, setSetupLog] = useState<string | null>(null);
 
@@ -148,6 +183,7 @@ export function SettingsModal({
       claude: s.claude ?? {},
       brightsy: s.brightsy ?? {},
       integrations: s.integrations ?? {},
+      defaults: s.defaults ?? {},
       advanced: s.advanced ?? {},
     });
     setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 3));
@@ -252,6 +288,7 @@ export function SettingsModal({
         claude: next.claude ?? {},
         brightsy: next.brightsy ?? {},
         integrations: next.integrations ?? {},
+        defaults: next.defaults ?? {},
         advanced: next.advanced ?? {},
       });
       const agents = await window.sideboard.detectAgents();
@@ -276,6 +313,7 @@ export function SettingsModal({
         claude: next.claude ?? {},
         brightsy: next.brightsy ?? {},
         integrations: next.integrations ?? {},
+        defaults: next.defaults ?? {},
         advanced: next.advanced ?? {},
       });
       setClaudePathDraft(next.claude?.executablePath ?? '');
@@ -308,6 +346,7 @@ export function SettingsModal({
         claude: next.claude ?? {},
         brightsy: next.brightsy ?? {},
         integrations: next.integrations ?? {},
+        defaults: next.defaults ?? {},
         advanced: next.advanced ?? {},
       });
     } catch (err) {
@@ -323,6 +362,7 @@ export function SettingsModal({
       claude: next.claude ?? {},
       brightsy: next.brightsy ?? {},
       integrations: next.integrations ?? {},
+      defaults: next.defaults ?? {},
       advanced: next.advanced ?? {},
     });
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 3));
@@ -345,6 +385,22 @@ export function SettingsModal({
     }
   }
 
+  async function saveDefaultsPatch(patch: {
+    agent?: AgentKind | null;
+    model?: string | null;
+  }) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await window.sideboard.updateDefaultsSettings(patch);
+      applySettings(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveAdvancedPatch(patch: Partial<AdvancedAppSettings>) {
     setBusy(true);
     setError(null);
@@ -360,6 +416,8 @@ export function SettingsModal({
 
   const advanced = settings.advanced ?? {};
   const autoRenameOn = advanced.autoRenameBranch !== false;
+  const defaultAgent: AgentKind = settings.defaults?.agent ?? 'claude';
+  const defaultModel = settings.defaults?.model?.trim() || null;
 
   const filteredArchived = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
@@ -488,6 +546,28 @@ export function SettingsModal({
                   Connect GitHub and Linear for Create-from (PRs, branches, issues). These
                   connections are owned by Sideboard — not per-agent MCP.
                 </p>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">Default agent &amp; model</div>
+                      <p className="settings-hint">
+                        Used when creating a new workspace chat or chat tab.
+                      </p>
+                      <p className="settings-status-text" style={{ marginTop: 8 }}>
+                        {defaultAgentModelLabel(defaultAgent, defaultModel)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busy}
+                      onClick={() => setDefaultsPickerOpen(true)}
+                    >
+                      Change
+                    </button>
+                  </div>
+                </div>
 
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
@@ -1519,6 +1599,23 @@ export function SettingsModal({
           </div>
         </div>
       </div>
+      <AgentOptionsPicker
+        open={defaultsPickerOpen}
+        value={{
+          agent: defaultAgent,
+          model: defaultModel,
+          autonomy: 'default' as Autonomy,
+        }}
+        title="Default agent & model"
+        confirmLabel="Save"
+        onClose={() => setDefaultsPickerOpen(false)}
+        onApply={(next) => {
+          void saveDefaultsPatch({
+            agent: next.agent,
+            model: next.model,
+          });
+        }}
+      />
     </div>
   );
 }

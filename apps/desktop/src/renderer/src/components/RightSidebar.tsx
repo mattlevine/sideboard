@@ -722,7 +722,7 @@ export function RightSidebar({
   }
 
   async function openRunConfig() {
-    // Prefer worktree settings (agent may have edited them), then main repo.
+    // Prefer worktree settings (agent may have edited them); open in Sideboard tabs.
     const candidates = [
       '.sideboard/settings.toml',
       '.conductor/settings.toml',
@@ -731,7 +731,7 @@ export function RightSidebar({
       try {
         const file = await window.sideboard.readFile(thread.id, rel);
         if (!file.binary) {
-          await window.sideboard.openInEditor(thread.id, undefined, rel);
+          onOpenFile?.(rel);
           return;
         }
       } catch {

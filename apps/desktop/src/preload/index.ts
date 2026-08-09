@@ -40,6 +40,8 @@ const api: IpcApi = {
     ipcRenderer.invoke('updateAdvancedSettings', patch),
   updateIntegrationsSettings: (patch) =>
     ipcRenderer.invoke('updateIntegrationsSettings', patch),
+  updateDefaultsSettings: (patch) =>
+    ipcRenderer.invoke('updateDefaultsSettings', patch),
   getGitHubStatus: () => ipcRenderer.invoke('getGitHubStatus'),
   listIssues: (repoPath) => ipcRenderer.invoke('listIssues', repoPath),
   listBranches: (repoPath, opts) => ipcRenderer.invoke('listBranches', repoPath, opts),

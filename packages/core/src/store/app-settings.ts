@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import type { AgentKind } from '../types/thread.js';
 import { appDataDir } from './paths.js';
 
 /** Well-known env keys managed from Settings → Agents (Conductor-style harnesses). */
@@ -13,6 +14,24 @@ export const HARNESS_ENV_KEYS = {
 } as const;
 
 export type HarnessId = keyof typeof HARNESS_ENV_KEYS;
+
+const DEFAULT_AGENTS = new Set<AgentKind>([
+  'claude',
+  'codex',
+  'opencode',
+  'brightsy',
+  'cursor',
+]);
+
+/**
+ * Account-level defaults for Create / new chat tabs (Settings → Account).
+ * Omitted fields fall back to Claude + Auto at runtime.
+ */
+export interface DefaultsAppSettings {
+  agent?: AgentKind;
+  /** Model / Brightsy target id. Empty or omitted = Auto / agent default. */
+  model?: string;
+}
 
 /** Claude Code harness options (executable override + Chrome). */
 export interface ClaudeHarnessSettings {
@@ -108,6 +127,8 @@ export interface AppSettings {
   brightsy: BrightsyHarnessSettings;
   /** GitHub / Linear connections and issue-source preference. */
   integrations: IntegrationsSettings;
+  /** Default agent + model for new chats (Settings → Account). */
+  defaults: DefaultsAppSettings;
   /** Power-user / Conductor-style advanced preferences. */
   advanced: AdvancedAppSettings;
 }
@@ -177,6 +198,23 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   return out;
 }
 
+function normalizeDefaults(raw: unknown): DefaultsAppSettings {
+  if (!raw || typeof raw !== 'object') return {};
+  const source = raw as Record<string, unknown>;
+  const out: DefaultsAppSettings = {};
+  if (
+    typeof source.agent === 'string' &&
+    DEFAULT_AGENTS.has(source.agent as AgentKind)
+  ) {
+    out.agent = source.agent as AgentKind;
+  }
+  if (typeof source.model === 'string') {
+    const model = source.model.trim();
+    if (model) out.model = model;
+  }
+  return out;
+}
+
 function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   if (!raw || typeof raw !== 'object') return {};
   const source = raw as Record<string, unknown>;
@@ -225,6 +263,7 @@ function normalizeSettings(raw: unknown): AppSettings {
   let claude: ClaudeHarnessSettings = {};
   let brightsy: BrightsyHarnessSettings = {};
   let integrations: IntegrationsSettings = {};
+  let defaults: DefaultsAppSettings = {};
   let advanced: AdvancedAppSettings = {};
   if (raw && typeof raw === 'object') {
     if ('environment' in raw) {
@@ -248,11 +287,14 @@ function normalizeSettings(raw: unknown): AppSettings {
         (raw as { integrations?: unknown }).integrations,
       );
     }
+    if ('defaults' in raw) {
+      defaults = normalizeDefaults((raw as { defaults?: unknown }).defaults);
+    }
     if ('advanced' in raw) {
       advanced = normalizeAdvanced((raw as { advanced?: unknown }).advanced);
     }
   }
-  return { environment: env, claude, brightsy, integrations, advanced };
+  return { environment: env, claude, brightsy, integrations, defaults, advanced };
 }
 
 const EMPTY_SETTINGS: AppSettings = {
@@ -260,6 +302,7 @@ const EMPTY_SETTINGS: AppSettings = {
   claude: {},
   brightsy: {},
   integrations: {},
+  defaults: {},
   advanced: {},
 };
 
@@ -365,6 +408,56 @@ export function updateIntegrationsSettings(
     }
   }
   return saveAppSettings({ ...current, integrations });
+}
+
+export function updateDefaultsSettings(
+  patch: {
+    agent?: AgentKind | null;
+    model?: string | null;
+  },
+): AppSettings {
+  const current = loadAppSettings();
+  const defaults: DefaultsAppSettings = { ...current.defaults };
+  if ('agent' in patch) {
+    if (patch.agent == null) {
+      delete defaults.agent;
+    } else if (DEFAULT_AGENTS.has(patch.agent)) {
+      defaults.agent = patch.agent;
+    }
+  }
+  if ('model' in patch) {
+    if (patch.model == null || patch.model.trim() === '') {
+      delete defaults.model;
+    } else {
+      defaults.model = patch.model.trim();
+    }
+  }
+  return saveAppSettings({ ...current, defaults });
+}
+
+/** Default agent for Create / new chats (claude when unset). */
+export function getDefaultAgent(
+  settings: AppSettings = loadAppSettings(),
+): AgentKind {
+  return settings.defaults.agent ?? 'claude';
+}
+
+/** Default model id for Create / new chats (`null` = Auto / agent default). */
+export function getDefaultModel(
+  settings: AppSettings = loadAppSettings(),
+): string | null {
+  const model = settings.defaults.model?.trim();
+  return model || null;
+}
+
+/** Resolved Create / new-chat agent + model pair. */
+export function resolveThreadDefaults(
+  settings: AppSettings = loadAppSettings(),
+): { agent: AgentKind; model: string | null } {
+  return {
+    agent: getDefaultAgent(settings),
+    model: getDefaultModel(settings),
+  };
 }
 
 /** True when Sideboard has a Linear API key stored. */

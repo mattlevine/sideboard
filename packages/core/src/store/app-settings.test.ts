@@ -42,6 +42,7 @@ describe('app settings', () => {
       claude: {},
       brightsy: {},
       integrations: {},
+      defaults: {},
       advanced: {},
     });
     const target: NodeJS.ProcessEnv = { CURSOR_API_KEY: 'from-shell' };
@@ -58,6 +59,7 @@ describe('app settings', () => {
       claude: {},
       brightsy: {},
       integrations: {},
+      defaults: {},
       advanced: {},
     });
   });
@@ -87,6 +89,33 @@ describe('app settings', () => {
     expect(cleared.integrations.linearApiKey).toBeUndefined();
     expect(mod.isLinearConnected()).toBe(false);
     expect(mod.resolveEffectiveIssueSource()).toBe('github');
+  });
+
+  it('round-trips default agent and model', async () => {
+    const mod = await load();
+    expect(mod.getDefaultAgent()).toBe('claude');
+    expect(mod.getDefaultModel()).toBeNull();
+    expect(mod.resolveThreadDefaults()).toEqual({ agent: 'claude', model: null });
+
+    const saved = mod.updateDefaultsSettings({
+      agent: 'cursor',
+      model: 'gpt-5',
+    });
+    expect(saved.defaults).toEqual({ agent: 'cursor', model: 'gpt-5' });
+    expect(mod.getDefaultAgent()).toBe('cursor');
+    expect(mod.getDefaultModel()).toBe('gpt-5');
+    expect(mod.resolveThreadDefaults()).toEqual({
+      agent: 'cursor',
+      model: 'gpt-5',
+    });
+
+    const clearedModel = mod.updateDefaultsSettings({ model: null });
+    expect(clearedModel.defaults).toEqual({ agent: 'cursor' });
+    expect(mod.getDefaultModel()).toBeNull();
+
+    const resetAgent = mod.updateDefaultsSettings({ agent: null });
+    expect(resetAgent.defaults).toEqual({});
+    expect(mod.getDefaultAgent()).toBe('claude');
   });
 
   it('round-trips Advanced preferences with Conductor-like defaults', async () => {

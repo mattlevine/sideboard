@@ -24,6 +24,7 @@ import {
   snapshotComposerDrop,
 } from '../lib/composer-file-drop';
 import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
+import { loadThreadDefaults } from '../lib/thread-defaults';
 
 type Mode = 'create' | 'orchestration';
 
@@ -229,6 +230,13 @@ export function CreateModal({
       .catch(() => setStatuses([]))
       .finally(() => setAgentsLoaded(true));
     void refreshWorkspaces(initialRepoPath);
+    void loadThreadDefaults().then((defaults) => {
+      setOptions((prev) => ({
+        ...prev,
+        agent: defaults.agent,
+        model: defaults.model,
+      }));
+    });
     void window.sideboard
       .getAppSettings()
       .then((s) => setLinearConnected(Boolean(s.integrations?.linearApiKey)))

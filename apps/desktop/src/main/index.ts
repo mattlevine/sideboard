@@ -68,6 +68,7 @@ import {
   updateAppEnvironment,
   updateBrightsySettings,
   updateClaudeSettings,
+  updateDefaultsSettings,
   updateIntegrationsSettings,
   type AdvancedAppSettings,
   type AgentKind,
@@ -78,6 +79,7 @@ import {
   type BrightsyHarnessSettings,
   type ClaudeHarnessSettings,
   type CloudConnectStatus,
+  type DefaultsAppSettings,
   type IntegrationsSettings,
   type IssueSource,
   type CreateThreadInput,
@@ -530,6 +532,16 @@ function registerIpc(): void {
         issueSource?: IssueSource | null;
       },
     ) => updateIntegrationsSettings(patch),
+  );
+  ipcMain.handle(
+    'updateDefaultsSettings',
+    (
+      _e,
+      patch: Partial<DefaultsAppSettings> & {
+        agent?: AgentKind | null;
+        model?: string | null;
+      },
+    ) => updateDefaultsSettings(patch),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
   ipcMain.handle('listIssues', async (_e, path: string) =>

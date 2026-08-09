@@ -5,6 +5,7 @@ import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
+import { loadThreadDefaults } from '../lib/thread-defaults';
 
 export type NewChatTabOptions = {
   agent?: AgentKind;
@@ -86,12 +87,30 @@ export function ChatTabs({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [newOpen, setNewOpen] = useState(false);
+  const [newTabDefaults, setNewTabDefaults] = useState<{
+    agent: AgentKind;
+    model: string | null;
+    autonomy: Autonomy;
+  }>({
+    agent: 'claude',
+    model: null,
+    autonomy: 'default',
+  });
   const inputRef = useRef<HTMLInputElement>(null);
-  const activeChat = chats.find((c) => c.id === activeChatId) ?? chats[0] ?? null;
 
   useEffect(() => {
     if (editingId) inputRef.current?.focus();
   }, [editingId]);
+
+  async function openNewTabPicker() {
+    const defaults = await loadThreadDefaults();
+    setNewTabDefaults({
+      agent: defaults.agent,
+      model: defaults.model,
+      autonomy: 'default',
+    });
+    setNewOpen(true);
+  }
 
   function startEdit(t: Thread) {
     setEditingId(t.id);
@@ -276,17 +295,13 @@ export function ChatTabs({
           type="button"
           className="chat-tab-add"
           title="New chat tab"
-          onClick={() => setNewOpen(true)}
+          onClick={() => void openNewTabPicker()}
         >
           +
         </button>
         <AgentOptionsPicker
           open={newOpen}
-          value={{
-            agent: activeChat?.agent ?? 'claude',
-            model: activeChat?.model ?? null,
-            autonomy: activeChat?.autonomy ?? 'default',
-          }}
+          value={newTabDefaults}
           title="New chat tab"
           confirmLabel="Create tab"
           onClose={() => setNewOpen(false)}

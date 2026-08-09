@@ -118,6 +118,10 @@ export interface IpcApi {
     linearApiKey?: string | null;
     issueSource?: IssueSource | null;
   }): Promise<AppSettings>;
+  updateDefaultsSettings(patch: {
+    agent?: AgentKind | null;
+    model?: string | null;
+  }): Promise<AppSettings>;
   /** Machine-global GitHub status via `gh`. */
   getGitHubStatus(): Promise<GitHubStatus>;
   /**
