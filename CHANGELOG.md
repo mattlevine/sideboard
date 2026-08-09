@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-08-08
+
+### Changed
+
+- Right sidebar open/closed and width, plus artifact column width, are remembered per worktree
+- Right sidebar git/action labels stay text until the pane is genuinely narrow (compact below 280px)
+
 ## [0.1.34] - 2026-08-08
 
 ### Changed
