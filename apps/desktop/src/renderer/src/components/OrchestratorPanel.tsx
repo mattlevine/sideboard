@@ -73,6 +73,8 @@ export function OrchestratorPanel({
     return parts.length ? parts.join(' · ') : `${childThreads.length} agent${childThreads.length === 1 ? '' : 's'}`;
   }, [childThreads]);
 
+  const parentQueueCount = thread.queue.length;
+
   return (
     <div className="panel orchestrator-panel">
       <div className="child-list">
@@ -86,14 +88,28 @@ export function OrchestratorPanel({
         ) : (
           childSummary && <span className="thread-meta">{childSummary}</span>
         )}
+        {parentQueueCount > 0 ? (
+          <span
+            className="thread-meta"
+            title="Follow-ups waiting above the composer — edit, send now, or remove"
+          >
+            {parentQueueCount} queued
+          </span>
+        ) : null}
         {childThreads.map((c) => (
           <button key={c.id} className="child-chip" onClick={() => onSelectChild(c.id)}>
             <span className={`dot ${c.status}`} />
             {c.title}
+            {c.queue.length > 0 ? (
+              <span className="thread-meta" title={`${c.queue.length} queued`}>
+                · q{c.queue.length}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
       <div className="orchestrator-panel-main">
+        {/* Same ThreadPanel as worktree chats — includes the Queued dock (edit / send now / remove). */}
         <ThreadPanel
           key={thread.id}
           thread={thread}
