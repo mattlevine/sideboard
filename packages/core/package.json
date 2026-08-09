@@ -1,6 +1,6 @@
 {
   "name": "@sideboard-ai/core",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "description": "Sideboard core — orchestration, agents, git worktrees, MCP server",
   "license": "Apache-2.0",
   "type": "module",
@@ -24,7 +24,6 @@
   "scripts": {
     "build": "tsup src/index.ts src/agents/cursor-runner.ts --format esm,cjs --dts --clean && tsup --config tsup.mcp.config.ts && node scripts/add-bin-shebang.cjs",
     "dev": "tsup src/index.ts src/agents/cursor-runner.ts src/mcp/run-stdio.ts --format esm,cjs --dts --watch",
-    "prepublishOnly": "pnpm run build",
     "prepublishOnly": "pnpm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
