@@ -26,6 +26,7 @@ export async function startMcpServer(): Promise<void> {
   // Do not reclaim "stale running" turns — MCP runs in a separate process from
   // the desktop orchestrator that owns activeTurns. Reclaiming here falsely
   // marks live parent turns as "Process died (reconciled on startup)".
+  // (reclaimStaleTurns defaults to false; keep the flag explicit for clarity.)
   await orch.reconcile(undefined, { reclaimStaleTurns: false });
 
   const server = new McpServer({

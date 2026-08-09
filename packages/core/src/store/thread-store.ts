@@ -23,6 +23,7 @@ export function normalizeThread(raw: Thread): Thread {
     planMode: Boolean(raw.planMode),
     autonomy: raw.autonomy ?? 'default',
     lastError: raw.lastError ?? null,
+    agentPid: raw.agentPid ?? null,
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
     prTitle: raw.prTitle ?? null,
     userSetTitle: Boolean(raw.userSetTitle),
@@ -104,6 +105,7 @@ export function createEmptyThread(
     repoPath: partial.repoPath,
     agent: partial.agent,
     lastError: null,
+    agentPid: null,
   };
 }
 

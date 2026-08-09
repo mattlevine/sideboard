@@ -48,6 +48,17 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { createThread } from '../threads/create.js';
+
+/** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
+export function isPidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 import {
   createChatTab as createChatTabImpl,
   forkChatTab as forkChatTabImpl,
@@ -166,18 +177,30 @@ export class Orchestrator {
     );
   }
 
+  /**
+   * Cross-process guard: another Sideboard process (MCP stdio) may call reconcile
+   * while the desktop still owns a live agent child. Never reclaim those.
+   */
+  private shouldReclaimRunningThread(thread: Thread): boolean {
+    if (!this.isStaleRunningThread(thread.id, thread.status)) return false;
+    const pid = thread.agentPid;
+    if (typeof pid === 'number' && pid > 0 && isPidAlive(pid)) return false;
+    return true;
+  }
+
   async reconcile(
     repoPath?: string,
     opts?: {
       /**
-       * When true (default), mark disk-status `running` threads with no in-process
-       * turn as stopped. Must stay false in Sideboard MCP subprocesses — they do
-       * not own agent turns, so every live parent turn looks "dead".
+       * When true, mark disk-status `running` threads with no in-process turn
+       * (and no live agentPid) as stopped. Default false — MCP/CLI helpers must
+       * not reclaim turns owned by the desktop orchestrator. Pass true only on
+       * real app/CLI startup recovery.
        */
       reclaimStaleTurns?: boolean;
     },
   ): Promise<void> {
-    const reclaimStaleTurns = opts?.reclaimStaleTurns !== false;
+    const reclaimStaleTurns = opts?.reclaimStaleTurns === true;
 
     // Soccer nicknames for orchestration chats (incl. legacy cloud-goal titles).
     healOrchestrationSoccerTitles();
@@ -199,7 +222,7 @@ export class Orchestrator {
         if (Object.keys(heal).length) {
           updateThread(thread.id, heal);
         }
-        if (reclaimStaleTurns && this.isStaleRunningThread(thread.id, thread.status)) {
+        if (reclaimStaleTurns && this.shouldReclaimRunningThread(thread)) {
           setStatus(thread.id, 'stopped', 'Process died (reconciled on startup)');
           this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
         }
@@ -210,7 +233,7 @@ export class Orchestrator {
         this.emit({ type: 'status_changed', threadId: thread.id, status: 'broken' });
         continue;
       }
-      if (reclaimStaleTurns && this.isStaleRunningThread(thread.id, thread.status)) {
+      if (reclaimStaleTurns && this.shouldReclaimRunningThread(thread)) {
         setStatus(thread.id, 'stopped', 'Process died (reconciled on startup)');
         this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       }
@@ -427,6 +450,13 @@ export class Orchestrator {
           await new Promise((r) => setTimeout(r, 100));
           continue;
         }
+        // Cross-process / Cursor cloud: agent child may still be alive even if
+        // this process briefly lost the handle — don't start a overlapping turn.
+        const livePid = thread.agentPid;
+        if (typeof livePid === 'number' && livePid > 0 && isPidAlive(livePid)) {
+          await new Promise((r) => setTimeout(r, 200));
+          continue;
+        }
 
         const prompt = thread.queue[0]!;
         const remaining = thread.queue.slice(1);
@@ -636,10 +666,23 @@ export class Orchestrator {
           if (event.type === 'stderr' && typeof event.data === 'string') {
             pushTurnStderr(stderrTail, event.data);
           }
+          // Heal false "Process died (reconciled on startup)" while we still own the turn
+          // (MCP subprocess reconcile used to stamp this mid tool-use).
+          const live = readThread(threadId);
+          if (
+            live?.lastError?.includes('reconciled on startup') &&
+            (this.activeTurns.has(threadId) || this.startingTurns.has(threadId))
+          ) {
+            setStatus(threadId, 'running');
+            this.emit({ type: 'status_changed', threadId, status: 'running' });
+          }
         },
       );
       this.activeTurns.set(threadId, handle);
       this.startingTurns.delete(threadId);
+      if (typeof handle.pid === 'number' && handle.pid > 0) {
+        updateThread(threadId, { agentPid: handle.pid });
+      }
       // If stop() raced mid-spawn, kill immediately and do not re-assert running.
       if (this.stoppedTurns.has(threadId)) {
         handle.kill();
@@ -662,19 +705,51 @@ export class Orchestrator {
       if (result.sessionId) {
         updateThread(threadId, { sessionId: result.sessionId });
       }
-      const assistantText = result.assistantText.trim();
+      let assistantText = result.assistantText.trim();
+      let parts = result.parts;
+      let usage = result.usage ?? undefined;
+      let exitCode = result.exitCode;
+
+      // Cursor: local runner can die mid-stream while the cloud agent finishes.
+      // Recover the finished run from the SDK store so we don't strand the turn as bare exit 1.
+      if (
+        this.requireThread(threadId).agent === 'cursor' &&
+        exitCode !== 0 &&
+        !assistantText &&
+        parts.length === 0
+      ) {
+        const sessionId =
+          result.sessionId || this.requireThread(threadId).sessionId || '';
+        if (sessionId) {
+          const { recoverFinishedCursorRun } = await import('../agents/cursor-recover.js');
+          // Poll briefly — cloud often finishes a few seconds after the local runner drops.
+          for (let i = 0; i < 8; i++) {
+            const recovered = recoverFinishedCursorRun({
+              agentId: sessionId,
+              startedAfterMs: turnStartedAt - 5_000,
+            });
+            if (recovered?.result) {
+              assistantText = recovered.result;
+              exitCode = 0;
+              break;
+            }
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+      }
+
       const failureOnlyMessage =
-        result.exitCode !== 0 &&
+        exitCode !== 0 &&
         looksLikeAgentFailureMessage(assistantText) &&
-        !result.parts.some((p) => p.type === 'tool' || p.type === 'thinking');
+        !parts.some((p) => p.type === 'tool' || p.type === 'thinking');
       // Quota/auth failures already surface as lastError — skip a duplicate agent bubble.
-      if (!failureOnlyMessage && (assistantText || result.parts.length > 0)) {
+      if (!failureOnlyMessage && (assistantText || parts.length > 0)) {
         appendMessage(threadId, {
           role: 'agent',
           text: assistantText,
-          parts: result.parts.length > 0 ? result.parts : undefined,
+          parts: parts.length > 0 ? parts : undefined,
           durationMs: Math.max(0, Date.now() - turnStartedAt),
-          usage: result.usage ?? undefined,
+          usage,
           ts: new Date().toISOString(),
         });
       }
@@ -686,7 +761,7 @@ export class Orchestrator {
       if (
         afterTurn.planMode &&
         afterTurn.agent === 'claude' &&
-        result.parts.some(
+        parts.some(
           (p) => p.type === 'tool' && /exitplanmode/i.test(p.name),
         )
       ) {
@@ -698,24 +773,24 @@ export class Orchestrator {
         // Preserve intentional stop — do not overwrite with idle/error from kill exit.
         setStatus(threadId, 'stopped');
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
-        this.emit({ type: 'turn_finished', threadId, exitCode: result.exitCode });
+        this.emit({ type: 'turn_finished', threadId, exitCode });
       } else {
         const lastStderr = summarizeTurnStderr(stderrTail);
         const detail =
           lastStderr ||
-          (result.exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
-        const failDetail = formatTurnExitError(result.exitCode, detail);
+          (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
+        const failDetail = formatTurnExitError(exitCode, detail);
         setStatus(
           threadId,
-          result.exitCode === 0 ? 'idle' : 'error',
-          result.exitCode === 0 ? null : failDetail,
+          exitCode === 0 ? 'idle' : 'error',
+          exitCode === 0 ? null : failDetail,
         );
         this.emit({
           type: 'status_changed',
           threadId,
-          status: result.exitCode === 0 ? 'idle' : 'error',
+          status: exitCode === 0 ? 'idle' : 'error',
         });
-        this.emit({ type: 'turn_finished', threadId, exitCode: result.exitCode });
+        this.emit({ type: 'turn_finished', threadId, exitCode });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -736,6 +811,11 @@ export class Orchestrator {
       this.processes.delete(`${threadId}:agent`);
       this.stoppedTurns.delete(threadId);
       this.runningCount = Math.max(0, this.runningCount - 1);
+      try {
+        updateThread(threadId, { agentPid: null });
+      } catch {
+        // Thread may have been purged mid-turn.
+      }
     }
   }
 

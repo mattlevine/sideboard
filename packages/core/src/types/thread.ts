@@ -101,6 +101,11 @@ export interface Thread {
   /** Pending composer attachments (forked transcripts, etc.). */
   attachments: ThreadAttachment[];
   lastError?: string | null;
+  /**
+   * OS pid of the in-flight agent child while status is `running`.
+   * Used so other processes (MCP) do not reclaim a live turn as dead.
+   */
+  agentPid?: number | null;
 }
 
 export interface CreateChatTabInput {

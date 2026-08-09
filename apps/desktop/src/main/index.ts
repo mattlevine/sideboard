@@ -1020,7 +1020,7 @@ app.whenReady().then(async () => {
     // Packaged launches often have cwd `/`, which is not a real project.
     if (root && root !== '/') {
       repoPath = root;
-      await orch.reconcile(repoPath);
+      await orch.reconcile(repoPath, { reclaimStaleTurns: true });
       try {
         await orch.addWorkspace(repoPath);
       } catch {
