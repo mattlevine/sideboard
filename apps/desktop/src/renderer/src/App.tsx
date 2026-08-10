@@ -26,6 +26,12 @@ import {
   writeRightSidebarOpen,
   writeRightSidebarWidth,
 } from './lib/right-sidebar-prefs';
+import {
+  baselineUnreadWorktrees,
+  latestAgentResponseAt,
+  markWorktreeSeen,
+  unreadWorktreeKey,
+} from './lib/unread-worktrees';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
 const RIGHT_SIDEBAR_DEFAULT = 340;
@@ -500,9 +506,35 @@ export function App() {
     setOpenFilePath(null);
   }, [selectedId]);
 
+  // Seed last-seen so historical rows don't all flash unread on first launch.
+  useEffect(() => {
+    baselineUnreadWorktrees(threads);
+  }, [threads]);
+
+  // While a worktree/orchestration is open, keep it marked seen so finishes
+  // while watching don't light up the sidebar when you navigate away.
+  useEffect(() => {
+    if (view !== 'thread' || !selectedId) return;
+    const selectedThread =
+      threads.find((t) => t.id === selectedId) ??
+      archived.find((t) => t.id === selectedId);
+    if (!selectedThread) return;
+    const key = unreadWorktreeKey(selectedThread);
+    if (!key) return;
+    const group = threads.filter((t) => unreadWorktreeKey(t) === key);
+    const activity = latestAgentResponseAt(group) ?? new Date().toISOString();
+    markWorktreeSeen(key, activity);
+  }, [view, selectedId, threads, archived]);
+
   function onSelect(id: string, multi: boolean) {
     setView('thread');
     setSelectedId(id);
+    const selectedThread = threads.find((t) => t.id === id);
+    if (selectedThread && !multi) {
+      const key = unreadWorktreeKey(selectedThread);
+      const group = threads.filter((t) => unreadWorktreeKey(t) === key);
+      markWorktreeSeen(key, latestAgentResponseAt(group) ?? new Date().toISOString());
+    }
     if (!multi) {
       setMultiSelected(new Set([id]));
       return;

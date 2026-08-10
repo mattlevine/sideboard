@@ -2139,6 +2139,17 @@ body.resizing-panels webview {
   color: var(--text);
 }
 
+/* Agent response arrived while this worktree/orchestration wasn't open. */
+.thread-item.unread .thread-title {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.thread-item.unread .dot.idle,
+.thread-item.unread .dot.stopped {
+  background: var(--accent);
+}
+
 .thread-meta {
   color: var(--muted-dim);
   font-size: var(--font-size-tiny);
@@ -7735,7 +7746,9 @@ body:has(.update-banner) .team-toast-stack {
   padding: 8px 16px 10px;
   margin: 0;
   max-width: 52rem;
+  font-size: var(--font-size-meta);
   line-height: 1.45;
+  color: var(--muted);
 }
 
 .board-badge {
@@ -7758,6 +7771,15 @@ body:has(.update-banner) .team-toast-stack {
   align-items: center;
   flex-wrap: wrap;
   gap: 2px 0;
+  font-size: var(--font-size-chat);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: var(--letter-tight);
+}
+
+.board-row .thread-meta {
+  font-size: var(--font-size-meta);
+  margin-top: 2px;
 }
 
 .board-open {
@@ -7776,21 +7798,24 @@ body:has(.update-banner) .team-toast-stack {
 }
 
 .board-preview {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 12px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-chat);
+  line-height: var(--line-height-chat);
+  letter-spacing: var(--letter-tight);
   overflow-x: hidden;
   overflow-y: auto;
-  max-width: 720px;
-  max-height: 12em;
+  max-width: 820px;
+  max-height: 16em;
   text-align: left;
   overscroll-behavior: contain;
   word-break: break-word;
 }
 
 .board-preview .md-compact {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
 }
 
 .board-preview .md-compact p,
@@ -7800,9 +7825,9 @@ body:has(.update-banner) .team-toast-stack {
 .board-preview .md-compact h1,
 .board-preview .md-compact h2,
 .board-preview .md-compact h3 {
-  margin: 0 0 0.35em;
+  margin: 0 0 0.45em;
   font-size: inherit;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .board-preview .md-compact pre {
@@ -7810,7 +7835,7 @@ body:has(.update-banner) .team-toast-stack {
 }
 
 .board-preview .md-compact code {
-  font-size: 11px;
+  font-size: 0.88em;
 }
 
 .board-row-actions {

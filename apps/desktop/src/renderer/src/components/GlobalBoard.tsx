@@ -87,7 +87,7 @@ export function GlobalBoard({
 
       <FleetActivityBar runtime={runtime} compact />
 
-      <p className="thread-meta board-lede">
+      <p className="board-lede">
         Chats that steer worktree agents across your registered workspaces.
         Brightsy cloud requests go to the chat marked Brightsy.
       </p>

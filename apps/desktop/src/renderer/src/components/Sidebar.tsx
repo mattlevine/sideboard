@@ -11,6 +11,11 @@ import {
   threadDisplayTitle,
 } from '../lib/global-workspace';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
+import {
+  isWorktreeUnread,
+  latestAgentResponseAt,
+  unreadWorktreeKey,
+} from '../lib/unread-worktrees';
 import { BrandMark } from './BrandMark';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { SidebarToggle } from './SidebarToggle';
@@ -220,10 +225,15 @@ export function Sidebar({
                   globalThreads.some((t) => t.id === selectedId);
                 const selected = globalThreads.some((t) => multiSelected.has(t.id));
                 const cloud = globalThreads.some((t) => isCloudCoordinatorThread(t));
+                const unread = isWorktreeUnread(
+                  unreadWorktreeKey(primary),
+                  latestAgentResponseAt(globalThreads),
+                  { active },
+                );
                 return (
                   <div className="worktree-block">
                     <div
-                      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}`}
+                      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${unread ? ' unread' : ''}`}
                       onClick={(e) =>
                         onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey)
                       }
@@ -368,10 +378,15 @@ export function Sidebar({
               const selected =
                 group.some((t) => multiSelected.has(t.id));
               const archiving = group.some((t) => t.id === archivingId);
+              const unread = isWorktreeUnread(
+                unreadWorktreeKey(primary),
+                latestAgentResponseAt(group),
+                { active },
+              );
               return (
                 <div key={primary.worktreePath} className="worktree-block">
                   <div
-                    className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}`}
+                    className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
                     aria-busy={archiving}
                     onClick={(e) => {
                       if (archiving) return;
