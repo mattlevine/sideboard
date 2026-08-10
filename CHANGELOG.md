@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.49] - 2026-08-10
+
+### Added
+
+- Sidebar highlights worktree / orchestration rows when an agent turn finishes while that row isn’t open, until you click in
+
+### Changed
+
+- Orchestration (global) dashboard card titles and message previews use the same chat type scale as thread chat
+
+## [0.1.48] - 2026-08-09
+
+### Added
+
+- Sent user messages keep attachment chips / image thumbnails in chat history
+
+### Changed
+
+- Chat message type size bumped for readability (closer to Cursor)
+
 ## [0.1.47] - 2026-08-09
 
 ### Fixed
