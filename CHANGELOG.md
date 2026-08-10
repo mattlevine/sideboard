@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.50] - 2026-08-10
+
+### Fixed
+
+- Right sidebar git button refreshes after a worktree turn finishes (including sibling chats) and re-fetches the remote tip so **Commit & push** flips to **Merge** once the branch is clean and pushed
+- Right sidebar is keyed to the active worktree and ignores stale diff/PR results from a previous worktree
+
 ## [0.1.49] - 2026-08-10
 
 ### Added

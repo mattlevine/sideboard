@@ -75,6 +75,11 @@ function prNumber(url: string | null | undefined): string | null {
   return m?.[1] ?? null;
 }
 
+function sameWorktreePath(a: string, b: string): boolean {
+  const norm = (p: string) => p.replace(/\/$/, '');
+  return norm(a) === norm(b);
+}
+
 function isNotGitError(message: string): boolean {
   const m = message.toLowerCase();
   return (
@@ -152,16 +157,34 @@ export function RightSidebar({
     reviewDecision: string | null;
   } | null>(null);
 
+  /** Stable id for the worktree this sidebar instance is bound to. */
+  const worktreeKey = thread.worktreePath.replace(/\/$/, '') || thread.id;
+  const worktreeKeyRef = useRef(worktreeKey);
+  worktreeKeyRef.current = worktreeKey;
+
+  const isCurrentWorktree = useCallback(
+    (path: string | null | undefined) =>
+      Boolean(path && sameWorktreePath(path, worktreeKeyRef.current)),
+    [],
+  );
+
   const reloadRunScripts = useCallback(() => {
     if (typeof window.sideboard.listRunScripts !== 'function') {
       setRunScripts([]);
       return;
     }
+    const forWorktree = worktreeKey;
     void window.sideboard
       .listRunScripts(thread.id)
-      .then(setRunScripts)
-      .catch(() => setRunScripts([]));
-  }, [thread.id]);
+      .then((scripts) => {
+        if (worktreeKeyRef.current !== forWorktree) return;
+        setRunScripts(scripts);
+      })
+      .catch(() => {
+        if (worktreeKeyRef.current !== forWorktree) return;
+        setRunScripts([]);
+      });
+  }, [thread.id, worktreeKey]);
 
   useEffect(() => {
     void window.sideboard
@@ -175,15 +198,17 @@ export function RightSidebar({
 
   useEffect(() => {
     const off = window.sideboard.onEvent((event) => {
-      if ('threadId' in event && event.threadId !== thread.id) return;
       if (event.type === 'setup_started') {
+        if (event.threadId !== thread.id) return;
         setSetupOutput('');
         setSetupRunning(true);
       }
       if (event.type === 'setup_output') {
+        if (event.threadId !== thread.id) return;
         setSetupOutput((prev) => (prev ? `${prev}\n${event.line}` : event.line));
       }
       if (event.type === 'setup_finished') {
+        if (event.threadId !== thread.id) return;
         setSetupRunning(false);
         void window.sideboard
           .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
@@ -194,6 +219,7 @@ export function RightSidebar({
         reloadRunScripts();
       }
       if (event.type === 'run_output') {
+        if (event.threadId !== thread.id) return;
         setRunLogs((prev) => {
           const cur = prev[event.scriptName] ?? '';
           return {
@@ -203,20 +229,40 @@ export function RightSidebar({
         });
       }
       if (event.type === 'dev_server_started' || event.type === 'dev_server_stopped') {
+        if (event.threadId !== thread.id) return;
         onRefresh();
       }
       if (event.type === 'turn_finished') {
-        void window.sideboard
-          .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
-          .then(setSetupInfo);
-        void window.sideboard
-          .hasConductorHook(thread.worktreePath, thread.repoPath)
-          .then(setHasHook);
-        reloadRunScripts();
+        void (async () => {
+          if (event.threadId !== thread.id) {
+            try {
+              const other = await window.sideboard.getThread(event.threadId);
+              if (!other || !isCurrentWorktree(other.worktreePath)) return;
+            } catch {
+              return;
+            }
+          }
+          if (worktreeKeyRef.current !== worktreeKey) return;
+          void window.sideboard
+            .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
+            .then(setSetupInfo);
+          void window.sideboard
+            .hasConductorHook(thread.worktreePath, thread.repoPath)
+            .then(setHasHook);
+          reloadRunScripts();
+        })();
       }
     });
     return off;
-  }, [thread.id, thread.worktreePath, thread.repoPath, onRefresh, reloadRunScripts]);
+  }, [
+    thread.id,
+    thread.worktreePath,
+    thread.repoPath,
+    worktreeKey,
+    onRefresh,
+    reloadRunScripts,
+    isCurrentWorktree,
+  ]);
 
   useEffect(() => {
     const el = setupOutputRef.current;
@@ -248,14 +294,16 @@ export function RightSidebar({
 
   const reloadDiff = useCallback(() => {
     let cancelled = false;
+    const forWorktree = worktreeKey;
+    const forThreadId = thread.id;
     setDiffError(null);
     void window.sideboard
-      .getDiff(thread.id, {
+      .getDiff(forThreadId, {
         scope: diffScope,
         commitSha: diffScope === 'commits' ? commitSha : null,
       })
       .then((d) => {
-        if (cancelled) return;
+        if (cancelled || worktreeKeyRef.current !== forWorktree) return;
         setDiff(d);
         // Keep file-tab git markers on the broad change set, not a narrow filter.
         if (
@@ -271,20 +319,19 @@ export function RightSidebar({
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setDiff(null);
-          setDiffError(err instanceof Error ? err.message : String(err));
-          onFileChanges?.({});
-        }
+        if (cancelled || worktreeKeyRef.current !== forWorktree) return;
+        setDiff(null);
+        setDiffError(err instanceof Error ? err.message : String(err));
+        onFileChanges?.({});
       });
     return () => {
       cancelled = true;
     };
-  }, [thread.id, diffScope, commitSha, upper, onFileChanges]);
+  }, [thread.id, worktreeKey, diffScope, commitSha, upper, onFileChanges]);
 
   useEffect(() => {
     return reloadDiff();
-  }, [thread.id, thread.updatedAt, thread.status, reloadDiff]);
+  }, [thread.id, thread.worktreePath, thread.updatedAt, thread.status, reloadDiff]);
 
   function onDiffScopeChange(scope: DiffScope, sha?: string | null) {
     setDiffScope(scope);
@@ -334,22 +381,27 @@ export function RightSidebar({
   }, [thread.id, thread.updatedAt, upper]);
 
   const loadPrChecks = useCallback(async () => {
+    const forWorktree = worktreeKey;
     setPrChecksLoading(true);
     setPrChecksError(null);
     try {
       const checks = await window.sideboard.getPrChecks(thread.id);
+      if (worktreeKeyRef.current !== forWorktree) return;
       setPrChecks(checks);
     } catch (err) {
+      if (worktreeKeyRef.current !== forWorktree) return;
       setPrChecks(null);
       setPrChecksError(err instanceof Error ? err.message : String(err));
     } finally {
-      setPrChecksLoading(false);
+      if (worktreeKeyRef.current === forWorktree) setPrChecksLoading(false);
     }
-  }, [thread.id]);
+  }, [thread.id, worktreeKey]);
 
   const loadPrMeta = useCallback(async () => {
+    const forWorktree = worktreeKey;
     try {
       const meta = await window.sideboard.getPrMeta(thread.id);
+      if (worktreeKeyRef.current !== forWorktree) return;
       if (!meta) {
         setPrMeta(null);
         return;
@@ -364,29 +416,63 @@ export function RightSidebar({
         reviewDecision: meta.reviewDecision,
       });
     } catch {
+      if (worktreeKeyRef.current !== forWorktree) return;
       setPrMeta(null);
     }
-  }, [thread.id]);
+  }, [thread.id, worktreeKey]);
 
   useEffect(() => {
     void loadPrMeta();
     // Intentionally omit thread.updatedAt — agent turns must not re-hit GraphQL.
   }, [loadPrMeta, thread.prUrl, thread.branchName]);
 
-  // After a turn ends, re-check commits/push state and whether a PR now exists.
+  // After a turn ends (this chat or a sibling in the same worktree), re-check
+  // dirty/unpushed so Commit & push flips to Merge when the branch is clean.
   useEffect(() => {
     const off = window.sideboard.onEvent((event) => {
-      if (event.type !== 'turn_finished') return;
-      if (event.threadId !== thread.id) return;
-      reloadDiff();
-      void loadPrMeta().then(() => {
-        // getPrMeta may persist a newly discovered prUrl — refresh thread props.
-        onRefresh();
-      });
-      if (upper === 'checks') void loadPrChecks();
+      if (event.type !== 'turn_finished' && event.type !== 'status_changed') return;
+      if (
+        event.type === 'status_changed' &&
+        event.status !== 'idle' &&
+        event.status !== 'stopped'
+      ) {
+        return;
+      }
+
+      void (async () => {
+        if (event.threadId !== thread.id) {
+          try {
+            const other = await window.sideboard.getThread(event.threadId);
+            if (!other || !isCurrentWorktree(other.worktreePath)) {
+              return;
+            }
+          } catch {
+            return;
+          }
+        }
+        if (worktreeKeyRef.current !== worktreeKey) return;
+        reloadDiff();
+        if (event.type === 'turn_finished') {
+          void loadPrMeta().then(() => {
+            // getPrMeta may persist a newly discovered prUrl — refresh thread props.
+            onRefresh();
+          });
+          if (upper === 'checks') void loadPrChecks();
+        }
+      })();
     });
     return off;
-  }, [thread.id, reloadDiff, loadPrMeta, loadPrChecks, upper, onRefresh]);
+  }, [
+    thread.id,
+    thread.worktreePath,
+    worktreeKey,
+    reloadDiff,
+    loadPrMeta,
+    loadPrChecks,
+    upper,
+    onRefresh,
+    isCurrentWorktree,
+  ]);
 
   useEffect(() => {
     if (upper !== 'checks') return;

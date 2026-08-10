@@ -116,6 +116,17 @@ async function resolveMergeBase(
 
 /** Commits on HEAD not yet on the remote tracking branch (0 if none/unknown). */
 async function countUnpushedCommits(worktreePath: string): Promise<number> {
+  // Refresh the remote-tracking tip so a just-finished push isn't counted as unpushed.
+  const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
+    reject: false,
+  });
+  const branch = head.stdout.trim();
+  if (branch && branch !== 'HEAD') {
+    await git(['fetch', 'origin', branch, '--quiet'], worktreePath, {
+      reject: false,
+    });
+  }
+
   const upstream = await git(
     ['rev-list', '--count', '@{upstream}..HEAD'],
     worktreePath,
@@ -125,10 +136,6 @@ async function countUnpushedCommits(worktreePath: string): Promise<number> {
     const n = Number(upstream.stdout.trim());
     return Number.isFinite(n) ? n : 0;
   }
-  const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
-    reject: false,
-  });
-  const branch = head.stdout.trim();
   if (!branch || branch === 'HEAD') return 0;
   const remote = await git(
     ['rev-list', '--count', `origin/${branch}..HEAD`],

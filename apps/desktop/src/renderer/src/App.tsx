@@ -808,6 +808,7 @@ export function App() {
                 onChangeEnd={persistRightSidebarWidth}
               />
               <RightSidebar
+                key={selected.worktreePath.replace(/\/$/, '') || selected.id}
                 thread={selected}
                 onRefresh={() => void refresh()}
                 onArchiveThread={archiveThreadAndRefresh}
