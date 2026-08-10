@@ -15,6 +15,8 @@ interface Props {
   onRefresh: () => void;
   onSelectChild: (id: string) => void;
   onSelectChat: (id: string, created?: Thread) => void;
+  /** Leave the chat pane when the last orchestration/global tab is archived. */
+  onLeaveThread?: () => void;
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
   leftSidebarToggle?: ReactNode;
@@ -44,6 +46,7 @@ export function OrchestratorPanel({
   onRefresh,
   onSelectChild,
   onSelectChat,
+  onLeaveThread,
   composerPrefill,
   onComposerPrefillConsumed,
   leftSidebarToggle,
@@ -119,6 +122,7 @@ export function OrchestratorPanel({
           turnStartedAt={turnStartedAt}
           onRefresh={onRefresh}
           onSelectChat={onSelectChat}
+          onLeaveThread={onLeaveThread}
           composerPrefill={composerPrefill}
           onComposerPrefillConsumed={onComposerPrefillConsumed}
           leftSidebarToggle={leftSidebarToggle}

@@ -551,11 +551,20 @@ export function App() {
     setArchivingId(id);
     try {
       await window.sideboard.archiveThread(id);
-      if (selectedId === id || multiSelected.has(id)) {
-        setSelectedId(null);
-        setMultiSelected(new Set());
-        setView('board');
-      }
+      // Functional updates so batch-archiving several orchestration chats
+      // still clears selection when the active id is in the batch.
+      let leave = false;
+      setSelectedId((prev) => {
+        if (prev !== id) return prev;
+        leave = true;
+        return null;
+      });
+      setMultiSelected((prev) => {
+        if (!prev.has(id)) return prev;
+        leave = true;
+        return new Set();
+      });
+      if (leave) setView('board');
       await refresh();
     } finally {
       setArchivingId(null);
@@ -729,6 +738,7 @@ export function App() {
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
               },
+              onLeaveThread: showBoard,
               composerPrefill: prefill,
               onComposerPrefillConsumed: () => setPrefill(undefined),
               leftSidebarToggle: leftToggle,
@@ -771,6 +781,7 @@ export function App() {
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
               }}
+              onLeaveThread={showBoard}
               composerPrefill={prefill}
               onComposerPrefillConsumed={() => setPrefill(undefined)}
               leftSidebarToggle={leftToggle}

@@ -8,7 +8,7 @@ import type {
   DiffScopeStat,
 } from '../types/thread.js';
 import { git } from '../git/run.js';
-import { isDirty, resolveDefaultBranch, resolveDiffBaseRef } from '../git/worktree.js';
+import { isDirty, resolveDefaultBranch, resolveDiffBaseRef, isSideboardScratchPath } from '../git/worktree.js';
 
 /** Stable codes for the Changes panel (Cursor-style empty states). */
 export type GitWorktreeStatus = 'ok' | 'missing_worktree' | 'not_git';
@@ -194,7 +194,10 @@ async function listUntrackedPaths(worktreePath: string): Promise<string[]> {
     worktreePath,
     { reject: false },
   );
-  return stdout.split('\0').filter(Boolean);
+  return stdout
+    .split('\0')
+    .filter(Boolean)
+    .filter((p) => !isSideboardScratchPath(p));
 }
 
 async function listUntrackedFiles(

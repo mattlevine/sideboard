@@ -99,6 +99,8 @@ interface Props {
   turnStartedAt?: number;
   onRefresh: () => void;
   onSelectChat: (id: string, created?: Thread) => void;
+  /** When the active chat is archived and no sibling tabs remain (e.g. last orchestration). */
+  onLeaveThread?: () => void;
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
   openFilePath?: string | null;
@@ -178,6 +180,7 @@ export function ThreadPanel({
   turnStartedAt,
   onRefresh,
   onSelectChat,
+  onLeaveThread,
   composerPrefill,
   onComposerPrefillConsumed,
   openFilePath = null,
@@ -802,11 +805,12 @@ export function ThreadPanel({
 
   async function archiveChatTab(id: string) {
     await window.sideboard.archiveThread(id);
-    onRefresh();
     if (id === thread.id) {
       const rest = chats.filter((c) => c.id !== id);
       if (rest[0]) onSelectChat(rest[0].id);
+      else onLeaveThread?.();
     }
+    onRefresh();
   }
   const threadUsage = useMemo(
     () => sumUsage(thread.messages.map((m) => m.usage)),

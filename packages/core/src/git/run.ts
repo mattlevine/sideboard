@@ -35,9 +35,25 @@ export async function run(
 export async function git(
   args: string[],
   cwd: string,
-  opts?: { reject?: boolean },
+  opts?: {
+    reject?: boolean;
+    env?: Record<string, string>;
+    /** Passed as `git -c key=value` (e.g. authenticated HTTPS via http.extraHeader). */
+    config?: Record<string, string>;
+  },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return run('git', args, { cwd, reject: opts?.reject });
+  const prefix: string[] = [];
+  if (opts?.config) {
+    for (const [key, value] of Object.entries(opts.config)) {
+      if (!key) continue;
+      prefix.push('-c', `${key}=${value}`);
+    }
+  }
+  return run('git', [...prefix, ...args], {
+    cwd,
+    reject: opts?.reject,
+    env: opts?.env,
+  });
 }
 
 export async function gh(
@@ -46,4 +62,12 @@ export async function gh(
   opts?: { reject?: boolean },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return run('gh', args, { cwd, reject: opts?.reject });
+}
+
+/** GitHub CLI token for non-interactive HTTPS git (GUI apps often lack SSH agent). */
+export async function resolveGhAuthToken(cwd: string): Promise<string | null> {
+  const result = await gh(['auth', 'token'], cwd, { reject: false });
+  if (result.exitCode !== 0) return null;
+  const token = result.stdout.trim();
+  return token || null;
 }

@@ -3,13 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./run.js', () => ({
   git: vi.fn(),
   gh: vi.fn(),
+  resolveGhAuthToken: vi.fn(),
 }));
 
-import { gh, git } from './run.js';
+import { gh, git, resolveGhAuthToken } from './run.js';
 import { fetchPrHead, resolveWorktreeStartPoint } from './worktree.js';
 
 const gitMock = vi.mocked(git);
 const ghMock = vi.mocked(gh);
+const tokenMock = vi.mocked(resolveGhAuthToken);
 
 describe('resolveWorktreeStartPoint', () => {
   beforeEach(() => {
@@ -76,6 +78,7 @@ describe('fetchPrHead', () => {
   beforeEach(() => {
     gitMock.mockReset();
     ghMock.mockReset();
+    tokenMock.mockReset();
   });
 
   it('force-fetches pull/N/head into the local branch from origin', async () => {
@@ -141,7 +144,66 @@ describe('fetchPrHead', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('retries HTTPS with gh auth when SSH and anonymous HTTPS fail', async () => {
+    tokenMock.mockResolvedValue('gho_test_token');
+    gitMock.mockImplementation(async (args, _cwd, opts) => {
+      const key = args.join(' ');
+      if (key === 'remote get-url origin') {
+        return {
+          stdout: 'git@github.com:mattlevine/brightsy-ai.git',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (key === 'fetch origin +pull/91/head:sideboard-pr-91') {
+        return {
+          stdout: '',
+          stderr: 'Permission denied (publickey).',
+          exitCode: 1,
+        };
+      }
+      if (
+        key ===
+        'fetch https://github.com/mattlevine/brightsy-ai.git +pull/91/head:sideboard-pr-91'
+      ) {
+        if (opts?.config?.['http.extraHeader']?.includes('gho_test_token')) {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        return {
+          stdout: '',
+          stderr: "could not read Username for 'https://github.com'",
+          exitCode: 1,
+        };
+      }
+      if (key === 'rev-parse --verify sideboard-pr-91') {
+        return { stdout: 'a5ba994', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+
+    await expect(
+      fetchPrHead('/repo', 91, 'sideboard-pr-91'),
+    ).resolves.toBeUndefined();
+    expect(tokenMock).toHaveBeenCalled();
+    expect(gitMock).toHaveBeenCalledWith(
+      [
+        'fetch',
+        'https://github.com/mattlevine/brightsy-ai.git',
+        '+pull/91/head:sideboard-pr-91',
+      ],
+      '/repo',
+      expect.objectContaining({
+        reject: false,
+        env: { GIT_TERMINAL_PROMPT: '0' },
+        config: {
+          'http.extraHeader': 'AUTHORIZATION: bearer gho_test_token',
+        },
+      }),
+    );
+  });
+
   it('throws a clear error when the PR head cannot be fetched', async () => {
+    tokenMock.mockResolvedValue(null);
     gitMock.mockImplementation(async (args) => {
       const key = args.join(' ');
       if (key === 'remote get-url origin') {

@@ -18,7 +18,7 @@ import {
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
 import { formatGhLandError, isGhRateLimitError } from './gh-errors.js';
-import { gh, git } from './run.js';
+import { gh, git, resolveGhAuthToken } from './run.js';
 import { buildMergeGateChecks, type PrMergeGate } from './pr-gates.js';
 
 /** Best-effort GraphQL reset time from `gh api rate_limit` (REST; often still available). */
@@ -736,22 +736,46 @@ export async function fetchPrHead(
   const slug = await resolveGithubRepoSlug(repoPath);
   const refspec = `+pull/${number}/head:${localBranch}`;
   const errors: string[] = [];
+  const httpsRemote = slug ? `https://github.com/${slug}.git` : null;
 
-  const tryFetch = async (remote: string): Promise<boolean> => {
-    const result = await git(['fetch', remote, refspec], repoPath, {
-      reject: false,
-    });
+  const tryFetch = async (
+    remote: string,
+    opts?: { ghAuth?: boolean },
+  ): Promise<boolean> => {
+    const label = opts?.ghAuth ? `${remote} (gh auth)` : remote;
+    const gitOpts: {
+      reject: false;
+      env?: Record<string, string>;
+      config?: Record<string, string>;
+    } = { reject: false };
+
+    if (opts?.ghAuth) {
+      const token = await resolveGhAuthToken(repoPath);
+      if (!token) {
+        errors.push(`${label}: gh auth token unavailable`);
+        return false;
+      }
+      // Dock/Finder launches often lack SSH agent; gh keyring still works.
+      // AUTHORIZATION must be uppercase so git does not strip the header.
+      gitOpts.env = { GIT_TERMINAL_PROMPT: '0' };
+      gitOpts.config = {
+        'http.extraHeader': `AUTHORIZATION: bearer ${token}`,
+      };
+    }
+
+    const result = await git(['fetch', remote, refspec], repoPath, gitOpts);
     if (result.exitCode === 0) return true;
     const detail = (result.stderr || result.stdout).trim();
-    if (detail) errors.push(`${remote}: ${detail}`);
+    if (detail) errors.push(`${label}: ${detail}`);
     return false;
   };
 
   let fetched = await tryFetch('origin');
-  if (!fetched && slug) {
+  if (!fetched && httpsRemote) {
     // Origin may be a fork / mirror that doesn't expose pull/*/head — fetch from
     // the GitHub repo Sideboard listed the PR against.
-    fetched = await tryFetch(`https://github.com/${slug}.git`);
+    fetched = await tryFetch(httpsRemote);
+    if (!fetched) fetched = await tryFetch(httpsRemote, { ghAuth: true });
   }
 
   const localOk = async () => {
@@ -784,10 +808,24 @@ export async function fetchPrHead(
     }
     if (oid) {
       // Ensure the object exists locally before branching.
-      const ensureOid = async (remote: string) => {
-        const got = await git(['fetch', remote, oid], repoPath, {
-          reject: false,
-        });
+      const ensureOid = async (
+        remote: string,
+        opts?: { ghAuth?: boolean },
+      ) => {
+        const gitOpts: {
+          reject: false;
+          env?: Record<string, string>;
+          config?: Record<string, string>;
+        } = { reject: false };
+        if (opts?.ghAuth) {
+          const token = await resolveGhAuthToken(repoPath);
+          if (!token) return false;
+          gitOpts.env = { GIT_TERMINAL_PROMPT: '0' };
+          gitOpts.config = {
+            'http.extraHeader': `AUTHORIZATION: bearer ${token}`,
+          };
+        }
+        const got = await git(['fetch', remote, oid], repoPath, gitOpts);
         return got.exitCode === 0;
       };
       let haveObject =
@@ -797,8 +835,11 @@ export async function fetchPrHead(
           })
         ).exitCode === 0;
       if (!haveObject) haveObject = await ensureOid('origin');
-      if (!haveObject && slug) {
-        haveObject = await ensureOid(`https://github.com/${slug}.git`);
+      if (!haveObject && httpsRemote) {
+        haveObject = await ensureOid(httpsRemote);
+        if (!haveObject) {
+          haveObject = await ensureOid(httpsRemote, { ghAuth: true });
+        }
       }
       if (haveObject) {
         const branched = await git(['branch', '-f', localBranch, oid], repoPath, {
@@ -973,8 +1014,43 @@ export async function listWorktrees(repoPath: string): Promise<
 }
 
 export async function isDirty(worktreePath: string): Promise<boolean> {
-  const { stdout } = await git(['status', '--porcelain'], worktreePath);
-  return stdout.trim().length > 0;
+  // -uall expands untracked dirs so we can ignore Sideboard scratch without
+  // treating `?? .sideboard/` as push-relevant dirt.
+  const { stdout } = await git(['status', '--porcelain', '-uall'], worktreePath);
+  for (const line of stdout.split('\n')) {
+    if (!line.trim()) continue;
+    const rel = porcelainStatusPath(line);
+    if (!rel || isSideboardScratchPath(rel)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Local Sideboard attachment scratch (review guidelines seed, composer drops).
+ * Must not force the right-sidebar primary action to "Commit & push".
+ */
+export function isSideboardScratchPath(relativePath: string): boolean {
+  const p = relativePath
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/$/, '');
+  return (
+    p === '.sideboard/attachments' || p.startsWith('.sideboard/attachments/')
+  );
+}
+
+/** Path from a `git status --porcelain` line (handles renames + quoted paths). */
+function porcelainStatusPath(line: string): string {
+  // "XY PATH" or "XY PATH -> PATH2" (optional quotes around paths)
+  const rest = line.length >= 3 ? line.slice(3) : '';
+  if (!rest) return '';
+  const arrow = rest.lastIndexOf(' -> ');
+  const raw = arrow >= 0 ? rest.slice(arrow + 4) : rest;
+  if (raw.startsWith('"') && raw.endsWith('"')) {
+    return raw.slice(1, -1).replace(/\\([\\"])/g, '$1');
+  }
+  return raw;
 }
 
 export async function currentBranch(worktreePath: string): Promise<string> {

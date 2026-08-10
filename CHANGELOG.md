@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.51] - 2026-08-10
+
+### Fixed
+
+- Creating a PR worktree from the orchestration agent no longer fails when the GUI app lacks SSH keys: PR head fetch falls back to HTTPS authenticated with `gh auth token`
+- Closing the last orchestration (or worktree) chat tab returns to the board instead of leaving the archived chat open in the pane
+- PR review worktrees show **Merge** (not **Commit & push**) when the only local dirt is Sideboard `.sideboard/attachments` scratch from Review
+
 ## [0.1.50] - 2026-08-10
 
 ### Fixed
