@@ -71,7 +71,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- list_run_scripts / run_dev_script / stop_dev_script — start/stop named run scripts',
   'Inspect / review / PRs:',
   '- get_diff — compact diff summary',
-  '- request_review — open a Review chat tab on a worktree thread (merge-readiness recommendation); then wait_for_turn / get_turn_result on the returned id',
+  '- request_review — open a Review chat tab on a worktree thread (attaches .sideboard/review.md when present, else local guidelines; sends "Review."); then wait_for_turn / get_turn_result on the returned id',
   '- Ask the worktree agent via send_to_thread to open a draft PR with `gh pr create --draft -R <origin-owner/name>` (workspace `github:` slug / that worktree\'s origin — never upstream). Do not open PRs from the orchestrator yourself.',
   'Human-only (do not attempt): merge, ready-for-review land, purge_thread.',
   'Thread links in replies: when mentioning a chat/thread for the user, include a markdown link `[Title](sideboard://thread/<id>)` using the full id (or the link field from create_thread / list_threads). Sideboard renders these as clickable opens.',

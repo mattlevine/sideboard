@@ -12,10 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Sidebar highlights worktree / orchestration rows when an agent turn finishes while that row isn’t open, until you click in
+- Per-repo Review guidelines via committed `.sideboard/review.md` (preferred over local attachments scratch)
 
 ### Changed
 
 - Orchestration (global) dashboard card titles and message previews use the same chat type scale as thread chat
+
+### Fixed
+
+- Review button again attaches guidelines and sends the short **Review.** message (not a long user prompt)
 
 ## [0.1.48] - 2026-08-09
 

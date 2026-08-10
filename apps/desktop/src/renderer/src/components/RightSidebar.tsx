@@ -15,7 +15,6 @@ import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { prPillModifier, prPillStatusLabel, summarizeChecks } from '../lib/pr-format';
 import {
-  REVIEW_REQUEST_PATH,
   ensureReviewRequestFile,
 } from '../lib/review-request';
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
@@ -591,8 +590,8 @@ export function RightSidebar({
   }
 
   /**
-   * Open a fresh Review chat and ask for a merge-readiness recommendation.
-   * Same path as MCP `request_review` (optional attach of existing guidelines).
+   * Open a fresh Review chat, attach resolved guidelines, send "Review."
+   * Same path as MCP `request_review`.
    */
   async function startAgentReview() {
     if (reviewBusy) return;
@@ -609,12 +608,12 @@ export function RightSidebar({
     }
   }
 
-  /** Opt-in: create/open editable Review request.md for custom guidelines. */
+  /** Opt-in: create/open editable review guidelines (prefers .sideboard/review.md). */
   async function customizeReviewGuidelines() {
     setReviewMenuOpen(false);
     try {
-      await ensureReviewRequestFile(thread.id);
-      onOpenFile?.(REVIEW_REQUEST_PATH, { view: 'edit' });
+      const guidelines = await ensureReviewRequestFile(thread.id);
+      onOpenFile?.(guidelines.path, { view: 'edit' });
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
     }

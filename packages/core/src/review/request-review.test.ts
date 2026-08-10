@@ -1,13 +1,16 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  REPO_REVIEW_PATH,
   REVIEW_REQUEST_PATH,
   REVIEW_REQUEST_PREFILL,
   buildReviewRequestAttachment,
+  ensureReviewRequestFile,
   readExistingReviewRequestFile,
   requestReview,
+  resolveReviewGuidelines,
 } from './request-review.js';
 
 vi.mock('../store/thread-store.js', () => ({
@@ -38,9 +41,43 @@ describe('requestReview', () => {
     rmSync(worktree, { recursive: true, force: true });
   });
 
-  it('reads existing guidelines from the worktree', () => {
-    writeFileSync(join(worktree, REVIEW_REQUEST_PATH), '# custom\n');
-    expect(readExistingReviewRequestFile(worktree)).toContain('# custom');
+  it('prefers committed .sideboard/review.md over local attachments', () => {
+    writeFileSync(join(worktree, REVIEW_REQUEST_PATH), '# local only\n');
+    mkdirSync(join(worktree, '.sideboard'), { recursive: true });
+    writeFileSync(join(worktree, REPO_REVIEW_PATH), '# repo policy\n');
+    const resolved = resolveReviewGuidelines(worktree);
+    expect(resolved.source).toBe('repo');
+    expect(resolved.path).toBe(REPO_REVIEW_PATH);
+    expect(resolved.content).toContain('repo policy');
+  });
+
+  it('uses local attachments when repo file is absent', () => {
+    writeFileSync(join(worktree, REVIEW_REQUEST_PATH), '## Recommendation\nlocal\n');
+    const resolved = resolveReviewGuidelines(worktree);
+    expect(resolved.source).toBe('local');
+    expect(resolved.path).toBe(REVIEW_REQUEST_PATH);
+    expect(resolved.content).toContain('local');
+  });
+
+  it('seeds stock template into local attachments when nothing exists', () => {
+    const resolved = resolveReviewGuidelines(worktree);
+    expect(resolved.source).toBe('stock');
+    expect(resolved.path).toBe(REVIEW_REQUEST_PATH);
+    expect(existsSync(join(worktree, REVIEW_REQUEST_PATH))).toBe(true);
+    expect(existsSync(join(worktree, REPO_REVIEW_PATH))).toBe(false);
+    expect(resolved.content).toContain('## Required outcome');
+  });
+
+  it('reads existing guidelines preferring repo', () => {
+    writeFileSync(join(worktree, REPO_REVIEW_PATH), '# custom repo\n');
+    expect(readExistingReviewRequestFile(worktree)).toContain('custom repo');
+  });
+
+  it('customize ensures committed .sideboard/review.md when neither exists', () => {
+    const ensured = ensureReviewRequestFile(worktree);
+    expect(ensured.source).toBe('repo');
+    expect(ensured.path).toBe(REPO_REVIEW_PATH);
+    expect(existsSync(join(worktree, REPO_REVIEW_PATH))).toBe(true);
   });
 
   it('rejects orchestrator threads', async () => {
@@ -56,8 +93,8 @@ describe('requestReview', () => {
     );
   });
 
-  it('creates a Review tab, attaches guidelines, and sends the prefill', async () => {
-    writeFileSync(join(worktree, REVIEW_REQUEST_PATH), '## Recommendation required\n');
+  it('creates a Review tab with repo guidelines and sends Review.', async () => {
+    writeFileSync(join(worktree, REPO_REVIEW_PATH), '## Recommendation required\n');
     const from = {
       id: 'from-id',
       sourceType: 'branch',
@@ -79,21 +116,24 @@ describe('requestReview', () => {
         title: 'Review',
         attachments: [
           expect.objectContaining({
-            name: 'Review request.md',
-            path: REVIEW_REQUEST_PATH,
+            name: 'review.md',
+            path: REPO_REVIEW_PATH,
             content: expect.stringContaining('Recommendation'),
           }),
         ],
       }),
     );
     expect(send).toHaveBeenCalledWith('review-tab', REVIEW_REQUEST_PREFILL);
+    expect(REVIEW_REQUEST_PREFILL).toBe('Review.');
     expect(result.tab.id).toBe('review-tab');
     expect(result.from.id).toBe('from-id');
   });
 
-  it('builds a file attachment', () => {
-    const att = buildReviewRequestAttachment('hello');
+  it('builds a file attachment with optional path', () => {
+    const att = buildReviewRequestAttachment('hello', { path: REPO_REVIEW_PATH });
     expect(att.kind).toBe('file');
+    expect(att.path).toBe(REPO_REVIEW_PATH);
+    expect(att.name).toBe('review.md');
     expect(att.content).toBe('hello');
   });
 });
