@@ -83,8 +83,9 @@ interface CreateState {
   mode: 'quick' | 'orchestration';
 }
 
-interface CreateProgress {
-  mode: 'create' | 'orchestration';
+/** Non-blocking status in the chat empty pane (create + archive teardown). */
+interface PaneProgress {
+  mode: 'create' | 'orchestration' | 'archive' | 'remove';
   repoName: string;
   selectionHint: string | null;
 }
@@ -99,8 +100,8 @@ export function App() {
   /** Thread currently tearing down via archive (sidebar shows progress). */
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [createState, setCreateState] = useState<CreateState | null>(null);
-  /** Non-blocking create status shown in the chat empty state. */
-  const [createProgress, setCreateProgress] = useState<CreateProgress | null>(null);
+  /** Non-blocking create/archive status shown in the chat empty state. */
+  const [paneProgress, setPaneProgress] = useState<PaneProgress | null>(null);
   const [liveByThread, setLiveByThread] = useState<Record<string, string>>({});
   const [livePartsByThread, setLivePartsByThread] = useState<Record<string, MessagePart[]>>({});
   const [turnStartedAtByThread, setTurnStartedAtByThread] = useState<Record<string, number>>({});
@@ -556,60 +557,127 @@ export function App() {
     });
   }
 
-  async function archiveThreadAndRefresh(id: string) {
-    setArchivingId(id);
+  /**
+   * Archive one or more chats. When a worktree is torn down, leave the chat
+   * immediately and show progress in the empty pane (same as create) — do not
+   * block on a modal overlay while git worktree remove runs.
+   */
+  async function archiveThreadsAndRefresh(
+    ids: string[],
+    meta?: { title?: string; removesWorktree?: boolean },
+  ) {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (uniqueIds.length === 0) return;
+
+    const first =
+      threads.find((t) => t.id === uniqueIds[0]) ??
+      archived.find((t) => t.id === uniqueIds[0]) ??
+      null;
+    const label =
+      meta?.title?.trim() ||
+      first?.title?.trim() ||
+      first?.branchName?.replace(/^thread\//, '') ||
+      'Worktree';
+    const removesWorktree = meta?.removesWorktree !== false;
+    const idSet = new Set(uniqueIds);
+    const leavesSelection =
+      (selectedId != null && idSet.has(selectedId)) ||
+      [...multiSelected].some((id) => idSet.has(id));
+
+    // Tear-down: leave immediately + inline progress (non-blocking, like create).
+    if (removesWorktree) {
+      setPaneProgress({
+        mode: 'archive',
+        repoName: label,
+        selectionHint:
+          uniqueIds.length > 1 ? `${uniqueIds.length} chats` : 'removing worktree',
+      });
+      setSelectedId(null);
+      setMultiSelected(new Set());
+      setView('thread');
+    } else if (leavesSelection) {
+      // Closing one tab among siblings — switch away without a progress pane.
+      const sibling = threads.find(
+        (t) =>
+          !idSet.has(t.id) &&
+          first != null &&
+          t.worktreePath.replace(/\/$/, '') ===
+            first.worktreePath.replace(/\/$/, ''),
+      );
+      if (sibling) {
+        setSelectedId(sibling.id);
+        setMultiSelected(new Set([sibling.id]));
+      } else {
+        setSelectedId(null);
+        setMultiSelected(new Set());
+        setView('board');
+      }
+    }
+
     try {
-      await window.sideboard.archiveThread(id);
-      // Functional updates so batch-archiving several orchestration chats
-      // still clears selection when the active id is in the batch.
-      let leave = false;
-      setSelectedId((prev) => {
-        if (prev !== id) return prev;
-        leave = true;
-        return null;
-      });
-      setMultiSelected((prev) => {
-        if (!prev.has(id)) return prev;
-        leave = true;
-        return new Set();
-      });
-      if (leave) setView('board');
+      for (const id of uniqueIds) {
+        setArchivingId(id);
+        await window.sideboard.archiveThread(id);
+      }
       await refresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       setArchivingId(null);
+      if (removesWorktree) {
+        setPaneProgress((prev) => (prev?.mode === 'archive' ? null : prev));
+        setView('board');
+        setSelectedId(null);
+      }
     }
+  }
+
+  async function archiveThreadAndRefresh(id: string) {
+    return archiveThreadsAndRefresh([id], { removesWorktree: true });
   }
 
   async function removeWorkspaceAndRefresh(path: string) {
     const inWorkspace = threads.filter((t) => t.repoPath === path);
-    for (const t of inWorkspace) {
-      setArchivingId(t.id);
-      try {
-        await window.sideboard.archiveThread(t.id);
-      } finally {
-        setArchivingId(null);
-      }
-    }
-    await window.sideboard.removeWorkspace(path);
-    if (repoPath === path || path === '/') {
-      setRepoPath('');
-      try {
-        await window.sideboard.setRepoPath('');
-      } catch {
-        // ignore
-      }
-    }
-    const removedIds = new Set(inWorkspace.map((t) => t.id));
-    if (selectedId && removedIds.has(selectedId)) {
-      setSelectedId(null);
-      setView('board');
-    }
-    setMultiSelected((prev) => {
-      const next = new Set([...prev].filter((id) => !removedIds.has(id)));
-      return next.size === prev.size ? prev : next;
+    const name = path.split('/').filter(Boolean).pop() || path;
+    setPaneProgress({
+      mode: 'remove',
+      repoName: name,
+      selectionHint:
+        inWorkspace.length > 0
+          ? `${inWorkspace.length} thread${inWorkspace.length === 1 ? '' : 's'}`
+          : 'sidebar',
     });
-    await refreshWorkspaces();
-    await refresh();
+    setSelectedId(null);
+    setMultiSelected(new Set());
+    setView('thread');
+
+    try {
+      for (const t of inWorkspace) {
+        setArchivingId(t.id);
+        await window.sideboard.archiveThread(t.id);
+      }
+      setArchivingId(null);
+      await window.sideboard.removeWorkspace(path);
+      if (repoPath === path || path === '/') {
+        setRepoPath('');
+        try {
+          await window.sideboard.setRepoPath('');
+        } catch {
+          // ignore
+        }
+      }
+      await refreshWorkspaces();
+      await refresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+      throw err;
+    } finally {
+      setArchivingId(null);
+      setPaneProgress((prev) => (prev?.mode === 'remove' ? null : prev));
+      setView('board');
+      setSelectedId(null);
+    }
   }
 
   function showBoard() {
@@ -679,7 +747,7 @@ export function App() {
                 await refresh();
               })
             }
-            onArchive={archiveThreadAndRefresh}
+            onArchive={(ids, meta) => archiveThreadsAndRefresh(ids, meta)}
             archivingId={archivingId}
             onRemoveWorkspace={removeWorkspaceAndRefresh}
             onToggleSidebar={toggleLeftSidebar}
@@ -748,6 +816,8 @@ export function App() {
                 setMultiSelected(new Set([id]));
               },
               onLeaveThread: showBoard,
+              onArchiveThread: (id: string, meta?: { title?: string; removesWorktree?: boolean }) =>
+                archiveThreadsAndRefresh([id], meta),
               composerPrefill: prefill,
               onComposerPrefillConsumed: () => setPrefill(undefined),
               leftSidebarToggle: leftToggle,
@@ -831,7 +901,9 @@ export function App() {
                 key={selected.worktreePath.replace(/\/$/, '') || selected.id}
                 thread={selected}
                 onRefresh={() => void refresh()}
-                onArchiveThread={archiveThreadAndRefresh}
+                onArchiveThread={(id, meta) =>
+                  archiveThreadsAndRefresh([id], meta)
+                }
                 archiving={archivingId === selected.id}
                 openFilePath={openFilePath}
                 changesPath={changesPath}
@@ -854,32 +926,40 @@ export function App() {
           )}
         </div>
       )}
-      {view === 'thread' && createProgress && !selected && (
+      {view === 'thread' && paneProgress && !selected && (
         <div className="panel thread-panel">
           <div className="chat">
             <div className="chat-empty">
               <CreateProcessingOverlay
                 variant="inline"
-                mode={createProgress.mode}
-                repoName={createProgress.repoName}
-                selectionHint={createProgress.selectionHint}
+                mode={paneProgress.mode}
+                repoName={paneProgress.repoName}
+                selectionHint={paneProgress.selectionHint}
               />
               <h3>
-                {createProgress.mode === 'orchestration'
+                {paneProgress.mode === 'orchestration'
                   ? 'What should we orchestrate?'
-                  : 'What are you working on?'}
+                  : paneProgress.mode === 'archive'
+                    ? 'Removing worktree'
+                    : paneProgress.mode === 'remove'
+                      ? 'Removing project'
+                      : 'What are you working on?'}
               </h3>
               <p>
-                {createProgress.mode === 'orchestration'
+                {paneProgress.mode === 'orchestration'
                   ? 'Preparing the coordinator chat…'
-                  : 'Creating your worktree — you can keep browsing while this finishes.'}
+                  : paneProgress.mode === 'archive'
+                    ? 'Tearing down the worktree — you can keep browsing while this finishes.'
+                    : paneProgress.mode === 'remove'
+                      ? 'Archiving threads and removing the project from the sidebar…'
+                      : 'Creating your worktree — you can keep browsing while this finishes.'}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {view === 'thread' && !selected && !createProgress && (
+      {view === 'thread' && !selected && !paneProgress && (
         <div className="empty">
           Thread not found.{' '}
           <button onClick={showBoard}>Back to board</button>
@@ -901,18 +981,18 @@ export function App() {
             setSettingsInitialNav('account');
           }}
           onCreateStart={(info) => {
-            setCreateProgress(info);
+            setPaneProgress(info);
             setSelectedId(null);
             setView('thread');
             setMultiSelected(new Set());
           }}
           onCreateFailed={(message) => {
-            setCreateProgress(null);
+            setPaneProgress(null);
             setView('board');
             window.alert(message);
           }}
           onCreated={(thread, opts) => {
-            setCreateProgress(null);
+            setPaneProgress(null);
             upsertThread(thread);
             notifySoccerNickname(thread.title);
             void refresh();

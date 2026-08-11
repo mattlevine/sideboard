@@ -18,7 +18,6 @@ import {
   unreadWorktreeKey,
 } from '../lib/unread-worktrees';
 import { BrandMark } from './BrandMark';
-import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
@@ -33,7 +32,10 @@ interface Props {
   onSelect: (id: string, multi: boolean) => void;
   onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
   onPickRepo: () => void;
-  onArchive?: (threadId: string) => void | Promise<void>;
+  onArchive?: (
+    threadIds: string[],
+    meta: { title: string; removesWorktree: boolean },
+  ) => void | Promise<void>;
   /** Thread id currently being archived (shows progress on its worktree row). */
   archivingId?: string | null;
   /** Unregister a project workspace (caller archives threads as needed). */
@@ -395,7 +397,7 @@ function WorktreeSidebarRow({
   archiving,
   unread,
   onSelect,
-  onArchive,
+  showArchive,
   onRequestArchive,
 }: {
   primary: Thread;
@@ -406,7 +408,8 @@ function WorktreeSidebarRow({
   archiving: boolean;
   unread: boolean;
   onSelect: (id: string, multi: boolean) => void;
-  onArchive?: (threadId: string) => void | Promise<void>;
+  /** When true, show the archive control (parent handles confirm + teardown). */
+  showArchive?: boolean;
   onRequestArchive: (chats: Thread[]) => void;
 }) {
   const [rowHover, setRowHover] = useState(false);
@@ -552,7 +555,7 @@ function WorktreeSidebarRow({
           className="worktree-row-actions"
           onClick={(e) => e.stopPropagation()}
         >
-          {onArchive ? (
+          {showArchive ? (
             <>
               <button
                 type="button"
@@ -642,13 +645,11 @@ export function Sidebar({
     threadIds?: string[];
     removesWorktree?: boolean;
   } | null>(null);
-  const [archiveBusy, setArchiveBusy] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState<{
     path: string;
     name: string;
     threadCount: number;
   } | null>(null);
-  const [removeBusy, setRemoveBusy] = useState(false);
 
   const q = filter.trim().toLowerCase();
 
@@ -943,12 +944,13 @@ export function Sidebar({
                     archiving={archiving}
                     unread={unread}
                     onSelect={onSelect}
-                    onArchive={onArchive}
+                    showArchive={Boolean(onArchive)}
                     onRequestArchive={(chats) =>
                       setArchiveConfirm({
                         threadId: primary.id,
                         title: worktreeLabel,
                         chatCount: chats.length,
+                        threadIds: chats.map((c) => c.id),
                       })
                     }
                   />
@@ -963,30 +965,16 @@ export function Sidebar({
       {archiveConfirm && (
         <div
           className="modal-backdrop"
-          onClick={() => {
-            if (!archiveBusy) setArchiveConfirm(null);
-          }}
+          onClick={() => setArchiveConfirm(null)}
         >
           <div
-            className={`modal create-modal merge-modal${archiveBusy ? ' is-creating' : ''}`}
+            className="modal create-modal merge-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="archive-worktree-title"
-            aria-busy={archiveBusy}
             onClick={(e) => e.stopPropagation()}
           >
-            {archiveBusy ? (
-              <CreateProcessingOverlay
-                mode="archive"
-                repoName={archiveConfirm.title}
-                selectionHint={
-                  archiveConfirm.chatCount <= 1 && archiveConfirm.removesWorktree !== false
-                    ? 'removing worktree'
-                    : `${archiveConfirm.chatCount} chats`
-                }
-              />
-            ) : null}
-            <div className={`create-modal-content${archiveBusy ? ' veiled' : ''}`}>
+            <div className="create-modal-content">
               <h3 id="archive-worktree-title" className="merge-modal-title">
                 {archiveConfirm.removesWorktree === false
                   ? 'Archive orchestration?'
@@ -1000,39 +988,34 @@ export function Sidebar({
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
                 <button
                   type="button"
-                  disabled={archiveBusy}
-                  onClick={() => {
-                    if (!archiveBusy) setArchiveConfirm(null);
-                  }}
+                  onClick={() => setArchiveConfirm(null)}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className="primary"
-                  disabled={archiveBusy}
                   onClick={() => {
                     const ids = archiveConfirm.threadIds?.length
                       ? archiveConfirm.threadIds
                       : [archiveConfirm.threadId];
-                    setArchiveBusy(true);
-                    void (async () => {
-                      for (const id of ids) {
-                        await Promise.resolve(onArchive?.(id));
-                      }
-                    })()
-                      .then(() => {
-                        setArchiveConfirm(null);
-                      })
-                      .catch((err: unknown) => {
-                        window.alert(err instanceof Error ? err.message : String(err));
-                      })
-                      .finally(() => {
-                        setArchiveBusy(false);
-                      });
+                    const meta = {
+                      title: archiveConfirm.title,
+                      removesWorktree: archiveConfirm.removesWorktree !== false,
+                    };
+                    // Close immediately — progress moves to the chat empty pane
+                    // (same non-blocking pattern as worktree create).
+                    setArchiveConfirm(null);
+                    void Promise.resolve(onArchive?.(ids, meta)).catch(
+                      (err: unknown) => {
+                        window.alert(
+                          err instanceof Error ? err.message : String(err),
+                        );
+                      },
+                    );
                   }}
                 >
-                  {archiveBusy ? 'Archiving…' : 'Archive'}
+                  Archive
                 </button>
               </div>
             </div>
@@ -1043,30 +1026,16 @@ export function Sidebar({
       {removeConfirm && onRemoveWorkspace && (
         <div
           className="modal-backdrop"
-          onClick={() => {
-            if (!removeBusy) setRemoveConfirm(null);
-          }}
+          onClick={() => setRemoveConfirm(null)}
         >
           <div
-            className={`modal create-modal merge-modal${removeBusy ? ' is-creating' : ''}`}
+            className="modal create-modal merge-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="remove-workspace-title"
-            aria-busy={removeBusy}
             onClick={(e) => e.stopPropagation()}
           >
-            {removeBusy ? (
-              <CreateProcessingOverlay
-                mode="remove"
-                repoName={removeConfirm.name}
-                selectionHint={
-                  removeConfirm.threadCount > 0
-                    ? `${removeConfirm.threadCount} thread${removeConfirm.threadCount === 1 ? '' : 's'}`
-                    : 'sidebar'
-                }
-              />
-            ) : null}
-            <div className={`create-modal-content${removeBusy ? ' veiled' : ''}`}>
+            <div className="create-modal-content">
               <h3 id="remove-workspace-title" className="merge-modal-title">
                 Remove {removeConfirm.name}?
               </h3>
@@ -1078,33 +1047,26 @@ export function Sidebar({
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
                 <button
                   type="button"
-                  disabled={removeBusy}
-                  onClick={() => {
-                    if (!removeBusy) setRemoveConfirm(null);
-                  }}
+                  onClick={() => setRemoveConfirm(null)}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className="primary"
-                  disabled={removeBusy}
                   onClick={() => {
                     const path = removeConfirm.path;
-                    setRemoveBusy(true);
-                    void Promise.resolve(onRemoveWorkspace(path))
-                      .then(() => {
-                        setRemoveConfirm(null);
-                      })
-                      .catch((err: unknown) => {
-                        window.alert(err instanceof Error ? err.message : String(err));
-                      })
-                      .finally(() => {
-                        setRemoveBusy(false);
-                      });
+                    setRemoveConfirm(null);
+                    void Promise.resolve(onRemoveWorkspace(path)).catch(
+                      (err: unknown) => {
+                        window.alert(
+                          err instanceof Error ? err.message : String(err),
+                        );
+                      },
+                    );
                   }}
                 >
-                  {removeBusy ? 'Removing…' : 'Remove'}
+                  Remove
                 </button>
               </div>
             </div>

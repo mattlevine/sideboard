@@ -484,9 +484,9 @@ export class Orchestrator {
   }
 
   listWorkspaces(): Workspace[] {
-    // Only active threads can discover new workspaces. Explicitly removed paths
-    // stay dismissed (see removed-workspaces.json) even if archived history remains.
-    const fromThreads = listThreads({ includeArchived: false }).map((t) => t.repoPath);
+    // Keep projects visible after their last worktree is archived. Explicit
+    // removals stay dismissed via removed-workspaces.json.
+    const fromThreads = listThreads({ includeArchived: true }).map((t) => t.repoPath);
     return syncWorkspacesFromThreads(fromThreads);
   }
 
@@ -1908,7 +1908,18 @@ export class Orchestrator {
       }
       await removeWorktree(thread.repoPath, thread.worktreePath);
     }
-    return setStatus(thread.id, 'archived');
+    const archived = setStatus(thread.id, 'archived');
+    // Archiving the last worktree must not unregister the project — keep it in
+    // the sidebar so the user can create a new thread without re-adding it.
+    if (thread.repoPath && !isGlobalRepoPath(thread.repoPath)) {
+      try {
+        const { ensureWorkspace } = await import('../store/workspaces.js');
+        await ensureWorkspace(thread.repoPath);
+      } catch {
+        // Best-effort — repo may have been deleted on disk.
+      }
+    }
+    return archived;
   }
 
   async purge(threadRef: string, opts?: { deleteBranch?: boolean }): Promise<void> {

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.56] - 2026-08-11
+
+### Fixed
+
+- Archiving the last worktree no longer removes the project from the sidebar; projects stay registered until explicitly removed
+- Workspace discovery again includes archived threads (explicit removals still stick via `removed-workspaces.json`)
+
+### Changed
+
+- Deleting/archiving a worktree is non-blocking: the confirm dialog closes immediately and progress shows in the chat empty pane (same pattern as create)
+
 ## [0.1.55] - 2026-08-11
 
 ### Fixed

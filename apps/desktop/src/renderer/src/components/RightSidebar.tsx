@@ -7,7 +7,6 @@ import type {
 } from '@sideboard-ai/core';
 import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
 import { FileTree } from './FileTree';
-import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
 import { StackMap } from './StackMap';
@@ -27,7 +26,10 @@ interface Props {
   thread: Thread;
   onRefresh: () => void;
   /** Archive this worktree/chat tab (parent tracks loading in the sidebar). */
-  onArchiveThread?: (threadId: string) => void | Promise<void>;
+  onArchiveThread?: (
+    threadId: string,
+    meta?: { title?: string; removesWorktree?: boolean },
+  ) => void | Promise<void>;
   archiving?: boolean;
   onAskAboutFile: (path: string) => void;
   openFilePath?: string | null;
@@ -138,7 +140,6 @@ export function RightSidebar({
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState<{ chatCount: number } | null>(null);
-  const [archiveBusy, setArchiveBusy] = useState(false);
   const [mergeConfirm, setMergeConfirm] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
@@ -1558,32 +1559,16 @@ export function RightSidebar({
       {archiveConfirm && (
         <div
           className="modal-backdrop"
-          onClick={() => {
-            if (!archiveBusy && !archiving) setArchiveConfirm(null);
-          }}
+          onClick={() => setArchiveConfirm(null)}
         >
           <div
-            className={`modal create-modal merge-modal${archiveBusy || archiving ? ' is-creating' : ''}`}
+            className="modal create-modal merge-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="archive-chat-title"
-            aria-busy={archiveBusy || archiving}
             onClick={(e) => e.stopPropagation()}
           >
-            {archiveBusy || archiving ? (
-              <CreateProcessingOverlay
-                mode="archive"
-                repoName={thread.title.trim() || thread.branchName.replace(/^thread\//, '')}
-                selectionHint={
-                  archiveConfirm.chatCount <= 1
-                    ? 'removing worktree'
-                    : `${archiveConfirm.chatCount} chats`
-                }
-              />
-            ) : null}
-            <div
-              className={`create-modal-content${archiveBusy || archiving ? ' veiled' : ''}`}
-            >
+            <div className="create-modal-content">
               <h3 id="archive-chat-title" className="merge-modal-title">
                 Close chat tab?
               </h3>
@@ -1593,35 +1578,37 @@ export function RightSidebar({
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
                 <button
                   type="button"
-                  disabled={archiveBusy || archiving}
-                  onClick={() => {
-                    if (!archiveBusy && !archiving) setArchiveConfirm(null);
-                  }}
+                  onClick={() => setArchiveConfirm(null)}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className="primary"
-                  disabled={archiveBusy || archiving}
                   onClick={() => {
-                    setArchiveBusy(true);
+                    const removesWorktree = archiveConfirm.chatCount <= 1;
+                    const title =
+                      thread.title.trim() ||
+                      thread.branchName.replace(/^thread\//, '');
+                    setArchiveConfirm(null);
                     const run = onArchiveThread
-                      ? Promise.resolve(onArchiveThread(thread.id))
-                      : window.sideboard.archiveThread(thread.id).then(onRefresh);
-                    void run
-                      .then(() => {
-                        setArchiveConfirm(null);
-                      })
-                      .catch((err: unknown) => {
-                        window.alert(err instanceof Error ? err.message : String(err));
-                      })
-                      .finally(() => {
-                        setArchiveBusy(false);
-                      });
+                      ? Promise.resolve(
+                          onArchiveThread(thread.id, {
+                            title,
+                            removesWorktree,
+                          }),
+                        )
+                      : window.sideboard
+                          .archiveThread(thread.id)
+                          .then(onRefresh);
+                    void run.catch((err: unknown) => {
+                      window.alert(
+                        err instanceof Error ? err.message : String(err),
+                      );
+                    });
                   }}
                 >
-                  {archiveBusy || archiving ? 'Closing…' : 'Close tab'}
+                  Close tab
                 </button>
               </div>
             </div>

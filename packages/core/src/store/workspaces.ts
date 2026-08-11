@@ -105,7 +105,7 @@ export async function ensureWorkspace(repoPath: string): Promise<Workspace> {
   return addWorkspace(repoPath);
 }
 
-/** Merge in repo paths discovered from existing threads. */
+/** Merge in repo paths discovered from existing threads (including archived). */
 export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
   const current = readAll();
   const removed = readRemoved();
@@ -124,6 +124,8 @@ export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
     byPath.set(path, ws);
     dirty = true;
   }
+  // Never prune: an empty project (no active worktrees) must stay registered
+  // until the user explicitly removes it.
   const next = [...byPath.values()];
   if (dirty) writeAll(next);
   return next.sort((a, b) => a.name.localeCompare(b.name));

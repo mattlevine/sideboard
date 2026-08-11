@@ -111,6 +111,14 @@ interface Props {
   onSelectChat: (id: string, created?: Thread) => void;
   /** When the active chat is archived and no sibling tabs remain (e.g. last orchestration). */
   onLeaveThread?: () => void;
+  /**
+   * Archive a chat tab. Parent shows non-blocking pane progress when the
+   * worktree is torn down (last tab).
+   */
+  onArchiveThread?: (
+    threadId: string,
+    meta?: { title?: string; removesWorktree?: boolean },
+  ) => void | Promise<void>;
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
   openFilePath?: string | null;
@@ -191,6 +199,7 @@ export function ThreadPanel({
   onRefresh,
   onSelectChat,
   onLeaveThread,
+  onArchiveThread,
   composerPrefill,
   onComposerPrefillConsumed,
   openFilePath = null,
@@ -248,7 +257,6 @@ export function ThreadPanel({
     title: string;
     chatCount: number;
   } | null>(null);
-  const [closeBusy, setCloseBusy] = useState(false);
   /** User dismissed the plan question panel for this tool id (show normal composer). */
   const [dismissedPlanQuestionsId, setDismissedPlanQuestionsId] = useState<string | null>(
     null,
@@ -996,6 +1004,13 @@ export function ThreadPanel({
   const attachments = thread.attachments ?? [];
 
   async function archiveChatTab(id: string) {
+    const removesWorktree = chats.length <= 1 && !isGlobalThread(thread);
+    const tab = chats.find((c) => c.id === id);
+    const title = tab?.title?.trim() || closeConfirm?.title || 'Untitled';
+    if (onArchiveThread) {
+      await onArchiveThread(id, { title, removesWorktree });
+      return;
+    }
     await window.sideboard.archiveThread(id);
     if (id === thread.id) {
       const rest = chats.filter((c) => c.id !== id);
@@ -1343,30 +1358,16 @@ export function ThreadPanel({
       {closeConfirm && (
         <div
           className="modal-backdrop"
-          onClick={() => {
-            if (!closeBusy) setCloseConfirm(null);
-          }}
+          onClick={() => setCloseConfirm(null)}
         >
           <div
-            className={`modal create-modal merge-modal${closeBusy ? ' is-creating' : ''}`}
+            className="modal create-modal merge-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="close-chat-title"
-            aria-busy={closeBusy}
             onClick={(e) => e.stopPropagation()}
           >
-            {closeBusy ? (
-              <CreateProcessingOverlay
-                mode="archive"
-                repoName={closeConfirm.title.trim() || 'Untitled'}
-                selectionHint={
-                  closeConfirm.chatCount <= 1 && !isGlobalThread(thread)
-                    ? 'removing worktree'
-                    : `${closeConfirm.chatCount} chats`
-                }
-              />
-            ) : null}
-            <div className={`create-modal-content${closeBusy ? ' veiled' : ''}`}>
+            <div className="create-modal-content">
               <h3 id="close-chat-title" className="merge-modal-title">
                 Close chat tab?
               </h3>
@@ -1378,33 +1379,24 @@ export function ThreadPanel({
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
                 <button
                   type="button"
-                  disabled={closeBusy}
-                  onClick={() => {
-                    if (!closeBusy) setCloseConfirm(null);
-                  }}
+                  onClick={() => setCloseConfirm(null)}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className="primary"
-                  disabled={closeBusy}
                   onClick={() => {
                     const { id } = closeConfirm;
-                    setCloseBusy(true);
-                    void archiveChatTab(id)
-                      .then(() => {
-                        setCloseConfirm(null);
-                      })
-                      .catch((err: unknown) => {
-                        window.alert(err instanceof Error ? err.message : String(err));
-                      })
-                      .finally(() => {
-                        setCloseBusy(false);
-                      });
+                    setCloseConfirm(null);
+                    void archiveChatTab(id).catch((err: unknown) => {
+                      window.alert(
+                        err instanceof Error ? err.message : String(err),
+                      );
+                    });
                   }}
                 >
-                  {closeBusy ? 'Closing…' : 'Close tab'}
+                  Close tab
                 </button>
               </div>
             </div>
