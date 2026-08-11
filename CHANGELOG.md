@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.53] - 2026-08-10
+
+### Added
+
+- Markdown table repair for common agent mistakes (short `|---|` delimiters expanded to match header columns)
+
+### Fixed
+
+- Cursor follow-ups no longer fail with “already has active run”: stale SDK runs are cancelled and the send is retried
+- OpenCode no longer auto-adopts another chat’s session in the same worktree; invalid Claude/Codex/OpenCode resume clears `sessionId` and retries once with a seeded fresh session
+
+### Changed
+
+- Creating a worktree is non-blocking: the create dialog closes immediately and progress shows in the chat empty state above “What are you working on?”; setup continues in the background after the worktree exists
+
 ## [0.1.52] - 2026-08-10
 
 ### Added
