@@ -8740,6 +8740,30 @@ body:has(.update-banner) .team-toast-stack {
   backdrop-filter: blur(2px);
 }
 
+.create-processing.is-inline {
+  position: relative;
+  inset: auto;
+  z-index: 0;
+  padding: 8px 12px 20px;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  gap: 14px;
+}
+
+.create-processing.is-inline .create-processing-orb {
+  width: 56px;
+  height: 56px;
+}
+
+.create-processing.is-inline .create-processing-title {
+  font-size: 15px;
+}
+
+.create-processing.is-inline .create-processing-meta {
+  font-size: 12px;
+}
+
 .create-processing-orb {
   position: relative;
   width: 72px;

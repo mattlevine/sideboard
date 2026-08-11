@@ -57,15 +57,18 @@ function stepsForMode(mode: OverlayMode) {
   }
 }
 
-/** Full-modal processing surface while create / merge / remove / archive runs. */
+/** Processing surface while create / merge / remove / archive runs. */
 export function CreateProcessingOverlay({
   mode,
   repoName,
   selectionHint,
+  variant = 'modal',
 }: {
   mode: OverlayMode;
   repoName: string;
   selectionHint?: string | null;
+  /** `modal` fills a dialog; `inline` sits in the chat empty state. */
+  variant?: 'modal' | 'inline';
 }) {
   const steps = stepsForMode(mode);
   const [step, setStep] = useState(0);
@@ -79,11 +82,15 @@ export function CreateProcessingOverlay({
   }, [steps]);
 
   return (
-    <div className="create-processing" role="status" aria-live="polite">
+    <div
+      className={`create-processing${variant === 'inline' ? ' is-inline' : ''}`}
+      role="status"
+      aria-live="polite"
+    >
       <div className="create-processing-orb" aria-hidden>
         <span className="create-processing-ring" />
         <span className="create-processing-ring delay" />
-        <BrandMark className="create-processing-mark" size="lg" />
+        <BrandMark className="create-processing-mark" size={variant === 'inline' ? 'md' : 'lg'} />
       </div>
       <div className="create-processing-copy">
         <p className="create-processing-title">

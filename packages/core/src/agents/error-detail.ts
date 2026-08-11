@@ -105,6 +105,26 @@ export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
 }
 
 /**
+ * True when stderr/detail indicates the CLI could not resume its stored session.
+ * Sideboard should clear `thread.sessionId` and retry with a seeded fresh session.
+ */
+export function looksLikeInvalidAgentSession(text: string): boolean {
+  const lower = text.trim().toLowerCase();
+  if (!lower) return false;
+  return (
+    /session not found/.test(lower) ||
+    /no conversation found/.test(lower) ||
+    /conversation .+ not found/.test(lower) ||
+    /thread .+ not found/.test(lower) ||
+    /unknown session/.test(lower) ||
+    /invalid session/.test(lower) ||
+    /session .+ (missing|expired|deleted|gone)/.test(lower) ||
+    /cannot resume/.test(lower) ||
+    /failed to (load|resume|open) session/.test(lower)
+  );
+}
+
+/**
  * True when assistant/result text is itself the failure (Claude often prints
  * session limits as normal result text, then exits 1 with an empty stderr).
  */

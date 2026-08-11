@@ -11,6 +11,7 @@ import { applyAgentEvent } from '@sideboard/message-parts';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateModal } from './components/CreateModal';
+import { CreateProcessingOverlay } from './components/CreateProcessingOverlay';
 import { OrchestratorPanel } from './components/OrchestratorPanel';
 import { GlobalBoard } from './components/GlobalBoard';
 import { RightSidebar } from './components/RightSidebar';
@@ -82,6 +83,12 @@ interface CreateState {
   mode: 'quick' | 'orchestration';
 }
 
+interface CreateProgress {
+  mode: 'create' | 'orchestration';
+  repoName: string;
+  selectionHint: string | null;
+}
+
 export function App() {
   const [repoPath, setRepoPath] = useState('');
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -92,6 +99,8 @@ export function App() {
   /** Thread currently tearing down via archive (sidebar shows progress). */
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [createState, setCreateState] = useState<CreateState | null>(null);
+  /** Non-blocking create status shown in the chat empty state. */
+  const [createProgress, setCreateProgress] = useState<CreateProgress | null>(null);
   const [liveByThread, setLiveByThread] = useState<Record<string, string>>({});
   const [livePartsByThread, setLivePartsByThread] = useState<Record<string, MessagePart[]>>({});
   const [turnStartedAtByThread, setTurnStartedAtByThread] = useState<Record<string, number>>({});
@@ -845,7 +854,32 @@ export function App() {
           )}
         </div>
       )}
-      {view === 'thread' && !selected && (
+      {view === 'thread' && createProgress && !selected && (
+        <div className="panel thread-panel">
+          <div className="chat">
+            <div className="chat-empty">
+              <CreateProcessingOverlay
+                variant="inline"
+                mode={createProgress.mode}
+                repoName={createProgress.repoName}
+                selectionHint={createProgress.selectionHint}
+              />
+              <h3>
+                {createProgress.mode === 'orchestration'
+                  ? 'What should we orchestrate?'
+                  : 'What are you working on?'}
+              </h3>
+              <p>
+                {createProgress.mode === 'orchestration'
+                  ? 'Preparing the coordinator chat…'
+                  : 'Creating your worktree — you can keep browsing while this finishes.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === 'thread' && !selected && !createProgress && (
         <div className="empty">
           Thread not found.{' '}
           <button onClick={showBoard}>Back to board</button>
@@ -866,7 +900,19 @@ export function App() {
             setSettingsOpen(true);
             setSettingsInitialNav('account');
           }}
+          onCreateStart={(info) => {
+            setCreateProgress(info);
+            setSelectedId(null);
+            setView('thread');
+            setMultiSelected(new Set());
+          }}
+          onCreateFailed={(message) => {
+            setCreateProgress(null);
+            setView('board');
+            window.alert(message);
+          }}
           onCreated={(thread, opts) => {
+            setCreateProgress(null);
             upsertThread(thread);
             notifySoccerNickname(thread.title);
             void refresh();

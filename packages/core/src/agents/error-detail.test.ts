@@ -6,6 +6,7 @@ import {
   formatTurnExitError,
   humanizeAgentFailDetail,
   looksLikeAgentFailureMessage,
+  looksLikeInvalidAgentSession,
   pushTurnStderr,
   summarizeTurnStderr,
 } from './error-detail.js';
@@ -83,6 +84,15 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
   it('hints rate limits and model issues', () => {
     expect(humanizeAgentFailDetail('429 Too Many Requests')).toMatch(/retry/i);
     expect(humanizeAgentFailDetail('model gpt-x not found')).toMatch(/pick another model/i);
+  });
+
+  it('detects invalid resume / missing session failures', () => {
+    expect(looksLikeInvalidAgentSession('Session not found')).toBe(true);
+    expect(looksLikeInvalidAgentSession('No conversation found with session ID: abc')).toBe(
+      true,
+    );
+    expect(looksLikeInvalidAgentSession('failed to load session')).toBe(true);
+    expect(looksLikeInvalidAgentSession('Credit balance is too low')).toBe(false);
   });
 
   it('surfaces opaque exits with a generic hint', () => {

@@ -216,6 +216,7 @@ export function ThreadPanel({
 }: Props) {
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
+  const [setupRunning, setSetupRunning] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [editingQueueIndex, setEditingQueueIndex] = useState<number | null>(null);
   const [queueEditText, setQueueEditText] = useState('');
@@ -266,6 +267,16 @@ export function ThreadPanel({
   const [filePicker, setFilePicker] = useState<RightColumnFilePicker | null>(null);
   /** After the user closes the pane, skip auto-open until a different artifact. */
   const suppressArtifactAutoOpen = useRef(isRightPaneSuppressed(thread.id));
+
+  useEffect(() => {
+    setSetupRunning(false);
+    const off = window.sideboard.onEvent((event) => {
+      if (!('threadId' in event) || event.threadId !== thread.id) return;
+      if (event.type === 'setup_started') setSetupRunning(true);
+      if (event.type === 'setup_finished') setSetupRunning(false);
+    });
+    return off;
+  }, [thread.id]);
   const rightPane =
     rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??
     rightSession?.tabs[0] ??
@@ -1508,9 +1519,22 @@ export function ThreadPanel({
             !showStreaming &&
             !thread.lastError && (
               <div className="chat-empty">
-                <div className="chat-empty-mark" aria-hidden>
-                  <span className="chat-empty-cube" />
-                </div>
+                {setupRunning ? (
+                  <CreateProcessingOverlay
+                    variant="inline"
+                    mode="create"
+                    repoName={
+                      thread.repoPath.split('/').filter(Boolean).pop() ||
+                      thread.title ||
+                      'Workspace'
+                    }
+                    selectionHint="Running setup"
+                  />
+                ) : (
+                  <div className="chat-empty-mark" aria-hidden>
+                    <span className="chat-empty-cube" />
+                  </div>
+                )}
                 {thread.sourceType === 'orchestration' || isGlobalThread(thread) ? (
                   <>
                     <h3>What should we orchestrate?</h3>

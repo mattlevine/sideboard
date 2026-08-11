@@ -8,7 +8,7 @@
  * Uses {@link JsonlLocalAgentStore} instead of the SDK's default SQLite store:
  * Electron's embedded Node (used via ELECTRON_RUN_AS_NODE) lacks `node:sqlite`.
  */
-import { Agent, CursorAgentError, JsonlLocalAgentStore } from '@cursor/sdk';
+import { Agent, AgentBusyError, CursorAgentError, JsonlLocalAgentStore } from '@cursor/sdk';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -56,6 +56,43 @@ function localAgentStore(): JsonlLocalAgentStore {
   const root = join(appDataDir(), 'cursor-sdk-store');
   mkdirSync(root, { recursive: true });
   return new JsonlLocalAgentStore(root);
+}
+
+function isAgentBusyError(err: unknown): boolean {
+  if (err instanceof AgentBusyError) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /already has active run/i.test(message);
+}
+
+/**
+ * Cancel leftover local runs so a follow-up `send` can proceed.
+ * Happens when a previous runner process died without waiting/cancelling.
+ */
+async function cancelStaleLocalRuns(
+  agentId: string,
+  opts: { cwd: string; store: JsonlLocalAgentStore },
+): Promise<number> {
+  const listed = await Agent.listRuns(agentId, {
+    runtime: 'local',
+    cwd: opts.cwd,
+    store: opts.store,
+    limit: 20,
+  });
+  let cancelled = 0;
+  for (const run of listed.items) {
+    if (run.status !== 'running') continue;
+    try {
+      await Agent.cancelRun(run.id, {
+        runtime: 'local',
+        cwd: opts.cwd,
+        store: opts.store,
+      });
+      cancelled += 1;
+    } catch {
+      /* best-effort */
+    }
+  }
+  return cancelled;
 }
 
 async function readStdinJson(): Promise<CursorTurnRequest> {
@@ -143,10 +180,25 @@ async function main(): Promise<number> {
     try {
       emit({ type: 'session_id', data: agent.agentId });
 
-      const run = await agent.send(
-        req.prompt,
-        mcpServers ? { mcpServers } : undefined,
-      );
+      const sendOpts = mcpServers ? { mcpServers } : undefined;
+      let run;
+      try {
+        run = await agent.send(req.prompt, sendOpts);
+      } catch (err) {
+        if (!isAgentBusyError(err)) throw err;
+        const n = await cancelStaleLocalRuns(agent.agentId, {
+          cwd: req.cwd,
+          store,
+        });
+        emit({
+          type: 'stderr',
+          data:
+            n > 0
+              ? `Cursor agent had ${n} stale active run(s) — cancelled and retrying`
+              : 'Cursor agent busy — retrying send',
+        });
+        run = await agent.send(req.prompt, sendOpts);
+      }
       for await (const msg of run.stream()) {
         for (const event of cursorSdkMessageToEvents(msg as never)) {
           emit(event);

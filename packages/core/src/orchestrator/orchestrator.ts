@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, humanizeAgentFailDetail } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, humanizeAgentFailDetail } from '../agents/error-detail.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -432,25 +432,41 @@ export class Orchestrator {
   }
 
   async createThread(input: CreateThreadInput): Promise<Thread> {
-    let thread = await createThread(input);
+    const thread = await createThread(input);
     this.emit({ type: 'status_changed', threadId: thread.id, status: thread.status });
 
-    await this.runSetupAfterCreate(thread.id);
+    // Return as soon as the worktree exists so the chat UI can open. Setup,
+    // optional auto-run, and the first prompt continue in the background.
+    void this.finishCreateThread(thread.id, input.prompt?.trim() || undefined);
+
+    return thread;
+  }
+
+  private async finishCreateThread(
+    threadId: string,
+    prompt?: string,
+  ): Promise<void> {
+    await this.runSetupAfterCreate(threadId);
 
     const { autoRunAfterSetupEnabled } = await import('../store/app-settings.js');
     if (autoRunAfterSetupEnabled()) {
       try {
-        await this.startDev(thread.id);
+        await this.startDev(threadId);
       } catch {
         // Best-effort — setup/run script may be missing.
       }
     }
 
-    const prompt = input.prompt?.trim();
     if (prompt) {
-      thread = await this.send(thread.id, prompt);
+      try {
+        await this.send(threadId, prompt);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        updateThread(threadId, {
+          lastError: `First prompt failed: ${message}`,
+        });
+      }
     }
-    return thread;
   }
 
   /** Run workspace setup after a new worktree is created (no-op if none configured). */
@@ -901,10 +917,96 @@ export class Orchestrator {
         }
       }
 
-      const lastStderr = summarizeTurnStderr(stderrTail);
-      const detail =
+      let lastStderr = summarizeTurnStderr(stderrTail);
+      let detail =
         lastStderr ||
         (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
+
+      // Claude / Codex / OpenCode: stale --resume / --session ids fail the turn.
+      // Drop the session and retry once with a seeded fresh CLI session (Cursor
+      // already recovers busy/not-found inside cursor-runner).
+      if (
+        exitCode !== 0 &&
+        !assistantText &&
+        parts.length === 0 &&
+        !this.stoppedTurns.has(threadId) &&
+        looksLikeInvalidAgentSession(detail) &&
+        this.requireThread(threadId).sessionId &&
+        this.requireThread(threadId).agent !== 'cursor' &&
+        this.requireThread(threadId).agent !== 'brightsy'
+      ) {
+        updateThread(threadId, { sessionId: null });
+        pushTurnStderr(
+          stderrTail,
+          'Agent session missing — starting a fresh session',
+        );
+        this.emit({
+          type: 'turn_output',
+          threadId,
+          event: {
+            type: 'stderr',
+            data: 'Agent session missing — starting a fresh session',
+          },
+        });
+        const retryThread = this.requireThread(threadId);
+        const prior = retryThread.messages.slice(0, -1);
+        const retrySeed = buildSessionSeed(prior);
+        const retryInstructions =
+          retryThread.agent === 'claude'
+            ? null
+            : formatAgentInstructions(
+                loadAgentInstructions(retryThread.worktreePath, retryThread.agent),
+              );
+        const retryPrefix = [
+          coordinatorDirective,
+          worktreeDirective,
+          artifactDirective,
+          renameBranchDirective,
+          retryInstructions,
+          retrySeed,
+        ]
+          .filter(Boolean)
+          .join('\n\n---\n\n');
+        const retryHandle = await spawnAgentTurn(
+          retryThread,
+          { cachedPrefix: retryPrefix, prompt: agentPrompt },
+          (event) => {
+            this.emit({ type: 'turn_output', threadId, event });
+            if (event.type === 'session_id') {
+              updateThread(threadId, { sessionId: event.data });
+            }
+            if (event.type === 'stderr' && typeof event.data === 'string') {
+              pushTurnStderr(stderrTail, event.data);
+            }
+          },
+        );
+        this.activeTurns.set(threadId, retryHandle);
+        if (typeof retryHandle.pid === 'number' && retryHandle.pid > 0) {
+          updateThread(threadId, { agentPid: retryHandle.pid });
+        }
+        this.processes.set(`${threadId}:agent`, {
+          kind: 'agent',
+          pid: retryHandle.pid,
+          startedAt: new Date().toISOString(),
+          kill: retryHandle.kill,
+        });
+        if (this.stoppedTurns.has(threadId)) {
+          retryHandle.kill();
+        }
+        const retryResult = await retryHandle.done;
+        if (retryResult.sessionId) {
+          updateThread(threadId, { sessionId: retryResult.sessionId });
+        }
+        assistantText = retryResult.assistantText.trim();
+        parts = retryResult.parts;
+        usage = retryResult.usage ?? undefined;
+        exitCode = retryResult.exitCode;
+        lastStderr = summarizeTurnStderr(stderrTail);
+        detail =
+          lastStderr ||
+          (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
+      }
+
       // Prefer putting human-readable limit/auth failures in the agent bubble
       // (keeps duration/usage chips) instead of a bare lastError footer.
       let chatText = assistantText;

@@ -265,6 +265,7 @@ export const opencodeAdapter: AgentAdapter = {
   },
 
   async resolveSessionId(worktreePath, cached): Promise<string | null> {
+    const cachedId = cached?.trim() || null;
     const listed = await run(
       'opencode',
       ['session', 'list', '--format', 'json'],
@@ -281,19 +282,29 @@ export const opencodeAdapter: AgentAdapter = {
         if (Array.isArray(sessions) && sessions.length > 0) {
           const norm = (p: string) => p.replace(/\/+$/, '');
           const wt = norm(worktreePath);
-          // Exact directory match only — never bind a parent/repo session via prefix.
-          const match = sessions.find(
+          const forWorktree = sessions.filter(
             (s) =>
               (s.directory && norm(s.directory) === wt) ||
               (s.path && norm(s.path) === wt),
           );
-          if (match?.id) return match.id;
+          // Prefer the thread's own session when it still exists.
+          if (cachedId && forWorktree.some((s) => s.id === cachedId)) {
+            return cachedId;
+          }
+          if (cachedId && sessions.some((s) => s.id === cachedId)) {
+            return cachedId;
+          }
+          // Stale cached id (missing from list) → start fresh for this chat.
+          // Do NOT auto-adopt another tab's worktree session when cached is null —
+          // sibling chats share a worktreePath and would otherwise merge sessions.
+          return null;
         }
       } catch {
         // fall through
       }
     }
-    return cached;
+    // List failed / empty — keep cached if we have one (offline / CLI glitch).
+    return cachedId;
   },
 
   async buildAttach(thread): Promise<AttachCommand> {

@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+const runMock = vi.fn();
+vi.mock('../git/run.js', () => ({
+  run: (...args: unknown[]) => runMock(...args),
+}));
+
 import { opencodeAdapter } from './opencode.js';
 
 const baseThread = {
@@ -20,6 +26,11 @@ const baseThread = {
   updatedAt: '',
   ref: 't1',
 };
+
+beforeEach(() => {
+  runMock.mockReset();
+  runMock.mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' });
+});
 
 describe('opencodeAdapter.buildTurn', () => {
   it('denies edits in plan mode via OPENCODE_PERMISSION', async () => {
@@ -118,5 +129,24 @@ describe('opencodeAdapter.parseEvent', () => {
 
   it('does not dump unknown JSON into stdout', () => {
     expect(opencodeAdapter.parseEvent(JSON.stringify({ type: 'mystery', foo: 1 }))).toBeNull();
+  });
+});
+
+describe('opencodeAdapter.resolveSessionId', () => {
+  it('prefers the cached session and does not auto-adopt another worktree session', async () => {
+    runMock.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify([
+        { id: 'ses_other', directory: '/tmp/wt' },
+        { id: 'ses_mine', directory: '/tmp/wt' },
+      ]),
+      stderr: '',
+    });
+
+    await expect(opencodeAdapter.resolveSessionId('/tmp/wt', 'ses_mine')).resolves.toBe(
+      'ses_mine',
+    );
+    await expect(opencodeAdapter.resolveSessionId('/tmp/wt', null)).resolves.toBeNull();
+    await expect(opencodeAdapter.resolveSessionId('/tmp/wt', 'ses_gone')).resolves.toBeNull();
   });
 });

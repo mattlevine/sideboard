@@ -49,6 +49,17 @@ interface Props {
   initialMode?: 'quick' | 'orchestration';
   onClose: () => void;
   onCreated: (thread: Thread, opts?: { stayOpen?: boolean }) => void;
+  /**
+   * Fired when create starts and the modal will close so progress can move
+   * into the chat empty state (non-blocking).
+   */
+  onCreateStart?: (info: {
+    mode: Mode;
+    repoName: string;
+    selectionHint: string | null;
+  }) => void;
+  /** Fired when background create fails after the modal already closed. */
+  onCreateFailed?: (message: string) => void;
   /** Called after a workspace is added so the sidebar can refresh. */
   onWorkspacesChanged?: () => void;
   /** Open Settings → Account (e.g. Linear setup). */
@@ -124,6 +135,8 @@ export function CreateModal({
   initialMode = 'quick',
   onClose,
   onCreated,
+  onCreateStart,
+  onCreateFailed,
   onWorkspacesChanged,
   onOpenAccount,
 }: Props) {
@@ -321,8 +334,36 @@ export function CreateModal({
       setError('Add a project first');
       return;
     }
-    setBusy(true);
+    if (mode === 'orchestration' && !goal.trim()) {
+      setError('Describe the orchestration goal');
+      return;
+    }
     setError(null);
+
+    const selectionHint = selection
+      ? selection.kind === 'pr'
+        ? `PR #${selection.ref}`
+        : selection.kind === 'ticket'
+          ? selection.ref
+          : selection.ref === 'default'
+            ? 'default branch'
+            : selection.ref
+      : null;
+
+    // Move progress into the chat empty state instead of blocking the modal,
+    // unless "create more" keeps the dialog open.
+    const moveToChat = !createMore;
+    if (moveToChat) {
+      onCreateStart?.({
+        mode,
+        repoName,
+        selectionHint,
+      });
+      onClose();
+    } else {
+      setBusy(true);
+    }
+
     try {
       const draft = {
         agent: options.agent,
@@ -334,7 +375,6 @@ export function CreateModal({
       };
 
       if (mode === 'orchestration') {
-        if (!goal.trim()) throw new Error('Describe the orchestration goal');
         const t = await window.sideboard.startOrchestration({
           goal: goal.trim(),
           ...draft,
@@ -344,7 +384,6 @@ export function CreateModal({
           resetDraft();
         } else {
           onCreated(t);
-          onClose();
         }
         return;
       }
@@ -397,10 +436,14 @@ export function CreateModal({
         resetDraft();
       } else {
         onCreated(t);
-        onClose();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (moveToChat) {
+        onCreateFailed?.(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setBusy(false);
     }
