@@ -566,7 +566,8 @@ export function SettingsModal({
                         Default agent, model &amp; effort
                       </div>
                       <p className="settings-hint">
-                        Used when creating a new workspace chat or chat tab.
+                        Used for new workspace chats, chat tabs, the cloud orchestrator, and
+                        MCP-spawned worktrees (when agent/model are omitted).
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
                         {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort)}
@@ -1198,23 +1199,50 @@ export function SettingsModal({
                     <label className="settings-label" htmlFor="cloud-connect-agent">
                       Coordinator agent
                     </label>
-                    <select
-                      id="cloud-connect-agent"
-                      className="settings-select"
-                      disabled={busy}
-                      value={cloudConnect?.agent ?? settings.brightsy?.cloudConnectAgent ?? 'claude'}
-                      onChange={(e) =>
-                        void saveCloudConnect({
-                          agent: e.target.value as BrightsyCloudConnectAgent,
-                        })
-                      }
-                    >
-                      {CLOUD_CONNECT_AGENTS.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.label}
-                        </option>
-                      ))}
-                    </select>
+                    <p className="settings-hint" style={{ marginBottom: '0.45rem' }}>
+                      Uses Account default when that agent can orchestrate (Claude, Cursor,
+                      Codex, or OpenCode). Currently:{' '}
+                      <strong>
+                        {cloudConnect?.agent ??
+                          settings.brightsy?.cloudConnectAgent ??
+                          defaultAgent}
+                      </strong>
+                      {defaultAgent === 'brightsy'
+                        ? ' — set a fallback below because Brightsy cannot run the coordinator.'
+                        : null}
+                    </p>
+                    {defaultAgent === 'brightsy' ? (
+                      <select
+                        id="cloud-connect-agent"
+                        className="settings-select"
+                        disabled={busy}
+                        value={
+                          cloudConnect?.agent ??
+                          settings.brightsy?.cloudConnectAgent ??
+                          'claude'
+                        }
+                        onChange={(e) =>
+                          void saveCloudConnect({
+                            agent: e.target.value as BrightsyCloudConnectAgent,
+                          })
+                        }
+                      >
+                        {CLOUD_CONNECT_AGENTS.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy}
+                        onClick={() => setDefaultsPickerOpen(true)}
+                      >
+                        Change account default
+                      </button>
+                    )}
 
                     <p className="settings-hint" style={{ marginTop: '0.6rem' }}>
                       {cloudConnect?.enabled

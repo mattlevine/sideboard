@@ -8,6 +8,7 @@ import {
 import { ensureGlobalCoordinatorCwd } from '../orchestrator/coordinator-prompt.js';
 import type { AgentKind, Thread, ThreadAttachment, Autonomy } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
+import { resolveNewThreadOptions, resolveThreadDefaults } from './app-settings.js';
 import { globalAgentCwd } from './paths.js';
 import {
   createEmptyThread,
@@ -146,7 +147,13 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
       : allocateTeamName(takenTeamSlugsForOrchestration()).name;
   const sourceRef =
     opts.sourceRef?.trim() || (isCloud ? CLOUD_ORCHESTRATOR_GOAL : title);
-  const agent = assertOrchestratorCapableAgent(opts.agent);
+  const resolved = resolveNewThreadOptions({
+    agent: opts.agent,
+    model: opts.model,
+    effort: opts.effort,
+    fast: opts.fast,
+  });
+  const agent = assertOrchestratorCapableAgent(resolved.agent);
   const thread = createEmptyThread({
     title,
     // Stick nicknames the same way chat tabs do (avoid later sync overwrites).
@@ -158,9 +165,9 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     repoPath: GLOBAL_WORKSPACE_ID,
     agent,
     autonomy: opts.autonomy ?? 'default',
-    model: opts.model ?? null,
-    effort: opts.effort ?? 'high',
-    fast: Boolean(opts.fast),
+    model: resolved.model,
+    effort: resolved.effort,
+    fast: resolved.fast,
     planMode: Boolean(opts.planMode),
     attachments: opts.attachments ?? [],
     parentThreadId: opts.parentThreadId ?? null,
@@ -202,23 +209,44 @@ function findCloudCoordinator(): Thread | undefined {
 
 /** Find or create the singleton Brightsy cloud coordinator under Global. */
 export function ensureCloudCoordinator(agent: AgentKind): Thread {
+  const defaults = resolveThreadDefaults();
+  const desired = assertOrchestratorCapableAgent(agent);
+
   // Sync find+create is atomic on the JS event loop; re-check after create
   // in case a concurrent caller already wrote the singleton.
   const existing = findCloudCoordinator();
   if (existing) {
+    const patch: Parameters<typeof updateThread>[1] = {};
     // Migrate legacy home-repo cloud coordinators onto Global.
     if (existing.repoPath !== GLOBAL_WORKSPACE_ID) {
-      return updateThread(existing.id, {
-        repoPath: GLOBAL_WORKSPACE_ID,
-        worktreePath: globalAgentCwd(),
-        branchName: 'global',
-      });
+      patch.repoPath = GLOBAL_WORKSPACE_ID;
+      patch.worktreePath = globalAgentCwd();
+      patch.branchName = 'global';
+    }
+    // Align idle (pre-session) coordinators with Account defaults / connect agent.
+    const hasAgentTurns = existing.messages.some((m) => m.role === 'agent');
+    const canRetarget =
+      !existing.sessionId &&
+      !hasAgentTurns &&
+      existing.status !== 'running' &&
+      existing.status !== 'queued';
+    if (canRetarget) {
+      if (existing.agent !== desired) patch.agent = desired;
+      if (existing.model !== defaults.model) patch.model = defaults.model;
+      if (existing.effort !== defaults.effort) patch.effort = defaults.effort;
+      if (existing.fast !== defaults.fast) patch.fast = defaults.fast;
+    }
+    if (Object.keys(patch).length > 0) {
+      return updateThread(existing.id, patch);
     }
     return existing;
   }
   const created = createGlobalChat({
     sourceRef: CLOUD_ORCHESTRATOR_GOAL,
-    agent,
+    agent: desired,
+    model: defaults.model,
+    effort: defaults.effort,
+    fast: defaults.fast,
   });
   // Prefer the oldest matching coordinator if two were created in a race.
   const all = listThreads({ includeArchived: true })

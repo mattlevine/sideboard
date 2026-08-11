@@ -532,6 +532,39 @@ export function resolveThreadDefaults(
   };
 }
 
+/**
+ * Resolve agent/model/effort/fast for a newly created thread.
+ * Omitted fields use Account defaults (Settings → Account).
+ * Pass `model: null` explicitly to force Auto / agent-default.
+ */
+export function resolveNewThreadOptions(
+  overrides: {
+    agent?: AgentKind | null;
+    model?: string | null;
+    effort?: ThinkingEffort | 'normal' | null;
+    fast?: boolean | null;
+  } = {},
+  settings: AppSettings = loadAppSettings(),
+): { agent: AgentKind; model: string | null; effort: ThinkingEffort; fast: boolean } {
+  const defaults = resolveThreadDefaults(settings);
+  const effort =
+    overrides.effort === undefined || overrides.effort === null
+      ? defaults.effort
+      : (normalizeThinkingEffort(overrides.effort) ?? defaults.effort);
+  return {
+    agent: overrides.agent ?? defaults.agent,
+    model:
+      overrides.model === undefined
+        ? defaults.model
+        : overrides.model?.trim() || null,
+    effort,
+    fast:
+      overrides.fast === undefined || overrides.fast === null
+        ? defaults.fast
+        : Boolean(overrides.fast),
+  };
+}
+
 /** True when Sideboard has a Linear API key stored. */
 export function isLinearConnected(
   settings: AppSettings = loadAppSettings(),
@@ -571,10 +604,25 @@ export function brightsyCloudConnectEnabled(
   return Boolean(settings.brightsy.cloudConnectEnabled);
 }
 
+/**
+ * Local agent for the Brightsy cloud coordinator.
+ * Prefer Account → Default agent when it can run orchestration (Claude / Cursor /
+ * Codex / OpenCode). `cloudConnectAgent` is only a fallback when the account
+ * default cannot orchestrate (e.g. Brightsy).
+ */
 export function brightsyCloudConnectAgent(
   settings: AppSettings = loadAppSettings(),
 ): BrightsyCloudConnectAgent {
-  return settings.brightsy.cloudConnectAgent ?? 'claude';
+  const fallback =
+    settings.brightsy.cloudConnectAgent &&
+    CLOUD_CONNECT_AGENTS.has(settings.brightsy.cloudConnectAgent)
+      ? settings.brightsy.cloudConnectAgent
+      : ('claude' as BrightsyCloudConnectAgent);
+  const preferred = getDefaultAgent(settings);
+  if (CLOUD_CONNECT_AGENTS.has(preferred as BrightsyCloudConnectAgent)) {
+    return preferred as BrightsyCloudConnectAgent;
+  }
+  return fallback;
 }
 
 export function updateAdvancedSettings(

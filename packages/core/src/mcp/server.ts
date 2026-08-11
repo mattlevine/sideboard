@@ -308,13 +308,29 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
+  const { resolveNewThreadOptions, resolveThreadDefaults } = await import(
+    '../store/app-settings.js'
+  );
+  const accountDefaults = resolveThreadDefaults();
+  const accountDefaultsHint = `Account defaults: agent=${accountDefaults.agent}, model=${accountDefaults.model?.trim() || 'Auto'}, effort=${accountDefaults.effort}`;
+
   server.tool(
     'create_thread',
-    'Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces and parentThreadId when spawning from an orchestrator. Then use send_to_thread to chat.',
+    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces and parentThreadId when spawning from an orchestrator. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Then use send_to_thread to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
-      agent: z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor']),
+      agent: z
+        .enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor'])
+        .optional()
+        .describe(`Omit to use Account default agent (${accountDefaults.agent})`),
+      model: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          `Usually omit to use Account default model (${accountDefaults.model?.trim() || 'Auto'}). Pass null only to force Auto / agent-default.`,
+        ),
       repoPath: z.string(),
       title: z.string().optional(),
       parentThreadId: z.string().optional(),
@@ -336,10 +352,17 @@ export async function startMcpServer(): Promise<void> {
           };
         }
       }
+      const opts = resolveNewThreadOptions({
+        agent: args.agent,
+        model: args.model,
+      });
       const thread = await orch.createThread({
         sourceType: args.sourceType,
         sourceRef: args.sourceRef,
-        agent: args.agent,
+        agent: opts.agent,
+        model: opts.model,
+        effort: opts.effort,
+        fast: opts.fast,
         repoPath: args.repoPath,
         title: args.title,
         parentThreadId: args.parentThreadId ?? null,
@@ -353,6 +376,8 @@ export async function startMcpServer(): Promise<void> {
               title: thread.title,
               branchName: thread.branchName,
               worktreePath: thread.worktreePath,
+              agent: thread.agent,
+              model: thread.model,
               status: thread.status,
               link: `sideboard://thread/${thread.id}`,
             }),

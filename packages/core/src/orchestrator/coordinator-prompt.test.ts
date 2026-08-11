@@ -55,6 +55,7 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('list_prs');
     expect(prompt).toContain('list_issues');
     expect(prompt).toContain('create_thread');
+    expect(prompt).toContain('Account defaults');
     expect(prompt).toContain('list_models');
     expect(prompt).toContain('fork_worktree');
     expect(prompt).toContain('fork_chat');

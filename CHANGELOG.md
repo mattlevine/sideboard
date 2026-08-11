@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.55] - 2026-08-11
+
+### Fixed
+
+- Cloud orchestrator and MCP-spawned worktrees now use Account default agent, model, effort, and fast (Settings → Default agent, model & effort) instead of hard-coding Claude / Auto
+- `create_thread` agent/model are optional; omitting them applies Account defaults (tool + coordinator prompts document the current defaults)
+
+### Changed
+
+- Cloud connect coordinator follows the Account default agent when it can orchestrate (Claude / Cursor / Codex / OpenCode); the Brightsy-only fallback picker remains for when the default is Brightsy
+- New threads created via `createThread` / `createGlobalChat` fill omitted model/effort/fast from Account defaults
+
 ## [0.1.54] - 2026-08-10
 
 ### Fixed

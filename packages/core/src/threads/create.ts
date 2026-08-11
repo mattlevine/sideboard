@@ -9,6 +9,7 @@ import {
   resolveRepoRoot,
 } from '../git/worktree.js';
 import { copyConfiguredFiles } from '../hook/conductor.js';
+import { resolveNewThreadOptions } from '../store/app-settings.js';
 import {
   createEmptyThread,
   readThread,
@@ -27,7 +28,13 @@ export async function createThread(
 ): Promise<Thread> {
   // Tickets no longer require agent Linear MCP — Sideboard Account owns
   // Linear/GitHub issue connections (see integrations/).
-  await requireAgent(input.agent);
+  const resolved = resolveNewThreadOptions({
+    agent: input.agent,
+    model: input.model,
+    effort: input.effort,
+    fast: input.fast,
+  });
+  await requireAgent(resolved.agent);
 
   const repoPath = await resolveRepoRoot(input.repoPath);
   if (!existsSync(repoPath)) {
@@ -83,11 +90,11 @@ export async function createThread(
     branchName,
     worktreePath,
     repoPath,
-    agent: input.agent,
+    agent: resolved.agent,
     autonomy: input.autonomy ?? 'default',
-    model: input.model ?? null,
-    effort: input.effort ?? 'high',
-    fast: Boolean(input.fast),
+    model: resolved.model,
+    effort: resolved.effort,
+    fast: resolved.fast,
     planMode: Boolean(input.planMode),
     attachments: input.attachments ?? [],
     sourceIsFork,

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveGithubRepoSlug } from '../git/worktree.js';
+import { resolveThreadDefaults } from '../store/app-settings.js';
 import { globalAgentCwd, sideboardReposDir } from '../store/paths.js';
 import type { Workspace } from '../store/workspaces.js';
 
@@ -55,12 +56,12 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- list_workspaces — registered repos (path + github slug when known)',
   '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces (issues: Linear API or GitHub Issues)',
   '- get_pr_stack / open_pr_stack_layers / add_stack_layer / create_pr_stack — GitHub stacked PRs (`gh stack`); one worktree per layer',
-  '- list_models — only when you need a specific model (rare); otherwise leave model unset = Auto',
+  '- list_models — only when you need a specific model (rare); otherwise omit model so Account defaults apply',
   '- list_threads / get_thread — fleet status (what is going on)',
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
   'Worktree threads (chats):',
-  '- create_thread — create a worktree + chat from branch | pr | ticket; pass repoPath + parentThreadId',
+  '- create_thread — create a worktree + chat from branch | pr | ticket; pass repoPath + parentThreadId; omit agent and model to use Sideboard Account defaults (Settings → Default agent, model & effort)',
   '- fork_worktree — fork a worktree chat into a NEW git worktree + chat (transcript attached); optional agent; leave model unset (Auto) unless you have a reason. Not for orchestration chats.',
   '- fork_chat — fork a worktree chat (same worktree tab) OR a Global orchestration chat (new orchestration tab); optional agent; leave model unset (Auto) unless you have a reason. Remote coordinators: use this to continue another orchestration chat on a different agent after session limits.',
   '- send_to_thread — queue a prompt (start/continue a chat turn); pass force_stop: true to interrupt mid-turn / clear stale queued prompts before replacing with a new request',
@@ -79,6 +80,12 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Bash / Read / etc: allowed for (1) inspecting target worktrees / registered repo paths from MCP, and (2) greenfield setup under ~/sideboard/repos (git clone, gh repo create, git init+remote). Never git init/clone *inside* this synthetic home cwd — emptiness here is expected, not a bug.',
 ].join('\n');
 
+function accountDefaultsPlaybookLine(): string {
+  const d = resolveThreadDefaults();
+  const model = d.model?.trim() || 'Auto';
+  return `- Account defaults for create_thread (omit agent/model to use these): agent=${d.agent}, model=${model}, effort=${d.effort}`;
+}
+
 /**
  * Short identity block prepended to every orchestration turn prompt.
  * Survives Claude `--resume` (which drops cachedPrefix).
@@ -95,6 +102,7 @@ export function coordinatorTurnReminder(opts: {
     '- Registered workspaces / child threads are the fleet you manage via Sideboard MCP.',
     `- Parent thread id (pass as parentThreadId when creating children): ${opts.parentId}`,
     goal ? `- Goal / title: ${goal}` : null,
+    accountDefaultsPlaybookLine(),
     '- For "what\'s going on": call list_threads (and list_workspaces if needed). Summarize fleet status — do not ls/git-status this synthetic home.',
     '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn.',
     '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn → draft PR.',
@@ -124,9 +132,12 @@ export function ensureGlobalCoordinatorCwd(): string {
     '',
     COORDINATOR_TOOL_PLAYBOOK,
     '',
+    accountDefaultsPlaybookLine(),
+    '',
     coordinatorGreenfieldPlaybook(reposDir),
     '',
     'When creating threads, pass `repoPath` from `list_workspaces` (or the path you just registered) and `parentThreadId` for children.',
+    'Omit `agent` / `model` on `create_thread` unless you have a reason to override Account defaults.',
     'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn.',
     'Typical flow (new app): Bash create/clone under repos dir → add_workspace → create_thread → send_to_thread (implement) → wait_for_turn → draft PR via worktree agent.',
     'Always ask worktree agents to open draft PRs (`send_to_thread` + `gh pr create --draft -R <origin>`); never open PRs from the orchestrator.',
@@ -162,8 +173,10 @@ export function coordinatorSystemPrompt(opts: {
     'You operate across ALL registered workspaces below.',
     'You have no project git home — this process cwd is synthetic and empty on purpose.',
     COORDINATOR_TOOL_PLAYBOOK,
+    accountDefaultsPlaybookLine(),
     coordinatorGreenfieldPlaybook(reposDir),
     'When creating threads, pass the correct repoPath for the target workspace and parentThreadId for children.',
+    'Omit agent/model on create_thread unless you need to override Account defaults.',
     'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread (implement) → wait_for_turn → send_to_thread (ask for `gh pr create --draft -R <origin-owner/name>` using the workspace github slug) → wait_for_turn. Never target upstream. Never open PRs from the orchestrator.',
     'Typical flow (new app): Bash under repos dir (clone or gh repo create) → add_workspace → create_thread → send_to_thread → wait_for_turn → draft PR via worktree agent.',
     `Goal: ${opts.goal}`,

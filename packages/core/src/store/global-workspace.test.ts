@@ -64,6 +64,15 @@ describe('global-workspace', () => {
     ).toThrow(/does not support Sideboard MCP/);
   });
 
+  it('ensureCloudCoordinator applies account default model on create', async () => {
+    const { updateDefaultsSettings } = await import('./app-settings.js');
+    updateDefaultsSettings({ agent: 'cursor', model: 'default', effort: 'xhigh' });
+    const cloud = ensureCloudCoordinator('cursor');
+    expect(cloud.agent).toBe('cursor');
+    expect(cloud.model).toBe('default');
+    expect(cloud.effort).toBe('xhigh');
+  });
+
   it('ensureCloudCoordinator is a singleton under Global with a soccer nickname', () => {
     const cloud = ensureCloudCoordinator('claude');
     expect(cloud.sourceRef).toBe(CLOUD_ORCHESTRATOR_GOAL);

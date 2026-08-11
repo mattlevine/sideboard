@@ -179,7 +179,8 @@ describe('app settings', () => {
       cloudConnectAgent: 'codex',
     });
     expect(mod.brightsyCloudConnectEnabled()).toBe(true);
-    expect(mod.brightsyCloudConnectAgent()).toBe('codex');
+    // Account default (claude when unset) wins over cloudConnectAgent override.
+    expect(mod.brightsyCloudConnectAgent()).toBe('claude');
 
     const cleared = mod.updateBrightsySettings({
       cloudConnectEnabled: false,
@@ -188,6 +189,42 @@ describe('app settings', () => {
     expect(cleared.brightsy.cloudConnectEnabled).toBe(false);
     expect(cleared.brightsy.cloudConnectAgent).toBeUndefined();
     expect(mod.brightsyCloudConnectAgent()).toBe('claude');
+  });
+
+  it('uses account default agent for cloud connect when orchestrator-capable', async () => {
+    const mod = await load();
+    mod.updateDefaultsSettings({ agent: 'cursor', model: 'default' });
+    mod.updateBrightsySettings({ cloudConnectAgent: 'claude' });
+    expect(mod.brightsyCloudConnectAgent()).toBe('cursor');
+  });
+
+  it('falls back to cloudConnectAgent when account default cannot orchestrate', async () => {
+    const mod = await load();
+    mod.updateDefaultsSettings({ agent: 'brightsy' });
+    mod.updateBrightsySettings({ cloudConnectAgent: 'codex' });
+    expect(mod.brightsyCloudConnectAgent()).toBe('codex');
+  });
+
+  it('resolveNewThreadOptions fills omitted fields from account defaults', async () => {
+    const mod = await load();
+    mod.updateDefaultsSettings({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'high',
+      fast: true,
+    });
+    expect(mod.resolveNewThreadOptions({})).toEqual({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'high',
+      fast: true,
+    });
+    expect(mod.resolveNewThreadOptions({ agent: 'claude', model: null })).toEqual({
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      fast: true,
+    });
   });
 
   it('round-trips Claude harness settings', async () => {
