@@ -455,7 +455,7 @@ Sideboard prefers `.sideboard/settings.toml` and falls back to `.conductor/setti
 
 ### Review guidelines
 
-Commit `.sideboard/review.md` to customize merge-readiness Review for the whole repo. The Review button attaches that file when present; otherwise it uses a local `.sideboard/attachments/Review request.md` (gitignored) or seeds the stock template there. **Customize guidelines…** creates/opens `.sideboard/review.md` so you can check it in.
+Commit `.sideboard/review.md` to customize merge-readiness Review for the whole repo. The Review button attaches that file when present; otherwise it uses a local `.context/attachments/Review request.md` (gitignored) or seeds the stock template there. **Customize guidelines…** creates/opens `.sideboard/review.md` so you can check it in. Workspace-local chat scratch (plans, drops, review seeds) lives under `.context/attachments/` — same idea as Conductor’s `.context` vs committed `.sideboard/` / `.conductor/` config.
 
 Older threads that already point at a repo-local path keep working; new threads always use the home-dir (or configured) root.
 

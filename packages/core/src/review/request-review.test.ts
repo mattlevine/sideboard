@@ -42,6 +42,7 @@ describe('requestReview', () => {
   });
 
   it('prefers committed .sideboard/review.md over local attachments', () => {
+    mkdirSync(join(worktree, '.context', 'attachments'), { recursive: true });
     writeFileSync(join(worktree, REVIEW_REQUEST_PATH), '# local only\n');
     mkdirSync(join(worktree, '.sideboard'), { recursive: true });
     writeFileSync(join(worktree, REPO_REVIEW_PATH), '# repo policy\n');
@@ -52,6 +53,7 @@ describe('requestReview', () => {
   });
 
   it('uses local attachments when repo file is absent', () => {
+    mkdirSync(join(worktree, '.context', 'attachments'), { recursive: true });
     writeFileSync(join(worktree, REVIEW_REQUEST_PATH), '## Recommendation\nlocal\n');
     const resolved = resolveReviewGuidelines(worktree);
     expect(resolved.source).toBe('local');

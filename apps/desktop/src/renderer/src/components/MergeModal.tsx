@@ -8,6 +8,8 @@ interface Props {
   isDraft: boolean;
   busy: boolean;
   error: string | null;
+  /** When set, merge uses `gh stack merge` through this PR. */
+  stackMerge?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -21,10 +23,15 @@ export function MergeModal({
   isDraft,
   busy,
   error,
+  stackMerge,
   onConfirm,
   onCancel,
 }: Props) {
-  const title = prNumber ? `Merge #${prNumber}?` : 'Merge pull request?';
+  const title = prNumber
+    ? stackMerge
+      ? `Merge stack through #${prNumber}?`
+      : `Merge #${prNumber}?`
+    : 'Merge pull request?';
   const hint = prNumber ? `PR #${prNumber}` : branch;
 
   return (
@@ -53,9 +60,18 @@ export function MergeModal({
           <h3 className="merge-modal-title">{title}</h3>
           {prTitle ? <p className="merge-modal-subtitle">{prTitle}</p> : null}
           <p className="confirm-dialog-message">
-            Squash-merge this pull request on GitHub
-            {isDraft ? '. It will be marked ready first (drafts can’t be merged).' : '.'} The
-            button will switch to Live when it succeeds.
+            {stackMerge
+              ? `Squash-merge this stack through ${
+                  prNumber ? `PR #${prNumber}` : 'the current layer'
+                } on GitHub via gh stack merge (lower layers land first).${
+                  isDraft ? ' Drafts in the merge range are marked ready first.' : ''
+                }`
+              : `Squash-merge this pull request on GitHub${
+                  isDraft
+                    ? '. It will be marked ready first (drafts can’t be merged).'
+                    : '.'
+                }`}{' '}
+            The button will switch to Live when it succeeds.
           </p>
           <dl className="land-confirm-meta">
             <div>

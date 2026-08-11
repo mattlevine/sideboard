@@ -12,6 +12,7 @@ import {
   resolveGithubRepoSlug,
   resolvePrSelector,
 } from '../git/worktree.js';
+import { getPrStack as fetchPrStack } from '../git/stack.js';
 import { runSetupScript, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
 import { runCursorWorktreeSetup } from '../hook/cursor-worktrees.js';
 import {
@@ -33,10 +34,12 @@ import type {
   PrCheckRun,
   PrDetails,
   PrMeta,
+  PrStack,
   Thread,
   ThreadAttachment,
   ThreadOptionsPatch,
 } from '../types/thread.js';
+import type { ThinkingEffort } from '../types/thinking-effort.js';
 import {
   appendMessage,
   deleteThreadRecord,
@@ -78,6 +81,12 @@ import {
   importConductorWorkspaceAsync,
   listConductorWorkspaces,
 } from '../threads/adopt.js';
+import {
+  addStackLayerFromThread,
+  createPrStack,
+  initStackFromThread,
+  openPrStackLayers,
+} from '../threads/stack-layers.js';
 import { confirmLand, previewLand } from '../land/land.js';
 import {
   captureTurnBaseline,
@@ -109,6 +118,11 @@ import {
   loadAgentInstructions,
 } from '../agents/instructions.js';
 import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
+import {
+  extractPresentedPlan,
+  readPlanFile,
+  writePlanFile,
+} from '../plan/plan-file.js';
 import { loadWorkspaceSettings } from '../hook/settings.js';
 import { syncThreadBranchFromGit } from '../threads/sync-branch.js';
 import {
@@ -418,14 +432,10 @@ export class Orchestrator {
   }
 
   async createThread(input: CreateThreadInput): Promise<Thread> {
-    let thread = await createThread(input, (line) => {
-      this.emit({
-        type: 'turn_output',
-        threadId: 'pending',
-        event: { type: 'stdout', data: line },
-      });
-    });
+    let thread = await createThread(input);
     this.emit({ type: 'status_changed', threadId: thread.id, status: thread.status });
+
+    await this.runSetupAfterCreate(thread.id);
 
     const { autoRunAfterSetupEnabled } = await import('../store/app-settings.js');
     if (autoRunAfterSetupEnabled()) {
@@ -441,6 +451,20 @@ export class Orchestrator {
       thread = await this.send(thread.id, prompt);
     }
     return thread;
+  }
+
+  /** Run workspace setup after a new worktree is created (no-op if none configured). */
+  private async runSetupAfterCreate(threadId: string): Promise<void> {
+    try {
+      await this.runSetup(threadId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/no setup script/i.test(message)) return;
+      if (/already running/i.test(message)) return;
+      updateThread(threadId, {
+        lastError: `Setup failed: ${message}`,
+      });
+    }
   }
 
   listWorkspaces(): Workspace[] {
@@ -906,6 +930,20 @@ export class Orchestrator {
       // turn re-enters plan mode with --permission-mode plan instead of resuming
       // an exited-plan Claude session.
       const afterTurn = this.requireThread(threadId);
+      if (afterTurn.planMode && afterTurn.worktreePath?.trim()) {
+        const presented = extractPresentedPlan(parts);
+        const exited = parts.some(
+          (p) => p.type === 'tool' && /exitplanmode/i.test(p.name),
+        );
+        if (presented?.content) {
+          writePlanFile(afterTurn.worktreePath, presented.content);
+        } else if (exited || (chatText && chatText.trim().length >= 400)) {
+          // Fallback when the agent skipped present_plan but finished a plan.
+          if (!readPlanFile(afterTurn.worktreePath) && chatText?.trim()) {
+            writePlanFile(afterTurn.worktreePath, chatText.trim());
+          }
+        }
+      }
       if (
         afterTurn.planMode &&
         afterTurn.agent === 'claude' &&
@@ -1500,6 +1538,108 @@ export class Orchestrator {
     return meta;
   }
 
+  async getPrStack(threadRef: string): Promise<PrStack | null> {
+    const thread = this.requireThread(threadRef);
+    if (!thread.worktreePath?.trim()) return null;
+    const stack = await fetchPrStack(thread.worktreePath);
+    if (!stack) return null;
+    const current = stack.currentIndex >= 0 ? stack.layers[stack.currentIndex] : null;
+    const patch: Partial<Thread> = {};
+    if (stack.stackNumber != null) {
+      const id = `gh-stack-${stack.stackNumber}`;
+      if (thread.stackId !== id) patch.stackId = id;
+    }
+    if (current?.position != null && thread.stackLayer !== current.position) {
+      patch.stackLayer = current.position;
+    }
+    if (current?.prUrl && current.prUrl !== thread.prUrl) patch.prUrl = current.prUrl;
+    if (current?.title && current.title !== thread.prTitle) patch.prTitle = current.title;
+    if (current?.branchName && current.branchName !== thread.branchName) {
+      patch.branchName = current.branchName;
+    }
+    if (Object.keys(patch).length > 0) updateThread(thread.id, patch);
+    return stack;
+  }
+
+  /** Open worktrees for all (or one) stack layers discovered from a thread. */
+  async openPrStackLayers(
+    threadRef: string,
+    opts?: { layer?: number },
+  ): Promise<{ stack: PrStack; threads: Thread[] }> {
+    const result = await openPrStackLayers({ threadRef, layer: opts?.layer });
+    for (const t of result.threads) {
+      this.emit({ type: 'status_changed', threadId: t.id, status: t.status });
+    }
+    for (const id of result.createdThreadIds) {
+      await this.runSetupAfterCreate(id);
+    }
+    return { stack: result.stack, threads: result.threads };
+  }
+
+  /** Add a branch on top of the thread's stack and open its worktree. */
+  async addStackLayer(
+    threadRef: string,
+    branchName: string,
+    opts?: { title?: string },
+  ): Promise<{ stack: PrStack; thread: Thread }> {
+    const result = await addStackLayerFromThread({
+      threadRef,
+      branchName,
+      title: opts?.title,
+    });
+    this.emit({
+      type: 'status_changed',
+      threadId: result.thread.id,
+      status: result.thread.status,
+    });
+    if (result.createdWorktree) {
+      await this.runSetupAfterCreate(result.thread.id);
+    }
+    return { stack: result.stack, thread: result.thread };
+  }
+
+  /** Initialize a stack from the current thread branch (optional extra layers). */
+  async initStackFromThread(
+    threadRef: string,
+    opts?: { additionalBranches?: string[]; base?: string },
+  ): Promise<{ stack: PrStack; threads: Thread[] }> {
+    const result = await initStackFromThread({
+      threadRef,
+      additionalBranches: opts?.additionalBranches,
+      base: opts?.base,
+    });
+    for (const t of result.threads) {
+      this.emit({ type: 'status_changed', threadId: t.id, status: t.status });
+    }
+    for (const id of result.createdThreadIds) {
+      await this.runSetupAfterCreate(id);
+    }
+    return { stack: result.stack, threads: result.threads };
+  }
+
+  /** Create a new multi-layer stack with one worktree per layer. */
+  async createPrStack(input: {
+    repoPath: string;
+    branches: string[];
+    base?: string;
+    agent: AgentKind;
+    autonomy?: Autonomy;
+    model?: string | null;
+    effort?: ThinkingEffort;
+    fast?: boolean;
+    planMode?: boolean;
+    title?: string;
+  }): Promise<{ stack: PrStack; threads: Thread[] }> {
+    const result = await createPrStack(input);
+    for (const t of result.threads) {
+      this.emit({ type: 'status_changed', threadId: t.id, status: t.status });
+    }
+    for (const id of result.createdThreadIds) {
+      await this.runSetupAfterCreate(id);
+    }
+    return { stack: result.stack, threads: result.threads };
+  }
+
   async getPrDetails(threadRef: string): Promise<PrDetails | null> {
     const { thread, selector, cwd } = await this.withPrSelector(threadRef);
     if (!selector) return null;
@@ -1593,14 +1733,9 @@ export class Orchestrator {
     model?: string | null;
     title?: string;
   }): Promise<Thread> {
-    const thread = await forkThreadWorktreeImpl(input, (line) => {
-      this.emit({
-        type: 'turn_output',
-        threadId: 'pending',
-        event: { type: 'stdout', data: line },
-      });
-    });
+    const thread = await forkThreadWorktreeImpl(input);
     this.emit({ type: 'status_changed', threadId: thread.id, status: thread.status });
+    await this.runSetupAfterCreate(thread.id);
     return thread;
   }
 
@@ -1620,7 +1755,7 @@ export class Orchestrator {
 
   /**
    * Stage OS / worktree files into composer attachments (copies external files
-   * into `.sideboard/attachments/` so agents can Read images and binaries).
+   * into `.context/attachments/` so agents can Read images and binaries).
    */
   attachComposerFiles(
     threadRef: string,

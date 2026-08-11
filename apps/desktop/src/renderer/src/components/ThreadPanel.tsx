@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { AgentKind, MessagePart, ThinkingEffort, Thread, ThreadAttachment } from '@sideboard-ai/core';
+import { extractPendingPlanQuestions, formatPlanQuestionsForChat } from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
@@ -38,6 +39,15 @@ import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
 import { ThinkingEffortChip } from './ThinkingEffortChip';
+import { PlanQuestionsPanel } from './PlanQuestionsPanel';
+import { PlanApprovalCard } from './PlanApprovalCard';
+import { PlanReadyBar } from './PlanReadyBar';
+import {
+  isPlanAwaitingApproval,
+  latestPlanText,
+  latestPresentedPlan,
+} from '../lib/plan-ready';
+import { PLAN_FILE_REL } from '@sideboard/plan-file';
 import {
   agentModelLabel,
   cursorModelLabel,
@@ -238,6 +248,10 @@ export function ThreadPanel({
     chatCount: number;
   } | null>(null);
   const [closeBusy, setCloseBusy] = useState(false);
+  /** User dismissed the plan question panel for this tool id (show normal composer). */
+  const [dismissedPlanQuestionsId, setDismissedPlanQuestionsId] = useState<string | null>(
+    null,
+  );
   const [forkWorkspaceConfirm, setForkWorkspaceConfirm] = useState<{
     throughIndex: number;
   } | null>(null);
@@ -264,8 +278,75 @@ export function ThreadPanel({
   const [composerDragOver, setComposerDragOver] = useState(false);
   const plusBtnRef = useRef<HTMLButtonElement>(null);
   const openBtnRef = useRef<HTMLButtonElement>(null);
+
+  const pendingPlanQuestions = useMemo(() => {
+    const fromLive = extractPendingPlanQuestions(liveParts);
+    if (fromLive) return fromLive;
+    for (let i = thread.messages.length - 1; i >= 0; i--) {
+      const m = thread.messages[i]!;
+      if (m.role !== 'agent') continue;
+      return extractPendingPlanQuestions(m.parts);
+    }
+    return null;
+  }, [liveParts, thread.messages]);
+
+  const showPlanQuestions =
+    Boolean(pendingPlanQuestions) &&
+    pendingPlanQuestions!.id !== dismissedPlanQuestionsId;
+
+  const planAwaitingApproval = useMemo(
+    () =>
+      isPlanAwaitingApproval({
+        planMode: thread.planMode,
+        status: thread.status,
+        messages: thread.messages,
+        liveParts,
+        hasPendingQuestions: showPlanQuestions,
+      }),
+    [
+      thread.planMode,
+      thread.status,
+      thread.messages,
+      liveParts,
+      showPlanQuestions,
+    ],
+  );
+
+  const [planFileContent, setPlanFileContent] = useState<string | null>(null);
+
+  useEffect(() => {
+    const wantsFile =
+      planAwaitingApproval ||
+      liveParts.some((p) => p.type === 'tool' && /present_plan$/i.test(p.name ?? ''));
+    if (!wantsFile || !thread.worktreePath?.trim()) {
+      if (!planAwaitingApproval) setPlanFileContent(null);
+      return;
+    }
+    let cancelled = false;
+    void window.sideboard
+      .readFile(thread.id, PLAN_FILE_REL)
+      .then((f) => {
+        if (cancelled) return;
+        setPlanFileContent(f.binary ? null : f.content || null);
+      })
+      .catch(() => {
+        if (!cancelled) setPlanFileContent(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    planAwaitingApproval,
+    thread.id,
+    thread.worktreePath,
+    thread.messages.length,
+    liveParts,
+  ]);
+
   const composerExpanded =
     composerFocused ||
+    showPlanQuestions ||
+    planAwaitingApproval ||
     Boolean(prompt.trim()) ||
     plusOpen ||
     agentPickerOpen ||
@@ -448,6 +529,10 @@ export function ThreadPanel({
   }, [thread.messages, thread.queue, liveOutput, liveParts, pendingUser]);
 
   useEffect(() => {
+    setDismissedPlanQuestionsId(null);
+  }, [thread.id]);
+
+  useEffect(() => {
     if (!pendingUser) return;
     const matched =
       thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) ||
@@ -487,10 +572,19 @@ export function ThreadPanel({
         setWorkspacePickerOpen(false);
         setIssuePickerOpen(true);
       }
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key === 'Enter' &&
+        planAwaitingApproval
+      ) {
+        e.preventDefault();
+        void implementPlan();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [thread.id]);
+  }, [thread.id, planAwaitingApproval]);
 
   function patchOptions(patch: Parameters<typeof window.sideboard.setThreadOptions>[1]) {
     void window.sideboard
@@ -562,6 +656,50 @@ export function ThreadPanel({
     liveParts.length > 0 ||
     thread.status === 'running' ||
     (thread.status === 'queued' && Boolean(pendingUser));
+
+  const liveHasPresentPlan = liveParts.some(
+    (p) => p.type === 'tool' && /present_plan$/i.test(p.name ?? ''),
+  );
+
+  const presentedPlan = useMemo(() => {
+    if (liveHasPresentPlan || (showStreaming && liveParts.length)) {
+      const live = latestPresentedPlan(
+        [
+          {
+            role: 'agent',
+            text: liveOutput,
+            parts: liveParts,
+            ts: new Date().toISOString(),
+          },
+        ],
+        planFileContent,
+      );
+      if (live) return live;
+    }
+    return latestPresentedPlan(thread.messages, planFileContent);
+  }, [
+    liveHasPresentPlan,
+    showStreaming,
+    liveParts,
+    liveOutput,
+    thread.messages,
+    planFileContent,
+  ]);
+
+  const showPlanCard =
+    Boolean(presentedPlan?.content) &&
+    (planAwaitingApproval || liveHasPresentPlan) &&
+    !showPlanQuestions &&
+    !openFilePath &&
+    !openUrl &&
+    !changesOpen;
+
+  const lastAgentMessageIndex = useMemo(() => {
+    for (let i = thread.messages.length - 1; i >= 0; i--) {
+      if (thread.messages[i]!.role === 'agent') return i;
+    }
+    return -1;
+  }, [thread.messages]);
 
   /** True from `turn_started` to `turn_finished` — a turn is actively in flight. */
   const turnInFlight = Boolean(turnStartedAt);
@@ -685,15 +823,58 @@ export function ThreadPanel({
 
   async function implementPlan() {
     if (busy) return;
+    const notes = prompt.trim();
     await window.sideboard.setThreadOptions(thread.id, { planMode: false });
     setBusy(true);
-    const text = 'Implement the plan above.';
+    const text = notes
+      ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
+      : `Implement the plan in ${PLAN_FILE_REL}.`;
     setPendingUser(text);
+    setPrompt('');
     try {
       await window.sideboard.sendToThread(thread.id, text);
       onRefresh();
     } catch (err) {
       setPendingUser(null);
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyPlan() {
+    const text = latestPlanText(thread.messages, planFileContent);
+    if (!text) {
+      window.alert('No plan text to copy yet.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /** Fork a new same-worktree chat with the plan history, then implement there. */
+  async function handOffPlan() {
+    if (busy) return;
+    const notes = prompt.trim();
+    setBusy(true);
+    try {
+      const throughIndex = Math.max(0, thread.messages.length - 1);
+      const t = await window.sideboard.forkChatTab({
+        threadId: thread.id,
+        throughIndex,
+      });
+      await window.sideboard.setThreadOptions(t.id, { planMode: false });
+      const text = notes
+        ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
+        : `Implement the plan in ${PLAN_FILE_REL}.`;
+      setPrompt('');
+      await window.sideboard.sendToThread(t.id, text);
+      onSelectChat(t.id, t);
+      onRefresh();
+    } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -1361,30 +1542,56 @@ export function ThreadPanel({
               m.role === 'agent' && prevUser
                 ? Math.max(0, new Date(m.ts).getTime() - new Date(prevUser.ts).getTime())
                 : undefined;
+            const hidePlanProse =
+              showPlanCard &&
+              !showStreaming &&
+              i === lastAgentMessageIndex &&
+              m.role === 'agent' &&
+              (presentedPlan?.source === 'present_plan' ||
+                presentedPlan?.source === 'text' ||
+                presentedPlan?.source === 'exit_plan');
             return (
               <div key={`${m.ts}-${i}`} className={`msg ${m.role}`}>
                 {m.role === 'agent' ? (
-                  <AgentMessage
-                    text={m.text}
-                    parts={m.parts}
-                    ts={m.ts}
-                    durationMs={m.durationMs ?? fallbackDuration}
-                    usage={m.usage}
-                    threadId={thread.id}
-                    worktreePath={thread.worktreePath}
-                    knownFilePaths={filePaths}
-                    onOpenFile={onSelectFile}
-                    onOpenThread={onOpenThreadLink}
-                    onOpenArtifact={openRightPane}
-                    activeArtifactId={rightPane?.id}
-                    artifactIdPrefix={`msg-${i}`}
-                    onFork={() => void forkToTab(i)}
-                    onForkWorkspace={
-                      canForkWorkspace
-                        ? () => requestForkWorkspace(i)
-                        : undefined
-                    }
-                  />
+                  <>
+                    <AgentMessage
+                      text={m.text}
+                      parts={m.parts}
+                      ts={m.ts}
+                      durationMs={m.durationMs ?? fallbackDuration}
+                      usage={m.usage}
+                      threadId={thread.id}
+                      worktreePath={thread.worktreePath}
+                      knownFilePaths={filePaths}
+                      onOpenFile={onSelectFile}
+                      onOpenThread={onOpenThreadLink}
+                      onOpenArtifact={openRightPane}
+                      activeArtifactId={rightPane?.id}
+                      artifactIdPrefix={`msg-${i}`}
+                      onFork={() => void forkToTab(i)}
+                      onForkWorkspace={
+                        canForkWorkspace
+                          ? () => requestForkWorkspace(i)
+                          : undefined
+                      }
+                      hideAnswer={hidePlanProse}
+                    />
+                    {showPlanQuestions &&
+                      pendingPlanQuestions &&
+                      m.parts?.some(
+                        (p) =>
+                          p.type === 'tool' &&
+                          p.id === pendingPlanQuestions.id,
+                      ) && (
+                        <div className="plan-questions-chat-brief">
+                          <MarkdownMessage
+                            text={formatPlanQuestionsForChat(
+                              pendingPlanQuestions.questions,
+                            )}
+                          />
+                        </div>
+                      )}
+                  </>
                 ) : m.role === 'summary' ? (
                   <div className="msg-summary">
                     <div className="msg-summary-label">Context summarized</div>
@@ -1445,6 +1652,7 @@ export function ThreadPanel({
                     onOpenArtifact={openRightPane}
                     activeArtifactId={rightPane?.id}
                     artifactIdPrefix="live"
+                    hideAnswer={showPlanCard && liveHasPresentPlan}
                     onFork={() =>
                       void forkToTab(Math.max(0, thread.messages.length - 1))
                     }
@@ -1463,6 +1671,20 @@ export function ThreadPanel({
                     showMark={false}
                   />
                 )}
+                {showPlanQuestions &&
+                  pendingPlanQuestions &&
+                  liveParts.some(
+                    (p) =>
+                      p.type === 'tool' && p.id === pendingPlanQuestions.id,
+                  ) && (
+                    <div className="plan-questions-chat-brief">
+                      <MarkdownMessage
+                        text={formatPlanQuestionsForChat(
+                          pendingPlanQuestions.questions,
+                        )}
+                      />
+                    </div>
+                  )}
               </div>
               <div
                 className="msg-stream-activity"
@@ -1480,6 +1702,16 @@ export function ThreadPanel({
                 </span>
               </div>
             </>
+          )}
+          {showPlanCard && presentedPlan && (
+            <div className="msg agent plan-at-end">
+              <PlanApprovalCard
+                title={presentedPlan.title}
+                path={presentedPlan.path}
+                content={presentedPlan.content}
+                onOpenFile={onSelectFile}
+              />
+            </div>
           )}
           {thread.lastError && !isRedundantLastError(thread) && (
             <div className="msg error" style={{ color: 'var(--err)' }}>
@@ -1613,17 +1845,44 @@ export function ThreadPanel({
             void attachDroppedSnapshot(snap);
           }}
         >
-          {thread.planMode && !openFilePath && !openUrl && !changesOpen && (
-            <div className="composer-plan-banner">
-              Plan mode stays on until you turn it off or click Implement.
-            </div>
-          )}
           <ComposerAttachmentChips
             attachments={attachments}
             onRemove={(id) => void removeAttachment(id)}
             onOpen={onSelectFile}
             expandImages={false}
           />
+          {planAwaitingApproval && !showPlanQuestions && (
+            <PlanReadyBar
+              busy={busy}
+              onCopy={() => void copyPlan()}
+              onHandOff={() => void handOffPlan()}
+              onApprove={() => void implementPlan()}
+            />
+          )}
+          {showPlanQuestions && pendingPlanQuestions ? (
+            <PlanQuestionsPanel
+              pending={pendingPlanQuestions}
+              busy={busy}
+              onDismiss={() => setDismissedPlanQuestionsId(pendingPlanQuestions.id)}
+              onSubmit={(message) => {
+                setDismissedPlanQuestionsId(pendingPlanQuestions.id);
+                void (async () => {
+                  setBusy(true);
+                  setPendingUser(message);
+                  try {
+                    await window.sideboard.sendToThread(thread.id, message);
+                    setPrompt('');
+                    onRefresh();
+                  } catch (err) {
+                    setPendingUser(null);
+                    window.alert(err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              }}
+            />
+          ) : (
           <div className="composer-input-row" ref={acRef}>
             <span className="composer-cube" aria-hidden />
             {acItems.length > 0 && (
@@ -1648,11 +1907,13 @@ export function ThreadPanel({
               placeholder={
                 thread.status === 'running' || thread.status === 'queued'
                   ? 'Queued when you send…'
-                  : thread.planMode
-                    ? 'Plan mode — agent will analyze and plan without editing files'
-                    : thread.sourceType === 'orchestration' || isGlobalThread(thread)
-                      ? 'Describe a goal — spawn and steer worktree agents via MCP'
-                      : 'Ask to make changes, @mention files, run /commands'
+                  : planAwaitingApproval
+                    ? 'Optional notes for Approve / Hand off…'
+                    : thread.planMode
+                      ? 'Plan mode — agent will analyze and plan without editing files'
+                      : thread.sourceType === 'orchestration' || isGlobalThread(thread)
+                        ? 'Describe a goal — spawn and steer worktree agents via MCP'
+                        : 'Ask to make changes, @mention files, run /commands'
               }
               onFocus={() => setComposerFocused(true)}
               onBlur={() => {
@@ -1741,7 +2002,8 @@ export function ThreadPanel({
               </button>
             )}
           </div>
-          {composerExpanded && (
+          )}
+          {composerExpanded && !showPlanQuestions && (
             <div
               className="composer-toolbar"
               onMouseDown={(e) => {
@@ -1778,7 +2040,9 @@ export function ThreadPanel({
                 </button>
               </div>
               <div className="composer-right">
-                {thread.planMode && thread.messages.some((m) => m.role === 'agent') && (
+                {thread.planMode &&
+                  thread.messages.some((m) => m.role === 'agent') &&
+                  !planAwaitingApproval && (
                   <button
                     type="button"
                     className="chip implement-plan"

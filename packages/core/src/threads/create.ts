@@ -8,12 +8,10 @@ import {
   resolveDefaultBranch,
   resolveRepoRoot,
 } from '../git/worktree.js';
-import { copyConfiguredFiles, runSetupScript } from '../hook/conductor.js';
-import { runCursorWorktreeSetup } from '../hook/cursor-worktrees.js';
+import { copyConfiguredFiles } from '../hook/conductor.js';
 import {
   createEmptyThread,
   readThread,
-  updateThread,
   writeThread,
 } from '../store/thread-store.js';
 import { ensureWorkspace } from '../store/workspaces.js';
@@ -25,7 +23,7 @@ import type {
 
 export async function createThread(
   input: CreateThreadInput,
-  onSetupLine?: (line: string) => void,
+  _onSetupLine?: (line: string) => void,
 ): Promise<Thread> {
   // Tickets no longer require agent Linear MCP — Sideboard Account owns
   // Linear/GitHub issue connections (see integrations/).
@@ -100,23 +98,7 @@ export async function createThread(
   writeThread(thread);
   await ensureWorkspace(repoPath);
 
-  try {
-    let setup = await runSetupScript(repoPath, worktreePath, onSetupLine);
-    if (!setup.ran) {
-      setup = await runCursorWorktreeSetup(repoPath, worktreePath, onSetupLine);
-    }
-    if (setup.ran && setup.exitCode !== 0 && setup.exitCode !== null) {
-      updateThread(thread.id, {
-        lastError: `Setup exited ${setup.exitCode} (thread is still usable)`,
-      });
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    updateThread(thread.id, {
-      lastError: `Setup failed: ${message}`,
-    });
-  }
-
+  // Setup runs via Orchestrator.runSetup after create (emits setup_* for the UI).
   return readThread(thread.id) ?? thread;
 }
 

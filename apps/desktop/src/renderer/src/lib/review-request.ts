@@ -5,8 +5,8 @@ export const REPO_REVIEW_PATH = '.sideboard/review.md';
 
 export const REPO_REVIEW_NAME = 'review.md';
 
-/** Local / Conductor-style scratch guidelines (gitignored under attachments/). */
-export const REVIEW_REQUEST_PATH = '.sideboard/attachments/Review request.md';
+/** Local scratch guidelines (gitignored under `.context/attachments/`). */
+export const REVIEW_REQUEST_PATH = '.context/attachments/Review request.md';
 
 export const REVIEW_REQUEST_NAME = 'Review request.md';
 

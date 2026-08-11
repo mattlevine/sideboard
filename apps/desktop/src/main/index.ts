@@ -763,6 +763,22 @@ function registerIpc(): void {
   ipcMain.handle('initializeGit', (_e, ref: string) => orch.initializeGit(ref));
   ipcMain.handle('getPrChecks', (_e, ref: string) => orch.getPrChecks(ref));
   ipcMain.handle('getPrMeta', (_e, ref: string) => orch.getPrMeta(ref));
+  ipcMain.handle('getPrStack', (_e, ref: string) => orch.getPrStack(ref));
+  ipcMain.handle(
+    'openPrStackLayers',
+    (_e, ref: string, opts?: { layer?: number }) => orch.openPrStackLayers(ref, opts),
+  );
+  ipcMain.handle(
+    'addStackLayer',
+    (_e, ref: string, branchName: string, opts?: { title?: string }) =>
+      orch.addStackLayer(ref, branchName, opts),
+  );
+  ipcMain.handle(
+    'initStackFromThread',
+    (_e, ref: string, opts?: { additionalBranches?: string[]; base?: string }) =>
+      orch.initStackFromThread(ref, opts),
+  );
+  ipcMain.handle('createPrStack', (_e, input) => orch.createPrStack(input));
   ipcMain.handle('getPrDetails', (_e, ref: string) => orch.getPrDetails(ref));
   ipcMain.handle('listFiles', (_e, ref: string) => orch.listFiles(ref));
   ipcMain.handle('readFile', (_e, ref: string, relativePath: string) =>

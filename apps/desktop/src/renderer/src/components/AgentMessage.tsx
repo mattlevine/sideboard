@@ -43,6 +43,8 @@ interface Props {
   onFork?: () => void;
   /** Fork into a new git worktree (Conductor-style new workspace). */
   onForkWorkspace?: () => void;
+  /** Hide the answer body when the plan card already shows the same markdown. */
+  hideAnswer?: boolean;
 }
 
 function basename(path: string): string {
@@ -140,6 +142,7 @@ export function AgentMessage({
   artifactIdPrefix,
   onFork,
   onForkWorkspace,
+  hideAnswer = false,
 }: Props) {
   const [expanded, setExpanded] = useState(Boolean(streaming));
   const [menuOpen, setMenuOpen] = useState(false);
@@ -153,7 +156,12 @@ export function AgentMessage({
   }
 
   const safeParts = parts ?? [];
-  const toolCount = safeParts.filter((p) => p.type === 'tool').length;
+  const toolCount = safeParts.filter(
+    (p) =>
+      p.type === 'tool' &&
+      !/present_plan$/i.test(p.name ?? '') &&
+      !/ask_user|AskUserQuestion/i.test(p.name ?? ''),
+  ).length;
   const messageCount = safeParts.filter((p) => p.type === 'text').length;
   const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
   const hasTranscript = toolCount > 0 || thinkingCount > 0;
@@ -244,6 +252,10 @@ export function AgentMessage({
                   );
                 }
                 if (part.type === 'tool') {
+                  // Plan body is rendered as PlanApprovalCard in the chat stream.
+                  if (/present_plan$/i.test(part.name ?? '')) return null;
+                  // Questions are rendered as a chat brief + composer panel.
+                  if (/ask_user|AskUserQuestion/i.test(part.name ?? '')) return null;
                   const clickable = hasCodeDiff(part);
                   const isRunning = part.status === 'running';
                   return (
@@ -296,7 +308,7 @@ export function AgentMessage({
         </div>
       )}
 
-      {answer && (!hasTranscript || !expanded) && (
+      {answer && !hideAnswer && (!hasTranscript || !expanded) && (
         <div className="msg-body">
           <MarkdownMessage
             text={answer}

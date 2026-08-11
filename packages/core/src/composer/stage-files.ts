@@ -2,6 +2,10 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileS
 import { basename, extname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { ThreadAttachment } from '../types/thread.js';
+import {
+  ATTACHMENTS_DIR,
+  attachmentsGitignoreBody,
+} from '../paths/workspace-scratch.js';
 
 /** Keep in sync with renderer `lib/language.ts` / `diff.ts` IMAGE_EXTENSIONS. */
 const IMAGE_EXTENSIONS = new Set([
@@ -26,12 +30,6 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = {
   ico: 'image/x-icon',
 };
 
-const ATTACHMENTS_DIR = '.sideboard/attachments';
-const ATTACHMENTS_GITIGNORE = `# Sideboard review / composer attachments (local only)
-*
-!.gitignore
-`;
-
 /** Inline text/binary content cap (images use path + preview instead). */
 const MAX_INLINE_BYTES = 400_000;
 /** Cap for data-URL thumbnails stored on pending attachments. */
@@ -55,7 +53,7 @@ function ensureAttachmentsDir(worktreePath: string): string {
   mkdirSync(dir, { recursive: true });
   const gi = join(dir, '.gitignore');
   if (!existsSync(gi)) {
-    writeFileSync(gi, ATTACHMENTS_GITIGNORE, 'utf8');
+    writeFileSync(gi, attachmentsGitignoreBody(), 'utf8');
   }
   return dir;
 }
@@ -163,7 +161,7 @@ export function attachmentFromAbsolutePath(absolutePath: string): ThreadAttachme
 }
 
 /**
- * Copy absolute paths into `.sideboard/attachments/` and return composer attachments
+ * Copy absolute paths into `.context/attachments/` and return composer attachments
  * with worktree-relative `path` (and image previews when applicable).
  */
 export function stageAbsolutePathsAsAttachments(
@@ -202,7 +200,7 @@ export interface ComposerFileBuffer {
 }
 
 /**
- * Write in-memory file buffers into `.sideboard/attachments/` (renderer drop
+ * Write in-memory file buffers into `.context/attachments/` (renderer drop
  * fallback when Electron does not expose a filesystem path).
  */
 export function stageBuffersAsAttachments(

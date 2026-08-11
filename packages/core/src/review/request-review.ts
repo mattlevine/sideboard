@@ -6,6 +6,11 @@ import { isOrchestratorThread } from '../store/global-workspace.js';
 import { createChatTab } from '../threads/chat-tabs.js';
 import { findThreadByRef } from '../store/thread-store.js';
 import { REVIEW_REQUEST_TEMPLATE } from './review-request-template.js';
+import {
+  ATTACHMENTS_DIR,
+  LEGACY_ATTACHMENTS_DIR,
+  attachmentsGitignoreBody,
+} from '../paths/workspace-scratch.js';
 
 /** Committed per-repo review guidelines (preferred when present). */
 export const REPO_REVIEW_PATH = '.sideboard/review.md';
@@ -13,20 +18,17 @@ export const REPO_REVIEW_PATH = '.sideboard/review.md';
 export const REPO_REVIEW_NAME = 'review.md';
 
 /**
- * Local / Conductor-style scratch guidelines (gitignored under attachments/).
+ * Local scratch guidelines (gitignored under `.context/attachments/`).
  * Used as override when no repo file exists, or as the stock seed target.
  */
-export const REVIEW_REQUEST_PATH = '.sideboard/attachments/Review request.md';
+export const REVIEW_REQUEST_PATH = `${ATTACHMENTS_DIR}/Review request.md`;
+
+export const LEGACY_REVIEW_REQUEST_PATH = `${LEGACY_ATTACHMENTS_DIR}/Review request.md`;
 
 export const REVIEW_REQUEST_NAME = 'Review request.md';
 
 /** Short chat message — guidelines live in the attached review file. */
 export const REVIEW_REQUEST_PREFILL = 'Review.';
-
-const ATTACHMENTS_GITIGNORE = `# Sideboard review / composer attachments (local only)
-*
-!.gitignore
-`;
 
 /** Stock template from before readiness recommendations were required. */
 const LEGACY_REVIEW_TEMPLATE_MARKERS = [
@@ -67,17 +69,18 @@ function readTextIfPresent(abs: string): string | null {
 }
 
 function ensureAttachmentsGitignore(worktreePath: string): void {
-  const gitignoreAbs = join(worktreePath, '.sideboard', 'attachments', '.gitignore');
+  const gitignoreAbs = join(worktreePath, ATTACHMENTS_DIR, '.gitignore');
   if (existsSync(gitignoreAbs)) return;
   mkdirSync(dirname(gitignoreAbs), { recursive: true });
-  writeFileSync(gitignoreAbs, ATTACHMENTS_GITIGNORE, 'utf8');
+  writeFileSync(gitignoreAbs, attachmentsGitignoreBody(), 'utf8');
 }
 
 /**
  * Resolve which review guidelines to attach:
  * 1. `.sideboard/review.md` (committed, per-repo)
- * 2. `.sideboard/attachments/Review request.md` (local override)
- * 3. Seed stock template into the local attachments path (does not write the repo file)
+ * 2. `.context/attachments/Review request.md` (local override)
+ * 3. Legacy `.sideboard/attachments/Review request.md`
+ * 4. Seed stock template into `.context/attachments/` (does not write the repo file)
  */
 export function resolveReviewGuidelines(worktreePath: string): ResolvedReviewGuidelines {
   const repoAbs = join(worktreePath, REPO_REVIEW_PATH);
@@ -98,6 +101,17 @@ export function resolveReviewGuidelines(worktreePath: string): ResolvedReviewGui
       path: REVIEW_REQUEST_PATH,
       name: REVIEW_REQUEST_NAME,
       content: localContent,
+      source: 'local',
+    };
+  }
+
+  const legacyAbs = join(worktreePath, LEGACY_REVIEW_REQUEST_PATH);
+  const legacyContent = readTextIfPresent(legacyAbs);
+  if (legacyContent && !shouldRefreshReviewRequestTemplate(legacyContent)) {
+    return {
+      path: LEGACY_REVIEW_REQUEST_PATH,
+      name: REVIEW_REQUEST_NAME,
+      content: legacyContent,
       source: 'local',
     };
   }
@@ -132,11 +146,16 @@ export function ensureReviewRequestFile(worktreePath: string): ResolvedReviewGui
   }
 
   const localAbs = join(worktreePath, REVIEW_REQUEST_PATH);
-  const localContent = readTextIfPresent(localAbs);
+  const localContent =
+    readTextIfPresent(localAbs) ??
+    readTextIfPresent(join(worktreePath, LEGACY_REVIEW_REQUEST_PATH));
   if (localContent && !shouldRefreshReviewRequestTemplate(localContent)) {
     // Legacy local-only customize — don't force a repo file over an existing local one.
+    const path = existsSync(localAbs)
+      ? REVIEW_REQUEST_PATH
+      : LEGACY_REVIEW_REQUEST_PATH;
     return {
-      path: REVIEW_REQUEST_PATH,
+      path,
       name: REVIEW_REQUEST_NAME,
       content: localContent,
       source: 'local',
@@ -175,7 +194,8 @@ export function buildReviewRequestAttachment(
 export function readExistingReviewRequestFile(worktreePath: string): string | null {
   return (
     readTextIfPresent(join(worktreePath, REPO_REVIEW_PATH)) ??
-    readTextIfPresent(join(worktreePath, REVIEW_REQUEST_PATH))
+    readTextIfPresent(join(worktreePath, REVIEW_REQUEST_PATH)) ??
+    readTextIfPresent(join(worktreePath, LEGACY_REVIEW_REQUEST_PATH))
   );
 }
 

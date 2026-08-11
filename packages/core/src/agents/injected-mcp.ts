@@ -34,6 +34,8 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_artifact',
   'mcp__sideboard__present_schema',
   'mcp__sideboard__present_files',
+  'mcp__sideboard__ask_user',
+  'mcp__sideboard__present_plan',
 ] as const;
 
 /** Legacy single-server allow list (CLI ~/.brightsy fallback). */

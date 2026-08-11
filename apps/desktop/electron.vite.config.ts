@@ -64,12 +64,28 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/agents/orchestrator-capable.ts',
         ),
+        '@sideboard/plan-ask-user': resolve(
+          __dirname,
+          '../../packages/core/src/plan/ask-user.ts',
+        ),
+        '@sideboard/plan-file': resolve(
+          __dirname,
+          '../../packages/core/src/plan/plan-present.ts',
+        ),
+
       },
     },
     optimizeDeps: {
       // Never prebundle the Cursor SDK into the renderer — it ships broken .d.ts/.map
       // graphs that blow up esbuild when pulled via the @sideboard-ai/core barrel.
-      exclude: ['@cursor/sdk', '@sideboard-ai/core'],
+      // Also keep Node-only execa/unicorn-magic out of client dep optimization.
+      exclude: [
+        '@cursor/sdk',
+        '@sideboard-ai/core',
+        'execa',
+        'npm-run-path',
+        'unicorn-magic',
+      ],
       include: ['@brightsy/client'],
     },
     build: {

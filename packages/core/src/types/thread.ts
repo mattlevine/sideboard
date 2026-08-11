@@ -108,6 +108,13 @@ export interface Thread {
   prUrl: string | null;
   /** Cached PR title for Conductor-style sidebar labels (PR title > branch). */
   prTitle: string | null;
+  /**
+   * Stable id for a GitHub PR stack this thread belongs to (shared across layer worktrees).
+   * Null when not part of a stack.
+   */
+  stackId: string | null;
+  /** 1-based layer position in the stack (bottom = 1), when {@link stackId} is set. */
+  stackLayer: number | null;
   /** When true, `title` is a manual override and is not overwritten by branch/PR sync. */
   userSetTitle: boolean;
   createdAt: string;
@@ -274,6 +281,41 @@ export interface PrMeta {
   reviewDecision: string | null;
   baseRefName: string;
   headRefName: string;
+}
+
+/** One layer in a GitHub PR stack (bottom = position 1). */
+export interface PrStackLayer {
+  /** 1-based index from trunk (bottom = 1). */
+  position: number;
+  branchName: string;
+  /** Tip SHA when known from `gh stack view`. */
+  headSha?: string;
+  /** Parent tip SHA last recorded by gh-stack (may lag). */
+  baseSha?: string;
+  isCurrent: boolean;
+  isMerged: boolean;
+  isQueued: boolean;
+  needsRebase: boolean;
+  prNumber: number | null;
+  prUrl: string | null;
+  /** OPEN | MERGED | QUEUED when a PR exists. */
+  prState: string | null;
+  title?: string;
+}
+
+/** GitHub stacked PRs for a worktree / branch. */
+export interface PrStack {
+  /** GitHub stack number when known. */
+  stackNumber: number | null;
+  trunk: string;
+  currentBranch: string;
+  /** Bottom → top. */
+  layers: PrStackLayer[];
+  /** Current layer index in `layers` (0-based), or -1. */
+  currentIndex: number;
+  /** True when every open layer below+including current looks mergeable. */
+  readyToMerge: boolean;
+  blockedReason: string | null;
 }
 
 export interface IssueInfo {

@@ -43,13 +43,13 @@ describe('stage-files', () => {
     expect(att.content).toMatch(/Image attached/);
   });
 
-  it('stages external files into .sideboard/attachments', () => {
+  it('stages external files into .context/attachments', () => {
     const worktree = tempDir();
     const srcDir = tempDir();
     const abs = join(srcDir, 'hello.txt');
     writeFileSync(abs, 'hello world');
     const [att] = stageAbsolutePathsAsAttachments(worktree, [abs]);
-    expect(att?.path).toBe('.sideboard/attachments/hello.txt');
+    expect(att?.path).toBe('.context/attachments/hello.txt');
     expect(att?.content).toBe('hello world');
   });
 
@@ -72,7 +72,7 @@ describe('stage-files', () => {
     const [att] = stageBuffersAsAttachments(worktree, [
       { name: 'drop.png', dataBase64: png.toString('base64') },
     ]);
-    expect(att?.path).toBe('.sideboard/attachments/drop.png');
+    expect(att?.path).toBe('.context/attachments/drop.png');
     expect(att?.previewDataUrl).toBeTruthy();
   });
 });

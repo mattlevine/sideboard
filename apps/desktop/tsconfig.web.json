@@ -19,7 +19,11 @@
       "@sideboard/worktree-labels": ["../../packages/core/src/git/worktree-labels.ts"],
       "@sideboard/brightsy-targets": ["../../packages/core/src/agents/brightsy-targets.ts"],
       "@sideboard/gh-errors": ["../../packages/core/src/git/gh-errors.ts"],
+      "@sideboard/diff-comment": ["../../packages/core/src/composer/diff-comment.ts"],
+      "@sideboard/teams": ["../../packages/core/src/git/teams.ts"],
       "@sideboard/orchestrator-capable": ["../../packages/core/src/agents/orchestrator-capable.ts"],
+      "@sideboard/plan-ask-user": ["../../packages/core/src/plan/ask-user.ts"],
+      "@sideboard/plan-file": ["../../packages/core/src/plan/plan-present.ts"],
       "@brightsy/ui-context": ["./node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx"]
     }
   },

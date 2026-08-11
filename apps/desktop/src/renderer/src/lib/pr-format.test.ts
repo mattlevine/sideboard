@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatReviewDecision,
+  hasMergeConflictChecks,
   prPillModifier,
   prPillStatusLabel,
 } from './pr-format';
@@ -42,6 +43,27 @@ describe('pr pill status', () => {
     ).toBe('Draft');
   });
 
+  it('surfaces merge conflicts over draft / review decision', () => {
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: true,
+        reviewDecision: 'APPROVED',
+        mergeConflicts: true,
+      }),
+    ).toBe('Merge conflicts');
+    expect(
+      prPillModifier({
+        merged: false,
+        closed: false,
+        draft: true,
+        reviewDecision: 'APPROVED',
+        mergeConflicts: true,
+      }),
+    ).toBe('conflicts');
+  });
+
   it('shows needs approval / open / approved for open PRs', () => {
     expect(
       prPillStatusLabel({
@@ -75,5 +97,19 @@ describe('pr pill status', () => {
         reviewDecision: 'APPROVED',
       }),
     ).toBe('approved');
+  });
+});
+
+describe('hasMergeConflictChecks', () => {
+  it('detects CONFLICTING / DIRTY mergeability rows', () => {
+    expect(hasMergeConflictChecks([])).toBe(false);
+    expect(
+      hasMergeConflictChecks([
+        { kind: 'mergeability', state: 'CONFLICTING', name: 'Merge conflicts' },
+      ]),
+    ).toBe(true);
+    expect(
+      hasMergeConflictChecks([{ kind: 'mergeability', state: 'BEHIND', name: 'Branch behind' }]),
+    ).toBe(false);
   });
 });

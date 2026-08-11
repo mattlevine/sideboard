@@ -3,7 +3,7 @@ import { BrandMark } from './BrandMark';
 
 const STEPS_THREAD = [
   'Creating worktree',
-  'Checking out branch',
+  'Running setup',
   'Wiring session',
   'Almost ready',
 ] as const;

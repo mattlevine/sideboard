@@ -63,6 +63,8 @@ function worktreeBindingFrom(from: Thread): Pick<
   | 'parentThreadId'
   | 'prUrl'
   | 'prTitle'
+  | 'stackId'
+  | 'stackLayer'
 > {
   return {
     worktreePath: normalizeWorktreePath(from.worktreePath),
@@ -80,6 +82,8 @@ function worktreeBindingFrom(from: Thread): Pick<
     parentThreadId: from.parentThreadId,
     prUrl: from.prUrl,
     prTitle: from.prTitle,
+    stackId: from.stackId,
+    stackLayer: from.stackLayer,
   };
 }
 

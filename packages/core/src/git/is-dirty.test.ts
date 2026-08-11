@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { isDirty, isSideboardScratchPath } from './worktree.js';
 
 describe('isSideboardScratchPath', () => {
-  it('matches attachment scratch only', () => {
+  it('matches .context and legacy .sideboard attachment scratch', () => {
+    expect(isSideboardScratchPath('.context/attachments/.gitignore')).toBe(true);
+    expect(isSideboardScratchPath('.context/attachments/plan.md')).toBe(true);
     expect(isSideboardScratchPath('.sideboard/attachments/.gitignore')).toBe(
       true,
     );
@@ -30,16 +32,16 @@ describe('isDirty', () => {
     return dir;
   }
 
-  it('ignores untracked .sideboard/attachments scratch', async () => {
+  it('ignores untracked .context/attachments scratch', async () => {
     const dir = await initRepo();
-    mkdirSync(join(dir, '.sideboard', 'attachments'), { recursive: true });
+    mkdirSync(join(dir, '.context', 'attachments'), { recursive: true });
     writeFileSync(
-      join(dir, '.sideboard', 'attachments', '.gitignore'),
+      join(dir, '.context', 'attachments', '.gitignore'),
       '*\n!.gitignore\n',
     );
     writeFileSync(
-      join(dir, '.sideboard', 'attachments', 'Review request.md'),
-      'Review.\n',
+      join(dir, '.context', 'attachments', 'plan.md'),
+      '# Plan\n',
     );
 
     await expect(isDirty(dir)).resolves.toBe(false);
@@ -50,9 +52,9 @@ describe('isDirty', () => {
     writeFileSync(join(dir, 'new.ts'), 'export {}\n');
     await expect(isDirty(dir)).resolves.toBe(true);
 
-    mkdirSync(join(dir, '.sideboard', 'attachments'), { recursive: true });
+    mkdirSync(join(dir, '.context', 'attachments'), { recursive: true });
     writeFileSync(
-      join(dir, '.sideboard', 'attachments', '.gitignore'),
+      join(dir, '.context', 'attachments', '.gitignore'),
       '*\n!.gitignore\n',
     );
     await expect(isDirty(dir)).resolves.toBe(true);

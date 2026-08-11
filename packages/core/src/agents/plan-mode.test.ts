@@ -26,8 +26,10 @@ describe('permissionMode', () => {
 describe('PLAN_MODE_INSTRUCTION', () => {
   it('instructs plan-only behavior that stays until the user exits', () => {
     expect(PLAN_MODE_INSTRUCTION).toMatch(/Plan mode/i);
-    expect(PLAN_MODE_INSTRUCTION).toMatch(/Do not modify/i);
+    expect(PLAN_MODE_INSTRUCTION).toMatch(/present_plan|\.context\/attachments\/plan\.md/i);
     expect(PLAN_MODE_INSTRUCTION).toMatch(/remain active/i);
-    expect(PLAN_MODE_INSTRUCTION).toMatch(/Do not exit plan mode/i);
+    expect(PLAN_MODE_INSTRUCTION).toMatch(/ask_user/i);
+    expect(PLAN_MODE_INSTRUCTION).toMatch(/chat message|tradeoff|description/i);
+    expect(PLAN_MODE_INSTRUCTION).toMatch(/ExitPlanMode|Approve/i);
   });
 });

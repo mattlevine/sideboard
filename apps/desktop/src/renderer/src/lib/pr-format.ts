@@ -21,9 +21,12 @@ export function prPillModifier(opts: {
   closed: boolean;
   draft: boolean;
   reviewDecision: string | null | undefined;
+  /** Open PR cannot merge until conflicts are resolved. */
+  mergeConflicts?: boolean;
 }): string {
   if (opts.merged) return 'merged';
   if (opts.closed) return 'closed';
+  if (opts.mergeConflicts) return 'conflicts';
   if (opts.draft) return 'draft';
   const decision = (opts.reviewDecision ?? '').toUpperCase();
   if (decision === 'REVIEW_REQUIRED') return 'needs-approval';
@@ -38,11 +41,27 @@ export function prPillStatusLabel(opts: {
   closed: boolean;
   draft: boolean;
   reviewDecision: string | null | undefined;
+  mergeConflicts?: boolean;
 }): string {
   if (opts.merged) return 'Merged';
   if (opts.closed) return 'Closed';
+  if (opts.mergeConflicts) return 'Merge conflicts';
   if (opts.draft) return 'Draft';
   return formatReviewDecision(opts.reviewDecision) ?? 'Open';
+}
+
+/** True when Checks include a failing mergeability conflict row. */
+export function hasMergeConflictChecks(
+  checks: Array<Pick<PrCheckRun, 'kind' | 'state' | 'name'>> | null | undefined,
+): boolean {
+  if (!checks?.length) return false;
+  return checks.some((c) => {
+    if (c.kind === 'mergeability') {
+      const state = (c.state ?? '').toUpperCase();
+      return state === 'CONFLICTING' || state === 'DIRTY';
+    }
+    return /merge conflicts/i.test(c.name ?? '');
+  });
 }
 
 export function formatCheckDuration(check: PrCheckRun): string {

@@ -8,6 +8,7 @@ export * from './store/global-workspace.js';
 export * from './git/run.js';
 export * from './git/gh-errors.js';
 export * from './git/worktree.js';
+export * from './git/stack.js';
 export * from './integrations/github.js';
 export * from './integrations/linear.js';
 export * from './integrations/issues.js';
@@ -34,9 +35,14 @@ export * from './land/land.js';
 export * from './threads/create.js';
 export * from './threads/chat-tabs.js';
 export * from './threads/fork-worktree.js';
+export * from './threads/stack-layers.js';
 export * from './threads/adopt.js';
 export * from './orchestrator/orchestrator.js';
 export * from './review/request-review.js';
+export * from './paths/workspace-scratch.js';
+export * from './plan/ask-user.js';
+export * from './plan/plan-present.js';
+export * from './plan/plan-file.js';
 export {
   coordinatorSystemPrompt,
   coordinatorTurnReminder,

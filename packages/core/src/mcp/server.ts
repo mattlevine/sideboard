@@ -145,6 +145,90 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'ask_user',
+    'Ask the user clarifying multiple-choice questions in Sideboard’s composer (plan mode). Before calling, write a short chat message explaining the decision and what each option means. Include a description on every option. Use for approach forks and requirements — not for “is the plan ready?”. After calling, stop and wait for their next message with answers.',
+    {
+      questions: z
+        .array(
+          z.object({
+            question: z.string().describe('Full question text ending with ?'),
+            header: z
+              .string()
+              .max(24)
+              .optional()
+              .describe('Short label shown above the question'),
+            multiSelect: z
+              .boolean()
+              .optional()
+              .describe('Allow selecting multiple options'),
+            options: z
+              .array(
+                z                .object({
+                  label: z.string(),
+                  description: z
+                    .string()
+                    .optional()
+                    .describe('What this option means / when to choose it (strongly preferred)'),
+                }),
+              )
+              .min(2)
+              .max(6)
+              .describe('2–6 choices (Sideboard also offers Other)'),
+          }),
+        )
+        .min(1)
+        .max(4)
+        .describe('1–4 questions'),
+    },
+    async ({ questions }) => {
+      const payload = {
+        ok: true,
+        questions,
+        message:
+          'Questions shown in Sideboard’s composer. Wait for the user’s next message with their answers before continuing.',
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+    },
+  );
+
+  server.tool(
+    'present_plan',
+    'Save the implementation plan as markdown to .context/attachments/plan.md and show it in Sideboard chat for user approval (Copy / Hand off / Approve). Call this when the plan is ready — required in plan mode. Pass the full plan body in content. Then Claude should call ExitPlanMode.',
+    {
+      title: z
+        .string()
+        .optional()
+        .describe('Short plan title (defaults to Plan)'),
+      content: z
+        .string()
+        .min(1)
+        .describe('Full plan markdown (headings, steps, risks, open questions)'),
+      thread_id: z
+        .string()
+        .optional()
+        .describe('Sideboard thread id when cwd is not the worktree'),
+    },
+    async ({ title, content, thread_id }) => {
+      const { writePlanFile } = await import('../plan/plan-file.js');
+      let root = process.cwd();
+      if (thread_id?.trim()) {
+        const t = orch.getThread(thread_id.trim());
+        if (t?.worktreePath?.trim()) root = t.worktreePath;
+      }
+      const path = writePlanFile(root, content);
+      const payload = {
+        ok: true,
+        path,
+        title: title?.trim() || 'Plan',
+        content,
+        message:
+          'Plan saved to .context/attachments/plan.md and shown in Sideboard chat for approval.',
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+    },
+  );
+
+  server.tool(
     'present_schema',
     'Open Sideboard’s schema-driven CMS side column (filterable table and/or form). Pass JSON Schema + schemaUi (Brightsy extensions supported). Use datasource=brightsy with resource_id (record type UUID) when logged into Brightsy; use datasource=inline with embedded resource/records for any other source.',
     {
@@ -783,6 +867,130 @@ export async function startMcpServer(): Promise<void> {
                   `#${p.number} ${p.title} (${p.headRefName})${p.isCrossRepository ? ' [fork]' : ''}`,
               )
               .join('\n'),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'get_pr_stack',
+    'Load the GitHub PR stack for a thread worktree (`gh stack view --json`). Returns null JSON when the branch is not stacked. Prefer this before mergePr on stacked PRs.',
+    { ref: z.string() },
+    async ({ ref }) => {
+      const stack = await orch.getPrStack(ref);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(stack, null, 2) }],
+      };
+    },
+  );
+
+  server.tool(
+    'open_pr_stack_layers',
+    'Materialize one worktree+thread per stack layer (or a single 1-based layer). Pass a thread ref already on the stack.',
+    {
+      ref: z.string(),
+      layer: z.number().int().positive().optional(),
+    },
+    async ({ ref, layer }) => {
+      const result = await orch.openPrStackLayers(ref, { layer });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                stackNumber: result.stack.stackNumber,
+                trunk: result.stack.trunk,
+                threads: result.threads.map((t) => ({
+                  id: t.id,
+                  title: t.title,
+                  branchName: t.branchName,
+                  stackLayer: t.stackLayer,
+                  worktreePath: t.worktreePath,
+                  prUrl: t.prUrl,
+                  link: `sideboard://thread/${t.id}`,
+                })),
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'add_stack_layer',
+    'Add a branch on top of the current stack (`gh stack add`) and open a worktree+thread for it.',
+    {
+      ref: z.string(),
+      branchName: z.string(),
+      title: z.string().optional(),
+    },
+    async ({ ref, branchName, title }) => {
+      const result = await orch.addStackLayer(ref, branchName, { title });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                id: result.thread.id,
+                title: result.thread.title,
+                branchName: result.thread.branchName,
+                stackLayer: result.thread.stackLayer,
+                worktreePath: result.thread.worktreePath,
+                link: `sideboard://thread/${result.thread.id}`,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'create_pr_stack',
+    'Create a new GitHub PR stack with one Sideboard worktree per layer (bottom→top branch names). Requires `gh extension install github/gh-stack`.',
+    {
+      repoPath: z.string(),
+      branches: z.array(z.string()).min(1),
+      agent: z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor']),
+      base: z.string().optional(),
+      title: z.string().optional(),
+    },
+    async (args) => {
+      const result = await orch.createPrStack({
+        repoPath: args.repoPath,
+        branches: args.branches,
+        agent: args.agent,
+        base: args.base,
+        title: args.title,
+      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                stackNumber: result.stack.stackNumber,
+                trunk: result.stack.trunk,
+                threads: result.threads.map((t) => ({
+                  id: t.id,
+                  title: t.title,
+                  branchName: t.branchName,
+                  stackLayer: t.stackLayer,
+                  worktreePath: t.worktreePath,
+                  link: `sideboard://thread/${t.id}`,
+                })),
+              },
+              null,
+              2,
+            ),
           },
         ],
       };

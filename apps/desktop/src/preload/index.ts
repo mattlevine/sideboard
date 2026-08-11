@@ -89,6 +89,14 @@ const api: IpcApi = {
   initializeGit: (threadRef) => ipcRenderer.invoke('initializeGit', threadRef),
   getPrChecks: (threadRef) => ipcRenderer.invoke('getPrChecks', threadRef),
   getPrMeta: (threadRef) => ipcRenderer.invoke('getPrMeta', threadRef),
+  getPrStack: (threadRef) => ipcRenderer.invoke('getPrStack', threadRef),
+  openPrStackLayers: (threadRef, opts) =>
+    ipcRenderer.invoke('openPrStackLayers', threadRef, opts),
+  addStackLayer: (threadRef, branchName, opts) =>
+    ipcRenderer.invoke('addStackLayer', threadRef, branchName, opts),
+  initStackFromThread: (threadRef, opts) =>
+    ipcRenderer.invoke('initStackFromThread', threadRef, opts),
+  createPrStack: (input) => ipcRenderer.invoke('createPrStack', input),
   getPrDetails: (threadRef) => ipcRenderer.invoke('getPrDetails', threadRef),
   listFiles: (threadRef) => ipcRenderer.invoke('listFiles', threadRef),
   readFile: (threadRef, relativePath) =>

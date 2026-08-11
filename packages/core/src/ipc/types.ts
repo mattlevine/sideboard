@@ -21,6 +21,7 @@ import type {
   PrDetails,
   PrInfo,
   PrMeta,
+  PrStack,
   Thread,
   ThreadOptionsPatch,
 } from '../types/thread.js';
@@ -149,7 +150,7 @@ export interface IpcApi {
   setAttachments(threadRef: string, attachments: ThreadAttachment[]): Promise<Thread>;
   /**
    * Stage dropped/picked files into composer attachments. External files are
-   * copied into `.sideboard/attachments/` in the thread worktree.
+   * copied into `.context/attachments/` in the thread worktree.
    */
   attachComposerFiles(
     threadRef: string,
@@ -218,6 +219,37 @@ export interface IpcApi {
   getPrChecks(threadRef: string): Promise<PrCheckRun[] | null>;
   /** Lightweight PR fields for the sidebar pill (cheap GraphQL). */
   getPrMeta(threadRef: string): Promise<PrMeta | null>;
+  /** GitHub PR stack for the thread worktree, or null if not stacked. */
+  getPrStack(threadRef: string): Promise<PrStack | null>;
+  /** Open worktrees/threads for stack layers (all, or one 1-based position). */
+  openPrStackLayers(
+    threadRef: string,
+    opts?: { layer?: number },
+  ): Promise<{ stack: PrStack; threads: Thread[] }>;
+  /** Add a branch on top of the thread's stack and open its worktree. */
+  addStackLayer(
+    threadRef: string,
+    branchName: string,
+    opts?: { title?: string },
+  ): Promise<{ stack: PrStack; thread: Thread }>;
+  /** Turn the current thread branch into a stack (optional extra empty layers). */
+  initStackFromThread(
+    threadRef: string,
+    opts?: { additionalBranches?: string[]; base?: string },
+  ): Promise<{ stack: PrStack; threads: Thread[] }>;
+  /** Create a new stack with one worktree per layer. */
+  createPrStack(input: {
+    repoPath: string;
+    branches: string[];
+    base?: string;
+    agent: AgentKind;
+    autonomy?: Autonomy;
+    model?: string | null;
+    effort?: ThinkingEffort;
+    fast?: boolean;
+    planMode?: boolean;
+    title?: string;
+  }): Promise<{ stack: PrStack; threads: Thread[] }>;
   /** PR description / reviews for the Review tab. */
   getPrDetails(threadRef: string): Promise<PrDetails | null>;
   listFiles(threadRef: string): Promise<string[]>;

@@ -20,6 +20,7 @@ import { normalizeWorktreePath } from './worktree-labels.js';
 import { formatGhLandError, isGhRateLimitError } from './gh-errors.js';
 import { gh, git, resolveGhAuthToken } from './run.js';
 import { buildMergeGateChecks, type PrMergeGate } from './pr-gates.js';
+import { getPrStack, mergePrStack, stackMergeReadiness } from './stack.js';
 
 /** Best-effort GraphQL reset time from `gh api rate_limit` (REST; often still available). */
 async function lookupGithubGraphqlReset(cwd: string): Promise<number | undefined> {
@@ -977,6 +978,75 @@ export async function createThreadWorktree(opts: {
   return { branchName, worktreePath };
 }
 
+/**
+ * Attach a worktree to an **existing** branch (stack layers).
+ * Unlike {@link createThreadWorktree}, does not create `thread/<slug>`.
+ */
+export async function createExistingBranchWorktree(opts: {
+  repoPath: string;
+  branchName: string;
+  slug: string;
+}): Promise<CreateWorktreeResult> {
+  const branchName = opts.branchName.trim();
+  if (!branchName) throw new Error('branch name required');
+  const worktreePath = join(worktreesRoot(opts.repoPath), opts.slug);
+
+  if (existsSync(worktreePath)) {
+    throw new Error(`Worktree already exists at ${worktreePath}`);
+  }
+
+  await ensureGhPreferOrigin(opts.repoPath);
+  await git(['fetch', 'origin', '--prune'], opts.repoPath, { reject: false });
+  if (!branchName.startsWith('origin/') && !branchName.startsWith('refs/')) {
+    await git(['fetch', 'origin', branchName], opts.repoPath, { reject: false });
+  }
+
+  const existing = await listWorktrees(opts.repoPath);
+  const already = existing.find((w) => w.branch === branchName);
+  if (already?.path) {
+    throw new Error(
+      `Branch ${branchName} is already checked out at ${already.path}`,
+    );
+  }
+
+  const startPoint = await resolveWorktreeStartPoint(opts.repoPath, branchName);
+  const add = await git(
+    ['worktree', 'add', worktreePath, startPoint],
+    opts.repoPath,
+    { reject: false },
+  );
+  if (add.exitCode !== 0) {
+    // Prefer attaching the local branch name when startPoint was origin/….
+    const retry = await git(
+      ['worktree', 'add', worktreePath, branchName],
+      opts.repoPath,
+      { reject: false },
+    );
+    if (retry.exitCode !== 0) {
+      throw new Error(
+        `Failed to create worktree for ${branchName}: ${
+          retry.stderr.trim() ||
+          add.stderr.trim() ||
+          retry.stdout.trim() ||
+          add.stdout.trim() ||
+          `exit ${add.exitCode}`
+        }`,
+      );
+    }
+  }
+
+  // Ensure HEAD is the named local branch (not detached).
+  const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
+    reject: false,
+  });
+  if (head.stdout.trim() === 'HEAD' || head.stdout.trim() !== branchName) {
+    await git(['checkout', '-B', branchName], worktreePath, { reject: false });
+  }
+
+  await ensureGhPreferOrigin(worktreePath);
+  return { branchName, worktreePath };
+}
+
 export async function removeWorktree(
   repoPath: string,
   worktreePath: string,
@@ -1026,18 +1096,14 @@ export async function isDirty(worktreePath: string): Promise<boolean> {
   return false;
 }
 
+import { isWorkspaceScratchPath } from '../paths/workspace-scratch.js';
+
 /**
- * Local Sideboard attachment scratch (review guidelines seed, composer drops).
+ * Local workspace scratch (`.context/attachments`, legacy `.sideboard/attachments`).
  * Must not force the right-sidebar primary action to "Commit & push".
  */
 export function isSideboardScratchPath(relativePath: string): boolean {
-  const p = relativePath
-    .replace(/\\/g, '/')
-    .replace(/^\.\//, '')
-    .replace(/\/$/, '');
-  return (
-    p === '.sideboard/attachments' || p.startsWith('.sideboard/attachments/')
-  );
+  return isWorkspaceScratchPath(relativePath);
 }
 
 /** Path from a `git status --porcelain` line (handles renames + quoted paths). */
@@ -1076,15 +1142,16 @@ export async function pushBranch(
   await git(['push', '-u', 'origin', branchName], worktreePath);
 }
 
-/** Merge an open pull request via `gh pr merge` (squash by default).
- * Draft PRs are marked ready first — GitHub rejects merge while still draft. */
+/** Merge an open pull request.
+ * When the worktree is on a GitHub PR stack, uses `gh stack merge` (atomic through that PR).
+ * Otherwise: draft → ready, then `gh pr merge` (squash by default). */
 export async function mergePr(
   cwd: string,
   selector: string,
   opts?: { method?: 'merge' | 'squash' | 'rebase' },
 ): Promise<{ url: string; state: string }> {
   const slug = await resolveGithubRepoSlug(cwd);
-  const viewArgs = ['pr', 'view', selector, '--json', 'url,state,isDraft'];
+  const viewArgs = ['pr', 'view', selector, '--json', 'url,state,isDraft,number'];
   if (slug) viewArgs.push('--repo', slug);
   const before = await gh(viewArgs, cwd, { reject: false });
   if (before.exitCode !== 0 || !before.stdout.trim()) {
@@ -1092,19 +1159,40 @@ export async function mergePr(
   }
   let url = '';
   let isDraft = false;
+  let prNumber: number | null = null;
   try {
     const parsed = JSON.parse(before.stdout) as {
       url?: string;
       state?: string;
       isDraft?: boolean;
+      number?: number;
     };
     url = String(parsed.url ?? '');
     isDraft = Boolean(parsed.isDraft);
+    prNumber =
+      typeof parsed.number === 'number' && Number.isFinite(parsed.number)
+        ? parsed.number
+        : null;
     if (String(parsed.state ?? '').toUpperCase() === 'MERGED') {
       return { url, state: 'MERGED' };
     }
   } catch {
     throw new Error('Could not parse pull request details');
+  }
+
+  const stack = await getPrStack(cwd);
+  const stackLayer =
+    stack && prNumber != null
+      ? stack.layers.find((l) => l.prNumber === prNumber)
+      : null;
+  if (stack && stackLayer && prNumber != null) {
+    const throughIndex = stack.layers.findIndex((l) => l.prNumber === prNumber);
+    const gate = stackMergeReadiness(stack.layers, throughIndex);
+    if (!gate.readyToMerge) {
+      throw new Error(gate.blockedReason || 'Stack is not ready to merge');
+    }
+    await mergePrStack(cwd, { through: prNumber, method: opts?.method ?? 'squash' });
+    return { url, state: 'MERGED' };
   }
 
   if (isDraft) {
@@ -1133,10 +1221,12 @@ export async function mergePr(
   const after = await gh(viewArgs, cwd, { reject: false });
   if (after.exitCode === 0 && after.stdout.trim()) {
     try {
-      const parsed = JSON.parse(after.stdout) as { url?: string; state?: string };
+      const parsed = after.stdout
+        ? (JSON.parse(after.stdout) as { url?: string; state?: string })
+        : null;
       return {
-        url: String(parsed.url ?? url),
-        state: String(parsed.state ?? 'MERGED'),
+        url: String(parsed?.url ?? url),
+        state: String(parsed?.state ?? 'MERGED'),
       };
     } catch {
       // fall through

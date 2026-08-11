@@ -40,6 +40,9 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/present_artifact$/i.test(name)) {
     return str(input?.title) ? `Present ${str(input?.title)}` : 'Present artifact';
   }
+  if (/present_plan$/i.test(name)) {
+    return str(input?.title) ? `Plan ${str(input?.title)}` : 'Present plan';
+  }
   if (/present_schema$/i.test(name)) {
     return str(input?.title) ? `Schema ${str(input?.title)}` : 'Present schema';
   }

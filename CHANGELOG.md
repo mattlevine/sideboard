@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- GitHub PR stacks (first-class): `gh stack` wrappers, one worktree per layer, right-sidebar stack map (open layer / open all / add layer), merge via `gh stack merge`, MCP `get_pr_stack` / `open_pr_stack_layers` / `add_stack_layer` / `create_pr_stack`
+- Plan mode clarifying questions: agents call Sideboard MCP `ask_user` (or Claude `AskUserQuestion`); Conductor-style composer UI with numbered options, **Other…**, pagination, and dismiss. Agents explain option tradeoffs in chat first; Sideboard also mirrors questions + option descriptions in the transcript
+- Plan ready actions: **Copy**, **Hand off** (fork chat + implement), and **Approve** (⌘⇧↵) in the composer when the plan is ready — optional composer notes are included; the plan markdown in chat is presentation-only
+- Plan mode writes `.context/attachments/plan.md` via MCP `present_plan` and shows the plan markdown in chat for approval (shared across forked chat tabs in the same worktree)
+
+### Changed
+
+- Workspace-local scratch (plans, composer drops, local Review seed) moves to `.context/attachments/` (Conductor-style); committed Sideboard config stays under `.sideboard/` (`settings.toml`, `review.md`). Legacy `.sideboard/attachments/` still readable
+- Right sidebar: when a PR has merge conflicts, the pill shows **Merge conflicts** and the primary button becomes **Resolve** (queues merging the PR base into the branch)
+- New worktrees always run setup via Orchestrator `runSetup` (sidebar Setup tab events) after create / fork / stack layer open
+
+### Removed
+
+- Composer “Plan mode stays on…” banner (redundant with the plan-mode chip)
+
 ## [0.1.51] - 2026-08-10
 
 ### Fixed

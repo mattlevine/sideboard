@@ -10,10 +10,11 @@ import { FileTree } from './FileTree';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
+import { StackMap } from './StackMap';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
-import { prPillModifier, prPillStatusLabel, summarizeChecks } from '../lib/pr-format';
+import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks } from '../lib/pr-format';
 import {
   ensureReviewRequestFile,
 } from '../lib/review-request';
@@ -536,22 +537,27 @@ export function RightSidebar({
   const prOpen = Boolean(prUrl) && !prMerged && !prClosed;
   const prDraft = Boolean(prMeta?.isDraft) && prOpen;
   const prReviewDecision = prOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null;
+  const mergeConflicts = prOpen && hasMergeConflictChecks(prChecks);
   const pillOpts = {
     merged: prMerged,
     closed: prClosed,
     draft: prDraft,
     reviewDecision: prReviewDecision,
+    mergeConflicts,
   };
   const pillModifier = prUrl ? prPillModifier(pillOpts) : '';
   const pillStatus = prUrl ? prPillStatusLabel(pillOpts) : '';
   /** Local work that still needs to land before merge. */
   const hasLocalChanges =
     Boolean(diff?.dirty) || (diff?.unpushed ?? 0) > 0;
+  const prBase =
+    prMeta?.baseRefName?.trim().replace(/^refs\/heads\//, '') || 'main';
 
   function primaryGitLabel(): string {
     if (prMerged) return 'Live';
     if (prClosed) return 'Closed';
     if (!prUrl) return 'Create PR';
+    if (mergeConflicts) return 'Resolve';
     if (hasLocalChanges) return 'Commit & push';
     return 'Merge';
   }
@@ -560,6 +566,7 @@ export function RightSidebar({
     if (prMerged) return '●';
     if (prClosed) return '✕';
     if (!prUrl) return '⎇';
+    if (mergeConflicts) return '⚡';
     if (hasLocalChanges) return '↑';
     return '⤵';
   }
@@ -567,6 +574,10 @@ export function RightSidebar({
   function onPrimaryGitClick() {
     if (prMerged || prClosed) {
       if (prUrl) void window.sideboard.openExternal(prUrl);
+      return;
+    }
+    if (mergeConflicts) {
+      void askAgentGit('resolve-conflicts');
       return;
     }
     if (prUrl && !hasLocalChanges) {
@@ -630,7 +641,7 @@ export function RightSidebar({
       prompt =
         check.state.toUpperCase() === 'BEHIND'
           ? 'Update the branch.'
-          : 'Fix merge conflicts.';
+          : `Merge origin/${prBase} into this branch. Then push.`;
     } else if (kind === 'review') {
       prompt = 'Address review comments.';
     } else {
@@ -646,15 +657,22 @@ export function RightSidebar({
 
   /** Conductor-style: git buttons queue a short instruction for the worktree agent. */
   async function askAgentGit(
-    action: 'create-pr' | 'create-draft' | 'create-web' | 'commit-push',
+    action:
+      | 'create-pr'
+      | 'create-draft'
+      | 'create-web'
+      | 'commit-push'
+      | 'resolve-conflicts',
   ) {
     setPrMenuOpen(false);
     const prompt =
-      action === 'commit-push'
-        ? 'Commit and push.'
-        : action === 'create-web'
-          ? 'Commit, push, and open a PR in the browser.'
-          : 'Commit, push, and open a draft PR.';
+      action === 'resolve-conflicts'
+        ? `Merge origin/${prBase} into this branch. Then push.`
+        : action === 'commit-push'
+          ? 'Commit and push.'
+          : action === 'create-web'
+            ? 'Commit, push, and open a PR in the browser.'
+            : 'Commit, push, and open a draft PR.';
     setBusy(true);
     try {
       await window.sideboard.sendToThread(thread.id, prompt);
@@ -837,11 +855,13 @@ export function RightSidebar({
                     ? 'Pull request merged — open on GitHub'
                     : prClosed
                       ? 'Pull request closed — open on GitHub'
-                      : prUrl && !hasLocalChanges
-                        ? 'Merge pull request on GitHub'
-                        : prUrl
-                          ? 'Ask the agent to commit and push'
-                          : 'Ask the agent to create a pull request'
+                      : mergeConflicts
+                        ? `Ask the agent to merge origin/${prBase} and resolve conflicts`
+                        : prUrl && !hasLocalChanges
+                          ? 'Merge pull request on GitHub'
+                          : prUrl
+                            ? 'Ask the agent to commit and push'
+                            : 'Ask the agent to create a pull request'
                 }
               >
                 <span className="btn-icon" aria-hidden>
@@ -864,7 +884,19 @@ export function RightSidebar({
                     <div className="tool-menu">
                       {prUrl ? (
                         <>
-                          {hasLocalChanges ? (
+                          {mergeConflicts ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrMenuOpen(false);
+                                setMergeError(null);
+                                setMergeConfirm(true);
+                              }}
+                            >
+                              <span className="tool-menu-icon">⌥</span>
+                              <span>Merge without resolving</span>
+                            </button>
+                          ) : hasLocalChanges ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -883,6 +915,55 @@ export function RightSidebar({
                             >
                               <span className="tool-menu-icon">↑</span>
                               <span>Commit & push</span>
+                            </button>
+                          )}
+                          {!thread.stackId ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrMenuOpen(false);
+                                void (async () => {
+                                  try {
+                                    await window.sideboard.initStackFromThread(
+                                      thread.id,
+                                    );
+                                    onRefresh();
+                                  } catch (err) {
+                                    window.alert(
+                                      err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                    );
+                                  }
+                                })();
+                              }}
+                            >
+                              <span className="tool-menu-icon">☰</span>
+                              <span>Init PR stack</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrMenuOpen(false);
+                                void (async () => {
+                                  try {
+                                    await window.sideboard.openPrStackLayers(
+                                      thread.id,
+                                    );
+                                    onRefresh();
+                                  } catch (err) {
+                                    window.alert(
+                                      err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                    );
+                                  }
+                                })();
+                              }}
+                            >
+                              <span className="tool-menu-icon">☰</span>
+                              <span>Open all stack layers</span>
                             </button>
                           )}
                         </>
@@ -927,6 +1008,11 @@ export function RightSidebar({
             </button>
           </div>
         </div>
+        <StackMap
+          thread={thread}
+          onRefresh={onRefresh}
+          onSelectChat={onSelectChat}
+        />
       </div>
 
       <div className="right-upper">
@@ -1458,6 +1544,7 @@ export function RightSidebar({
           isDraft={Boolean(prMeta?.isDraft)}
           busy={mergeBusy}
           error={mergeError}
+          stackMerge={Boolean(thread.stackId)}
           onConfirm={() => void confirmMergePr()}
           onCancel={() => {
             if (!mergeBusy) {

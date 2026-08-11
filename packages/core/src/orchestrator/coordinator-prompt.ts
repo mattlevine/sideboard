@@ -54,6 +54,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Discover:',
   '- list_workspaces — registered repos (path + github slug when known)',
   '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces (issues: Linear API or GitHub Issues)',
+  '- get_pr_stack / open_pr_stack_layers / add_stack_layer / create_pr_stack — GitHub stacked PRs (`gh stack`); one worktree per layer',
   '- list_models — only when you need a specific model (rare); otherwise leave model unset = Auto',
   '- list_threads / get_thread — fleet status (what is going on)',
   'Workspaces:',
