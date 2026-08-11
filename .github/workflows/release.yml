@@ -4,10 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-    # Without this, GitHub still queues the workflow on every branch push,
-    # concludes "No jobs were run", and emails that as a failure.
-    branches-ignore:
-      - '**'
 
 permissions:
   contents: write
@@ -24,6 +20,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @sideboard-ai/core build
       - run: pnpm --filter @sideboard-ai/cli build

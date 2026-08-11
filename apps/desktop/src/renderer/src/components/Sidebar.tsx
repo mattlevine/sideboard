@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import {
   normalizeWorktreePath,
   threadDisplayLabel,
@@ -63,6 +64,554 @@ function groupByWorktree(threads: Thread[]): Thread[][] {
   }
   return [...map.values()].map((list) =>
     list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+  );
+}
+
+type WorktreeDiffStat = { additions: number; deletions: number };
+
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 48) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function prNumberFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m = url.match(/\/pull\/(\d+)/);
+  return m?.[1] ?? null;
+}
+
+function worktreeSlug(thread: Thread): string {
+  const base = thread.worktreePath.replace(/\/$/, '').split('/').pop();
+  return base || thread.branchName.replace(/^thread\//, '') || 'workspace';
+}
+
+function previewSnippet(thread: Thread): string {
+  if (thread.lastError?.trim()) return thread.lastError.trim();
+  const last = [...thread.messages].reverse().find(
+    (m) => m.role === 'agent' || m.role === 'user',
+  );
+  if (last?.text?.trim()) {
+    const t = last.text.trim().replace(/\s+/g, ' ');
+    return t.length > 120 ? `${t.slice(0, 117)}…` : t;
+  }
+  if (thread.branchName?.trim()) return thread.branchName;
+  return '';
+}
+
+function WorktreeArchiveCard({
+  open,
+  anchorRef,
+  thread,
+  label,
+  onArchive,
+  onKeepOpen,
+}: {
+  open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
+  thread: Thread;
+  label: string;
+  onArchive: () => void;
+  onKeepOpen: (v: boolean) => void;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const slug = worktreeSlug(thread);
+  const prNum = prNumberFromUrl(thread.prUrl);
+  const preview = previewSnippet(thread);
+  const ok =
+    thread.status === 'idle' ||
+    thread.status === 'stopped' ||
+    thread.status === 'archived';
+
+  useEffect(() => {
+    if (!open || !anchorRef.current) {
+      setPos(null);
+      return;
+    }
+    const rect = anchorRef.current.getBoundingClientRect();
+    const width = 280;
+    let left = rect.right + 10;
+    if (left + width > window.innerWidth - 12) {
+      left = Math.max(12, rect.left - width - 10);
+    }
+    let top = rect.top - 8;
+    if (top + 180 > window.innerHeight - 12) {
+      top = Math.max(12, window.innerHeight - 192);
+    }
+    setPos({ top, left });
+  }, [open, anchorRef, thread.id]);
+
+  if (!open || !pos) return null;
+
+  return createPortal(
+    <div
+      className="worktree-hover-card"
+      style={{ top: pos.top, left: pos.left }}
+      role="dialog"
+      aria-label={`Archive ${label}`}
+      onMouseEnter={() => onKeepOpen(true)}
+      onMouseLeave={() => onKeepOpen(false)}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="worktree-hover-card-top">
+        <span className="worktree-hover-card-slug">{slug}</span>
+        <span
+          className={`worktree-hover-card-status${ok ? ' ok' : ''}`}
+          title={thread.status}
+          aria-label={thread.status}
+        >
+          {ok ? '✓' : '●'}
+        </span>
+      </div>
+      <div className="worktree-hover-card-title" title={label}>
+        {label}
+      </div>
+      {preview ? (
+        <p className="worktree-hover-card-preview">{preview}</p>
+      ) : null}
+      <div className="worktree-hover-card-footer">
+        <button
+          type="button"
+          className="worktree-hover-card-btn"
+          onClick={onArchive}
+        >
+          <span aria-hidden>▤</span>
+          Archive
+        </button>
+        <div className="worktree-hover-card-meta">
+          {thread.prUrl && prNum ? (
+            <button
+              type="button"
+              className="worktree-hover-card-pr"
+              title={thread.prUrl}
+              onClick={() => void window.sideboard.openExternal(thread.prUrl!)}
+            >
+              <span aria-hidden>⎇</span>
+              #{prNum} ↗
+            </button>
+          ) : thread.branchName ? (
+            <span className="worktree-hover-card-branch" title={thread.branchName}>
+              ⎇ {thread.branchName.replace(/^thread\//, '')}
+            </span>
+          ) : null}
+          <span className="worktree-hover-card-age">
+            {relativeTime(thread.updatedAt)}
+          </span>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function WorktreeEditCard({
+  open,
+  anchorRef,
+  thread,
+  label,
+  dirty,
+  loaded,
+  additions,
+  deletions,
+  onOpen,
+  onKeepOpen,
+}: {
+  open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
+  thread: Thread;
+  label: string;
+  dirty: boolean;
+  loaded: boolean;
+  additions: number;
+  deletions: number;
+  onOpen: () => void;
+  onKeepOpen: (v: boolean) => void;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [prBusy, setPrBusy] = useState(false);
+  const slug = worktreeSlug(thread);
+  const prNum = prNumberFromUrl(thread.prUrl);
+  const preview = previewSnippet(thread);
+  const ok =
+    thread.status === 'idle' ||
+    thread.status === 'stopped' ||
+    thread.status === 'archived';
+
+  useEffect(() => {
+    if (!open || !anchorRef.current) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = 280;
+      let left = rect.right + 10;
+      if (left + width > window.innerWidth - 12) {
+        left = Math.max(12, rect.left - width - 10);
+      }
+      let top = rect.top - 8;
+      if (top + 200 > window.innerHeight - 12) {
+        top = Math.max(12, window.innerHeight - 212);
+      }
+      setPos({ top, left });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, anchorRef, thread.id]);
+
+  async function createPr() {
+    if (prBusy) return;
+    setPrBusy(true);
+    try {
+      await window.sideboard.sendToThread(
+        thread.id,
+        'Commit, push, and open a draft PR.',
+      );
+      onKeepOpen(false);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPrBusy(false);
+    }
+  }
+
+  if (!open || !pos) return null;
+
+  const gitLabel = !loaded
+    ? '…'
+    : dirty
+      ? `+${additions} −${deletions}`
+      : 'clean';
+
+  return createPortal(
+    <div
+      className="worktree-hover-card"
+      style={{ top: pos.top, left: pos.left }}
+      role="dialog"
+      aria-label={`Open ${label}`}
+      onMouseEnter={() => onKeepOpen(true)}
+      onMouseLeave={() => onKeepOpen(false)}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="worktree-hover-card-top">
+        <span className="worktree-hover-card-slug">{slug}</span>
+        <span
+          className={`worktree-hover-card-git${dirty ? ' is-dirty' : ''}${loaded ? '' : ' is-loading'}`}
+          title={
+            dirty
+              ? `Uncommitted +${additions} −${deletions}`
+              : loaded
+                ? 'Working tree clean'
+                : 'Loading git status…'
+          }
+          aria-label={
+            dirty
+              ? `Uncommitted +${additions} −${deletions}`
+              : loaded
+                ? 'Working tree clean'
+                : 'Loading git status'
+          }
+        >
+          {dirty && loaded ? (
+            <>
+              <span className="add">+{additions}</span>
+              <span className="del">−{deletions}</span>
+            </>
+          ) : (
+            gitLabel
+          )}
+        </span>
+        <span
+          className={`worktree-hover-card-status${ok ? ' ok' : ''}${dirty ? ' dirty' : ''}`}
+          title={thread.status}
+          aria-label={thread.status}
+        >
+          {ok && !dirty ? '✓' : '●'}
+        </span>
+      </div>
+      <div className="worktree-hover-card-title" title={label}>
+        {label}
+      </div>
+      {preview ? (
+        <p className="worktree-hover-card-preview">{preview}</p>
+      ) : null}
+      <div className="worktree-hover-card-footer">
+        {thread.prUrl && prNum ? (
+          <button
+            type="button"
+            className="worktree-hover-card-btn"
+            title={thread.prUrl}
+            onClick={() => void window.sideboard.openExternal(thread.prUrl!)}
+          >
+            <span aria-hidden>⎇</span>
+            #{prNum} ↗
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="worktree-hover-card-btn"
+            disabled={prBusy}
+            onClick={() => void createPr()}
+          >
+            <span aria-hidden>⎇</span>
+            {prBusy ? 'Creating…' : 'Create PR'}
+          </button>
+        )}
+        <div className="worktree-hover-card-meta">
+          <button
+            type="button"
+            className="worktree-hover-card-open"
+            onClick={onOpen}
+          >
+            Open
+          </button>
+          <span className="worktree-hover-card-age">
+            {relativeTime(thread.updatedAt)}
+          </span>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function WorktreeSidebarRow({
+  primary,
+  group,
+  worktreeLabel,
+  active,
+  selected,
+  archiving,
+  unread,
+  onSelect,
+  onArchive,
+  onRequestArchive,
+}: {
+  primary: Thread;
+  group: Thread[];
+  worktreeLabel: string;
+  active: boolean;
+  selected: boolean;
+  archiving: boolean;
+  unread: boolean;
+  onSelect: (id: string, multi: boolean) => void;
+  onArchive?: (threadId: string) => void | Promise<void>;
+  onRequestArchive: (chats: Thread[]) => void;
+}) {
+  const [rowHover, setRowHover] = useState(false);
+  const [pencilHover, setPencilHover] = useState(false);
+  const [stat, setStat] = useState<WorktreeDiffStat | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [archiveHover, setArchiveHover] = useState(false);
+  const archiveBtnRef = useRef<HTMLButtonElement>(null);
+  const pencilBtnRef = useRef<HTMLButtonElement>(null);
+  const archiveCloseTimer = useRef<number | null>(null);
+  const pencilCloseTimer = useRef<number | null>(null);
+  const fetchGen = useRef(0);
+  const wantFetch = rowHover || pencilHover || archiveHover;
+
+  function clearTimer(ref: { current: number | null }) {
+    if (ref.current != null) {
+      window.clearTimeout(ref.current);
+      ref.current = null;
+    }
+  }
+
+  function setArchiveCardOpen(next: boolean) {
+    clearTimer(archiveCloseTimer);
+    if (next) {
+      clearTimer(pencilCloseTimer);
+      setPencilHover(false);
+      setArchiveHover(true);
+      return;
+    }
+    archiveCloseTimer.current = window.setTimeout(() => {
+      setArchiveHover(false);
+      archiveCloseTimer.current = null;
+    }, 120);
+  }
+
+  function setEditCardOpen(next: boolean) {
+    clearTimer(pencilCloseTimer);
+    if (next) {
+      clearTimer(archiveCloseTimer);
+      setArchiveHover(false);
+      setPencilHover(true);
+      return;
+    }
+    pencilCloseTimer.current = window.setTimeout(() => {
+      setPencilHover(false);
+      pencilCloseTimer.current = null;
+    }, 120);
+  }
+
+  useEffect(() => {
+    return () => {
+      clearTimer(archiveCloseTimer);
+      clearTimer(pencilCloseTimer);
+    };
+  }, []);
+
+  // Prefetch on row hover so status is ready when the pencil card opens.
+  useEffect(() => {
+    if (!wantFetch) return;
+    const gen = ++fetchGen.current;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const diff = await window.sideboard.getDiff(primary.id, {
+          scope: 'uncommitted',
+        });
+        if (cancelled || gen !== fetchGen.current) return;
+        const s = diff.scopeStats?.uncommitted;
+        setStat(
+          s
+            ? { additions: s.additions, deletions: s.deletions }
+            : { additions: 0, deletions: 0 },
+        );
+        setLoaded(true);
+      } catch {
+        if (cancelled || gen !== fetchGen.current) return;
+        setStat({ additions: 0, deletions: 0 });
+        setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [wantFetch, primary.id, primary.updatedAt, primary.worktreePath]);
+
+  const dirty =
+    loaded && stat != null && (stat.additions > 0 || stat.deletions > 0);
+
+  function requestArchive() {
+    setArchiveHover(false);
+    void window.sideboard
+      .listWorktreeChats(primary.id)
+      .then(onRequestArchive)
+      .catch(alert);
+  }
+
+  return (
+    <div
+      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
+      aria-busy={archiving}
+      onMouseEnter={() => setRowHover(true)}
+      onMouseLeave={() => {
+        setRowHover(false);
+        setEditCardOpen(false);
+        setArchiveCardOpen(false);
+      }}
+      onClick={(e) => {
+        if (archiving) return;
+        onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey);
+      }}
+    >
+      {archiving ? (
+        <span className="thread-archive-spinner" aria-hidden />
+      ) : (
+        <span className={`dot ${primary.status}`} />
+      )}
+      <div className="thread-item-body">
+        <div
+          className="thread-title"
+          title={
+            primary.sourceType === 'orchestration'
+              ? `${worktreeLabel} ✦`
+              : worktreeLabel
+          }
+        >
+          {worktreeLabel}
+          {primary.sourceType === 'orchestration' ? ' ✦' : ''}
+        </div>
+        <div className="thread-meta">
+          {archiving
+            ? 'Archiving…'
+            : [
+                primary.agent,
+                group.length > 1 ? `${group.length} chats` : null,
+                primary.devPort ? `:${primary.devPort}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+        </div>
+      </div>
+      {!archiving ? (
+        <div
+          className="worktree-row-actions"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {onArchive ? (
+            <>
+              <button
+                type="button"
+                ref={archiveBtnRef}
+                className={`icon-btn worktree-remove-btn${archiveHover ? ' is-hot' : ''}`}
+                title="Archive workspace"
+                aria-label={`Archive ${worktreeLabel}`}
+                aria-expanded={archiveHover}
+                onMouseEnter={() => setArchiveCardOpen(true)}
+                onMouseLeave={() => setArchiveCardOpen(false)}
+                onFocus={() => setArchiveCardOpen(true)}
+                onBlur={() => setArchiveCardOpen(false)}
+                onClick={requestArchive}
+              >
+                ▤
+              </button>
+              <WorktreeArchiveCard
+                open={archiveHover}
+                anchorRef={archiveBtnRef}
+                thread={primary}
+                label={worktreeLabel}
+                onArchive={requestArchive}
+                onKeepOpen={setArchiveCardOpen}
+              />
+            </>
+          ) : null}
+          <button
+            type="button"
+            ref={pencilBtnRef}
+            className={`icon-btn worktree-open-btn${pencilHover ? ' is-hot' : ''}`}
+            title={`Open ${worktreeLabel}`}
+            aria-label={`Open ${worktreeLabel}`}
+            aria-expanded={pencilHover}
+            onMouseEnter={() => setEditCardOpen(true)}
+            onMouseLeave={() => setEditCardOpen(false)}
+            onFocus={() => setEditCardOpen(true)}
+            onBlur={() => setEditCardOpen(false)}
+            onClick={() => onSelect(primary.id, false)}
+          >
+            ✎
+          </button>
+          <WorktreeEditCard
+            open={pencilHover}
+            anchorRef={pencilBtnRef}
+            thread={primary}
+            label={worktreeLabel}
+            dirty={dirty}
+            loaded={loaded}
+            additions={stat?.additions ?? 0}
+            deletions={stat?.deletions ?? 0}
+            onOpen={() => {
+              setEditCardOpen(false);
+              onSelect(primary.id, false);
+            }}
+            onKeepOpen={setEditCardOpen}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -385,67 +934,24 @@ export function Sidebar({
               );
               return (
                 <div key={primary.worktreePath} className="worktree-block">
-                  <div
-                    className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
-                    aria-busy={archiving}
-                    onClick={(e) => {
-                      if (archiving) return;
-                      onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey);
-                    }}
-                  >
-                    {archiving ? (
-                      <span className="thread-archive-spinner" aria-hidden />
-                    ) : (
-                      <span className={`dot ${primary.status}`} />
-                    )}
-                    <div className="thread-item-body">
-                      <div
-                        className="thread-title"
-                        title={
-                          primary.sourceType === 'orchestration'
-                            ? `${worktreeLabel} ✦`
-                            : worktreeLabel
-                        }
-                      >
-                        {worktreeLabel}
-                        {primary.sourceType === 'orchestration' ? ' ✦' : ''}
-                      </div>
-                      <div className="thread-meta">
-                        {archiving
-                          ? 'Archiving…'
-                          : [
-                              primary.agent,
-                              group.length > 1 ? `${group.length} chats` : null,
-                              primary.devPort ? `:${primary.devPort}` : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                      </div>
-                    </div>
-                    {!archiving && onArchive && (
-                      <button
-                        type="button"
-                        className="icon-btn worktree-remove-btn"
-                        title={`Archive ${worktreeLabel}`}
-                        aria-label={`Archive ${worktreeLabel}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void window.sideboard
-                            .listWorktreeChats(primary.id)
-                            .then((chats) =>
-                              setArchiveConfirm({
-                                threadId: primary.id,
-                                title: worktreeLabel,
-                                chatCount: chats.length,
-                              }),
-                            )
-                            .catch(alert);
-                        }}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
+                  <WorktreeSidebarRow
+                    primary={primary}
+                    group={group}
+                    worktreeLabel={worktreeLabel}
+                    active={active}
+                    selected={selected}
+                    archiving={archiving}
+                    unread={unread}
+                    onSelect={onSelect}
+                    onArchive={onArchive}
+                    onRequestArchive={(chats) =>
+                      setArchiveConfirm({
+                        threadId: primary.id,
+                        title: worktreeLabel,
+                        chatCount: chats.length,
+                      })
+                    }
+                  />
                 </div>
               );
             })}

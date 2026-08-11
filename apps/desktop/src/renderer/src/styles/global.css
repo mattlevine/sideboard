@@ -2161,9 +2161,38 @@ body.resizing-panels webview {
 
 /* Action controls stay pinned in the row — never pushed off-screen. */
 .thread-item > .icon-btn,
-.thread-item > .worktree-remove-btn {
+.thread-item > .worktree-remove-btn,
+.thread-item > .worktree-row-actions {
   flex: 0 0 auto;
   margin-left: 0;
+}
+
+.worktree-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
+}
+
+.thread-item:hover .worktree-row-actions,
+.worktree-row-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.worktree-open-btn {
+  opacity: 1;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.worktree-open-btn:hover,
+.worktree-open-btn.is-hot {
+  color: var(--text);
 }
 
 .panel {
@@ -3507,23 +3536,189 @@ body.resizing-panels webview {
 .worktree-remove-btn {
   margin-left: 0;
   flex: 0 0 auto;
-  opacity: 0;
-  pointer-events: none;
   position: relative;
   z-index: 1;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
   color: var(--muted);
 }
 
-.thread-item:hover .worktree-remove-btn,
-.worktree-remove-btn:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
+.worktree-remove-btn:hover,
+.worktree-remove-btn.is-hot {
+  color: var(--text);
+  background: var(--bg-hover);
 }
 
-.worktree-remove-btn:hover {
+.worktree-hover-card {
+  position: fixed;
+  z-index: 10050;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  padding: 12px 12px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
+
+.worktree-hover-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.worktree-hover-card-slug {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.worktree-hover-card-git {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.worktree-hover-card-git.is-loading {
+  opacity: 0.45;
+}
+
+.worktree-hover-card-git.is-dirty .add {
+  color: var(--ok);
+}
+
+.worktree-hover-card-git.is-dirty .del {
   color: var(--err);
+}
+
+.worktree-hover-card-status {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.worktree-hover-card-status.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+}
+
+.worktree-hover-card-status.dirty {
+  color: #e6b84d;
+  border-color: color-mix(in srgb, #e6b84d 50%, var(--border));
+}
+
+.worktree-hover-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.worktree-hover-card-preview {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.worktree-hover-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.worktree-hover-card-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.worktree-hover-card-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 32%, var(--bg));
+}
+
+.worktree-hover-card-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.worktree-hover-card-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.worktree-hover-card-pr,
+.worktree-hover-card-branch,
+.worktree-hover-card-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.worktree-hover-card-pr:hover,
+.worktree-hover-card-open:hover {
+  color: var(--accent);
+}
+
+.worktree-hover-card-age {
+  flex: 0 0 auto;
+  opacity: 0.85;
 }
 
 .composer-attachments {
