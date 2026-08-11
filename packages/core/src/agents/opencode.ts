@@ -182,7 +182,7 @@ export const opencodeAdapter: AgentAdapter = {
     };
   },
 
-  parseEvent(line: string): AgentEvent | null {
+  parseEvent(line: string): AgentEvent | AgentEvent[] | null {
     const trimmed = line.trim();
     if (!trimmed) return null;
     try {
@@ -202,7 +202,13 @@ export const opencodeAdapter: AgentAdapter = {
         (typeof obj.sessionID === 'string' && obj.sessionID) ||
         (typeof obj.sessionId === 'string' && obj.sessionId) ||
         (typeof obj.session_id === 'string' && obj.session_id);
-      if (sid) return { type: 'session_id', data: sid };
+
+      // Nearly every OpenCode JSONL event includes sessionID — only treat
+      // step_start / bare session markers as session events. Returning early
+      // on any sessionID drops text, tools, and usage (same trap as Claude).
+      if (sid && (!obj.type || obj.type === 'step_start' || obj.type === 'session')) {
+        return { type: 'session_id', data: sid };
+      }
 
       if (obj.type === 'text') {
         const text =
@@ -212,19 +218,60 @@ export const opencodeAdapter: AgentAdapter = {
       }
       if (obj.type === 'tool_use') {
         const part = (obj as {
-          part?: { id?: string; tool?: string; name?: string; input?: Record<string, unknown> };
+          part?: {
+            id?: string;
+            callID?: string;
+            tool?: string;
+            name?: string;
+            input?: Record<string, unknown>;
+            state?: {
+              status?: string;
+              input?: Record<string, unknown>;
+              output?: unknown;
+              error?: unknown;
+            };
+          };
           id?: string;
           name?: string;
           tool?: string;
           input?: Record<string, unknown>;
         }).part;
-        const id = part?.id ?? (obj as { id?: string }).id ?? `tool-${Date.now()}`;
+        const id =
+          part?.callID ??
+          part?.id ??
+          (obj as { id?: string }).id ??
+          `tool-${Date.now()}`;
         const name =
-          part?.name ?? part?.tool ?? (obj as { name?: string; tool?: string }).name ??
-          (obj as { tool?: string }).tool ??
+          part?.tool ??
+          part?.name ??
+          (obj as { tool?: string; name?: string }).tool ??
+          (obj as { name?: string }).name ??
           'tool';
-        const input = part?.input ?? (obj as { input?: Record<string, unknown> }).input;
-        return { type: 'tool_use', id, name, input };
+        const state = part?.state;
+        const input =
+          (state?.input && typeof state.input === 'object'
+            ? state.input
+            : undefined) ??
+          part?.input ??
+          (obj as { input?: Record<string, unknown> }).input;
+        const events: AgentEvent[] = [{ type: 'tool_use', id, name, input }];
+        // OpenCode emits tool_use only when the call finishes (status completed).
+        const output = state?.output;
+        if (output != null || state?.status === 'completed' || state?.status === 'error') {
+          const content =
+            typeof output === 'string'
+              ? output
+              : output != null
+                ? JSON.stringify(output)
+                : formatUnknownDetail(state?.error) || undefined;
+          events.push({
+            type: 'tool_result',
+            id,
+            content,
+            isError: state?.status === 'error' || state?.status === 'failed',
+          });
+        }
+        return events.length === 1 ? events[0]! : events;
       }
       if (obj.type === 'tool_result') {
         const part = (obj as {

@@ -58,6 +58,11 @@ describe('injected-mcp', () => {
     expect(codexArgs.some((a) => a.startsWith('mcp_servers.sideboard.command='))).toBe(
       true,
     );
+    expect(
+      codexArgs.some(
+        (a) => a === 'mcp_servers.sideboard.default_tools_approval_mode="approve"',
+      ),
+    ).toBe(true);
 
     const oc = JSON.parse(toOpencodeMcpConfigContent(servers)) as {
       mcp: { sideboard: { type: string; command: string[] } };

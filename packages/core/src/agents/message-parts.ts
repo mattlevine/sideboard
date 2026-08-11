@@ -192,9 +192,26 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
   }
 
   if (event.type === 'tool_result') {
-    const next = parts.map((p) => {
-      if (p.type !== 'tool' || p.id !== event.id) return p;
-      const fromResult = parseDiffStat(event.content);
+    const existing = parts.findIndex((p) => p.type === 'tool' && p.id === event.id);
+    const fromResult = parseDiffStat(event.content);
+    if (existing < 0) {
+      // Orphan result (e.g. Cursor completed without a prior running event).
+      return [
+        ...parts,
+        {
+          type: 'tool' as const,
+          id: event.id,
+          name: 'tool',
+          description: 'tool',
+          status: event.isError ? ('error' as const) : ('done' as const),
+          result: event.content,
+          ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
+          ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
+        },
+      ];
+    }
+    return parts.map((p, i) => {
+      if (i !== existing || p.type !== 'tool') return p;
       return {
         ...p,
         status: event.isError ? ('error' as const) : ('done' as const),
@@ -203,7 +220,6 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
       };
     });
-    return next;
   }
 
   return parts;

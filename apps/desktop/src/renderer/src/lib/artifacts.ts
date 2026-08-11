@@ -195,22 +195,84 @@ function kindFromArtifactType(type: string | undefined, content: string): Artifa
   return 'html';
 }
 
+/** Cursor MCP nests tool args under `{ toolName, providerIdentifier, args }`. */
+export function flattenToolInput(
+  input: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!input) return undefined;
+  const nested = asRecord(input.args);
+  if (
+    nested &&
+    (typeof input.toolName === 'string' || typeof input.providerIdentifier === 'string')
+  ) {
+    return nested;
+  }
+  return input;
+}
+
+/** Unwrap Cursor MCP `{ value: { content: [{ text: { text } }] } }` result envelopes. */
+export function unwrapToolResultPayload(result: unknown): unknown {
+  const parsed = parseMaybeJson(result);
+  const rec = asRecord(parsed);
+  if (!rec) return parsed;
+
+  const collectTexts = (items: unknown[]): string[] => {
+    const texts: string[] = [];
+    for (const item of items) {
+      const row = asRecord(item);
+      if (!row) continue;
+      if (typeof row.text === 'string') {
+        texts.push(row.text);
+        continue;
+      }
+      const nested = asRecord(row.text);
+      if (typeof nested?.text === 'string') texts.push(nested.text);
+    }
+    return texts;
+  };
+
+  const value = asRecord(rec.value);
+  if (value && Array.isArray(value.content)) {
+    const texts = collectTexts(value.content);
+    if (texts.length === 1) return parseMaybeJson(texts[0]);
+    if (texts.length > 1) return texts.map((t) => parseMaybeJson(t));
+  }
+  if (Array.isArray(rec.content) && rec.content.every((c) => asRecord(c)?.text != null)) {
+    const texts = collectTexts(rec.content);
+    if (texts.length === 1) return parseMaybeJson(texts[0]);
+    if (texts.length > 1) return texts.map((t) => parseMaybeJson(t));
+  }
+  return parsed;
+}
+
+export function toolShortName(name: string, input?: Record<string, unknown>): string {
+  const fromName = name.replace(/^mcp__[^_]+__/, '').replace(/^mcp__/, '');
+  if (fromName && fromName !== 'mcp' && fromName !== 'tool') return fromName;
+  if (typeof input?.toolName === 'string' && input.toolName.trim()) return input.toolName.trim();
+  return fromName;
+}
+
+function matchesPresentTool(shortName: string, suffix: string): boolean {
+  return new RegExp(`${suffix}$`, 'i').test(shortName);
+}
+
 /** Extract artifacts from present_artifact / Brightsy create|update_artifact tool parts. */
 export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArtifact[] {
   if (!parts?.length) return [];
   const out: ChatArtifact[] = [];
   for (const part of parts) {
     if (part.type !== 'tool') continue;
-    const shortName = part.name.replace(/^mcp__[^_]+__/, '').replace(/^mcp__/, '');
+    const rawInput = asRecord(part.input);
+    const shortName = toolShortName(part.name, rawInput);
     if (
       !/^(create|update)_artifact$/i.test(shortName) &&
-      !/^present_artifact$/i.test(shortName)
+      !matchesPresentTool(shortName, 'present_artifact')
     ) {
       continue;
     }
 
-    const input = asRecord(part.input);
-    const result = parseMaybeJson(part.result);
+    const input = flattenToolInput(rawInput);
+    const result = unwrapToolResultPayload(part.result);
     const resultRec = asRecord(result);
     const wrapped =
       asRecord(resultRec?.data) ??

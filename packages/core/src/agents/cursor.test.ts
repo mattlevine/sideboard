@@ -112,7 +112,82 @@ describe('cursorSdkMessageToEvents', () => {
         status: 'completed',
         result: 'ok',
       }),
-    ).toEqual([{ type: 'tool_result', id: 'c1', content: 'ok', isError: false }]);
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'c1',
+        name: 'Read',
+        input: undefined,
+      },
+      { type: 'tool_result', id: 'c1', content: 'ok', isError: false },
+    ]);
+  });
+
+  it('normalizes Cursor MCP present_artifact nested args/result', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Hi</h1></body></html>';
+    const payload = JSON.stringify({
+      ok: true,
+      artifact_id: 'a1',
+      title: 'Hi',
+      type: 'html',
+      content: html,
+      message: 'Presented.',
+    });
+
+    expect(
+      cursorSdkMessageToEvents({
+        type: 'tool_call',
+        call_id: 'mcp1',
+        name: 'mcp',
+        status: 'running',
+        args: {
+          providerIdentifier: 'sideboard',
+          toolName: 'present_artifact',
+          args: { title: 'Hi', type: 'html', content: html, artifact_id: 'a1' },
+        },
+      }),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'mcp1',
+        name: 'mcp__sideboard__present_artifact',
+        input: { title: 'Hi', type: 'html', content: html, artifact_id: 'a1' },
+      },
+    ]);
+
+    expect(
+      cursorSdkMessageToEvents({
+        type: 'tool_call',
+        call_id: 'mcp1',
+        name: 'mcp',
+        status: 'completed',
+        args: {
+          providerIdentifier: 'sideboard',
+          toolName: 'present_artifact',
+          args: { title: 'Hi', type: 'html', content: html, artifact_id: 'a1' },
+        },
+        result: {
+          status: 'success',
+          value: {
+            content: [{ text: { text: payload } }],
+            isError: false,
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'mcp1',
+        name: 'mcp__sideboard__present_artifact',
+        input: { title: 'Hi', type: 'html', content: html, artifact_id: 'a1' },
+      },
+      {
+        type: 'tool_result',
+        id: 'mcp1',
+        content: payload,
+        isError: false,
+      },
+    ]);
   });
 
   it('maps usage', () => {

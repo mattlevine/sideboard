@@ -12,7 +12,7 @@ Sideboard is **repo + worktree + CMS** (optional): an open control plane over gi
 
 Run agents in isolated `thread/*` worktrees from the CLI, desktop app, or MCP — then move in and out of Sideboard as you choose.
 
-![Sideboard desktop — Review chat with HTML artifact preview, worktree files, and PR status](docs/assets/sideboard-desktop-review-v3.png)
+![Sideboard desktop — chat with Document artifact preview, worktree changes, and run panel](docs/assets/sideboard-desktop-review-v4.png)
 
 **Agents and backends are plugs, not the product.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is not a Brightsy (or any) CMS shell — it's **JSON Schema → table/form**. The agent can invent a schema for whatever data it needs; wire Brightsy, inline JSON, or another datasource later. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([how to create a Slack connector](docs/remote-integrations.md)).
 

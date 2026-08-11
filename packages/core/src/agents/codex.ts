@@ -109,6 +109,35 @@ function codexConfigHasNetworkAccess(): boolean {
   return false;
 }
 
+/** Flatten Codex/MCP result content arrays to a single string payload. */
+function unwrapCodexMcpResult(result: unknown): string | undefined {
+  if (result == null) return undefined;
+  if (typeof result === 'string') return result;
+  if (typeof result !== 'object') return String(result);
+  const rec = result as Record<string, unknown>;
+  if (Array.isArray(rec.content)) {
+    const texts: string[] = [];
+    for (const item of rec.content) {
+      if (!item || typeof item !== 'object') continue;
+      const text = (item as { text?: unknown }).text;
+      if (typeof text === 'string') texts.push(text);
+    }
+    if (texts.length) return texts.join('\n');
+  }
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+}
+
 export const codexAdapter: AgentAdapter = {
   kind: 'codex',
 
@@ -197,7 +226,7 @@ export const codexAdapter: AgentAdapter = {
     };
   },
 
-  parseEvent(line: string): AgentEvent | null {
+  parseEvent(line: string): AgentEvent | AgentEvent[] | null {
     const trimmed = line.trim();
     if (!trimmed) return null;
     try {
@@ -220,24 +249,78 @@ export const codexAdapter: AgentAdapter = {
       }
       if (typeof obj.item === 'object' && obj.item !== null) {
         const item = obj.item as {
+          id?: string;
           type?: string;
+          item_type?: string;
           text?: string;
           message?: string;
           status?: string;
+          server?: string;
+          tool?: string;
+          arguments?: unknown;
+          result?: unknown;
+          error?: { message?: string } | null;
+          command?: string;
+          aggregated_output?: string;
         };
-        if (item.type === 'error') {
+        const itemType = item.type ?? item.item_type;
+
+        if (itemType === 'error') {
           const detail = item.message?.trim() || extractJsonErrorMessage(obj) || 'Codex item error';
           // Stream-lag warnings are non-fatal; still surface but prefer real failures later.
           return { type: 'stderr', data: detail };
         }
-        if (item.type === 'agent_message' && item.text) {
+        if (itemType === 'agent_message' && item.text) {
           return { type: 'stdout', data: item.text };
+        }
+        if (itemType === 'mcp_tool_call' && item.id && item.server && item.tool) {
+          const name = `mcp__${item.server}__${item.tool}`;
+          const input = asRecord(item.arguments);
+          const events: AgentEvent[] = [
+            { type: 'tool_use', id: item.id, name, input },
+          ];
+          const finished =
+            type === 'item.completed' ||
+            item.status === 'completed' ||
+            item.status === 'failed';
+          if (finished) {
+            const errMsg =
+              item.error && typeof item.error.message === 'string'
+                ? item.error.message
+                : undefined;
+            events.push({
+              type: 'tool_result',
+              id: item.id,
+              content: unwrapCodexMcpResult(item.result) ?? errMsg,
+              isError: item.status === 'failed' || Boolean(errMsg),
+            });
+          }
+          return events.length === 1 ? events[0]! : events;
+        }
+        if (itemType === 'command_execution' && item.id) {
+          const input = item.command ? { command: item.command } : undefined;
+          const events: AgentEvent[] = [
+            { type: 'tool_use', id: item.id, name: 'Bash', input },
+          ];
+          if (
+            type === 'item.completed' ||
+            item.status === 'completed' ||
+            item.status === 'failed'
+          ) {
+            events.push({
+              type: 'tool_result',
+              id: item.id,
+              content: item.aggregated_output,
+              isError: item.status === 'failed',
+            });
+          }
+          return events.length === 1 ? events[0]! : events;
         }
         if (item.status === 'failed') {
           const detail =
             item.message?.trim() ||
             extractJsonErrorMessage(item as Record<string, unknown>) ||
-            `Codex ${item.type ?? 'item'} failed`;
+            `Codex ${itemType ?? 'item'} failed`;
           return { type: 'stderr', data: detail };
         }
       }

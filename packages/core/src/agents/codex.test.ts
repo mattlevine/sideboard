@@ -97,6 +97,68 @@ describe('codexAdapter.parseEvent', () => {
     expect(event).toEqual({ type: 'stdout', data: 'hello' });
   });
 
+  it('maps mcp_tool_call present_artifact to tool_use/tool_result', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Doc</h1></body></html>';
+    const payload = JSON.stringify({
+      ok: true,
+      artifact_id: 'a1',
+      title: 'Doc',
+      type: 'html',
+      content: html,
+    });
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.started',
+          item: {
+            id: 'item_5',
+            type: 'mcp_tool_call',
+            server: 'sideboard',
+            tool: 'present_artifact',
+            arguments: { title: 'Doc', type: 'html', content: html, artifact_id: 'a1' },
+            status: 'in_progress',
+          },
+        }),
+      ),
+    ).toEqual({
+      type: 'tool_use',
+      id: 'item_5',
+      name: 'mcp__sideboard__present_artifact',
+      input: { title: 'Doc', type: 'html', content: html, artifact_id: 'a1' },
+    });
+
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.completed',
+          item: {
+            id: 'item_5',
+            type: 'mcp_tool_call',
+            server: 'sideboard',
+            tool: 'present_artifact',
+            arguments: { title: 'Doc', type: 'html', content: html, artifact_id: 'a1' },
+            result: { content: [{ type: 'text', text: payload }], structured_content: null },
+            error: null,
+            status: 'completed',
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'item_5',
+        name: 'mcp__sideboard__present_artifact',
+        input: { title: 'Doc', type: 'html', content: html, artifact_id: 'a1' },
+      },
+      {
+        type: 'tool_result',
+        id: 'item_5',
+        content: payload,
+        isError: false,
+      },
+    ]);
+  });
+
   it('extracts session_id from thread.started', () => {
     const event = codexAdapter.parseEvent(
       JSON.stringify({ type: 'thread.started', thread_id: 'thread-123' }),

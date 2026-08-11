@@ -88,6 +88,24 @@ describe('applyAgentEvent', () => {
       deletions: 1,
     });
   });
+
+  it('creates a tool part for orphan tool_result events', () => {
+    const parts = applyAgentEvent([], {
+      type: 'tool_result',
+      id: 'orphan',
+      content: '{"ok":true}',
+    });
+    expect(parts).toEqual([
+      {
+        type: 'tool',
+        id: 'orphan',
+        name: 'tool',
+        description: 'tool',
+        status: 'done',
+        result: '{"ok":true}',
+      },
+    ]);
+  });
 });
 
 describe('toolDetail', () => {

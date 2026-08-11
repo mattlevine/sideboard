@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.54] - 2026-08-10
+
+### Fixed
+
+- Cursor MCP `present_artifact` / present_* tools now show in chat and open the side column (normalize nested `mcp` tool calls + unwrap result envelopes)
+- OpenCode no longer drops text/tools/usage when `sessionID` is present on every event; tool calls read `part.state.input` / `output`
+- Codex maps `mcp_tool_call` items into tool chips / artifacts and auto-approves injected MCP tools in headless exec
+- Schema/files pane extractors accept Cursor-style nested MCP payloads
+
+### Changed
+
+- README hero screenshot refreshed (`sideboard-desktop-review-v4.png`)
+
 ## [0.1.53] - 2026-08-10
 
 ### Added

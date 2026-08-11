@@ -80,10 +80,11 @@ describe('opencodeAdapter.buildTurn', () => {
 });
 
 describe('opencodeAdapter.parseEvent', () => {
-  it('extracts usage from step_finish', () => {
+  it('extracts usage from step_finish even when sessionID is present', () => {
     const event = opencodeAdapter.parseEvent(
       JSON.stringify({
         type: 'step_finish',
+        sessionID: 'ses_keep',
         part: {
           type: 'step-finish',
           reason: 'stop',
@@ -105,9 +106,69 @@ describe('opencodeAdapter.parseEvent', () => {
     expect(event).toBeNull();
   });
 
-  it('extracts session id', () => {
-    const event = opencodeAdapter.parseEvent(JSON.stringify({ sessionID: 'ses_123' }));
-    expect(event).toEqual({ type: 'session_id', data: 'ses_123' });
+  it('extracts session id from step_start / bare markers only', () => {
+    expect(opencodeAdapter.parseEvent(JSON.stringify({ sessionID: 'ses_123' }))).toEqual({
+      type: 'session_id',
+      data: 'ses_123',
+    });
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({ type: 'step_start', sessionID: 'ses_123', part: { type: 'step-start' } }),
+      ),
+    ).toEqual({ type: 'session_id', data: 'ses_123' });
+  });
+
+  it('does not let sessionID short-circuit text or tools', () => {
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'text',
+          sessionID: 'ses_keep',
+          part: { type: 'text', text: 'hello' },
+        }),
+      ),
+    ).toEqual({ type: 'stdout', data: 'hello' });
+
+    const html = '<!DOCTYPE html><html><body><h1>Doc</h1></body></html>';
+    const payload = JSON.stringify({
+      ok: true,
+      artifact_id: 'a1',
+      title: 'Doc',
+      type: 'html',
+      content: html,
+    });
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'tool_use',
+          sessionID: 'ses_keep',
+          part: {
+            id: 'prt_1',
+            callID: 'call_1',
+            tool: 'present_artifact',
+            type: 'tool',
+            state: {
+              status: 'completed',
+              input: { title: 'Doc', type: 'html', content: html, artifact_id: 'a1' },
+              output: payload,
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'call_1',
+        name: 'present_artifact',
+        input: { title: 'Doc', type: 'html', content: html, artifact_id: 'a1' },
+      },
+      {
+        type: 'tool_result',
+        id: 'call_1',
+        content: payload,
+        isError: false,
+      },
+    ]);
   });
 
   it('maps error events to stderr (including nested objects)', () => {

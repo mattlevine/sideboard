@@ -1,7 +1,10 @@
 import type { MessagePart } from '@sideboard-ai/core';
 import {
   extractArtifacts,
+  flattenToolInput,
   latestArtifact,
+  toolShortName,
+  unwrapToolResultPayload,
   type ChatArtifact,
 } from './artifacts';
 
@@ -187,15 +190,15 @@ export function extractSchemaPanes(parts: MessagePart[] | undefined): SchemaPane
   const out: SchemaPaneContent[] = [];
   for (const part of parts) {
     if (part.type !== 'tool') continue;
-    const shortName = part.name.replace(/^mcp__[^_]+__/, '').replace(/^mcp__/, '');
-    if (!/^present_schema$/i.test(shortName)) continue;
+    const rawInput = asRecord(part.input);
+    const shortName = toolShortName(part.name, rawInput);
+    if (!/present_schema$/i.test(shortName)) continue;
 
-    const input = asRecord(part.input);
-    const result = asRecord(parseMaybeJson(part.result));
+    const input = flattenToolInput(rawInput);
+    const result = asRecord(unwrapToolResultPayload(part.result));
     const wrapped = asRecord(result?.data) ?? result ?? input;
     if (!wrapped && !input) continue;
 
-    const src = input ?? wrapped ?? {};
     const merged = { ...asRecord(wrapped), ...asRecord(input) } as Record<string, unknown>;
     const paneId =
       str(merged.pane_id) ??
@@ -261,11 +264,12 @@ export function extractFilesPanes(parts: MessagePart[] | undefined): FilesPaneCo
   const out: FilesPaneContent[] = [];
   for (const part of parts) {
     if (part.type !== 'tool') continue;
-    const shortName = part.name.replace(/^mcp__[^_]+__/, '').replace(/^mcp__/, '');
-    if (!/^present_files$/i.test(shortName)) continue;
+    const rawInput = asRecord(part.input);
+    const shortName = toolShortName(part.name, rawInput);
+    if (!/present_files$/i.test(shortName)) continue;
 
-    const input = asRecord(part.input);
-    const result = asRecord(parseMaybeJson(part.result));
+    const input = flattenToolInput(rawInput);
+    const result = asRecord(unwrapToolResultPayload(part.result));
     const wrapped = asRecord(result?.data) ?? result ?? input;
     const merged = { ...asRecord(wrapped), ...asRecord(input) } as Record<string, unknown>;
     const paneId = str(merged.pane_id) ?? str(merged.id) ?? part.id;

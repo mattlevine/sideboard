@@ -113,6 +113,39 @@ describe('extractToolArtifacts', () => {
     expect(arts[0]!.title).toBe('Preview');
     expect(arts[0]!.kind).toBe('html');
   });
+
+  it('reads Cursor nested mcp present_artifact args + result envelope', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Nested</h1></body></html>';
+    const payload = JSON.stringify({
+      ok: true,
+      artifact_id: 'n1',
+      title: 'Nested',
+      type: 'html',
+      content: html,
+    });
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't4',
+        name: 'mcp',
+        status: 'done',
+        input: {
+          providerIdentifier: 'sideboard',
+          toolName: 'present_artifact',
+          args: { artifact_id: 'n1', type: 'html', title: 'Nested', content: html },
+        },
+        result: JSON.stringify({
+          status: 'success',
+          value: { content: [{ text: { text: payload } }], isError: false },
+        }),
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.id).toBe('tool-n1');
+    expect(arts[0]!.title).toBe('Nested');
+    expect(arts[0]!.content).toBe(html);
+  });
 });
 
 describe('extractArtifacts / latestArtifact', () => {

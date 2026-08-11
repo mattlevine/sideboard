@@ -258,6 +258,9 @@ export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
         args.push('-c', `${prefix}.env.${key}=${JSON.stringify(value)}`);
       }
     }
+    // `--ask-for-approval never` does not cover MCP; without this, headless
+    // exec often cancels present_* / other Sideboard tools as "user cancelled".
+    args.push('-c', `${prefix}.default_tools_approval_mode=${JSON.stringify('approve')}`);
   }
   return args;
 }

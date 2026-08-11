@@ -61,6 +61,104 @@ function usageFromCursor(usage: CursorSdkStreamMessage['usage']): TokenUsage | n
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+/**
+ * Cursor MCP tools stream as `name: "mcp"` with nested
+ * `{ providerIdentifier, toolName, args }` — flatten to Claude-style
+ * `mcp__<provider>__<tool>` + flat input so present_* extractors work.
+ */
+export function normalizeCursorToolCall(
+  name: string,
+  args: unknown,
+): { name: string; input?: Record<string, unknown> } {
+  const raw = asRecord(args);
+  const toolName =
+    typeof raw?.toolName === 'string' && raw.toolName.trim() ? raw.toolName.trim() : null;
+  const looksLikeMcp =
+    name === 'mcp' ||
+    (toolName != null &&
+      (typeof raw?.providerIdentifier === 'string' || asRecord(raw?.args) != null));
+
+  if (looksLikeMcp && toolName) {
+    const providerRaw =
+      typeof raw!.providerIdentifier === 'string' && raw!.providerIdentifier.trim()
+        ? raw!.providerIdentifier.trim()
+        : 'sideboard';
+    const provider = providerRaw.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const nested = asRecord(raw!.args);
+    return {
+      name: `mcp__${provider}__${toolName}`,
+      input: nested ?? { toolName },
+    };
+  }
+
+  return { name, input: raw };
+}
+
+/** Unwrap Cursor MCP result envelopes to the tool's text payload. */
+export function unwrapCursorToolResult(result: unknown): string | undefined {
+  if (result == null) return undefined;
+  if (typeof result === 'string') return result;
+
+  const rec = asRecord(result);
+  if (!rec) {
+    try {
+      return JSON.stringify(result);
+    } catch {
+      return String(result);
+    }
+  }
+
+  const collectTexts = (items: unknown[]): string[] => {
+    const texts: string[] = [];
+    for (const item of items) {
+      const row = asRecord(item);
+      if (!row) continue;
+      if (typeof row.text === 'string') {
+        texts.push(row.text);
+        continue;
+      }
+      const nested = asRecord(row.text);
+      if (typeof nested?.text === 'string') texts.push(nested.text);
+    }
+    return texts;
+  };
+
+  // Cursor MCP: { status, value: { content: [{ text: { text } }], isError } }
+  const value = asRecord(rec.value);
+  if (value && Array.isArray(value.content)) {
+    const texts = collectTexts(value.content);
+    if (texts.length) return texts.join('\n');
+  }
+
+  // Standard MCP content array on the result itself.
+  if (Array.isArray(rec.content)) {
+    const texts = collectTexts(rec.content);
+    if (texts.length) return texts.join('\n');
+  }
+
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
+}
+
+function cursorToolResultIsError(status: string | undefined, result: unknown): boolean {
+  if (status === 'error') return true;
+  const rec = asRecord(result);
+  if (!rec) return false;
+  if (rec.status === 'error') return true;
+  const value = asRecord(rec.value);
+  return value?.isError === true;
+}
+
 /**
  * Map a Cursor SDK stream message into Sideboard AgentEvent(s).
  * Mirrors how Conductor consumes `run.stream()` events.
@@ -82,14 +180,12 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
       if (block?.type === 'text' && block.text) {
         out.push({ type: 'stdout', data: block.text });
       } else if (block?.type === 'tool_use' && block.id && block.name) {
+        const normalized = normalizeCursorToolCall(block.name, block.input);
         out.push({
           type: 'tool_use',
           id: block.id,
-          name: block.name,
-          input:
-            block.input && typeof block.input === 'object'
-              ? (block.input as Record<string, unknown>)
-              : undefined,
+          name: normalized.name,
+          input: normalized.input,
         });
       }
     }
@@ -97,32 +193,32 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
   }
 
   if (msg.type === 'tool_call' && msg.call_id && msg.name) {
+    const normalized = normalizeCursorToolCall(msg.name, msg.args);
     if (msg.status === 'running') {
       return [
         {
           type: 'tool_use',
           id: msg.call_id,
-          name: msg.name,
-          input:
-            msg.args && typeof msg.args === 'object'
-              ? (msg.args as Record<string, unknown>)
-              : undefined,
+          name: normalized.name,
+          input: normalized.input,
         },
       ];
     }
     if (msg.status === 'completed' || msg.status === 'error') {
-      const content =
-        typeof msg.result === 'string'
-          ? msg.result
-          : msg.result != null
-            ? JSON.stringify(msg.result)
-            : undefined;
+      // Always upsert tool_use on completion — Cursor sometimes skips `running`,
+      // and applyAgentEvent previously dropped orphan tool_result events.
       return [
+        {
+          type: 'tool_use',
+          id: msg.call_id,
+          name: normalized.name,
+          input: normalized.input,
+        },
         {
           type: 'tool_result',
           id: msg.call_id,
-          content,
-          isError: msg.status === 'error',
+          content: unwrapCursorToolResult(msg.result),
+          isError: cursorToolResultIsError(msg.status, msg.result),
         },
       ];
     }
