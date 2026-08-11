@@ -24,11 +24,21 @@ const MAX_ORCH_THREADS = 5;
  */
 export async function startMcpServer(): Promise<void> {
   const orch = getOrchestrator();
+  // Match desktop concurrency — caps are per-process, but using Account settings
+  // avoids MCP defaulting to 3 while desktop runs higher.
+  try {
+    const { maxConcurrentAgents } = await import('../store/app-settings.js');
+    orch.setMaxConcurrent(maxConcurrentAgents());
+  } catch {
+    // Best-effort — keep constructor default.
+  }
   // Do not reclaim "stale running" turns — MCP runs in a separate process from
   // the desktop orchestrator that owns activeTurns. Reclaiming here falsely
   // marks live parent turns as "Process died (reconciled on startup)".
-  // (reclaimStaleTurns defaults to false; keep the flag explicit for clarity.)
-  await orch.reconcile(undefined, { reclaimStaleTurns: false });
+  // Do not drain the whole fleet on every MCP stdio boot (present_* / tool
+  // calls): that steals queues into a short-lived process. Desktop adopts
+  // persisted queues via the thread-store watcher instead.
+  await orch.reconcile(undefined, { reclaimStaleTurns: false, drainQueues: false });
 
   const server = new McpServer({
     name: 'sideboard',
@@ -640,7 +650,7 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref, through_index, agent, model, title }) => {
       try {
         const source = orch.getThread(ref);
-        if (source) await orch.reconcile(source.repoPath);
+        if (source) await orch.reconcile(source.repoPath, { drainQueues: false });
         const thread = await orch.forkThreadWorktree({
           threadId: ref,
           throughIndex: through_index,

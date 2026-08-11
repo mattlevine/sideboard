@@ -383,13 +383,26 @@ function setupUpdater(): void {
 function setupStoreWatcher(): void {
   const dir = threadsDir();
   const watcher = watch(dir, { ignoreInitial: true, depth: 0 });
+  let adoptTimer: ReturnType<typeof setTimeout> | null = null;
   const notify = () => {
     mainWindow?.webContents.send('threads:changed');
+    // MCP stdio (separate process) enqueues via send_to_thread; when that child
+    // exits mid-wait, queues stay on disk. Adopt them into the desktop drain.
+    if (adoptTimer) clearTimeout(adoptTimer);
+    adoptTimer = setTimeout(() => {
+      adoptTimer = null;
+      try {
+        orch.adoptPersistedQueues();
+      } catch {
+        // Best-effort — next change or startup reconcile will retry.
+      }
+    }, 250);
   };
   watcher.on('add', notify);
   watcher.on('change', notify);
   watcher.on('unlink', notify);
   app.on('will-quit', () => {
+    if (adoptTimer) clearTimeout(adoptTimer);
     void watcher.close();
   });
 }

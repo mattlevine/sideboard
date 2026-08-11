@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.57] - 2026-08-11
+
+### Fixed
+
+- MCP-created threads no longer stall in `queued` after the MCP stdio child exits: desktop adopts persisted queues from the thread-store watcher; MCP startup no longer drains the whole fleet into short-lived processes
+- Clear dead `agentPid` / heal empty `queued` status so drain cannot pin forever
+
 ## [0.1.56] - 2026-08-11
 
 ### Fixed

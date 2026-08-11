@@ -222,9 +222,16 @@ export class Orchestrator {
        * real app/CLI startup recovery.
        */
       reclaimStaleTurns?: boolean;
+      /**
+       * When false, skip draining persisted queues. MCP stdio boots must not
+       * steal the whole fleet into a short-lived process (desktop adopts instead).
+       * Default true for desktop/CLI.
+       */
+      drainQueues?: boolean;
     },
   ): Promise<void> {
     const reclaimStaleTurns = opts?.reclaimStaleTurns === true;
+    const drainQueues = opts?.drainQueues !== false;
 
     // Soccer nicknames for orchestration chats (incl. legacy cloud-goal titles).
     healOrchestrationSoccerTitles();
@@ -289,15 +296,44 @@ export class Orchestrator {
       // Best-effort orphan discovery
     }
 
-    // Drain any persisted queues (skip stopped — Stop parks the queue until the user resumes).
-    for (const thread of listThreads()) {
-      if (thread.queue.length > 0 && thread.status !== 'stopped') {
-        void this.drainQueue(thread.id);
-      }
+    if (drainQueues) {
+      this.adoptPersistedQueues();
     }
 
     // Re-arm session-quota wait timers (and fire any that are already due).
     this.schedulePendingQuotaResumes();
+  }
+
+  /**
+   * Adopt queues persisted by another process (MCP stdio / CLI) into this
+   * orchestrator's drain loops. Desktop calls this on thread-store changes so
+   * MCP-created review threads don't stay `queued` after the MCP child exits.
+   */
+  adoptPersistedQueues(): void {
+    for (const thread of listThreads()) {
+      if (thread.status === 'stopped' || thread.status === 'archived') continue;
+
+      const pid = thread.agentPid;
+      const deadPid =
+        typeof pid === 'number' && pid > 0 && !isPidAlive(pid) ? true : false;
+      if (deadPid) {
+        updateThread(thread.id, { agentPid: null });
+      }
+
+      // Heal: prompt was popped then the draining process died before running.
+      if (thread.status === 'queued' && thread.queue.length === 0) {
+        if (!this.activeTurns.has(thread.id) && !this.startingTurns.has(thread.id)) {
+          setStatus(thread.id, 'idle');
+          this.emit({ type: 'status_changed', threadId: thread.id, status: 'idle' });
+        }
+        continue;
+      }
+
+      if (thread.queue.length > 0) {
+        this.haltDrain.delete(thread.id);
+        void this.drainQueue(thread.id);
+      }
+    }
   }
 
   private clearQuotaResumeTimer(threadId: string): void {
@@ -520,7 +556,13 @@ export class Orchestrator {
       const current = this.requireThread(thread.id);
       const queue = [...current.queue, prompt];
       this.haltDrain.delete(thread.id);
-      updateThread(thread.id, { queue, status: 'queued' });
+      const patch: Parameters<typeof updateThread>[1] = { queue, status: 'queued' };
+      // Stale agentPid from a dead MCP/desktop child can pin drainQueue forever.
+      const pid = current.agentPid;
+      if (typeof pid === 'number' && pid > 0 && !isPidAlive(pid)) {
+        patch.agentPid = null;
+      }
+      updateThread(thread.id, patch);
       this.emit({ type: 'queue_changed', threadId: thread.id, queue });
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'queued' });
       void this.drainQueue(thread.id);
