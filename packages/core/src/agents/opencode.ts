@@ -165,6 +165,8 @@ export const opencodeAdapter: AgentAdapter = {
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
+      orchestratorThreadId:
+        thread.sourceType === 'orchestration' ? thread.id : null,
     });
     const mcpContent =
       injected.length > 0 ? toOpencodeMcpConfigContent(injected) : null;

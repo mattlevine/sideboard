@@ -5,7 +5,7 @@ import {
   resolveClaudeExecutable,
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
-import { mcpAllowTools, mcpAuthWarnings, parseMcpList } from './claude-mcp.js';
+import { mcpAllowTools, parseMcpList } from './claude-mcp.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
 import {
   brightsyMcpAllowedTools,
@@ -206,21 +206,24 @@ export const claudeAdapter: AgentAdapter = {
       }
     }
 
-    const auth = await run(claude, ['auth', 'status'], { reject: false });
+    const auth = await run(claude, ['auth', 'status'], {
+      reject: false,
+      timeoutMs: 5_000,
+    });
     const authenticated = auth.exitCode === 0;
 
-    const servers = await loadMcpServers();
-    const linearMcp = servers.some(
-      (s) => s.connected && /linear/i.test(s.name),
-    );
-
+    // Do not spawn `claude mcp list` during detect — nested under an active
+    // Claude/Codex turn (MCP create_thread → requireAgent) it can block forever.
+    // Ticket sources use Sideboard Account integrations, not agent Linear MCP.
     return {
       agent: 'claude',
       installed: true,
       authenticated,
-      linearMcp,
-      warnings: mcpAuthWarnings(servers),
-      reason: authenticated ? undefined : 'claude auth status failed — run `claude auth login`',
+      linearMcp: false,
+      warnings: [],
+      reason: authenticated
+        ? undefined
+        : 'claude auth status failed — run `claude auth login`',
     };
   },
 
@@ -248,6 +251,7 @@ export const claudeAdapter: AgentAdapter = {
     const injectedServers = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
+      orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
     const injectedBrightsyNames = injectedServers
       .filter((s) => s.name === 'brightsy' || s.name.startsWith('brightsy_'))

@@ -10,6 +10,7 @@ import {
   ensureConnectedBrightsyTeamTokens,
   type ConnectedBrightsyTeam,
 } from '../brightsy/connected-teams.js';
+import { appDataDir } from '../store/paths.js';
 import { resolveNodeLaunch } from './node-launch.js';
 
 export type InjectedMcpServer = {
@@ -191,11 +192,30 @@ export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
 export async function buildInjectedMcpServers(opts: {
   includeSideboard?: boolean;
   includeBrightsy?: boolean;
+  /**
+   * When set (orchestration turns), Sideboard MCP inherits this as
+   * SIDEBOARD_ORCHESTRATOR_THREAD_ID so create_thread can default/fix
+   * parentThreadId even if the agent hallucinates a stale id.
+   */
+  orchestratorThreadId?: string | null;
 }): Promise<InjectedMcpServer[]> {
   const servers: InjectedMcpServer[] = [];
 
   if (opts.includeSideboard) {
-    servers.push(await resolveSideboardMcpServer());
+    const sideboard = await resolveSideboardMcpServer();
+    // Always pin MCP to the same app-data dir as the host (desktop `pnpm dev`
+    // uses `.sideboard/dev-app-data`). Without this, Codex MCP often starts with
+    // a stripped env and writes to ~/Library/.../sideboard — so real desktop
+    // parentThreadIds look "missing" and children vanish from the UI.
+    sideboard.env = {
+      ...(sideboard.env ?? {}),
+      SIDEBOARD_APP_DATA: appDataDir(),
+    };
+    const orchId = opts.orchestratorThreadId?.trim();
+    if (orchId) {
+      sideboard.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID = orchId;
+    }
+    servers.push(sideboard);
   }
 
   if (opts.includeBrightsy && isBrightsyConnected()) {
@@ -258,9 +278,12 @@ export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
         args.push('-c', `${prefix}.env.${key}=${JSON.stringify(value)}`);
       }
     }
-    // `--ask-for-approval never` does not cover MCP; without this, headless
+    // Shell approval_policy=never does not cover MCP; without this, headless
     // exec often cancels present_* / other Sideboard tools as "user cancelled".
     args.push('-c', `${prefix}.default_tools_approval_mode=${JSON.stringify('approve')}`);
+    // create_thread does git fetch + detect; default 60s is tight under load.
+    args.push('-c', `${prefix}.tool_timeout_sec=300`);
+    args.push('-c', `${prefix}.startup_timeout_sec=30`);
   }
   return args;
 }
@@ -332,8 +355,13 @@ export function writeSideboardMcpConfig(): string {
         args: /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry)
           ? [entry, 'mcp']
           : [entry],
+        env: { SIDEBOARD_APP_DATA: appDataDir() },
       }
-    : { command: 'sideboard', args: ['mcp'] };
+    : {
+        command: 'sideboard',
+        args: ['mcp'],
+        env: { SIDEBOARD_APP_DATA: appDataDir() },
+      };
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-orch-mcp-'));
   const cfgPath = join(dir, 'mcp.json');
   writeFileSync(

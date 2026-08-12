@@ -16,10 +16,13 @@ describe('permissionMode', () => {
     expect(JSON.parse(mode.opencodePermission)).toMatchObject({ edit: 'allow' });
   });
 
-  it('plan mode overrides full autonomy for Claude', () => {
-    const mode = permissionMode({ autonomy: 'full', planMode: true });
-    expect(mode.claude).toBe('plan');
-    expect(mode.codexSandbox).toBe('read-only');
+  it('uses danger-full-access for Codex orchestration (MCP writes outside --cd)', () => {
+    const mode = permissionMode({
+      autonomy: 'default',
+      planMode: false,
+      sourceType: 'orchestration',
+    });
+    expect(mode.codexSandbox).toBe('danger-full-access');
   });
 });
 

@@ -2037,7 +2037,10 @@ export function ThreadPanel({
                     setAgentPickerOpen(true);
                   }}
                 >
-                  ▦ {modelLabel}
+                  <span className="chip-model-icon" aria-hidden>
+                    ▦
+                  </span>
+                  <span className="chip-label">{modelLabel}</span>
                 </button>
                 <ThinkingEffortChip
                   effort={displayEffort}
@@ -2051,8 +2054,8 @@ export function ThreadPanel({
                 >
                   <span className="chip-plan-icon" aria-hidden>
                     ◫
-                  </span>{' '}
-                  Plan
+                  </span>
+                  <span className="chip-label">Plan</span>
                 </button>
               </div>
               <div className="composer-right">
@@ -2066,7 +2069,10 @@ export function ThreadPanel({
                     disabled={busy}
                     onClick={() => void implementPlan()}
                   >
-                    Implement
+                    <span className="chip-implement-icon" aria-hidden>
+                      ▶
+                    </span>
+                    <span className="chip-label">Implement</span>
                   </button>
                 )}
                 <button

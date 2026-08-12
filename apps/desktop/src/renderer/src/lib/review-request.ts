@@ -10,7 +10,7 @@ export const REVIEW_REQUEST_PATH = '.context/attachments/Review request.md';
 
 export const REVIEW_REQUEST_NAME = 'Review request.md';
 
-export const REVIEW_REQUEST_PREFILL = 'Review.';
+export const REVIEW_REQUEST_PREFILL = 'Review changes in this workspace.';
 
 /** Default guidelines — users can edit the on-disk file to taste. */
 export const REVIEW_REQUEST_TEMPLATE = `# Review guidelines:

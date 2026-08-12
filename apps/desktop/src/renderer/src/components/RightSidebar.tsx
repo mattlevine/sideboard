@@ -695,7 +695,7 @@ export function RightSidebar({
   }
 
   /**
-   * Open a fresh Review chat, attach resolved guidelines, send "Review."
+   * Open a fresh Review chat, attach resolved guidelines, send the review prefill.
    * Same path as MCP `request_review`.
    */
   async function startAgentReview() {

@@ -847,7 +847,9 @@ export class Orchestrator {
     // Every turn also gets coordinatorTurnReminder in agentPrompt; global cwd has CLAUDE.md.
     let coordinatorDirective: string | null = null;
     if (isOrchestration) {
-      if (isGlobalThread(fresh)) ensureGlobalCoordinatorCwd();
+      if (isGlobalThread(fresh)) {
+        ensureGlobalCoordinatorCwd({ orchestratorThreadId: fresh.id });
+      }
       if (!fresh.sessionId) {
         const inventory = await enrichWorkspacesWithGithub(this.listWorkspaces());
         coordinatorDirective = coordinatorSystemPrompt({

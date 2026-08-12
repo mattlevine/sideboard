@@ -49,7 +49,11 @@ export async function spawnAgentTurn(
     const { ensureGlobalCoordinatorCwd } = await import(
       '../orchestrator/coordinator-prompt.js'
     );
-    ensureGlobalCoordinatorCwd();
+    ensureGlobalCoordinatorCwd(
+      isOrchestratorThread(thread)
+        ? { orchestratorThreadId: thread.id }
+        : undefined,
+    );
   }
   if (isOrchestratorThread(thread)) {
     assertOrchestratorCapableAgent(thread.agent);

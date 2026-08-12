@@ -62,8 +62,8 @@ Download the latest Mac build from [GitHub Releases](https://github.com/mattlevi
 
 | Chip | DMG |
 |------|-----|
-| Apple Silicon | https://github.com/mattlevine/sideboard/releases/download/v0.1.57/Sideboard-0.1.57-arm64.dmg |
-| Intel | https://github.com/mattlevine/sideboard/releases/download/v0.1.57/Sideboard-0.1.57.dmg |
+| Apple Silicon | https://github.com/mattlevine/sideboard/releases/download/v0.1.59/Sideboard-0.1.59-arm64.dmg |
+| Intel | https://github.com/mattlevine/sideboard/releases/download/v0.1.59/Sideboard-0.1.59.dmg |
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**. The repo is currently private — make it public (or host the DMGs elsewhere) before sharing the README links.
 
@@ -277,7 +277,7 @@ Once connected, agents get tools to:
 
 - **Discover** — `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
 - **Workspaces** — `add_workspace` / `remove_workspace`
-- **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result`; `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
+- **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids); `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
 - **Setup / run** — `run_setup`, `list_run_scripts`, `run_dev_script`, `stop_dev_script`
 - **Inspect / review / PRs** — `get_diff`; `request_review` (opens a Review chat tab on a worktree thread); ask worktree agents via `send_to_thread` to `gh pr create --draft` (no host draft-PR tool)

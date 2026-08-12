@@ -551,12 +551,23 @@ export function resolveNewThreadOptions(
     overrides.effort === undefined || overrides.effort === null
       ? defaults.effort
       : (normalizeThinkingEffort(overrides.effort) ?? defaults.effort);
+  const agent = overrides.agent ?? defaults.agent;
+  let model =
+    overrides.model === undefined
+      ? defaults.model
+      : overrides.model?.trim() || null;
+  // Account "default"/"auto" is Cursor Auto — not a Codex/Claude/OpenCode model id.
+  // Applying it to other agents makes later turns pass a bogus `--model default`.
+  if (
+    model &&
+    agent !== 'cursor' &&
+    /^(default|auto)$/i.test(model.trim())
+  ) {
+    model = null;
+  }
   return {
-    agent: overrides.agent ?? defaults.agent,
-    model:
-      overrides.model === undefined
-        ? defaults.model
-        : overrides.model?.trim() || null,
+    agent,
+    model,
     effort,
     fast:
       overrides.fast === undefined || overrides.fast === null

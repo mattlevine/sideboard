@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   BRIGHTSY_MCP_ALLOWED_TOOLS,
@@ -48,10 +49,17 @@ describe('injected-mcp', () => {
       expect(servers[0]!.args?.[0]).toMatch(/run-stdio\.(js|cjs)$|cli[/\\]dist[/\\]index\.js$/);
     }
 
-    const { toCursorMcpServers, toCodexMcpConfigArgs, toOpencodeMcpConfigContent } =
+    const { toCursorMcpServers, toCodexMcpConfigArgs, toOpencodeMcpConfigContent, writeMcpServersConfig } =
       await import('./injected-mcp.js');
+    // Dev/desktop app-data must reach every agent MCP serializer (Codex was the
+    // regression: stripped env → wrong ~/Library/.../sideboard store).
+    expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
+
     const cursorMap = toCursorMcpServers(servers);
     expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
+    expect(cursorMap.sideboard?.env?.SIDEBOARD_APP_DATA).toBe(
+      servers[0]!.env!.SIDEBOARD_APP_DATA,
+    );
 
     const codexArgs = toCodexMcpConfigArgs(servers);
     expect(codexArgs).toContain('-c');
@@ -63,17 +71,74 @@ describe('injected-mcp', () => {
         (a) => a === 'mcp_servers.sideboard.default_tools_approval_mode="approve"',
       ),
     ).toBe(true);
+    expect(codexArgs.some((a) => a === 'mcp_servers.sideboard.tool_timeout_sec=300')).toBe(
+      true,
+    );
+    expect(
+      codexArgs.some((a) =>
+        a.includes('mcp_servers.sideboard.env.SIDEBOARD_APP_DATA='),
+      ),
+    ).toBe(true);
 
     const oc = JSON.parse(toOpencodeMcpConfigContent(servers)) as {
-      mcp: { sideboard: { type: string; command: string[] } };
+      mcp: {
+        sideboard: {
+          type: string;
+          command: string[];
+          environment?: Record<string, string>;
+        };
+      };
     };
     expect(oc.mcp.sideboard.type).toBe('local');
     expect(oc.mcp.sideboard.command[0]).toBe(servers[0]!.command);
+    expect(oc.mcp.sideboard.environment?.SIDEBOARD_APP_DATA).toBe(
+      servers[0]!.env!.SIDEBOARD_APP_DATA,
+    );
+
+    const claudeCfgPath = writeMcpServersConfig(servers);
+    expect(claudeCfgPath).toBeTruthy();
+    const claudeCfg = JSON.parse(readFileSync(claudeCfgPath!, 'utf8')) as {
+      mcpServers: { sideboard: { env?: Record<string, string> } };
+    };
+    expect(claudeCfg.mcpServers.sideboard.env?.SIDEBOARD_APP_DATA).toBe(
+      servers[0]!.env!.SIDEBOARD_APP_DATA,
+    );
   });
 
   it('resolves MCP entry without throwing when import.meta.url is unavailable', async () => {
     const { findSideboardMcpJsEntry } = await import('./injected-mcp.js');
     expect(() => findSideboardMcpJsEntry()).not.toThrow();
+  });
+
+  it('injects SIDEBOARD_ORCHESTRATOR_THREAD_ID for orchestration turns', async () => {
+    const servers = await buildInjectedMcpServers({
+      includeSideboard: true,
+      includeBrightsy: false,
+      orchestratorThreadId: 'orch-thread-123',
+    });
+    expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBe('orch-thread-123');
+    expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
+    const { toCodexMcpConfigArgs } = await import('./injected-mcp.js');
+    const args = toCodexMcpConfigArgs(servers);
+    expect(
+      args.some((a) =>
+        a.includes('mcp_servers.sideboard.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID='),
+      ),
+    ).toBe(true);
+    expect(
+      args.some((a) =>
+        a.includes('mcp_servers.sideboard.env.SIDEBOARD_APP_DATA='),
+      ),
+    ).toBe(true);
+  });
+
+  it('always injects SIDEBOARD_APP_DATA for Sideboard MCP', async () => {
+    const servers = await buildInjectedMcpServers({
+      includeSideboard: true,
+      includeBrightsy: false,
+    });
+    expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
+    expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBeUndefined();
   });
 
   it('skips brightsy when not connected', async () => {

@@ -95,7 +95,7 @@ describe('requestReview', () => {
     );
   });
 
-  it('creates a Review tab with repo guidelines and sends Review.', async () => {
+  it('creates a Review tab with repo guidelines and sends the review prefill', async () => {
     writeFileSync(join(worktree, REPO_REVIEW_PATH), '## Recommendation required\n');
     const from = {
       id: 'from-id',
@@ -126,7 +126,7 @@ describe('requestReview', () => {
       }),
     );
     expect(send).toHaveBeenCalledWith('review-tab', REVIEW_REQUEST_PREFILL);
-    expect(REVIEW_REQUEST_PREFILL).toBe('Review.');
+    expect(REVIEW_REQUEST_PREFILL).toBe('Review changes in this workspace.');
     expect(result.tab.id).toBe('review-tab');
     expect(result.from.id).toBe('from-id');
   });

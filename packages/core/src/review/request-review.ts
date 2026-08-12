@@ -28,7 +28,7 @@ export const LEGACY_REVIEW_REQUEST_PATH = `${LEGACY_ATTACHMENTS_DIR}/Review requ
 export const REVIEW_REQUEST_NAME = 'Review request.md';
 
 /** Short chat message — guidelines live in the attached review file. */
-export const REVIEW_REQUEST_PREFILL = 'Review.';
+export const REVIEW_REQUEST_PREFILL = 'Review changes in this workspace.';
 
 /** Stock template from before readiness recommendations were required. */
 const LEGACY_REVIEW_TEMPLATE_MARKERS = [
@@ -209,7 +209,7 @@ export interface RequestReviewResult {
 type SendFn = (threadRef: string, prompt: string) => Promise<Thread>;
 
 /**
- * Open a fresh "Review" chat tab, attach resolved guidelines, send "Review."
+ * Open a fresh "Review" chat tab, attach resolved guidelines, send the review prefill.
  */
 export async function requestReview(
   threadRef: string,

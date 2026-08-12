@@ -413,16 +413,17 @@ function WorktreeSidebarRow({
   onRequestArchive: (chats: Thread[]) => void;
 }) {
   const [rowHover, setRowHover] = useState(false);
-  const [pencilHover, setPencilHover] = useState(false);
+  const [gitCardOpen, setGitCardOpenState] = useState(false);
   const [stat, setStat] = useState<WorktreeDiffStat | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [archiveHover, setArchiveHover] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const rowHoverRef = useRef(false);
   const archiveBtnRef = useRef<HTMLButtonElement>(null);
-  const pencilBtnRef = useRef<HTMLButtonElement>(null);
   const archiveCloseTimer = useRef<number | null>(null);
-  const pencilCloseTimer = useRef<number | null>(null);
+  const gitCloseTimer = useRef<number | null>(null);
   const fetchGen = useRef(0);
-  const wantFetch = rowHover || pencilHover || archiveHover;
+  const wantFetch = rowHover || gitCardOpen || archiveHover;
 
   function clearTimer(ref: { current: number | null }) {
     if (ref.current != null) {
@@ -434,39 +435,41 @@ function WorktreeSidebarRow({
   function setArchiveCardOpen(next: boolean) {
     clearTimer(archiveCloseTimer);
     if (next) {
-      clearTimer(pencilCloseTimer);
-      setPencilHover(false);
+      clearTimer(gitCloseTimer);
+      setGitCardOpenState(false);
       setArchiveHover(true);
       return;
     }
     archiveCloseTimer.current = window.setTimeout(() => {
       setArchiveHover(false);
       archiveCloseTimer.current = null;
+      // Leaving the archive control back onto the row restores the git card.
+      if (rowHoverRef.current) setGitCardOpen(true);
     }, 120);
   }
 
-  function setEditCardOpen(next: boolean) {
-    clearTimer(pencilCloseTimer);
+  function setGitCardOpen(next: boolean) {
+    clearTimer(gitCloseTimer);
     if (next) {
       clearTimer(archiveCloseTimer);
       setArchiveHover(false);
-      setPencilHover(true);
+      setGitCardOpenState(true);
       return;
     }
-    pencilCloseTimer.current = window.setTimeout(() => {
-      setPencilHover(false);
-      pencilCloseTimer.current = null;
+    gitCloseTimer.current = window.setTimeout(() => {
+      setGitCardOpenState(false);
+      gitCloseTimer.current = null;
     }, 120);
   }
 
   useEffect(() => {
     return () => {
       clearTimer(archiveCloseTimer);
-      clearTimer(pencilCloseTimer);
+      clearTimer(gitCloseTimer);
     };
   }, []);
 
-  // Prefetch on row hover so status is ready when the pencil card opens.
+  // Prefetch on row hover so git status is ready for the hover card.
   useEffect(() => {
     if (!wantFetch) return;
     const gen = ++fetchGen.current;
@@ -508,12 +511,18 @@ function WorktreeSidebarRow({
 
   return (
     <div
+      ref={rowRef}
       className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
       aria-busy={archiving}
-      onMouseEnter={() => setRowHover(true)}
+      onMouseEnter={() => {
+        rowHoverRef.current = true;
+        setRowHover(true);
+        if (!archiveHover) setGitCardOpen(true);
+      }}
       onMouseLeave={() => {
+        rowHoverRef.current = false;
         setRowHover(false);
-        setEditCardOpen(false);
+        setGitCardOpen(false);
         setArchiveCardOpen(false);
       }}
       onClick={(e) => {
@@ -550,69 +559,52 @@ function WorktreeSidebarRow({
                 .join(' · ')}
         </div>
       </div>
-      {!archiving ? (
+      {!archiving && showArchive ? (
         <div
           className="worktree-row-actions"
           onClick={(e) => e.stopPropagation()}
         >
-          {showArchive ? (
-            <>
-              <button
-                type="button"
-                ref={archiveBtnRef}
-                className={`icon-btn worktree-remove-btn${archiveHover ? ' is-hot' : ''}`}
-                title="Archive workspace"
-                aria-label={`Archive ${worktreeLabel}`}
-                aria-expanded={archiveHover}
-                onMouseEnter={() => setArchiveCardOpen(true)}
-                onMouseLeave={() => setArchiveCardOpen(false)}
-                onFocus={() => setArchiveCardOpen(true)}
-                onBlur={() => setArchiveCardOpen(false)}
-                onClick={requestArchive}
-              >
-                ▤
-              </button>
-              <WorktreeArchiveCard
-                open={archiveHover}
-                anchorRef={archiveBtnRef}
-                thread={primary}
-                label={worktreeLabel}
-                onArchive={requestArchive}
-                onKeepOpen={setArchiveCardOpen}
-              />
-            </>
-          ) : null}
           <button
             type="button"
-            ref={pencilBtnRef}
-            className={`icon-btn worktree-open-btn${pencilHover ? ' is-hot' : ''}`}
-            title={`Open ${worktreeLabel}`}
-            aria-label={`Open ${worktreeLabel}`}
-            aria-expanded={pencilHover}
-            onMouseEnter={() => setEditCardOpen(true)}
-            onMouseLeave={() => setEditCardOpen(false)}
-            onFocus={() => setEditCardOpen(true)}
-            onBlur={() => setEditCardOpen(false)}
-            onClick={() => onSelect(primary.id, false)}
+            ref={archiveBtnRef}
+            className={`icon-btn worktree-remove-btn${archiveHover ? ' is-hot' : ''}`}
+            title="Archive workspace"
+            aria-label={`Archive ${worktreeLabel}`}
+            aria-expanded={archiveHover}
+            onMouseEnter={() => setArchiveCardOpen(true)}
+            onMouseLeave={() => setArchiveCardOpen(false)}
+            onFocus={() => setArchiveCardOpen(true)}
+            onBlur={() => setArchiveCardOpen(false)}
+            onClick={requestArchive}
           >
-            ✎
+            ▤
           </button>
-          <WorktreeEditCard
-            open={pencilHover}
-            anchorRef={pencilBtnRef}
+          <WorktreeArchiveCard
+            open={archiveHover}
+            anchorRef={archiveBtnRef}
             thread={primary}
             label={worktreeLabel}
-            dirty={dirty}
-            loaded={loaded}
-            additions={stat?.additions ?? 0}
-            deletions={stat?.deletions ?? 0}
-            onOpen={() => {
-              setEditCardOpen(false);
-              onSelect(primary.id, false);
-            }}
-            onKeepOpen={setEditCardOpen}
+            onArchive={requestArchive}
+            onKeepOpen={setArchiveCardOpen}
           />
         </div>
+      ) : null}
+      {!archiving ? (
+        <WorktreeEditCard
+          open={gitCardOpen}
+          anchorRef={rowRef}
+          thread={primary}
+          label={worktreeLabel}
+          dirty={dirty}
+          loaded={loaded}
+          additions={stat?.additions ?? 0}
+          deletions={stat?.deletions ?? 0}
+          onOpen={() => {
+            setGitCardOpen(false);
+            onSelect(primary.id, false);
+          }}
+          onKeepOpen={setGitCardOpen}
+        />
       ) : null}
     </div>
   );

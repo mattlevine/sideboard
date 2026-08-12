@@ -127,6 +127,9 @@ export const cursorAdapter: AgentAdapter = {
   kind: 'cursor',
 
   async detect(): Promise<AgentStatus> {
+    // Do not call Cursor.models.list here — create_thread (esp. under a Codex
+    // orchestrator MCP child) would hang the whole stdio server on a network
+    // wait. Presence of an API key is enough; turns fail later if auth is bad.
     const apiKey = resolveCursorApiKey();
     if (!apiKey) {
       return {
@@ -140,26 +143,13 @@ export const cursorAdapter: AgentAdapter = {
       };
     }
 
-    try {
-      await Cursor.models.list({ apiKey });
-      return {
-        agent: 'cursor',
-        installed: true,
-        authenticated: true,
-        linearMcp: false,
-        warnings: [],
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return {
-        agent: 'cursor',
-        installed: true,
-        authenticated: false,
-        linearMcp: false,
-        warnings: [],
-        reason: `Cursor API auth failed: ${message}`,
-      };
-    }
+    return {
+      agent: 'cursor',
+      installed: true,
+      authenticated: true,
+      linearMcp: false,
+      warnings: [],
+    };
   },
 
   async buildTurn(thread, input): Promise<TurnCommand> {
@@ -171,6 +161,8 @@ export const cursorAdapter: AgentAdapter = {
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
+      orchestratorThreadId:
+        thread.sourceType === 'orchestration' ? thread.id : null,
     });
     const mcpServers = toCursorMcpServers(injected);
     const req: CursorTurnRequest = {

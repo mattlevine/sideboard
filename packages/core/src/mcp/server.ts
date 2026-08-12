@@ -16,6 +16,26 @@ import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 
 const MAX_ORCH_THREADS = 5;
+/** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
+const CREATE_THREAD_TIMEOUT_MS = 90_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
 
 /**
  * Sideboard MCP server — agent-facing judgment surface.
@@ -38,7 +58,14 @@ export async function startMcpServer(): Promise<void> {
   // Do not drain the whole fleet on every MCP stdio boot (present_* / tool
   // calls): that steals queues into a short-lived process. Desktop adopts
   // persisted queues via the thread-store watcher instead.
-  await orch.reconcile(undefined, { reclaimStaleTurns: false, drainQueues: false });
+  try {
+    await orch.reconcile(undefined, { reclaimStaleTurns: false, drainQueues: false });
+  } catch (err) {
+    console.error(
+      '[sideboard-mcp] reconcile on boot failed (continuing):',
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   const server = new McpServer({
     name: 'sideboard',
@@ -326,7 +353,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_thread',
-    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces and parentThreadId when spawning from an orchestrator. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Then use send_to_thread to chat.`,
+    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces. From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Then use send_to_thread to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -343,13 +370,41 @@ export async function startMcpServer(): Promise<void> {
         ),
       repoPath: z.string(),
       title: z.string().optional(),
-      parentThreadId: z.string().optional(),
+      parentThreadId: z
+        .string()
+        .optional()
+        .describe(
+          'Orchestration: omit (preferred) or pass YOUR chat id from the turn reminder / AGENTS.md. Do not invent uuids.',
+        ),
     },
     async (args) => {
-      if (args.parentThreadId) {
+      const envParentId = process.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || '';
+      let parentId = args.parentThreadId?.trim() || '';
+      let parent = parentId ? orch.getThread(parentId) : null;
+      let parentCorrectedFrom: string | undefined;
+
+      // When MCP was spawned from an orchestration turn, ALWAYS bind children to
+      // that chat — agents (esp. Codex) invent/reuse stale parentThreadIds.
+      // Never fall back to "newest live orch" — that steals children into a
+      // different store/chat the user may never see (dev vs shared app-data).
+      if (envParentId) {
+        const envParent = orch.getThread(envParentId);
+        if (envParent) {
+          if (parentId && parentId !== envParentId) parentCorrectedFrom = parentId;
+          else if (!parentId) parentCorrectedFrom = undefined;
+          parentId = envParentId;
+          parent = envParent;
+        }
+      }
+      if (parentId && !parent) {
+        parentCorrectedFrom = parentId;
+        parentId = '';
+        parent = null;
+      }
+      if (parentId) {
         const children = orch
           .getThreads(true)
-          .filter((t) => t.parentThreadId === args.parentThreadId);
+          .filter((t) => t.parentThreadId === parentId);
         if (children.length >= MAX_ORCH_THREADS) {
           return {
             content: [
@@ -362,38 +417,82 @@ export async function startMcpServer(): Promise<void> {
           };
         }
       }
+      // Nested Codex-under-Codex (orchestrator create_thread agent=codex) can
+      // deadlock on ~/.codex locks. Prefer a non-Codex worktree agent instead.
+      let agentArg = args.agent;
+      let agentCoercedFrom: string | undefined;
+      const resolvedProbe = resolveNewThreadOptions({ agent: agentArg }).agent;
+      // Coerce whenever the child would be Codex — even if parentThreadId was
+      // omitted/wrong — so nested Codex cannot pin the MCP stdio server.
+      if (resolvedProbe === 'codex') {
+        agentCoercedFrom = agentArg ?? 'codex';
+        const accountAgent = resolveNewThreadOptions({}).agent;
+        agentArg = accountAgent !== 'codex' ? accountAgent : 'cursor';
+      }
       const opts = resolveNewThreadOptions({
-        agent: args.agent,
+        agent: agentArg,
         model: args.model,
       });
-      const thread = await orch.createThread({
-        sourceType: args.sourceType,
-        sourceRef: args.sourceRef,
-        agent: opts.agent,
-        model: opts.model,
-        effort: opts.effort,
-        fast: opts.fast,
-        repoPath: args.repoPath,
-        title: args.title,
-        parentThreadId: args.parentThreadId ?? null,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: thread.id,
-              title: thread.title,
-              branchName: thread.branchName,
-              worktreePath: thread.worktreePath,
-              agent: thread.agent,
-              model: thread.model,
-              status: thread.status,
-              link: `sideboard://thread/${thread.id}`,
-            }),
-          },
-        ],
-      };
+      try {
+        const thread = await withTimeout(
+          orch.createThread({
+            sourceType: args.sourceType,
+            sourceRef: args.sourceRef,
+            agent: opts.agent,
+            model: opts.model,
+            effort: opts.effort,
+            fast: opts.fast,
+            repoPath: args.repoPath,
+            title: args.title,
+            parentThreadId: parentId || null,
+          }),
+          CREATE_THREAD_TIMEOUT_MS,
+          'create_thread',
+        );
+        const parentNote = parentCorrectedFrom
+          ? parentId
+            ? `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; nested under ${parentId}`
+            : `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; created without parent`
+          : undefined;
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: thread.id,
+                title: thread.title,
+                branchName: thread.branchName,
+                worktreePath: thread.worktreePath,
+                agent: thread.agent,
+                model: thread.model,
+                status: thread.status,
+                link: `sideboard://thread/${thread.id}`,
+                parentThreadId: thread.parentThreadId,
+                ...(agentCoercedFrom
+                  ? {
+                      agentCoercedFrom,
+                      note: `Avoid nested Codex under a Codex orchestrator — used Account default agent=${thread.agent}`,
+                    }
+                  : {}),
+                ...(parentCorrectedFrom
+                  ? { parentCorrectedFrom, parentNote }
+                  : {}),
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `create_thread failed: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
     },
   );
 
@@ -582,7 +681,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'request_review',
-    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .sideboard/review.md when present (else local Review request.md / stock template), and sends "Review." Expect Approve / Approve with nits / Request changes / Needs more information. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn / get_turn_result on the returned review tab id.',
+    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .sideboard/review.md when present (else local Review request.md / stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn / get_turn_result on the returned review tab id.',
     { ref: z.string().describe('Worktree thread id/ref to review') },
     async ({ ref }) => {
       try {

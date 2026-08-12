@@ -37,11 +37,13 @@ describe('codexAdapter.buildTurn', () => {
       prompt: 'fix the bug',
     });
     expect(cmd.args[0]).toBe('exec');
-    expect(cmd.args[1]).toContain('AGENTS.md body');
-    expect(cmd.args[1]).toContain('fix the bug');
+    expect(cmd.args.at(-1)).toContain('AGENTS.md body');
+    expect(cmd.args.at(-1)).toContain('fix the bug');
     expect(cmd.args).not.toContain('-');
     expect(cmd.stdin).toBeUndefined();
     expect(cmd.args).toContain('--json');
+    expect(cmd.args).not.toContain('--ask-for-approval');
+    expect(cmd.args.slice(1, -1)).toContain('approval_policy="never"');
   });
 
   it('uses resume with explicit session id (never --last)', async () => {
@@ -49,14 +51,17 @@ describe('codexAdapter.buildTurn', () => {
       { ...baseThread, sessionId: 'thread-abc' },
       { cachedPrefix: 'stable prefix', prompt: 'next step' },
     );
-    expect(cmd.args.slice(0, 4)).toEqual(['exec', 'resume', 'thread-abc', expect.any(String)]);
+    expect(cmd.args[0]).toBe('exec');
+    expect(cmd.args.slice(-3)).toEqual(['resume', 'thread-abc', expect.any(String)]);
+    expect(cmd.args.indexOf('--cd')).toBeLessThan(cmd.args.indexOf('resume'));
+    expect(cmd.args.indexOf('--sandbox')).toBeLessThan(cmd.args.indexOf('resume'));
     expect(cmd.args).not.toContain('--last');
   });
 
   it('uses stdin sentinel for oversized prompts', async () => {
     const big = 'x'.repeat(CODEX_PROMPT_ARG_MAX + 1);
     const cmd = await codexAdapter.buildTurn(baseThread, { prompt: big });
-    expect(cmd.args[1]).toBe('-');
+    expect(cmd.args.at(-1)).toBe('-');
     expect(cmd.stdin).toBe(`${big}\n`);
   });
 
@@ -65,6 +70,21 @@ describe('codexAdapter.buildTurn', () => {
     expect(cmd.args).toContain('-c');
     const cfg = cmd.args.filter((_, i) => cmd.args[i - 1] === '-c');
     expect(cfg.some((c) => c.startsWith('mcp_servers.sideboard.command='))).toBe(true);
+  });
+
+  it('skips git-repo trust check (global orchestration cwd is not a git repo)', async () => {
+    const cmd = await codexAdapter.buildTurn(baseThread, { prompt: 'list threads' });
+    expect(cmd.args).toContain('--skip-git-repo-check');
+  });
+
+  it('uses danger-full-access sandbox for orchestration threads', async () => {
+    const cmd = await codexAdapter.buildTurn(
+      { ...baseThread, sourceType: 'orchestration' } as typeof baseThread & {
+        sourceType: 'orchestration';
+      },
+      { prompt: 'create a thread' },
+    );
+    expect(cmd.args[cmd.args.indexOf('--sandbox') + 1]).toBe('danger-full-access');
   });
 });
 

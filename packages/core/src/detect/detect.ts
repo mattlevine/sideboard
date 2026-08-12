@@ -1,17 +1,36 @@
-import { allAdapters, ensureAgentPath } from '../agents/index.js';
-import type { AgentStatus } from '../types/thread.js';
+import { getAdapter, allAdapters, ensureAgentPath } from '../agents/index.js';
+import type { AgentKind, AgentStatus } from '../types/thread.js';
 
 export async function detectAgents(): Promise<AgentStatus[]> {
   ensureAgentPath();
   return Promise.all(allAdapters().map((a) => a.detect()));
 }
 
+/**
+ * Verify one agent is installed/authenticated.
+ * Only probes that agent — never runs every detector. Nested `codex mcp list`
+ * / `codex login status` while a parent `codex exec` holds ~/.codex SQLite locks
+ * can block create_thread MCP forever.
+ */
+const REQUIRE_AGENT_TIMEOUT_MS = 8_000;
+
 export async function requireAgent(
-  agent: AgentStatus['agent'],
+  agent: AgentKind,
   opts?: { requireLinear?: boolean },
 ): Promise<AgentStatus> {
-  const status = (await detectAgents()).find((s) => s.agent === agent);
-  if (!status) throw new Error(`Unknown agent: ${agent}`);
+  ensureAgentPath();
+  const status = await Promise.race([
+    getAdapter(agent).detect(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `${agent} detect timed out after ${REQUIRE_AGENT_TIMEOUT_MS / 1000}s`,
+          ),
+        );
+      }, REQUIRE_AGENT_TIMEOUT_MS);
+    }),
+  ]);
   if (!status.installed || !status.authenticated) {
     throw new Error(status.reason ?? `${agent} is not available`);
   }

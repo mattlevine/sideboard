@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
@@ -138,11 +138,24 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return undefined;
 }
 
+function codexLooksAuthenticated(): boolean {
+  // Never spawn `codex login status` / `codex mcp list` from detect — nested under
+  // an active `codex exec` those CLIs can block forever on ~/.codex SQLite locks,
+  // which hangs Sideboard MCP create_thread (orchestrator → create agent=codex).
+  const authPath = join(homedir(), '.codex', 'auth.json');
+  if (!existsSync(authPath)) return false;
+  try {
+    return statSync(authPath).size > 2;
+  } catch {
+    return false;
+  }
+}
+
 export const codexAdapter: AgentAdapter = {
   kind: 'codex',
 
   async detect(): Promise<AgentStatus> {
-    const which = await run('which', ['codex'], { reject: false });
+    const which = await run('which', ['codex'], { reject: false, timeoutMs: 3_000 });
     if (which.exitCode !== 0) {
       return {
         agent: 'codex',
@@ -154,11 +167,8 @@ export const codexAdapter: AgentAdapter = {
       };
     }
 
-    const auth = await run('codex', ['login', 'status'], { reject: false });
-    const authenticated = auth.exitCode === 0;
-
-    const mcp = await run('codex', ['mcp', 'list', '--json'], { reject: false });
-    const linearMcp = /linear/i.test(mcp.stdout + mcp.stderr);
+    const authenticated = codexLooksAuthenticated();
+    const linearMcp = false;
 
     const warnings: string[] = [];
     if (!codexConfigHasNetworkAccess()) {
@@ -173,7 +183,9 @@ export const codexAdapter: AgentAdapter = {
       authenticated,
       linearMcp,
       warnings,
-      reason: authenticated ? undefined : 'codex login status failed — run `codex login`',
+      reason: authenticated
+        ? undefined
+        : 'Codex auth not found — run `codex login` (expected ~/.codex/auth.json)',
     };
   },
 
@@ -201,22 +213,30 @@ export const codexAdapter: AgentAdapter = {
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
+      orchestratorThreadId:
+        thread.sourceType === 'orchestration' ? thread.id : null,
     });
     const mcpOverrides = toCodexMcpConfigArgs(injected);
-    const args = [
-      'exec',
-      ...(sessionId ? (['resume', sessionId] as const) : []),
-      promptArg,
+    // Options must come before the prompt / `resume` subcommand. `codex exec resume`
+    // does not accept `--cd` / `--sandbox` after SESSION_ID PROMPT (Codex ≥0.147).
+    const execOpts = [
+      // Global orchestration cwd is not a git repo; without this Codex ≥0.147
+      // refuses to start ("Not inside a trusted directory").
+      '--skip-git-repo-check',
       '--cd',
       thread.worktreePath,
       '--json',
       '--sandbox',
       mode.codexSandbox,
-      '--ask-for-approval',
-      'never',
+      // `codex exec` rejects `--ask-for-approval` (global-only on newer CLIs).
+      '-c',
+      'approval_policy="never"',
       ...(model ? (['--model', model] as const) : []),
       ...mcpOverrides,
     ];
+    const args = sessionId
+      ? ['exec', ...execOpts, 'resume', sessionId, promptArg]
+      : ['exec', ...execOpts, promptArg];
 
     return {
       file: 'codex',
@@ -365,7 +385,7 @@ export const codexAdapter: AgentAdapter = {
     if (sessionId) {
       return {
         file: 'codex',
-        args: ['exec', 'resume', sessionId, '--cd', thread.worktreePath],
+        args: ['exec', '--cd', thread.worktreePath, 'resume', sessionId],
         cwd: thread.worktreePath,
       };
     }
@@ -383,12 +403,12 @@ export const codexAdapter: AgentAdapter = {
       'codex',
       [
         'exec',
-        prompt,
         '--json',
         '--sandbox',
         'read-only',
-        '--ask-for-approval',
-        'never',
+        '-c',
+        'approval_policy="never"',
+        prompt,
       ],
       { reject: false },
     );

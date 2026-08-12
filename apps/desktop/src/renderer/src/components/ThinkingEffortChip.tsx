@@ -110,7 +110,8 @@ export function ThinkingEffortChip({ effort, onChange, className }: ChipProps) {
           setOpen((v) => !v);
         }}
       >
-        <ThinkingEffortIcon effort={effort} /> {label}
+        <ThinkingEffortIcon effort={effort} />{' '}
+        <span className="chip-label">{label}</span>
       </button>
       <FloatingMenu
         open={open}

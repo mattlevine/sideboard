@@ -2183,18 +2183,6 @@ body.resizing-panels webview {
   pointer-events: auto;
 }
 
-.worktree-open-btn {
-  opacity: 1;
-  font-size: 13px;
-  line-height: 1;
-  color: var(--muted);
-}
-
-.worktree-open-btn:hover,
-.worktree-open-btn.is-hot {
-  color: var(--text);
-}
-
 .panel {
   display: flex;
   flex-direction: column;
@@ -4823,6 +4811,8 @@ body.resizing-panels webview {
   gap: 8px;
   transition: padding 0.15s ease, border-radius 0.15s ease;
   overflow: visible;
+  container-type: inline-size;
+  container-name: composer;
 }
 
 .composer-box.collapsed {
@@ -4986,6 +4976,11 @@ body.resizing-panels webview {
   background: transparent;
   border-color: transparent;
   color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .chip:hover {
@@ -4996,6 +4991,22 @@ body.resizing-panels webview {
   background: var(--bg-input);
   border-color: var(--border);
   color: var(--text);
+}
+
+.chip .chip-label {
+  min-width: 0;
+}
+
+/* Narrow composer (split panes / skinny chat): icons only — titles keep the meaning. */
+@container composer (max-width: 420px) {
+  .composer-toolbar .chip-label {
+    display: none;
+  }
+
+  .composer-toolbar .chip {
+    padding: 5px 7px;
+    gap: 0;
+  }
 }
 
 .chip.fast.active {
@@ -9134,6 +9145,8 @@ body:has(.update-banner) .team-toast-stack {
 
 .create-footer {
   padding: 8px 12px 12px;
+  container-type: inline-size;
+  container-name: composer;
 }
 
 .create-footer .composer-toolbar.create-variant .chip {

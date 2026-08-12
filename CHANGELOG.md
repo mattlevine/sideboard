@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.59] - 2026-08-12
+
+### Fixed
+
+- Orchestration MCP always inherits `SIDEBOARD_APP_DATA` (Claude / Cursor / Codex / OpenCode) so `create_thread` writes into the same store as desktop `pnpm dev` (`.sideboard/dev-app-data`) instead of a separate `~/Library/.../sideboard` tree children never appear in
+- Codex orchestration: `--skip-git-repo-check`, `approval_policy=never` (no rejected `--ask-for-approval`), non-blocking detect (no nested `codex login` / `mcp list`), and injected `SIDEBOARD_ORCHESTRATOR_THREAD_ID` so inventing stale `parentThreadId`s cannot hang or mis-nest children
+- `create_thread` no longer remaps unknown parents onto a random live orchestration chat; bind via env / a real parent id only
+- Coordinator `AGENTS.md` / `CLAUDE.md` embed the orchestration thread id and keep it across reconcile rewrites; turn reminders tell agents to omit or pass that id
+- Git worktree create / fetch timeouts so a stuck fetch cannot pin MCP stdio forever; `create_thread` hard timeout (90s)
+- Nested Codex-under-Codex from `create_thread` is coerced to a non-Codex Account default agent
+
+### Changed
+
+- Review sends **Review changes in this workspace.** (was **Review.**)
+- Left sidebar: hovering a worktree row opens the git status hover card; edit (✎) icon removed
+- Narrow composer toolbars hide chip labels (icons only) so model / effort / Plan stay usable in skinny panes
+
+## [0.1.58] - 2026-08-11
+
+Desktop GitHub release only (npm stayed at 0.1.57). Functional fixes above ship in **0.1.59**.
+
 ## [0.1.57] - 2026-08-11
 
 ### Fixed

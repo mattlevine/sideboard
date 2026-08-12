@@ -225,6 +225,13 @@ describe('app settings', () => {
       effort: 'high',
       fast: true,
     });
+    // Cursor Auto ("default") must not ride along onto Codex/Claude children.
+    expect(mod.resolveNewThreadOptions({ agent: 'codex' })).toEqual({
+      agent: 'codex',
+      model: null,
+      effort: 'high',
+      fast: true,
+    });
   });
 
   it('round-trips Claude harness settings', async () => {

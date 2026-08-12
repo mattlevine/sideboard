@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveGithubRepoSlug } from '../git/worktree.js';
 import { resolveThreadDefaults } from '../store/app-settings.js';
@@ -61,7 +61,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
   'Worktree threads (chats):',
-  '- create_thread — create a worktree + chat from branch | pr | ticket; pass repoPath + parentThreadId; omit agent and model to use Sideboard Account defaults (Settings → Default agent, model & effort)',
+  '- create_thread — create a worktree + chat from branch | pr | ticket; pass repoPath + parentThreadId; omit agent and model to use Sideboard Account defaults (Settings → Default agent, model & effort). If you are Codex, do not set agent=codex (nested Codex deadlocks)',
   '- fork_worktree — fork a worktree chat into a NEW git worktree + chat (transcript attached); optional agent; leave model unset (Auto) unless you have a reason. Not for orchestration chats.',
   '- fork_chat — fork a worktree chat (same worktree tab) OR a Global orchestration chat (new orchestration tab); optional agent; leave model unset (Auto) unless you have a reason. Remote coordinators: use this to continue another orchestration chat on a different agent after session limits.',
   '- send_to_thread — queue a prompt (start/continue a chat turn); pass force_stop: true to interrupt mid-turn / clear stale queued prompts before replacing with a new request',
@@ -73,7 +73,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- list_run_scripts / run_dev_script / stop_dev_script — start/stop named run scripts',
   'Inspect / review / PRs:',
   '- get_diff — compact diff summary',
-  '- request_review — open a Review chat tab on a worktree thread (attaches .sideboard/review.md when present, else local guidelines; sends "Review."); then wait_for_turn / get_turn_result on the returned id',
+  '- request_review — open a Review chat tab on a worktree thread (attaches .sideboard/review.md when present, else local guidelines; sends "Review changes in this workspace."); then wait_for_turn / get_turn_result on the returned id',
   '- Ask the worktree agent via send_to_thread to open a draft PR with `gh pr create --draft -R <origin-owner/name>` (workspace `github:` slug / that worktree\'s origin — never upstream). Do not open PRs from the orchestrator yourself.',
   'Human-only (do not attempt): merge, ready-for-review land, purge_thread.',
   'Thread links in replies: when mentioning a chat/thread for the user, include a markdown link `[Title](sideboard://thread/<id>)` using the full id (or the link field from create_thread / list_threads). Sideboard renders these as clickable opens.',
@@ -100,7 +100,9 @@ export function coordinatorTurnReminder(opts: {
     '- You oversee Sideboard worktree agents. You are not yourself checked out in a project worktree.',
     '- This cwd is a synthetic empty home (not a git repo). Emptiness here is expected — it is not a problem to fix.',
     '- Registered workspaces / child threads are the fleet you manage via Sideboard MCP.',
-    `- Parent thread id (pass as parentThreadId when creating children): ${opts.parentId}`,
+    `- YOUR orchestration thread id is ${opts.parentId}`,
+    `- Always pass parentThreadId="${opts.parentId}" on create_thread (never invent or reuse another uuid).`,
+    `- Or omit parentThreadId — Sideboard MCP already binds children to ${opts.parentId}.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
     '- For "what\'s going on": call list_threads (and list_workspaces if needed). Summarize fleet status — do not ls/git-status this synthetic home.',
@@ -115,11 +117,44 @@ export function coordinatorTurnReminder(opts: {
 /**
  * Write durable CLAUDE.md / AGENTS.md into the global synthetic cwd so Claude
  * (and other agents that load AGENTS.md) keep orchestrator identity on resume.
+ * When `orchestratorThreadId` is set, embed that uuid so Codex/Claude resume
+ * cannot invent a stale parentThreadId.
  */
-export function ensureGlobalCoordinatorCwd(): string {
+export function ensureGlobalCoordinatorCwd(opts?: {
+  orchestratorThreadId?: string | null;
+}): string {
   const dir = globalAgentCwd();
-  mkdirSync(dir, { recursive: true });
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch {
+    // Best-effort — MCP under a restricted sandbox may not create the dir.
+    return dir;
+  }
   const reposDir = sideboardReposDir();
+  // Reconcile / createGlobalChat call this without an id — preserve any id
+  // already written for the active orch so Codex resume keeps seeing it.
+  let orchId = opts?.orchestratorThreadId?.trim() || '';
+  if (!orchId) {
+    try {
+      const existing = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
+      const m = existing.match(
+        /YOUR orchestration thread id is `([0-9a-f-]{36})`/i,
+      );
+      if (m?.[1]) orchId = m[1];
+    } catch {
+      // no prior file
+    }
+  }
+  const parentBlock = orchId
+    ? [
+        '',
+        `## This chat's id`,
+        '',
+        `YOUR orchestration thread id is \`${orchId}\`.`,
+        `On every create_thread, pass parentThreadId="${orchId}" — or omit parentThreadId (Sideboard binds it automatically).`,
+        'Never invent a uuid and never reuse an id from an earlier conversation.',
+      ]
+    : [];
   const body = [
     '# Sideboard Orchestration',
     '',
@@ -129,6 +164,7 @@ export function ensureGlobalCoordinatorCwd(): string {
     'Repos from `list_workspaces` and threads from `list_threads` are the fleet you orchestrate.',
     'For status questions ("what\'s going on?"), use `list_threads` / `list_workspaces` — never diagnose this synthetic home as a broken worktree.',
     'Bash is fine for inspecting **child worktree** / registered-repo paths, and for greenfield repo setup under the Sideboard repos directory — not for treating this home as the project.',
+    ...parentBlock,
     '',
     COORDINATOR_TOOL_PLAYBOOK,
     '',
@@ -136,15 +172,25 @@ export function ensureGlobalCoordinatorCwd(): string {
     '',
     coordinatorGreenfieldPlaybook(reposDir),
     '',
-    'When creating threads, pass `repoPath` from `list_workspaces` (or the path you just registered) and `parentThreadId` for children.',
+    'When creating threads, pass `repoPath` from `list_workspaces` (or the path you just registered).',
+    orchId
+      ? `Pass parentThreadId="${orchId}" (or omit it). Never invent another parentThreadId.`
+      : 'Pass `parentThreadId` for children (this chat\'s id from the turn reminder).',
     'Omit `agent` / `model` on `create_thread` unless you have a reason to override Account defaults.',
+    'Never pass `agent=codex` when you yourself are Codex — nested Codex deadlocks on shared ~/.codex locks. Omit agent (Account default) or use cursor/claude.',
     'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn.',
     'Typical flow (new app): Bash create/clone under repos dir → add_workspace → create_thread → send_to_thread (implement) → wait_for_turn → draft PR via worktree agent.',
     'Always ask worktree agents to open draft PRs (`send_to_thread` + `gh pr create --draft -R <origin>`); never open PRs from the orchestrator.',
   ].join('\n');
   // Always rewrite so tool playbook updates ship without manual cleanup.
-  writeFileSync(join(dir, 'CLAUDE.md'), `${body}\n`, 'utf8');
-  writeFileSync(join(dir, 'AGENTS.md'), `${body}\n`, 'utf8');
+  // Never throw — a sandboxed Codex MCP child that cannot write here must still
+  // serve create_thread / list_threads instead of dying during initialize.
+  try {
+    writeFileSync(join(dir, 'CLAUDE.md'), `${body}\n`, 'utf8');
+    writeFileSync(join(dir, 'AGENTS.md'), `${body}\n`, 'utf8');
+  } catch {
+    // ignore
+  }
   return dir;
 }
 
@@ -175,12 +221,12 @@ export function coordinatorSystemPrompt(opts: {
     COORDINATOR_TOOL_PLAYBOOK,
     accountDefaultsPlaybookLine(),
     coordinatorGreenfieldPlaybook(reposDir),
-    'When creating threads, pass the correct repoPath for the target workspace and parentThreadId for children.',
+    'When creating threads, pass the correct repoPath for the target workspace.',
+    `YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit parentThreadId (Sideboard binds it). Never invent a uuid.`,
     'Omit agent/model on create_thread unless you need to override Account defaults.',
     'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread (implement) → wait_for_turn → send_to_thread (ask for `gh pr create --draft -R <origin-owner/name>` using the workspace github slug) → wait_for_turn. Never target upstream. Never open PRs from the orchestrator.',
     'Typical flow (new app): Bash under repos dir (clone or gh repo create) → add_workspace → create_thread → send_to_thread → wait_for_turn → draft PR via worktree agent.',
     `Goal: ${opts.goal}`,
-    `Parent thread id (pass as parentThreadId when creating children): ${opts.parentId}`,
     'Registered workspaces:',
     formatWorkspaceInventory(opts.workspaces),
   ].join('\n');

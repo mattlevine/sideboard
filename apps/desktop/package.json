@@ -1,6 +1,6 @@
 {
   "name": "@sideboard-ai/desktop",
-  "version": "0.1.57",
+  "version": "0.1.59",
   "private": true,
   "description": "Sideboard desktop — agent-agnostic worktree orchestration",
   "license": "Apache-2.0",

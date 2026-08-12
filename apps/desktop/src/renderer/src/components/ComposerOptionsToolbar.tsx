@@ -358,8 +358,8 @@ export function ComposerOptionsToolbar({
           >
             <span className="chip-model-icon" aria-hidden>
               ✦
-            </span>{' '}
-            {modelLabel}
+            </span>
+            <span className="chip-label">{modelLabel}</span>
           </button>
           <ThinkingEffortChip
             effort={options.effort}
@@ -373,8 +373,8 @@ export function ComposerOptionsToolbar({
           >
             <span className="chip-plan-icon" aria-hidden>
               ◫
-            </span>{' '}
-            Plan
+            </span>
+            <span className="chip-label">Plan</span>
           </button>
         </div>
         <div className="composer-right">

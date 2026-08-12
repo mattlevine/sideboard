@@ -106,6 +106,8 @@ describe('coordinator-prompt', () => {
     expect(text).toContain('oversee Sideboard worktree agents');
     expect(text).toContain('not yourself checked out');
     expect(text).toContain('abc-123');
+    expect(text).toContain('YOUR orchestration thread id');
+    expect(text).toContain('parentThreadId="abc-123"');
     expect(text).toContain('synthetic');
     expect(text).toContain('list_threads');
     expect(text).toContain('Emptiness here is expected');
@@ -119,7 +121,9 @@ describe('coordinator-prompt', () => {
     const root = mkdtempSync(join(tmpdir(), 'sb-global-cwd-'));
     process.env.SIDEBOARD_APP_DATA = root;
     try {
-      const cwd = ensureGlobalCoordinatorCwd();
+      const cwd = ensureGlobalCoordinatorCwd({
+        orchestratorThreadId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      });
       const claude = readFileSync(join(cwd, 'CLAUDE.md'), 'utf8');
       const agents = readFileSync(join(cwd, 'AGENTS.md'), 'utf8');
       expect(claude).toContain('Orchestration');
@@ -128,7 +132,15 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('normal');
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('add_workspace');
+      expect(claude).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+      expect(claude).toContain('parentThreadId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
       expect(agents).toContain('Sideboard MCP');
+      expect(agents).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+
+      // reconcile-style rewrite without an id must keep the prior uuid
+      ensureGlobalCoordinatorCwd();
+      const agents2 = readFileSync(join(cwd, 'AGENTS.md'), 'utf8');
+      expect(agents2).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     } finally {
       if (prev === undefined) delete process.env.SIDEBOARD_APP_DATA;
       else process.env.SIDEBOARD_APP_DATA = prev;
