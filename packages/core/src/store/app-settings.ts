@@ -113,6 +113,11 @@ export interface AdvancedAppSettings {
    * Conductor: `git.delete_branch_on_archive` (default off).
    */
   deleteBranchOnPurge?: boolean;
+  /**
+   * When a linked PR becomes MERGED, archive the worktree’s chats.
+   * Conductor: auto-archive on merge (opt-in; default off).
+   */
+  autoArchiveOnMerge?: boolean;
   /** Max concurrent agent turns across the orchestrator (default 3). */
   maxConcurrent?: number;
   /**
@@ -257,6 +262,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.deleteBranchOnPurge === 'boolean') {
     out.deleteBranchOnPurge = source.deleteBranchOnPurge;
+  }
+  if (typeof source.autoArchiveOnMerge === 'boolean') {
+    out.autoArchiveOnMerge = source.autoArchiveOnMerge;
   }
   if (typeof source.maxConcurrent === 'number' && Number.isFinite(source.maxConcurrent)) {
     out.maxConcurrent = Math.max(1, Math.min(32, Math.floor(source.maxConcurrent)));
@@ -656,6 +664,9 @@ export function updateAdvancedSettings(
   if (typeof patch.deleteBranchOnPurge === 'boolean') {
     advanced.deleteBranchOnPurge = patch.deleteBranchOnPurge;
   }
+  if (typeof patch.autoArchiveOnMerge === 'boolean') {
+    advanced.autoArchiveOnMerge = patch.autoArchiveOnMerge;
+  }
   if (typeof patch.maxConcurrent === 'number' && Number.isFinite(patch.maxConcurrent)) {
     advanced.maxConcurrent = Math.max(1, Math.min(32, Math.floor(patch.maxConcurrent)));
   }
@@ -722,6 +733,13 @@ export function deleteBranchOnPurgeEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.deleteBranchOnPurge);
+}
+
+/** Conductor-style opt-in — default off. */
+export function autoArchiveOnMergeEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.autoArchiveOnMerge);
 }
 
 export function autoCleanupOrphansEnabled(

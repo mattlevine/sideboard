@@ -116,6 +116,7 @@ describe('context compact', () => {
       devPort: null,
       prUrl: null,
       prTitle: null,
+      prState: null,
       stackId: null,
       stackLayer: null,
       userSetTitle: false,

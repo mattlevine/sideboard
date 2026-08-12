@@ -24,6 +24,7 @@ const primary: Thread = {
   devPort: null,
   prUrl: null,
   prTitle: null,
+  prState: null,
   stackId: null,
   stackLayer: null,
   createdAt: '2026-08-01T23:10:10.000Z',

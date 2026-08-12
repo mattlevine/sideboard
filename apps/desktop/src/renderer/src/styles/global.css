@@ -2065,6 +2065,28 @@ body.resizing-panels webview {
   outline: 1px solid var(--accent-dim);
 }
 
+/* Conductor-style: merged PR workspaces read as purple “done”. */
+.thread-item.merged {
+  background: rgba(163, 113, 247, 0.12);
+}
+
+.thread-item.merged:hover {
+  background: rgba(163, 113, 247, 0.18);
+}
+
+.thread-item.merged.active {
+  background: rgba(163, 113, 247, 0.22);
+}
+
+.thread-item.merged .thread-title {
+  color: #d2a8ff;
+}
+
+.thread-item.merged .dot.idle,
+.thread-item.merged .dot.stopped {
+  background: #a371f7;
+}
+
 .dot {
   width: 8px;
   height: 8px;
@@ -3628,6 +3650,19 @@ body.resizing-panels webview {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.worktree-hover-card-title:hover {
+  color: var(--accent);
 }
 
 .worktree-hover-card-preview {
@@ -3659,6 +3694,8 @@ body.resizing-panels webview {
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .worktree-hover-card-btn:hover:not(:disabled) {
@@ -3668,6 +3705,85 @@ body.resizing-panels webview {
 .worktree-hover-card-btn:disabled {
   opacity: 0.65;
   cursor: default;
+}
+
+.worktree-hover-card-btn-status {
+  font-weight: 500;
+  color: #9cdcfe;
+}
+
+/* PR lifecycle colors on the same Create-PR-shaped button. */
+.worktree-hover-card-btn.open {
+  border-color: var(--accent-dim);
+  background: var(--accent-soft);
+  color: #75beff;
+}
+
+.worktree-hover-card-btn.open .worktree-hover-card-btn-status {
+  color: #9cdcfe;
+}
+
+.worktree-hover-card-btn.draft {
+  border-style: dashed;
+  border-color: var(--accent-dim);
+  background: var(--accent-soft);
+  color: #75beff;
+}
+
+.worktree-hover-card-btn.draft .worktree-hover-card-btn-status {
+  color: #9cdcfe;
+}
+
+.worktree-hover-card-btn.merged {
+  background: rgba(163, 113, 247, 0.14);
+  border-color: rgba(163, 113, 247, 0.45);
+  color: #d2a8ff;
+}
+
+.worktree-hover-card-btn.merged .worktree-hover-card-btn-status {
+  color: #e2c5ff;
+}
+
+.worktree-hover-card-btn.closed {
+  background: rgba(139, 148, 158, 0.12);
+  border-color: rgba(139, 148, 158, 0.4);
+  color: #9aa0a6;
+}
+
+.worktree-hover-card-btn.closed .worktree-hover-card-btn-status {
+  color: #b0b5ba;
+}
+
+.worktree-hover-card-btn.needs-approval {
+  background: rgba(210, 153, 34, 0.12);
+  border-color: rgba(210, 153, 34, 0.5);
+  color: #e2b340;
+}
+
+.worktree-hover-card-btn.needs-approval .worktree-hover-card-btn-status {
+  color: #f0c14d;
+}
+
+.worktree-hover-card-btn.approved {
+  background: rgba(63, 185, 80, 0.1);
+  border-color: rgba(63, 185, 80, 0.35);
+  color: #6fcf97;
+}
+
+.worktree-hover-card-btn.approved .worktree-hover-card-btn-status {
+  color: #8fd9a8;
+}
+
+.worktree-hover-card-btn.rejected,
+.worktree-hover-card-btn.conflicts {
+  background: rgba(248, 81, 73, 0.12);
+  border-color: rgba(248, 81, 73, 0.5);
+  color: #ff7b72;
+}
+
+.worktree-hover-card-btn.rejected .worktree-hover-card-btn-status,
+.worktree-hover-card-btn.conflicts .worktree-hover-card-btn-status {
+  color: #ffa198;
 }
 
 .worktree-hover-card-meta {
@@ -5652,15 +5768,52 @@ body.resizing-panels webview {
 .right-top {
   position: relative;
   z-index: 30;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   /* Keep visible so the PR split-menu can overlay the files panel below. */
   overflow: visible;
 }
 
+/* Conductor-style: whole header turns purple when the PR is merged. */
+.right-top.merged {
+  background: #3b2760;
+  border-bottom-color: rgba(163, 113, 247, 0.35);
+}
+
+.right-top.merged .pr-pill.merged {
+  background: transparent;
+  border-color: rgba(210, 168, 255, 0.55);
+  color: #e8d4ff;
+}
+
+.right-top.merged .pr-pill.merged .pr-status {
+  color: #d2a8ff;
+}
+
+.right-top.merged .btn-live,
+.right-top.merged .btn-continue,
+.right-top.merged .btn-closed {
+  border: 1px dashed rgba(210, 168, 255, 0.55) !important;
+  background: transparent !important;
+  color: #d2a8ff !important;
+}
+
+.right-top.merged .btn-archive {
+  background: #a371f7 !important;
+  border-color: #9466e8 !important;
+  color: #fff !important;
+}
+
+.right-top.merged .btn-archive:hover:not(:disabled) {
+  background: #b084f9 !important;
+  border-color: #b084f9 !important;
+}
+
 .right-top .split-btn {
   z-index: 31;
+  align-items: stretch;
+  height: 28px;
 }
 
 .right-top .tool-menu {
@@ -5678,8 +5831,41 @@ body.resizing-panels webview {
 .right-top-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  min-height: 28px;
+}
+
+/* Uniform control height — PR link is a button, not a tall pill. */
+.right-top .pr-pill,
+.right-top .branch-pill,
+.right-top .right-actions > button,
+.right-top .split-main,
+.right-top .split-caret {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.right-top .pr-pill {
+  border-radius: 6px;
+  gap: 6px;
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  max-width: 100%;
+}
+
+.right-top .split-caret {
+  padding-left: 6px;
+  padding-right: 6px;
+  min-width: 28px;
 }
 
 .stack-map {
@@ -5889,7 +6075,8 @@ body.resizing-panels webview {
     min-width: 0;
     flex: 1 1 auto;
     overflow: hidden;
-    padding: 3px 8px;
+    padding: 0 8px;
+    height: 28px;
   }
 
   .right-top .pr-pill .pr-status {
@@ -6260,10 +6447,12 @@ body.resizing-panels webview {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
-  padding: 3px 10px;
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 28px;
+  box-sizing: border-box;
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 1;
   background: var(--accent-soft);
   border: 1px solid var(--accent-dim);
   color: #75beff;
@@ -6315,13 +6504,13 @@ body.resizing-panels webview {
 }
 
 .pr-pill.merged {
-  background: rgba(63, 185, 80, 0.12);
-  border-color: rgba(63, 185, 80, 0.45);
-  color: #6fcf97;
+  background: rgba(163, 113, 247, 0.14);
+  border-color: rgba(163, 113, 247, 0.45);
+  color: #d2a8ff;
 }
 
 .pr-pill.merged .pr-status {
-  color: #8fd9a8;
+  color: #e2c5ff;
 }
 
 .pr-pill.closed {

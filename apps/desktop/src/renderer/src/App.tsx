@@ -434,6 +434,67 @@ export function App() {
     };
   }, [refresh]);
 
+  // Conductor-style: lightly follow open PRs so external merges purple + auto-archive.
+  const openPrSyncKey = useMemo(() => {
+    return threads
+      .filter(
+        (t) =>
+          !isGlobalThread(t) &&
+          Boolean(t.prUrl?.trim()) &&
+          (t.prState ?? '').toUpperCase() !== 'MERGED' &&
+          (t.prState ?? '').toUpperCase() !== 'CLOSED',
+      )
+      .map((t) => `${t.id}:${(t.worktreePath || '').replace(/\/$/, '')}`)
+      .sort()
+      .join('|');
+  }, [threads]);
+
+  useEffect(() => {
+    if (!openPrSyncKey) return;
+    let cancelled = false;
+    let running = false;
+
+    async function syncOpenPrStates() {
+      if (cancelled || running) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      // Dedupe by worktree; prefer first thread id per worktree.
+      const seenWt = new Set<string>();
+      const ids: string[] = [];
+      for (const entry of openPrSyncKey.split('|')) {
+        const [id, wt = ''] = entry.split(':');
+        if (!id || seenWt.has(wt)) continue;
+        seenWt.add(wt);
+        ids.push(id);
+      }
+      if (ids.length === 0) return;
+      running = true;
+      try {
+        for (const id of ids) {
+          if (cancelled) break;
+          try {
+            await window.sideboard.getPrMeta(id);
+          } catch {
+            // ignore per-thread failures (offline / no PR)
+          }
+        }
+      } finally {
+        running = false;
+      }
+    }
+
+    void syncOpenPrStates();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void syncOpenPrStates();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    const interval = window.setInterval(() => void syncOpenPrStates(), 60_000);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(interval);
+    };
+  }, [openPrSyncKey]);
+
   const selected = useMemo(
     () => threads.find((t) => t.id === selectedId) ?? archived.find((t) => t.id === selectedId) ?? null,
     [threads, archived, selectedId],

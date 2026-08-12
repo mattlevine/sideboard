@@ -532,7 +532,7 @@ export function RightSidebar({
 
   const prUrl = prMeta?.url ?? thread.prUrl ?? null;
   const num = prMeta?.number != null ? String(prMeta.number) : prNumber(prUrl);
-  const prState = (prMeta?.state ?? '').toUpperCase();
+  const prState = (prMeta?.state ?? thread.prState ?? '').toUpperCase();
   const prMerged = prState === 'MERGED';
   const prClosed = prState === 'CLOSED';
   const prOpen = Boolean(prUrl) && !prMerged && !prClosed;
@@ -831,7 +831,7 @@ export function RightSidebar({
 
   return (
     <aside className="right-sidebar">
-      <div className="right-top">
+      <div className={`right-top${prMerged ? ' merged' : ''}`}>
         <div className="right-top-row">
           {prUrl ? (
             <button

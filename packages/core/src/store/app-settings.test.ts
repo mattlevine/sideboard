@@ -145,6 +145,7 @@ describe('app settings', () => {
     expect(mod.caffeinateWhileRunningEnabled()).toBe(false);
     expect(mod.caffeinateWhileCloudConnectEnabled()).toBe(false);
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
+    expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
     expect(mod.maxConcurrentAgents()).toBe(3);
 
     const saved = mod.updateAdvancedSettings({
@@ -153,6 +154,7 @@ describe('app settings', () => {
       caffeinateWhileRunning: true,
       caffeinateWhileCloudConnect: true,
       deleteBranchOnPurge: true,
+      autoArchiveOnMerge: true,
       maxConcurrent: 8,
     });
     expect(saved.advanced).toEqual({
@@ -161,10 +163,12 @@ describe('app settings', () => {
       caffeinateWhileRunning: true,
       caffeinateWhileCloudConnect: true,
       deleteBranchOnPurge: true,
+      autoArchiveOnMerge: true,
       maxConcurrent: 8,
     });
     expect(mod.autoRenameBranchEnabled()).toBe(false);
     expect(mod.caffeinateWhileCloudConnectEnabled()).toBe(true);
+    expect(mod.autoArchiveOnMergeEnabled()).toBe(true);
     expect(mod.maxConcurrentAgents()).toBe(8);
   });
 

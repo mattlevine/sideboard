@@ -63,6 +63,8 @@ function worktreeBindingFrom(from: Thread): Pick<
   | 'parentThreadId'
   | 'prUrl'
   | 'prTitle'
+  | 'prState'
+  | 'skipAutoArchiveOnMerge'
   | 'stackId'
   | 'stackLayer'
 > {
@@ -82,6 +84,8 @@ function worktreeBindingFrom(from: Thread): Pick<
     parentThreadId: from.parentThreadId,
     prUrl: from.prUrl,
     prTitle: from.prTitle,
+    prState: from.prState,
+    skipAutoArchiveOnMerge: from.skipAutoArchiveOnMerge,
     stackId: from.stackId,
     stackLayer: from.stackLayer,
   };

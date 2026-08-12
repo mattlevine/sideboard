@@ -43,6 +43,8 @@ export function normalizeThread(raw: Thread): Thread {
     agentPid: raw.agentPid ?? null,
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
     prTitle: raw.prTitle ?? null,
+    prState: raw.prState ?? null,
+    skipAutoArchiveOnMerge: Boolean(raw.skipAutoArchiveOnMerge),
     stackId: raw.stackId ?? null,
     stackLayer: raw.stackLayer ?? null,
     userSetTitle: Boolean(raw.userSetTitle),
@@ -65,6 +67,8 @@ export function createEmptyThread(
     | 'activeRuns'
     | 'prUrl'
     | 'prTitle'
+    | 'prState'
+    | 'skipAutoArchiveOnMerge'
     | 'stackId'
     | 'stackLayer'
     | 'userSetTitle'
@@ -96,6 +100,8 @@ export function createEmptyThread(
         | 'activeRuns'
         | 'prUrl'
         | 'prTitle'
+        | 'prState'
+        | 'skipAutoArchiveOnMerge'
         | 'stackId'
         | 'stackLayer'
         | 'userSetTitle'
@@ -120,6 +126,8 @@ export function createEmptyThread(
     activeRuns: partial.activeRuns ?? [],
     prUrl: partial.prUrl ?? null,
     prTitle: partial.prTitle ?? null,
+    prState: partial.prState ?? null,
+    skipAutoArchiveOnMerge: partial.skipAutoArchiveOnMerge ?? false,
     stackId: partial.stackId ?? null,
     stackLayer: partial.stackLayer ?? null,
     userSetTitle: partial.userSetTitle ?? false,

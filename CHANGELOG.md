@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.62] - 2026-08-12
+
+### Added
+
+- Conductor-style merged PR UX: purple sidebar rows + purple right-sidebar header, cached `prState`, and light follow of open PRs (focus + every 60s)
+- Optional **Auto-archive on merge** (Settings → Advanced; **off by default**)
+- Worktree hover card shows live GitHub PR lifecycle (`#N` + Open / Draft / Merged / review state) with the same Create PR button shape
+
+### Changed
+
+- Right-sidebar header is shorter; PR control matches Archive / Continue button height and corner radius
+
 ## [0.1.61] - 2026-08-12
 
 ### Fixed

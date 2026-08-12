@@ -27,6 +27,7 @@ function orchThread(over: Partial<Thread> = {}): Thread {
     activeRuns: [],
     prUrl: null,
     prTitle: null,
+    prState: null,
     stackId: null,
     stackLayer: null,
     userSetTitle: true,
@@ -35,7 +36,7 @@ function orchThread(over: Partial<Thread> = {}): Thread {
     messages: [],
     attachments: [],
     ...over,
-  };
+  } as Thread;
 }
 
 const LIMIT =

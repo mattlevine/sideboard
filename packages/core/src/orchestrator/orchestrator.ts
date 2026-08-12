@@ -13,6 +13,10 @@ import {
   resolvePrSelector,
 } from '../git/worktree.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
+import {
+  normalizePrState,
+  shouldAutoArchiveOnPrMerge,
+} from '../git/pr-merge-archive.js';
 import { runSetupScript, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
 import { runCursorWorktreeSetup } from '../hook/cursor-worktrees.js';
 import {
@@ -1638,10 +1642,19 @@ export class Orchestrator {
     this.assertNotGlobal(thread, 'Merge PR');
     if (!selector) throw new Error('No pull request linked to this thread');
     const result = await mergeGithubPr(cwd, selector);
-    if (result.url && result.url !== thread.prUrl) {
-      updateThread(thread.id, { prUrl: result.url });
-    }
-    return result;
+    const state = normalizePrState(result.state) || 'MERGED';
+    const metaLike: PrMeta = {
+      number: 0,
+      title: thread.prTitle ?? thread.title,
+      url: result.url || thread.prUrl || '',
+      state,
+      isDraft: false,
+      reviewDecision: null,
+      baseRefName: '',
+      headRefName: '',
+    };
+    await this.persistPrMetaAndMaybeArchive(thread, metaLike);
+    return { url: metaLike.url, state };
   }
 
   /** Resolve PR selector and optionally persist `prUrl` when found. */
@@ -1670,18 +1683,68 @@ export class Orchestrator {
     if (!selector) return null;
     const meta = await fetchPrMeta(cwd, selector);
     if (meta) {
-      const patch: Partial<Thread> = {};
-      if (meta.url && meta.url !== thread.prUrl) patch.prUrl = meta.url;
-      if (meta.title && meta.title !== thread.prTitle) patch.prTitle = meta.title;
-      if (Object.keys(patch).length > 0) {
-        updateThread(thread.id, patch);
-        const latest = this.requireThread(thread.id);
-        if (!latest.userSetTitle && meta.title && latest.title !== meta.title) {
-          updateThread(thread.id, { title: meta.title });
-        }
-      }
+      await this.persistPrMetaAndMaybeArchive(thread, meta);
     }
     return meta;
+  }
+
+  /**
+   * Persist PR URL/title/state and Conductor-style auto-archive when the PR
+   * first becomes MERGED.
+   */
+  private async persistPrMetaAndMaybeArchive(
+    thread: Thread,
+    meta: PrMeta,
+  ): Promise<void> {
+    const prevState = normalizePrState(thread.prState);
+    const nextState = normalizePrState(meta.state);
+    const patch: Partial<Thread> = {};
+    if (meta.url && meta.url !== thread.prUrl) patch.prUrl = meta.url;
+    if (meta.title && meta.title !== thread.prTitle) patch.prTitle = meta.title;
+    if (nextState && nextState !== prevState) patch.prState = nextState;
+    if (
+      thread.skipAutoArchiveOnMerge &&
+      nextState &&
+      nextState !== 'MERGED' &&
+      nextState !== 'CLOSED'
+    ) {
+      patch.skipAutoArchiveOnMerge = false;
+    }
+    if (Object.keys(patch).length > 0) {
+      updateThread(thread.id, patch);
+      const latest = this.requireThread(thread.id);
+      if (!latest.userSetTitle && meta.title && latest.title !== meta.title) {
+        updateThread(thread.id, { title: meta.title });
+      }
+    }
+
+    const { autoArchiveOnMergeEnabled } = await import('../store/app-settings.js');
+    const latest = this.requireThread(thread.id);
+    if (
+      !shouldAutoArchiveOnPrMerge({
+        previousPrState: prevState || null,
+        nextPrState: nextState,
+        threadStatus: latest.status,
+        skipAutoArchiveOnMerge: latest.skipAutoArchiveOnMerge,
+        autoArchiveEnabled: autoArchiveOnMergeEnabled(),
+        isGlobal: isGlobalThread(latest),
+      })
+    ) {
+      return;
+    }
+
+    // Mark siblings merged first so restore later sees prState=MERGED.
+    const siblings = threadsSharingWorktree(latest.worktreePath);
+    for (const t of siblings) {
+      const sibPatch: Partial<Thread> = { prState: 'MERGED' };
+      if (meta.url && meta.url !== t.prUrl) sibPatch.prUrl = meta.url;
+      if (meta.title && meta.title !== t.prTitle) sibPatch.prTitle = meta.title;
+      if (Object.keys(sibPatch).length > 0) updateThread(t.id, sibPatch);
+    }
+    for (const t of siblings) {
+      if (this.requireThread(t.id).status === 'archived') continue;
+      await this.archive(t.id);
+    }
   }
 
   async getPrStack(threadRef: string): Promise<PrStack | null> {
@@ -1933,7 +1996,9 @@ export class Orchestrator {
     const thread = this.requireThread(threadRef);
     this.stop(thread.id);
     if (isGlobalThread(thread)) {
-      return setStatus(thread.id, 'archived');
+      const archived = setStatus(thread.id, 'archived');
+      this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
+      return archived;
     }
     const siblings = threadsSharingWorktree(thread.worktreePath).filter((t) => t.id !== thread.id);
     // Only tear down the worktree when this is the last active chat tab.
@@ -1953,6 +2018,7 @@ export class Orchestrator {
       await removeWorktree(thread.repoPath, thread.worktreePath);
     }
     const archived = setStatus(thread.id, 'archived');
+    this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
     // Archiving the last worktree must not unregister the project — keep it in
     // the sidebar so the user can create a new thread without re-adding it.
     if (thread.repoPath && !isGlobalRepoPath(thread.repoPath)) {
@@ -1998,7 +2064,9 @@ export class Orchestrator {
     if (isGlobalThread(thread)) {
       const { globalAgentCwd } = await import('../store/paths.js');
       updateThread(thread.id, { worktreePath: globalAgentCwd() });
-      return setStatus(thread.id, 'idle');
+      const restored = setStatus(thread.id, 'idle');
+      this.emit({ type: 'status_changed', threadId: restored.id, status: restored.status });
+      return restored;
     }
     if (!existsSync(thread.worktreePath)) {
       const { createThreadWorktree } = await import('../git/worktree.js');
@@ -2012,7 +2080,36 @@ export class Orchestrator {
       void createThreadWorktree;
       void slug;
     }
-    return setStatus(thread.id, 'idle');
+
+    // Conductor guard: unarchiving a merged-PR workspace must not immediately
+    // re-archive. Persist live MERGED state (when known) and set the skip flag.
+    const restorePatch: Partial<Thread> = {};
+    let alreadyMerged = normalizePrState(thread.prState) === 'MERGED';
+    if (!alreadyMerged && thread.prUrl?.trim() && thread.worktreePath?.trim()) {
+      try {
+        const selector = resolvePrSelector(thread);
+        if (selector) {
+          const meta = await fetchPrMeta(thread.worktreePath, selector);
+          if (meta) {
+            const state = normalizePrState(meta.state);
+            if (meta.url && meta.url !== thread.prUrl) restorePatch.prUrl = meta.url;
+            if (meta.title && meta.title !== thread.prTitle) restorePatch.prTitle = meta.title;
+            if (state) restorePatch.prState = state;
+            if (state === 'MERGED') alreadyMerged = true;
+          }
+        }
+      } catch {
+        // Offline / gh unavailable — fall through with cached state.
+      }
+    }
+    if (alreadyMerged) restorePatch.skipAutoArchiveOnMerge = true;
+    if (Object.keys(restorePatch).length > 0) {
+      updateThread(thread.id, restorePatch);
+    }
+
+    const restored = setStatus(thread.id, 'idle');
+    this.emit({ type: 'status_changed', threadId: restored.id, status: restored.status });
+    return restored;
   }
 
   async attachCommand(threadRef: string) {

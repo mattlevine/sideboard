@@ -12,6 +12,7 @@ import {
   threadDisplayTitle,
 } from '../lib/global-workspace';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
+import { prPillModifier, prPillStatusLabel } from '../lib/pr-format';
 import {
   isWorktreeUnread,
   latestAgentResponseAt,
@@ -121,8 +122,19 @@ function WorktreeArchiveCard({
   onKeepOpen: (v: boolean) => void;
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [prMeta, setPrMeta] = useState<{
+    number: number;
+    url: string;
+    state: string;
+    isDraft: boolean;
+    reviewDecision: string | null;
+  } | null>(null);
   const slug = worktreeSlug(thread);
-  const prNum = prNumberFromUrl(thread.prUrl);
+  const prUrl = prMeta?.url ?? thread.prUrl ?? null;
+  const prNum =
+    prMeta?.number != null
+      ? String(prMeta.number)
+      : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
   const ok =
     thread.status === 'idle' ||
@@ -147,7 +159,48 @@ function WorktreeArchiveCard({
     setPos({ top, left });
   }, [open, anchorRef, thread.id]);
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const meta = await window.sideboard.getPrMeta(thread.id);
+        if (cancelled) return;
+        if (!meta) {
+          setPrMeta(null);
+          return;
+        }
+        setPrMeta({
+          number: meta.number,
+          url: meta.url,
+          state: meta.state,
+          isDraft: meta.isDraft,
+          reviewDecision: meta.reviewDecision,
+        });
+      } catch {
+        if (!cancelled) setPrMeta(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, thread.id, thread.prUrl]);
+
   if (!open || !pos) return null;
+
+  const prState = (prMeta?.state ?? '').toUpperCase();
+  const prMerged = prState === 'MERGED';
+  const prClosed = prState === 'CLOSED';
+  const prIsOpen = Boolean(prMeta) && !prMerged && !prClosed;
+  const prDraft = Boolean(prMeta?.isDraft) && prIsOpen;
+  const pillOpts = {
+    merged: prMerged,
+    closed: prClosed,
+    draft: prDraft,
+    reviewDecision: prIsOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null,
+  };
+  const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
+  const prStatusMod = prMeta ? prPillModifier(pillOpts) : '';
 
   return createPortal(
     <div
@@ -185,20 +238,25 @@ function WorktreeArchiveCard({
           Archive
         </button>
         <div className="worktree-hover-card-meta">
-          {thread.prUrl && prNum ? (
+          {prMeta && prNum ? (
             <button
               type="button"
-              className="worktree-hover-card-pr"
-              title={thread.prUrl}
-              onClick={() => void window.sideboard.openExternal(thread.prUrl!)}
+              className={`worktree-hover-card-btn${prStatusMod ? ` ${prStatusMod}` : ''}`}
+              title={
+                prStatusLabel
+                  ? `${prNum ? `#${prNum}` : 'PR'} · ${prStatusLabel}`
+                  : (prUrl ?? undefined)
+              }
+              onClick={() => {
+                if (prUrl) void window.sideboard.openExternal(prUrl);
+              }}
             >
               <span aria-hidden>⎇</span>
               #{prNum} ↗
+              {prStatusLabel ? (
+                <span className="worktree-hover-card-btn-status">{prStatusLabel}</span>
+              ) : null}
             </button>
-          ) : thread.branchName ? (
-            <span className="worktree-hover-card-branch" title={thread.branchName}>
-              ⎇ {thread.branchName.replace(/^thread\//, '')}
-            </span>
           ) : null}
           <span className="worktree-hover-card-age">
             {relativeTime(thread.updatedAt)}
@@ -235,8 +293,19 @@ function WorktreeEditCard({
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
+  const [prMeta, setPrMeta] = useState<{
+    number: number;
+    url: string;
+    state: string;
+    isDraft: boolean;
+    reviewDecision: string | null;
+  } | null>(null);
   const slug = worktreeSlug(thread);
-  const prNum = prNumberFromUrl(thread.prUrl);
+  const prUrl = prMeta?.url ?? thread.prUrl ?? null;
+  const prNum =
+    prMeta?.number != null
+      ? String(prMeta.number)
+      : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
   const ok =
     thread.status === 'idle' ||
@@ -272,6 +341,34 @@ function WorktreeEditCard({
     };
   }, [open, anchorRef, thread.id]);
 
+  // Fetch live PR lifecycle (draft / open / merged / review) when the card opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const meta = await window.sideboard.getPrMeta(thread.id);
+        if (cancelled) return;
+        if (!meta) {
+          setPrMeta(null);
+          return;
+        }
+        setPrMeta({
+          number: meta.number,
+          url: meta.url,
+          state: meta.state,
+          isDraft: meta.isDraft,
+          reviewDecision: meta.reviewDecision,
+        });
+      } catch {
+        if (!cancelled) setPrMeta(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, thread.id, thread.prUrl]);
+
   async function createPr() {
     if (prBusy) return;
     setPrBusy(true);
@@ -295,6 +392,21 @@ function WorktreeEditCard({
     : dirty
       ? `+${additions} −${deletions}`
       : 'clean';
+
+  const prState = (prMeta?.state ?? '').toUpperCase();
+  const prMerged = prState === 'MERGED';
+  const prClosed = prState === 'CLOSED';
+  const prIsOpen = Boolean(prMeta) && !prMerged && !prClosed;
+  const prDraft = Boolean(prMeta?.isDraft) && prIsOpen;
+  const pillOpts = {
+    merged: prMerged,
+    closed: prClosed,
+    draft: prDraft,
+    reviewDecision: prIsOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null,
+  };
+  // Only show a status pill once GitHub PR meta is loaded — never invent "Open".
+  const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
+  const prStatusMod = prMeta ? prPillModifier(pillOpts) : '';
 
   return createPortal(
     <div
@@ -342,22 +454,36 @@ function WorktreeEditCard({
           {ok && !dirty ? '✓' : '●'}
         </span>
       </div>
-      <div className="worktree-hover-card-title" title={label}>
+      <button
+        type="button"
+        className="worktree-hover-card-title"
+        title={label}
+        onClick={onOpen}
+      >
         {label}
-      </div>
+      </button>
       {preview ? (
         <p className="worktree-hover-card-preview">{preview}</p>
       ) : null}
       <div className="worktree-hover-card-footer">
-        {thread.prUrl && prNum ? (
+        {prMeta && prNum ? (
           <button
             type="button"
-            className="worktree-hover-card-btn"
-            title={thread.prUrl}
-            onClick={() => void window.sideboard.openExternal(thread.prUrl!)}
+            className={`worktree-hover-card-btn${prStatusMod ? ` ${prStatusMod}` : ''}`}
+            title={
+              prStatusLabel
+                ? `${prNum ? `#${prNum}` : 'PR'} · ${prStatusLabel}`
+                : (prUrl ?? undefined)
+            }
+            onClick={() => {
+              if (prUrl) void window.sideboard.openExternal(prUrl);
+            }}
           >
             <span aria-hidden>⎇</span>
             #{prNum} ↗
+            {prStatusLabel ? (
+              <span className="worktree-hover-card-btn-status">{prStatusLabel}</span>
+            ) : null}
           </button>
         ) : (
           <button
@@ -371,13 +497,6 @@ function WorktreeEditCard({
           </button>
         )}
         <div className="worktree-hover-card-meta">
-          <button
-            type="button"
-            className="worktree-hover-card-open"
-            onClick={onOpen}
-          >
-            Open
-          </button>
           <span className="worktree-hover-card-age">
             {relativeTime(thread.updatedAt)}
           </span>
@@ -501,6 +620,10 @@ function WorktreeSidebarRow({
   const dirty =
     loaded && stat != null && (stat.additions > 0 || stat.deletions > 0);
 
+  const prMerged =
+    (primary.prState ?? '').toUpperCase() === 'MERGED' ||
+    group.some((t) => (t.prState ?? '').toUpperCase() === 'MERGED');
+
   function requestArchive() {
     setArchiveHover(false);
     void window.sideboard
@@ -512,7 +635,7 @@ function WorktreeSidebarRow({
   return (
     <div
       ref={rowRef}
-      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
+      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}${prMerged ? ' merged' : ''}`}
       aria-busy={archiving}
       onMouseEnter={() => {
         rowHoverRef.current = true;

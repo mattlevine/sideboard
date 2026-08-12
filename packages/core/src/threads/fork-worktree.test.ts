@@ -23,6 +23,7 @@ const source: Thread = {
   devPort: null,
   prUrl: null,
   prTitle: null,
+  prState: null,
   stackId: null,
   stackLayer: null,
   userSetTitle: false,

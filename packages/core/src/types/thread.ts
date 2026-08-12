@@ -109,6 +109,18 @@ export interface Thread {
   /** Cached PR title for Conductor-style sidebar labels (PR title > branch). */
   prTitle: string | null;
   /**
+   * Cached GitHub PR lifecycle from the last `getPrMeta` / merge
+   * (`OPEN` | `MERGED` | `CLOSED`, etc.). Used for purple “done” sidebar
+   * styling and Conductor-style auto-archive-on-merge.
+   */
+  prState: string | null;
+  /**
+   * When true, skip auto-archive if the PR is already MERGED (set on restore
+   * so unarchiving a merged workspace does not immediately re-archive).
+   * Cleared when `prState` becomes a non-merged open state again.
+   */
+  skipAutoArchiveOnMerge?: boolean;
+  /**
    * Stable id for a GitHub PR stack this thread belongs to (shared across layer worktrees).
    * Null when not part of a stack.
    */

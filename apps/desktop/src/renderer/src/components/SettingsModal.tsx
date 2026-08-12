@@ -1402,6 +1402,32 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-toggle-row">
                     <div>
+                      <div className="settings-section-title">Auto-archive on merge</div>
+                      <p className="settings-hint">
+                        Optional Conductor-style behavior: when a linked PR merges, archive the
+                        worktree. Off by default — merged workspaces stay visible in purple.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.autoArchiveOnMerge ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.autoArchiveOnMerge)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          autoArchiveOnMerge: !advanced.autoArchiveOnMerge,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
                       <div className="settings-section-title">Auto-clean orphan worktrees</div>
                       <p className="settings-hint">
                         Remove Sideboard worktrees with no thread record when over the machine max
