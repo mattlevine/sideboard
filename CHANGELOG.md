@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.60] - 2026-08-12
+
+Rebuild + release of the 0.1.59 orchestration MCP / Codex fixes (fresh npm + desktop artifacts).
+
 ## [0.1.59] - 2026-08-12
 
 ### Fixed
