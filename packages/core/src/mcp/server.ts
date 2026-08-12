@@ -402,8 +402,9 @@ export async function startMcpServer(): Promise<void> {
         parent = null;
       }
       if (parentId) {
+        // Cap active children only — archived/deleted tabs must not block new creates.
         const children = orch
-          .getThreads(true)
+          .getThreads(false)
           .filter((t) => t.parentThreadId === parentId);
         if (children.length >= MAX_ORCH_THREADS) {
           return {
