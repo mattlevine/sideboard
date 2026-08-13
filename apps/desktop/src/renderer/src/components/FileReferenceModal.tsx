@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { FilePathLink } from '../lib/file-path-link';
 import { documentPreviewKind } from '../lib/language';
-import { CodeView } from './CodeView';
 import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
+
+const CodeView = lazy(() =>
+  import('./CodeView').then((m) => ({ default: m.CodeView })),
+);
 
 interface Props {
   threadId: string;
@@ -130,16 +133,18 @@ export function FileReferenceModal({
         )}
         {showCode && (
           <div className="file-ref-code">
-            <CodeView
-              key={`preview:${link.path}`}
-              path={link.path}
-              value={content!}
-              worktreePath={worktreePath}
-              modelNonce="file-ref-modal"
-              readOnly
-              revealLine={link.startLine}
-              highlightEndLine={link.endLine}
-            />
+            <Suspense fallback={<div className="empty">Loading…</div>}>
+              <CodeView
+                key={`preview:${link.path}`}
+                path={link.path}
+                value={content!}
+                worktreePath={worktreePath}
+                modelNonce="file-ref-modal"
+                readOnly
+                revealLine={link.startLine}
+                highlightEndLine={link.endLine}
+              />
+            </Suspense>
           </div>
         )}
       </div>

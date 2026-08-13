@@ -1532,13 +1532,26 @@ export class Orchestrator {
 
   async diff(
     threadRef: string,
-    opts?: { scope?: DiffScope; commitSha?: string | null },
+    opts?: {
+      scope?: DiffScope;
+      commitSha?: string | null;
+      base?: string;
+      includePatches?: boolean;
+      includeMeta?: boolean;
+      includeUntracked?: boolean;
+      path?: string;
+    },
   ) {
     const thread = this.requireThread(threadRef);
     this.assertNotGlobal(thread, 'Diff');
     return getDiff(thread.worktreePath, thread.repoPath, {
       scope: opts?.scope,
       commitSha: opts?.commitSha,
+      base: opts?.base,
+      includePatches: opts?.includePatches,
+      includeMeta: opts?.includeMeta,
+      includeUntracked: opts?.includeUntracked,
+      path: opts?.path,
       lastTurnBase: this.turnBaselines.get(thread.id) ?? null,
     });
   }

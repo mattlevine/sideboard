@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.68] - 2026-08-12
+
+### Changed
+
+- Opening a file in Changes Diff is a single `git diff --no-ext-diff` for that path (no merge-base round-trip, untracked walk, or external diff tool)
+- Changes file list paints tracked files first, then badges and untracked paths
+- Git commands used for diffs run with `--no-pager` so a configured pager cannot stall the panel
+
 ## [0.1.67] - 2026-08-12
 
 ### Added

@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ThreadAttachment } from '@sideboard-ai/core';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DiffScope, ThreadAttachment } from '@sideboard-ai/core';
 import {
   buildDiffCommentAttachment,
   type DiffCommentLine,
 } from '@sideboard/diff-comment';
 import { documentPreviewKind } from '../lib/language';
 import { parseUnifiedPatch } from '../lib/tool-diff';
-import { CodeView } from './CodeView';
 import { DiffLines } from './DiffLines';
 import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
 import { GitChangeBadge } from './GitChangeBadge';
 import { PanePreloader } from './PanePreloader';
+
+const CodeView = lazy(() =>
+  import('./CodeView').then((m) => ({ default: m.CodeView })),
+);
 
 interface Props {
   threadId: string;
@@ -18,6 +21,10 @@ interface Props {
   worktreePath: string;
   /** Prefer Diff when opening from the Changes tab. */
   initialView?: 'edit' | 'diff';
+  /** Match the Changes panel filter so Diff doesn't re-resolve vs default branch. */
+  diffScope?: DiffScope;
+  commitSha?: string | null;
+  diffBase?: string | null;
   onClose: () => void;
   onSaved?: () => void;
   /** Attach a line-anchored diff comment to the thread composer. */
@@ -29,6 +36,9 @@ export function FileEditor({
   path,
   worktreePath,
   initialView = 'edit',
+  diffScope = 'uncommitted',
+  commitSha = null,
+  diffBase = null,
   onClose,
   onSaved,
   onDiffComment,
@@ -49,8 +59,6 @@ export function FileEditor({
   );
   const [patch, setPatch] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(initialView === 'diff');
-  /** False until after paint so the preload shows before heavy DiffLines mount. */
-  const [diffReady, setDiffReady] = useState(false);
   const [changeMeta, setChangeMeta] = useState<{
     status: string;
     additions?: number;
@@ -63,11 +71,17 @@ export function FileEditor({
 
   const loadPatch = useCallback(async () => {
     setDiffLoading(true);
-    setDiffReady(false);
     setPatch(null);
     try {
-      const d = await window.sideboard.getDiff(threadId);
-      const file = d.files.find((f) => f.path === path);
+      const d = await window.sideboard.getDiff(threadId, {
+        path,
+        scope: diffScope,
+        commitSha: diffScope === 'commits' ? commitSha : null,
+        base: diffBase ?? undefined,
+        includeMeta: false,
+        includeUntracked: false,
+      });
+      const file = d.files.find((f) => f.path === path) ?? d.files[0];
       if (file) {
         setPatch(file.patch || '');
         setChangeMeta({
@@ -86,34 +100,15 @@ export function FileEditor({
     } finally {
       setDiffLoading(false);
     }
-  }, [path, threadId]);
+  }, [commitSha, diffBase, diffScope, path, threadId]);
 
   useEffect(() => {
     void loadPatch();
   }, [loadPatch]);
 
-  // Let the loading UI paint, then parse/mount the diff on the next tick.
-  useEffect(() => {
-    if (mode !== 'diff' || patch == null || diffLoading) {
-      setDiffReady(false);
-      return;
-    }
-    setDiffReady(false);
-    let cancelled = false;
-    const raf = window.requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        if (!cancelled) setDiffReady(true);
-      }, 0);
-    });
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(raf);
-    };
-  }, [mode, patch, diffLoading, path]);
-
   const diffRows = useMemo(
-    () => (mode === 'diff' && patch != null && diffReady ? parseUnifiedPatch(patch) : null),
-    [mode, patch, diffReady],
+    () => (mode === 'diff' && patch != null && !diffLoading ? parseUnifiedPatch(patch) : null),
+    [mode, patch, diffLoading],
   );
 
   const dirty = content != null && content !== saved && !binary && !truncated;
@@ -165,6 +160,7 @@ export function FileEditor({
   );
 
   useEffect(() => {
+    if (mode === 'diff') return;
     let cancelled = false;
     setContent(null);
     setError(null);
@@ -184,7 +180,7 @@ export function FileEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyDiskRead, threadId, path]);
+  }, [applyDiskRead, threadId, path, mode]);
 
   useEffect(() => {
     void window.sideboard.watchOpenFile(threadId, path).catch(() => undefined);
@@ -329,7 +325,7 @@ export function FileEditor({
       {error && <div className="empty">{error}</div>}
       {!error && mode === 'diff' && (
         <div className="file-editor-diff">
-          {diffLoading || (patch != null && (!diffReady || diffRows == null)) ? (
+          {diffLoading || (patch != null && diffRows == null) ? (
             <PanePreloader
               label={diffLoading || patch == null ? 'Loading diff' : 'Rendering diff'}
             />
@@ -373,13 +369,15 @@ export function FileEditor({
           />
         )}
       {!error && content != null && mode === 'code' && !isImage && (
-        <CodeView
-          path={path}
-          worktreePath={worktreePath}
-          value={content}
-          readOnly={binary || truncated}
-          onChange={setContent}
-        />
+        <Suspense fallback={<PanePreloader label="Loading editor" />}>
+          <CodeView
+            path={path}
+            worktreePath={worktreePath}
+            value={content}
+            readOnly={binary || truncated}
+            onChange={setContent}
+          />
+        </Suspense>
       )}
     </div>
   );

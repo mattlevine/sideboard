@@ -221,7 +221,15 @@ export interface IpcApi {
   stopThread(threadRef: string): Promise<Thread>;
   getDiff(
     threadRef: string,
-    opts?: { scope?: DiffScope; commitSha?: string | null },
+    opts?: {
+      scope?: DiffScope;
+      commitSha?: string | null;
+      base?: string;
+      includePatches?: boolean;
+      includeMeta?: boolean;
+      includeUntracked?: boolean;
+      path?: string;
+    },
   ): Promise<DiffResult>;
   /** `git init` in the thread worktree when Changes has no Git repo (Cursor-style). */
   initializeGit(threadRef: string): Promise<void>;

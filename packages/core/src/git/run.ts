@@ -58,7 +58,7 @@ export async function git(
       prefix.push('-c', `${key}=${value}`);
     }
   }
-  return run('git', [...prefix, ...args], {
+  return run('git', ['--no-pager', ...prefix, ...args], {
     cwd,
     reject: opts?.reject,
     timeoutMs: opts?.timeoutMs,

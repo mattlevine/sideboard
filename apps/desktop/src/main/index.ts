@@ -810,8 +810,19 @@ function registerIpc(): void {
   );
   ipcMain.handle(
     'getDiff',
-    (_e, ref: string, opts?: { scope?: DiffScope; commitSha?: string | null }) =>
-      orch.diff(ref, opts),
+    (
+      _e,
+      ref: string,
+      opts?: {
+        scope?: DiffScope;
+        commitSha?: string | null;
+        base?: string;
+        includePatches?: boolean;
+        includeMeta?: boolean;
+        includeUntracked?: boolean;
+        path?: string;
+      },
+    ) => orch.diff(ref, opts),
   );
   ipcMain.handle('initializeGit', (_e, ref: string) => orch.initializeGit(ref));
   ipcMain.handle('getPrChecks', (_e, ref: string) => orch.getPrChecks(ref));

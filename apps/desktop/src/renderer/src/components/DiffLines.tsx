@@ -1,38 +1,25 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { DiffCommentLine } from '@sideboard/diff-comment';
 import { tintLine, type DiffRow } from '../lib/tool-diff';
 
 type SelectableRow = Extract<DiffRow, { kind: 'context' | 'del' | 'add' }>;
 
-function DiffLine({
+const DiffLine = memo(function DiffLine({
   row,
   selected,
   commentable,
-  onSelect,
+  index,
 }: {
   row: SelectableRow;
   selected: boolean;
   commentable: boolean;
-  onSelect?: (e: MouseEvent | KeyboardEvent) => void;
+  index: number;
 }) {
   const tint = tintLine(row.text);
   return (
     <div
       className={`tool-diff-line ${row.kind}${selected ? ' selected' : ''}${commentable ? ' commentable' : ''}`}
-      role={commentable ? 'button' : undefined}
-      tabIndex={commentable ? 0 : undefined}
-      aria-pressed={commentable ? selected : undefined}
-      onClick={commentable ? onSelect : undefined}
-      onKeyDown={
-        commentable
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onSelect?.(e);
-              }
-            }
-          : undefined
-      }
+      data-diff-idx={commentable ? String(index) : undefined}
     >
       <span className="tool-diff-gutter" aria-hidden />
       <span className="tool-diff-lineno">{row.lineNo}</span>
@@ -50,7 +37,7 @@ function DiffLine({
       </span>
     </div>
   );
-}
+});
 
 function flattenSelectable(rows: DiffRow[], expanded: Record<string, boolean>): SelectableRow[] {
   const out: SelectableRow[] = [];
@@ -133,14 +120,23 @@ export function DiffLines({
     return () => window.removeEventListener('keydown', onKey);
   }, [commentable, anchor, draft]);
 
-  function selectAt(index: number, e: MouseEvent | KeyboardEvent) {
+  function selectAt(index: number, shiftKey: boolean) {
     if (!commentable) return;
-    if (e.shiftKey && anchor != null) {
+    if (shiftKey && anchor != null) {
       setFocus(index);
     } else {
       setAnchor(index);
       setFocus(index);
     }
+  }
+
+  function onBodyClick(e: MouseEvent<HTMLDivElement>) {
+    if (!commentable) return;
+    const el = (e.target as HTMLElement | null)?.closest('[data-diff-idx]');
+    if (!el) return;
+    const idx = Number(el.getAttribute('data-diff-idx'));
+    if (!Number.isFinite(idx)) return;
+    selectAt(idx, e.shiftKey);
   }
 
   function clearSelection() {
@@ -175,7 +171,10 @@ export function DiffLines({
   let selectCursor = 0;
 
   return (
-    <div className={`${className}${commentable ? ' is-commentable' : ''}`}>
+    <div
+      className={`${className}${commentable ? ' is-commentable' : ''}`}
+      onClick={commentable ? onBodyClick : undefined}
+    >
       {commentable && (
         <div className="diff-comment-hint thread-meta">
           Click a line to comment · Shift-click for a range · Esc to clear
@@ -209,7 +208,7 @@ export function DiffLines({
                       row={r}
                       selected={selected}
                       commentable={commentable}
-                      onSelect={(e) => selectAt(idx, e)}
+                      index={idx}
                     />
                   );
                 })}
@@ -226,7 +225,7 @@ export function DiffLines({
             row={row}
             selected={selected}
             commentable={commentable}
-            onSelect={(e) => selectAt(idx, e)}
+            index={idx}
           />
         );
       })}

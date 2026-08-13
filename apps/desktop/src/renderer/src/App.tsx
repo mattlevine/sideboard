@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type {
+  DiffScope,
   MessagePart,
   OrchestratorEvent,
   OrchestratorRuntime,
@@ -121,6 +122,9 @@ export function App() {
   /** Dedicated Changes center tab (not a per-file name tab). */
   const [changesOpen, setChangesOpen] = useState(false);
   const [changesPath, setChangesPath] = useState<string | null>(null);
+  const [changesDiffScope, setChangesDiffScope] = useState<DiffScope>('uncommitted');
+  const [changesCommitSha, setChangesCommitSha] = useState<string | null>(null);
+  const [changesDiffBase, setChangesDiffBase] = useState<string | null>(null);
   const [fileChanges, setFileChanges] = useState<
     Record<string, { status: string; additions?: number; deletions?: number }>
   >({});
@@ -137,10 +141,21 @@ export function App() {
     setChangesPath(null);
   }, [selectedId]);
 
-  function openFile(path: string, opts?: { view?: 'edit' | 'diff' }) {
+  function openFile(
+    path: string,
+    opts?: {
+      view?: 'edit' | 'diff';
+      scope?: DiffScope;
+      commitSha?: string | null;
+      base?: string | null;
+    },
+  ) {
     if (opts?.view === 'diff') {
       setChangesOpen(true);
       setChangesPath(path);
+      setChangesDiffScope(opts.scope ?? 'uncommitted');
+      setChangesCommitSha(opts.commitSha ?? null);
+      setChangesDiffBase(opts.base ?? null);
       setOpenFilePath(null);
       setOpenUrl(null);
       setOpenFileView('diff');
@@ -210,6 +225,9 @@ export function App() {
   function closeChanges() {
     setChangesOpen(false);
     setChangesPath(null);
+    setChangesDiffScope('uncommitted');
+    setChangesCommitSha(null);
+    setChangesDiffBase(null);
   }
 
   function selectChangesTab() {
@@ -938,6 +956,9 @@ export function App() {
               openFileView={openFileView}
               changesOpen={changesOpen}
               changesPath={changesPath}
+              changesDiffScope={changesDiffScope}
+              changesCommitSha={changesCommitSha}
+              changesDiffBase={changesDiffBase}
               onSelectFile={openFile}
               onCloseFile={closeFile}
               onSelectChanges={selectChangesTab}

@@ -6,7 +6,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AgentKind, MessagePart, ThinkingEffort, Thread, ThreadAttachment } from '@sideboard-ai/core';
+import type {
+  AgentKind,
+  DiffScope,
+  MessagePart,
+  ThinkingEffort,
+  Thread,
+  ThreadAttachment,
+} from '@sideboard-ai/core';
 import { extractPendingPlanQuestions, formatPlanQuestionsForChat } from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
@@ -129,7 +136,18 @@ interface Props {
   /** Dedicated Changes center tab (file list selection, not a basename tab). */
   changesOpen?: boolean;
   changesPath?: string | null;
-  onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
+  changesDiffScope?: DiffScope;
+  changesCommitSha?: string | null;
+  changesDiffBase?: string | null;
+  onSelectFile?: (
+    path: string,
+    opts?: {
+      view?: 'edit' | 'diff';
+      scope?: DiffScope;
+      commitSha?: string | null;
+      base?: string | null;
+    },
+  ) => void;
   onCloseFile?: (path: string) => void;
   onSelectUrl?: (url: string) => void;
   onCloseUrl?: (url: string) => void;
@@ -209,6 +227,9 @@ export function ThreadPanel({
   openUrl = null,
   changesOpen = false,
   changesPath = null,
+  changesDiffScope = 'uncommitted',
+  changesCommitSha = null,
+  changesDiffBase = null,
   onSelectFile,
   onCloseFile,
   onSelectUrl,
@@ -1469,11 +1490,14 @@ export function ThreadPanel({
         <div className="thread-chat-column">
       {changesOpen && changesPath ? (
         <FileEditor
-          key={`changes:${changesPath}`}
+          key={`changes:${changesPath}:${changesDiffScope}:${changesCommitSha ?? ''}`}
           threadId={thread.id}
           path={changesPath}
           worktreePath={thread.worktreePath}
           initialView="diff"
+          diffScope={changesDiffScope}
+          commitSha={changesCommitSha}
+          diffBase={changesDiffBase}
           onClose={() => onCloseChanges?.()}
           onSaved={onRefresh}
           onDiffComment={(att) => {

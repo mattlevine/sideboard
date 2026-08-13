@@ -193,7 +193,10 @@ export async function originGhRepoEnv(
   return slug ? { GH_REPO: slug } : {};
 }
 
-export async function resolveDefaultBranch(repoPath: string): Promise<string> {
+export async function resolveDefaultBranch(
+  repoPath: string,
+  opts?: { network?: boolean },
+): Promise<string> {
   // Prefer origin (same rationale as resolveGithubRepoSlug) so Makerkit-style
   // origin+upstream checkouts don't resolve the template's default branch tip.
   const viaOrigin = await git(
@@ -205,22 +208,24 @@ export async function resolveDefaultBranch(repoPath: string): Promise<string> {
     return viaOrigin.stdout.trim().replace(/^refs\/remotes\/origin\//, '');
   }
 
-  const slug = await resolveGithubRepoSlug(repoPath);
-  const viaGh = await gh(
-    [
-      'repo',
-      'view',
-      ...(slug ? ['--repo', slug] : []),
-      '--json',
-      'defaultBranchRef',
-      '--jq',
-      '.defaultBranchRef.name',
-    ],
-    repoPath,
-    { reject: false },
-  );
-  if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
-    return viaGh.stdout.trim();
+  if (opts?.network !== false) {
+    const slug = await resolveGithubRepoSlug(repoPath);
+    const viaGh = await gh(
+      [
+        'repo',
+        'view',
+        ...(slug ? ['--repo', slug] : []),
+        '--json',
+        'defaultBranchRef',
+        '--jq',
+        '.defaultBranchRef.name',
+      ],
+      repoPath,
+      { reject: false, timeoutMs: 8_000 },
+    );
+    if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
+      return viaGh.stdout.trim();
+    }
   }
 
   for (const candidate of ['main', 'master']) {
@@ -1110,13 +1115,13 @@ export async function listWorktrees(repoPath: string): Promise<
 }
 
 export async function isDirty(worktreePath: string): Promise<boolean> {
-  // -uall expands untracked dirs so we can ignore Sideboard scratch without
-  // treating `?? .sideboard/` as push-relevant dirt.
-  const { stdout } = await git(['status', '--porcelain', '-uall'], worktreePath);
+  // Default `-unormal` collapses untracked dirs (fast). Do not use `-uall` —
+  // that walks every untracked file and made Changes wait seconds.
+  const { stdout } = await git(['status', '--porcelain'], worktreePath);
   for (const line of stdout.split('\n')) {
     if (!line.trim()) continue;
     const rel = porcelainStatusPath(line);
-    if (!rel || isSideboardScratchPath(rel)) continue;
+    if (!rel || isSideboardScratchPath(rel) || rel === '.sideboard') continue;
     return true;
   }
   return false;

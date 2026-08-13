@@ -35,7 +35,15 @@ interface Props {
   openFilePath?: string | null;
   /** Path selected in the dedicated Changes center tab. */
   changesPath?: string | null;
-  onOpenFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
+  onOpenFile?: (
+    path: string,
+    opts?: {
+      view?: 'edit' | 'diff';
+      scope?: DiffScope;
+      commitSha?: string | null;
+      base?: string | null;
+    },
+  ) => void;
   /** Open an http(s) URL in a center preview tab (e.g. localhost:port). */
   onOpenUrl?: (url: string) => void;
   /** Select another chat tab in this worktree (e.g. after creating one for setup). */
@@ -298,27 +306,84 @@ export function RightSidebar({
     let cancelled = false;
     const forWorktree = worktreeKey;
     const forThreadId = thread.id;
+    const listOpts = {
+      scope: diffScope,
+      commitSha: diffScope === 'commits' ? commitSha : null,
+      includePatches: false as const,
+    };
     setDiffError(null);
-    void window.sideboard
-      .getDiff(forThreadId, {
-        scope: diffScope,
-        commitSha: diffScope === 'commits' ? commitSha : null,
-      })
-      .then((d) => {
-        if (cancelled || worktreeKeyRef.current !== forWorktree) return;
-        setDiff(d);
-        // Keep file-tab git markers on the broad change set, not a narrow filter.
+
+    const apply = (d: DiffResult, fromMeta: boolean) => {
+      if (cancelled || worktreeKeyRef.current !== forWorktree) return;
+      setDiff(d);
+      if (
+        (diffScope === 'commits' && !commitSha) ||
+        diffScope === 'uncommitted'
+      ) {
+        onFileChanges?.(fileChangeMap(d.files));
+      }
+      if (upper === 'changes' && !fromMeta) {
+        setSelected((prev) =>
+          prev && d.files.some((f) => f.path === prev) ? prev : (d.files[0]?.path ?? null),
+        );
+      }
+    };
+
+    const mergeUntracked = (d: DiffResult) => {
+      if (cancelled || worktreeKeyRef.current !== forWorktree) return;
+      setDiff((prev) => {
+        if (!prev) return d;
+        const map = new Map(prev.files.map((f) => [f.path, f]));
+        for (const f of d.files) {
+          if (!map.has(f.path)) map.set(f.path, f);
+        }
+        const files = [...map.values()].sort((a, b) => a.path.localeCompare(b.path));
         if (
           (diffScope === 'commits' && !commitSha) ||
           diffScope === 'uncommitted'
         ) {
-          onFileChanges?.(fileChangeMap(d.files));
+          onFileChanges?.(fileChangeMap(files));
         }
-        if (upper === 'changes') {
-          setSelected((prev) =>
-            prev && d.files.some((f) => f.path === prev) ? prev : (d.files[0]?.path ?? null),
-          );
-        }
+        return {
+          ...prev,
+          files,
+          dirty: prev.dirty || files.length > 0,
+          stat:
+            files.length === prev.files.length
+              ? prev.stat
+              : `${files.length} file${files.length === 1 ? '' : 's'} changed`,
+        };
+      });
+    };
+
+    void window.sideboard
+      .getDiff(forThreadId, {
+        ...listOpts,
+        includeMeta: false,
+        includeUntracked: false,
+      })
+      .then((d) => {
+        apply(d, false);
+        if (cancelled) return;
+        return window.sideboard.getDiff(forThreadId, {
+          ...listOpts,
+          includeMeta: true,
+          // Keep the UI responsive while Diff opens — untracked paths are
+          // appended in a third cheap pass after meta badges land.
+          includeUntracked: false,
+        });
+      })
+      .then((d) => {
+        if (d) apply(d, true);
+        if (cancelled) return;
+        return window.sideboard.getDiff(forThreadId, {
+          ...listOpts,
+          includeMeta: false,
+          includeUntracked: true,
+        });
+      })
+      .then((d) => {
+        if (d) mergeUntracked(d);
       })
       .catch((err: unknown) => {
         if (cancelled || worktreeKeyRef.current !== forWorktree) return;
@@ -331,9 +396,33 @@ export function RightSidebar({
     };
   }, [thread.id, worktreeKey, diffScope, commitSha, upper, onFileChanges]);
 
+  const activityReloadReady = useRef(false);
   useEffect(() => {
-    return reloadDiff();
-  }, [thread.id, thread.worktreePath, thread.updatedAt, thread.status, reloadDiff]);
+    activityReloadReady.current = false;
+    const cleanup = reloadDiff();
+    const readyTimer = window.setTimeout(() => {
+      activityReloadReady.current = true;
+    }, 0);
+    return () => {
+      window.clearTimeout(readyTimer);
+      cleanup();
+    };
+  }, [thread.id, thread.worktreePath, reloadDiff]);
+
+  // Agent turns bump updatedAt constantly — don't re-run git on every token.
+  const reloadDiffRef = useRef(reloadDiff);
+  reloadDiffRef.current = reloadDiff;
+  useEffect(() => {
+    if (!activityReloadReady.current) return;
+    let cancel: (() => void) | undefined;
+    const timer = window.setTimeout(() => {
+      cancel = reloadDiffRef.current();
+    }, 400);
+    return () => {
+      window.clearTimeout(timer);
+      cancel?.();
+    };
+  }, [thread.updatedAt, thread.status]);
 
   function onDiffScopeChange(scope: DiffScope, sha?: string | null) {
     setDiffScope(scope);
@@ -527,7 +616,12 @@ export function RightSidebar({
 
   function focusChangedFile(path: string) {
     setSelected(path);
-    onOpenFile?.(path, { view: 'diff' });
+    onOpenFile?.(path, {
+      view: 'diff',
+      scope: diffScope,
+      commitSha: diffScope === 'commits' ? commitSha : null,
+      base: diff?.mergeBase ?? diff?.base ?? null,
+    });
   }
 
   const prUrl = prMeta?.url ?? thread.prUrl ?? null;

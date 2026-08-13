@@ -101,31 +101,34 @@ function capPatch(patch: string, maxHunk: number): string {
   return `${patch.slice(0, maxHunk)}\n\n… truncated (${patch.length - maxHunk} more chars)`;
 }
 
+const mergeBaseCache = new Map<string, { at: number; value: string }>();
+const MERGE_BASE_TTL_MS = 45_000;
+
 async function resolveMergeBase(
   worktreePath: string,
   base: string,
   repoPath?: string,
 ): Promise<string> {
   const baseRef = await resolveDiffBaseRef(worktreePath, base, repoPath);
+  const cacheKey = `${worktreePath}\0${baseRef}`;
+  const hit = mergeBaseCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < MERGE_BASE_TTL_MS) return hit.value;
   const { stdout } = await git(['merge-base', baseRef, 'HEAD'], worktreePath, {
     reject: false,
   });
-  const mb = stdout.trim();
-  return mb || baseRef;
+  const mb = stdout.trim() || baseRef;
+  mergeBaseCache.set(cacheKey, { at: Date.now(), value: mb });
+  return mb;
 }
 
 /** Commits on HEAD not yet on the remote tracking branch (0 if none/unknown). */
 async function countUnpushedCommits(worktreePath: string): Promise<number> {
-  // Refresh the remote-tracking tip so a just-finished push isn't counted as unpushed.
+  // Use the local upstream / origin/<branch> tip — never fetch. A remote
+  // round-trip here made every Changes refresh wait on the network.
   const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
     reject: false,
   });
   const branch = head.stdout.trim();
-  if (branch && branch !== 'HEAD') {
-    await git(['fetch', 'origin', branch, '--quiet'], worktreePath, {
-      reject: false,
-    });
-  }
 
   const upstream = await git(
     ['rev-list', '--count', '@{upstream}..HEAD'],
@@ -162,15 +165,42 @@ function splitCombinedDiff(stdout: string): Map<string, string> {
   return map;
 }
 
+function syntheticAddPatch(
+  path: string,
+  content: string,
+  maxHunk: number,
+): DiffFile {
+  const lines = content.split('\n');
+  const body = lines.map((l) => `+${l}`).join('\n');
+  const header = `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,${lines.length} @@\n`;
+  return {
+    path,
+    status: 'A',
+    patch: capPatch(`${header}${body}`, maxHunk),
+    additions: lines.length,
+    deletions: 0,
+  };
+}
+
 async function untrackedPatch(
   worktreePath: string,
   path: string,
   maxHunk: number,
 ): Promise<DiffFile> {
+  const abs = join(worktreePath, path);
+  try {
+    const st = statSync(abs);
+    if (st.isFile() && st.size > maxHunk) {
+      const buf = readFileSync(abs).subarray(0, maxHunk);
+      return syntheticAddPatch(path, buf.toString('utf8'), maxHunk);
+    }
+  } catch {
+    // Fall through to git --no-index.
+  }
   const { stdout: patch } = await git(
-    ['diff', '--no-index', '--', '/dev/null', path],
+    ['diff', '--no-ext-diff', '--no-color', '--no-index', '--', '/dev/null', path],
     worktreePath,
-    { reject: false },
+    { reject: false, timeoutMs: 4_000 },
   );
   const normalized = patch
     .replace(/^diff --git a\/.+? b\/.+?$/m, `diff --git a/${path} b/${path}`)
@@ -188,12 +218,13 @@ async function untrackedPatch(
   };
 }
 
-async function listUntrackedPaths(worktreePath: string): Promise<string[]> {
-  const { stdout } = await git(
-    ['ls-files', '-z', '--others', '--exclude-standard'],
-    worktreePath,
-    { reject: false },
-  );
+async function listUntrackedPaths(
+  worktreePath: string,
+  path?: string | null,
+): Promise<string[]> {
+  const args = ['ls-files', '-z', '--others', '--exclude-standard'];
+  if (path) args.push('--', path);
+  const { stdout } = await git(args, worktreePath, { reject: false });
   return stdout
     .split('\0')
     .filter(Boolean)
@@ -203,10 +234,108 @@ async function listUntrackedPaths(worktreePath: string): Promise<string[]> {
 async function listUntrackedFiles(
   worktreePath: string,
   maxHunk: number,
+  paths?: string[],
 ): Promise<DiffFile[]> {
-  const paths = await listUntrackedPaths(worktreePath);
-  if (paths.length === 0) return [];
-  return Promise.all(paths.map((path) => untrackedPatch(worktreePath, path, maxHunk)));
+  const list = paths ?? (await listUntrackedPaths(worktreePath));
+  if (list.length === 0) return [];
+  return Promise.all(list.map((path) => untrackedPatch(worktreePath, path, maxHunk)));
+}
+
+function untrackedStubs(paths: string[]): DiffFile[] {
+  return paths.map((path) => ({
+    path,
+    status: 'A',
+    patch: '',
+    additions: 0,
+    deletions: 0,
+  }));
+}
+
+function pathspec(path: string | null): string[] {
+  return path ? ['--', path] : [];
+}
+
+function gitDiff(
+  args: string[],
+  cwd: string,
+  opts?: { timeoutMs?: number },
+) {
+  return git(['diff', '--no-ext-diff', '--no-color', ...args], cwd, {
+    reject: false,
+    timeoutMs: opts?.timeoutMs,
+  });
+}
+
+function fileFromPatch(path: string, patch: string, maxHunk: number): DiffFile {
+  let status = 'M';
+  if (/^new file mode /m.test(patch) || /^--- \/dev\/null/m.test(patch)) {
+    status = 'A';
+  } else if (
+    /^deleted file mode /m.test(patch) ||
+    /^\+\+\+ \/dev\/null/m.test(patch)
+  ) {
+    status = 'D';
+  } else if (/^rename from /m.test(patch)) {
+    status = 'R';
+  }
+  const additions = patch
+    .split('\n')
+    .filter((l) => l.startsWith('+') && !l.startsWith('+++')).length;
+  const deletions = patch
+    .split('\n')
+    .filter((l) => l.startsWith('-') && !l.startsWith('---')).length;
+  return {
+    path,
+    status,
+    patch: capPatch(patch, maxHunk),
+    additions,
+    deletions,
+  };
+}
+
+async function gitDiffParts(
+  worktreePath: string,
+  diffArgs: string[],
+  includePatches: boolean,
+  path: string | null,
+): Promise<{ nameStatus: string; numstat: string; combinedDiff: string }> {
+  const extra = pathspec(path);
+  // One `git diff` when we need the patch — three parallel diffs each load
+  // the index on large worktrees and can also invoke diff.external (delta, etc.).
+  if (includePatches) {
+    const diff = await gitDiff([...diffArgs, ...extra], worktreePath, {
+      timeoutMs: 4_000,
+    });
+    return { nameStatus: '', numstat: '', combinedDiff: diff.stdout };
+  }
+  const [ns, num] = await Promise.all([
+    gitDiff(['--name-status', ...diffArgs, ...extra], worktreePath),
+    gitDiff(['--numstat', ...diffArgs, ...extra], worktreePath),
+  ]);
+  return {
+    nameStatus: ns.stdout,
+    numstat: num.stdout,
+    combinedDiff: '',
+  };
+}
+
+function formatStat(files: DiffFile[]): string {
+  if (files.length === 0) return '(no changes)';
+  const additions = files.reduce((n, f) => n + (f.additions ?? 0), 0);
+  const deletions = files.reduce((n, f) => n + (f.deletions ?? 0), 0);
+  const n = files.length;
+  return `${n} file${n === 1 ? '' : 's'} changed, ${additions} insertions(+), ${deletions} deletions(-)`;
+}
+
+function emptyScopeStats(): Record<DiffScope, DiffScopeStat> {
+  const z = emptyStat();
+  return {
+    commits: z,
+    uncommitted: z,
+    staged: z,
+    unstaged: z,
+    last_turn: z,
+  };
 }
 
 function filesFromDiff(
@@ -215,8 +344,13 @@ function filesFromDiff(
   combinedDiff: string,
   maxHunk: number,
 ): DiffFile[] {
-  const counts = parseNumstat(numstat);
   const patches = splitCombinedDiff(combinedDiff);
+  if (!nameStatus.trim() && patches.size > 0) {
+    return [...patches.entries()].map(([path, patch]) =>
+      fileFromPatch(path, patch, maxHunk),
+    );
+  }
+  const counts = parseNumstat(numstat);
   const files: DiffFile[] = [];
   for (const { status, path } of parseNameStatus(nameStatus)) {
     const n = counts.get(path);
@@ -245,13 +379,13 @@ async function computeScopeStats(
     lastTurnNum,
   ] = await Promise.all([
     mergeBase
-      ? git(['diff', '--numstat', mergeBase], worktreePath, { reject: false })
+      ? gitDiff(['--numstat', mergeBase], worktreePath)
       : Promise.resolve({ stdout: '' }),
-    git(['diff', '--numstat', 'HEAD'], worktreePath, { reject: false }),
-    git(['diff', '--numstat', '--cached'], worktreePath, { reject: false }),
-    git(['diff', '--numstat'], worktreePath, { reject: false }),
+    gitDiff(['--numstat', 'HEAD'], worktreePath),
+    gitDiff(['--numstat', '--cached'], worktreePath),
+    gitDiff(['--numstat'], worktreePath),
     lastTurnBase
-      ? git(['diff', '--numstat', lastTurnBase], worktreePath, { reject: false })
+      ? gitDiff(['--numstat', lastTurnBase], worktreePath)
       : Promise.resolve({ stdout: '' }),
   ]);
 
@@ -276,6 +410,18 @@ export interface GetDiffOptions {
   lastTurnBase?: string | null;
   /** When scope is `commits`, show only this commit's patch. */
   commitSha?: string | null;
+  /**
+   * When false, skip unified patches (file list + line counts only).
+   * Default true. The Changes file list should pass false and load one
+   * file's patch with `path` when the editor opens.
+   */
+  includePatches?: boolean;
+  /** Scope stats, commits, dirty, unpushed. Default true. */
+  includeMeta?: boolean;
+  /** Untracked files. Default follows the scope (usually on). */
+  includeUntracked?: boolean;
+  /** Only this worktree-relative path. */
+  path?: string;
 }
 
 /** Recent commits since merge-base (Cursor Commits submenu). */
@@ -293,7 +439,7 @@ export async function listBranchCommits(
 
   let base = opts?.base;
   try {
-    base = base ?? (await resolveDefaultBranch(repoPath));
+    base = base ?? (await resolveDefaultBranch(repoPath, { network: false }));
   } catch {
     base = 'HEAD';
   }
@@ -324,6 +470,135 @@ export async function listBranchCommits(
   return commits;
 }
 
+const SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+function emptyPathDiff(
+  scope: DiffScope,
+  base: string,
+  hasLastTurnBase: boolean,
+  commitSha: string | null = null,
+): DiffResult {
+  return {
+    scope,
+    commitSha: scope === 'commits' ? commitSha : null,
+    base,
+    files: [],
+    stat: formatStat([]),
+    dirty: false,
+    unpushed: 0,
+    hasLastTurnBase,
+    commits: [],
+    scopeStats: emptyScopeStats(),
+  };
+}
+
+/**
+ * Open one file in Diff: a single `git diff --no-ext-diff`, no worktree inspect,
+ * no untracked walk, no merge-base unless this is the branch-vs-default filter.
+ */
+async function getPathDiff(
+  worktreePath: string,
+  repoPath: string,
+  opts: {
+    path: string;
+    scope: DiffScope;
+    commitSha: string | null;
+    lastTurnBase: string | null;
+    hasLastTurnBase: boolean;
+    base?: string;
+    includePatches: boolean;
+    maxHunk: number;
+  },
+): Promise<DiffResult> {
+  const { path, scope, commitSha, lastTurnBase, hasLastTurnBase, includePatches, maxHunk } =
+    opts;
+
+  if (scope === 'last_turn' && !lastTurnBase) {
+    return emptyPathDiff(scope, 'last turn', false);
+  }
+
+  let diffArgs: string[];
+  let labelBase: string;
+  if (scope === 'staged') {
+    diffArgs = ['--cached'];
+    labelBase = 'staged';
+  } else if (scope === 'unstaged') {
+    diffArgs = [];
+    labelBase = 'unstaged';
+  } else if (scope === 'uncommitted') {
+    diffArgs = ['HEAD'];
+    labelBase = 'HEAD';
+  } else if (scope === 'last_turn') {
+    diffArgs = [lastTurnBase!];
+    labelBase = 'last turn';
+  } else if (scope === 'commits' && commitSha) {
+    diffArgs = [`${commitSha}^!`];
+    labelBase = commitSha.slice(0, 7);
+  } else if (scope === 'commits' && opts.base && SHA_RE.test(opts.base)) {
+    diffArgs = [opts.base];
+    labelBase = opts.base.slice(0, 7);
+  } else if (scope === 'commits') {
+    let base = opts.base;
+    try {
+      base = base ?? (await resolveDefaultBranch(repoPath, { network: false }));
+    } catch {
+      base = 'HEAD';
+    }
+    const mergeBase = await resolveMergeBase(worktreePath, base, repoPath);
+    diffArgs = [mergeBase];
+    labelBase = mergeBase;
+  } else {
+    diffArgs = ['HEAD'];
+    labelBase = 'HEAD';
+  }
+
+  const diff = await gitDiff(
+    includePatches
+      ? [...diffArgs, '--', path]
+      : ['--name-status', ...diffArgs, '--', path],
+    worktreePath,
+    { timeoutMs: 4_000 },
+  );
+
+  const filesMap = new Map<string, DiffFile>();
+  if (includePatches) {
+    const parsed = filesFromDiff('', '', diff.stdout, maxHunk);
+    for (const file of parsed) filesMap.set(file.path, file);
+    if (diff.stdout.trim() && !filesMap.has(path)) {
+      filesMap.set(path, fileFromPatch(path, diff.stdout, maxHunk));
+    }
+  } else {
+    for (const file of filesFromDiff(diff.stdout, '', '', maxHunk)) {
+      filesMap.set(file.path, file);
+    }
+  }
+
+  if (filesMap.size === 0) {
+    const maybe = await listUntrackedPaths(worktreePath, path);
+    if (maybe.length > 0) {
+      const extra = includePatches
+        ? await listUntrackedFiles(worktreePath, maxHunk, maybe)
+        : untrackedStubs(maybe);
+      for (const file of extra) filesMap.set(file.path, file);
+    }
+  }
+
+  const files = [...filesMap.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return {
+    scope,
+    commitSha: scope === 'commits' ? commitSha : null,
+    base: labelBase,
+    files,
+    stat: formatStat(files),
+    dirty: files.length > 0,
+    unpushed: 0,
+    hasLastTurnBase,
+    commits: [],
+    scopeStats: emptyScopeStats(),
+    mergeBase: SHA_RE.test(diffArgs[0] ?? '') ? diffArgs[0] : null,
+  };
+}
+
 /**
  * Change set for the Changes panel, filtered by Cursor-style scope.
  */
@@ -332,6 +607,29 @@ export async function getDiff(
   repoPath: string,
   opts?: GetDiffOptions,
 ): Promise<DiffResult> {
+  const maxHunk = opts?.maxHunkChars ?? 8_000;
+  const scope: DiffScope = opts?.scope ?? 'commits';
+  const lastTurnBase = opts?.lastTurnBase?.trim() || null;
+  const hasLastTurnBase = Boolean(lastTurnBase);
+  const commitSha = opts?.commitSha?.trim() || null;
+  const includePatches = opts?.includePatches ?? true;
+  const pathFilter = opts?.path?.trim() || null;
+  const fileOnly = Boolean(pathFilter);
+  const includeMeta = (opts?.includeMeta ?? true) && !fileOnly;
+
+  if (fileOnly && pathFilter && !includeMeta) {
+    return getPathDiff(worktreePath, repoPath, {
+      path: pathFilter,
+      scope,
+      commitSha,
+      lastTurnBase,
+      hasLastTurnBase,
+      base: opts?.base,
+      includePatches,
+      maxHunk,
+    });
+  }
+
   const status = await inspectGitWorktree(worktreePath);
   if (status === 'missing_worktree') {
     throw new Error('Worktree not found');
@@ -340,25 +638,42 @@ export async function getDiff(
     throw new Error('Not a Git repository');
   }
 
-  const maxHunk = opts?.maxHunkChars ?? 8_000;
-  const scope: DiffScope = opts?.scope ?? 'commits';
-  const lastTurnBase = opts?.lastTurnBase?.trim() || null;
-  const hasLastTurnBase = Boolean(lastTurnBase);
-  const commitSha = opts?.commitSha?.trim() || null;
+  // Path-only loads (Diff tab) skip the untracked tree walk unless asked —
+  // that walk was a multi-second cost on large worktrees.
+  const wantUntracked =
+    opts?.includeUntracked !== undefined
+      ? opts.includeUntracked
+      : !fileOnly &&
+        ((scope === 'commits' && !commitSha) ||
+          scope === 'uncommitted' ||
+          scope === 'unstaged' ||
+          scope === 'last_turn');
 
-  const head = await git(['rev-parse', '--verify', 'HEAD'], worktreePath, {
+  const needsMergeBase =
+    (scope === 'commits' && !commitSha) || includeMeta;
+
+  const headP = git(['rev-parse', '--verify', 'HEAD'], worktreePath, {
     reject: false,
   });
+  const untrackedP = wantUntracked
+    ? listUntrackedPaths(worktreePath, pathFilter)
+    : Promise.resolve([] as string[]);
+
+  const head = await headP;
   const hasHead = head.exitCode === 0;
-  const untrackedPaths = await listUntrackedPaths(worktreePath);
 
   if (!hasHead) {
+    const untrackedPaths = await untrackedP;
     const files =
       scope === 'staged'
         ? []
-        : (await listUntrackedFiles(worktreePath, maxHunk)).sort((a, b) =>
-            a.path.localeCompare(b.path),
-          );
+        : includePatches
+          ? (await listUntrackedFiles(worktreePath, maxHunk, untrackedPaths)).sort(
+              (a, b) => a.path.localeCompare(b.path),
+            )
+          : untrackedStubs(untrackedPaths).sort((a, b) =>
+              a.path.localeCompare(b.path),
+            );
     const untrackedStat: DiffScopeStat = {
       files: files.length,
       additions: files.reduce((n, f) => n + (f.additions ?? 0), 0),
@@ -370,9 +685,7 @@ export async function getDiff(
       commitSha: null,
       base: '(no commits)',
       files,
-      stat: files.length
-        ? files.map((f) => ` ${f.path} | untracked`).join('\n')
-        : '(no changes)',
+      stat: formatStat(files),
       dirty: files.length > 0,
       unpushed: 0,
       hasLastTurnBase,
@@ -387,164 +700,143 @@ export async function getDiff(
     };
   }
 
-  let base = opts?.base;
-  try {
-    base = base ?? (await resolveDefaultBranch(repoPath));
-  } catch {
-    base = 'HEAD';
+  let mergeBase = 'HEAD';
+  let baseLabel = 'HEAD';
+  if (needsMergeBase) {
+    let base = opts?.base;
+    try {
+      base = base ?? (await resolveDefaultBranch(repoPath, { network: false }));
+    } catch {
+      base = 'HEAD';
+    }
+    // Prefer origin/<default> when the remote-tracking ref already exists.
+    // Do not fetch here — a remote round-trip on every Changes refresh made
+    // the panel wait on the network. Worktree create / pull refresh those refs.
+    // resolveMergeBase also resolves the ref (and caches) — don't double-call.
+    mergeBase = await resolveMergeBase(worktreePath, base, repoPath);
+    baseLabel = await resolveDiffBaseRef(worktreePath, base, repoPath);
   }
-  // Prefer origin/<default> and refresh it so PR/adopt worktrees aren't
-  // compared against a stale local default branch (looks like every file changed).
-  base = await resolveDiffBaseRef(worktreePath, base, repoPath);
-  if (base.startsWith('origin/')) {
-    const short = base.slice('origin/'.length);
-    await git(['fetch', 'origin', short, '--quiet'], worktreePath, {
-      reject: false,
-    });
-    // Re-resolve after fetch in case the tip moved.
-    base = await resolveDiffBaseRef(worktreePath, short, repoPath);
+
+  const includeUntracked = wantUntracked;
+
+  const metaPromise = includeMeta
+    ? Promise.all([
+        computeScopeStats(
+          worktreePath,
+          mergeBase,
+          lastTurnBase,
+          // Cheap: don't wait on the untracked walk just to pad the badge.
+          0,
+        ),
+        listBranchCommits(worktreePath, repoPath, { base: baseLabel }),
+        isDirty(worktreePath),
+        countUnpushedCommits(worktreePath),
+      ]).then(([scopeStats, commits, dirty, unpushed]) => ({
+        scopeStats,
+        commits,
+        dirty,
+        unpushed,
+      }))
+    : Promise.resolve({
+        scopeStats: emptyScopeStats(),
+        commits: [] as DiffCommit[],
+        dirty: false,
+        unpushed: 0,
+      });
+
+  if (scope === 'last_turn' && !lastTurnBase) {
+    const meta = await metaPromise;
+    return {
+      scope,
+      commitSha: null,
+      base: 'last turn',
+      files: [],
+      stat: '(no last agent turn)',
+      dirty: meta.dirty,
+      unpushed: meta.unpushed,
+      hasLastTurnBase: false,
+      commits: meta.commits,
+      scopeStats: meta.scopeStats,
+    };
   }
-  const mergeBase = await resolveMergeBase(worktreePath, base, repoPath);
-  const scopeStats = await computeScopeStats(
-    worktreePath,
-    mergeBase,
-    lastTurnBase,
-    untrackedPaths.length,
-  );
 
-  const includeUntracked =
-    (scope === 'commits' && !commitSha) ||
-    scope === 'uncommitted' ||
-    scope === 'unstaged' ||
-    scope === 'last_turn';
-
-  let nameStatus = '';
-  let numstat = '';
-  let combinedDiff = '';
-  let labelBase = base;
-
+  let diffArgs: string[];
+  let labelBase = baseLabel;
   if (scope === 'staged') {
-    const [ns, num, diff] = await Promise.all([
-      git(['diff', '--name-status', '--cached'], worktreePath, { reject: false }),
-      git(['diff', '--numstat', '--cached'], worktreePath, { reject: false }),
-      git(['diff', '--cached'], worktreePath, { reject: false }),
-    ]);
-    nameStatus = ns.stdout;
-    numstat = num.stdout;
-    combinedDiff = diff.stdout;
+    diffArgs = ['--cached'];
     labelBase = 'staged';
   } else if (scope === 'unstaged') {
-    const [ns, num, diff] = await Promise.all([
-      git(['diff', '--name-status'], worktreePath, { reject: false }),
-      git(['diff', '--numstat'], worktreePath, { reject: false }),
-      git(['diff'], worktreePath, { reject: false }),
-    ]);
-    nameStatus = ns.stdout;
-    numstat = num.stdout;
-    combinedDiff = diff.stdout;
+    diffArgs = [];
     labelBase = 'unstaged';
   } else if (scope === 'uncommitted') {
-    const [ns, num, diff] = await Promise.all([
-      git(['diff', '--name-status', 'HEAD'], worktreePath, { reject: false }),
-      git(['diff', '--numstat', 'HEAD'], worktreePath, { reject: false }),
-      git(['diff', 'HEAD'], worktreePath, { reject: false }),
-    ]);
-    nameStatus = ns.stdout;
-    numstat = num.stdout;
-    combinedDiff = diff.stdout;
+    diffArgs = ['HEAD'];
     labelBase = 'HEAD';
   } else if (scope === 'last_turn') {
-    if (!lastTurnBase) {
-      const commits = await listBranchCommits(worktreePath, repoPath, { base });
-      return {
-        scope,
-        commitSha: null,
-        base: 'last turn',
-        files: [],
-        stat: '(no last agent turn)',
-        dirty: await isDirty(worktreePath),
-        unpushed: await countUnpushedCommits(worktreePath),
-        hasLastTurnBase: false,
-        commits,
-        scopeStats,
-      };
-    }
-    const [ns, num, diff] = await Promise.all([
-      git(['diff', '--name-status', lastTurnBase], worktreePath, { reject: false }),
-      git(['diff', '--numstat', lastTurnBase], worktreePath, { reject: false }),
-      git(['diff', lastTurnBase], worktreePath, { reject: false }),
-    ]);
-    nameStatus = ns.stdout;
-    numstat = num.stdout;
-    combinedDiff = diff.stdout;
+    diffArgs = [lastTurnBase!];
     labelBase = 'last turn';
   } else if (scope === 'commits' && commitSha) {
-    // Single commit patch
-    const range = `${commitSha}^!`;
-    const [ns, num, diff] = await Promise.all([
-      git(['diff', '--name-status', range], worktreePath, { reject: false }),
-      git(['diff', '--numstat', range], worktreePath, { reject: false }),
-      git(['diff', range], worktreePath, { reject: false }),
-    ]);
-    nameStatus = ns.stdout;
-    numstat = num.stdout;
-    combinedDiff = diff.stdout;
+    diffArgs = [`${commitSha}^!`];
     labelBase = commitSha.slice(0, 7);
   } else {
-    // commits — full branch delta vs merge-base (incl. working tree)
-    const [ns, num, diff] = await Promise.all([
-      git(['diff', '--name-status', mergeBase], worktreePath, { reject: false }),
-      git(['diff', '--numstat', mergeBase], worktreePath, { reject: false }),
-      git(['diff', mergeBase], worktreePath, { reject: false }),
-    ]);
-    nameStatus = ns.stdout;
-    numstat = num.stdout;
-    combinedDiff = diff.stdout;
-    labelBase = base;
+    diffArgs = [mergeBase];
+    labelBase = baseLabel;
   }
 
-  const commits = await listBranchCommits(worktreePath, repoPath, { base });
+  const partsPromise = gitDiffParts(
+    worktreePath,
+    diffArgs,
+    includePatches,
+    pathFilter,
+  );
+
+  const [parts, meta, untrackedPaths] = await Promise.all([
+    partsPromise,
+    metaPromise,
+    untrackedP,
+  ]);
 
   const filesMap = new Map<string, DiffFile>();
-  for (const file of filesFromDiff(nameStatus, numstat, combinedDiff, maxHunk)) {
+  for (const file of filesFromDiff(
+    parts.nameStatus,
+    parts.numstat,
+    parts.combinedDiff,
+    maxHunk,
+  )) {
     filesMap.set(file.path, file);
   }
 
   if (includeUntracked) {
-    const untrackedFiles = await listUntrackedFiles(worktreePath, maxHunk);
-    for (const file of untrackedFiles) {
+    const extra = includePatches
+      ? await listUntrackedFiles(worktreePath, maxHunk, untrackedPaths)
+      : untrackedStubs(untrackedPaths);
+    for (const file of extra) {
       if (!filesMap.has(file.path)) filesMap.set(file.path, file);
+    }
+  } else if (fileOnly && pathFilter && !filesMap.has(pathFilter)) {
+    // Path-only: still try a single untracked file if git had no tracked diff.
+    const maybe = await listUntrackedPaths(worktreePath, pathFilter);
+    if (maybe.length > 0) {
+      const extra = includePatches
+        ? await listUntrackedFiles(worktreePath, maxHunk, maybe)
+        : untrackedStubs(maybe);
+      for (const file of extra) filesMap.set(file.path, file);
     }
   }
 
   const files = [...filesMap.values()].sort((a, b) => a.path.localeCompare(b.path));
-  const { stdout: statOut } = await git(
-    scope === 'staged'
-      ? ['diff', '--stat', '--cached']
-      : scope === 'unstaged'
-        ? ['diff', '--stat']
-        : scope === 'uncommitted'
-          ? ['diff', '--stat', 'HEAD']
-          : scope === 'last_turn' && lastTurnBase
-            ? ['diff', '--stat', lastTurnBase]
-            : scope === 'commits' && commitSha
-              ? ['diff', '--stat', `${commitSha}^!`]
-              : ['diff', '--stat', mergeBase],
-    worktreePath,
-    { reject: false },
-  );
 
   return {
     scope,
     commitSha: scope === 'commits' ? commitSha : null,
     base: labelBase,
     files,
-    stat: statOut.trim() || (files.length ? `${files.length} file(s)` : '(no changes)'),
-    dirty: await isDirty(worktreePath),
-    unpushed: await countUnpushedCommits(worktreePath),
+    stat: formatStat(files),
+    dirty: fileOnly || !includeMeta ? files.length > 0 : meta.dirty,
+    unpushed: meta.unpushed,
     hasLastTurnBase,
-    commits,
-    scopeStats,
+    commits: meta.commits,
+    scopeStats: meta.scopeStats,
+    mergeBase: needsMergeBase ? mergeBase : null,
   };
 }
 

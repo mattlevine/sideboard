@@ -389,6 +389,8 @@ export interface DiffResult {
   hasLastTurnBase: boolean;
   /** Recent commits on the branch (vs merge-base), for the Commits flyout. */
   commits: DiffCommit[];
+  /** Resolved merge-base SHA when comparing the branch to the default. */
+  mergeBase?: string | null;
 }
 
 export interface LandPreview {

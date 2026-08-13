@@ -597,6 +597,7 @@ function WorktreeSidebarRow({
       try {
         const diff = await window.sideboard.getDiff(primary.id, {
           scope: 'uncommitted',
+          includePatches: false,
         });
         if (cancelled || gen !== fetchGen.current) return;
         const s = diff.scopeStats?.uncommitted;
