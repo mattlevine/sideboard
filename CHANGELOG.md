@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.69] - 2026-08-12
+
+### Changed
+
+- Diff view no longer shows a loading preloader; the patch appears when git is done
+
 ## [0.1.68] - 2026-08-12
 
 ### Changed

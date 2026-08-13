@@ -325,15 +325,7 @@ export function FileEditor({
       {error && <div className="empty">{error}</div>}
       {!error && mode === 'diff' && (
         <div className="file-editor-diff">
-          {diffLoading || (patch != null && diffRows == null) ? (
-            <PanePreloader
-              label={diffLoading || patch == null ? 'Loading diff' : 'Rendering diff'}
-            />
-          ) : patch == null || diffRows == null ? (
-            <div className="pane-preloader" role="status">
-              No diff available
-            </div>
-          ) : (
+          {!diffLoading && patch != null && diffRows != null ? (
             <DiffLines
               className="tool-diff-body file-diff-lines"
               rows={diffRows}
@@ -352,7 +344,9 @@ export function FileEditor({
                   : undefined
               }
             />
-          )}
+          ) : !diffLoading ? (
+            <div className="empty">No diff available</div>
+          ) : null}
         </div>
       )}
       {!error && content == null && mode !== 'diff' && <div className="empty">Loading…</div>}
