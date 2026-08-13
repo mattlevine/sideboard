@@ -7,6 +7,16 @@ export interface PrMergeGate {
   reviewDecision: string | null;
   baseRefName: string | null;
   url: string | null;
+  /** GitHub `isInMergeQueue` — the PR is waiting in a merge queue. */
+  isInMergeQueue?: boolean;
+}
+
+/** True when GitHub reports the PR is in a merge queue. */
+export function prIsInMergeQueue(
+  gate: Pick<PrMergeGate, 'isInMergeQueue' | 'mergeStateStatus'>,
+): boolean {
+  if (gate.isInMergeQueue) return true;
+  return (gate.mergeStateStatus ?? '').toUpperCase() === 'QUEUED';
 }
 
 export interface BuildMergeGateOptions {
@@ -36,7 +46,8 @@ export function buildMergeGateChecks(
 
   const conflicting =
     mergeable === 'CONFLICTING' || mergeState === 'DIRTY';
-  if (conflicting) {
+  const inQueue = prIsInMergeQueue(gate);
+  if (conflicting && !inQueue) {
     rows.push({
       name: 'Merge conflicts',
       state: mergeable === 'CONFLICTING' ? 'CONFLICTING' : mergeState || 'DIRTY',
@@ -45,6 +56,18 @@ export function buildMergeGateChecks(
       completedAt: null,
       link,
       description: `This branch has conflicts that must be resolved before it can merge into ${base}.`,
+      workflow: 'mergeability',
+      kind: 'mergeability',
+    });
+  } else if (inQueue) {
+    rows.push({
+      name: 'Merge queue',
+      state: 'QUEUED',
+      bucket: 'pending',
+      startedAt: null,
+      completedAt: null,
+      link,
+      description: `This pull request is in the GitHub merge queue for ${base}.`,
       workflow: 'mergeability',
       kind: 'mergeability',
     });

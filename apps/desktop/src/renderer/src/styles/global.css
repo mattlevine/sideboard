@@ -1699,11 +1699,54 @@ body.resizing-panels webview {
 .brand {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 9px;
   font-size: 15px;
   font-weight: 550;
   letter-spacing: -0.02em;
   color: var(--text);
+}
+
+.slack-reply-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.slack-reply-badge {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: hsl(var(--slack-badge-hue, 210) 42% 42%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.slack-reply-badge::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2bac76;
+  box-shadow: 0 0 0 1.5px var(--bg);
+}
+
+.slack-reply-badge:hover {
+  filter: brightness(1.12);
 }
 
 .brand-mark {
@@ -3722,6 +3765,16 @@ button.worktree-hover-card-title:hover {
 
 .worktree-hover-card-btn.merged .worktree-hover-card-btn-status {
   color: #e2c5ff;
+}
+
+.worktree-hover-card-btn.queued {
+  background: rgba(57, 192, 201, 0.14);
+  border-color: rgba(57, 192, 201, 0.45);
+  color: #6fdbd4;
+}
+
+.worktree-hover-card-btn.queued .worktree-hover-card-btn-status {
+  color: #9ee8e2;
 }
 
 .worktree-hover-card-btn.closed {
@@ -5792,6 +5845,11 @@ button.worktree-hover-card-title:hover {
   border-bottom-color: rgba(163, 113, 247, 0.35);
 }
 
+.right-top.queued {
+  background: #16363a;
+  border-bottom-color: rgba(57, 192, 201, 0.4);
+}
+
 /* PR pill sits on the tinted bar — outlined, status color matches state. */
 .right-top.open .pr-pill,
 .right-top.draft .pr-pill {
@@ -5859,6 +5917,16 @@ button.worktree-hover-card-title:hover {
 
 .right-top.merged .pr-pill .pr-status {
   color: #d2a8ff;
+}
+
+.right-top.queued .pr-pill {
+  background: transparent;
+  border-color: rgba(111, 219, 212, 0.55);
+  color: #9ee8e2;
+}
+
+.right-top.queued .pr-pill .pr-status {
+  color: #6fdbd4;
 }
 
 /* Primary + caret follow the state color; Archive stays solid accent for that state. */
@@ -5953,6 +6021,19 @@ button.worktree-hover-card-title:hover {
 .right-top.merged .btn-archive:hover:not(:disabled) {
   background: #b084f9 !important;
   border-color: #b084f9 !important;
+}
+
+.right-top.queued .btn-continue,
+.right-top.queued .split-caret {
+  border: 1px dashed rgba(111, 219, 212, 0.55) !important;
+  background: transparent !important;
+  color: #9ee8e2 !important;
+}
+
+.right-top.queued .btn-archive {
+  background: #1a7f88 !important;
+  border-color: #39c0c9 !important;
+  color: #fff !important;
 }
 
 .right-top .split-btn {
@@ -6092,6 +6173,10 @@ button.worktree-hover-card-title:hover {
 
 .stack-map-layer.is-merged {
   opacity: 0.55;
+}
+
+.stack-map-layer.is-queued .stack-map-badge {
+  color: #6fdbd4;
 }
 
 .stack-map-layer.needs-rebase .stack-map-pr {
@@ -6656,6 +6741,16 @@ button.worktree-hover-card-title:hover {
 
 .pr-pill.merged .pr-status {
   color: #e2c5ff;
+}
+
+.pr-pill.queued {
+  background: rgba(57, 192, 201, 0.14);
+  border-color: rgba(57, 192, 201, 0.45);
+  color: #6fdbd4;
+}
+
+.pr-pill.queued .pr-status {
+  color: #9ee8e2;
 }
 
 .pr-pill.closed {

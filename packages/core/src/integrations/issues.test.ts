@@ -91,5 +91,8 @@ describe('integrations / issues', () => {
     expect(result.issues[0]?.identifier).toBe('ENG-1');
     expect(result.issues[0]?.provider).toBe('linear');
     expect(fetchMock).toHaveBeenCalled();
+    const auth = (fetchMock.mock.calls[0]?.[1] as { headers?: Record<string, string> })
+      ?.headers?.Authorization;
+    expect(auth).toBe('lin_api_test');
   });
 });

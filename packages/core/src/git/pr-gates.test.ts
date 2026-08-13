@@ -61,4 +61,34 @@ describe('buildMergeGateChecks', () => {
     );
     expect(rows[0]).toMatchObject({ name: 'Merge blocked', bucket: 'fail' });
   });
+
+  it('surfaces GitHub merge queue as a pending row', () => {
+    const rows = buildMergeGateChecks({
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+      reviewDecision: 'APPROVED',
+      baseRefName: 'main',
+      url: 'https://github.com/acme/widgets/pull/1',
+      isInMergeQueue: true,
+    });
+    expect(rows).toEqual([
+      expect.objectContaining({
+        name: 'Merge queue',
+        state: 'QUEUED',
+        bucket: 'pending',
+        kind: 'mergeability',
+      }),
+    ]);
+  });
+
+  it('treats mergeStateStatus QUEUED as in-queue even without isInMergeQueue', () => {
+    const rows = buildMergeGateChecks({
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'QUEUED',
+      reviewDecision: null,
+      baseRefName: 'main',
+      url: null,
+    });
+    expect(rows[0]).toMatchObject({ name: 'Merge queue', state: 'QUEUED', bucket: 'pending' });
+  });
 });

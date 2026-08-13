@@ -1,0 +1,39 @@
+# fly.toml app configuration file generated for Sideboard Slack relay
+#
+# Deploy from the monorepo root (build context = repo root):
+#   fly deploy --config apps/slack-relay/fly.toml --dockerfile apps/slack-relay/Dockerfile .
+#
+# First time:
+#   fly apps create sideboard-slack-relay
+#   fly secrets set SIDEBOARD_SLACK_APP_TOKEN=xapp-… -a sideboard-slack-relay
+#
+# Custom domain:
+#   fly certs add slack-relay.sideboard.cloud -a sideboard-slack-relay
+
+app = 'sideboard-slack-relay'
+primary_region = 'sjc'
+
+[build]
+
+[env]
+  HOST = '0.0.0.0'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [[http_service.checks]]
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '20s'
+    method = 'GET'
+    path = '/health'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpus = 1

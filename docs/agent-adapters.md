@@ -55,4 +55,4 @@ Reference implementations:
 
 - Auto-publishing the agent to npm
 - Desktop polish beyond showing the new kind in the picker
-- Cloud remote bridges (those consume CLI/MCP — see [remote-integrations.md](remote-integrations.md))
+- Cloud remote bridges (built-in Slack — [README](../README.md#slack))

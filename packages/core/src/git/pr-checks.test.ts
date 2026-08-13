@@ -7,7 +7,7 @@ vi.mock('./run.js', () => ({
 }));
 
 import { gh, git } from './run.js';
-import { getPrChecks } from './worktree.js';
+import { getPrChecks, getPrMeta } from './worktree.js';
 
 const ghMock = vi.mocked(gh);
 const gitMock = vi.mocked(git);
@@ -184,5 +184,72 @@ describe('getPrChecks', () => {
       exitCode: 1,
     });
     await expect(getPrChecks('/tmp/wt', '42')).rejects.toThrow(/auth/i);
+  });
+
+  it('prepends a merge-queue row and skips the local conflict probe', async () => {
+    ghMock
+      .mockResolvedValueOnce({
+        stdout: '[]',
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          mergeable: 'MERGEABLE',
+          mergeStateStatus: 'CLEAN',
+          reviewDecision: 'APPROVED',
+          baseRefName: 'main',
+          url: 'https://github.com/acme/widgets/pull/42',
+          isInMergeQueue: true,
+        }),
+        stderr: '',
+        exitCode: 0,
+      });
+    const checks = await getPrChecks('/tmp/wt', '42');
+    expect(checks).toEqual([
+      expect.objectContaining({
+        name: 'Merge queue',
+        state: 'QUEUED',
+        bucket: 'pending',
+        kind: 'mergeability',
+      }),
+    ]);
+    expect(gitMock.mock.calls.some((c) => c[0]?.[0] === 'merge-tree')).toBe(false);
+  });
+});
+
+describe('getPrMeta', () => {
+  beforeEach(() => {
+    ghMock.mockReset();
+    gitMock.mockReset();
+    gitMock.mockResolvedValue({
+      stdout: 'git@github.com:acme/widgets.git',
+      stderr: '',
+      exitCode: 0,
+    });
+  });
+
+  it('maps isInMergeQueue onto PrMeta', async () => {
+    ghMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        number: 42,
+        title: 'Queue me',
+        url: 'https://github.com/acme/widgets/pull/42',
+        state: 'OPEN',
+        isDraft: false,
+        reviewDecision: 'APPROVED',
+        baseRefName: 'main',
+        headRefName: 'feat/queue',
+        isInMergeQueue: true,
+        mergeStateStatus: 'CLEAN',
+      }),
+      stderr: '',
+      exitCode: 0,
+    });
+    await expect(getPrMeta('/tmp/wt', '42')).resolves.toMatchObject({
+      number: 42,
+      state: 'OPEN',
+      isInMergeQueue: true,
+    });
   });
 });

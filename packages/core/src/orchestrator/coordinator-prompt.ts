@@ -55,9 +55,12 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Discover:',
   '- list_workspaces — registered repos (path + github slug when known)',
   '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces (issues: Linear API or GitHub Issues)',
+  '- list_teams / slack_list_channels / slack_list_users / slack_search / slack_read / slack_post — Slack workspaces from Account settings; pass team_id from list_teams',
+  '- Slack notify (only when the user asks): list_teams → slack_list_users or slack_list_channels → slack_post with to=@user or #channel and optional github_url (PR, blob permalink, or review/issue comment). Do not notify proactively.',
   '- get_pr_stack / open_pr_stack_layers / add_stack_layer / create_pr_stack — GitHub stacked PRs (`gh stack`); one worktree per layer',
   '- list_models — only when you need a specific model (rare); otherwise omit model so Account defaults apply',
   '- list_threads / get_thread — fleet status (what is going on)',
+  '- set_caffeinate — keep this Mac awake across turns (macOS caffeinate). Turn on for Slack / away-from-keyboard work. Turn OFF when the user says they are done, wrapping up, going to sleep, or no longer need the machine awake.',
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
   'Worktree threads (chats):',
@@ -109,6 +112,7 @@ export function coordinatorTurnReminder(opts: {
     '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn.',
     '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn → draft PR.',
     '- When naming threads for the user, link them as `[Title](sideboard://thread/<id>)`.',
+    '- If they will wait on Slack or leave the Mac, call set_caffeinate enabled=true. When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -198,21 +202,28 @@ export function coordinatorSystemPrompt(opts: {
   goal: string;
   parentId: string;
   workspaces: WorkspaceInventoryEntry[];
-  /** cloud = Brightsy reply framing; desktop = local Orchestration chat */
-  audience?: 'cloud' | 'desktop';
+  /** cloud = Brightsy reply framing; slack = Sideboard Slack app; desktop = local Orchestration chat */
+  audience?: 'cloud' | 'slack' | 'desktop';
 }): string {
   const audience = opts.audience ?? 'cloud';
   const reposDir = sideboardReposDir();
   const intro =
     audience === 'cloud'
       ? [
-          'You are a Sideboard coordinator responding to a request from a Brightsy cloud agent (Slack, Discord, Teams, or other chat).',
+          'You are a Sideboard coordinator responding to a request from a Brightsy cloud agent (Discord, Teams, or other chat).',
           'Your reply will be sent back to that cloud agent — be concise and actionable.',
         ]
-      : [
-          'You are a Sideboard orchestration agent: you oversee worktree agents across registered workspaces in the Sideboard app.',
-          'Stay concise and actionable; prefer Sideboard MCP for fleet status; use Bash for greenfield repo setup and inspecting target worktree paths.',
-        ];
+      : audience === 'slack'
+        ? [
+            'You are a Sideboard coordinator responding to a Slack DM or @mention via the Sideboard Slack app.',
+            'Your reply will be posted back in Slack — be concise and actionable.',
+            'Sideboard signs the Slack reply with this Mac\'s destination name (Personal / Work). Do not prefix that name yourself.',
+            'Call set_caffeinate enabled=true when they start a stretch of remote work so the Mac stays awake. Call set_caffeinate enabled=false when they say they are done, wrapping up, or going to sleep.',
+          ]
+        : [
+            'You are a Sideboard orchestration agent: you oversee worktree agents across registered workspaces in the Sideboard app.',
+            'Stay concise and actionable; prefer Sideboard MCP for fleet status; use Bash for greenfield repo setup and inspecting target worktree paths.',
+          ];
 
   return [
     ...intro,

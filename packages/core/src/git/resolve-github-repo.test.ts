@@ -139,7 +139,7 @@ describe('ensureGhPreferOrigin', () => {
     expect(ghMock).toHaveBeenCalledWith(
       ['repo', 'set-default', 'origin'],
       '/tmp/storycycle',
-      { reject: false },
+      { reject: false, timeoutMs: 15_000 },
     );
   });
 

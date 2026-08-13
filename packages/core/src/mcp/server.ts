@@ -15,6 +15,7 @@ import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
+import { registerSlackTools } from './slack-tools.js';
 
 const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
@@ -266,7 +267,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'present_schema',
-    'Open Sideboard’s schema-driven CMS side column (filterable table and/or form). Pass JSON Schema + schemaUi (Brightsy extensions supported). Use datasource=brightsy with resource_id (record type UUID) when logged into Brightsy; use datasource=inline with embedded resource/records for any other source.',
+    'Open Sideboard’s schema-driven side column (filterable table and/or form). Pass JSON Schema + optional schemaUi. Prefer datasource=inline with embedded resource/records. Use datasource=brightsy with resource_id only when the user is logged into Brightsy.',
     {
       title: z.string().describe('Pane title'),
       mode: z
@@ -341,12 +342,62 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
+  registerSlackTools(server);
+
   if (sideboardMcpProfile() !== 'worktree') {
+  const { getCaffeinateHold, setCaffeinateHold } = await import(
+    '../store/caffeinate-hold.js'
+  );
   const { resolveNewThreadOptions, resolveThreadDefaults } = await import(
     '../store/app-settings.js'
   );
   const accountDefaults = resolveThreadDefaults();
   const accountDefaultsHint = `Account defaults: agent=${accountDefaults.agent}, model=${accountDefaults.model?.trim() || 'Auto'}, effort=${accountDefaults.effort}`;
+
+  server.tool(
+    'set_caffeinate',
+    'Keep this Mac awake with caffeinate (like Claude Code) across turns — independent of Settings toggles. Turn ON when the user will be away from the keyboard, is driving work from Slack, or asks you to keep the machine awake. Turn OFF when they say they are done, wrapping up, going to sleep, or no longer need the Mac awake. macOS only.',
+    {
+      enabled: z
+        .boolean()
+        .describe('true = hold caffeinate on; false = release and let the Mac sleep'),
+    },
+    async ({ enabled }) => {
+      const state = setCaffeinateHold(enabled);
+      if (enabled && !state.held) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ...state,
+                ok: false,
+                message:
+                  state.platform === 'darwin'
+                    ? 'Could not start caffeinate.'
+                    : 'Caffeinate is macOS only.',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              ...getCaffeinateHold(),
+              ok: true,
+              message: state.held
+                ? 'Mac will stay awake until you call set_caffeinate with enabled=false (or the user says they are done).'
+                : 'Caffeinate hold released. The Mac can sleep (unless Settings caffeinate toggles are on).',
+            }),
+          },
+        ],
+      };
+    },
+  );
 
   server.tool(
     'create_thread',
@@ -596,7 +647,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'archive_thread',
-    'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Cannot archive the cloud coordinator — use the Sideboard UI for that.',
+    'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Coordinators open PRs only by asking the worktree agent.',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
@@ -782,7 +833,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fork_chat',
-    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Remote coordinators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
+    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Slack / Global orchestrators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
     {
       ref: z.string().describe('Thread id/ref to fork (worktree agent or orchestration chat)'),
       through_index: z

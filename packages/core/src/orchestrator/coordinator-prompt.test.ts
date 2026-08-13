@@ -57,6 +57,7 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('create_thread');
     expect(prompt).toContain('Account defaults');
     expect(prompt).toContain('list_models');
+    expect(prompt).toContain('set_caffeinate');
     expect(prompt).toContain('fork_worktree');
     expect(prompt).toContain('fork_chat');
     expect(prompt).toMatch(/orchestration chat/i);
@@ -83,6 +84,17 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('add_workspace');
     expect(prompt).toContain('sideboard/repos');
     expect(prompt).toContain('sideboard://thread/');
+  });
+
+  it('slack audience tells the coordinator not to sign the destination name', () => {
+    const prompt = coordinatorSystemPrompt({
+      goal: 'Ship the feature',
+      parentId: 'parent-1',
+      audience: 'slack',
+      workspaces: [],
+    });
+    expect(prompt).toContain('Slack DM or @mention');
+    expect(prompt).toContain('Do not prefix that name yourself');
   });
 
   it('cloud audience keeps Brightsy reply framing', () => {
@@ -114,6 +126,7 @@ describe('coordinator-prompt', () => {
     expect(text).toContain('New repo');
     expect(text).toContain('add_workspace');
     expect(text).toContain('sideboard://thread/');
+    expect(text).toContain('set_caffeinate');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
@@ -135,6 +148,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
       expect(claude).toContain('parentThreadId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
       expect(agents).toContain('Sideboard MCP');
+      expect(agents).toContain('set_caffeinate');
       expect(agents).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
 
       // reconcile-style rewrite without an id must keep the prior uuid

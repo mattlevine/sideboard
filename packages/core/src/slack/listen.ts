@@ -1,0 +1,441 @@
+import type { AgentKind } from '../types/thread.js';
+import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
+import { getOrchestrator } from '../orchestrator/orchestrator.js';
+import {
+  enrichWorkspacesWithGithub,
+} from '../orchestrator/coordinator-prompt.js';
+import {
+  ensureSlackDeviceIdentity,
+  getDefaultAgent,
+} from '../store/app-settings.js';
+import { ensureSlackCoordinator } from '../store/global-workspace.js';
+import { readThread } from '../store/thread-store.js';
+import { SlackApiError, slackApi } from './api.js';
+import {
+  isSlackStopCommand,
+  type SlackInboundMessage,
+  type SlackSocketModeOptions,
+} from './socket-mode.js';
+import { listSlackWorkspacesRaw, slackTokenFor } from './workspaces.js';
+import { getSlackReplyTarget, setSlackReplyTarget } from './reply-target.js';
+import { slackRelayUrl } from './baked-app.js';
+import { runSlackRelayClient } from './relay-client.js';
+
+export {
+  inboundFromSocketFrame,
+  isSlackStopCommand,
+  parseSlackSocketFrame,
+  runSlackSocketMode,
+  stripSlackMentions,
+} from './socket-mode.js';
+export type { SlackInboundMessage } from './socket-mode.js';
+
+export const SLACK_LISTEN_BUSY_REPLY = [
+  'Sideboard is busy with an in-progress turn.',
+  'I did not start a new request.',
+  'Send "stop" to interrupt, or try again when idle.',
+].join(' ');
+
+export const SLACK_LISTEN_STOPPED_REPLY =
+  'Sideboard stopped the in-progress turn. Send another message when you want to continue.';
+
+export const SLACK_LISTEN_TIMEOUT_REPLY = [
+  'Sideboard timed out waiting for the local agent turn to finish.',
+  'Send "stop" to interrupt, or try again.',
+].join(' ');
+
+/** Serialize inbound Slack handling so busy checks cannot interleave. */
+let handleChain: Promise<void> = Promise.resolve();
+
+function enqueueHandle(fn: () => Promise<void>): Promise<void> {
+  const run = handleChain.then(fn, fn);
+  handleChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+export interface SlackListenOptions {
+  agent?: AgentKind;
+  signal?: AbortSignal;
+  onLog?: (line: string) => void;
+  /** Override hosted relay URL (tests / local relay). */
+  relayUrl?: string;
+  fetchImpl?: typeof fetch;
+  WebSocketImpl?: SlackSocketModeOptions['WebSocketImpl'];
+  /** Tests: handle without talking to Slack Web API. */
+  postReply?: (msg: SlackInboundMessage, text: string) => Promise<void>;
+  /** Tests: ack reactions without talking to Slack Web API. */
+  addReaction?: (msg: SlackInboundMessage, name: string) => Promise<void>;
+}
+
+function refreshWorkspaces() {
+  return getOrchestrator().listWorkspaces();
+}
+
+export function formatSlackInboundPrompt(msg: SlackInboundMessage): string {
+  const kind = msg.kind === 'mention' ? 'Slack @mention' : 'Slack DM';
+  return `${kind}\n\n${msg.text}`;
+}
+
+/** True when the last coordinator user message was injected from Slack Listen. */
+export function isSlackInboundUserPrompt(text: string): boolean {
+  return text.startsWith('Slack DM\n') || text.startsWith('Slack @mention\n');
+}
+
+/**
+ * Prefix Slack replies with This Mac's destination (`Work: …`) so a user with
+ * more than one device can see who answered and address follow-ups the same way.
+ */
+export function formatSlackSignedReply(deviceLabel: string, text: string): string {
+  const label = deviceLabel.trim();
+  const body = text.trim();
+  if (!body) return body;
+  if (!label) return body;
+  const head = `${label}:`;
+  if (body.slice(0, head.length).toLowerCase() === head.toLowerCase()) {
+    return body;
+  }
+  return `${label}: ${body}`;
+}
+
+function signForThisMac(text: string): string {
+  return formatSlackSignedReply(ensureSlackDeviceIdentity().deviceLabel, text);
+}
+
+/**
+ * Top-level DMs stay in the main conversation. Mentions and already-threaded
+ * messages reply in-thread so Slack does not hide the answer.
+ */
+export function slackReplyThreadTs(msg: SlackInboundMessage): string | undefined {
+  if (msg.threadTs && msg.threadTs !== msg.ts) return msg.threadTs;
+  if (msg.kind === 'mention') return msg.ts;
+  return undefined;
+}
+
+/** Slack emoji short name for “seen / got it”. */
+export const SLACK_SEEN_REACTION = '+1';
+
+function writeTokenForTeam(teamId: string): string {
+  const workspaces = listSlackWorkspacesRaw();
+  const ws = workspaces.find((w) => w.team_id === teamId);
+  if (!ws) {
+    const connected = workspaces
+      .map((w) => `${w.team_name} (${w.team_id})`)
+      .join(', ');
+    throw new Error(
+      connected
+        ? `No connected Slack workspace for team ${teamId}. Connected: ${connected}`
+        : `No connected Slack workspace for team ${teamId}`,
+    );
+  }
+  return slackTokenFor(ws, 'write');
+}
+
+/** Thumbs-up the inbound message so Slack shows the bot saw it. */
+export async function ackSlackInboundSeen(
+  msg: SlackInboundMessage,
+  opts: Pick<SlackListenOptions, 'addReaction' | 'fetchImpl' | 'onLog'>,
+): Promise<void> {
+  const log = opts.onLog ?? (() => undefined);
+  try {
+    if (opts.addReaction) {
+      await opts.addReaction(msg, SLACK_SEEN_REACTION);
+      return;
+    }
+    await slackApi(
+      writeTokenForTeam(msg.teamId),
+      'reactions.add',
+      {
+        channel: msg.channelId,
+        timestamp: msg.ts,
+        name: SLACK_SEEN_REACTION,
+      },
+      opts.fetchImpl,
+    );
+  } catch (err) {
+    if (err instanceof SlackApiError && err.slackError === 'already_reacted') return;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const hint =
+      err instanceof SlackApiError && err.slackError === 'missing_scope'
+        ? ' — reconnect Slack in Account to grant reactions:write'
+        : '';
+    log(`react error: ${errMsg}${hint}`);
+  }
+}
+
+async function postSlackText(
+  target: { teamId: string; channelId: string; threadTs?: string },
+  text: string,
+  opts: Pick<SlackListenOptions, 'postReply' | 'fetchImpl'>,
+): Promise<void> {
+  const stub: SlackInboundMessage = {
+    teamId: target.teamId,
+    channelId: target.channelId,
+    ts: target.threadTs ?? '',
+    threadTs: target.threadTs,
+    text: '',
+    kind: 'dm',
+  };
+  if (opts.postReply) {
+    await opts.postReply(stub, text);
+    return;
+  }
+  const token = writeTokenForTeam(target.teamId);
+  await slackApi(
+    token,
+    'chat.postMessage',
+    {
+      channel: target.channelId,
+      text,
+      thread_ts: target.threadTs,
+    },
+    opts.fetchImpl,
+  );
+}
+
+async function postSlackReply(
+  msg: SlackInboundMessage,
+  text: string,
+  opts: Pick<SlackListenOptions, 'postReply' | 'fetchImpl'>,
+): Promise<void> {
+  await postSlackText(
+    {
+      teamId: msg.teamId,
+      channelId: msg.channelId,
+      threadTs: slackReplyThreadTs(msg),
+    },
+    signForThisMac(text),
+    opts,
+  );
+}
+
+const lastRelayed = new Map<string, string>();
+
+function markRelayed(threadId: string, text: string): void {
+  lastRelayed.set(threadId, `${threadId}:${text}`);
+}
+
+function alreadyRelayed(threadId: string, text: string): boolean {
+  return lastRelayed.get(threadId) === `${threadId}:${text}`;
+}
+
+/**
+ * Desktop follow-ups on a Slack-linked coordinator. Inbound Slack turns post
+ * after waitForTurn so this does not double-send (or race with empty text).
+ */
+async function relayCoordinatorReplyToSlack(
+  threadId: string,
+  opts: SlackListenOptions,
+): Promise<void> {
+  const target = getSlackReplyTarget(threadId);
+  if (!target) return;
+  const thread = readThread(threadId);
+  const lastUser = thread
+    ? [...thread.messages].reverse().find((m) => m.role === 'user')
+    : undefined;
+  if (lastUser && isSlackInboundUserPrompt(lastUser.text)) return;
+  const result = getOrchestrator().getTurnResult(threadId);
+  const text = result.text.trim();
+  if (!text) return;
+  if (alreadyRelayed(threadId, text)) return;
+  markRelayed(threadId, text);
+  const log = opts.onLog ?? (() => undefined);
+  try {
+    await postSlackText(target, signForThisMac(text), opts);
+    log(`replied ${target.threadTs ?? target.channelId} (${text.length} chars)`);
+  } catch (err) {
+    lastRelayed.delete(threadId);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    log(`relay error: ${errMsg}`);
+  }
+}
+
+export async function handleSlackInbound(
+  msg: SlackInboundMessage,
+  opts: SlackListenOptions,
+): Promise<void> {
+  const log = opts.onLog ?? (() => undefined);
+  await ackSlackInboundSeen(msg, opts);
+  const agent = coerceOrchestratorAgent(opts.agent ?? getDefaultAgent());
+  const workspaces = refreshWorkspaces();
+  for (const ws of workspaces) {
+    await getOrchestrator().reconcile(ws.path).catch(() => undefined);
+  }
+  const inventory = await enrichWorkspacesWithGithub(workspaces);
+  const userId = msg.userId?.trim();
+  if (!userId) {
+    log(`skip ${msg.kind} ${msg.ts}: missing Slack user id`);
+    return;
+  }
+  const coordinator = ensureSlackCoordinator(msg.teamId, userId, agent);
+  const fresh = readThread(coordinator.id) ?? coordinator;
+
+  if (isSlackStopCommand(msg.text)) {
+    try {
+      getOrchestrator().stop(fresh.id);
+      log(`stop ${msg.kind} ${msg.ts} → coordinator ${fresh.id.slice(0, 8)}`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log(`stop ${msg.ts}: ${errMsg}`);
+    }
+    await postSlackReply(msg, SLACK_LISTEN_STOPPED_REPLY, opts);
+    log(`replied stopped ${msg.ts}`);
+    return;
+  }
+
+  if (fresh.status === 'running' || fresh.status === 'queued') {
+    log(`busy ${msg.kind} ${msg.ts} → coordinator ${fresh.id.slice(0, 8)} (${fresh.status})`);
+    await postSlackReply(msg, SLACK_LISTEN_BUSY_REPLY, opts);
+    log(`replied busy ${msg.ts}`);
+    return;
+  }
+
+  log(
+    `run ${msg.kind} ${msg.ts} user ${userId} → coordinator ${fresh.id.slice(0, 8)} (${inventory.length} workspace${inventory.length === 1 ? '' : 's'})`,
+  );
+
+  const prompt = formatSlackInboundPrompt(msg);
+  setSlackReplyTarget({
+    threadId: fresh.id,
+    teamId: msg.teamId,
+    channelId: msg.channelId,
+    threadTs: slackReplyThreadTs(msg),
+  });
+
+  const orch = getOrchestrator();
+  let reply: string;
+  try {
+    await orch.send(fresh.id, prompt);
+    await orch.waitForTurn(fresh.id, 14 * 60 * 1000);
+    reply = orch.getTurnResult(fresh.id).text.trim();
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const timedOut = /timed out|timeout/i.test(errMsg);
+    const errorReply = timedOut
+      ? SLACK_LISTEN_TIMEOUT_REPLY
+      : `Sideboard coordinator error: ${errMsg}`;
+    await postSlackReply(msg, errorReply, opts).catch((postErr) => {
+      const postMsg = postErr instanceof Error ? postErr.message : String(postErr);
+      log(`post error: ${postMsg}`);
+    });
+    log(`replied error ${msg.ts}: ${errMsg}`);
+    if (!timedOut) throw err;
+    return;
+  }
+
+  if (!reply) {
+    log(`post error: no agent text to send for ${msg.ts}`);
+    return;
+  }
+  if (alreadyRelayed(fresh.id, reply)) {
+    log(`turn finished ${msg.ts} (already posted)`);
+    return;
+  }
+  try {
+    await postSlackReply(msg, reply, opts);
+    markRelayed(fresh.id, reply);
+    log(`replied ${msg.ts} (${reply.length} chars)`);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    log(`post error: ${errMsg}`);
+  }
+}
+
+function ownedSlackUserKeys(): Set<string> {
+  const keys = new Set<string>();
+  for (const w of listSlackWorkspacesRaw()) {
+    const team = w.team_id?.trim();
+    const user = w.user_id?.trim();
+    if (team && user) keys.add(`${team}:${user}`);
+  }
+  return keys;
+}
+
+/**
+ * Only handle Slack events for Slack users who connected this Sideboard
+ * (OAuth authed_user). Other people messaging the bot must run their own Mac.
+ */
+export function isInboundForThisDesktop(msg: SlackInboundMessage): boolean {
+  const userId = msg.userId?.trim();
+  if (!userId) return false;
+  const owned = ownedSlackUserKeys();
+  return owned.has(`${msg.teamId.trim()}:${userId}`);
+}
+
+/**
+ * Sideboard-native Slack inbound via the hosted relay.
+ * The Mac never holds an app-level `xapp-` token.
+ */
+export async function runSlackListen(opts: SlackListenOptions = {}): Promise<void> {
+  const log = opts.onLog ?? console.log;
+  const connected = listSlackWorkspacesRaw();
+  const orch = getOrchestrator();
+  const off = orch.on((event) => {
+    if (event.type !== 'turn_finished') return;
+    void relayCoordinatorReplyToSlack(event.threadId, opts);
+  });
+
+  const onInbound = (msg: SlackInboundMessage) =>
+    enqueueHandle(async () => {
+      if (!isInboundForThisDesktop(msg)) {
+        log(
+          `skip ${msg.kind} ${msg.ts}: Slack user ${msg.userId ?? '?'} is not connected on this Mac`,
+        );
+        return;
+      }
+      await handleSlackInbound(msg, opts);
+    });
+
+  try {
+    const relay = (opts.relayUrl ?? slackRelayUrl()).trim();
+    if (!relay) {
+      throw new Error('Slack Listen needs the hosted relay URL.');
+    }
+    const withIdentity = connected.filter(
+      (w) => w.bot_token?.trim() && w.user_token?.trim() && w.user_id?.trim(),
+    );
+    if (withIdentity.length === 0) {
+      throw new Error(
+        'Slack Listen needs Add via browser (bot token + your Slack user id). Paste-only bot tokens cannot prove which Slack user owns this Mac.',
+      );
+    }
+    const device = ensureSlackDeviceIdentity();
+    log(
+      `Relay listen · ${device.deviceLabel} · ${withIdentity.length} workspace${withIdentity.length === 1 ? '' : 's'} as Slack user: ${withIdentity.map((w) => `${w.team_name}/${w.user_id}`).join(', ')}`,
+    );
+    await runSlackRelayClient({
+      url: relay,
+      signal: opts.signal,
+      onLog: log,
+      WebSocketImpl: opts.WebSocketImpl,
+      deviceId: device.deviceId,
+      deviceLabel: device.deviceLabel,
+      workspaces: withIdentity.map((w) => ({
+        teamId: w.team_id,
+        userId: w.user_id!.trim(),
+        botToken: w.bot_token!.trim(),
+        userToken: w.user_token!.trim(),
+      })),
+      onEvent: onInbound,
+    });
+  } finally {
+    off();
+  }
+}
+
+/** How Listen will receive Slack events on this machine. */
+export function resolveSlackListenMode(opts?: {
+  relayUrl?: string | null;
+  workspaceCount?: number;
+}): 'relay' | null {
+  const relay = (opts?.relayUrl ?? slackRelayUrl()).trim();
+  const count =
+    opts?.workspaceCount ??
+    listSlackWorkspacesRaw().filter(
+      (w) => w.bot_token?.trim() && w.user_token?.trim() && w.user_id?.trim(),
+    ).length;
+  if (relay && count > 0) return 'relay';
+  return null;
+}

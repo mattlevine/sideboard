@@ -1,0 +1,66 @@
+# Sideboard Slack app manifest.
+# Create: https://api.slack.com/apps → Create New App → From a manifest → paste this file.
+# After create: Basic Information → App-Level Tokens → Generate with connections:write (xapp-…).
+# App icon: upload docs/slack-app-icon.png (512×512) under Basic Information → Display Information.
+# Manifests cannot include the xapp- token or the icon file.
+
+display_information:
+  name: Sideboard
+  description: Drive Sideboard agents from Slack DMs and @mentions.
+  background_color: "#111827"
+  long_description: >-
+    Sideboard is a local control plane for AI coding agents. This Slack app sends
+    DMs and @mentions to the Sideboard orchestrator on your machine and posts
+    replies back in-thread. It also lets agents list channels, search, read, and
+    post across every Slack workspace you connect in Sideboard Account settings.
+    No public Event URL — inbound uses Socket Mode.
+
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Sideboard
+    always_online: true
+
+oauth_config:
+  redirect_urls:
+    - http://127.0.0.1:19847/callback
+  scopes:
+    bot:
+      - app_mentions:read
+      - channels:history
+      - channels:read
+      - chat:write
+      - chat:write.public
+      - reactions:write
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - im:write
+      - mpim:history
+      - mpim:read
+      - team:read
+      - users:read
+      - users:read.email
+    user:
+      - channels:history
+      - channels:read
+      - chat:write
+      - groups:history
+      - im:history
+      - mpim:history
+      - search:read
+      - users:read
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.im
+      - message.mpim

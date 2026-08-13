@@ -98,6 +98,28 @@ describe('pr pill status', () => {
       }),
     ).toBe('approved');
   });
+
+  it('shows Queued when the PR is in a GitHub merge queue', () => {
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: 'APPROVED',
+        inMergeQueue: true,
+      }),
+    ).toBe('Queued');
+    expect(
+      prPillModifier({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: 'APPROVED',
+        mergeConflicts: true,
+        inMergeQueue: true,
+      }),
+    ).toBe('queued');
+  });
 });
 
 describe('hasMergeConflictChecks', () => {

@@ -48,7 +48,7 @@ pnpm --filter @sideboard-ai/desktop typecheck
 ## Where to contribute
 
 - **New coding agent** — see [docs/agent-adapters.md](docs/agent-adapters.md)
-- **Remote chat bridges (Slack, etc.)** — use CLI/MCP; see [create your own Slack connector](docs/remote-integrations.md). Brightsy’s cloud path is one optional consumer, not required.
+- **Remote chat (Slack)** — built-in [Sideboard Slack](README.md#slack) (each Mac is a destination).
 - **MCP tools** — `packages/core/src/mcp/`
 - **CLI commands** — `packages/cli/src/`
 - **Board UI** — `apps/desktop/src/renderer/`

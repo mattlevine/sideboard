@@ -40,6 +40,12 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_files',
   'mcp__sideboard__ask_user',
   'mcp__sideboard__present_plan',
+  'mcp__sideboard__list_teams',
+  'mcp__sideboard__slack_list_channels',
+  'mcp__sideboard__slack_list_users',
+  'mcp__sideboard__slack_search',
+  'mcp__sideboard__slack_read',
+  'mcp__sideboard__slack_post',
 ] as const;
 
 /** Legacy single-server allow list (CLI ~/.brightsy fallback). */

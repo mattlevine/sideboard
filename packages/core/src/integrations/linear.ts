@@ -1,5 +1,5 @@
 import type { IssueInfo } from '../types/thread.js';
-import { getLinearApiKey } from '../store/app-settings.js';
+import { getLinearAuthToken, linearAuthorizationHeader } from './linear-oauth.js';
 
 const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
 
@@ -33,14 +33,14 @@ type LinearIssueNode = {
 
 /**
  * List open issues assigned to the authenticated Linear user via GraphQL.
- * Uses Sideboard-stored API key (Account → Linear), not agent MCP.
+ * Uses Sideboard-stored OAuth token or API key (Account → Linear), not agent MCP.
  */
 export async function listLinearIssuesDirect(
   opts?: { limit?: number; apiKey?: string | null },
 ): Promise<IssueInfo[]> {
-  const apiKey = (opts?.apiKey ?? getLinearApiKey())?.trim();
+  const apiKey = (opts?.apiKey ?? (await getLinearAuthToken()))?.trim();
   if (!apiKey) {
-    throw new Error('Linear is not connected — add an API key in Account settings');
+    throw new Error('Linear is not connected — sign in from Account settings');
   }
 
   const first = Math.max(1, Math.min(100, opts?.limit ?? 50));
@@ -48,7 +48,7 @@ export async function listLinearIssuesDirect(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: apiKey,
+      Authorization: linearAuthorizationHeader(apiKey),
     },
     body: JSON.stringify({
       query: ASSIGNED_ISSUES_QUERY,

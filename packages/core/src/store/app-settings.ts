@@ -1,9 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 import type { AgentKind } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { appDataDir } from './paths.js';
+import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
+import { loadSecretVault, saveSecretVault } from './secret-vault.js';
 
 /** Well-known env keys managed from Settings → Agents (Conductor-style harnesses). */
 export const HARNESS_ENV_KEYS = {
@@ -62,7 +65,7 @@ export type BrightsyCloudConnectAgent =
   | 'opencode'
   | 'cursor';
 
-/** Brightsy cloud remote-orchestrator preferences (Slack / Discord / Teams). */
+/** Brightsy cloud remote-orchestrator preferences. */
 export interface BrightsyHarnessSettings {
   /** Absolute path to the Brightsy CLI. Empty/omitted = `brightsy` on PATH. */
   executablePath?: string;
@@ -83,16 +86,48 @@ export type IssueSource = 'linear' | 'github';
 
 /**
  * Sideboard-owned third-party connections (Account / Integrations).
- * GitHub uses machine `gh` auth; Linear uses a stored API key.
+ * GitHub uses machine `gh` auth; Linear uses OAuth (or a stored API key).
  */
 export interface IntegrationsSettings {
-  /** Linear personal API key (https://linear.app/settings/api). */
+  /** Linear personal API key (https://linear.app/settings/api). Fallback when OAuth is unused. */
   linearApiKey?: string;
+  /** Linear OAuth access token (Account → Linear → Connect via browser). */
+  linearAccessToken?: string;
+  /** Linear OAuth refresh token (rotated on each refresh). */
+  linearRefreshToken?: string;
+  /** Epoch ms when {@link IntegrationsSettings.linearAccessToken} expires. */
+  linearTokenExpiresAt?: number;
+  /** Linear OAuth app Client ID override (else baked / env). */
+  linearClientId?: string;
+  /** Linear OAuth app Client Secret override (optional with PKCE). */
+  linearClientSecret?: string;
+  /** Display name of the connected Linear user (non-secret). */
+  linearViewerName?: string;
+  /** Display name of the connected Linear workspace (non-secret). */
+  linearOrganizationName?: string;
   /**
    * Preferred issue source for Create-from / Link issue (default: GitHub).
-   * When `linear` but no API key, runtime falls back to GitHub Issues.
+   * When `linear` but not connected, runtime falls back to GitHub Issues.
    */
   issueSource?: IssueSource;
+  /** Slack app Client ID for browser OAuth (Account → Slack). */
+  slackClientId?: string;
+  /** Slack app Client Secret for browser OAuth. */
+  slackClientSecret?: string;
+  /**
+   * Slack app-level token (`xapp-…`, `connections:write`) for Socket Mode listen.
+   * App-wide — not per workspace.
+   */
+  slackAppToken?: string;
+  /** When true, desktop/CLI listen for Slack DMs and @mentions via Socket Mode. */
+  slackListenEnabled?: boolean;
+  /**
+   * Stable per-Mac id for the Slack relay (Personal vs Work can both stay online).
+   * Generated once; do not copy between machines.
+   */
+  slackDeviceId?: string;
+  /** Human label for this Mac destination, e.g. Personal / Work. */
+  slackDeviceLabel?: string;
 }
 
 /**
@@ -118,8 +153,12 @@ export interface AdvancedAppSettings {
    */
   caffeinateWhileRunning?: boolean;
   /**
-   * Keep the Mac awake with `caffeinate` while Brightsy cloud connect is listening
-   * (so Slack/Discord/Teams tasks can be polled). Default off.
+   * Keep the Mac awake with `caffeinate` while Slack Listen is connected
+   * (so Personal/Work stay reachable with the lid closed on AC). Default off.
+   */
+  caffeinateWhileSlackListen?: boolean;
+  /**
+   * @deprecated Prefer `caffeinateWhileSlackListen`. Still read on load for migration.
    */
   caffeinateWhileCloudConnect?: boolean;
   /**
@@ -164,7 +203,7 @@ export interface AppSettings {
   codex: CliExecutableSettings;
   /** OpenCode CLI executable override. */
   opencode: CliExecutableSettings;
-  /** Brightsy cloud connect preferences (Slack / Discord / Teams). */
+  /** Brightsy cloud connect preferences. */
   brightsy: BrightsyHarnessSettings;
   /** GitHub / Linear connections and issue-source preference. */
   integrations: IntegrationsSettings;
@@ -172,6 +211,65 @@ export interface AppSettings {
   defaults: DefaultsAppSettings;
   /** Power-user / Conductor-style advanced preferences. */
   advanced: AdvancedAppSettings;
+}
+
+/** Integrations fields safe to send to the renderer (no token values). */
+export type PublicIntegrationsSettings = Omit<
+  IntegrationsSettings,
+  | 'linearApiKey'
+  | 'linearAccessToken'
+  | 'linearRefreshToken'
+  | 'linearClientSecret'
+  | 'slackClientSecret'
+  | 'slackAppToken'
+> & {
+  /** True when Linear is connected (OAuth or API key). */
+  hasLinearApiKey: boolean;
+  hasLinearOAuth: boolean;
+  hasSlackClientSecret: boolean;
+  hasSlackAppToken: boolean;
+};
+
+/** Settings payload for the desktop UI. Secret values are omitted. */
+export type PublicAppSettings = Omit<AppSettings, 'integrations'> & {
+  integrations: PublicIntegrationsSettings;
+};
+
+function hasLinearOAuth(integrations: IntegrationsSettings): boolean {
+  return Boolean(
+    integrations.linearAccessToken?.trim() || integrations.linearRefreshToken?.trim(),
+  );
+}
+
+function hasLinearCredentials(integrations: IntegrationsSettings): boolean {
+  return Boolean(integrations.linearApiKey?.trim()) || hasLinearOAuth(integrations);
+}
+
+export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
+  const environment: Record<string, string> = {};
+  for (const key of Object.keys(settings.environment)) {
+    if (key.trim()) environment[key] = '';
+  }
+  const integrations: IntegrationsSettings = { ...settings.integrations };
+  const slackClientSecret = integrations.slackClientSecret;
+  const slackAppToken = integrations.slackAppToken;
+  delete integrations.linearApiKey;
+  delete integrations.linearAccessToken;
+  delete integrations.linearRefreshToken;
+  delete integrations.linearClientSecret;
+  delete integrations.slackClientSecret;
+  delete integrations.slackAppToken;
+  return {
+    ...settings,
+    environment,
+    integrations: {
+      ...integrations,
+      hasLinearApiKey: hasLinearCredentials(settings.integrations),
+      hasLinearOAuth: hasLinearOAuth(settings.integrations),
+      hasSlackClientSecret: Boolean(slackClientSecret?.trim()),
+      hasSlackAppToken: Boolean(slackAppToken?.trim()),
+    },
+  };
 }
 
 export function appSettingsPath(): string {
@@ -248,11 +346,64 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
     const key = source.linearApiKey.trim();
     if (key) out.linearApiKey = key;
   }
+  if (typeof source.linearAccessToken === 'string') {
+    const token = source.linearAccessToken.trim();
+    if (token) out.linearAccessToken = token;
+  }
+  if (typeof source.linearRefreshToken === 'string') {
+    const token = source.linearRefreshToken.trim();
+    if (token) out.linearRefreshToken = token;
+  }
+  if (typeof source.linearTokenExpiresAt === 'number' && Number.isFinite(source.linearTokenExpiresAt)) {
+    out.linearTokenExpiresAt = source.linearTokenExpiresAt;
+  } else if (typeof source.linearTokenExpiresAt === 'string') {
+    const n = Number(source.linearTokenExpiresAt);
+    if (Number.isFinite(n)) out.linearTokenExpiresAt = n;
+  }
+  if (typeof source.linearClientId === 'string') {
+    const id = source.linearClientId.trim();
+    if (id) out.linearClientId = id;
+  }
+  if (typeof source.linearClientSecret === 'string') {
+    const secret = source.linearClientSecret.trim();
+    if (secret) out.linearClientSecret = secret;
+  }
+  if (typeof source.linearViewerName === 'string') {
+    const name = source.linearViewerName.trim().slice(0, 120);
+    if (name) out.linearViewerName = name;
+  }
+  if (typeof source.linearOrganizationName === 'string') {
+    const name = source.linearOrganizationName.trim().slice(0, 120);
+    if (name) out.linearOrganizationName = name;
+  }
   if (
     typeof source.issueSource === 'string' &&
     ISSUE_SOURCES.has(source.issueSource as IssueSource)
   ) {
     out.issueSource = source.issueSource as IssueSource;
+  }
+  if (typeof source.slackClientId === 'string') {
+    const id = source.slackClientId.trim();
+    if (id) out.slackClientId = id;
+  }
+  if (typeof source.slackClientSecret === 'string') {
+    const secret = source.slackClientSecret.trim();
+    if (secret) out.slackClientSecret = secret;
+  }
+  if (typeof source.slackAppToken === 'string') {
+    const token = source.slackAppToken.trim();
+    if (token) out.slackAppToken = token;
+  }
+  if (typeof source.slackListenEnabled === 'boolean') {
+    out.slackListenEnabled = source.slackListenEnabled;
+  }
+  if (typeof source.slackDeviceId === 'string') {
+    const id = source.slackDeviceId.trim();
+    if (id) out.slackDeviceId = id;
+  }
+  if (typeof source.slackDeviceLabel === 'string') {
+    const label = source.slackDeviceLabel.trim().slice(0, 64);
+    if (label) out.slackDeviceLabel = label;
   }
   return out;
 }
@@ -293,8 +444,11 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   if (typeof source.caffeinateWhileRunning === 'boolean') {
     out.caffeinateWhileRunning = source.caffeinateWhileRunning;
   }
-  if (typeof source.caffeinateWhileCloudConnect === 'boolean') {
-    out.caffeinateWhileCloudConnect = source.caffeinateWhileCloudConnect;
+  if (typeof source.caffeinateWhileSlackListen === 'boolean') {
+    out.caffeinateWhileSlackListen = source.caffeinateWhileSlackListen;
+  } else if (typeof source.caffeinateWhileCloudConnect === 'boolean') {
+    // Migrate former Brightsy cloud-connect toggle.
+    out.caffeinateWhileSlackListen = source.caffeinateWhileCloudConnect;
   }
   if (typeof source.deleteBranchOnPurge === 'boolean') {
     out.deleteBranchOnPurge = source.deleteBranchOnPurge;
@@ -407,12 +561,11 @@ const EMPTY_SETTINGS: AppSettings = {
   advanced: {},
 };
 
-export function loadAppSettings(): AppSettings {
+function readSettingsFile(): AppSettings {
   const path = appSettingsPath();
-  if (!existsSync(path)) {
-    return { ...EMPTY_SETTINGS };
-  }
+  if (!existsSync(path)) return { ...EMPTY_SETTINGS };
   try {
+    chmodOwnerOnly(path);
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
     return normalizeSettings(parsed);
   } catch {
@@ -420,10 +573,82 @@ export function loadAppSettings(): AppSettings {
   }
 }
 
+function diskHoldsSecrets(disk: AppSettings): boolean {
+  return Boolean(
+    disk.integrations.linearApiKey ||
+      disk.integrations.linearAccessToken ||
+      disk.integrations.linearRefreshToken ||
+      disk.integrations.linearClientSecret ||
+      disk.integrations.slackClientSecret ||
+      disk.integrations.slackAppToken ||
+      Object.keys(disk.environment).length > 0,
+  );
+}
+
+function mergeVault(disk: AppSettings): AppSettings {
+  const vault = loadSecretVault();
+  const environment = { ...(vault.environment ?? {}), ...disk.environment };
+  const integrations = { ...disk.integrations };
+  if (vault.linearApiKey && !integrations.linearApiKey) {
+    integrations.linearApiKey = vault.linearApiKey;
+  }
+  if (vault.linearAccessToken && !integrations.linearAccessToken) {
+    integrations.linearAccessToken = vault.linearAccessToken;
+  }
+  if (vault.linearRefreshToken && !integrations.linearRefreshToken) {
+    integrations.linearRefreshToken = vault.linearRefreshToken;
+  }
+  if (vault.linearClientSecret && !integrations.linearClientSecret) {
+    integrations.linearClientSecret = vault.linearClientSecret;
+  }
+  if (vault.slackClientSecret && !integrations.slackClientSecret) {
+    integrations.slackClientSecret = vault.slackClientSecret;
+  }
+  if (vault.slackAppToken && !integrations.slackAppToken) {
+    integrations.slackAppToken = vault.slackAppToken;
+  }
+  return { ...disk, environment, integrations };
+}
+
+function persistSplit(settings: AppSettings): void {
+  const integrations: IntegrationsSettings = { ...settings.integrations };
+  const linearApiKey = integrations.linearApiKey;
+  const linearAccessToken = integrations.linearAccessToken;
+  const linearRefreshToken = integrations.linearRefreshToken;
+  const linearClientSecret = integrations.linearClientSecret;
+  const slackClientSecret = integrations.slackClientSecret;
+  const slackAppToken = integrations.slackAppToken;
+  delete integrations.linearApiKey;
+  delete integrations.linearAccessToken;
+  delete integrations.linearRefreshToken;
+  delete integrations.linearClientSecret;
+  delete integrations.slackClientSecret;
+  delete integrations.slackAppToken;
+  writePrivateFile(
+    appSettingsPath(),
+    `${JSON.stringify({ ...settings, environment: {}, integrations }, null, 2)}\n`,
+  );
+  saveSecretVault({
+    linearApiKey,
+    linearAccessToken,
+    linearRefreshToken,
+    linearClientSecret,
+    slackClientSecret,
+    slackAppToken,
+    environment: settings.environment,
+  });
+}
+
+export function loadAppSettings(): AppSettings {
+  const disk = readSettingsFile();
+  const merged = mergeVault(disk);
+  if (diskHoldsSecrets(disk)) persistSplit(merged);
+  return merged;
+}
+
 export function saveAppSettings(settings: AppSettings): AppSettings {
   const normalized = normalizeSettings(settings);
-  mkdirSync(appDataDir(), { recursive: true });
-  writeFileSync(appSettingsPath(), `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+  persistSplit(normalized);
   return normalized;
 }
 
@@ -531,7 +756,15 @@ export function updateOpencodeSettings(
 export function updateIntegrationsSettings(
   patch: {
     linearApiKey?: string | null;
+    linearClientId?: string | null;
+    linearClientSecret?: string | null;
     issueSource?: IssueSource | null;
+    slackClientId?: string | null;
+    slackClientSecret?: string | null;
+    slackAppToken?: string | null;
+    slackListenEnabled?: boolean | null;
+    slackDeviceId?: string | null;
+    slackDeviceLabel?: string | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -543,11 +776,67 @@ export function updateIntegrationsSettings(
       integrations.linearApiKey = patch.linearApiKey.trim();
     }
   }
+  if ('linearClientId' in patch) {
+    if (patch.linearClientId == null || patch.linearClientId.trim() === '') {
+      delete integrations.linearClientId;
+    } else {
+      integrations.linearClientId = patch.linearClientId.trim();
+    }
+  }
+  if ('linearClientSecret' in patch) {
+    if (patch.linearClientSecret == null || patch.linearClientSecret.trim() === '') {
+      delete integrations.linearClientSecret;
+    } else {
+      integrations.linearClientSecret = patch.linearClientSecret.trim();
+    }
+  }
   if ('issueSource' in patch) {
     if (patch.issueSource == null) {
       delete integrations.issueSource;
     } else if (ISSUE_SOURCES.has(patch.issueSource)) {
       integrations.issueSource = patch.issueSource;
+    }
+  }
+  if ('slackClientId' in patch) {
+    if (patch.slackClientId == null || patch.slackClientId.trim() === '') {
+      delete integrations.slackClientId;
+    } else {
+      integrations.slackClientId = patch.slackClientId.trim();
+    }
+  }
+  if ('slackClientSecret' in patch) {
+    if (patch.slackClientSecret == null || patch.slackClientSecret.trim() === '') {
+      delete integrations.slackClientSecret;
+    } else {
+      integrations.slackClientSecret = patch.slackClientSecret.trim();
+    }
+  }
+  if ('slackAppToken' in patch) {
+    if (patch.slackAppToken == null || patch.slackAppToken.trim() === '') {
+      delete integrations.slackAppToken;
+    } else {
+      integrations.slackAppToken = patch.slackAppToken.trim();
+    }
+  }
+  if ('slackListenEnabled' in patch) {
+    if (patch.slackListenEnabled == null) {
+      delete integrations.slackListenEnabled;
+    } else {
+      integrations.slackListenEnabled = Boolean(patch.slackListenEnabled);
+    }
+  }
+  if ('slackDeviceId' in patch) {
+    if (patch.slackDeviceId == null || patch.slackDeviceId.trim() === '') {
+      delete integrations.slackDeviceId;
+    } else {
+      integrations.slackDeviceId = patch.slackDeviceId.trim();
+    }
+  }
+  if ('slackDeviceLabel' in patch) {
+    if (patch.slackDeviceLabel == null || patch.slackDeviceLabel.trim() === '') {
+      delete integrations.slackDeviceLabel;
+    } else {
+      integrations.slackDeviceLabel = patch.slackDeviceLabel.trim().slice(0, 64);
     }
   }
   return saveAppSettings({ ...current, integrations });
@@ -681,11 +970,50 @@ export function resolveNewThreadOptions(
   };
 }
 
-/** True when Sideboard has a Linear API key stored. */
+/** True when Sideboard has Linear OAuth tokens or an API key stored. */
 export function isLinearConnected(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
-  return Boolean(settings.integrations.linearApiKey?.trim());
+  return hasLinearCredentials(settings.integrations);
+}
+
+/** Persist Linear OAuth tokens after authorize or refresh. */
+export function saveLinearOAuth(input: {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  viewerName?: string;
+  organizationName?: string;
+}): AppSettings {
+  const current = loadAppSettings();
+  const integrations: IntegrationsSettings = { ...current.integrations };
+  integrations.linearAccessToken = input.accessToken.trim();
+  if (input.refreshToken?.trim()) {
+    integrations.linearRefreshToken = input.refreshToken.trim();
+  }
+  if (typeof input.expiresIn === 'number' && Number.isFinite(input.expiresIn)) {
+    integrations.linearTokenExpiresAt = Date.now() + Math.max(0, input.expiresIn) * 1000;
+  }
+  if (input.viewerName?.trim()) {
+    integrations.linearViewerName = input.viewerName.trim().slice(0, 120);
+  }
+  if (input.organizationName?.trim()) {
+    integrations.linearOrganizationName = input.organizationName.trim().slice(0, 120);
+  }
+  return saveAppSettings({ ...current, integrations });
+}
+
+/** Clear Linear OAuth tokens and API key. Does not revoke remotely. */
+export function disconnectLinearConnection(): AppSettings {
+  const current = loadAppSettings();
+  const integrations: IntegrationsSettings = { ...current.integrations };
+  delete integrations.linearApiKey;
+  delete integrations.linearAccessToken;
+  delete integrations.linearRefreshToken;
+  delete integrations.linearTokenExpiresAt;
+  delete integrations.linearViewerName;
+  delete integrations.linearOrganizationName;
+  return saveAppSettings({ ...current, integrations });
 }
 
 /** Preferred issue source (default GitHub). */
@@ -718,6 +1046,55 @@ export function brightsyCloudConnectEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.brightsy.cloudConnectEnabled);
+}
+
+/** Slack Socket Mode inbound (Account → Slack). Default off. */
+export function slackListenEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return settings.integrations.slackListenEnabled === true;
+}
+
+/**
+ * Stable per-Mac identity for the Slack relay so Personal and Work can both
+ * stay online as separate destinations.
+ */
+export function ensureSlackDeviceIdentity(
+  settings: AppSettings = loadAppSettings(),
+): { deviceId: string; deviceLabel: string } {
+  let deviceId = settings.integrations.slackDeviceId?.trim() ?? '';
+  let deviceLabel = settings.integrations.slackDeviceLabel?.trim() ?? '';
+  const patch: { slackDeviceId?: string; slackDeviceLabel?: string } = {};
+  if (!deviceId) {
+    deviceId = randomUUID();
+    patch.slackDeviceId = deviceId;
+  }
+  if (!deviceLabel) {
+    try {
+      deviceLabel = hostname().split('.')[0]?.trim() || 'This Mac';
+    } catch {
+      deviceLabel = 'This Mac';
+    }
+    patch.slackDeviceLabel = deviceLabel;
+  }
+  if (Object.keys(patch).length > 0) {
+    updateIntegrationsSettings(patch);
+  }
+  return { deviceId, deviceLabel };
+}
+
+/**
+ * App-level token for Slack Socket Mode (`xapp-…`).
+ * Env `SIDEBOARD_SLACK_APP_TOKEN` wins over settings.
+ */
+export function slackAppLevelToken(
+  settings: AppSettings = loadAppSettings(),
+): string {
+  return (
+    process.env.SIDEBOARD_SLACK_APP_TOKEN?.trim() ||
+    settings.integrations.slackAppToken?.trim() ||
+    ''
+  );
 }
 
 /** Default off — worktree agents only get Brightsy MCP on ask / prior use. */
@@ -762,8 +1139,12 @@ export function updateAdvancedSettings(
   if (typeof patch.caffeinateWhileRunning === 'boolean') {
     advanced.caffeinateWhileRunning = patch.caffeinateWhileRunning;
   }
-  if (typeof patch.caffeinateWhileCloudConnect === 'boolean') {
-    advanced.caffeinateWhileCloudConnect = patch.caffeinateWhileCloudConnect;
+  if (typeof patch.caffeinateWhileSlackListen === 'boolean') {
+    advanced.caffeinateWhileSlackListen = patch.caffeinateWhileSlackListen;
+    delete advanced.caffeinateWhileCloudConnect;
+  } else if (typeof patch.caffeinateWhileCloudConnect === 'boolean') {
+    advanced.caffeinateWhileSlackListen = patch.caffeinateWhileCloudConnect;
+    delete advanced.caffeinateWhileCloudConnect;
   }
   if (typeof patch.deleteBranchOnPurge === 'boolean') {
     advanced.deleteBranchOnPurge = patch.deleteBranchOnPurge;
@@ -827,10 +1208,17 @@ export function caffeinateWhileRunningEnabled(
   return Boolean(settings.advanced.caffeinateWhileRunning);
 }
 
+export function caffeinateWhileSlackListenEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.caffeinateWhileSlackListen);
+}
+
+/** @deprecated Use caffeinateWhileSlackListenEnabled. */
 export function caffeinateWhileCloudConnectEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
-  return Boolean(settings.advanced.caffeinateWhileCloudConnect);
+  return caffeinateWhileSlackListenEnabled(settings);
 }
 
 export function deleteBranchOnPurgeEnabled(

@@ -19,7 +19,11 @@ import {
 import { normalizeWorktreePath } from './worktree-labels.js';
 import { formatGhLandError, isGhRateLimitError } from './gh-errors.js';
 import { gh, git, resolveGhAuthToken } from './run.js';
-import { buildMergeGateChecks, type PrMergeGate } from './pr-gates.js';
+import {
+  buildMergeGateChecks,
+  prIsInMergeQueue,
+  type PrMergeGate,
+} from './pr-gates.js';
 import { getPrStack, mergePrStack, stackMergeReadiness } from './stack.js';
 
 /** Best-effort GraphQL reset time from `gh api rate_limit` (REST; often still available). */
@@ -415,10 +419,21 @@ async function fetchPrMergeGate(
     'view',
     selector,
     '--json',
-    'mergeable,mergeStateStatus,reviewDecision,baseRefName,url',
+    'mergeable,mergeStateStatus,reviewDecision,baseRefName,url,isInMergeQueue',
   ];
   if (slug) args.push('--repo', slug);
-  const { stdout, exitCode, stderr } = await gh(args, cwd, { reject: false });
+  let { stdout, exitCode, stderr } = await gh(args, cwd, { reject: false });
+  if (exitCode !== 0 && isUnknownJsonField(stderr, 'isInMergeQueue')) {
+    const retry = [
+      'pr',
+      'view',
+      selector,
+      '--json',
+      'mergeable,mergeStateStatus,reviewDecision,baseRefName,url',
+    ];
+    if (slug) retry.push('--repo', slug);
+    ({ stdout, exitCode, stderr } = await gh(retry, cwd, { reject: false }));
+  }
   if (exitCode !== 0 || !stdout.trim()) {
     if (/no pull requests found/i.test(stderr)) return null;
     return null;
@@ -443,10 +458,23 @@ async function fetchPrMergeGate(
           ? view.baseRefName
           : null,
       url: typeof view.url === 'string' && view.url ? view.url : null,
+      isInMergeQueue: parseInMergeQueue(view),
     };
   } catch {
     return null;
   }
+}
+
+function isUnknownJsonField(stderr: string, field: string): boolean {
+  return new RegExp(`unknown json field[^\\n]*${field}`, 'i').test(stderr);
+}
+
+function parseInMergeQueue(view: Record<string, unknown>): boolean {
+  return prIsInMergeQueue({
+    isInMergeQueue: view.isInMergeQueue === true,
+    mergeStateStatus:
+      typeof view.mergeStateStatus === 'string' ? view.mergeStateStatus : null,
+  });
 }
 
 /**
@@ -540,9 +568,12 @@ export async function getPrChecks(
   const mergeState = (gate?.mergeStateStatus ?? '').toUpperCase();
   // GitHub often leaves mergeable=UNKNOWN; always verify unless GH already
   // reports an explicit conflict (local probe is cheap and more reliable).
+  // Skip when the PR is in a merge queue — the local worktree may lag the
+  // queue's temporary branch and would look dirty/conflicting.
   const alreadyConflicting =
     mergeable === 'CONFLICTING' || mergeState === 'DIRTY';
-  const needsLocalProbe = !alreadyConflicting;
+  const inQueue = gate ? prIsInMergeQueue(gate) : false;
+  const needsLocalProbe = !alreadyConflicting && !inQueue;
 
   if (needsLocalProbe) {
     try {
@@ -558,6 +589,7 @@ export async function getPrChecks(
           reviewDecision: gate?.reviewDecision ?? null,
           baseRefName: local.base,
           url: gate?.url ?? null,
+          isInMergeQueue: false,
         };
         // Stash file hint on a synthetic description via gate url leave as-is;
         // buildMergeGateChecks uses base name — enrich after.
@@ -617,10 +649,21 @@ export async function getPrMeta(
     'view',
     selector,
     '--json',
-    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName',
+    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,isInMergeQueue,mergeStateStatus',
   ];
   if (slug) viewArgs.push('--repo', slug);
-  const { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
+  let { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
+  if (exitCode !== 0 && isUnknownJsonField(stderr, 'isInMergeQueue')) {
+    const retry = [
+      'pr',
+      'view',
+      selector,
+      '--json',
+      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,mergeStateStatus',
+    ];
+    if (slug) retry.push('--repo', slug);
+    ({ stdout, exitCode, stderr } = await gh(retry, cwd, { reject: false }));
+  }
   if (exitCode !== 0 || !stdout.trim()) {
     if (/no pull requests found/i.test(stderr)) return null;
     return null;
@@ -639,6 +682,7 @@ export async function getPrMeta(
           : null,
       baseRefName: String(view.baseRefName ?? ''),
       headRefName: String(view.headRefName ?? ''),
+      isInMergeQueue: parseInMergeQueue(view),
     };
   } catch {
     return null;

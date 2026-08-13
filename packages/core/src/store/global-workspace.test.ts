@@ -7,11 +7,14 @@ import { FAMOUS_SOCCER_TEAMS } from '../git/teams.js';
 import {
   createGlobalChat,
   ensureCloudCoordinator,
+  ensureSlackCoordinator,
   GLOBAL_WORKSPACE_ID,
   healOrchestrationSoccerTitles,
   isGlobalThread,
+  isSlackCoordinatorThread,
   listGlobalThreads,
   orchestratorSessionPoisonedByBuiltins,
+  slackCoordinatorSourceRef,
 } from './global-workspace.js';
 import { updateThread } from './thread-store.js';
 
@@ -81,6 +84,28 @@ describe('global-workspace', () => {
     expect(cloud.repoPath).toBe(GLOBAL_WORKSPACE_ID);
     const again = ensureCloudCoordinator('codex');
     expect(again.id).toBe(cloud.id);
+  });
+
+  it('ensureSlackCoordinator is one Global chat per Slack user', () => {
+    const matt = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    expect(matt.sourceRef).toBe(slackCoordinatorSourceRef('T1', 'Umatt'));
+    expect(isSlackCoordinatorThread(matt)).toBe(true);
+    expect(matt.repoPath).toBe(GLOBAL_WORKSPACE_ID);
+    expect(teamNames.has(matt.title)).toBe(true);
+
+    const mattAgain = ensureSlackCoordinator('T1', 'Umatt', 'codex');
+    expect(mattAgain.id).toBe(matt.id);
+
+    const alice = ensureSlackCoordinator('T1', 'Ualice', 'claude');
+    expect(alice.id).not.toBe(matt.id);
+    expect(alice.sourceRef).toBe('slack:T1:Ualice');
+
+    const otherTeam = ensureSlackCoordinator('T2', 'Umatt', 'claude');
+    expect(otherTeam.id).not.toBe(matt.id);
+
+    // Brightsy cloud singleton stays separate.
+    const cloud = ensureCloudCoordinator('claude');
+    expect(cloud.id).not.toBe(matt.id);
   });
 
   it('heals legacy cloud-goal titles to soccer nicknames', () => {

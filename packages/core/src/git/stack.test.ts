@@ -88,4 +88,12 @@ describe('stackMergeReadiness', () => {
     const r = stackMergeReadiness(stack.layers, 1);
     expect(r.readyToMerge).toBe(true);
   });
+
+  it('treats QUEUED lower layers as still mergeable', () => {
+    const stack = parseGhStackViewJson(JSON.stringify(FIXTURE))!;
+    stack.layers[0]!.isQueued = true;
+    stack.layers[0]!.prState = 'QUEUED';
+    const r = stackMergeReadiness(stack.layers, 1);
+    expect(r.readyToMerge).toBe(true);
+  });
 });

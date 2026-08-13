@@ -29,6 +29,7 @@ import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
   AdvancedAppSettings,
   AppSettings,
+  PublicAppSettings,
   BrightsyCloudConnectAgent,
   BrightsyHarnessSettings,
   ClaudeHarnessSettings,
@@ -44,6 +45,8 @@ import type {
 } from '../agents/install.js';
 import type { BrightsySession } from '../brightsy/accounts.js';
 import type { GitHubStatus } from '../integrations/github.js';
+import type { SlackReplyBadge } from '../slack/outbound-watch.js';
+import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesResult } from '../integrations/issues.js';
 
 /** Live status of the Brightsy cloud connect daemon in the desktop app. */
@@ -57,6 +60,22 @@ export interface CloudConnectStatus {
   lastLog: string | null;
 }
 
+/** Live status of Sideboard Slack Listen (hosted relay). */
+export interface SlackListenStatus {
+  enabled: boolean;
+  running: boolean;
+  hasAppToken: boolean;
+  /** Built-in Sideboard Slack app Client ID/Secret are present (not sent to renderer). */
+  bakedOAuth: boolean;
+  /** How inbound events arrive when listening. */
+  mode: 'relay' | null;
+  workspaceCount: number;
+  /** This Mac’s Slack destination label (Personal / Work). */
+  deviceLabel: string | null;
+  lastError: string | null;
+  lastLog: string | null;
+}
+
 /** Shared typed surface for Electron preload ↔ renderer (and docs). */
 export interface IpcApi {
   detectAgents(): Promise<AgentStatus[]>;
@@ -66,17 +85,17 @@ export interface IpcApi {
   installAgent(agent: AgentKind): Promise<AgentSetupActionResult>;
   /** Open the agent’s login/auth command in the system terminal. */
   loginAgent(agent: AgentKind): Promise<AgentSetupActionResult>;
-  getAppSettings(): Promise<AppSettings>;
-  saveAppSettings(settings: AppSettings): Promise<AppSettings>;
-  updateAppEnvironment(patch: Record<string, string | null | undefined>): Promise<AppSettings>;
+  getAppSettings(): Promise<PublicAppSettings>;
+  saveAppSettings(settings: AppSettings): Promise<PublicAppSettings>;
+  updateAppEnvironment(patch: Record<string, string | null | undefined>): Promise<PublicAppSettings>;
   updateClaudeSettings(
     patch: Partial<ClaudeHarnessSettings> & { executablePath?: string | null },
-  ): Promise<AppSettings>;
+  ): Promise<PublicAppSettings>;
   /** Persist a custom executable path for Claude / Codex / OpenCode / Brightsy. */
   updateAgentExecutable(
     agent: CliAgentKind,
     executablePath: string | null,
-  ): Promise<AppSettings>;
+  ): Promise<PublicAppSettings>;
   /** Native file picker for a Claude Code executable override. */
   pickClaudeExecutable(): Promise<string | null>;
   /** Native file picker for a CLI agent executable override. */
@@ -124,20 +143,44 @@ export interface IpcApi {
     patch: Partial<BrightsyHarnessSettings> & {
       cloudConnectAgent?: BrightsyCloudConnectAgent | null;
     },
-  ): Promise<AppSettings>;
-  updateAdvancedSettings(patch: Partial<AdvancedAppSettings>): Promise<AppSettings>;
+  ): Promise<PublicAppSettings>;
+  updateAdvancedSettings(patch: Partial<AdvancedAppSettings>): Promise<PublicAppSettings>;
   updateIntegrationsSettings(patch: {
     linearApiKey?: string | null;
     issueSource?: IssueSource | null;
-  }): Promise<AppSettings>;
+    slackClientId?: string | null;
+    slackClientSecret?: string | null;
+    slackAppToken?: string | null;
+    slackListenEnabled?: boolean | null;
+    slackDeviceId?: string | null;
+    slackDeviceLabel?: string | null;
+  }): Promise<PublicAppSettings>;
   updateDefaultsSettings(patch: {
     agent?: AgentKind | null;
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
-  }): Promise<AppSettings>;
+  }): Promise<PublicAppSettings>;
   /** Machine-global GitHub status via `gh`. */
   getGitHubStatus(): Promise<GitHubStatus>;
+  /** Connected Slack workspaces (no tokens). */
+  getSlackWorkspaces(): Promise<SlackWorkspaceInfo[]>;
+  /** Add a workspace from a pasted bot (xoxb-) or user (xoxp-) token. */
+  connectSlackToken(token: string): Promise<SlackWorkspaceInfo[]>;
+  /** Browser OAuth — opens Slack, waits for localhost callback. */
+  startSlackOAuth(): Promise<SlackWorkspaceInfo[]>;
+  disconnectSlackWorkspace(teamId: string): Promise<SlackWorkspaceInfo[]>;
+  /** Browser OAuth — opens Linear, waits for localhost callback. */
+  startLinearOAuth(): Promise<PublicAppSettings>;
+  /** Revoke Linear OAuth (best-effort) and clear stored Linear credentials. */
+  disconnectLinear(): Promise<PublicAppSettings>;
+  /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */
+  getSlackListenStatus(): Promise<SlackListenStatus>;
+  setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
+  /** Unread Slack replies to messages this Mac posted (does not drive the Mac). */
+  getSlackReplyBadges(): Promise<SlackReplyBadge[]>;
+  /** Open the Slack thread in the browser/app and clear that user's badge. */
+  openSlackReply(badgeId: string): Promise<SlackReplyBadge[]>;
   /**
    * Unified issues for Create-from / Link issue (Linear API or GitHub Issues,
    * based on Account preference with Linear→GitHub fallback).

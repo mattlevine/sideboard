@@ -759,11 +759,21 @@ export class Orchestrator {
     // Sideboard plan mode stays on until the user toggles it off / Implement.
     // Orchestrators get a short identity reminder the same way — resume strips
     // the full playbook from cachedPrefix.
+    const slackInbound = /^(Slack DM|Slack @mention)(?:\n|$)/.test(
+      expandedPrompt.trim(),
+    );
     const orchestrationReminder = isOrchestratorThread(thread)
-      ? coordinatorTurnReminder({
-          parentId: threadId,
-          goal: thread.sourceRef || thread.title,
-        })
+      ? [
+          coordinatorTurnReminder({
+            parentId: threadId,
+            goal: thread.sourceRef || thread.title,
+          }),
+          slackInbound
+            ? 'This turn is a Slack DM or @mention. Your reply is posted back in Slack — keep it concise. Sideboard signs it with this Mac\'s destination name; do not prefix the name yourself.'
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
       : null;
     // Re-assert on every turn (incl. CLI --resume, which drops cachedPrefix).
     const artifactReminder =
@@ -857,7 +867,11 @@ export class Orchestrator {
           goal: fresh.sourceRef || fresh.title || 'Orchestration',
           parentId: fresh.id,
           workspaces: inventory,
-          audience: 'desktop',
+          audience: /^(Slack DM|Slack @mention)(?:\n|$)/.test(
+            expandedPrompt.trim(),
+          )
+            ? 'slack'
+            : 'desktop',
         });
       }
     }
@@ -1654,6 +1668,7 @@ export class Orchestrator {
       reviewDecision: null,
       baseRefName: '',
       headRefName: '',
+      isInMergeQueue: false,
     };
     await this.persistPrMetaAndMaybeArchive(thread, metaLike);
     return { url: metaLike.url, state };

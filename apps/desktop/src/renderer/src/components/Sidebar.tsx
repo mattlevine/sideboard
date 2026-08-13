@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
   normalizeWorktreePath,
   threadDisplayLabel,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
-import type { Thread } from '@sideboard-ai/core';
+import type { SlackReplyBadge, Thread } from '@sideboard-ai/core';
 import {
   GLOBAL_WORKSPACE_ID,
-  isCloudCoordinatorThread,
   threadDisplayTitle,
 } from '../lib/global-workspace';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
@@ -43,6 +42,9 @@ interface Props {
   onRemoveWorkspace?: (repoPath: string) => void | Promise<void>;
   onToggleSidebar: () => void;
   onOpenSettings?: () => void;
+  /** Other people who replied to a Slack message this Mac posted. */
+  slackReplies?: SlackReplyBadge[];
+  onOpenSlackReply?: (badgeId: string) => void;
 }
 
 function repoName(repoPath: string): string {
@@ -128,6 +130,7 @@ function WorktreeArchiveCard({
     state: string;
     isDraft: boolean;
     reviewDecision: string | null;
+    isInMergeQueue: boolean;
   } | null>(null);
   const slug = worktreeSlug(thread);
   const prUrl = prMeta?.url ?? thread.prUrl ?? null;
@@ -176,6 +179,7 @@ function WorktreeArchiveCard({
           state: meta.state,
           isDraft: meta.isDraft,
           reviewDecision: meta.reviewDecision,
+          isInMergeQueue: Boolean(meta.isInMergeQueue),
         });
       } catch {
         if (!cancelled) setPrMeta(null);
@@ -198,6 +202,7 @@ function WorktreeArchiveCard({
     closed: prClosed,
     draft: prDraft,
     reviewDecision: prIsOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null,
+    inMergeQueue: prIsOpen && Boolean(prMeta?.isInMergeQueue),
   };
   const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
   const prStatusMod = prMeta ? prPillModifier(pillOpts) : '';
@@ -299,6 +304,7 @@ function WorktreeEditCard({
     state: string;
     isDraft: boolean;
     reviewDecision: string | null;
+    isInMergeQueue: boolean;
   } | null>(null);
   const slug = worktreeSlug(thread);
   const prUrl = prMeta?.url ?? thread.prUrl ?? null;
@@ -359,6 +365,7 @@ function WorktreeEditCard({
           state: meta.state,
           isDraft: meta.isDraft,
           reviewDecision: meta.reviewDecision,
+          isInMergeQueue: Boolean(meta.isInMergeQueue),
         });
       } catch {
         if (!cancelled) setPrMeta(null);
@@ -403,6 +410,7 @@ function WorktreeEditCard({
     closed: prClosed,
     draft: prDraft,
     reviewDecision: prIsOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null,
+    inMergeQueue: prIsOpen && Boolean(prMeta?.isInMergeQueue),
   };
   // Only show a status pill once GitHub PR meta is loaded — never invent "Open".
   const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
@@ -746,6 +754,8 @@ export function Sidebar({
   onRemoveWorkspace,
   onToggleSidebar,
   onOpenSettings,
+  slackReplies = [],
+  onOpenSlackReply,
 }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -819,6 +829,24 @@ export function Sidebar({
         <div className="brand">
           <BrandMark size="sm" />
           <span className="brand-name">Sideboard</span>
+          {slackReplies.length > 0 && (
+            <div className="slack-reply-badges" role="list" aria-label="Slack replies">
+              {slackReplies.map((badge) => (
+                <button
+                  key={badge.id}
+                  type="button"
+                  role="listitem"
+                  className="slack-reply-badge"
+                  style={{ '--slack-badge-hue': String(badge.hue) } as CSSProperties}
+                  title={`${badge.userName} replied in Slack — open thread`}
+                  aria-label={`${badge.userName} replied in Slack. Open thread.`}
+                  onClick={() => onOpenSlackReply?.(badge.id)}
+                >
+                  {badge.initials}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <nav className="sidebar-nav">
           <button
@@ -886,7 +914,6 @@ export function Sidebar({
                   view === 'thread' &&
                   globalThreads.some((t) => t.id === selectedId);
                 const selected = globalThreads.some((t) => multiSelected.has(t.id));
-                const cloud = globalThreads.some((t) => isCloudCoordinatorThread(t));
                 const unread = isWorktreeUnread(
                   unreadWorktreeKey(primary),
                   latestAgentResponseAt(globalThreads),
@@ -904,14 +931,9 @@ export function Sidebar({
                       <div className="thread-item-body">
                         <div
                           className="thread-title"
-                          title={
-                            cloud
-                              ? `${threadDisplayTitle(primary)} · Brightsy`
-                              : threadDisplayTitle(primary)
-                          }
+                          title={threadDisplayTitle(primary)}
                         >
                           {threadDisplayTitle(primary)}
-                          {cloud ? ' · Brightsy' : ''}
                         </div>
                         <div className="thread-meta">
                           {primary.agent}

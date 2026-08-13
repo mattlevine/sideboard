@@ -126,18 +126,23 @@ export function StackMap({ thread, onRefresh, onSelectChat }: Props) {
             layer.position === thread.stackLayer || layer.isCurrent;
           const pr =
             layer.prNumber != null ? `#${layer.prNumber}` : layer.branchName;
+          const queued =
+            !layer.isMerged &&
+            (layer.isQueued || (layer.prState ?? '').toUpperCase() === 'QUEUED');
           return (
             <li key={`${layer.position}-${layer.branchName}`}>
               <button
                 type="button"
                 className={`stack-map-layer${current ? ' is-current' : ''}${
                   layer.isMerged ? ' is-merged' : ''
-                }${layer.needsRebase ? ' needs-rebase' : ''}`}
+                }${queued ? ' is-queued' : ''}${layer.needsRebase ? ' needs-rebase' : ''}`}
                 disabled={busy}
                 onClick={() => void focusLayer(layer.position)}
                 title={
                   layer.needsRebase
                     ? `${pr} needs rebase`
+                    : queued
+                      ? `${pr} in merge queue`
                     : layer.title || layer.branchName
                 }
               >
@@ -145,6 +150,9 @@ export function StackMap({ thread, onRefresh, onSelectChat }: Props) {
                 <span className="stack-map-pr">{pr}</span>
                 {layer.needsRebase ? (
                   <span className="stack-map-badge">rebase</span>
+                ) : null}
+                {queued ? (
+                  <span className="stack-map-badge">queued</span>
                 ) : null}
                 {layer.isMerged ? (
                   <span className="stack-map-badge">merged</span>

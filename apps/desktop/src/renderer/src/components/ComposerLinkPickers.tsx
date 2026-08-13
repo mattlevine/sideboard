@@ -86,7 +86,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
               type="button"
               className="composer-picker-row"
               onClick={() => {
-                void window.sideboard.openExternal('https://linear.app/settings/api');
+                void window.sideboard.openExternal('https://linear.app');
               }}
             >
               <span className="composer-picker-icons">
@@ -95,7 +95,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
               <span className="composer-picker-main">
                 <span className="composer-picker-title">Set up Linear</span>
                 <span className="composer-picker-sub">
-                  Add an API key in Settings → Account (showing GitHub Issues for now)
+                  Sign in from Settings → Account (showing GitHub Issues for now)
                 </span>
               </span>
               <span className="composer-picker-hint">

@@ -1,24 +1,32 @@
 # Sideboard
 
-**Your agent threads aren't trapped anywhere.**
+**Open control plane for a fleet of local coding agents.**
 
-When you run many AI coding agents at once, the hard part isn't spawning worktrees — it's knowing what's going on, working with what they produce, and not getting stuck inside someone else's UI.
+One agent per git worktree is a crowded pattern in 2026 — Conductor, Cursor’s Agents window, Claude Code, and OSS boards (Superset, Emdash, Claude Squad) all spawn that. The remaining jobs are seeing the fleet, letting an agent reason about other threads, working the data next to the code, and leaving whenever you want.
 
-Sideboard is **repo + worktree + CMS** (optional): an open control plane over git worktrees, with a desktop surface that is a **union of agent code and data** — chat in the middle, schema-driven forms / artifacts / a file manager in a tabbed column, and the connected repo on the far right.
+Sideboard is CLI + MCP + a Mac desktop for those jobs. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). The board, the MCP, and `attach` / `adopt` are the product.
 
 1. **A global board for you** — status, live output, and fan-out across every thread
 2. **An MCP for the agents** — list threads, wait on turns, read diffs, orchestrate the fleet, and present artifacts, schemas, and files in the desktop UI
 3. **A door back to the native harness** — `attach` into Claude/Codex/OpenCode mid-flight, or `adopt` sessions that started elsewhere
 
-Run agents in isolated `thread/*` worktrees from the CLI, desktop app, or MCP — then move in and out of Sideboard as you choose.
+Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP — then move in and out of Sideboard as you choose.
 
 ![Sideboard desktop — chat with Document artifact preview, worktree changes, and run panel](docs/assets/sideboard-desktop-review-v4.png)
 
-**Agents and backends are plugs, not the product.** Core CLI, MCP, and desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is not a Brightsy (or any) CMS shell — it's **JSON Schema → table/form**. The agent can invent a schema for whatever data it needs; wire Brightsy, inline JSON, or another datasource later. CLI and MCP also run separately from the desktop app — you can build your own Slack/Discord bridges on them ([how to create a Slack connector](docs/remote-integrations.md)).
+**Agents and backends are plugs, not the product.** CLI, MCP, and the desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is **JSON Schema → table/form**, not a CMS shell. The agent can invent a schema for whatever data it needs; wire inline JSON or another datasource later. CLI and MCP also run without the desktop app. Slack inbound is built in ([setup](#slack)).
+
+## Who it's for
+
+Fits if you already run several local CLI agents on a Mac and want a control plane you can script, an orchestrator agent can drive, and you can leave. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
+
+Use something else if you want a closed Mac board and will not use CLI/MCP ([Conductor](https://www.conductor.build/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
+
+Peer-by-peer notes: [Compare](docs/COMPARE.md).
 
 ## Why it exists
 
-Most multi-agent tools optimize for parallelism. Sideboard optimizes for **visibility, handoff, and a place to work the data next to the code**:
+Spawning worktrees is the shared primitive. Sideboard is built for **visibility, handoff, and a place to work the data next to the code**:
 
 | Job | Typical tools | Sideboard |
 |-----|---------------|-----------|
@@ -31,7 +39,7 @@ Most multi-agent tools optimize for parallelism. Sideboard optimizes for **visib
 | Collect / edit structured data the agent needs | Spreadsheet, separate CMS, or markdown forever | `present_schema` → form/table from a schema the agent can create |
 | Files for that data + the git worktree | Two other windows | File manager tabs + far-right repo Files / Changes / CI |
 
-The fit: agents already write code **and** invent the shapes of data (content, configs, feedback, ops rows). Sideboard is where those meet — **code in the worktree, data in schema UI**, without forcing a CMS product or leaving the thread.
+Agents write code **and** invent data shapes (content, configs, feedback, ops rows). Sideboard is where those meet — **code in the worktree, data in schema UI** — without a CMS product.
 
 A concrete loop: pull or edit page content and media in schema + files tabs, then have the agent write it into a **static site** in the same worktree (Astro, Next export, Eleventy, plain HTML) — review the data and the generated pages before you land.
 
@@ -39,13 +47,13 @@ Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Us
 
 Also true, and useful on the way:
 
-- **Agent-agnostic** — Claude Code, Codex, OpenCode, Cursor (via `@cursor/sdk`, Conductor-style); optionally Brightsy (hosted chat via `brightsy chat --json`; no local file edits)
-- **Schema-agnostic / CMS-optional** — render any JSON Schema + `schemaUi`; Brightsy is one datasource, not the UI. CMS is a use case, not the category
+- **Agent-agnostic** — Claude Code, Codex, OpenCode, Cursor (via `@cursor/sdk`, Conductor-style)
+- **Schema-agnostic / CMS-optional** — render any JSON Schema + `schemaUi`. CMS is a use case, not the category
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
-- **Integration-friendly** — remote chat (Slack, etc.) can sit on CLI/MCP without Brightsy; see [create your own Slack connector](docs/remote-integrations.md)
+- **Integration-friendly** — Slack DMs and @mentions to your Mac ([setup](#slack))
 
-Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [DIY Slack connector](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Security](SECURITY.md)
+Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Slack](#slack) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Security](SECURITY.md)
 
 ## Install
 
@@ -133,18 +141,6 @@ sideboard detect                     # cursor should show authenticated
 
 Shell env wins if both are set. Docs: [cursor.com/docs/sdk/typescript](https://cursor.com/docs/sdk/typescript)
 
-#### Brightsy (optional)
-
-Hosted agents and models via `brightsy chat --json` (chat-only — no local file edits). Not required for Sideboard.
-
-```bash
-npm install -g @brightsy/cli
-brightsy login
-brightsy whoami
-```
-
-Docs: [@brightsy/cli](https://www.npmjs.com/package/@brightsy/cli)
-
 Verify everything Sideboard can see:
 
 ```bash
@@ -195,13 +191,13 @@ Same chrome for every backend:
 
 | Provider | When |
 |----------|------|
-| `inline` | Agent embeds `resource` / `records` in the tool call — any use, no CMS account |
-| `brightsy` | Logged-in team + `resource_id` — first full provider; CMS is one use case |
+| `inline` | Agent embeds `resource` / `records` in the tool call — any use, no extra account |
+| `brightsy` | Optional — logged-in Brightsy team + `resource_id` |
 
 ### Artifacts & file manager
 
 - **`present_artifact`** — HTML / SVG / markdown in the same column (Claude-style docs, yours)
-- **`present_files`** — browse / upload / pick (`brightsy` storage or `memory` demo). Drag from Finder or from Sideboard’s worktree file list. Multiple Files tabs can sit beside multiple schema tabs.
+- **`present_files`** — browse / upload / pick (`memory` demo, or optional Brightsy storage). Drag from Finder or from Sideboard’s worktree file list. Multiple Files tabs can sit beside multiple schema tabs.
 
 New datasources implement list/get/save (and optional publish). They do not fork the column UI.
 
@@ -282,135 +278,86 @@ Once connected, agents get tools to:
 - **Setup / run** — `run_setup`, `list_run_scripts`, `run_dev_script`, `stop_dev_script`
 - **Inspect / review / PRs** — `get_diff`; `request_review` (opens a Review chat tab on a worktree thread); ask worktree agents via `send_to_thread` to `gh pr create --draft` (no host draft-PR tool)
 
-Ready-for-review land / merge and `purge_thread` stay human-only. The cloud coordinator cannot be archived via MCP. Coordinators open PRs only by asking the worktree agent.
+Ready-for-review land / merge and `purge_thread` stay human-only. Coordinators open PRs only by asking the worktree agent.
 
-Want Slack (or any chat) without Brightsy? Point your bot at this MCP or the CLI — [create your own Slack connector](docs/remote-integrations.md).
+## Linear
 
-## Optional: Brightsy
-
-Brightsy integrations below are **optional**. Skip this entire section if you only use Claude/Codex/OpenCode/Cursor.
-
-### Brightsy MCP on every Claude thread
-
-When `brightsy login` is active, Sideboard auto-injects Brightsy MCP (`brightsy-mcp` or `npx @brightsy/mcp-server`) into **all Claude thread turns** via `--mcp-config` — no separate Claude MCP registration required. Coordinator threads also get Sideboard MCP.
-
-Install the MCP binary if you want the faster path (otherwise `npx` is used):
+**Settings → Account → Linear → Connect via browser.** Sideboard stores the OAuth token on this Mac and uses it for Create-from / Link issue. A personal API key still works if you paste one.
 
 ```bash
-npm i -g @brightsy/mcp-server
+sideboard linear login
+sideboard linear disconnect
 ```
 
-### Connect Brightsy teams (CLI + MCP)
+Callback URL for the Sideboard Linear OAuth app: `http://127.0.0.1:19848/callback`. Override the client with `SIDEBOARD_LINEAR_CLIENT_ID` (secret optional — the desktop uses PKCE).
 
-Team list/switch is provided by Brightsy itself:
+## Slack
+
+Install the Sideboard Slack app once; each MacBook is its own destination (Personal, Work, …). DMs and `@mentions` go to the Global orchestrator on that Mac; replies post back to Slack.
+
+```
+┌────────────────┐     hosted relay      ┌──────────────────┐
+│ Slack          │ ─────────────────────► │ Sideboard Mac    │
+│ DM / @mention  │     (WSS)              │ (Personal/Work)  │
+└────────────────┘ ◄── chat.postMessage ──└────────┬─────────┘
+                                                   │
+                                                   ▼
+                                          Global orchestrator → worktrees
+```
+
+Keep the desktop app running after you connect a workspace.
+
+### Connect
+
+**Settings → Account → Slack workspaces**
+
+1. **Add via browser** — installs the official Sideboard Slack app into a workspace (use this; paste-only bot tokens cannot prove which Slack user owns the Mac).
+2. **This Mac** — name the destination (`Personal`, `Work`, …). Each Mac gets a stable id; both can stay online at once.
+3. Listening starts when a workspace is connected. Status should show `Relay connected · Personal` (or your name).
+
+Someone else messaging the bot needs **their** Sideboard online — messages route to the Slack user who connected that Mac, not to tabs on yours.
+
+Env overrides (optional): `SIDEBOARD_SLACK_RELAY_URL` (e.g. local `ws://127.0.0.1:8787/desktop`).
+
+### Talk to a Mac from Slack
+
+| Where | What to type |
+|-------|----------------|
+| **DM the bot** | `work: Check the failing CI` |
+| **Channel / thread** | `@sideboard work: Check the failing CI` |
+
+The destination prefix is the **This Mac** name (case does not matter). Mentions are stripped before routing, so `work:` is what selects the Mac.
+
+- One Mac online → it handles unprefixed messages.
+- Personal and Work both online → unprefixed messages go to whichever claims first. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
+- Send `stop` to interrupt an in-progress turn.
+
+### CLI
 
 ```bash
-brightsy teams                 # list
-brightsy teams switch <slug>   # activate (updates ~/.brightsy)
+sideboard slack teams
+sideboard slack login          # browser OAuth
+sideboard slack listen         # same listen path as the desktop
 ```
 
-MCP exposes the same as `list_teams` / `switch_team`. Sideboard Settings uses those under the hood; checking a team also stores it for multi-team Claude MCP (`brightsy_<slug>` per connected team).
+Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_users` / `slack_search` / `slack_read` / `slack_post` once a workspace is connected (optional `github_url` for a PR or permalink).
+
+If someone replies in Slack to a message Sideboard posted, a per-user badge appears next to the Sideboard wordmark. Click it to open that thread in Slack. Those replies do not start a turn on this Mac.
+
+More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
+
+## Also: Brightsy
+
+Optional hosted chat and one schema/files backend. Skip this if you use Claude, Codex, OpenCode, or Cursor. Remote control of this Mac is **Slack**, not Brightsy.
 
 ```bash
-sideboard brightsy teams
-sideboard brightsy connect-team <slug>   # connect + activate
-sideboard brightsy disconnect-team <slug>
-```
-
-Connected teams unlock the **Brightsy datasource** for `present_schema` / `present_files` (record types + account file storage). Inline/memory still work with no Brightsy — Brightsy is a provider for data, not the shape of the UI.
-
-## Optional: Brightsy remote orchestrator (Slack / Discord / Teams)
-
-> **Optional.** This is one remote path. To build your own Slack/Discord bridge on Sideboard CLI/MCP (no Brightsy), see [create your own Slack connector](docs/remote-integrations.md).
-
-Brightsy chat channels can drive Sideboard on your machine across **all registered workspaces** — no need to be at the keyboard. Slack is the best-tested path; Discord and Microsoft Teams use the same cloud-task flow but are less battle-tested.
-
-### How the pieces fit together
-
-```
-┌─────────────────┐     chat      ┌──────────────────┐
-│ Slack / Discord │ ────────────► │ Brightsy cloud   │
-│ / Teams         │               │ agent + desktop  │
-└─────────────────┘               │ task             │
-                                  └────────┬─────────┘
-                                           │ desktop task
-                                           ▼
-                                  ┌──────────────────┐
-                                  │ Cloud connect    │
-                                  │ daemon (poll ~5s)│
-                                  └────────┬─────────┘
-                                           │ send + wait
-                     ┌─────────────────────┼─────────────────────┐
-                     ▼                     ▼                     │
-           ┌─────────────────┐   ┌─────────────────┐             │
-           │ Orchestration   │   │ Local orch chat │             │
-           │ chat (Brightsy- │   │ (desktop New    │             │
-           │ marked)         │   │  chat)          │             │
-           └────────┬────────┘   └────────┬────────┘             │
-                    │ tools               │ tools                │
-                    └──────────┬──────────┘                      │
-                               ▼                                 │
-                     ┌─────────────────┐                         │
-                     │ Sideboard MCP   │                         │
-                     │ fleet control   │                         │
-                     └────────┬────────┘                         │
-                              │ create / send / wait             │
-                              ▼                                  │
-                     ┌─────────────────┐      draft PR / push    │
-                     │ Worktree agents │ ──────────────────────► │ GitHub
-                     │ (repo threads)  │                         │
-                     └─────────────────┘                         │
-                              │                                  │
-           reply text ────────┘                                  │
-           (cloud path only) ────────────────────────────────────┘
-                               back to Brightsy → Slack
-```
-
-**Path through a request**
-
-1. **Chat → Brightsy** — A human asks in Slack (or Discord/Teams). Brightsy’s cloud agent receives it and, when desktop Sideboard access is enabled, creates an inbound desktop task.
-2. **Daemon → orchestration** — Sideboard’s cloud-connect daemon polls Brightsy, routes the task to the singleton Brightsy-marked orchestration chat (soccer nickname in the UI; identity on `sourceRef`), and waits for the turn.
-3. **Orchestrator steers the fleet** — That chat uses Sideboard MCP (`list_workspaces`, `create_thread`, `send_to_thread`, `wait_for_turn`, …). It does not live in a project worktree; it oversees them.
-4. **Worktree agents build** — Child threads are real git worktrees under registered workspaces. They code, run tools, and open draft PRs when asked. Deep links: `sideboard://thread/<id>`.
-5. **Reply back up** — Orchestrator text is submitted as the Brightsy task response and relayed back to Slack.
-
-**Two ways in**
-
-| Path | Entry | Then |
-|------|--------|------|
-| **Cloud** | Slack → Brightsy → cloud-connect daemon | Brightsy-marked orchestration chat → same MCP + worktree agents |
-| **Local** | Sideboard Orchestration → New chat | Same MCP + worktree agents (no Brightsy hop) |
-
-**Orchestration** is a first-class home-less surface: multiple orchestration chats, each using a synthetic empty cwd and Sideboard/Brightsy MCP tools only (no Edit/Write/Bash on a home checkout). Brightsy cloud always routes to one designated chat (identity on `sourceRef`, not the tab title). The Home board lists those orchestration chats (last responses) — not a fan-out console.
-
-Sideboard uses Brightsy’s existing `/api/v1beta/desktop/*` cloud-to-local API. If the cloud coordinator is already running or queued, the daemon returns a fixed non-AI busy reply (no queue, no sibling chat) so the cloud agent can decide what to do next. To interrupt an in-progress turn, the cloud agent can send a follow-up desktop task whose first line is exactly `SIDEBOARD_FORCE_STOP` (optional new request on later lines); the daemon stops the coordinator immediately—before the serialized task queue—then either confirms the stop or runs the remainder.
-
-**Setup (desktop UI — preferred)**
-
-1. `brightsy login`, then in Sideboard: **Settings → Agents → Brightsy** and check the teams you want.
-2. Same panel: turn on **Cloud messages / remote orchestrator** and pick a coordinator agent (`claude` recommended).
-3. In Brightsy, connect Slack, Discord, and/or Teams on the agent, and link your chat identity under User Settings → Integrations.
-4. Keep the Sideboard desktop app running. It polls Brightsy desktop tasks and routes them to the Global coordinator.
-
-Once enabled, the same panel shows live status (listening / starting / error) and the list of registered workspaces the coordinator can reach. Turning the switch off stops the daemon and disables Brightsy desktop access for that account.
-
-**Setup (CLI)**
-
-```bash
+npm install -g @brightsy/cli
 brightsy login
-sideboard brightsy connect-team <slug>
-sideboard connect --agent claude
 ```
 
-`--repo` is deprecated/ignored — the daemon always uses the Global workspace coordinator and still exposes **all** registered workspaces. `--agent` accepts `claude|codex|opencode|cursor` (not Brightsy — chat-only). Other flags: `--poll-ms <ms>` (default 5000), `--no-enable-access`, `--no-allow-always`.
+Then Settings → Agents → Brightsy to connect a team. That unlocks hosted chat in the agent picker (no local file edits) and `datasource=brightsy` for `present_schema` / `present_files`. Inline schema and memory files work with no Brightsy account.
 
-**What the coordinator can/can't do**
-
-- Can: `list_workspaces`, list/create/send threads across workspaces, wait for turns, read diffs.
-- Can't: `confirm_land` or purge — those stay human-only, from the desktop app or CLI directly.
-- Can't: edit a home git checkout — Global chats have no repo worktree.
-
-Any inbound task Brightsy marks `awaiting_confirmation` is auto-approved by the daemon as soon as it's seen — once connect is running there's no extra approval step per message.
+`sideboard brightsy teams` / `connect-team` wrap the same team list. Worktree agents get Brightsy MCP only when you ask, or when Settings → Advanced → Inject Brightsy MCP is on.
 
 ## Monorepo
 

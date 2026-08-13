@@ -23,9 +23,12 @@ export function prPillModifier(opts: {
   reviewDecision: string | null | undefined;
   /** Open PR cannot merge until conflicts are resolved. */
   mergeConflicts?: boolean;
+  /** Open PR is waiting in a GitHub merge queue. */
+  inMergeQueue?: boolean;
 }): string {
   if (opts.merged) return 'merged';
   if (opts.closed) return 'closed';
+  if (opts.inMergeQueue) return 'queued';
   if (opts.mergeConflicts) return 'conflicts';
   if (opts.draft) return 'draft';
   const decision = (opts.reviewDecision ?? '').toUpperCase();
@@ -42,9 +45,11 @@ export function prPillStatusLabel(opts: {
   draft: boolean;
   reviewDecision: string | null | undefined;
   mergeConflicts?: boolean;
+  inMergeQueue?: boolean;
 }): string {
   if (opts.merged) return 'Merged';
   if (opts.closed) return 'Closed';
+  if (opts.inMergeQueue) return 'Queued';
   if (opts.mergeConflicts) return 'Merge conflicts';
   if (opts.draft) return 'Draft';
   return formatReviewDecision(opts.reviewDecision) ?? 'Open';
@@ -104,6 +109,8 @@ export function checkStatusLabel(check: Pick<PrCheckRun, 'bucket' | 'state' | 'k
         return 'Needs approval';
       case 'UNKNOWN':
         return 'Checking…';
+      case 'QUEUED':
+        return 'Queued';
       default:
         break;
     }

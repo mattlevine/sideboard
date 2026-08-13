@@ -165,6 +165,7 @@ export function RightSidebar({
     title: string;
     baseRefName: string;
     reviewDecision: string | null;
+    isInMergeQueue: boolean;
   } | null>(null);
 
   /** Stable id for the worktree this sidebar instance is bound to. */
@@ -505,6 +506,7 @@ export function RightSidebar({
         title: meta.title,
         baseRefName: meta.baseRefName,
         reviewDecision: meta.reviewDecision,
+        isInMergeQueue: Boolean(meta.isInMergeQueue),
       });
     } catch {
       if (worktreeKeyRef.current !== forWorktree) return;
@@ -570,17 +572,6 @@ export function RightSidebar({
     void loadPrChecks();
   }, [upper, thread.id, thread.prUrl, thread.branchName, loadPrChecks]);
 
-  // Light poll while checks are pending (Checks tab only)
-  useEffect(() => {
-    if (upper !== 'checks') return;
-    const list = prChecks ?? [];
-    if (!list.some((c) => c.bucket === 'pending')) return;
-    const id = window.setInterval(() => {
-      void loadPrChecks();
-    }, 15_000);
-    return () => window.clearInterval(id);
-  }, [upper, prChecks, loadPrChecks]);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'r') {
@@ -632,13 +623,15 @@ export function RightSidebar({
   const prOpen = Boolean(prUrl) && !prMerged && !prClosed;
   const prDraft = Boolean(prMeta?.isDraft) && prOpen;
   const prReviewDecision = prOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null;
-  const mergeConflicts = prOpen && hasMergeConflictChecks(prChecks);
+  const inMergeQueue = prOpen && Boolean(prMeta?.isInMergeQueue);
+  const mergeConflicts = prOpen && !inMergeQueue && hasMergeConflictChecks(prChecks);
   const pillOpts = {
     merged: prMerged,
     closed: prClosed,
     draft: prDraft,
     reviewDecision: prReviewDecision,
     mergeConflicts,
+    inMergeQueue,
   };
   const pillModifier = prUrl ? prPillModifier(pillOpts) : '';
   const pillStatus = prUrl ? prPillStatusLabel(pillOpts) : '';
@@ -648,10 +641,24 @@ export function RightSidebar({
   const prBase =
     prMeta?.baseRefName?.trim().replace(/^refs\/heads\//, '') || 'main';
 
+  // Light poll while checks are pending (Checks tab only) or the PR is in a merge queue.
+  useEffect(() => {
+    if (upper !== 'checks' && !inMergeQueue) return;
+    const list = prChecks ?? [];
+    const pendingChecks = upper === 'checks' && list.some((c) => c.bucket === 'pending');
+    if (!pendingChecks && !inMergeQueue) return;
+    const id = window.setInterval(() => {
+      void loadPrMeta();
+      if (upper === 'checks') void loadPrChecks();
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, [upper, prChecks, inMergeQueue, loadPrChecks, loadPrMeta]);
+
   function primaryGitLabel(): string {
     if (prMerged) return 'Live';
     if (prClosed) return 'Closed';
     if (!prUrl) return 'Create PR';
+    if (inMergeQueue) return 'Queued';
     if (mergeConflicts) return 'Resolve';
     if (hasLocalChanges) return 'Commit & push';
     return 'Merge';
@@ -661,13 +668,14 @@ export function RightSidebar({
     if (prMerged) return '●';
     if (prClosed) return '✕';
     if (!prUrl) return '⎇';
+    if (inMergeQueue) return '☰';
     if (mergeConflicts) return '⚡';
     if (hasLocalChanges) return '↑';
     return '⤵';
   }
 
   function onPrimaryGitClick() {
-    if (prMerged || prClosed) {
+    if (prMerged || prClosed || inMergeQueue) {
       if (prUrl) void window.sideboard.openExternal(prUrl);
       return;
     }
@@ -702,6 +710,7 @@ export function RightSidebar({
               url: result.url || prev.url,
               isDraft: false,
               reviewDecision: null,
+              isInMergeQueue: false,
             }
           : {
               number: Number(num) || 0,
@@ -711,6 +720,7 @@ export function RightSidebar({
               title: thread.prTitle ?? thread.title,
               baseRefName: 'main',
               reviewDecision: null,
+              isInMergeQueue: false,
             },
       );
       onRefresh();
@@ -950,7 +960,9 @@ export function RightSidebar({
                     ? 'Pull request merged — open on GitHub'
                     : prClosed
                       ? 'Pull request closed — open on GitHub'
-                      : mergeConflicts
+                      : inMergeQueue
+                        ? 'In GitHub merge queue — open on GitHub'
+                        : mergeConflicts
                         ? `Ask the agent to merge origin/${prBase} and resolve conflicts`
                         : prUrl && !hasLocalChanges
                           ? 'Merge pull request on GitHub'
@@ -979,7 +991,18 @@ export function RightSidebar({
                     <div className="tool-menu">
                       {prUrl ? (
                         <>
-                          {mergeConflicts ? (
+                          {inMergeQueue ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrMenuOpen(false);
+                                void window.sideboard.openExternal(prUrl);
+                              }}
+                            >
+                              <span className="tool-menu-icon">↗</span>
+                              <span>Open on GitHub</span>
+                            </button>
+                          ) : mergeConflicts ? (
                             <button
                               type="button"
                               onClick={() => {

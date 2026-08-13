@@ -271,7 +271,7 @@ export function CreateModal({
     });
     void window.sideboard
       .getAppSettings()
-      .then((s) => setLinearConnected(Boolean(s.integrations?.linearApiKey)))
+      .then((s) => setLinearConnected(Boolean(s.integrations?.hasLinearApiKey)))
       .catch(() => setLinearConnected(false));
   }, [initialRepoPath]);
 

@@ -13,6 +13,7 @@ import {
   registerArtifactPreviewScheme,
 } from './artifact-preview';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
+import { initDesktopSecretVault } from './secret-vault';
 
 // Must run before app.ready so artifact iframes can load outside renderer CSP.
 registerArtifactPreviewScheme();
@@ -29,8 +30,8 @@ import {
   brightsyCloudConnectAgent,
   brightsyCloudConnectEnabled,
   BrightsySideboardApi,
-  caffeinateWhileCloudConnectEnabled,
   caffeinateWhileRunningEnabled,
+  caffeinateWhileSlackListenEnabled,
   claudeUserSettingsPath,
   detectAgents,
   ensureAgentPath,
@@ -50,7 +51,24 @@ import {
   listLinearIssues,
   listIssues,
   getGitHubStatus,
+  listSlackWorkspaces,
+  connectSlackToken,
+  disconnectSlackWorkspace,
+  startSlackOAuth,
+  startLinearOAuth,
+  disconnectLinear,
+  runSlackListen,
+  resolveSlackListenMode,
+  slackAppLevelToken,
+  slackRelayUrl,
+  hasBakedSlackOAuth,
+  refreshSlackReplyBadges,
+  dismissSlackReplyBadge,
+  permalinkForSlackReplyBadge,
+  getDefaultAgent,
+  ensureSlackDeviceIdentity,
   loadAppSettings,
+  toPublicAppSettings,
   loadBrightsyConfig,
   loginAgent,
   maxConcurrentAgents,
@@ -81,6 +99,7 @@ import {
   type ClaudeHarnessSettings,
   type CliAgentKind,
   type CloudConnectStatus,
+  type SlackListenStatus,
   type DefaultsAppSettings,
   type IntegrationsSettings,
   type IssueSource,
@@ -129,6 +148,11 @@ let cloudConnectAbort: AbortController | null = null;
 let cloudConnectRunning = false;
 let cloudConnectLastError: string | null = null;
 let cloudConnectLastLog: string | null = null;
+
+let slackListenAbort: AbortController | null = null;
+let slackListenRunning = false;
+let slackListenLastError: string | null = null;
+let slackListenLastLog: string | null = null;
 
 function readCloudConnectStatus(): CloudConnectStatus {
   const settings = loadAppSettings();
@@ -244,6 +268,121 @@ async function setCloudConnect(opts: {
     startCloudConnectDaemon();
   }
   return readCloudConnectStatus();
+}
+
+function readSlackListenStatus(): SlackListenStatus {
+  const settings = loadAppSettings();
+  const workspaceCount = listSlackWorkspaces().length;
+  const hasAppToken = Boolean(slackAppLevelToken(settings));
+  const mode = resolveSlackListenMode({
+    relayUrl: slackRelayUrl(),
+    workspaceCount,
+  });
+  const device =
+    workspaceCount > 0 || settings.integrations.slackDeviceId
+      ? ensureSlackDeviceIdentity(settings)
+      : null;
+  return {
+    enabled: workspaceCount > 0,
+    running: slackListenRunning,
+    hasAppToken,
+    bakedOAuth: hasBakedSlackOAuth(),
+    mode,
+    workspaceCount,
+    deviceLabel: device?.deviceLabel ?? null,
+    lastError: slackListenLastError,
+    lastLog: slackListenLastLog,
+  };
+}
+
+function stopSlackListenDaemon(): void {
+  if (slackListenAbort) {
+    slackListenAbort.abort();
+    slackListenAbort = null;
+  }
+  slackListenRunning = false;
+  syncCaffeinate();
+}
+
+function startSlackListenDaemon(): void {
+  if (slackListenAbort) return;
+  const settings = loadAppSettings();
+  if (listSlackWorkspaces().length === 0) return;
+  ensureSlackDeviceIdentity(settings);
+  const mode = resolveSlackListenMode({
+    relayUrl: slackRelayUrl(),
+    workspaceCount: listSlackWorkspaces().length,
+  });
+  if (!mode) {
+    slackListenLastError =
+      'Listen needs a connected workspace (Add via browser).';
+    slackListenLastLog = slackListenLastError;
+    return;
+  }
+
+  const ac = new AbortController();
+  slackListenAbort = ac;
+  slackListenRunning = true;
+  slackListenLastError = null;
+  slackListenLastLog = 'Starting Slack relay…';
+  syncCaffeinate();
+
+  void runSlackListen({
+    agent: getDefaultAgent(settings),
+    signal: ac.signal,
+    fetchImpl: net.fetch.bind(net) as typeof fetch,
+    onLog: (line) => {
+      slackListenLastLog = line;
+      if (
+        line.startsWith('socket error:') ||
+        line.startsWith('event error:') ||
+        line.startsWith('relay error:') ||
+        line.startsWith('post error:') ||
+        line.startsWith('react error:')
+      ) {
+        slackListenLastError = line;
+      } else if (
+        line.startsWith('Relay connected') ||
+        line.startsWith('Relay registered') ||
+        line.startsWith('run ') ||
+        line.startsWith('replied ') ||
+        line.startsWith('busy ')
+      ) {
+        slackListenLastError = null;
+      }
+    },
+  })
+    .catch((err) => {
+      slackListenLastError = err instanceof Error ? err.message : String(err);
+      slackListenLastLog = slackListenLastError;
+    })
+    .finally(() => {
+      if (slackListenAbort === ac) {
+        slackListenAbort = null;
+        slackListenRunning = false;
+        syncCaffeinate();
+      }
+    });
+}
+
+function syncSlackListenDaemon(): SlackListenStatus {
+  const mode = resolveSlackListenMode({
+    relayUrl: slackRelayUrl(),
+    workspaceCount: listSlackWorkspaces().length,
+  });
+  if (mode) {
+    startSlackListenDaemon();
+  } else {
+    stopSlackListenDaemon();
+  }
+  return readSlackListenStatus();
+}
+
+function setSlackListen(opts: { enabled: boolean }): SlackListenStatus {
+  updateIntegrationsSettings({ slackListenEnabled: opts.enabled });
+  if (opts.enabled) return syncSlackListenDaemon();
+  stopSlackListenDaemon();
+  return readSlackListenStatus();
 }
 
 async function stopOpenFileWatcher(): Promise<void> {
@@ -419,7 +558,7 @@ function stopCaffeinate(): void {
   caffeinateProc = null;
 }
 
-/** Keep the Mac awake while agents run and/or cloud connect is listening. */
+/** Keep the Mac awake while agents run and/or Slack Listen is connected. */
 function syncCaffeinate(): void {
   if (process.platform !== 'darwin') {
     stopCaffeinate();
@@ -427,7 +566,7 @@ function syncCaffeinate(): void {
   }
   const keepAwake =
     (caffeinateWhileRunningEnabled() && orch.getRuntime().running > 0) ||
-    (caffeinateWhileCloudConnectEnabled() && cloudConnectRunning);
+    (caffeinateWhileSlackListenEnabled() && slackListenRunning);
   if (keepAwake && !caffeinateProc) {
     try {
       caffeinateProc = spawn('caffeinate', ['-dimsu'], {
@@ -492,18 +631,29 @@ function registerIpc(): void {
     applyAppEnvironment(process.env);
     return loginAgent(agent);
   });
-  ipcMain.handle('getAppSettings', () => loadAppSettings());
+  ipcMain.handle('getAppSettings', () => toPublicAppSettings(loadAppSettings()));
   ipcMain.handle('saveAppSettings', (_e, settings: AppSettings) => {
-    const saved = saveAppSettings(settings);
+    const current = loadAppSettings();
+    const saved = saveAppSettings({
+      ...settings,
+      environment: current.environment,
+      integrations: {
+        ...current.integrations,
+        issueSource: settings.integrations?.issueSource ?? current.integrations.issueSource,
+        slackClientId: settings.integrations?.slackClientId ?? current.integrations.slackClientId,
+        slackListenEnabled:
+          settings.integrations?.slackListenEnabled ?? current.integrations.slackListenEnabled,
+      },
+    });
     applyAppEnvironment(process.env, saved);
-    return saved;
+    return toPublicAppSettings(saved);
   });
   ipcMain.handle(
     'updateAppEnvironment',
     (_e, patch: Record<string, string | null | undefined>) => {
       const saved = updateAppEnvironment(patch);
       applyAppEnvironment(process.env, saved);
-      return saved;
+      return toPublicAppSettings(saved);
     },
   );
   ipcMain.handle(
@@ -514,7 +664,7 @@ function registerIpc(): void {
     ) => {
       const saved = updateClaudeSettings(patch);
       applyAppEnvironment(process.env, saved);
-      return saved;
+      return toPublicAppSettings(saved);
     },
   );
   ipcMain.handle(
@@ -522,7 +672,7 @@ function registerIpc(): void {
     (_e, agent: CliAgentKind, executablePath: string | null) => {
       const saved = updateAgentExecutable(agent, executablePath);
       applyAppEnvironment(process.env, saved);
-      return saved;
+      return toPublicAppSettings(saved);
     },
   );
   ipcMain.handle(
@@ -532,7 +682,7 @@ function registerIpc(): void {
       patch: Partial<BrightsyHarnessSettings> & {
         cloudConnectAgent?: BrightsyCloudConnectAgent | null;
       },
-    ) => updateBrightsySettings(patch),
+    ) => toPublicAppSettings(updateBrightsySettings(patch)),
   );
   ipcMain.handle('updateAdvancedSettings', (_e, patch: Partial<AdvancedAppSettings>) => {
     const saved = updateAdvancedSettings(patch);
@@ -541,11 +691,12 @@ function registerIpc(): void {
     }
     if (
       'caffeinateWhileRunning' in patch ||
+      'caffeinateWhileSlackListen' in patch ||
       'caffeinateWhileCloudConnect' in patch
     ) {
       syncCaffeinate();
     }
-    return saved;
+    return toPublicAppSettings(saved);
   });
   ipcMain.handle(
     'updateIntegrationsSettings',
@@ -554,8 +705,19 @@ function registerIpc(): void {
       patch: Partial<IntegrationsSettings> & {
         linearApiKey?: string | null;
         issueSource?: IssueSource | null;
+        slackAppToken?: string | null;
       },
-    ) => updateIntegrationsSettings(patch),
+    ) => {
+      const next = { ...patch };
+      // Renderer cannot clear the app-level Socket Mode token.
+      if (!next.slackAppToken?.trim()) delete next.slackAppToken;
+      const saved = updateIntegrationsSettings(next);
+      if (next.slackAppToken || 'slackDeviceLabel' in next || 'slackDeviceId' in next) {
+        stopSlackListenDaemon();
+        syncSlackListenDaemon();
+      }
+      return toPublicAppSettings(saved);
+    },
   );
   ipcMain.handle(
     'updateDefaultsSettings',
@@ -567,9 +729,57 @@ function registerIpc(): void {
         effort?: ThinkingEffort | null;
         fast?: boolean | null;
       },
-    ) => updateDefaultsSettings(patch),
+    ) => toPublicAppSettings(updateDefaultsSettings(patch)),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
+  ipcMain.handle('getSlackWorkspaces', () => listSlackWorkspaces());
+  ipcMain.handle('connectSlackToken', async (_e, token: string) => {
+    await connectSlackToken(token);
+    syncSlackListenDaemon();
+    return listSlackWorkspaces();
+  });
+  ipcMain.handle('startSlackOAuth', async () => {
+    await startSlackOAuth({
+      openUrl: (url) => shell.openExternal(url),
+    });
+    syncSlackListenDaemon();
+    return listSlackWorkspaces();
+  });
+  ipcMain.handle('startLinearOAuth', async () => {
+    const saved = await startLinearOAuth({
+      openUrl: (url) => shell.openExternal(url),
+    });
+    return toPublicAppSettings(saved);
+  });
+  ipcMain.handle('disconnectLinear', async () => {
+    const saved = await disconnectLinear();
+    return toPublicAppSettings(saved);
+  });
+  ipcMain.handle('disconnectSlackWorkspace', (_e, teamId: string) => {
+    const list = disconnectSlackWorkspace(teamId);
+    syncSlackListenDaemon();
+    return list;
+  });
+  ipcMain.handle('getSlackListenStatus', () => readSlackListenStatus());
+  ipcMain.handle('setSlackListen', (_e, opts: { enabled: boolean }) =>
+    setSlackListen(opts),
+  );
+  ipcMain.handle('getSlackReplyBadges', () => refreshSlackReplyBadges());
+  ipcMain.handle('openSlackReply', async (_e, badgeId: string) => {
+    const id = typeof badgeId === 'string' ? badgeId : '';
+    const url = permalinkForSlackReplyBadge(id);
+    if (url) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          await shell.openExternal(parsed.href);
+        }
+      } catch {
+        /* ignore invalid permalink */
+      }
+    }
+    return dismissSlackReplyBadge(id);
+  });
   ipcMain.handle('listIssues', async (_e, path: string) =>
     listIssues(await resolveRepoRoot(path)),
   );
@@ -1086,6 +1296,14 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  try {
+    initDesktopSecretVault();
+  } catch (err) {
+    console.warn(
+      'Secret vault init skipped:',
+      err instanceof Error ? err.message : err,
+    );
+  }
   // GUI apps get a stripped PATH; make sure `claude` / friends resolve.
   ensureAgentPath();
   // Conductor-style Settings → Environment (e.g. CURSOR_API_KEY).
@@ -1119,9 +1337,7 @@ app.whenReady().then(async () => {
   orch.listWorkspaces();
   createWindow();
   if (mainWindow) setupTsServer(mainWindow);
-  if (brightsyCloudConnectEnabled()) {
-    startCloudConnectDaemon();
-  }
+  syncSlackListenDaemon();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -1138,6 +1354,7 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   destroyUrlPreview();
   stopCloudConnectDaemon();
+  stopSlackListenDaemon();
   stopCaffeinate();
   void stopOpenFileWatcher();
   void closeTsServer();

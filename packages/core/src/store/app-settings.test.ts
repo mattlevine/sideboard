@@ -93,6 +93,69 @@ describe('app settings', () => {
     expect(mod.resolveEffectiveIssueSource()).toBe('github');
   });
 
+  it('round-trips Linear OAuth tokens in the vault and treats them as connected', async () => {
+    const mod = await load();
+    const saved = mod.saveLinearOAuth({
+      accessToken: 'lin_oauth_access',
+      refreshToken: 'lin_oauth_refresh',
+      expiresIn: 3600,
+      viewerName: 'Matt',
+      organizationName: 'Acme',
+    });
+    expect(saved.integrations.linearAccessToken).toBe('lin_oauth_access');
+    expect(saved.integrations.linearRefreshToken).toBe('lin_oauth_refresh');
+    expect(saved.integrations.linearViewerName).toBe('Matt');
+    expect(saved.integrations.linearOrganizationName).toBe('Acme');
+    expect(mod.isLinearConnected()).toBe(true);
+    expect(mod.resolveEffectiveIssueSource()).toBe('github');
+
+    const pub = mod.toPublicAppSettings(mod.loadAppSettings());
+    expect(pub.integrations.hasLinearApiKey).toBe(true);
+    expect(pub.integrations.hasLinearOAuth).toBe(true);
+    expect(pub.integrations.linearViewerName).toBe('Matt');
+    expect(pub.integrations.linearOrganizationName).toBe('Acme');
+    expect(
+      (pub.integrations as { linearAccessToken?: string }).linearAccessToken,
+    ).toBeUndefined();
+
+    const linearPref = mod.updateIntegrationsSettings({ issueSource: 'linear' });
+    expect(mod.resolveEffectiveIssueSource()).toBe('linear');
+    expect(linearPref.integrations.linearAccessToken).toBe('lin_oauth_access');
+
+    const cleared = mod.disconnectLinearConnection();
+    expect(cleared.integrations.linearAccessToken).toBeUndefined();
+    expect(cleared.integrations.linearRefreshToken).toBeUndefined();
+    expect(cleared.integrations.linearViewerName).toBeUndefined();
+    expect(mod.isLinearConnected()).toBe(false);
+    expect(mod.resolveEffectiveIssueSource()).toBe('github');
+  });
+
+  it('round-trips Slack Socket Mode app token and listen flag', async () => {
+    const prevToken = process.env.SIDEBOARD_SLACK_APP_TOKEN;
+    delete process.env.SIDEBOARD_SLACK_APP_TOKEN;
+    const mod = await load();
+    expect(mod.slackListenEnabled()).toBe(false);
+    expect(mod.slackAppLevelToken()).toBe('');
+
+    const saved = mod.updateIntegrationsSettings({
+      slackAppToken: 'xapp-test',
+      slackListenEnabled: true,
+    });
+    expect(saved.integrations.slackAppToken).toBe('xapp-test');
+    expect(saved.integrations.slackListenEnabled).toBe(true);
+    expect(mod.slackListenEnabled()).toBe(true);
+    expect(mod.slackAppLevelToken()).toBe('xapp-test');
+
+    const cleared = mod.updateIntegrationsSettings({
+      slackAppToken: null,
+      slackListenEnabled: false,
+    });
+    expect(cleared.integrations.slackAppToken).toBeUndefined();
+    expect(cleared.integrations.slackListenEnabled).toBe(false);
+    if (prevToken === undefined) delete process.env.SIDEBOARD_SLACK_APP_TOKEN;
+    else process.env.SIDEBOARD_SLACK_APP_TOKEN = prevToken;
+  });
+
   it('round-trips default agent, model, and effort', async () => {
     const mod = await load();
     expect(mod.getDefaultAgent()).toBe('claude');
@@ -145,7 +208,7 @@ describe('app settings', () => {
     expect(mod.autoRenameBranchEnabled()).toBe(true);
     expect(mod.autoRunAfterSetupEnabled()).toBe(false);
     expect(mod.caffeinateWhileRunningEnabled()).toBe(false);
-    expect(mod.caffeinateWhileCloudConnectEnabled()).toBe(false);
+    expect(mod.caffeinateWhileSlackListenEnabled()).toBe(false);
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
     expect(mod.maxConcurrentAgents()).toBe(3);
@@ -154,7 +217,7 @@ describe('app settings', () => {
       autoRenameBranch: false,
       autoRunAfterSetup: true,
       caffeinateWhileRunning: true,
-      caffeinateWhileCloudConnect: true,
+      caffeinateWhileSlackListen: true,
       deleteBranchOnPurge: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
@@ -163,13 +226,13 @@ describe('app settings', () => {
       autoRenameBranch: false,
       autoRunAfterSetup: true,
       caffeinateWhileRunning: true,
-      caffeinateWhileCloudConnect: true,
+      caffeinateWhileSlackListen: true,
       deleteBranchOnPurge: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
     });
     expect(mod.autoRenameBranchEnabled()).toBe(false);
-    expect(mod.caffeinateWhileCloudConnectEnabled()).toBe(true);
+    expect(mod.caffeinateWhileSlackListenEnabled()).toBe(true);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(true);
     expect(mod.maxConcurrentAgents()).toBe(8);
   });

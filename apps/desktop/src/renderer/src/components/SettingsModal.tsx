@@ -4,14 +4,14 @@ import type {
   AgentKind,
   AgentSetupActionResult,
   AgentStatus,
-  AppSettings,
   Autonomy,
-  BrightsyCloudConnectAgent,
   BrightsySession,
   CliAgentKind,
-  CloudConnectStatus,
+  SlackListenStatus,
   GitHubStatus,
   IssueSource,
+  PublicAppSettings,
+  SlackWorkspaceInfo,
   ThinkingEffort,
   Thread,
 } from '@sideboard-ai/core';
@@ -52,45 +52,49 @@ const CLI_PATH_LABELS: Record<CliAgentKind, { title: string; bin: string; system
   },
 };
 
-function emptyAppSettings(): AppSettings {
+function emptyAppSettings(): PublicAppSettings {
   return {
     environment: {},
     claude: {},
     codex: {},
     opencode: {},
     brightsy: {},
-    integrations: {},
+    integrations: {
+      hasLinearApiKey: false,
+      hasLinearOAuth: false,
+      hasSlackClientSecret: false,
+      hasSlackAppToken: false,
+    },
     defaults: {},
     advanced: {},
   };
 }
 
-function storedExecutablePath(settings: AppSettings, agent: CliAgentKind): string {
+function storedExecutablePath(settings: PublicAppSettings, agent: CliAgentKind): string {
   if (agent === 'claude') return settings.claude?.executablePath ?? '';
   if (agent === 'codex') return settings.codex?.executablePath ?? '';
   if (agent === 'opencode') return settings.opencode?.executablePath ?? '';
   return settings.brightsy?.executablePath ?? '';
 }
 
-function normalizeSettings(next: AppSettings): AppSettings {
+function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
   return {
     environment: next.environment ?? {},
     claude: next.claude ?? {},
     codex: next.codex ?? {},
     opencode: next.opencode ?? {},
     brightsy: next.brightsy ?? {},
-    integrations: next.integrations ?? {},
+    integrations: {
+      hasLinearApiKey: false,
+      hasLinearOAuth: false,
+      hasSlackClientSecret: false,
+      hasSlackAppToken: false,
+      ...next.integrations,
+    },
     defaults: next.defaults ?? {},
     advanced: next.advanced ?? {},
   };
 }
-
-const CLOUD_CONNECT_AGENTS: Array<{ id: BrightsyCloudConnectAgent; label: string }> = [
-  { id: 'claude', label: 'Claude Code' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'opencode', label: 'OpenCode' },
-  { id: 'cursor', label: 'Cursor' },
-];
 
 const DEFAULT_AGENT_LABELS: Record<AgentKind, string> = {
   claude: 'Claude',
@@ -187,7 +191,7 @@ const AGENT_PANELS: Array<{
     label: 'Brightsy',
     envKey: null,
     blurb:
-      'Hosted chat via the Brightsy CLI (`brightsy login`). Connect teams below, then turn on Cloud messages so remote Brightsy agents (Slack, Discord, Teams) can ask about all Sideboard workspaces.',
+      'Hosted chat via the Brightsy CLI (`brightsy login`) — no local file edits. Connect a team below for Brightsy schema and files. Slack (Account) is how you remote-control this Mac.',
     docsUrl: 'https://www.npmjs.com/package/@brightsy/cli',
   },
 ];
@@ -212,7 +216,7 @@ export function SettingsModal({
   const [nav, setNav] = useState<NavId>(initialNav);
   const [agentPanel, setAgentPanel] = useState<AgentPanel | null>(null);
   const [historyQuery, setHistoryQuery] = useState('');
-  const [settings, setSettings] = useState<AppSettings>(emptyAppSettings);
+  const [settings, setSettings] = useState<PublicAppSettings>(emptyAppSettings);
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -224,33 +228,46 @@ export function SettingsModal({
   const [cliPathDraft, setCliPathDraft] = useState('');
   const [systemCliPath, setSystemCliPath] = useState<string | null>(null);
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
-  const [cloudConnect, setCloudConnect] = useState<CloudConnectStatus | null>(null);
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
+  const [slackWorkspaces, setSlackWorkspaces] = useState<SlackWorkspaceInfo[]>([]);
+  const [slackListen, setSlackListen] = useState<SlackListenStatus | null>(null);
+  const [slackTokenDraft, setSlackTokenDraft] = useState('');
+  const [slackOauthBusy, setSlackOauthBusy] = useState(false);
+  const [slackDeviceLabelDraft, setSlackDeviceLabelDraft] = useState('');
   const [linearKeyDraft, setLinearKeyDraft] = useState('');
   const [showLinearKey, setShowLinearKey] = useState(false);
+  const [linearOauthBusy, setLinearOauthBusy] = useState(false);
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
   const [setupLog, setSetupLog] = useState<string | null>(null);
 
   async function reload() {
-    const cloudApi = window.sideboard.getCloudConnectStatus;
-    const [s, agents, session, cloud, gh] = await Promise.all([
+    const slackListenApi = window.sideboard.getSlackListenStatus;
+    const [s, agents, session, gh, slack, slackIn] = await Promise.all([
       window.sideboard.getAppSettings(),
       window.sideboard.detectAgents(),
       window.sideboard.getBrightsySession().catch(() => null),
-      typeof cloudApi === 'function'
-        ? cloudApi().catch(() => null)
-        : Promise.resolve(null),
       window.sideboard.getGitHubStatus().catch(() => null),
+      window.sideboard.getSlackWorkspaces().catch(() => [] as SlackWorkspaceInfo[]),
+      typeof slackListenApi === 'function'
+        ? slackListenApi().catch(() => null)
+        : Promise.resolve(null),
     ]);
     const next = normalizeSettings(s);
     setSettings(next);
     setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 3));
     setStatuses(agents);
     setBrightsySession(session);
-    setCloudConnect(cloud);
     setGithubStatus(gh);
+    setSlackWorkspaces(slack);
+    setSlackListen(slackIn);
     setLinearKeyDraft('');
+    setSlackTokenDraft('');
+    setSlackDeviceLabelDraft(
+      s.integrations.slackDeviceLabel?.trim() ||
+        slackIn?.deviceLabel?.trim() ||
+        '',
+    );
   }
 
   useEffect(() => {
@@ -273,16 +290,16 @@ export function SettingsModal({
   }, [agentPanel]);
 
   useEffect(() => {
-    if (agentPanel !== 'brightsy') return;
-    const cloudApi = window.sideboard.getCloudConnectStatus;
-    if (typeof cloudApi !== 'function') return;
+    if (nav !== 'account') return;
+    const api = window.sideboard.getSlackListenStatus;
+    if (typeof api !== 'function') return;
     const id = window.setInterval(() => {
-      void cloudApi()
-        .then(setCloudConnect)
+      void api()
+        .then(setSlackListen)
         .catch(() => undefined);
     }, 2500);
     return () => window.clearInterval(id);
-  }, [agentPanel]);
+  }, [nav]);
 
   useEffect(() => {
     setSetupLog(null);
@@ -297,8 +314,8 @@ export function SettingsModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const envEntries = useMemo(
-    () => Object.entries(settings.environment).sort(([a], [b]) => a.localeCompare(b)),
+  const envKeys = useMemo(
+    () => Object.keys(settings.environment).sort((a, b) => a.localeCompare(b)),
     [settings.environment],
   );
 
@@ -306,8 +323,9 @@ export function SettingsModal({
     ? AGENT_PANELS.find((a) => a.id === agentPanel) ?? null
     : null;
   const activeStatus = agentPanel ? statusFor(statuses, agentPanel) : undefined;
-  const activeEnvValue =
-    activeAgent?.envKey != null ? settings.environment[activeAgent.envKey] ?? '' : '';
+  const hasActiveEnv =
+    activeAgent?.envKey != null &&
+    Object.prototype.hasOwnProperty.call(settings.environment, activeAgent.envKey);
 
   function formatSetupResult(result: AgentSetupActionResult): string {
     const parts = [result.message];
@@ -421,30 +439,7 @@ export function SettingsModal({
     }
   }
 
-  async function saveCloudConnect(opts: {
-    enabled?: boolean;
-    agent?: BrightsyCloudConnectAgent;
-  }) {
-    setBusy(true);
-    setError(null);
-    try {
-      if (typeof window.sideboard.setCloudConnect !== 'function') {
-        throw new Error(
-          'Cloud connect requires a desktop restart (preload bridge outdated). Quit and reopen Sideboard.',
-        );
-      }
-      const status = await window.sideboard.setCloudConnect(opts);
-      setCloudConnect(status);
-      const next = await window.sideboard.getAppSettings();
-      applySettings(next);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function applySettings(next: AppSettings) {
+  function applySettings(next: PublicAppSettings) {
     setSettings(normalizeSettings(next));
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 3));
   }
@@ -452,6 +447,7 @@ export function SettingsModal({
   async function saveIntegrationsPatch(patch: {
     linearApiKey?: string | null;
     issueSource?: IssueSource | null;
+    slackDeviceLabel?: string | null;
   }) {
     setBusy(true);
     setError(null);
@@ -459,6 +455,13 @@ export function SettingsModal({
       const next = await window.sideboard.updateIntegrationsSettings(patch);
       applySettings(next);
       setLinearKeyDraft('');
+      if ('slackDeviceLabel' in patch) {
+        setSlackDeviceLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
+        const listenApi = window.sideboard.getSlackListenStatus;
+        if (typeof listenApi === 'function') {
+          setSlackListen(await listenApi().catch(() => null));
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -639,8 +642,8 @@ export function SettingsModal({
             {nav === 'account' && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Connect GitHub and Linear for Create-from (PRs, branches, issues). These
-                  connections are owned by Sideboard — not per-agent MCP.
+                  Connect GitHub, Linear, and Slack. These connections are owned by Sideboard —
+                  not per-agent MCP.
                 </p>
 
                 <div className="settings-section settings-section-card">
@@ -650,8 +653,8 @@ export function SettingsModal({
                         Default agent, model &amp; effort
                       </div>
                       <p className="settings-hint">
-                        Used for new workspace chats, chat tabs, the cloud orchestrator, and
-                        MCP-spawned worktrees (when agent/model are omitted).
+                        Used for new workspace chats, chat tabs, and MCP-spawned worktrees
+                        (when agent/model are omitted).
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
                         {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort)}
@@ -721,31 +724,40 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Linear</div>
                   <p className="settings-hint">
-                    Connect Linear so Sideboard can use issue context from your account. Create an
-                    API key at linear.app/settings/api.
+                    Connect Linear so Sideboard can use issue context from your account. Sign in
+                    with your browser — same pattern as Slack.
                   </p>
-                  {settings.integrations.linearApiKey ? (
+                  {settings.integrations.hasLinearApiKey ? (
                     <div className="settings-toggle-row" style={{ marginTop: 10 }}>
                       <div>
                         <p className="settings-status-text">
                           <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
-                          Connected
-                          {showLinearKey
-                            ? ` · ${settings.integrations.linearApiKey}`
-                            : ` · ${maskSecret(settings.integrations.linearApiKey)}`}
+                          {settings.integrations.hasLinearOAuth
+                            ? [
+                                'Connected',
+                                settings.integrations.linearViewerName,
+                                settings.integrations.linearOrganizationName,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')
+                            : 'Connected · key saved on this Mac'}
                         </p>
                       </div>
                       <div className="row" style={{ gap: 8, margin: 0 }}>
                         <button
                           type="button"
-                          onClick={() => setShowLinearKey((v) => !v)}
-                        >
-                          {showLinearKey ? 'Hide' : 'Show'}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void saveIntegrationsPatch({ linearApiKey: null })}
+                          disabled={busy || linearOauthBusy}
+                          onClick={() => {
+                            setBusy(true);
+                            setError(null);
+                            void window.sideboard
+                              .disconnectLinear()
+                              .then((next) => applySettings(next))
+                              .catch((err) =>
+                                setError(err instanceof Error ? err.message : String(err)),
+                              )
+                              .finally(() => setBusy(false));
+                          }}
                         >
                           Disconnect
                         </button>
@@ -753,18 +765,35 @@ export function SettingsModal({
                     </div>
                   ) : (
                     <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy || linearOauthBusy}
+                        onClick={() => {
+                          setLinearOauthBusy(true);
+                          setError(null);
+                          void window.sideboard
+                            .startLinearOAuth()
+                            .then((next) => applySettings(next))
+                            .catch((err) =>
+                              setError(err instanceof Error ? err.message : String(err)),
+                            )
+                            .finally(() => setLinearOauthBusy(false));
+                        }}
+                      >
+                        {linearOauthBusy ? 'Waiting for Linear…' : 'Connect via browser'}
+                      </button>
                       <input
                         type={showLinearKey ? 'text' : 'password'}
                         value={linearKeyDraft}
                         onChange={(e) => setLinearKeyDraft(e.target.value)}
-                        placeholder="lin_api_…"
+                        placeholder="or paste lin_api_…"
                         style={{ flex: 1 }}
                         autoComplete="off"
                       />
                       <button
                         type="button"
-                        className="primary"
-                        disabled={busy || !linearKeyDraft.trim()}
+                        disabled={busy || linearOauthBusy || !linearKeyDraft.trim()}
                         onClick={() =>
                           void saveIntegrationsPatch({ linearApiKey: linearKeyDraft.trim() })
                         }
@@ -773,6 +802,186 @@ export function SettingsModal({
                       </button>
                     </div>
                   )}
+                </div>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Slack workspaces</div>
+                  <p className="settings-hint">
+                    Click <strong>Add via browser</strong> to install the Sideboard Slack app into a
+                    workspace. Listening starts automatically. DMs and @mentions go to the Global
+                    orchestrator while Sideboard is running.
+                  </p>
+                  {slackWorkspaces.length > 0 ? (
+                    <div className="settings-check-list" style={{ marginTop: 10 }}>
+                      {slackWorkspaces.map((ws) => (
+                        <div key={ws.team_id} className="settings-toggle-row">
+                          <div>
+                            <p className="settings-status-text">
+                              <span
+                                className="settings-dot ok"
+                                style={{ display: 'inline-block', marginRight: 8 }}
+                              />
+                              {ws.team_name}
+                              <span className="settings-hint"> · {ws.team_id}</span>
+                              {!ws.has_user_token ? (
+                                <span className="settings-hint"> · search needs user token</span>
+                              ) : null}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={busy || slackOauthBusy}
+                      onClick={() => {
+                        setBusy(true);
+                        setError(null);
+                        void window.sideboard
+                          .disconnectSlackWorkspace(ws.team_id)
+                          .then((list) => {
+                            setSlackWorkspaces(list);
+                            return window.sideboard.getSlackListenStatus?.();
+                          })
+                          .then((status) => {
+                            if (status) setSlackListen(status);
+                          })
+                          .catch((err) =>
+                            setError(err instanceof Error ? err.message : String(err)),
+                          )
+                          .finally(() => setBusy(false));
+                      }}
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="settings-hint" style={{ marginTop: 8 }}>
+                      No workspaces connected yet.
+                    </p>
+                  )}
+                  <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                    <input
+                      type="password"
+                      value={slackTokenDraft}
+                      onChange={(e) => setSlackTokenDraft(e.target.value)}
+                      placeholder="xoxb-… or xoxp-…"
+                      style={{ flex: 1 }}
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busy || slackOauthBusy || !slackTokenDraft.trim()}
+                      onClick={() => {
+                        setBusy(true);
+                        setError(null);
+                        void window.sideboard
+                          .connectSlackToken(slackTokenDraft.trim())
+                          .then((list) => {
+                            setSlackWorkspaces(list);
+                            setSlackTokenDraft('');
+                            return window.sideboard.getSlackListenStatus?.();
+                          })
+                          .then((status) => {
+                            if (status) setSlackListen(status);
+                          })
+                          .catch((err) =>
+                            setError(err instanceof Error ? err.message : String(err)),
+                          )
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      Add workspace
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || slackOauthBusy}
+                      onClick={() => {
+                        setSlackOauthBusy(true);
+                        setError(null);
+                        void window.sideboard
+                          .startSlackOAuth()
+                          .then((list) => {
+                            setSlackWorkspaces(list);
+                            return window.sideboard.getSlackListenStatus?.();
+                          })
+                          .then((status) => {
+                            if (status) setSlackListen(status);
+                          })
+                          .catch((err) =>
+                            setError(err instanceof Error ? err.message : String(err)),
+                          )
+                          .finally(() => setSlackOauthBusy(false));
+                      }}
+                    >
+                      {slackOauthBusy ? 'Waiting for Slack…' : 'Add via browser'}
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 16 }}>
+                    <div className="settings-section-title">This Mac</div>
+                    <p className="settings-hint">
+                      Each MacBook is its own Slack destination. Name this one{' '}
+                      <strong>Personal</strong> or <strong>Work</strong>. Replies come
+                      back as <code>Work: …</code> so you know which Mac answered.
+                      Address one with <code>work:</code> or <code>personal:</code> at
+                      the start of the DM (case doesn&apos;t matter).
+                    </p>
+                    <div className="row" style={{ marginTop: 8, gap: 8 }}>
+                      <input
+                        value={slackDeviceLabelDraft}
+                        onChange={(e) => setSlackDeviceLabelDraft(e.target.value)}
+                        placeholder="Personal"
+                        style={{ flex: 1 }}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={
+                          busy ||
+                          !slackDeviceLabelDraft.trim() ||
+                          slackDeviceLabelDraft.trim() ===
+                            (settings.integrations.slackDeviceLabel?.trim() || '')
+                        }
+                        onClick={() =>
+                          void saveIntegrationsPatch({
+                            slackDeviceLabel: slackDeviceLabelDraft.trim(),
+                          })
+                        }
+                      >
+                        Save name
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 16 }}>
+                    <div className="settings-section-title">Listening</div>
+                    <p className="settings-hint">
+                      DMs to the bot and @mentions go to the Global orchestrator. Keep Sideboard
+                      running.
+                    </p>
+                  </div>
+                  <p className="settings-hint" style={{ marginTop: 8 }}>
+                    {slackListen?.workspaceCount
+                      ? slackListen.running
+                        ? `${
+                            slackListen.mode === 'relay'
+                              ? 'Relay connected'
+                              : 'Listening'
+                          }${slackListen.deviceLabel ? ` · ${slackListen.deviceLabel}` : ''} · ${slackListen.workspaceCount} workspace${slackListen.workspaceCount === 1 ? '' : 's'}`
+                        : slackListen.lastError
+                          ? `Not connected — ${slackListen.lastError}`
+                          : slackListen.mode
+                            ? 'Connecting…'
+                            : 'Listen is not available on this Mac yet.'
+                      : 'Connect a workspace to start listening.'}
+                  </p>
+                  {slackListen?.lastLog ? (
+                    <p className="settings-hint settings-cloud-log">{slackListen.lastLog}</p>
+                  ) : null}
+                  <p className="settings-hint" style={{ marginTop: 12 }}>
+                    Connect a workspace with Add via browser. Listening only receives your Slack
+                    user&apos;s messages on this Mac.
+                  </p>
                 </div>
 
                 <div className="settings-section settings-section-card">
@@ -788,7 +997,7 @@ export function SettingsModal({
                     ]).map((opt) => {
                       const preferred = settings.integrations.issueSource ?? 'github';
                       const active = preferred === opt.id;
-                      const linearOk = Boolean(settings.integrations.linearApiKey);
+                      const linearOk = Boolean(settings.integrations.hasLinearApiKey);
                       const disabled = opt.id === 'linear' && !linearOk;
                       return (
                         <button
@@ -829,17 +1038,11 @@ export function SettingsModal({
                       a.id === 'brightsy'
                         ? (brightsySession?.connectedTeams ?? []).length
                         : 0;
-                    const cloudBit =
-                      a.id === 'brightsy' && cloudConnect?.enabled
-                        ? cloudConnect.running
-                          ? ' · cloud on'
-                          : ' · cloud enabled'
-                        : '';
                     const meta =
                       a.id === 'brightsy' && ready
                         ? connectedCount > 0
-                          ? `Ready · ${connectedCount} team${connectedCount === 1 ? '' : 's'} connected${cloudBit}`
-                          : `Ready · select teams to connect${cloudBit}`
+                          ? `Ready · ${connectedCount} team${connectedCount === 1 ? '' : 's'} connected`
+                          : 'Ready · connect a team for schema and files'
                         : ready
                           ? a.bundled
                             ? 'Ready · SDK (no CLI install)'
@@ -1083,15 +1286,12 @@ export function SettingsModal({
                         autoComplete="off"
                         spellCheck={false}
                         placeholder={
-                          activeEnvValue
-                            ? maskSecret(activeEnvValue)
+                          hasActiveEnv
+                            ? 'Saved on this Mac — paste to replace'
                             : `Paste ${activeAgent.envKey}`
                         }
                         value={draftValue}
                         onChange={(e) => setDraftValue(e.target.value)}
-                        onFocus={() => {
-                          if (!draftValue && activeEnvValue) setDraftValue(activeEnvValue);
-                        }}
                       />
                       <button
                         type="button"
@@ -1114,7 +1314,7 @@ export function SettingsModal({
                       >
                         Save key
                       </button>
-                      {activeEnvValue && (
+                      {hasActiveEnv && (
                         <button
                           type="button"
                           disabled={busy}
@@ -1141,14 +1341,13 @@ export function SettingsModal({
                   </div>
                 )}
 
-                {(activeAgent.id === 'brightsy' || activeAgent.id === 'claude') && (
+                {activeAgent.id === 'brightsy' && (
                   <div className="settings-section">
                     <div className="settings-section-title">Brightsy teams</div>
                     <p className="settings-hint">
-                      Uses <code>brightsy teams</code> / <code>switch</code> (same as MCP{' '}
-                      <code>list_teams</code> / <code>switch_team</code>). Connected teams drive
-                      Brightsy CLI, agent chat, and Claude MCP (
-                      <code>brightsy_&lt;slug&gt;</code> per team).
+                      Uses <code>brightsy teams</code> / <code>switch</code>. Connected teams
+                      unlock hosted Brightsy chat and the Brightsy schema/files datasource. Slack
+                      (Account) is the remote path for this Mac.
                     </p>
                     {!brightsySession?.connected ? (
                       <p className="settings-hint">
@@ -1231,140 +1430,6 @@ export function SettingsModal({
                   </div>
                 )}
 
-                {activeAgent.id === 'brightsy' && (
-                  <div className="settings-section">
-                    <div className="settings-toggle-row">
-                      <div>
-                        <div className="settings-section-title">
-                          Cloud messages / remote orchestrator
-                        </div>
-                        <p className="settings-hint">
-                          Let Brightsy cloud agents ask about and drive threads across all
-                          registered Sideboard workspaces via the Orchestration coordinator (no
-                          home repo) — Slack, Discord, or Microsoft Teams (Slack is best-tested).
-                          Requires <code>brightsy login</code> and a chat channel on the Brightsy
-                          agent. Keep the desktop app running.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className={`settings-switch${cloudConnect?.enabled ? ' on' : ''}`}
-                        role="switch"
-                        aria-checked={Boolean(cloudConnect?.enabled)}
-                        disabled={busy || !brightsySession?.connected}
-                        onClick={() =>
-                          void saveCloudConnect({
-                            enabled: !cloudConnect?.enabled,
-                          })
-                        }
-                      >
-                        <span className="settings-switch-knob" />
-                      </button>
-                    </div>
-
-                    <div className="settings-toggle-row" style={{ marginTop: '0.85rem' }}>
-                      <div>
-                        <div className="settings-section-title">
-                          Caffeinate while cloud connect is on
-                        </div>
-                        <p className="settings-hint">
-                          Keep the Mac awake while listening for Slack / Discord / Teams messages
-                          (macOS only; lid-close may still sleep on battery).
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className={`settings-switch${advanced.caffeinateWhileCloudConnect ? ' on' : ''}`}
-                        role="switch"
-                        aria-checked={Boolean(advanced.caffeinateWhileCloudConnect)}
-                        disabled={busy}
-                        onClick={() =>
-                          void saveAdvancedPatch({
-                            caffeinateWhileCloudConnect: !advanced.caffeinateWhileCloudConnect,
-                          })
-                        }
-                      >
-                        <span className="settings-switch-knob" />
-                      </button>
-                    </div>
-
-                    <label className="settings-label" htmlFor="cloud-connect-agent">
-                      Coordinator agent
-                    </label>
-                    <p className="settings-hint" style={{ marginBottom: '0.45rem' }}>
-                      Uses Account default when that agent can orchestrate (Claude, Cursor,
-                      Codex, or OpenCode). Currently:{' '}
-                      <strong>
-                        {cloudConnect?.agent ??
-                          settings.brightsy?.cloudConnectAgent ??
-                          defaultAgent}
-                      </strong>
-                      {defaultAgent === 'brightsy'
-                        ? ' — set a fallback below because Brightsy cannot run the coordinator.'
-                        : null}
-                    </p>
-                    {defaultAgent === 'brightsy' ? (
-                      <select
-                        id="cloud-connect-agent"
-                        className="settings-select"
-                        disabled={busy}
-                        value={
-                          cloudConnect?.agent ??
-                          settings.brightsy?.cloudConnectAgent ??
-                          'claude'
-                        }
-                        onChange={(e) =>
-                          void saveCloudConnect({
-                            agent: e.target.value as BrightsyCloudConnectAgent,
-                          })
-                        }
-                      >
-                        {CLOUD_CONNECT_AGENTS.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={busy}
-                        onClick={() => setDefaultsPickerOpen(true)}
-                      >
-                        Change account default
-                      </button>
-                    )}
-
-                    <p className="settings-hint" style={{ marginTop: '0.6rem' }}>
-                      {cloudConnect?.enabled
-                        ? cloudConnect.running
-                          ? `Listening${cloudConnect.endpoint ? ` via ${cloudConnect.endpoint}` : ''} · ${cloudConnect.workspaces.length} workspace${cloudConnect.workspaces.length === 1 ? '' : 's'}`
-                          : cloudConnect.lastError
-                            ? `Enabled, but not running — ${cloudConnect.lastError}`
-                            : 'Enabled — starting…'
-                        : brightsySession?.connected
-                          ? 'Off — turn on to accept Brightsy cloud tasks (Slack / Discord / Teams).'
-                          : 'Log in with Brightsy first.'}
-                    </p>
-                    {cloudConnect?.enabled && cloudConnect.workspaces.length > 0 ? (
-                      <ul className="settings-workspace-list">
-                        {cloudConnect.workspaces.map((ws) => (
-                          <li key={ws.path}>
-                            <span>{ws.name}</span>
-                            <code className="settings-path">{ws.path}</code>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {cloudConnect?.lastLog ? (
-                      <p className="settings-hint settings-cloud-log">
-                        {cloudConnect.lastLog}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-
                 {!activeAgent.envKey &&
                   activeAgent.id !== 'brightsy' &&
                   activeAgent.id !== 'claude' && (
@@ -1391,9 +1456,10 @@ export function SettingsModal({
                         Inject Brightsy MCP on Claude, Codex, and OpenCode
                       </div>
                       <p className="settings-hint">
-                        Off by default. When on, those worktree chats always get Brightsy MCP if you
-                        are logged in. When off, they only get it if you say “use Brightsy…” or the
-                        thread already used it. Orchestration chats always get it when logged in.
+                        Off by default. Optional Brightsy tools on worktree chats when you are
+                        logged in. When off, they only get those tools if you say “use Brightsy…” or
+                        the thread already used them. Orchestration chats still get them when
+                        logged in.
                       </p>
                     </div>
                     <button
@@ -1486,6 +1552,34 @@ export function SettingsModal({
                       onClick={() =>
                         void saveAdvancedPatch({
                           caffeinateWhileRunning: !advanced.caffeinateWhileRunning,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">
+                        Caffeinate while Slack Listen is on
+                      </div>
+                      <p className="settings-hint">
+                        Keep the Mac awake while Sideboard is listening for Slack DMs and
+                        @mentions (macOS only; lid-close may still sleep on battery).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.caffeinateWhileSlackListen ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.caffeinateWhileSlackListen)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          caffeinateWhileSlackListen: !advanced.caffeinateWhileSlackListen,
                         })
                       }
                     >
@@ -1676,25 +1770,27 @@ export function SettingsModal({
                 </p>
 
                 <div className="settings-env-table">
-                  {envEntries.length === 0 && (
+                  {envKeys.length === 0 && (
                     <div className="settings-empty">No environment variables yet.</div>
                   )}
-                  {envEntries.map(([key, value]) => (
+                  {envKeys.map((key) => (
                     <div key={key} className="settings-env-row">
                       {editingEnvKey === key ? (
                         <>
                           <code className="settings-env-key">{key}</code>
                           <input
                             className="settings-env-input"
+                            type="password"
                             value={draftValue}
                             autoFocus
                             spellCheck={false}
+                            placeholder="Paste a new value to replace"
                             onChange={(e) => setDraftValue(e.target.value)}
                           />
                           <button
                             type="button"
                             className="primary"
-                            disabled={busy}
+                            disabled={busy || !draftValue.trim()}
                             onClick={() => {
                               void saveEnvPatch({ [key]: draftValue }).then(() => {
                                 setEditingEnvKey(null);
@@ -1717,17 +1813,15 @@ export function SettingsModal({
                       ) : (
                         <>
                           <code className="settings-env-key">{key}</code>
-                          <span className="settings-env-value" title={value}>
-                            {maskSecret(value)}
-                          </span>
+                          <span className="settings-env-value">Saved on this Mac</span>
                           <button
                             type="button"
                             onClick={() => {
                               setEditingEnvKey(key);
-                              setDraftValue(value);
+                              setDraftValue('');
                             }}
                           >
-                            Edit
+                            Replace
                           </button>
                           <button
                             type="button"

@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.69] - 2026-08-12
+## [0.1.69] - 2026-08-13
+
+### Added
+
+- PR pill, git hover card, Checks, and stack map show **Queued** when the connected GitHub PR is in a merge queue (`isInMergeQueue`)
+- Slack workspaces connector (Account settings): store N team tokens, MCP `list_teams` plus `slack_list_channels` / `slack_search` / `slack_read` / `slack_post`
+- Slack Listen via the official Sideboard app + hosted relay: DMs and @mentions route to the Global orchestrator; each Mac is a named destination (`Personal` / `Work`); address with `work:` / `personal:` (case-insensitive); replies are signed with that name so you can tell which Mac answered
+- Sidebar badge when someone replies in Slack to a message Sideboard posted (`slack_post`); click opens that thread. Their reply does not drive this Mac.
+- Orchestration MCP `set_caffeinate` — keep this Mac awake across Slack / away-from-keyboard turns; turn off when the user says they are done
 
 ### Changed
 
+- Linear Account connection uses browser OAuth (PKCE) instead of requiring a personal API key. Paste-a-key still works as a fallback. `sideboard linear login` / `disconnect`
 - Diff view no longer shows a loading preloader; the patch appears when git is done
 
 ## [0.1.68] - 2026-08-12

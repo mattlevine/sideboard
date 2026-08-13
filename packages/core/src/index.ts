@@ -2,6 +2,19 @@ export * from './types/thread.js';
 export * from './types/thinking-effort.js';
 export * from './store/paths.js';
 export * from './store/app-settings.js';
+export {
+  getCaffeinateHold,
+  setCaffeinateHold,
+  caffeinateHoldPath,
+} from './store/caffeinate-hold.js';
+export type { CaffeinateHoldState } from './store/caffeinate-hold.js';
+export {
+  setVaultMasterKey,
+  persistVaultKeyInKeychain,
+  readKeychainVaultKey,
+  resolveVaultKey,
+  secureFileUnlocksWith,
+} from './store/secure-file.js';
 export * from './store/thread-store.js';
 export * from './store/workspaces.js';
 export * from './store/global-workspace.js';
@@ -11,6 +24,7 @@ export * from './git/worktree.js';
 export * from './git/stack.js';
 export * from './integrations/github.js';
 export * from './integrations/linear.js';
+export * from './integrations/linear-oauth.js';
 export * from './integrations/issues.js';
 export * from './agents/index.js';
 export * from './agents/spawn.js';
@@ -58,7 +72,7 @@ export * from './git/orphan-cleanup.js';
 export { startMcpServer } from './mcp/server.js';
 export { sideboardMcpProfile, SIDEBOARD_MCP_PROFILE_ENV } from './mcp/profile.js';
 export type { SideboardMcpProfile } from './mcp/profile.js';
-export type { CloudConnectStatus, IpcApi } from './ipc/types.js';
+export type { IpcApi, CloudConnectStatus, SlackListenStatus } from './ipc/types.js';
 export { loadBrightsyConfig, brightsyConfigPath } from './brightsy/config.js';
 export {
   BrightsySideboardApi,
@@ -104,3 +118,57 @@ export {
   BRIGHTSY_MCP_ALLOWED_TOOLS,
   SIDEBOARD_MCP_ALLOWED_TOOLS,
 } from './agents/injected-mcp.js';
+export {
+  listSlackWorkspaces,
+  connectSlackToken,
+  disconnectSlackWorkspace,
+  getSlackWorkspace,
+} from './slack/workspaces.js';
+export type { SlackWorkspaceInfo } from './slack/workspaces.js';
+export {
+  startSlackOAuth,
+  slackOAuthCredentials,
+  hasBakedSlackOAuth,
+  SLACK_OAUTH_REDIRECT,
+  SLACK_OAUTH_PORT,
+} from './slack/oauth.js';
+export {
+  BAKED_SLACK_RELAY_URL,
+  slackRelayUrl,
+} from './slack/baked-app.js';
+export {
+  runSlackListen,
+  handleSlackInbound,
+  formatSlackInboundPrompt,
+  formatSlackSignedReply,
+  ackSlackInboundSeen,
+  resolveSlackListenMode,
+  isInboundForThisDesktop,
+  SLACK_LISTEN_BUSY_REPLY,
+  SLACK_LISTEN_STOPPED_REPLY,
+  SLACK_LISTEN_TIMEOUT_REPLY,
+  SLACK_SEEN_REACTION,
+} from './slack/listen.js';
+export type { SlackListenOptions, SlackInboundMessage } from './slack/listen.js';
+export { SlackRelayHub } from './slack/relay-hub.js';
+export { startSlackRelayServer } from './slack/relay-server.js';
+export type { SlackRelayServerOptions, SlackRelayServerHandle } from './slack/relay-server.js';
+export { runSlackRelayClient } from './slack/relay-client.js';
+export type { SlackRelayClientOptions } from './slack/relay-client.js';
+export {
+  recordSlackOutboundWatch,
+  listSlackReplyBadges,
+  dismissSlackReplyBadge,
+  refreshSlackReplyBadges,
+  permalinkForSlackReplyBadge,
+  slackArchiveUrl,
+} from './slack/outbound-watch.js';
+export type { SlackReplyBadge, SlackOutboundWatch } from './slack/outbound-watch.js';
+export {
+  parseSlackRelayClientMessage,
+  parseSlackRelayServerMessage,
+} from './slack/relay-protocol.js';
+export type {
+  SlackRelayClientMessage,
+  SlackRelayServerMessage,
+} from './slack/relay-protocol.js';

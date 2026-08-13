@@ -47,6 +47,17 @@ const api: IpcApi = {
   updateDefaultsSettings: (patch) =>
     ipcRenderer.invoke('updateDefaultsSettings', patch),
   getGitHubStatus: () => ipcRenderer.invoke('getGitHubStatus'),
+  getSlackWorkspaces: () => ipcRenderer.invoke('getSlackWorkspaces'),
+  connectSlackToken: (token) => ipcRenderer.invoke('connectSlackToken', token),
+  startSlackOAuth: () => ipcRenderer.invoke('startSlackOAuth'),
+  startLinearOAuth: () => ipcRenderer.invoke('startLinearOAuth'),
+  disconnectLinear: () => ipcRenderer.invoke('disconnectLinear'),
+  disconnectSlackWorkspace: (teamId) =>
+    ipcRenderer.invoke('disconnectSlackWorkspace', teamId),
+  getSlackListenStatus: () => ipcRenderer.invoke('getSlackListenStatus'),
+  setSlackListen: (opts) => ipcRenderer.invoke('setSlackListen', opts),
+  getSlackReplyBadges: () => ipcRenderer.invoke('getSlackReplyBadges'),
+  openSlackReply: (badgeId) => ipcRenderer.invoke('openSlackReply', badgeId),
   listIssues: (repoPath) => ipcRenderer.invoke('listIssues', repoPath),
   listBranches: (repoPath, opts) => ipcRenderer.invoke('listBranches', repoPath, opts),
   listPrs: (repoPath) => ipcRenderer.invoke('listPrs', repoPath),

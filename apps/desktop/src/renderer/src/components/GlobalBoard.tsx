@@ -3,7 +3,6 @@ import type { OrchestratorRuntime, Thread } from '@sideboard-ai/core';
 import {
   CLOUD_ORCHESTRATOR_GOAL,
   GLOBAL_WORKSPACE_ID,
-  isCloudCoordinatorThread,
   threadDisplayTitle,
 } from '../lib/global-workspace';
 import { FleetActivityBar } from './FleetActivityBar';
@@ -40,7 +39,7 @@ function previewForThread(
   if (last?.role === 'agent' || last?.role === 'user') {
     return { text: last.text, markdown: last.role === 'agent' };
   }
-  // Don't surface the internal Brightsy marker string as a preview.
+  // Don't surface the reserved global-orchestrator marker as a preview.
   if (t.sourceRef?.trim() && t.sourceRef !== CLOUD_ORCHESTRATOR_GOAL) {
     return { text: t.sourceRef, markdown: false };
   }
@@ -88,8 +87,8 @@ export function GlobalBoard({
       <FleetActivityBar runtime={runtime} compact />
 
       <p className="board-lede">
-        Chats that steer worktree agents across your registered workspaces.
-        Brightsy cloud requests go to the chat marked Brightsy.
+        Chats that steer worktree agents across your registered workspaces. Slack DMs and
+        @mentions land on the Global orchestrator.
       </p>
 
       <div className="board-body">
@@ -104,11 +103,10 @@ export function GlobalBoard({
               t,
               liveByThread[t.id],
             );
-            const isCloud = isCloudCoordinatorThread(t);
             return (
               <div
                 key={t.id}
-                className={`board-row${isCloud ? ' cloud-brightsy' : ''}`}
+                className="board-row"
               >
                 <span className={`dot ${t.status}`} title={t.status} />
                 <div
@@ -125,11 +123,6 @@ export function GlobalBoard({
                 >
                   <div className="thread-title">
                     {threadDisplayTitle(t)}
-                    {isCloud ? (
-                      <span className="board-badge" title="Receives Brightsy cloud requests">
-                        Brightsy
-                      </span>
-                    ) : null}
                   </div>
                   <div className="thread-meta">
                     {t.agent} · {t.status}

@@ -293,6 +293,8 @@ export interface PrMeta {
   reviewDecision: string | null;
   baseRefName: string;
   headRefName: string;
+  /** True when the PR is sitting in a GitHub merge queue. */
+  isInMergeQueue: boolean;
 }
 
 /** One layer in a GitHub PR stack (bottom = position 1). */
