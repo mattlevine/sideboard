@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.66] - 2026-08-12
+
+Desktop GitHub release of the 0.1.65 Brightsy MCP gating (fresh npm + Mac DMGs).
+
 ## [0.1.65] - 2026-08-12
 
 ### Added
