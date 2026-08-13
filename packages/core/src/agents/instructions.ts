@@ -126,6 +126,11 @@ export function formatWorktreeDirective(
  * Tell agents how Sideboard renders Claude-style artifacts (side column).
  * Claude Code has no claude.ai `artifact` tool — fences / present_artifact instead.
  */
+/** Short isolation line on every worktree turn (survives CLI resume). */
+export function formatWorktreeReminder(): string {
+  return 'Sideboard worktree: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout.';
+}
+
 export function formatArtifactDirective(): string {
   return [
     'Sideboard side column (desktop UI):',

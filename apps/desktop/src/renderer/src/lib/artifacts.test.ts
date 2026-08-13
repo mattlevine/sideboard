@@ -114,6 +114,33 @@ describe('extractToolArtifacts', () => {
     expect(arts[0]!.kind).toBe('html');
   });
 
+  it('reads present_artifact content from input when the tool result is compact', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Compact</h1></body></html>';
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't-compact',
+        name: 'mcp__sideboard__present_artifact',
+        status: 'done',
+        input: {
+          artifact_id: 'c1',
+          type: 'html',
+          title: 'Compact',
+          content: html,
+        },
+        result: JSON.stringify({
+          ok: true,
+          artifact_id: 'c1',
+          title: 'Compact',
+          type: 'html',
+        }),
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.content).toContain('<h1>Compact</h1>');
+  });
+
   it('reads Cursor nested mcp present_artifact args + result envelope', () => {
     const html = '<!DOCTYPE html><html><body><h1>Nested</h1></body></html>';
     const payload = JSON.stringify({

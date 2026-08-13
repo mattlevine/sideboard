@@ -52,7 +52,8 @@ describe('codexAdapter.buildTurn', () => {
       { cachedPrefix: 'stable prefix', prompt: 'next step' },
     );
     expect(cmd.args[0]).toBe('exec');
-    expect(cmd.args.slice(-3)).toEqual(['resume', 'thread-abc', expect.any(String)]);
+    expect(cmd.args.slice(-3)).toEqual(['resume', 'thread-abc', 'next step']);
+    expect(cmd.args.at(-1)).not.toContain('stable prefix');
     expect(cmd.args.indexOf('--cd')).toBeLessThan(cmd.args.indexOf('resume'));
     expect(cmd.args.indexOf('--sandbox')).toBeLessThan(cmd.args.indexOf('resume'));
     expect(cmd.args).not.toContain('--last');

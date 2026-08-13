@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.64] - 2026-08-12
+
+### Changed
+
+- Worktree agent turns inject a UI-only Sideboard MCP (present_artifact / schema / files / plan, ask_user) instead of the full 35-tool fleet catalog
+- Codex, OpenCode, and Cursor resume omit the worktree/artifact/AGENTS.md prefix (same as Claude `--resume`)
+- `present_*` MCP tool results return id + ok only — document/schema bodies stay on the tool input so they are not billed twice
+
 ## [0.1.63] - 2026-08-12
 
 ### Added

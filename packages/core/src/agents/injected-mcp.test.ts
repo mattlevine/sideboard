@@ -54,6 +54,7 @@ describe('injected-mcp', () => {
     // Dev/desktop app-data must reach every agent MCP serializer (Codex was the
     // regression: stripped env → wrong ~/Library/.../sideboard store).
     expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
+    expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
 
     const cursorMap = toCursorMcpServers(servers);
     expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
@@ -117,6 +118,7 @@ describe('injected-mcp', () => {
       orchestratorThreadId: 'orch-thread-123',
     });
     expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBe('orch-thread-123');
+    expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('orchestration');
     expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
     const { toCodexMcpConfigArgs } = await import('./injected-mcp.js');
     const args = toCodexMcpConfigArgs(servers);
@@ -138,6 +140,7 @@ describe('injected-mcp', () => {
       includeBrightsy: false,
     });
     expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
+    expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
     expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBeUndefined();
   });
 

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { run } from '../git/run.js';
 import { resolveAgentExecutable } from '../store/app-settings.js';
+import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
 import {
@@ -9,7 +10,7 @@ import {
   toOpencodeMcpConfigContent,
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
-import { flattenTurnInput } from './turn-input.js';
+import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 import { permissionMode } from './types.js';
 
@@ -165,8 +166,8 @@ export const opencodeAdapter: AgentAdapter = {
     // (system + last messages → cacheControl / cache_control / cachePoint) for
     // Anthropic, OpenRouter, Bedrock, etc. We keep a stable prefix-first string and
     // pipe it on stdin so large seeds avoid ARG_MAX and stay byte-identical across turns.
-    const prompt = flattenTurnInput(input);
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
+    const prompt = flattenTurnInput(dropCachedPrefixOnResume(input, sessionId));
     const mode = permissionMode(thread);
     const model = thread.model?.trim();
     // Never use --continue — it's global under concurrency. Always --session <id>.
@@ -186,8 +187,7 @@ export const opencodeAdapter: AgentAdapter = {
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
-      orchestratorThreadId:
-        thread.sourceType === 'orchestration' ? thread.id : null,
+      orchestratorThreadId: isOrchestratorThread(thread) ? thread.id : null,
     });
     const mcpContent =
       injected.length > 0 ? toOpencodeMcpConfigContent(injected) : null;

@@ -21,6 +21,19 @@ export function normalizeTurnInput(
 }
 
 /**
+ * Resumed CLI sessions already hold history + first-turn prefix. Re-sending
+ * cachedPrefix (worktree playbook, AGENTS.md, artifact docs) doubles tokens.
+ */
+export function dropCachedPrefixOnResume(
+  input: string | AgentTurnInput,
+  sessionId: string | null | undefined,
+): AgentTurnInput {
+  const turn = normalizeTurnInput(input);
+  if (sessionId) return { prompt: turn.prompt };
+  return turn;
+}
+
+/**
  * Flatten to a single string for CLIs that don't accept cache_control blocks
  * (Codex today; OpenCode `run` is plain text — OpenCode applies provider caching
  * internally after it receives the message).

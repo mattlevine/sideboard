@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
 import { resolveAgentExecutable } from '../store/app-settings.js';
+import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage } from './error-detail.js';
 import {
@@ -11,7 +12,7 @@ import {
   toCodexMcpConfigArgs,
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
-import { flattenTurnInput, normalizeTurnInput } from './turn-input.js';
+import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import { permissionMode } from './types.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
@@ -214,17 +215,16 @@ export const codexAdapter: AgentAdapter = {
     // (see openai/codex#35300). Keep a stable prefix-first string so implicit
     // prompt caching can still match across turns / resume. Plain text only —
     // no structured stdin / stream-json input that could add extra breakpoints.
-    const prompt = flattenTurnInput(input);
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
+    const prompt = flattenTurnInput(dropCachedPrefixOnResume(input, sessionId));
     const useStdin = prompt.length > CODEX_PROMPT_ARG_MAX;
     // `-` reads the full prompt from stdin; spawn closes the pipe immediately
     // (avoids codex exec hanging on an open empty stdin — see openai/codex#20919).
     const promptArg = useStdin ? '-' : prompt;
 
     if (process.env.SIDEBOARD_DEBUG_CODEX_TURN === '1') {
-      const { cachedPrefix } = normalizeTurnInput(input);
       console.error(
-        `[sideboard/codex] promptChars=${prompt.length} resumed=${Boolean(sessionId)} stdin=${useStdin} hasPrefix=${Boolean(cachedPrefix)}`,
+        `[sideboard/codex] promptChars=${prompt.length} resumed=${Boolean(sessionId)} stdin=${useStdin} hasPrefix=${prompt.includes('Current request:')}`,
       );
     }
 
@@ -233,8 +233,7 @@ export const codexAdapter: AgentAdapter = {
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
-      orchestratorThreadId:
-        thread.sourceType === 'orchestration' ? thread.id : null,
+      orchestratorThreadId: isOrchestratorThread(thread) ? thread.id : null,
     });
     const mcpOverrides = toCodexMcpConfigArgs(injected);
     // Options must come before the prompt / `resume` subcommand. `codex exec resume`

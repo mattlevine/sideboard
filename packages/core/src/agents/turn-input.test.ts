@@ -3,6 +3,7 @@ import {
   buildCachedUserContent,
   buildClaudeStreamJsonUserMessage,
   countCacheControlBlocks,
+  dropCachedPrefixOnResume,
   findInvalidCacheControlTtlOrder,
   flattenTurnInput,
   MAX_ANTHROPIC_CACHE_CONTROL_BLOCKS,
@@ -19,6 +20,23 @@ describe('normalizeTurnInput', () => {
       prompt: 'hi',
       cachedPrefix: undefined,
     });
+  });
+});
+
+describe('dropCachedPrefixOnResume', () => {
+  it('omits cachedPrefix when the CLI session is resumed', () => {
+    expect(
+      dropCachedPrefixOnResume(
+        { cachedPrefix: 'worktree playbook', prompt: 'next step' },
+        'sess-1',
+      ),
+    ).toEqual({ prompt: 'next step' });
+    expect(
+      dropCachedPrefixOnResume(
+        { cachedPrefix: 'worktree playbook', prompt: 'first' },
+        null,
+      ).cachedPrefix,
+    ).toBe('worktree playbook');
   });
 });
 

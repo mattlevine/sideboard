@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Cursor } from '@cursor/sdk';
 import { run } from '../git/run.js';
 import { loadAppSettings } from '../store/app-settings.js';
+import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus } from '../types/thread.js';
 import {
   parseCursorRunnerLine,
@@ -17,7 +18,7 @@ import {
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
 import { resolveNodeLaunch } from './node-launch.js';
-import { flattenTurnInput } from './turn-input.js';
+import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
 export type { AgentModelInfo, CursorModelInfo } from './model-info.js';
@@ -153,16 +154,15 @@ export const cursorAdapter: AgentAdapter = {
   },
 
   async buildTurn(thread, input): Promise<TurnCommand> {
-    const prompt = flattenTurnInput(input);
     const agentId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
+    const prompt = flattenTurnInput(dropCachedPrefixOnResume(input, agentId));
     const apiKey = resolveCursorApiKey() || undefined;
     // Same injection as Claude: Sideboard always; Brightsy when logged in.
     // Cursor does not persist mcpServers across resume — include every turn.
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: isBrightsyConnected(),
-      orchestratorThreadId:
-        thread.sourceType === 'orchestration' ? thread.id : null,
+      orchestratorThreadId: isOrchestratorThread(thread) ? thread.id : null,
     });
     const mcpServers = toCursorMcpServers(injected);
     const req: CursorTurnRequest = {

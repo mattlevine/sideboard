@@ -115,11 +115,10 @@ import {
   maybeCompactContext,
 } from '../composer/context-compact.js';
 import {
-  formatAgentInstructions,
   formatArtifactDirective,
   formatRenameBranchDirective,
   formatWorktreeDirective,
-  loadAgentInstructions,
+  formatWorktreeReminder,
 } from '../agents/instructions.js';
 import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
 import {
@@ -766,7 +765,7 @@ export class Orchestrator {
           goal: thread.sourceRef || thread.title,
         })
       : null;
-    // Re-assert on every turn (incl. Claude --resume, which drops cachedPrefix).
+    // Re-assert on every turn (incl. CLI --resume, which drops cachedPrefix).
     const artifactReminder =
       thread.agent !== 'brightsy'
         ? [
@@ -778,15 +777,19 @@ export class Orchestrator {
             'Do not say artifacts/CMS UI are unavailable.',
           ].join(' ')
         : null;
+    const worktreeReminder =
+      thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
+        ? formatWorktreeReminder()
+        : null;
     const agentPrompt = [
       thread.planMode ? PLAN_MODE_INSTRUCTION : null,
       orchestrationReminder,
+      worktreeReminder,
       artifactReminder,
       expandedPrompt,
     ]
       .filter(Boolean)
       .join('\n\n');
-    const instructionFiles = loadAgentInstructions(thread.worktreePath, thread.agent);
     // Attachments are consumed on the first turn (like Conductor transcript chips).
     if (thread.attachments.length > 0) {
       updateThread(threadId, { attachments: [] });
@@ -828,14 +831,8 @@ export class Orchestrator {
             customPrompt: settings?.prompts?.renameBranch,
           })
         : null;
-    // Claude Code auto-loads CLAUDE.md / AGENTS.md for `-p` turns — duplicating
-    // them in every user message wastes tokens and adds cache-breakpoint pressure.
-    // Brightsy agents already carry their own server-side instructions; stuffing
-    // local AGENTS.md into every turn has also triggered empty model responses.
-    const instructions =
-      fresh.agent === 'claude' || isBrightsy
-        ? null
-        : formatAgentInstructions(instructionFiles);
+    // CLIs auto-load CLAUDE.md / AGENTS.md from the worktree — do not duplicate
+    // them in the user message. Brightsy carries its own server-side instructions.
     // Fresh / compacted sessions have no CLI resume — seed from Sideboard history.
     let seed: string | null = null;
     if (!fresh.sessionId) {
@@ -865,20 +862,19 @@ export class Orchestrator {
       }
     }
 
-    // Worktree directive for local agents (even on Claude resume). Project
-    // instructions + seed only on fresh sessions / non-Claude agents.
-    // Rename-branch is Conductor-style: only while still on the placeholder branch.
-    const cachedPrefix = [
-      coordinatorDirective,
-      worktreeDirective,
-      artifactDirective,
-      renameBranchDirective,
-      ...(fresh.agent === 'claude' && fresh.sessionId
-        ? []
-        : [instructions, seed]),
-    ]
-      .filter(Boolean)
-      .join('\n\n---\n\n');
+    // Worktree / artifact playbooks only on a fresh session. Resumed CLI sessions
+    // already have them; adapters also drop cachedPrefix on resume.
+    const cachedPrefix = fresh.sessionId
+      ? ''
+      : [
+          coordinatorDirective,
+          worktreeDirective,
+          artifactDirective,
+          renameBranchDirective,
+          seed,
+        ]
+          .filter(Boolean)
+          .join('\n\n---\n\n');
 
     try {
       const stderrTail: string[] = [];
@@ -999,18 +995,11 @@ export class Orchestrator {
         const retryThread = this.requireThread(threadId);
         const prior = retryThread.messages.slice(0, -1);
         const retrySeed = buildSessionSeed(prior);
-        const retryInstructions =
-          retryThread.agent === 'claude'
-            ? null
-            : formatAgentInstructions(
-                loadAgentInstructions(retryThread.worktreePath, retryThread.agent),
-              );
         const retryPrefix = [
           coordinatorDirective,
           worktreeDirective,
           artifactDirective,
           renameBranchDirective,
-          retryInstructions,
           retrySeed,
         ]
           .filter(Boolean)

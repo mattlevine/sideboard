@@ -55,6 +55,17 @@ describe('cursorAdapter.buildTurn', () => {
     expect(req.mcpServers?.sideboard).toBeTruthy();
     expect(req.mcpServers!.sideboard.command).toBeTruthy();
   });
+
+  it('omits cachedPrefix on resumed Cursor sessions', async () => {
+    const cmd = await cursorAdapter.buildTurn(
+      { ...baseThread, sessionId: 'agent-abc' } as typeof baseThread,
+      { cachedPrefix: 'should not appear', prompt: 'next step' },
+    );
+    const req = JSON.parse(cmd.stdin!) as { prompt: string; agentId?: string };
+    expect(req.prompt).toBe('next step');
+    expect(req.prompt).not.toContain('should not appear');
+    expect(req.agentId).toBe('agent-abc');
+  });
 });
 
 describe('cursorSdkMessageToEvents', () => {

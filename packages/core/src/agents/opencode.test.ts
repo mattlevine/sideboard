@@ -58,12 +58,13 @@ describe('opencodeAdapter.buildTurn', () => {
   it('continues via --session id (never --continue)', async () => {
     const cmd = await opencodeAdapter.buildTurn(
       { ...baseThread, sessionId: 'ses_abc' },
-      { prompt: 'follow up' },
+      { cachedPrefix: 'should not appear', prompt: 'follow up' },
     );
     expect(cmd.args).toContain('--session');
     expect(cmd.args).toContain('ses_abc');
     expect(cmd.args).not.toContain('--continue');
     expect(cmd.stdin).toBe('follow up');
+    expect(cmd.stdin).not.toContain('should not appear');
   });
 
   it('injects Sideboard MCP via OPENCODE_CONFIG_CONTENT', async () => {

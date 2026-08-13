@@ -10,6 +10,7 @@ import {
   ensureConnectedBrightsyTeamTokens,
   type ConnectedBrightsyTeam,
 } from '../brightsy/connected-teams.js';
+import { SIDEBOARD_MCP_PROFILE_ENV } from '../mcp/profile.js';
 import { appDataDir } from '../store/paths.js';
 import { resolveNodeLaunch } from './node-launch.js';
 
@@ -207,11 +208,13 @@ export async function buildInjectedMcpServers(opts: {
     // uses `.sideboard/dev-app-data`). Without this, Codex MCP often starts with
     // a stripped env and writes to ~/Library/.../sideboard — so real desktop
     // parentThreadIds look "missing" and children vanish from the UI.
+    const orchId = opts.orchestratorThreadId?.trim();
+    const profile = orchId ? 'orchestration' : 'worktree';
     sideboard.env = {
       ...(sideboard.env ?? {}),
       SIDEBOARD_APP_DATA: appDataDir(),
+      [SIDEBOARD_MCP_PROFILE_ENV]: profile,
     };
-    const orchId = opts.orchestratorThreadId?.trim();
     if (orchId) {
       sideboard.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID = orchId;
     }

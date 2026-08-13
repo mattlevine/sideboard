@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAUDE_PROMPT_ARG_MAX, claudeAdapter } from './claude.js';
 
@@ -148,6 +149,10 @@ describe('claudeAdapter.buildTurn', () => {
     expect(mcpIdx).toBeGreaterThan(-1);
     const cfgPath = cmd.args[mcpIdx + 1];
     expect(cfgPath).toBeTruthy();
+    const cfg = JSON.parse(readFileSync(cfgPath!, 'utf8')) as {
+      mcpServers: { sideboard: { env?: Record<string, string> } };
+    };
+    expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
   });
 
   it('orchestrator turns get Sideboard MCP plus Bash/Read (fleet oversight)', async () => {
@@ -169,6 +174,11 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('Read');
     expect(cmd.args).not.toContain('--tools');
     expect(cmd.args).not.toContain('--disallowedTools');
+    const mcpIdx = cmd.args.indexOf('--mcp-config');
+    const cfg = JSON.parse(readFileSync(cmd.args[mcpIdx + 1]!, 'utf8')) as {
+      mcpServers: { sideboard: { env?: Record<string, string> } };
+    };
+    expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_MCP_PROFILE).toBe('orchestration');
   });
 
   it('Global threads keep Sideboard MCP even if sourceType was demoted to branch', async () => {

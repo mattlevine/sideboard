@@ -6,6 +6,7 @@ import {
   formatArtifactDirective,
   formatRenameBranchDirective,
   formatWorktreeDirective,
+  formatWorktreeReminder,
   loadAgentInstructions,
   withAgentInstructions,
 } from './instructions.js';
@@ -18,6 +19,16 @@ describe('formatArtifactDirective', () => {
     expect(text).toMatch(/present_files/);
     expect(text).toMatch(/```html/);
     expect(text).toMatch(/Never say artifacts, CMS UI, or the Files column are unavailable/i);
+  });
+});
+
+describe('formatWorktreeReminder', () => {
+  it('is a short isolation line for resumed turns', () => {
+    const text = formatWorktreeReminder();
+    expect(text.length).toBeLessThan(220);
+    expect(text).toMatch(/stay in this cwd/i);
+    expect(text).toMatch(/origin/i);
+    expect(text).toMatch(/upstream/i);
   });
 });
 

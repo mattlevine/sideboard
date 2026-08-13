@@ -15,7 +15,7 @@ import {
   isBrightsyConnected,
   writeMcpServersConfig,
 } from './injected-mcp.js';
-import { flattenTurnInput, normalizeTurnInput } from './turn-input.js';
+import { dropCachedPrefixOnResume, flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 import { permissionMode } from './types.js';
 
@@ -229,11 +229,10 @@ export const claudeAdapter: AgentAdapter = {
 
   async buildTurn(thread, input): Promise<TurnCommand> {
     const claude = resolveClaudeExecutable();
-    const turn = normalizeTurnInput(input);
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
     // Resumed sessions already carry history via --resume; a prefix here only
     // bloats the user message and can push Claude Code past 4 cache breakpoints.
-    const effective = sessionId ? { prompt: turn.prompt } : turn;
+    const effective = dropCachedPrefixOnResume(input, sessionId);
     const promptText = flattenTurnInput(effective);
     const useStdin = promptText.length > CLAUDE_PROMPT_ARG_MAX;
 

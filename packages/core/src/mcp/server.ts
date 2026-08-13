@@ -14,6 +14,7 @@ import { listLinearIssues } from '../threads/create.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
+import { sideboardMcpProfile } from './profile.js';
 
 const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
@@ -162,18 +163,17 @@ export async function startMcpServer(): Promise<void> {
         .optional()
         .describe('Stable id when updating the same artifact across turns'),
     },
-    async ({ title, type, content, artifact_id }) => {
+    async ({ title, type, artifact_id }) => {
       const id =
         artifact_id?.trim() ||
         `artifact_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      // Echo the payload so Sideboard’s stream parser can open the side column from
-      // the tool_use input / tool_result (MCP has no direct UI channel).
+      // Desktop opens the pane from tool_use input. Do not echo `content` —
+      // it would double the document in the model's context.
       const payload = {
         ok: true,
         artifact_id: id,
         title,
         type,
-        content,
         message:
           'Artifact accepted. Sideboard desktop opens it in the side column beside chat.',
       };
@@ -257,7 +257,6 @@ export async function startMcpServer(): Promise<void> {
         ok: true,
         path,
         title: title?.trim() || 'Plan',
-        content,
         message:
           'Plan saved to .context/attachments/plan.md and shown in Sideboard chat for approval.',
       };
@@ -306,9 +305,6 @@ export async function startMcpServer(): Promise<void> {
         datasource: args.datasource ?? (args.resource ? 'inline' : 'brightsy'),
         resource_id: args.resource_id,
         record_id: args.record_id,
-        resource: args.resource,
-        record: args.record,
-        records: args.records,
         message:
           'Schema pane accepted. Sideboard desktop opens the CMS column beside chat.',
       };
@@ -345,6 +341,7 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
+  if (sideboardMcpProfile() !== 'worktree') {
   const { resolveNewThreadOptions, resolveThreadDefaults } = await import(
     '../store/app-settings.js'
   );
@@ -1155,6 +1152,7 @@ export async function startMcpServer(): Promise<void> {
       return { content: [{ type: 'text', text: JSON.stringify(issues, null, 2) }] };
     },
   );
+  }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
