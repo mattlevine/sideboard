@@ -8,7 +8,7 @@ import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/th
 import { extractJsonErrorMessage } from './error-detail.js';
 import {
   buildInjectedMcpServers,
-  isBrightsyConnected,
+  shouldInjectBrightsyMcp,
   toCodexMcpConfigArgs,
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
@@ -230,10 +230,13 @@ export const codexAdapter: AgentAdapter = {
 
     const mode = permissionMode(thread);
     const model = thread.model?.trim();
+    const isOrchestrator = isOrchestratorThread(thread);
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
-      includeBrightsy: isBrightsyConnected(),
-      orchestratorThreadId: isOrchestratorThread(thread) ? thread.id : null,
+      includeBrightsy: shouldInjectBrightsyMcp(thread, {
+        orchestrator: isOrchestrator,
+      }),
+      orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
     const mcpOverrides = toCodexMcpConfigArgs(injected);
     // Options must come before the prompt / `resume` subcommand. `codex exec resume`

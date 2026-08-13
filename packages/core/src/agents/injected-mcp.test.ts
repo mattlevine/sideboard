@@ -6,6 +6,9 @@ import {
   brightsyMcpAllowedTools,
   buildInjectedMcpServers,
   isBrightsyConnected,
+  promptMentionsBrightsy,
+  shouldInjectBrightsyMcp,
+  threadRequestsBrightsyMcp,
 } from './injected-mcp.js';
 import { brightsyMcpServerName } from '../brightsy/connected-teams.js';
 
@@ -161,5 +164,158 @@ describe('injected-mcp', () => {
         expect(['brightsy-mcp', 'npx']).toContain(s.command);
       }
     }
+  });
+});
+
+describe('shouldInjectBrightsyMcp', () => {
+  it('matches explicit Brightsy asks in the user prompt', () => {
+    expect(promptMentionsBrightsy('use Brightsy to update the homepage')).toBe(
+      true,
+    );
+    expect(promptMentionsBrightsy('Ask Brightsy for the blog posts')).toBe(true);
+    expect(promptMentionsBrightsy('fix the sidebar')).toBe(false);
+    expect(promptMentionsBrightsy('brightsy-ai-examples is the repo')).toBe(
+      false,
+    );
+  });
+
+  it('does not inject on worktree coding turns without a Brightsy ask', () => {
+    expect(
+      shouldInjectBrightsyMcp(
+        { messages: [{ role: 'user', text: 'fix the sidebar', ts: '' }] },
+        { connected: true, alwaysOnWorktree: false },
+      ),
+    ).toBe(false);
+  });
+
+  it('injects when the current user message names Brightsy', () => {
+    expect(
+      shouldInjectBrightsyMcp(
+        {
+          messages: [
+            { role: 'user', text: 'use Brightsy to update the homepage', ts: '' },
+          ],
+        },
+        { connected: true, alwaysOnWorktree: false },
+      ),
+    ).toBe(true);
+  });
+
+  it('stays on after a prior Brightsy ask or Brightsy MCP tool', () => {
+    expect(
+      threadRequestsBrightsyMcp({
+        messages: [
+          { role: 'user', text: 'use Brightsy to list posts', ts: '' },
+          { role: 'agent', text: 'done', ts: '' },
+          { role: 'user', text: 'now add a hero image', ts: '' },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      threadRequestsBrightsyMcp({
+        messages: [
+          {
+            role: 'agent',
+            text: 'listing',
+            ts: '',
+            parts: [
+              {
+                type: 'tool',
+                id: 't1',
+                name: 'mcp__brightsy_acme__list_record_types',
+                status: 'done',
+              },
+            ],
+          },
+          { role: 'user', text: 'publish the draft', ts: '' },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('stays on after present_schema/present_files with Brightsy datasource', () => {
+    expect(
+      threadRequestsBrightsyMcp({
+        messages: [
+          {
+            role: 'agent',
+            text: '',
+            ts: '',
+            parts: [
+              {
+                type: 'tool',
+                id: 's1',
+                name: 'mcp__sideboard__present_schema',
+                input: { datasource: 'brightsy', title: 'Posts' },
+                status: 'done',
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      threadRequestsBrightsyMcp({
+        messages: [
+          {
+            role: 'agent',
+            text: '',
+            ts: '',
+            parts: [
+              {
+                type: 'tool',
+                id: 's1',
+                name: 'mcp__sideboard__present_schema',
+                input: { datasource: 'inline', title: 'Local' },
+                status: 'done',
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it('ignores agent prose that echoes the artifact reminder', () => {
+    expect(
+      threadRequestsBrightsyMcp({
+        messages: [
+          { role: 'user', text: 'make a page', ts: '' },
+          {
+            role: 'agent',
+            text: 'CMS forms/tables: MCP present_schema (Brightsy resource_id).',
+            ts: '',
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it('always injects for orchestrators when connected, never when logged out', () => {
+    expect(
+      shouldInjectBrightsyMcp(
+        { messages: [{ role: 'user', text: 'list threads', ts: '' }] },
+        { connected: true, orchestrator: true, alwaysOnWorktree: false },
+      ),
+    ).toBe(true);
+    expect(
+      shouldInjectBrightsyMcp(
+        {
+          messages: [
+            { role: 'user', text: 'use Brightsy to update the homepage', ts: '' },
+          ],
+        },
+        { connected: false, alwaysOnWorktree: true },
+      ),
+    ).toBe(false);
+  });
+
+  it('injects on every worktree turn when the always-on setting is enabled', () => {
+    expect(
+      shouldInjectBrightsyMcp(
+        { messages: [{ role: 'user', text: 'fix the sidebar', ts: '' }] },
+        { connected: true, alwaysOnWorktree: true },
+      ),
+    ).toBe(true);
   });
 });

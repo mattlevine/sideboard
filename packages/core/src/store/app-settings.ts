@@ -70,6 +70,12 @@ export interface BrightsyHarnessSettings {
   cloudConnectEnabled?: boolean;
   /** Local agent used for the cloud coordinator (not Brightsy itself). */
   cloudConnectAgent?: BrightsyCloudConnectAgent;
+  /**
+   * When true, inject Brightsy MCP on every worktree agent turn (Claude / Codex /
+   * Cursor / OpenCode) if logged in. Default off: only when the user asks
+   * (“use Brightsy…”) or the thread already used it. Orchestration always injects.
+   */
+  injectWorktreeMcp?: boolean;
 }
 
 /** Preferred issue tracker for Create-from / Link issue. */
@@ -225,6 +231,9 @@ function normalizeBrightsy(raw: unknown): BrightsyHarnessSettings {
     CLOUD_CONNECT_AGENTS.has(source.cloudConnectAgent as BrightsyCloudConnectAgent)
   ) {
     out.cloudConnectAgent = source.cloudConnectAgent as BrightsyCloudConnectAgent;
+  }
+  if (typeof source.injectWorktreeMcp === 'boolean') {
+    out.injectWorktreeMcp = source.injectWorktreeMcp;
   }
   return out;
 }
@@ -461,6 +470,7 @@ export function updateBrightsySettings(
     executablePath?: string | null;
     cloudConnectEnabled?: boolean;
     cloudConnectAgent?: BrightsyCloudConnectAgent | null;
+    injectWorktreeMcp?: boolean;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -481,6 +491,9 @@ export function updateBrightsySettings(
     } else if (CLOUD_CONNECT_AGENTS.has(patch.cloudConnectAgent)) {
       brightsy.cloudConnectAgent = patch.cloudConnectAgent;
     }
+  }
+  if (typeof patch.injectWorktreeMcp === 'boolean') {
+    brightsy.injectWorktreeMcp = patch.injectWorktreeMcp;
   }
   return saveAppSettings({ ...current, brightsy });
 }
@@ -705,6 +718,13 @@ export function brightsyCloudConnectEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.brightsy.cloudConnectEnabled);
+}
+
+/** Default off — worktree agents only get Brightsy MCP on ask / prior use. */
+export function brightsyInjectWorktreeMcpEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.brightsy.injectWorktreeMcp);
 }
 
 /**

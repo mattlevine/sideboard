@@ -13,7 +13,7 @@ import {
 } from './cursor-events.js';
 import {
   buildInjectedMcpServers,
-  isBrightsyConnected,
+  shouldInjectBrightsyMcp,
   toCursorMcpServers,
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
@@ -157,12 +157,15 @@ export const cursorAdapter: AgentAdapter = {
     const agentId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
     const prompt = flattenTurnInput(dropCachedPrefixOnResume(input, agentId));
     const apiKey = resolveCursorApiKey() || undefined;
-    // Same injection as Claude: Sideboard always; Brightsy when logged in.
-    // Cursor does not persist mcpServers across resume — include every turn.
+    // Sideboard always. Brightsy only when logged in and the user asked (or this
+    // thread already used it). Cursor does not persist mcpServers across resume.
+    const isOrchestrator = isOrchestratorThread(thread);
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
-      includeBrightsy: isBrightsyConnected(),
-      orchestratorThreadId: isOrchestratorThread(thread) ? thread.id : null,
+      includeBrightsy: shouldInjectBrightsyMcp(thread, {
+        orchestrator: isOrchestrator,
+      }),
+      orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
     const mcpServers = toCursorMcpServers(injected);
     const req: CursorTurnRequest = {

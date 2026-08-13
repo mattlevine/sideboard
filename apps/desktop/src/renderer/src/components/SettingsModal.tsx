@@ -469,6 +469,19 @@ export function SettingsModal({
     }
   }
 
+  async function saveBrightsyPatch(patch: { injectWorktreeMcp?: boolean }) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await window.sideboard.updateBrightsySettings(patch);
+      applySettings(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const advanced = settings.advanced ?? {};
   const autoRenameOn = advanced.autoRenameBranch !== false;
   const defaultAgent: AgentKind = settings.defaults?.agent ?? 'claude';
@@ -1190,6 +1203,36 @@ export function SettingsModal({
                     )}
                   </div>
                 )}
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">
+                        Inject Brightsy MCP on worktree agents
+                      </div>
+                      <p className="settings-hint">
+                        Off by default. When on, Claude / Codex / Cursor / OpenCode worktree chats
+                        always get Brightsy MCP (if you are logged in). When off, they only get it
+                        if you say “use Brightsy…” or the thread already used it. Orchestration
+                        chats always get it when logged in.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${settings.brightsy?.injectWorktreeMcp ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(settings.brightsy?.injectWorktreeMcp)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveBrightsyPatch({
+                          injectWorktreeMcp: !settings.brightsy?.injectWorktreeMcp,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
 
                 {activeAgent.id === 'brightsy' && (
                   <div className="settings-section">

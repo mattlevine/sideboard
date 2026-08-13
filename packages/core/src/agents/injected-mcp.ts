@@ -11,7 +11,9 @@ import {
   type ConnectedBrightsyTeam,
 } from '../brightsy/connected-teams.js';
 import { SIDEBOARD_MCP_PROFILE_ENV } from '../mcp/profile.js';
+import { loadAppSettings } from '../store/app-settings.js';
 import { appDataDir } from '../store/paths.js';
+import type { Thread, ThreadMessage } from '../types/thread.js';
 import { resolveNodeLaunch } from './node-launch.js';
 
 export type InjectedMcpServer = {
@@ -73,6 +75,73 @@ export function isBrightsyConnected(): boolean {
   } catch {
     return false;
   }
+}
+
+const BRIGHTSY_WORD = /(?<![a-z0-9_-])brightsy(?![a-z0-9_-])/i;
+
+/** True when the user explicitly named Brightsy (e.g. "use Brightsy to …"). */
+export function promptMentionsBrightsy(text: string | null | undefined): boolean {
+  return BRIGHTSY_WORD.test(text ?? '');
+}
+
+function isBrightsyMcpToolName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n === 'brightsy' || n.startsWith('mcp__brightsy') || n.startsWith('brightsy_');
+}
+
+function toolInputUsesBrightsyDatasource(
+  input: Record<string, unknown> | undefined,
+): boolean {
+  const ds = input?.datasource;
+  return typeof ds === 'string' && ds.toLowerCase() === 'brightsy';
+}
+
+function messageUsedBrightsyMcp(msg: ThreadMessage): boolean {
+  if (msg.role === 'user' && promptMentionsBrightsy(msg.text)) return true;
+  for (const part of msg.parts ?? []) {
+    if (part.type !== 'tool') continue;
+    if (isBrightsyMcpToolName(part.name)) return true;
+    if (
+      /present_(schema|files)$/i.test(part.name) &&
+      toolInputUsesBrightsyDatasource(part.input)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Worktree turns only inject Brightsy MCP when the user asked for it (or this
+ * thread already used it). Do not scan the assembled agent prompt — the
+ * artifact reminder always mentions Brightsy.
+ */
+export function threadRequestsBrightsyMcp(
+  thread: Pick<Thread, 'messages'> | null | undefined,
+): boolean {
+  return (thread?.messages ?? []).some(messageUsedBrightsyMcp);
+}
+
+/**
+ * Orchestration always gets Brightsy MCP when logged in. Worktree coding turns
+ * get it when Settings → “Inject Brightsy MCP on worktree agents” is on, or
+ * after “use Brightsy …” / a prior Brightsy tool / CMS pane.
+ */
+export function shouldInjectBrightsyMcp(
+  thread: Pick<Thread, 'messages'> | null | undefined,
+  opts?: {
+    orchestrator?: boolean;
+    connected?: boolean;
+    alwaysOnWorktree?: boolean;
+  },
+): boolean {
+  if (!(opts?.connected ?? isBrightsyConnected())) return false;
+  if (opts?.orchestrator) return true;
+  const alwaysOn =
+    opts?.alwaysOnWorktree ??
+    Boolean(loadAppSettings().brightsy?.injectWorktreeMcp);
+  if (alwaysOn) return true;
+  return threadRequestsBrightsyMcp(thread);
 }
 
 function mcpLaunch(

@@ -96,6 +96,9 @@ export {
 } from './brightsy/connected-teams.js';
 export {
   isBrightsyConnected,
+  promptMentionsBrightsy,
+  shouldInjectBrightsyMcp,
+  threadRequestsBrightsyMcp,
   writeInjectedMcpConfig,
   brightsyMcpAllowedTools,
   BRIGHTSY_MCP_ALLOWED_TOOLS,

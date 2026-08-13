@@ -185,6 +185,11 @@ describe('app settings', () => {
       cloudConnectAgent: 'codex',
     });
     expect(mod.brightsyCloudConnectEnabled()).toBe(true);
+    expect(mod.brightsyInjectWorktreeMcpEnabled()).toBe(false);
+
+    const mcpOn = mod.updateBrightsySettings({ injectWorktreeMcp: true });
+    expect(mcpOn.brightsy.injectWorktreeMcp).toBe(true);
+    expect(mod.brightsyInjectWorktreeMcpEnabled()).toBe(true);
     // Account default (claude when unset) wins over cloudConnectAgent override.
     expect(mod.brightsyCloudConnectAgent()).toBe('claude');
 

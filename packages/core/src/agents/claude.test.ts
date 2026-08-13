@@ -153,6 +153,10 @@ describe('claudeAdapter.buildTurn', () => {
       mcpServers: { sideboard: { env?: Record<string, string> } };
     };
     expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
+    const brightsyServers = Object.keys(cfg.mcpServers).filter(
+      (n) => n === 'brightsy' || n.startsWith('brightsy_'),
+    );
+    expect(brightsyServers).toEqual([]);
   });
 
   it('orchestrator turns get Sideboard MCP plus Bash/Read (fleet oversight)', async () => {

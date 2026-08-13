@@ -6,7 +6,7 @@ import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/th
 import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
 import {
   buildInjectedMcpServers,
-  isBrightsyConnected,
+  shouldInjectBrightsyMcp,
   toOpencodeMcpConfigContent,
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
@@ -184,10 +184,13 @@ export const opencodeAdapter: AgentAdapter = {
     if (model) {
       args.push('--model', model);
     }
+    const isOrchestrator = isOrchestratorThread(thread);
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
-      includeBrightsy: isBrightsyConnected(),
-      orchestratorThreadId: isOrchestratorThread(thread) ? thread.id : null,
+      includeBrightsy: shouldInjectBrightsyMcp(thread, {
+        orchestrator: isOrchestrator,
+      }),
+      orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
     const mcpContent =
       injected.length > 0 ? toOpencodeMcpConfigContent(injected) : null;

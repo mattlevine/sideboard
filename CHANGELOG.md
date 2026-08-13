@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.65] - 2026-08-12
+
+### Added
+
+- Settings → Agents toggle **Inject Brightsy MCP on worktree agents** (off by default). When on, Claude / Codex / Cursor / OpenCode worktree chats always get Brightsy MCP if logged in
+
+### Changed
+
+- Worktree agents no longer inject the full Brightsy MCP catalog on every turn. They get it when the user names Brightsy (“use Brightsy to…”), after the thread already used it or opened a Brightsy CMS pane, or when the setting above is on. Orchestration chats still get it whenever logged in
+
 ## [0.1.64] - 2026-08-12
 
 ### Changed

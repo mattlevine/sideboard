@@ -12,7 +12,7 @@ import {
   buildInjectedMcpServers,
   SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS,
   SIDEBOARD_MCP_ALLOWED_TOOLS,
-  isBrightsyConnected,
+  shouldInjectBrightsyMcp,
   writeMcpServersConfig,
 } from './injected-mcp.js';
 import { dropCachedPrefixOnResume, flattenTurnInput } from './turn-input.js';
@@ -245,11 +245,13 @@ export const claudeAdapter: AgentAdapter = {
     const mode = permissionMode(thread);
     const { isOrchestratorThread } = await import('../store/global-workspace.js');
     const isOrchestrator = isOrchestratorThread(thread);
-    // Auto-inject Brightsy MCP for every Claude turn when logged in; Sideboard MCP
-    // always (worktrees get present_artifact; coordinators get the full fleet).
+    // Sideboard MCP always (worktrees: present_*; coordinators: full fleet).
+    // Brightsy MCP only when logged in and the user asked (or this thread used it).
     const injectedServers = await buildInjectedMcpServers({
       includeSideboard: true,
-      includeBrightsy: isBrightsyConnected(),
+      includeBrightsy: shouldInjectBrightsyMcp(thread, {
+        orchestrator: isOrchestrator,
+      }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
     const injectedBrightsyNames = injectedServers
