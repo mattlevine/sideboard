@@ -1,8 +1,9 @@
-import { getAdapter, allAdapters, ensureAgentPath } from '../agents/index.js';
+import { getAdapter, allAdapters, ensureAgentPath, enrichPathWithNpmGlobalBin } from '../agents/index.js';
 import type { AgentKind, AgentStatus } from '../types/thread.js';
 
 export async function detectAgents(): Promise<AgentStatus[]> {
   ensureAgentPath();
+  enrichPathWithNpmGlobalBin();
   return Promise.all(allAdapters().map((a) => a.detect()));
 }
 
@@ -19,6 +20,7 @@ export async function requireAgent(
   opts?: { requireLinear?: boolean },
 ): Promise<AgentStatus> {
   ensureAgentPath();
+  enrichPathWithNpmGlobalBin();
   const status = await Promise.race([
     getAdapter(agent).detect(),
     new Promise<never>((_, reject) => {

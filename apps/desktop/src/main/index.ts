@@ -68,6 +68,7 @@ import {
   updateAppEnvironment,
   updateBrightsySettings,
   updateClaudeSettings,
+  updateAgentExecutable,
   updateDefaultsSettings,
   updateIntegrationsSettings,
   type AdvancedAppSettings,
@@ -78,6 +79,7 @@ import {
   type BrightsyCloudConnectAgent,
   type BrightsyHarnessSettings,
   type ClaudeHarnessSettings,
+  type CliAgentKind,
   type CloudConnectStatus,
   type DefaultsAppSettings,
   type IntegrationsSettings,
@@ -516,6 +518,14 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    'updateAgentExecutable',
+    (_e, agent: CliAgentKind, executablePath: string | null) => {
+      const saved = updateAgentExecutable(agent, executablePath);
+      applyAppEnvironment(process.env, saved);
+      return saved;
+    },
+  );
+  ipcMain.handle(
     'updateBrightsySettings',
     (
       _e,
@@ -580,8 +590,38 @@ function registerIpc(): void {
     if (result.canceled || !result.filePaths[0]) return null;
     return result.filePaths[0];
   });
+  ipcMain.handle('pickAgentExecutable', async (_e, agent: CliAgentKind) => {
+    const labels: Record<CliAgentKind, string> = {
+      claude: 'Claude Code',
+      codex: 'Codex',
+      opencode: 'OpenCode',
+      brightsy: 'Brightsy',
+    };
+    const label = labels[agent] ?? agent;
+    const result = await dialog.showOpenDialog({
+      title: `Choose ${label} executable`,
+      properties: ['openFile'],
+      message: `Select the ${label} binary to use for agent turns`,
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
   ipcMain.handle('resolveSystemClaudePath', async () => {
     const which = await run('which', ['claude'], { reject: false });
+    if (which.exitCode !== 0) return null;
+    const path = which.stdout.trim().split('\n')[0]?.trim();
+    return path || null;
+  });
+  ipcMain.handle('resolveSystemAgentPath', async (_e, agent: CliAgentKind) => {
+    const bins: Record<CliAgentKind, string> = {
+      claude: 'claude',
+      codex: 'codex',
+      opencode: 'opencode',
+      brightsy: 'brightsy',
+    };
+    const bin = bins[agent];
+    if (!bin) return null;
+    const which = await run('which', [bin], { reject: false });
     if (which.exitCode !== 0) return null;
     const path = which.stdout.trim().split('\n')[0]?.trim();
     return path || null;

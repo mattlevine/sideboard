@@ -49,6 +49,12 @@ export interface ClaudeHarnessSettings {
   chromeEnabled?: boolean;
 }
 
+/** Optional absolute path override for a CLI agent binary. */
+export interface CliExecutableSettings {
+  /** Absolute path to the CLI. Empty/omitted = default name on PATH. */
+  executablePath?: string;
+}
+
 /** Local agent that runs the Brightsy cloud coordinator. */
 export type BrightsyCloudConnectAgent =
   | 'claude'
@@ -58,6 +64,8 @@ export type BrightsyCloudConnectAgent =
 
 /** Brightsy cloud remote-orchestrator preferences (Slack / Discord / Teams). */
 export interface BrightsyHarnessSettings {
+  /** Absolute path to the Brightsy CLI. Empty/omitted = `brightsy` on PATH. */
+  executablePath?: string;
   /** When true, desktop app polls Brightsy for Sideboard cloud tasks. */
   cloudConnectEnabled?: boolean;
   /** Local agent used for the cloud coordinator (not Brightsy itself). */
@@ -146,6 +154,10 @@ export interface AppSettings {
   environment: Record<string, string>;
   /** Claude Code–specific harness settings. */
   claude: ClaudeHarnessSettings;
+  /** Codex CLI executable override. */
+  codex: CliExecutableSettings;
+  /** OpenCode CLI executable override. */
+  opencode: CliExecutableSettings;
   /** Brightsy cloud connect preferences (Slack / Discord / Teams). */
   brightsy: BrightsyHarnessSettings;
   /** GitHub / Linear connections and issue-source preference. */
@@ -186,10 +198,25 @@ const CLOUD_CONNECT_AGENTS = new Set<BrightsyCloudConnectAgent>([
   'cursor',
 ]);
 
+function normalizeCliExecutable(raw: unknown): CliExecutableSettings {
+  if (!raw || typeof raw !== 'object') return {};
+  const source = raw as Record<string, unknown>;
+  const out: CliExecutableSettings = {};
+  if (typeof source.executablePath === 'string') {
+    const path = source.executablePath.trim();
+    if (path) out.executablePath = path;
+  }
+  return out;
+}
+
 function normalizeBrightsy(raw: unknown): BrightsyHarnessSettings {
   if (!raw || typeof raw !== 'object') return {};
   const source = raw as Record<string, unknown>;
   const out: BrightsyHarnessSettings = {};
+  if (typeof source.executablePath === 'string') {
+    const path = source.executablePath.trim();
+    if (path) out.executablePath = path;
+  }
   if (typeof source.cloudConnectEnabled === 'boolean') {
     out.cloudConnectEnabled = source.cloudConnectEnabled;
   }
@@ -307,6 +334,8 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
 function normalizeSettings(raw: unknown): AppSettings {
   const env: Record<string, string> = {};
   let claude: ClaudeHarnessSettings = {};
+  let codex: CliExecutableSettings = {};
+  let opencode: CliExecutableSettings = {};
   let brightsy: BrightsyHarnessSettings = {};
   let integrations: IntegrationsSettings = {};
   let defaults: DefaultsAppSettings = {};
@@ -325,6 +354,12 @@ function normalizeSettings(raw: unknown): AppSettings {
     if ('claude' in raw) {
       claude = normalizeClaude((raw as { claude?: unknown }).claude);
     }
+    if ('codex' in raw) {
+      codex = normalizeCliExecutable((raw as { codex?: unknown }).codex);
+    }
+    if ('opencode' in raw) {
+      opencode = normalizeCliExecutable((raw as { opencode?: unknown }).opencode);
+    }
     if ('brightsy' in raw) {
       brightsy = normalizeBrightsy((raw as { brightsy?: unknown }).brightsy);
     }
@@ -340,12 +375,23 @@ function normalizeSettings(raw: unknown): AppSettings {
       advanced = normalizeAdvanced((raw as { advanced?: unknown }).advanced);
     }
   }
-  return { environment: env, claude, brightsy, integrations, defaults, advanced };
+  return {
+    environment: env,
+    claude,
+    codex,
+    opencode,
+    brightsy,
+    integrations,
+    defaults,
+    advanced,
+  };
 }
 
 const EMPTY_SETTINGS: AppSettings = {
   environment: {},
   claude: {},
+  codex: {},
+  opencode: {},
   brightsy: {},
   integrations: {},
   defaults: {},
@@ -412,12 +458,20 @@ export function updateClaudeSettings(
 
 export function updateBrightsySettings(
   patch: {
+    executablePath?: string | null;
     cloudConnectEnabled?: boolean;
     cloudConnectAgent?: BrightsyCloudConnectAgent | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
   const brightsy: BrightsyHarnessSettings = { ...current.brightsy };
+  if ('executablePath' in patch) {
+    if (patch.executablePath == null || patch.executablePath.trim() === '') {
+      delete brightsy.executablePath;
+    } else {
+      brightsy.executablePath = patch.executablePath.trim();
+    }
+  }
   if (typeof patch.cloudConnectEnabled === 'boolean') {
     brightsy.cloudConnectEnabled = patch.cloudConnectEnabled;
   }
@@ -429,6 +483,36 @@ export function updateBrightsySettings(
     }
   }
   return saveAppSettings({ ...current, brightsy });
+}
+
+export function updateCodexSettings(
+  patch: { executablePath?: string | null },
+): AppSettings {
+  const current = loadAppSettings();
+  const codex: CliExecutableSettings = { ...current.codex };
+  if ('executablePath' in patch) {
+    if (patch.executablePath == null || patch.executablePath.trim() === '') {
+      delete codex.executablePath;
+    } else {
+      codex.executablePath = patch.executablePath.trim();
+    }
+  }
+  return saveAppSettings({ ...current, codex });
+}
+
+export function updateOpencodeSettings(
+  patch: { executablePath?: string | null },
+): AppSettings {
+  const current = loadAppSettings();
+  const opencode: CliExecutableSettings = { ...current.opencode };
+  if ('executablePath' in patch) {
+    if (patch.executablePath == null || patch.executablePath.trim() === '') {
+      delete opencode.executablePath;
+    } else {
+      opencode.executablePath = patch.executablePath.trim();
+    }
+  }
+  return saveAppSettings({ ...current, opencode });
 }
 
 export function updateIntegrationsSettings(
@@ -780,8 +864,55 @@ export function maxConcurrentAgents(
 export function resolveClaudeExecutable(
   settings: AppSettings = loadAppSettings(),
 ): string {
-  const override = settings.claude.executablePath?.trim();
-  return override || 'claude';
+  return resolveAgentExecutable('claude', settings);
+}
+
+/** CLI agents that support a custom executable path override. */
+export type CliAgentKind = 'claude' | 'codex' | 'opencode' | 'brightsy';
+
+const DEFAULT_CLI_BIN: Record<CliAgentKind, string> = {
+  claude: 'claude',
+  codex: 'codex',
+  opencode: 'opencode',
+  brightsy: 'brightsy',
+};
+
+/** Binary name or absolute path for a CLI agent (custom path when set). */
+export function resolveAgentExecutable(
+  agent: CliAgentKind,
+  settings: AppSettings = loadAppSettings(),
+): string {
+  const fallback = DEFAULT_CLI_BIN[agent];
+  if (agent === 'claude') {
+    const override = settings.claude.executablePath?.trim();
+    return override || fallback;
+  }
+  if (agent === 'codex') {
+    const override = settings.codex.executablePath?.trim();
+    return override || fallback;
+  }
+  if (agent === 'opencode') {
+    const override = settings.opencode.executablePath?.trim();
+    return override || fallback;
+  }
+  const override = settings.brightsy.executablePath?.trim();
+  return override || fallback;
+}
+
+export function updateAgentExecutable(
+  agent: CliAgentKind,
+  executablePath: string | null,
+): AppSettings {
+  if (agent === 'claude') {
+    return updateClaudeSettings({ executablePath });
+  }
+  if (agent === 'codex') {
+    return updateCodexSettings({ executablePath });
+  }
+  if (agent === 'opencode') {
+    return updateOpencodeSettings({ executablePath });
+  }
+  return updateBrightsySettings({ executablePath });
 }
 
 export function claudeChromeEnabled(settings: AppSettings = loadAppSettings()): boolean {

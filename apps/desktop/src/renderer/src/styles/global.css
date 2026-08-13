@@ -2065,28 +2065,6 @@ body.resizing-panels webview {
   outline: 1px solid var(--accent-dim);
 }
 
-/* Conductor-style: merged PR workspaces read as purple “done”. */
-.thread-item.merged {
-  background: rgba(163, 113, 247, 0.12);
-}
-
-.thread-item.merged:hover {
-  background: rgba(163, 113, 247, 0.18);
-}
-
-.thread-item.merged.active {
-  background: rgba(163, 113, 247, 0.22);
-}
-
-.thread-item.merged .thread-title {
-  color: #d2a8ff;
-}
-
-.thread-item.merged .dot.idle,
-.thread-item.merged .dot.stopped {
-  background: #a371f7;
-}
-
 .dot {
   width: 8px;
   height: 8px;
@@ -5775,25 +5753,190 @@ button.worktree-hover-card-title:hover {
   overflow: visible;
 }
 
-/* Conductor-style: whole header turns purple when the PR is merged. */
+/* Conductor-style: tint the whole right header by PR lifecycle state. */
+.right-top.open {
+  background: #16324a;
+  border-bottom-color: rgba(0, 127, 212, 0.35);
+}
+
+.right-top.draft {
+  background: #1a2f42;
+  border-bottom-color: rgba(0, 127, 212, 0.28);
+}
+
+.right-top.needs-approval {
+  background: #3a2e14;
+  border-bottom-color: rgba(210, 153, 34, 0.4);
+}
+
+.right-top.approved {
+  background: #16341f;
+  border-bottom-color: rgba(63, 185, 80, 0.35);
+}
+
+.right-top.rejected,
+.right-top.conflicts {
+  background: #3a1a1a;
+  border-bottom-color: rgba(248, 81, 73, 0.4);
+}
+
+.right-top.closed {
+  background: #2a2d2e;
+  border-bottom-color: rgba(139, 148, 158, 0.35);
+}
+
 .right-top.merged {
-  background: #3b2760;
+  background: #2b1f3d;
   border-bottom-color: rgba(163, 113, 247, 0.35);
 }
 
-.right-top.merged .pr-pill.merged {
+/* PR pill sits on the tinted bar — outlined, status color matches state. */
+.right-top.open .pr-pill,
+.right-top.draft .pr-pill {
+  background: transparent;
+  border-color: rgba(117, 190, 255, 0.55);
+  color: #9cdcfe;
+}
+
+.right-top.draft .pr-pill {
+  border-style: dashed;
+}
+
+.right-top.open .pr-pill .pr-status,
+.right-top.draft .pr-pill .pr-status {
+  color: #75beff;
+}
+
+.right-top.needs-approval .pr-pill {
+  background: transparent;
+  border-color: rgba(226, 179, 64, 0.55);
+  color: #f0c14d;
+}
+
+.right-top.needs-approval .pr-pill .pr-status {
+  color: #e2b340;
+}
+
+.right-top.approved .pr-pill {
+  background: transparent;
+  border-color: rgba(111, 207, 151, 0.55);
+  color: #8fd9a8;
+}
+
+.right-top.approved .pr-pill .pr-status {
+  color: #6fcf97;
+}
+
+.right-top.rejected .pr-pill,
+.right-top.conflicts .pr-pill {
+  background: transparent;
+  border-color: rgba(255, 123, 114, 0.55);
+  color: #ffa198;
+}
+
+.right-top.rejected .pr-pill .pr-status,
+.right-top.conflicts .pr-pill .pr-status {
+  color: #ff7b72;
+}
+
+.right-top.closed .pr-pill {
+  background: transparent;
+  border-color: rgba(154, 160, 166, 0.5);
+  color: #b0b5ba;
+}
+
+.right-top.closed .pr-pill .pr-status {
+  color: #9aa0a6;
+}
+
+.right-top.merged .pr-pill {
   background: transparent;
   border-color: rgba(210, 168, 255, 0.55);
   color: #e8d4ff;
 }
 
-.right-top.merged .pr-pill.merged .pr-status {
+.right-top.merged .pr-pill .pr-status {
   color: #d2a8ff;
+}
+
+/* Primary + caret follow the state color; Archive stays solid accent for that state. */
+.right-top.open .btn-continue,
+.right-top.open .split-caret,
+.right-top.draft .btn-continue,
+.right-top.draft .split-caret {
+  border: 1px dashed rgba(117, 190, 255, 0.55) !important;
+  background: transparent !important;
+  color: #9cdcfe !important;
+}
+
+.right-top.open .btn-archive,
+.right-top.draft .btn-archive {
+  background: #0e639c !important;
+  border-color: #007fd4 !important;
+  color: #fff !important;
+}
+
+.right-top.needs-approval .btn-continue,
+.right-top.needs-approval .split-caret {
+  border: 1px dashed rgba(226, 179, 64, 0.55) !important;
+  background: transparent !important;
+  color: #f0c14d !important;
+}
+
+.right-top.needs-approval .btn-archive {
+  background: #a67c16 !important;
+  border-color: #cca700 !important;
+  color: #fff !important;
+}
+
+.right-top.approved .btn-continue,
+.right-top.approved .btn-live,
+.right-top.approved .split-caret {
+  border: 1px dashed rgba(111, 207, 151, 0.55) !important;
+  background: transparent !important;
+  color: #8fd9a8 !important;
+}
+
+.right-top.approved .btn-archive {
+  background: #2ea043 !important;
+  border-color: #3fb950 !important;
+  color: #fff !important;
+}
+
+.right-top.rejected .btn-continue,
+.right-top.rejected .split-caret,
+.right-top.conflicts .btn-continue,
+.right-top.conflicts .split-caret {
+  border: 1px dashed rgba(255, 123, 114, 0.55) !important;
+  background: transparent !important;
+  color: #ffa198 !important;
+}
+
+.right-top.rejected .btn-archive,
+.right-top.conflicts .btn-archive {
+  background: #da3633 !important;
+  border-color: #f85149 !important;
+  color: #fff !important;
+}
+
+.right-top.closed .btn-closed,
+.right-top.closed .btn-continue,
+.right-top.closed .split-caret {
+  border: 1px dashed rgba(154, 160, 166, 0.5) !important;
+  background: transparent !important;
+  color: #b0b5ba !important;
+}
+
+.right-top.closed .btn-archive {
+  background: #6e7681 !important;
+  border-color: #8b949e !important;
+  color: #fff !important;
 }
 
 .right-top.merged .btn-live,
 .right-top.merged .btn-continue,
-.right-top.merged .btn-closed {
+.right-top.merged .btn-closed,
+.right-top.merged .split-caret {
   border: 1px dashed rgba(210, 168, 255, 0.55) !important;
   background: transparent !important;
   color: #d2a8ff !important;

@@ -8,6 +8,7 @@ import type {
   Autonomy,
   BrightsyCloudConnectAgent,
   BrightsySession,
+  CliAgentKind,
   CloudConnectStatus,
   GitHubStatus,
   IssueSource,
@@ -21,6 +22,68 @@ import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
 
 type NavId = 'account' | 'agents' | 'environment' | 'advanced' | 'history';
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
+
+const CLI_PATH_AGENTS = new Set<AgentPanel>(['claude', 'codex', 'opencode', 'brightsy']);
+
+function isCliPathAgent(id: AgentPanel | null): id is CliAgentKind {
+  return id != null && CLI_PATH_AGENTS.has(id);
+}
+
+const CLI_PATH_LABELS: Record<CliAgentKind, { title: string; bin: string; systemLabel: string }> = {
+  claude: {
+    title: 'Claude Code executable path',
+    bin: 'claude',
+    systemLabel: 'Use system Claude Code',
+  },
+  codex: {
+    title: 'Codex executable path',
+    bin: 'codex',
+    systemLabel: 'Use system Codex',
+  },
+  opencode: {
+    title: 'OpenCode executable path',
+    bin: 'opencode',
+    systemLabel: 'Use system OpenCode',
+  },
+  brightsy: {
+    title: 'Brightsy executable path',
+    bin: 'brightsy',
+    systemLabel: 'Use system Brightsy',
+  },
+};
+
+function emptyAppSettings(): AppSettings {
+  return {
+    environment: {},
+    claude: {},
+    codex: {},
+    opencode: {},
+    brightsy: {},
+    integrations: {},
+    defaults: {},
+    advanced: {},
+  };
+}
+
+function storedExecutablePath(settings: AppSettings, agent: CliAgentKind): string {
+  if (agent === 'claude') return settings.claude?.executablePath ?? '';
+  if (agent === 'codex') return settings.codex?.executablePath ?? '';
+  if (agent === 'opencode') return settings.opencode?.executablePath ?? '';
+  return settings.brightsy?.executablePath ?? '';
+}
+
+function normalizeSettings(next: AppSettings): AppSettings {
+  return {
+    environment: next.environment ?? {},
+    claude: next.claude ?? {},
+    codex: next.codex ?? {},
+    opencode: next.opencode ?? {},
+    brightsy: next.brightsy ?? {},
+    integrations: next.integrations ?? {},
+    defaults: next.defaults ?? {},
+    advanced: next.advanced ?? {},
+  };
+}
 
 const CLOUD_CONNECT_AGENTS: Array<{ id: BrightsyCloudConnectAgent; label: string }> = [
   { id: 'claude', label: 'Claude Code' },
@@ -149,14 +212,7 @@ export function SettingsModal({
   const [nav, setNav] = useState<NavId>(initialNav);
   const [agentPanel, setAgentPanel] = useState<AgentPanel | null>(null);
   const [historyQuery, setHistoryQuery] = useState('');
-  const [settings, setSettings] = useState<AppSettings>({
-    environment: {},
-    claude: {},
-    brightsy: {},
-    integrations: {},
-    defaults: {},
-    advanced: {},
-  });
+  const [settings, setSettings] = useState<AppSettings>(emptyAppSettings);
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,8 +221,8 @@ export function SettingsModal({
   const [draftValue, setDraftValue] = useState('');
   const [editingEnvKey, setEditingEnvKey] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
-  const [claudePathDraft, setClaudePathDraft] = useState('');
-  const [systemClaudePath, setSystemClaudePath] = useState<string | null>(null);
+  const [cliPathDraft, setCliPathDraft] = useState('');
+  const [systemCliPath, setSystemCliPath] = useState<string | null>(null);
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
   const [cloudConnect, setCloudConnect] = useState<CloudConnectStatus | null>(null);
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
@@ -178,28 +234,19 @@ export function SettingsModal({
 
   async function reload() {
     const cloudApi = window.sideboard.getCloudConnectStatus;
-    const [s, agents, systemPath, session, cloud, gh] = await Promise.all([
+    const [s, agents, session, cloud, gh] = await Promise.all([
       window.sideboard.getAppSettings(),
       window.sideboard.detectAgents(),
-      window.sideboard.resolveSystemClaudePath(),
       window.sideboard.getBrightsySession().catch(() => null),
       typeof cloudApi === 'function'
         ? cloudApi().catch(() => null)
         : Promise.resolve(null),
       window.sideboard.getGitHubStatus().catch(() => null),
     ]);
-    setSettings({
-      environment: s.environment ?? {},
-      claude: s.claude ?? {},
-      brightsy: s.brightsy ?? {},
-      integrations: s.integrations ?? {},
-      defaults: s.defaults ?? {},
-      advanced: s.advanced ?? {},
-    });
+    const next = normalizeSettings(s);
+    setSettings(next);
     setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 3));
     setStatuses(agents);
-    setSystemClaudePath(systemPath);
-    setClaudePathDraft(s.claude?.executablePath ?? '');
     setBrightsySession(session);
     setCloudConnect(cloud);
     setGithubStatus(gh);
@@ -211,6 +258,19 @@ export function SettingsModal({
       setError(err instanceof Error ? err.message : String(err)),
     );
   }, []);
+
+  useEffect(() => {
+    if (!isCliPathAgent(agentPanel)) {
+      setCliPathDraft('');
+      setSystemCliPath(null);
+      return;
+    }
+    setCliPathDraft(storedExecutablePath(settings, agentPanel));
+    void window.sideboard
+      .resolveSystemAgentPath(agentPanel)
+      .then(setSystemCliPath)
+      .catch(() => setSystemCliPath(null));
+  }, [agentPanel]);
 
   useEffect(() => {
     if (agentPanel !== 'brightsy') return;
@@ -293,14 +353,7 @@ export function SettingsModal({
     setError(null);
     try {
       const next = await window.sideboard.updateAppEnvironment(patch);
-      setSettings({
-        environment: next.environment ?? {},
-        claude: next.claude ?? {},
-        brightsy: next.brightsy ?? {},
-        integrations: next.integrations ?? {},
-        defaults: next.defaults ?? {},
-        advanced: next.advanced ?? {},
-      });
+      applySettings(next);
       const agents = await window.sideboard.detectAgents();
       setStatuses(agents);
     } catch (err) {
@@ -310,23 +363,28 @@ export function SettingsModal({
     }
   }
 
-  async function saveClaudePatch(patch: {
-    executablePath?: string | null;
-    chromeEnabled?: boolean;
-  }) {
+  async function saveClaudePatch(patch: { chromeEnabled?: boolean }) {
     setBusy(true);
     setError(null);
     try {
       const next = await window.sideboard.updateClaudeSettings(patch);
-      setSettings({
-        environment: next.environment ?? {},
-        claude: next.claude ?? {},
-        brightsy: next.brightsy ?? {},
-        integrations: next.integrations ?? {},
-        defaults: next.defaults ?? {},
-        advanced: next.advanced ?? {},
-      });
-      setClaudePathDraft(next.claude?.executablePath ?? '');
+      applySettings(next);
+      const agents = await window.sideboard.detectAgents();
+      setStatuses(agents);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCliExecutablePath(agent: CliAgentKind, executablePath: string | null) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await window.sideboard.updateAgentExecutable(agent, executablePath);
+      applySettings(next);
+      setCliPathDraft(storedExecutablePath(next, agent));
       const agents = await window.sideboard.detectAgents();
       setStatuses(agents);
     } catch (err) {
@@ -351,14 +409,7 @@ export function SettingsModal({
       const status = await window.sideboard.setCloudConnect(opts);
       setCloudConnect(status);
       const next = await window.sideboard.getAppSettings();
-      setSettings({
-        environment: next.environment ?? {},
-        claude: next.claude ?? {},
-        brightsy: next.brightsy ?? {},
-        integrations: next.integrations ?? {},
-        defaults: next.defaults ?? {},
-        advanced: next.advanced ?? {},
-      });
+      applySettings(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -367,14 +418,7 @@ export function SettingsModal({
   }
 
   function applySettings(next: AppSettings) {
-    setSettings({
-      environment: next.environment ?? {},
-      claude: next.claude ?? {},
-      brightsy: next.brightsy ?? {},
-      integrations: next.integrations ?? {},
-      defaults: next.defaults ?? {},
-      advanced: next.advanced ?? {},
-    });
+    setSettings(normalizeSettings(next));
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 3));
   }
 
@@ -897,66 +941,6 @@ export function SettingsModal({
                       </div>
                     </div>
 
-                    <div className="settings-section">
-                      <label className="settings-section-title" htmlFor="claude-executable-path">
-                        Claude Code executable path
-                      </label>
-                      <p className="settings-hint">
-                        Override the Claude Code executable. Leave empty to use the system{' '}
-                        <code>claude</code>
-                        {systemClaudePath ? ` (${systemClaudePath})` : ' on PATH'} (recommended).
-                      </p>
-                      <div className="settings-key-row">
-                        <input
-                          id="claude-executable-path"
-                          type="text"
-                          autoComplete="off"
-                          spellCheck={false}
-                          placeholder={systemClaudePath || 'claude'}
-                          value={claudePathDraft}
-                          onChange={(e) => setClaudePathDraft(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          title="Browse"
-                          disabled={busy}
-                          onClick={() => {
-                            void window.sideboard.pickClaudeExecutable().then((path) => {
-                              if (!path) return;
-                              setClaudePathDraft(path);
-                              void saveClaudePatch({ executablePath: path });
-                            });
-                          }}
-                        >
-                          …
-                        </button>
-                      </div>
-                      <div className="settings-actions">
-                        <button
-                          type="button"
-                          className="primary"
-                          disabled={
-                            busy ||
-                            claudePathDraft.trim() === (settings.claude?.executablePath ?? '')
-                          }
-                          onClick={() =>
-                            void saveClaudePatch({
-                              executablePath: claudePathDraft.trim() || null,
-                            })
-                          }
-                        >
-                          Save path
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy || !settings.claude?.executablePath}
-                          onClick={() => void saveClaudePatch({ executablePath: null })}
-                        >
-                          Use system Claude Code
-                        </button>
-                      </div>
-                    </div>
-
                     <div className="settings-section settings-section-card">
                       <div className="settings-claude-settings-row">
                         <div>
@@ -978,6 +962,74 @@ export function SettingsModal({
                     </div>
                   </>
                 )}
+
+                {(() => {
+                  if (!isCliPathAgent(activeAgent.id)) return null;
+                  const pathAgent = activeAgent.id;
+                  const labels = CLI_PATH_LABELS[pathAgent];
+                  return (
+                    <div className="settings-section">
+                      <label
+                        className="settings-section-title"
+                        htmlFor={`${pathAgent}-executable-path`}
+                      >
+                        {labels.title}
+                      </label>
+                      <p className="settings-hint">
+                        Override the executable. Leave empty to use the system{' '}
+                        <code>{labels.bin}</code>
+                        {systemCliPath ? ` (${systemCliPath})` : ' on PATH'} (recommended).
+                      </p>
+                      <div className="settings-key-row">
+                        <input
+                          id={`${pathAgent}-executable-path`}
+                          type="text"
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder={systemCliPath || labels.bin}
+                          value={cliPathDraft}
+                          onChange={(e) => setCliPathDraft(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          title="Browse"
+                          disabled={busy}
+                          onClick={() => {
+                            void window.sideboard.pickAgentExecutable(pathAgent).then((path) => {
+                              if (!path) return;
+                              setCliPathDraft(path);
+                              void saveCliExecutablePath(pathAgent, path);
+                            });
+                          }}
+                        >
+                          …
+                        </button>
+                      </div>
+                      <div className="settings-actions">
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={
+                            busy ||
+                            cliPathDraft.trim() === storedExecutablePath(settings, pathAgent)
+                          }
+                          onClick={() =>
+                            void saveCliExecutablePath(pathAgent, cliPathDraft.trim() || null)
+                          }
+                        >
+                          Save path
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || !storedExecutablePath(settings, pathAgent)}
+                          onClick={() => void saveCliExecutablePath(pathAgent, null)}
+                        >
+                          {labels.systemLabel}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {activeAgent.envKey && (
                   <div className="settings-field">
@@ -1405,7 +1457,7 @@ export function SettingsModal({
                       <div className="settings-section-title">Auto-archive on merge</div>
                       <p className="settings-hint">
                         Optional Conductor-style behavior: when a linked PR merges, archive the
-                        worktree. Off by default — merged workspaces stay visible in purple.
+                        worktree. Off by default — merged PRs still tint the right-sidebar header.
                       </p>
                     </div>
                     <button

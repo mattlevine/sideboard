@@ -49,13 +49,21 @@ export {
   coerceOrchestratorAgent,
 } from './orchestrator-capable.js';
 export type { OrchestratorAgentKind } from './orchestrator-capable.js';
-export { ensureAgentPath } from './path.js';
+export {
+  ensureAgentPath,
+  enrichPathWithNpmGlobalBin,
+  resolveCommandBinarySync,
+  withExportedPath,
+  posixShellSingleQuote,
+} from './path.js';
 export {
   getAgentSetupInfo,
   listAgentSetupInfo,
   installAgent,
   loginAgent,
   openInSystemTerminal,
+  prepareTerminalCommand,
+  resolveLoginCommand,
 } from './install.js';
 export type { AgentSetupInfo, AgentSetupKind, AgentSetupActionResult } from './install.js';
 

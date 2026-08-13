@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
+import { resolveAgentExecutable } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage } from './error-detail.js';
 import {
@@ -38,10 +39,15 @@ export async function listCodexModels(): Promise<AgentModelInfo[]> {
     return cachedCodexModels.models;
   }
 
-  const which = await run('which', ['codex'], { reject: false });
-  if (which.exitCode !== 0) return FALLBACK_CODEX_MODELS;
+  const codex = resolveAgentExecutable('codex');
+  if (codex === 'codex') {
+    const which = await run('which', ['codex'], { reject: false });
+    if (which.exitCode !== 0) return FALLBACK_CODEX_MODELS;
+  } else if (!existsSync(codex)) {
+    return FALLBACK_CODEX_MODELS;
+  }
 
-  const listed = await run('codex', ['debug', 'models'], { reject: false });
+  const listed = await run(codex, ['debug', 'models'], { reject: false });
   if (listed.exitCode !== 0 || !listed.stdout.trim()) {
     return cachedCodexModels?.models ?? FALLBACK_CODEX_MODELS;
   }
@@ -155,16 +161,30 @@ export const codexAdapter: AgentAdapter = {
   kind: 'codex',
 
   async detect(): Promise<AgentStatus> {
-    const which = await run('which', ['codex'], { reject: false, timeoutMs: 3_000 });
-    if (which.exitCode !== 0) {
-      return {
-        agent: 'codex',
-        installed: false,
-        authenticated: false,
-        linearMcp: false,
-        warnings: [],
-        reason: 'codex CLI not found on PATH',
-      };
+    const codex = resolveAgentExecutable('codex');
+    if (codex !== 'codex') {
+      if (!existsSync(codex)) {
+        return {
+          agent: 'codex',
+          installed: false,
+          authenticated: false,
+          linearMcp: false,
+          warnings: [],
+          reason: `Codex executable not found: ${codex}`,
+        };
+      }
+    } else {
+      const which = await run('which', ['codex'], { reject: false, timeoutMs: 3_000 });
+      if (which.exitCode !== 0) {
+        return {
+          agent: 'codex',
+          installed: false,
+          authenticated: false,
+          linearMcp: false,
+          warnings: [],
+          reason: 'codex CLI not found on PATH',
+        };
+      }
     }
 
     const authenticated = codexLooksAuthenticated();
@@ -239,7 +259,7 @@ export const codexAdapter: AgentAdapter = {
       : ['exec', ...execOpts, promptArg];
 
     return {
-      file: 'codex',
+      file: resolveAgentExecutable('codex'),
       args,
       cwd: thread.worktreePath,
       stdin: useStdin ? `${prompt}\n` : undefined,
@@ -381,16 +401,17 @@ export const codexAdapter: AgentAdapter = {
   },
 
   async buildAttach(thread): Promise<AttachCommand> {
+    const codex = resolveAgentExecutable('codex');
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
     if (sessionId) {
       return {
-        file: 'codex',
+        file: codex,
         args: ['exec', '--cd', thread.worktreePath, 'resume', sessionId],
         cwd: thread.worktreePath,
       };
     }
     return {
-      file: 'codex',
+      file: codex,
       args: ['--cd', thread.worktreePath],
       cwd: thread.worktreePath,
     };
@@ -400,7 +421,7 @@ export const codexAdapter: AgentAdapter = {
     const prompt =
       'List my assigned Linear issues as JSON array only: id, identifier, title, url, labels.';
     const { stdout, exitCode } = await run(
-      'codex',
+      resolveAgentExecutable('codex'),
       [
         'exec',
         '--json',

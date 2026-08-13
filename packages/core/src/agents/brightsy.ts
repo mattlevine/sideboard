@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { run } from '../git/run.js';
 import {
   applyConnectedTeamToCli,
@@ -6,6 +7,7 @@ import {
   type ConnectedBrightsyTeam,
 } from '../brightsy/connected-teams.js';
 import { loadBrightsyConfig } from '../brightsy/config.js';
+import { resolveAgentExecutable } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, TokenUsage } from '../types/thread.js';
 import {
   decodeBrightsyTarget,
@@ -210,9 +212,13 @@ async function fetchTeamChatTargets(
 
 /** Fallback: single-team list via `brightsy chat --list-targets --json`. */
 async function listBrightsyChatTargetsViaCli(): Promise<BrightsyChatTargets> {
-  const listed = await run('brightsy', ['chat', '--list-targets', '--json'], {
-    reject: false,
-  });
+  const listed = await run(
+    resolveAgentExecutable('brightsy'),
+    ['chat', '--list-targets', '--json'],
+    {
+      reject: false,
+    },
+  );
   if (listed.exitCode !== 0 || !listed.stdout.trim()) {
     throw new Error(
       listed.stderr.trim() ||
@@ -332,20 +338,34 @@ export const brightsyAdapter: AgentAdapter = {
   kind: 'brightsy',
 
   async detect(): Promise<AgentStatus> {
-    const which = await run('which', ['brightsy'], { reject: false });
-    if (which.exitCode !== 0) {
-      return {
-        agent: 'brightsy',
-        installed: false,
-        authenticated: false,
-        linearMcp: false,
-        warnings: [],
-        reason: 'brightsy CLI not found on PATH — npm i -g @brightsy/cli',
-      };
+    const brightsy = resolveAgentExecutable('brightsy');
+    if (brightsy !== 'brightsy') {
+      if (!existsSync(brightsy)) {
+        return {
+          agent: 'brightsy',
+          installed: false,
+          authenticated: false,
+          linearMcp: false,
+          warnings: [],
+          reason: `Brightsy executable not found: ${brightsy}`,
+        };
+      }
+    } else {
+      const which = await run('which', ['brightsy'], { reject: false });
+      if (which.exitCode !== 0) {
+        return {
+          agent: 'brightsy',
+          installed: false,
+          authenticated: false,
+          linearMcp: false,
+          warnings: [],
+          reason: 'brightsy CLI not found on PATH — npm i -g @brightsy/cli',
+        };
+      }
     }
 
     // `brightsy whoami` exits 0 either way; the logged-in banner is the signal.
-    const who = await run('brightsy', ['whoami'], { reject: false });
+    const who = await run(brightsy, ['whoami'], { reject: false });
     const authenticated = who.exitCode === 0 && /logged in as/i.test(who.stdout);
     return {
       agent: 'brightsy',
@@ -374,7 +394,7 @@ export const brightsyAdapter: AgentAdapter = {
       target.id,
     ];
     return {
-      file: 'brightsy',
+      file: resolveAgentExecutable('brightsy'),
       args,
       cwd: thread.worktreePath,
       // Piped stdin becomes the message body (avoids ARG_MAX for long seeds).
@@ -398,6 +418,10 @@ export const brightsyAdapter: AgentAdapter = {
       target.type === 'model'
         ? ['chat', '--model', target.id]
         : ['chat', '--agent', target.id];
-    return { file: 'brightsy', args, cwd: thread.worktreePath };
+    return {
+      file: resolveAgentExecutable('brightsy'),
+      args,
+      cwd: thread.worktreePath,
+    };
   },
 };

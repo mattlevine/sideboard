@@ -17,8 +17,12 @@ const api: IpcApi = {
   saveAppSettings: (settings) => ipcRenderer.invoke('saveAppSettings', settings),
   updateAppEnvironment: (patch) => ipcRenderer.invoke('updateAppEnvironment', patch),
   updateClaudeSettings: (patch) => ipcRenderer.invoke('updateClaudeSettings', patch),
+  updateAgentExecutable: (agent, executablePath) =>
+    ipcRenderer.invoke('updateAgentExecutable', agent, executablePath),
   pickClaudeExecutable: () => ipcRenderer.invoke('pickClaudeExecutable'),
+  pickAgentExecutable: (agent) => ipcRenderer.invoke('pickAgentExecutable', agent),
   resolveSystemClaudePath: () => ipcRenderer.invoke('resolveSystemClaudePath'),
+  resolveSystemAgentPath: (agent) => ipcRenderer.invoke('resolveSystemAgentPath', agent),
   openClaudeUserSettings: () => ipcRenderer.invoke('openClaudeUserSettings'),
   listBrightsyChatTargets: () => ipcRenderer.invoke('listBrightsyChatTargets'),
   listCursorModels: () => ipcRenderer.invoke('listCursorModels'),

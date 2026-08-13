@@ -57,6 +57,8 @@ describe('app settings', () => {
     expect(mod.loadAppSettings()).toEqual({
       environment: {},
       claude: {},
+      codex: {},
+      opencode: {},
       brightsy: {},
       integrations: {},
       defaults: {},
@@ -255,6 +257,27 @@ describe('app settings', () => {
     expect(cleared.claude.executablePath).toBeUndefined();
     expect(cleared.claude.chromeEnabled).toBe(false);
     expect(mod.resolveClaudeExecutable()).toBe('claude');
+  });
+
+  it('round-trips CLI executable path overrides', async () => {
+    const mod = await load();
+    expect(mod.resolveAgentExecutable('codex')).toBe('codex');
+    expect(mod.resolveAgentExecutable('opencode')).toBe('opencode');
+    expect(mod.resolveAgentExecutable('brightsy')).toBe('brightsy');
+
+    mod.updateCodexSettings({ executablePath: '/custom/bin/codex' });
+    mod.updateOpencodeSettings({ executablePath: '/custom/bin/opencode' });
+    mod.updateBrightsySettings({ executablePath: '/custom/bin/brightsy' });
+    expect(mod.resolveAgentExecutable('codex')).toBe('/custom/bin/codex');
+    expect(mod.resolveAgentExecutable('opencode')).toBe('/custom/bin/opencode');
+    expect(mod.resolveAgentExecutable('brightsy')).toBe('/custom/bin/brightsy');
+
+    mod.updateAgentExecutable('codex', null);
+    mod.updateAgentExecutable('opencode', null);
+    mod.updateAgentExecutable('brightsy', null);
+    expect(mod.resolveAgentExecutable('codex')).toBe('codex');
+    expect(mod.resolveAgentExecutable('opencode')).toBe('opencode');
+    expect(mod.resolveAgentExecutable('brightsy')).toBe('brightsy');
   });
 
   it('preserves environment when updating Claude settings', async () => {

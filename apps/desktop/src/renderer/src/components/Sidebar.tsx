@@ -620,10 +620,6 @@ function WorktreeSidebarRow({
   const dirty =
     loaded && stat != null && (stat.additions > 0 || stat.deletions > 0);
 
-  const prMerged =
-    (primary.prState ?? '').toUpperCase() === 'MERGED' ||
-    group.some((t) => (t.prState ?? '').toUpperCase() === 'MERGED');
-
   function requestArchive() {
     setArchiveHover(false);
     void window.sideboard
@@ -635,7 +631,7 @@ function WorktreeSidebarRow({
   return (
     <div
       ref={rowRef}
-      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}${prMerged ? ' merged' : ''}`}
+      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
       aria-busy={archiving}
       onMouseEnter={() => {
         rowHoverRef.current = true;

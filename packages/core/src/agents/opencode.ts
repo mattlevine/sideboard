@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import { run } from '../git/run.js';
+import { resolveAgentExecutable } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
 import {
@@ -56,10 +58,15 @@ export async function listOpencodeModels(): Promise<AgentModelInfo[]> {
     return cachedOpencodeModels.models;
   }
 
-  const which = await run('which', ['opencode'], { reject: false });
-  if (which.exitCode !== 0) return FALLBACK_OPENCODE_MODELS;
+  const opencode = resolveAgentExecutable('opencode');
+  if (opencode === 'opencode') {
+    const which = await run('which', ['opencode'], { reject: false });
+    if (which.exitCode !== 0) return FALLBACK_OPENCODE_MODELS;
+  } else if (!existsSync(opencode)) {
+    return FALLBACK_OPENCODE_MODELS;
+  }
 
-  const listed = await run('opencode', ['models'], { reject: false });
+  const listed = await run(opencode, ['models'], { reject: false });
   if (listed.exitCode !== 0 || !listed.stdout.trim()) {
     return cachedOpencodeModels?.models ?? FALLBACK_OPENCODE_MODELS;
   }
@@ -107,22 +114,36 @@ export const opencodeAdapter: AgentAdapter = {
   kind: 'opencode',
 
   async detect(): Promise<AgentStatus> {
-    const which = await run('which', ['opencode'], { reject: false });
-    if (which.exitCode !== 0) {
-      return {
-        agent: 'opencode',
-        installed: false,
-        authenticated: false,
-        linearMcp: false,
-        warnings: [],
-        reason: 'opencode CLI not found on PATH',
-      };
+    const opencode = resolveAgentExecutable('opencode');
+    if (opencode !== 'opencode') {
+      if (!existsSync(opencode)) {
+        return {
+          agent: 'opencode',
+          installed: false,
+          authenticated: false,
+          linearMcp: false,
+          warnings: [],
+          reason: `OpenCode executable not found: ${opencode}`,
+        };
+      }
+    } else {
+      const which = await run('which', ['opencode'], { reject: false });
+      if (which.exitCode !== 0) {
+        return {
+          agent: 'opencode',
+          installed: false,
+          authenticated: false,
+          linearMcp: false,
+          warnings: [],
+          reason: 'opencode CLI not found on PATH',
+        };
+      }
     }
 
-    const auth = await run('opencode', ['auth', 'list'], { reject: false });
+    const auth = await run(opencode, ['auth', 'list'], { reject: false });
     const authenticated = auth.exitCode === 0 && auth.stdout.trim().length > 0;
 
-    const mcp = await run('opencode', ['mcp', 'list'], { reject: false });
+    const mcp = await run(opencode, ['mcp', 'list'], { reject: false });
     const linearMcp = /linear/i.test(mcp.stdout + mcp.stderr);
 
     return {
@@ -171,7 +192,7 @@ export const opencodeAdapter: AgentAdapter = {
     const mcpContent =
       injected.length > 0 ? toOpencodeMcpConfigContent(injected) : null;
     return {
-      file: 'opencode',
+      file: resolveAgentExecutable('opencode'),
       args,
       cwd: thread.worktreePath,
       // `opencode run` treats non-TTY stdin as the message body when no positional
@@ -316,7 +337,7 @@ export const opencodeAdapter: AgentAdapter = {
   async resolveSessionId(worktreePath, cached): Promise<string | null> {
     const cachedId = cached?.trim() || null;
     const listed = await run(
-      'opencode',
+      resolveAgentExecutable('opencode'),
       ['session', 'list', '--format', 'json'],
       { cwd: worktreePath, reject: false },
     );
@@ -361,7 +382,7 @@ export const opencodeAdapter: AgentAdapter = {
     const args = ['--dir', thread.worktreePath];
     if (sessionId) args.push('--session', sessionId);
     return {
-      file: 'opencode',
+      file: resolveAgentExecutable('opencode'),
       args,
       cwd: thread.worktreePath,
       env: {
@@ -374,7 +395,7 @@ export const opencodeAdapter: AgentAdapter = {
     const prompt =
       'List my assigned Linear issues as JSON array only: id, identifier, title, url, labels.';
     const { stdout, exitCode } = await run(
-      'opencode',
+      resolveAgentExecutable('opencode'),
       ['run', prompt, '--format', 'json'],
       {
         reject: false,

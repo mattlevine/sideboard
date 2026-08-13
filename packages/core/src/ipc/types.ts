@@ -32,6 +32,7 @@ import type {
   BrightsyCloudConnectAgent,
   BrightsyHarnessSettings,
   ClaudeHarnessSettings,
+  CliAgentKind,
   IssueSource,
 } from '../store/app-settings.js';
 import type { Workspace } from '../store/workspaces.js';
@@ -71,10 +72,19 @@ export interface IpcApi {
   updateClaudeSettings(
     patch: Partial<ClaudeHarnessSettings> & { executablePath?: string | null },
   ): Promise<AppSettings>;
+  /** Persist a custom executable path for Claude / Codex / OpenCode / Brightsy. */
+  updateAgentExecutable(
+    agent: CliAgentKind,
+    executablePath: string | null,
+  ): Promise<AppSettings>;
   /** Native file picker for a Claude Code executable override. */
   pickClaudeExecutable(): Promise<string | null>;
+  /** Native file picker for a CLI agent executable override. */
+  pickAgentExecutable(agent: CliAgentKind): Promise<string | null>;
   /** Absolute path for PATH `claude`, or null if missing. */
   resolveSystemClaudePath(): Promise<string | null>;
+  /** Absolute path for PATH binary of a CLI agent, or null if missing. */
+  resolveSystemAgentPath(agent: CliAgentKind): Promise<string | null>;
   /** Ensure `~/.claude/settings.json` exists and open it in the OS default app. */
   openClaudeUserSettings(): Promise<void>;
   listBrightsyChatTargets(): Promise<BrightsyChatTargets>;

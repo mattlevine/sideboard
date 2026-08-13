@@ -29,6 +29,7 @@ vi.mock('../agents/index.js', async () => {
   return {
     ...actual,
     ensureAgentPath: () => {},
+    enrichPathWithNpmGlobalBin: () => '',
     getAdapter: (kind: string) => {
       if (kind === 'claude') return { detect: detectClaude };
       if (kind === 'codex') return { detect: detectCodex };

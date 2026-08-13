@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.63] - 2026-08-12
+
+### Added
+
+- Custom executable path overrides for Codex, OpenCode, and Brightsy (Settings → Agents), matching Claude Code
+- IPC helpers to browse / resolve system CLI binaries for all supported agents
+
+### Fixed
+
+- Codex (and other npm-global CLIs) login/install Terminal windows now use an absolute binary path and export Electron’s PATH, so `codex login` works when Terminal’s shell PATH lacks the npm global bin
+
+### Changed
+
+- Right-sidebar header tints for all PR states (open / draft / review / conflicts / closed / merged), not only merged
+- Left sidebar no longer fills merged worktree rows purple (PR state color stays on the hover-card button)
+
 ## [0.1.62] - 2026-08-12
 
 ### Added

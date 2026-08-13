@@ -831,7 +831,7 @@ export function RightSidebar({
 
   return (
     <aside className="right-sidebar">
-      <div className={`right-top${prMerged ? ' merged' : ''}`}>
+      <div className={`right-top${pillModifier ? ` ${pillModifier}` : ''}`}>
         <div className="right-top-row">
           {prUrl ? (
             <button
