@@ -52,6 +52,8 @@ export type { OrchestratorAgentKind } from './orchestrator-capable.js';
 export {
   ensureAgentPath,
   enrichPathWithNpmGlobalBin,
+  conductorBundledBinDir,
+  isConductorBundledCli,
   resolveCommandBinarySync,
   withExportedPath,
   posixShellSingleQuote,

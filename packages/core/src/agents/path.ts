@@ -28,10 +28,23 @@ function prependPathDir(env: NodeJS.ProcessEnv, dir: string): void {
   env.PATH = [dir, ...parts].join(delimiter);
 }
 
+/** Conductor-bundled Claude/Codex live here (not on a typical GUI PATH). */
+export function conductorBundledBinDir(
+  home: string = process.env.HOME || process.env.USERPROFILE || homedir(),
+): string {
+  return join(home, 'Library', 'Application Support', 'com.conductor.app', 'bin');
+}
+
+export function isConductorBundledCli(filePath: string | null | undefined): boolean {
+  const p = (filePath ?? '').replace(/\\/g, '/');
+  return p.includes('/com.conductor.app/bin/') || p.endsWith('/com.conductor.app/bin');
+}
+
 /**
  * Electron / GUI apps often inherit a minimal PATH that omits Homebrew and
  * user bin dirs where `claude` / `codex` / `opencode` / `brightsy` live. Call
  * once at process start (and before agent spawns) so adapters can resolve CLIs.
+ * Also includes Conductor’s bundled `bin` (Claude/Codex) as a fallback.
  */
 export function ensureAgentPath(env: NodeJS.ProcessEnv = process.env): string {
   const home = env.HOME || env.USERPROFILE || homedir();
@@ -43,6 +56,8 @@ export function ensureAgentPath(env: NodeJS.ProcessEnv = process.env): string {
     ...EXTRA_BIN_DIRS.map((rel) => join(home, rel)),
     '/opt/homebrew/bin',
     '/usr/local/bin',
+    // Keep after Homebrew/npm so a user-installed CLI still wins.
+    conductorBundledBinDir(home),
   ];
 
   for (const dir of extras.reverse()) {
@@ -110,10 +125,10 @@ export function resolveCommandBinarySync(
   return `${abs}${rest}`;
 }
 
-/** `export PATH='…'; <command>` so Terminal inherits Electron’s enriched PATH. */
+/** `export PATH='…' && <command>` so Terminal inherits Electron’s enriched PATH. */
 export function withExportedPath(command: string, pathValue: string): string {
   const trimmed = command.trim();
   if (!trimmed) return trimmed;
   if (/^(export\s+PATH=|PATH=)/.test(trimmed)) return trimmed;
-  return `export PATH=${posixShellSingleQuote(pathValue)}; ${trimmed}`;
+  return `export PATH=${posixShellSingleQuote(pathValue)} && ${trimmed}`;
 }

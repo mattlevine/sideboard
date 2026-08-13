@@ -14,6 +14,7 @@ vi.mock('../store/app-settings.js', () => ({
 vi.mock('./path.js', () => ({
   ensureAgentPath: () => '/usr/bin',
   enrichPathWithNpmGlobalBin: () => '/opt/homebrew/bin:/usr/bin',
+  isConductorBundledCli: (filePath: string) => filePath.includes('com.conductor.app'),
   resolveCommandBinarySync: (command: string, whichPath: string | null) => {
     const abs = whichPath?.trim().split(/\r?\n/).find(Boolean);
     if (abs) {
@@ -42,11 +43,56 @@ describe('agent install helpers', () => {
     expect(info.loginCommand).toBeNull();
   });
 
-  it('installs Codex via npm when available', async () => {
+  it('skips npm when Codex is already on PATH', async () => {
     runMock.mockImplementation(async (file: string, args: string[]) => {
-      if (file === 'npm') return { stdout: 'ok', stderr: '', exitCode: 0 };
       if (file === 'which' && args[0] === 'codex') {
         return { stdout: '/opt/homebrew/bin/codex\n', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('codex');
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain('/opt/homebrew/bin/codex');
+    expect(runMock).not.toHaveBeenCalledWith(
+      'npm',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('reuses Conductor-bundled Codex instead of npm installing another copy', async () => {
+    const conductor =
+      '/Users/me/Library/Application Support/com.conductor.app/bin/codex';
+    runMock.mockImplementation(async (file: string, args: string[]) => {
+      if (file === 'which' && args[0] === 'codex') {
+        return { stdout: `${conductor}\n`, stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('codex');
+    expect(result.ok).toBe(true);
+    expect(result.message).toMatch(/Conductor/i);
+    expect(result.message).toContain(conductor);
+    expect(runMock).not.toHaveBeenCalledWith(
+      'npm',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('installs Codex via npm when not on PATH', async () => {
+    let installed = false;
+    runMock.mockImplementation(async (file: string, args: string[]) => {
+      if (file === 'npm') {
+        installed = true;
+        return { stdout: 'ok', stderr: '', exitCode: 0 };
+      }
+      if (file === 'which' && args[0] === 'codex') {
+        return installed
+          ? { stdout: '/opt/homebrew/bin/codex\n', stderr: '', exitCode: 0 }
+          : { stdout: '', stderr: '', exitCode: 1 };
       }
       return { stdout: '', stderr: '', exitCode: 0 };
     });

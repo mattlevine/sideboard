@@ -6,6 +6,7 @@ import {
 import type { AgentKind } from '../types/thread.js';
 import {
   enrichPathWithNpmGlobalBin,
+  isConductorBundledCli,
   resolveCommandBinarySync,
   withExportedPath,
 } from './path.js';
@@ -191,6 +192,12 @@ export async function openInSystemTerminal(command: string): Promise<void> {
   );
 }
 
+async function whichCli(bin: string): Promise<string | null> {
+  const which = await run('which', [bin], { reject: false, timeoutMs: 3_000 });
+  if (which.exitCode !== 0) return null;
+  return which.stdout.trim().split(/\r?\n/).find(Boolean) ?? null;
+}
+
 /** Install a CLI agent: npm packages run in-process; curl installers open Terminal. */
 export async function installAgent(agent: AgentKind): Promise<AgentSetupActionResult> {
   const info = getAgentSetupInfo(agent);
@@ -216,6 +223,20 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
   }
 
   enrichPathWithNpmGlobalBin();
+  const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];
+  if (cliBin) {
+    const existing = await whichCli(cliBin);
+    if (existing) {
+      return {
+        ok: true,
+        command: existing,
+        message: isConductorBundledCli(existing)
+          ? `Using Conductor’s ${cliBin} at ${existing}. No extra install — Log in only if auth is missing.`
+          : `Already on PATH: ${existing}`,
+      };
+    }
+  }
+
   const result = await run('npm', ['install', '-g', info.npmPackage], { reject: false });
   const ok = result.exitCode === 0;
   if (!ok) {
@@ -249,11 +270,9 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
 
   // Refresh PATH and confirm the CLI resolves where Terminal will look.
   enrichPathWithNpmGlobalBin();
-  const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];
   let binPath: string | null = null;
   if (cliBin) {
-    const which = await run('which', [cliBin], { reject: false, timeoutMs: 3_000 });
-    binPath = which.exitCode === 0 ? which.stdout.trim().split(/\r?\n/).find(Boolean) ?? null : null;
+    binPath = await whichCli(cliBin);
   }
 
   return {

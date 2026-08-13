@@ -335,13 +335,40 @@ export function SettingsModal({
 
   async function runLogin() {
     if (!activeAgent || setupBusy) return;
+    const agentId = activeAgent.id;
     setSetupBusy('login');
     setSetupLog(null);
     setError(null);
     try {
-      const result = await window.sideboard.loginAgent(activeAgent.id);
-      setSetupLog(formatSetupResult(result));
-      if (!result.ok) setError(result.message);
+      const result = await window.sideboard.loginAgent(agentId);
+      setSetupLog(
+        [
+          formatSetupResult(result),
+          'Finish signing in in that Terminal window (browser / ChatGPT). Sideboard will refresh when login completes.',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      );
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      if (!result.openedTerminal) return;
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2_000));
+        const agents = await window.sideboard.detectAgents();
+        setStatuses(agents);
+        const st = statusFor(agents, agentId);
+        if (st?.installed && st?.authenticated) {
+          setSetupLog((prev) => `${prev ?? ''}\n\nDetected ${agentId} — authenticated.`);
+          return;
+        }
+      }
+      setSetupLog(
+        (prev) =>
+          `${prev ?? ''}\n\nStill waiting — click Refresh after the Terminal login finishes.`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -873,7 +900,7 @@ export function SettingsModal({
                   <p className="settings-hint">
                     {activeAgent.bundled
                       ? 'Cursor is bundled with Sideboard — paste a CURSOR_API_KEY below (no package install).'
-                      : 'Install the CLI if missing, then authenticate. Install uses npm when possible; login opens Terminal.'}
+                      : 'If Conductor is installed, Sideboard reuses its Claude/Codex CLIs (no second copy). Otherwise: Install the CLI, then Log in. Install runs npm only when the CLI is missing. Log in opens Terminal — finish it there, then status updates.'}
                   </p>
                   <div className="settings-actions">
                     {!activeAgent.bundled && (
@@ -892,7 +919,7 @@ export function SettingsModal({
                         disabled={busy || setupBusy != null}
                         onClick={() => void runLogin()}
                       >
-                        {setupBusy === 'login' ? 'Opening…' : 'Log in'}
+                        {setupBusy === 'login' ? 'Waiting for login…' : 'Log in'}
                       </button>
                     )}
                     <button
@@ -1204,36 +1231,6 @@ export function SettingsModal({
                   </div>
                 )}
 
-                <div className="settings-section">
-                  <div className="settings-toggle-row">
-                    <div>
-                      <div className="settings-section-title">
-                        Inject Brightsy MCP on worktree agents
-                      </div>
-                      <p className="settings-hint">
-                        Off by default. When on, Claude / Codex / Cursor / OpenCode worktree chats
-                        always get Brightsy MCP (if you are logged in). When off, they only get it
-                        if you say “use Brightsy…” or the thread already used it. Orchestration
-                        chats always get it when logged in.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`settings-switch${settings.brightsy?.injectWorktreeMcp ? ' on' : ''}`}
-                      role="switch"
-                      aria-checked={Boolean(settings.brightsy?.injectWorktreeMcp)}
-                      disabled={busy}
-                      onClick={() =>
-                        void saveBrightsyPatch({
-                          injectWorktreeMcp: !settings.brightsy?.injectWorktreeMcp,
-                        })
-                      }
-                    >
-                      <span className="settings-switch-knob" />
-                    </button>
-                  </div>
-                </div>
-
                 {activeAgent.id === 'brightsy' && (
                   <div className="settings-section">
                     <div className="settings-toggle-row">
@@ -1386,6 +1383,35 @@ export function SettingsModal({
                   live in <code>.sideboard/settings.toml</code> (or{' '}
                   <code>.conductor/settings.toml</code>).
                 </p>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">
+                        Inject Brightsy MCP on Claude, Codex, and OpenCode
+                      </div>
+                      <p className="settings-hint">
+                        Off by default. When on, those worktree chats always get Brightsy MCP if you
+                        are logged in. When off, they only get it if you say “use Brightsy…” or the
+                        thread already used it. Orchestration chats always get it when logged in.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${settings.brightsy?.injectWorktreeMcp ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(settings.brightsy?.injectWorktreeMcp)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveBrightsyPatch({
+                          injectWorktreeMcp: !settings.brightsy?.injectWorktreeMcp,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
 
                 <div className="settings-section">
                   <div className="settings-toggle-row">

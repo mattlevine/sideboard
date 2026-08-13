@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.67] - 2026-08-12
+
+### Added
+
+- Detect Conductor-bundled Claude/Codex at `~/Library/Application Support/com.conductor.app/bin` (fallback after Homebrew/npm)
+
+### Changed
+
+- **Inject Brightsy MCP on Claude, Codex, and OpenCode** lives in Settings → Advanced (not Agents → Brightsy); still off by default
+- Install skips `npm i -g` when the CLI is already on PATH, including Conductor’s copy
+- Agent Log in polls until auth is detected instead of returning as soon as Terminal opens
+
 ## [0.1.66] - 2026-08-12
 
 Desktop GitHub release of the 0.1.65 Brightsy MCP gating (fresh npm + Mac DMGs).
