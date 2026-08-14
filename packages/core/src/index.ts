@@ -6,6 +6,7 @@ export {
   getCaffeinateHold,
   setCaffeinateHold,
   releaseCaffeinateHoldForThread,
+  isThreadCaffeinated,
   caffeinateHoldPath,
 } from './store/caffeinate-hold.js';
 export type { CaffeinateHoldState } from './store/caffeinate-hold.js';

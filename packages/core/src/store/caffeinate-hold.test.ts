@@ -153,4 +153,37 @@ describe('caffeinate hold', () => {
     expect(mod.releaseCaffeinateHoldForThread('orch-legacy').held).toBe(false);
     expect(killed).toEqual([9]);
   });
+
+  it('reports which orchestration chat is holding caffeinate', async () => {
+    const mod = await load();
+    const idle = {
+      held: false,
+      pid: null,
+      running: false,
+      platform: 'darwin' as const,
+      threadIds: [],
+    };
+    expect(mod.isThreadCaffeinated('orch-a', idle)).toBe(false);
+    expect(
+      mod.isThreadCaffeinated('orch-a', { ...idle, held: true, pid: 1, running: true }),
+    ).toBe(true);
+    expect(
+      mod.isThreadCaffeinated('orch-a', {
+        ...idle,
+        held: true,
+        pid: 1,
+        running: true,
+        threadIds: ['orch-b'],
+      }),
+    ).toBe(false);
+    expect(
+      mod.isThreadCaffeinated('orch-b', {
+        ...idle,
+        held: true,
+        pid: 1,
+        running: true,
+        threadIds: ['orch-b'],
+      }),
+    ).toBe(true);
+  });
 });

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { IpcApi, OrchestratorEvent } from '@sideboard-ai/core';
+import type { CaffeinateHoldState, IpcApi, OrchestratorEvent } from '@sideboard-ai/core';
 
 const api: IpcApi = {
   getPathForFile: (file) => {
@@ -58,6 +58,14 @@ const api: IpcApi = {
     ipcRenderer.invoke('disconnectSlackWorkspace', teamId),
   getSlackListenStatus: () => ipcRenderer.invoke('getSlackListenStatus'),
   setSlackListen: (opts) => ipcRenderer.invoke('setSlackListen', opts),
+  getCaffeinateHold: () => ipcRenderer.invoke('getCaffeinateHold'),
+  onCaffeinateHoldChanged: (listener) => {
+    const handler = (_event: IpcRendererEvent, state: CaffeinateHoldState) => listener(state);
+    ipcRenderer.on('caffeinate-hold:changed', handler);
+    return () => {
+      ipcRenderer.removeListener('caffeinate-hold:changed', handler);
+    };
+  },
   getSlackReplyBadges: () => ipcRenderer.invoke('getSlackReplyBadges'),
   openSlackReply: (badgeId) => ipcRenderer.invoke('openSlackReply', badgeId),
   listIssues: (repoPath) => ipcRenderer.invoke('listIssues', repoPath),

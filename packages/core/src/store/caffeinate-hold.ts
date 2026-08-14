@@ -107,6 +107,19 @@ function idleState(platform: NodeJS.Platform): CaffeinateHoldState {
   return { held: false, pid: null, running: false, platform, threadIds: [] };
 }
 
+/** True when this orchestration chat currently holds `set_caffeinate`. */
+export function isThreadCaffeinated(
+  threadId: string,
+  state: CaffeinateHoldState,
+): boolean {
+  if (!state.held) return false;
+  const id = threadId.trim();
+  if (!id) return false;
+  if (state.threadIds.includes(id)) return true;
+  // Legacy hold recorded no chat ids — treat as this orchestration chat.
+  return state.threadIds.length === 0;
+}
+
 export function getCaffeinateHold(): CaffeinateHoldState {
   const platform = hooks.platform ?? process.platform;
   const hold = readHold();

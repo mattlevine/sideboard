@@ -2435,6 +2435,29 @@ body.resizing-panels webview {
   text-overflow: ellipsis;
 }
 
+.chat-tab-caffeinate {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #ffc428;
+  color: #1a1208;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+  text-transform: lowercase;
+  opacity: 1;
+}
+
+.chat-tab:not(.active) .chat-tab-caffeinate {
+  background: #ffd24a;
+  color: #1a1208;
+}
+
 .chat-tab-changes-count {
   flex-shrink: 0;
   min-width: 1.1em;

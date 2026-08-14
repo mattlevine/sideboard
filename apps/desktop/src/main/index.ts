@@ -1,4 +1,15 @@
-import { app, BrowserWindow, Notification, dialog, ipcMain, nativeImage, net, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  Notification,
+  Tray,
+  dialog,
+  ipcMain,
+  nativeImage,
+  net,
+  shell,
+} from 'electron';
 import {
   destroyUrlPreview,
   hideUrlPreview,
@@ -14,12 +25,18 @@ import {
 } from './artifact-preview';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { initDesktopSecretVault } from './secret-vault';
+import {
+  caffeinateIndicatorReasons,
+  caffeinateIndicatorTooltip,
+  caffeinateTrayPng,
+  paintCaffeinateDockBadge,
+} from './caffeinate-indicator';
 
 // Must run before app.ready so artifact iframes can load outside renderer CSP.
 registerArtifactPreviewScheme();
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { watch, type FSWatcher } from 'chokidar';
 import { autoUpdater } from 'electron-updater';
@@ -30,8 +47,10 @@ import {
   brightsyCloudConnectAgent,
   brightsyCloudConnectEnabled,
   BrightsySideboardApi,
+  caffeinateHoldPath,
   caffeinateWhileRunningEnabled,
   caffeinateWhileSlackListenEnabled,
+  getCaffeinateHold,
   setCaffeinateHold,
   claudeUserSettingsPath,
   detectAgents,
@@ -146,6 +165,7 @@ const orch = getOrchestrator();
 let openFileWatcher: FSWatcher | null = null;
 let openFileWatchKey: string | null = null;
 let caffeinateProc: ChildProcess | null = null;
+let caffeinateTray: Tray | null = null;
 
 let cloudConnectAbort: AbortController | null = null;
 let cloudConnectRunning = false;
@@ -441,11 +461,107 @@ function resolveAppIcon(): string | null {
 }
 
 function applyDockIcon(): void {
-  if (process.platform !== 'darwin' || !app.dock) return;
-  const path = resolveAppIcon();
-  if (!path) return;
-  const image = nativeImage.createFromPath(path);
-  if (!image.isEmpty()) app.dock.setIcon(image);
+  syncCaffeinateIndicator();
+}
+
+function overlayCaffeinateOnIcon(base: Electron.NativeImage): Electron.NativeImage {
+  const size = 256;
+  const resized = base.resize({ width: size, height: size });
+  const bitmap = Buffer.from(resized.toBitmap());
+  paintCaffeinateDockBadge(bitmap, size, size, {
+    bgra: process.platform === 'darwin',
+  });
+  return nativeImage.createFromBitmap(bitmap, { width: size, height: size });
+}
+
+function showMainWindow(): void {
+  if (!mainWindow) createWindow();
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function destroyCaffeinateTray(): void {
+  if (!caffeinateTray) return;
+  caffeinateTray.destroy();
+  caffeinateTray = null;
+}
+
+function caffeinateTrayImage(): Electron.NativeImage {
+  const px = 44;
+  return nativeImage.createFromBuffer(caffeinateTrayPng(px), {
+    scaleFactor: 2,
+  });
+}
+
+function syncCaffeinateTray(active: boolean, tooltip: string): void {
+  if (process.platform !== 'darwin' || !active) {
+    destroyCaffeinateTray();
+    return;
+  }
+  const image = caffeinateTrayImage();
+  if (!caffeinateTray) {
+    caffeinateTray = new Tray(image);
+    caffeinateTray.setIgnoreDoubleClickEvents(true);
+    caffeinateTray.on('click', () => showMainWindow());
+    caffeinateTray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Sideboard is keeping this Mac awake', enabled: false },
+        { type: 'separator' },
+        { label: 'Show Sideboard', click: () => showMainWindow() },
+      ]),
+    );
+  } else {
+    caffeinateTray.setImage(image);
+  }
+  caffeinateTray.setTitle('');
+  caffeinateTray.setToolTip(tooltip);
+}
+
+function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
+  appCaffeinated: boolean;
+} {
+  const hold = getCaffeinateHold();
+  const reasons = caffeinateIndicatorReasons({
+    holdHeld: hold.held,
+    whileRunning: caffeinateWhileRunningEnabled(),
+    agentsRunning: orch.getRuntime().running,
+    whileSlackListen: caffeinateWhileSlackListenEnabled(),
+    slackListenRunning,
+  });
+  return { ...hold, appCaffeinated: reasons.length > 0 };
+}
+
+function syncCaffeinateIndicator(): void {
+  const state = caffeinateUiState();
+  const reasons = caffeinateIndicatorReasons({
+    holdHeld: state.held,
+    whileRunning: caffeinateWhileRunningEnabled(),
+    agentsRunning: orch.getRuntime().running,
+    whileSlackListen: caffeinateWhileSlackListenEnabled(),
+    slackListenRunning,
+  });
+  const active = state.appCaffeinated;
+  const tooltip = caffeinateIndicatorTooltip(reasons);
+
+  if (process.platform === 'darwin' && app.dock) {
+    const path = resolveAppIcon();
+    if (path) {
+      const base = nativeImage.createFromPath(path);
+      if (!base.isEmpty()) {
+        app.dock.setIcon(active ? overlayCaffeinateOnIcon(base) : base);
+      }
+    }
+    app.dock.setBadge('');
+  }
+
+  syncCaffeinateTray(active, tooltip);
+  try {
+    mainWindow?.webContents.send('caffeinate-hold:changed', state);
+  } catch {
+    // ignore
+  }
 }
 
 function createWindow(): void {
@@ -551,6 +667,29 @@ function setupStoreWatcher(): void {
   });
 }
 
+function setupCaffeinateHoldWatcher(): void {
+  const file = caffeinateHoldPath();
+  const dir = dirname(file);
+  const name = basename(file);
+  mkdirSync(dir, { recursive: true });
+  const watcher = watch(dir, { ignoreInitial: true, depth: 0 });
+  const notify = (changed: string) => {
+    if (basename(changed) !== name) return;
+    try {
+      mainWindow?.webContents.send('caffeinate-hold:changed', caffeinateUiState());
+    } catch {
+      // ignore
+    }
+    syncCaffeinateIndicator();
+  };
+  watcher.on('add', notify);
+  watcher.on('change', notify);
+  watcher.on('unlink', notify);
+  app.on('will-quit', () => {
+    void watcher.close();
+  });
+}
+
 function stopCaffeinate(): void {
   if (!caffeinateProc) return;
   try {
@@ -561,10 +700,11 @@ function stopCaffeinate(): void {
   caffeinateProc = null;
 }
 
-/** Keep the Mac awake while agents run and/or Slack Listen is connected. */
+/** Keep the Mac awake while agents run, Slack Listen is on, or a chat holds caffeinate. */
 function syncCaffeinate(): void {
   if (process.platform !== 'darwin') {
     stopCaffeinate();
+    syncCaffeinateIndicator();
     return;
   }
   const keepAwake =
@@ -585,6 +725,7 @@ function syncCaffeinate(): void {
   } else if (!keepAwake) {
     stopCaffeinate();
   }
+  syncCaffeinateIndicator();
 }
 
 function setupNotifications(): void {
@@ -801,6 +942,7 @@ function registerIpc(): void {
   ipcMain.handle('setSlackListen', (_e, opts: { enabled: boolean }) =>
     setSlackListen(opts),
   );
+  ipcMain.handle('getCaffeinateHold', () => caffeinateUiState());
   ipcMain.handle('getSlackReplyBadges', () => refreshSlackReplyBadges());
   ipcMain.handle('openSlackReply', async (_e, badgeId: string) => {
     const id = typeof badgeId === 'string' ? badgeId : '';
@@ -1354,6 +1496,7 @@ app.whenReady().then(async () => {
   registerIpc();
   setupNotifications();
   setupStoreWatcher();
+  setupCaffeinateHoldWatcher();
   setupUpdater();
   setupApplicationMenu(() => mainWindow);
   try {
@@ -1393,6 +1536,12 @@ app.on('will-quit', () => {
   stopCloudConnectDaemon();
   stopSlackListenDaemon();
   stopCaffeinate();
+  destroyCaffeinateTray();
+  try {
+    if (process.platform === 'darwin') app.dock?.setBadge('');
+  } catch {
+    // ignore
+  }
   try {
     setCaffeinateHold(false);
   } catch {

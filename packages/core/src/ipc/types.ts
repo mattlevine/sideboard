@@ -45,6 +45,7 @@ import type {
 } from '../agents/install.js';
 import type { BrightsySession } from '../brightsy/accounts.js';
 import type { GitHubStatus } from '../integrations/github.js';
+import type { CaffeinateHoldState } from '../store/caffeinate-hold.js';
 import type { SlackReplyBadge } from '../slack/outbound-watch.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesResult } from '../integrations/issues.js';
@@ -181,6 +182,12 @@ export interface IpcApi {
   /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */
   getSlackListenStatus(): Promise<SlackListenStatus>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
+  /** Live caffeinate: chat hold and/or Settings (agents running / Slack Listen). */
+  getCaffeinateHold(): Promise<CaffeinateHoldState & { appCaffeinated: boolean }>;
+  /** Fired when any caffeinate source starts or stops. */
+  onCaffeinateHoldChanged(
+    listener: (state: CaffeinateHoldState & { appCaffeinated: boolean }) => void,
+  ): () => void;
   /** Unread Slack replies to messages this Mac posted (relayed as info; does not start a turn). */
   getSlackReplyBadges(): Promise<SlackReplyBadge[]>;
   /** Open the Slack thread in the browser/app and clear that user's badge. */
