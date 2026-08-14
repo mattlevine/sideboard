@@ -15,7 +15,6 @@ import type {
   ThinkingEffort,
   Thread,
 } from '@sideboard-ai/core';
-import { isLinearOAuthCancelled, isSlackOAuthCancelled } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
@@ -201,6 +200,12 @@ function maskSecret(value: string): string {
   if (!value) return '';
   if (value.length <= 8) return '••••••••';
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
+
+/** IPC maps OAuth abort to these messages — do not import Node core into the renderer. */
+function isOauthCancelled(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /sign-in cancelled/i.test(message);
 }
 
 function statusFor(statuses: AgentStatus[], id: AgentPanel): AgentStatus | undefined {
@@ -811,7 +816,7 @@ export function SettingsModal({
                             .startLinearOAuth()
                             .then((next) => applySettings(next))
                             .catch((err) => {
-                              if (isLinearOAuthCancelled(err)) return;
+                              if (isOauthCancelled(err)) return;
                               setError(err instanceof Error ? err.message : String(err));
                             })
                             .finally(() => setLinearOauthBusy(false));
@@ -957,7 +962,7 @@ export function SettingsModal({
                             if (status) setSlackListen(status);
                           })
                           .catch((err) => {
-                            if (isSlackOAuthCancelled(err)) return;
+                            if (isOauthCancelled(err)) return;
                             setError(err instanceof Error ? err.message : String(err));
                           })
                           .finally(() => setSlackOauthBusy(false));
