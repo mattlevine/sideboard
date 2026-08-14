@@ -358,14 +358,15 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'set_caffeinate',
-    'Keep this Mac awake with caffeinate (like Claude Code) across turns — independent of Settings toggles. Turn ON when the user will be away from the keyboard, is driving work from Slack, or asks you to keep the machine awake. Turn OFF when they say they are done, wrapping up, going to sleep, or no longer need the Mac awake. macOS only.',
+    'Keep this Mac awake with caffeinate (like Claude Code) across turns — independent of Settings toggles. Turn ON when the user will be away from the keyboard, is driving work from Slack, or asks you to keep the machine awake. Turn OFF when they say they are done, wrapping up, going to sleep, or no longer need the Mac awake. Closing or archiving this orchestration chat also releases the hold. macOS only.',
     {
       enabled: z
         .boolean()
         .describe('true = hold caffeinate on; false = release and let the Mac sleep'),
     },
     async ({ enabled }) => {
-      const state = setCaffeinateHold(enabled);
+      const threadId = process.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || null;
+      const state = setCaffeinateHold(enabled, { threadId });
       if (enabled && !state.held) {
         return {
           content: [
@@ -392,7 +393,7 @@ export async function startMcpServer(): Promise<void> {
               ...getCaffeinateHold(),
               ok: true,
               message: state.held
-                ? 'Mac will stay awake until you call set_caffeinate with enabled=false (or the user says they are done).'
+                ? 'Mac will stay awake until you call set_caffeinate with enabled=false, the user says they are done, or this orchestration chat is closed.'
                 : 'Caffeinate hold released. The Mac can sleep (unless Settings caffeinate toggles are on).',
             }),
           },

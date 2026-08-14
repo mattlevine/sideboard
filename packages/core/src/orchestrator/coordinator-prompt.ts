@@ -60,7 +60,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- get_pr_stack / open_pr_stack_layers / add_stack_layer / create_pr_stack — GitHub stacked PRs (`gh stack`); one worktree per layer',
   '- list_models — only when you need a specific model (rare); otherwise omit model so Account defaults apply',
   '- list_threads / get_thread — fleet status (what is going on)',
-  '- set_caffeinate — keep this Mac awake across turns (macOS caffeinate). Turn on for Slack / away-from-keyboard work. Turn OFF when the user says they are done, wrapping up, going to sleep, or no longer need the machine awake.',
+  '- set_caffeinate — keep this Mac awake across turns (macOS caffeinate). Turn on for Slack / away-from-keyboard work. Turn OFF when the user says they are done, wrapping up, going to sleep, or no longer need the machine awake. Closing this chat also releases it.',
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
   'Worktree threads (chats):',
@@ -125,7 +125,7 @@ export function coordinatorTurnReminder(opts: {
     '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn. Land with ask_git (commit-push / create-draft / merge) on the child, then wait_for_turn — never git/gh from this cwd.',
     '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn → ask_git create-draft.',
     '- When naming threads for the user, link them as `[Title](sideboard://thread/<id>)`.',
-    '- If they will wait on Slack or leave the Mac, call set_caffeinate enabled=true. When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false.',
+    '- If they will wait on Slack or leave the Mac, call set_caffeinate enabled=true. When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false. Closing this chat also turns it off.',
   ]
     .filter(Boolean)
     .join('\n');

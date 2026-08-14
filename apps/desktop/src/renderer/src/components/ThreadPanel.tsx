@@ -1822,7 +1822,14 @@ export function ThreadPanel({
                 ) : (
                   <>
                     <div className="queued-msg-text">{text}</div>
-                    <div className="queued-msg-actions">
+                    <div
+                      className="queued-msg-actions"
+                      onMouseDown={(e) => {
+                        // Composer collapse (blur) would shift this dock before
+                        // mouseup, so the first click never reaches the button.
+                        e.preventDefault();
+                      }}
+                    >
                       <button
                         type="button"
                         className="queued-msg-icon-btn"

@@ -6,11 +6,13 @@
 # First time:
 #   fly apps create sideboard-slack-relay
 #   fly secrets set SIDEBOARD_SLACK_APP_TOKEN=xapp-… -a sideboard-slack-relay
+#   fly secrets set SIDEBOARD_SLACK_CLIENT_SECRET=… -a sideboard-slack-relay
 #
 # Custom domain:
-#   fly certs add slack-relay.sideboard.cloud -a sideboard-slack-relay
+#   fly certs add relay.sideboard.cloud -a sideboard-slack-relay
 #
-# HTTPS GET /callback is the Slack OAuth bounce (public distribution).
+# HTTPS GET /slack/callback exchanges Slack OAuth (client secret stays on this app).
+# Desktops poll GET /slack/oauth/result?state=…
 
 app = 'sideboard-slack-relay'
 primary_region = 'sjc'

@@ -3,6 +3,8 @@ import {
   type SlackRelayClientMessage,
 } from './relay-protocol.js';
 import { resolveWebSocket, type SlackInboundMessage, type SlackWebSocketCtor } from './socket-mode.js';
+import { lookupPreferPublicDns } from './public-dns.js';
+import { WebSocket as WsWebSocket } from 'ws';
 
 export interface SlackRelayRegisterWorkspace {
   teamId: string;
@@ -13,7 +15,7 @@ export interface SlackRelayRegisterWorkspace {
 }
 
 export interface SlackRelayClientOptions {
-  /** Full WebSocket URL including path, e.g. wss://slack-relay.sideboard.cloud/desktop */
+  /** Full WebSocket URL including path, e.g. wss://relay.sideboard.cloud/slack/desktop */
   url: string;
   workspaces: SlackRelayRegisterWorkspace[];
   /** Stable per-Mac destination id. */
@@ -57,7 +59,13 @@ function send(ws: { send(data: string): void }, msg: SlackRelayClientMessage): v
  */
 export async function runSlackRelayClient(opts: SlackRelayClientOptions): Promise<void> {
   const log = opts.onLog ?? (() => undefined);
-  const Ws = resolveWebSocket(opts.WebSocketImpl);
+  const Ws = opts.WebSocketImpl
+    ? resolveWebSocket(opts.WebSocketImpl)
+    : (class {
+        constructor(url: string) {
+          return new WsWebSocket(url, { lookup: lookupPreferPublicDns });
+        }
+      } as unknown as SlackWebSocketCtor);
   const url = opts.url.trim();
   const deviceId = opts.deviceId.trim();
   if (!url) throw new Error('Slack relay URL is empty');

@@ -59,6 +59,7 @@ describe('caffeinate hold', () => {
       pid: null,
       running: false,
       platform: 'darwin',
+      threadIds: [],
     });
     expect(killed).toEqual([4242]);
     expect(mod.getCaffeinateHold().held).toBe(false);
@@ -82,5 +83,74 @@ describe('caffeinate hold', () => {
       platform: 'linux',
     });
     expect(spawned).toHaveLength(0);
+  });
+
+  it('keeps caffeinate until the last holding orchestration chat releases', async () => {
+    const mod = await load();
+    const killed: number[] = [];
+    let alive = new Set<number>();
+    mod.setCaffeinateHoldHooks({
+      platform: 'darwin',
+      spawn: () => {
+        alive.add(7);
+        return {
+          pid: 7,
+          unref: () => undefined,
+          kill: () => {
+            alive.delete(7);
+          },
+        } as ReturnType<typeof import('node:child_process').spawn>;
+      },
+      processAlive: (pid) => alive.has(pid),
+      kill: (pid) => {
+        killed.push(pid);
+        alive.delete(pid);
+      },
+    });
+
+    mod.setCaffeinateHold(true, { threadId: 'orch-a' });
+    mod.setCaffeinateHold(true, { threadId: 'orch-b' });
+    expect(mod.getCaffeinateHold().threadIds).toEqual(['orch-a', 'orch-b']);
+
+    const afterA = mod.releaseCaffeinateHoldForThread('orch-a');
+    expect(afterA.held).toBe(true);
+    expect(afterA.threadIds).toEqual(['orch-b']);
+    expect(killed).toEqual([]);
+
+    const afterOther = mod.releaseCaffeinateHoldForThread('unrelated');
+    expect(afterOther.held).toBe(true);
+    expect(killed).toEqual([]);
+
+    const afterB = mod.releaseCaffeinateHoldForThread('orch-b');
+    expect(afterB.held).toBe(false);
+    expect(killed).toEqual([7]);
+  });
+
+  it('releases a legacy hold (no thread ids) when that chat closes', async () => {
+    const mod = await load();
+    const killed: number[] = [];
+    let alive = new Set<number>([9]);
+    mod.setCaffeinateHoldHooks({
+      platform: 'darwin',
+      spawn: () => {
+        alive.add(9);
+        return {
+          pid: 9,
+          unref: () => undefined,
+          kill: () => {
+            alive.delete(9);
+          },
+        } as ReturnType<typeof import('node:child_process').spawn>;
+      },
+      processAlive: (pid) => alive.has(pid),
+      kill: (pid) => {
+        killed.push(pid);
+        alive.delete(pid);
+      },
+    });
+    mod.setCaffeinateHold(true);
+    expect(mod.getCaffeinateHold().threadIds).toEqual([]);
+    expect(mod.releaseCaffeinateHoldForThread('orch-legacy').held).toBe(false);
+    expect(killed).toEqual([9]);
   });
 });

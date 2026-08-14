@@ -6,11 +6,7 @@ import {
   saveLinearOAuth,
   type AppSettings,
 } from '../store/app-settings.js';
-import {
-  BAKED_LINEAR_CLIENT_ID,
-  BAKED_LINEAR_CLIENT_SECRET,
-  hasBakedLinearOAuth,
-} from './linear-app.js';
+import { BAKED_LINEAR_CLIENT_ID, hasBakedLinearOAuth } from './linear-app.js';
 
 export { hasBakedLinearOAuth };
 
@@ -37,7 +33,7 @@ export function linearOAuthCredentials(): { clientId: string; clientSecret: stri
   const clientSecret =
     process.env.SIDEBOARD_LINEAR_CLIENT_SECRET?.trim() ||
     settings.integrations.linearClientSecret?.trim() ||
-    BAKED_LINEAR_CLIENT_SECRET.trim();
+    '';
   if (!clientId) {
     throw new Error(
       `Linear browser sign-in needs a Linear OAuth app Client ID. Create one at linear.app/settings/api/applications/new with callback ${LINEAR_OAUTH_REDIRECT}, then set SIDEBOARD_LINEAR_CLIENT_ID (PKCE does not require a secret). You can still paste a personal API key.`,

@@ -311,7 +311,7 @@ Keep the desktop app running after you connect a workspace.
 
 **Settings → Account → Slack workspaces**
 
-1. **Add via browser** — installs the official Sideboard Slack app into a workspace (use this; paste-only bot tokens cannot prove which Slack user owns the Mac). Until **Manage Distribution → Activate Public Distribution** is on, Slack sends that flow to the app’s home workspace (`brightsy.slack.com`) and will not list other teams. Slack requires an HTTPS redirect for that; Sideboard uses `https://slack-relay.sideboard.cloud/callback` (the relay bounces to `http://127.0.0.1:19847/callback` on this Mac).
+1. **Add via browser** — installs the official Sideboard Slack app into a workspace (use this; paste-only bot tokens cannot prove which Slack user owns the Mac). Until **Manage Distribution → Activate Public Distribution** is on, Slack sends that flow to the app’s home workspace (`brightsy.slack.com`) and will not list other teams. Slack requires an HTTPS redirect; Sideboard uses `https://relay.sideboard.cloud/slack/callback`. The relay exchanges the OAuth code (the client secret stays on the server). Sideboard polls until that finishes.
 2. **This Mac** — name the destination (`Personal`, `Work`, …). Each Mac gets a stable id; both can stay online at once.
 3. Listening starts when a workspace is connected. Status should show `Relay connected · Personal` (or your name).
 
@@ -319,7 +319,7 @@ Use **Cancel** in Settings if you close the Slack tab — closing the browser do
 
 Someone else messaging the bot needs **their** Sideboard online — messages route to the Slack user who connected that Mac, not to tabs on yours.
 
-Env overrides (optional): `SIDEBOARD_SLACK_RELAY_URL` (e.g. local `ws://127.0.0.1:8787/desktop`), `SIDEBOARD_SLACK_OAUTH_REDIRECT` (defaults to the hosted HTTPS bounce).
+Env overrides (optional): `SIDEBOARD_SLACK_RELAY_URL` (e.g. local `ws://127.0.0.1:8787/slack/desktop`), `SIDEBOARD_SLACK_OAUTH_REDIRECT` (defaults to `https://relay.sideboard.cloud/slack/callback`).
 
 ### Talk to a Mac from Slack
 

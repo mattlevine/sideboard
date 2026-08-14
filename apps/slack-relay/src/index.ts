@@ -4,18 +4,27 @@ import { startSlackRelayServer } from '@sideboard-ai/core';
  * Hosted Slack inbound relay.
  *
  * Env:
- *   SIDEBOARD_SLACK_APP_TOKEN  required xapp-… (connections:write) — never ship in the DMG
- *   PORT                       listen port (default 8787)
- *   HOST                       bind address (default 0.0.0.0)
+ *   SIDEBOARD_SLACK_APP_TOKEN      required xapp-… (connections:write) — never ship in the DMG
+ *   SIDEBOARD_SLACK_CLIENT_SECRET  required for Add via browser (OAuth exchange) — never ship in git/DMG
+ *   SIDEBOARD_SLACK_CLIENT_ID      optional; defaults to the public Sideboard Slack app id
+ *   PORT                           listen port (default 8787)
+ *   HOST                           bind address (default 0.0.0.0)
  *
- * Desktop clients connect to wss://slack-relay.sideboard.cloud/desktop (or
- * SIDEBOARD_SLACK_RELAY_URL for local testing). GET /callback is the HTTPS
- * OAuth bounce to http://127.0.0.1:19847/callback.
+ * Desktop clients connect to wss://relay.sideboard.cloud/slack/desktop (or
+ * SIDEBOARD_SLACK_RELAY_URL for local testing). GET /slack/callback exchanges
+ * the Slack OAuth code. Desktops poll GET /slack/oauth/result?state=…
  */
 async function main(): Promise<void> {
   const appToken = process.env.SIDEBOARD_SLACK_APP_TOKEN?.trim() ?? '';
   if (!appToken) {
     console.error('Set SIDEBOARD_SLACK_APP_TOKEN to an xapp-… token with connections:write.');
+    process.exit(1);
+  }
+  const clientSecret = process.env.SIDEBOARD_SLACK_CLIENT_SECRET?.trim() ?? '';
+  if (!clientSecret) {
+    console.error(
+      'Set SIDEBOARD_SLACK_CLIENT_SECRET via `fly secrets set` (never commit it).',
+    );
     process.exit(1);
   }
   const port = Number(process.env.PORT || process.env.SIDEBOARD_SLACK_RELAY_PORT || 8787);
@@ -28,6 +37,7 @@ async function main(): Promise<void> {
 
   const handle = await startSlackRelayServer({
     appToken,
+    clientSecret,
     port,
     host,
     signal: ac.signal,

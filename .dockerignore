@@ -1,0 +1,13 @@
+# Relay image only needs packages/core + apps/slack-relay (see Dockerfile).
+.git
+**/.DS_Store
+**/node_modules
+**/dist
+**/.vite
+Untitled
+.context
+apps/desktop
+apps/cli
+packages/cli
+*.dmg
+*.zip

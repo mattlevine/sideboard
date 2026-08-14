@@ -151,6 +151,7 @@ import {
   isOrchestratorThread,
   orchestratorSessionPoisonedByBuiltins,
 } from '../store/global-workspace.js';
+import { releaseCaffeinateHoldForThread } from '../store/caffeinate-hold.js';
 import {
   coordinatorSystemPrompt,
   coordinatorTurnReminder,
@@ -1561,6 +1562,16 @@ export class Orchestrator {
     }
   }
 
+  /** MCP set_caffeinate is a detached hold — closing the chat must not leave the Mac awake. */
+  private releaseOrchestratorCaffeinate(thread: Thread): void {
+    if (!isOrchestratorThread(thread)) return;
+    try {
+      releaseCaffeinateHoldForThread(thread.id);
+    } catch {
+      // Best-effort — a dead pid is already treated as released.
+    }
+  }
+
   async diff(
     threadRef: string,
     opts?: {
@@ -2061,6 +2072,7 @@ export class Orchestrator {
   async archive(threadRef: string): Promise<Thread> {
     const thread = this.requireThread(threadRef);
     this.stop(thread.id);
+    this.releaseOrchestratorCaffeinate(thread);
     if (isGlobalThread(thread)) {
       const archived = setStatus(thread.id, 'archived');
       this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
@@ -2101,6 +2113,7 @@ export class Orchestrator {
   async purge(threadRef: string, opts?: { deleteBranch?: boolean }): Promise<void> {
     const thread = this.requireThread(threadRef);
     this.stop(thread.id);
+    this.releaseOrchestratorCaffeinate(thread);
     if (isGlobalThread(thread)) {
       deleteThreadRecord(thread.id);
       return;

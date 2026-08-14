@@ -25,7 +25,7 @@ describe('resolveSlackListenMode', () => {
     const { resolveSlackListenMode } = await import('./listen.js');
     expect(
       resolveSlackListenMode({
-        relayUrl: 'ws://127.0.0.1:9/desktop',
+        relayUrl: 'ws://127.0.0.1:9/slack/desktop',
         workspaceCount: 1,
       }),
     ).toBe('relay');
@@ -37,7 +37,7 @@ describe('resolveSlackListenMode', () => {
     const { resolveSlackListenMode } = await import('./listen.js');
     expect(
       resolveSlackListenMode({
-        relayUrl: 'ws://127.0.0.1:9/desktop',
+        relayUrl: 'ws://127.0.0.1:9/slack/desktop',
         workspaceCount: 1,
       }),
     ).toBe('relay');
@@ -49,7 +49,7 @@ describe('resolveSlackListenMode', () => {
     const { resolveSlackListenMode } = await import('./listen.js');
     expect(
       resolveSlackListenMode({
-        relayUrl: 'ws://127.0.0.1:9/desktop',
+        relayUrl: 'ws://127.0.0.1:9/slack/desktop',
         workspaceCount: 0,
       }),
     ).toBeNull();

@@ -4,7 +4,9 @@
 # App icon: upload docs/slack-app-icon.png (512×512) under Basic Information → Display Information.
 # Manifests cannot include the xapp- token or the icon file.
 # Redirect must be HTTPS for Manage Distribution → Activate Public Distribution.
-# The hosted relay at /callback bounces to http://127.0.0.1:19847/callback.
+# Hosted relay exchanges the OAuth code at GET /slack/callback.
+# Paths are namespaced (`/slack/callback`) so one host can also serve other providers.
+# Local override: SIDEBOARD_SLACK_OAUTH_REDIRECT=http://127.0.0.1:19847/slack/callback
 
 display_information:
   name: Sideboard
@@ -28,7 +30,8 @@ features:
 
 oauth_config:
   redirect_urls:
-    - https://slack-relay.sideboard.cloud/callback
+    - https://relay.sideboard.cloud/slack/callback
+    - http://127.0.0.1:19847/slack/callback
   scopes:
     bot:
       - app_mentions:read

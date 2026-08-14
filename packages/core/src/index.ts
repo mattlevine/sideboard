@@ -5,6 +5,7 @@ export * from './store/app-settings.js';
 export {
   getCaffeinateHold,
   setCaffeinateHold,
+  releaseCaffeinateHoldForThread,
   caffeinateHoldPath,
 } from './store/caffeinate-hold.js';
 export type { CaffeinateHoldState } from './store/caffeinate-hold.js';
@@ -139,8 +140,7 @@ export {
   SlackOAuthCancelledError,
   SLACK_OAUTH_CANCELLED,
   SLACK_OAUTH_REDIRECT,
-  SLACK_OAUTH_LOCAL_CALLBACK,
-  SLACK_OAUTH_PORT,
+  slackOAuthResultUrl,
 } from './slack/oauth.js';
 export {
   BAKED_SLACK_RELAY_URL,

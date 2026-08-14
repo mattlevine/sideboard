@@ -32,6 +32,7 @@ import {
   BrightsySideboardApi,
   caffeinateWhileRunningEnabled,
   caffeinateWhileSlackListenEnabled,
+  setCaffeinateHold,
   claudeUserSettingsPath,
   detectAgents,
   ensureAgentPath,
@@ -1392,6 +1393,11 @@ app.on('will-quit', () => {
   stopCloudConnectDaemon();
   stopSlackListenDaemon();
   stopCaffeinate();
+  try {
+    setCaffeinateHold(false);
+  } catch {
+    // ignore
+  }
   void stopOpenFileWatcher();
   void closeTsServer();
 });

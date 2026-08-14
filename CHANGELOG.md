@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.75] - 2026-08-14
+
+### Changed
+
+- Slack **Add via browser** exchanges the OAuth code on the hosted relay. The Slack client secret is no longer in git or the desktop app (set `SIDEBOARD_SLACK_CLIENT_SECRET` on the relay).
+- Hosted relay hostname is `relay.sideboard.cloud` with Slack under `/slack/…` (OAuth `https://relay.sideboard.cloud/slack/callback`, desktop `wss://relay.sideboard.cloud/slack/desktop`).
+
+### Fixed
+
+- Slack Listen actually registers this Mac on the relay (Node `ws` DNS lookup now returns the address list Happy Eyeballs expects), so DMs and @mentions reach Sideboard
+- Orchestration `set_caffeinate` hold is released when that chat is closed/archived (and when Sideboard quits), so a self-caffeinated coordinator cannot leave the Mac awake
+- Queued-message Send now / Edit / Remove buttons work on the first click (composer collapse no longer steals the mouseup)
+
 ## [0.1.74] - 2026-08-13
 
 ### Added

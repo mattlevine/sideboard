@@ -1,33 +1,25 @@
-/** Fixed port so the desktop can listen on one localhost callback. */
-export const SLACK_OAUTH_PORT = 19847;
-
-/** Local listener. Slack never redirects here — HTTP is not allowed for public distribution. */
-export const SLACK_OAUTH_LOCAL_CALLBACK = `http://127.0.0.1:${SLACK_OAUTH_PORT}/callback`;
-
 /**
- * Slack-registered redirect URI (HTTPS). The hosted relay bounces to
- * {@link SLACK_OAUTH_LOCAL_CALLBACK} so the desktop can finish OAuth.
+ * Slack-registered redirect URI (HTTPS). Provider paths are namespaced under
+ * `/slack/…` so the same host can serve other OAuth relays later.
+ * The hosted relay exchanges the code — the Mac never sees the client secret.
  */
-export const SLACK_OAUTH_REDIRECT = 'https://slack-relay.sideboard.cloud/callback';
+export const SLACK_OAUTH_CALLBACK_PATH = '/slack/callback';
+export const SLACK_OAUTH_RESULT_PATH = '/slack/oauth/result';
+export const SLACK_RELAY_DESKTOP_PATH = '/slack/desktop';
+export const SLACK_OAUTH_LOCAL_PORT = 19847;
+/** Local callback — namespaced so one port can also host `/linear/callback`, etc. */
+export const SLACK_OAUTH_LOCAL_CALLBACK = `http://127.0.0.1:${SLACK_OAUTH_LOCAL_PORT}${SLACK_OAUTH_CALLBACK_PATH}`;
 
-export const SLACK_OAUTH_BOUNCE_PATH = '/callback';
+export const SLACK_OAUTH_REDIRECT = `https://relay.sideboard.cloud${SLACK_OAUTH_CALLBACK_PATH}`;
 
-const BOUNCE_PARAMS = ['code', 'state', 'error', 'error_description'] as const;
+/** @deprecated Use SLACK_OAUTH_CALLBACK_PATH */
+export const SLACK_OAUTH_BOUNCE_PATH = SLACK_OAUTH_CALLBACK_PATH;
 
 export function slackOAuthRedirectUri(): string {
   return process.env.SIDEBOARD_SLACK_OAUTH_REDIRECT?.trim() || SLACK_OAUTH_REDIRECT;
 }
 
-export function slackOAuthLocalBounceTarget(params: URLSearchParams): string {
-  const dest = new URL(SLACK_OAUTH_LOCAL_CALLBACK);
-  for (const key of BOUNCE_PARAMS) {
-    const value = params.get(key);
-    if (value) dest.searchParams.set(key, value);
-  }
-  return dest.toString();
-}
-
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
@@ -35,35 +27,30 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
-export function slackOAuthBounceHtml(target: string): string {
-  const safe = escapeHtml(target);
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${safe}"><title>Connecting Slack</title>
+export function slackOAuthHtmlPage(title: string, body: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <style>body{font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;max-width:36rem;margin:0 auto;color:#1a1a1a}
-h1{font-size:1.25rem}p{line-height:1.5;color:#444}a{color:#111}</style>
-<script>location.replace(${JSON.stringify(target)})</script>
-</head><body><h1>Connecting Slack</h1><p>Returning to Sideboard… <a href="${safe}">Continue</a></p></body></html>`;
+h1{font-size:1.25rem}p{line-height:1.5;color:#444}</style></head><body>${body}</body></html>`;
 }
 
-/** HTTPS bounce for the hosted relay. `reqUrl` is the incoming path + query. */
-export function slackOAuthBounceResponse(reqUrl: string): {
-  status: number;
-  headers: Record<string, string>;
-  body: string;
-} | null {
+export function parseSlackOAuthCallbackUrl(reqUrl: string): URL | null {
   let url: URL;
   try {
     url = new URL(reqUrl, SLACK_OAUTH_REDIRECT);
   } catch {
     return null;
   }
-  if (url.pathname !== SLACK_OAUTH_BOUNCE_PATH) return null;
-  const target = slackOAuthLocalBounceTarget(url.searchParams);
-  return {
-    status: 302,
-    headers: {
-      Location: target,
-      'Content-Type': 'text/html; charset=utf-8',
-    },
-    body: slackOAuthBounceHtml(target),
-  };
+  if (url.pathname !== SLACK_OAUTH_CALLBACK_PATH) return null;
+  return url;
+}
+
+export function parseSlackOAuthResultUrl(reqUrl: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(reqUrl, SLACK_OAUTH_REDIRECT);
+  } catch {
+    return null;
+  }
+  if (url.pathname !== SLACK_OAUTH_RESULT_PATH) return null;
+  return url;
 }

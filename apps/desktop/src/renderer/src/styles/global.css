@@ -4780,6 +4780,8 @@ button.worktree-hover-card-title:hover {
   background: linear-gradient(to top, var(--bg) 70%, transparent);
   max-height: min(40vh, 280px);
   overflow-y: auto;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
 }
 
 .queued-messages {
@@ -4853,6 +4855,9 @@ button.worktree-hover-card-title:hover {
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg) 55%, transparent);
   border: 1px solid var(--border-subtle);
+  position: relative;
+  z-index: 1;
+  -webkit-app-region: no-drag;
 }
 
 .queued-msg-icon-btn {
