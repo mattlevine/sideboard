@@ -1,3 +1,4 @@
+import { formatFetchError } from '../http/fetch.js';
 import {
   loadBrightsyConfig,
   saveBrightsyConfig,
@@ -41,21 +42,7 @@ export type BrightsySideboardApiOptions = {
 };
 
 /** Expand undici/Electron `TypeError: fetch failed` with the underlying cause. */
-export function formatBrightsyFetchError(err: unknown, url: string): string {
-  if (!(err instanceof Error)) return `${String(err)} (${url})`;
-  const cause = (err as Error & { cause?: unknown }).cause;
-  let detail = '';
-  if (cause instanceof Error) {
-    const code =
-      typeof (cause as NodeJS.ErrnoException).code === 'string'
-        ? (cause as NodeJS.ErrnoException).code
-        : undefined;
-    detail = code ? ` [${code}: ${cause.message}]` : ` [${cause.message}]`;
-  } else if (cause != null) {
-    detail = ` [${String(cause)}]`;
-  }
-  return `${err.message}${detail} (${url})`;
-}
+export const formatBrightsyFetchError = formatFetchError;
 
 /**
  * Minimal Brightsy HTTP client using ~/.brightsy/config.json (same session as CLI).

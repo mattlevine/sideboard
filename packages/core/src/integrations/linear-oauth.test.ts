@@ -12,14 +12,14 @@ import {
 import { BAKED_LINEAR_CLIENT_ID, hasBakedLinearOAuth } from './linear-app.js';
 
 describe('linear OAuth URL', () => {
-  it('includes client_id, PKCE, read scope, and localhost redirect', () => {
+  it('includes client_id, PKCE, read+write scope, and localhost redirect', () => {
     const url = linearOAuthAuthorizeUrl('CLIENT', 'state123', 'challengeABC');
     expect(url).toContain('https://linear.app/oauth/authorize?');
     expect(url).toContain('client_id=CLIENT');
     expect(url).toContain('state=state123');
     expect(url).toContain('code_challenge=challengeABC');
     expect(url).toContain('code_challenge_method=S256');
-    expect(url).toContain('scope=read');
+    expect(new URL(url).searchParams.get('scope')).toBe('read,write');
     expect(url).toContain('prompt=consent');
     expect(url).toContain(encodeURIComponent(LINEAR_OAUTH_REDIRECT));
   });
@@ -113,6 +113,30 @@ describe('linear OAuth credentials', () => {
     expect(body).toContain('refresh_token=refresh-1');
     expect(settings.loadAppSettings().integrations.linearAccessToken).toBe('new-access');
     expect(settings.loadAppSettings().integrations.linearRefreshToken).toBe('refresh-2');
+    vi.unstubAllGlobals();
+  });
+
+  it('surfaces undici fetch-failed cause on token refresh', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-linear-oauth-fetch-'));
+    process.env.SIDEBOARD_LINEAR_CLIENT_ID = 'env-client';
+    delete process.env.SIDEBOARD_LINEAR_CLIENT_SECRET;
+    const settings = await import('../store/app-settings.js');
+    settings.saveLinearOAuth({
+      accessToken: 'old-access',
+      refreshToken: 'refresh-1',
+      expiresIn: 0,
+    });
+    const cause = Object.assign(new Error('getaddrinfo ENOTFOUND api.linear.app'), {
+      code: 'ENOTFOUND',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(Object.assign(new TypeError('fetch failed'), { cause })),
+    );
+    const { getLinearAuthToken } = await import('./linear-oauth.js');
+    await expect(getLinearAuthToken()).rejects.toThrow(
+      /fetch failed \[ENOTFOUND: getaddrinfo ENOTFOUND api.linear.app\] \(https:\/\/api\.linear\.app\/oauth\/token\)/,
+    );
     vi.unstubAllGlobals();
   });
 

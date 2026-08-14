@@ -6,6 +6,7 @@ import {
   saveLinearOAuth,
   type AppSettings,
 } from '../store/app-settings.js';
+import { httpFetch } from '../http/fetch.js';
 import { BAKED_LINEAR_CLIENT_ID, hasBakedLinearOAuth } from './linear-app.js';
 
 export { hasBakedLinearOAuth };
@@ -19,8 +20,12 @@ const LINEAR_TOKEN = 'https://api.linear.app/oauth/token';
 const LINEAR_REVOKE = 'https://api.linear.app/oauth/revoke';
 const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
 
-/** Read-only — Sideboard lists assigned issues; it does not create them. */
-export const LINEAR_OAUTH_SCOPES = 'read';
+/**
+ * Requested at authorize time — Linear’s OAuth app settings have no scopes UI.
+ * `read,write` lists assigned issues and lets MCP create/update/comment.
+ * Users who connected with `read` only must Disconnect and Connect again.
+ */
+export const LINEAR_OAUTH_SCOPES = 'read,write';
 
 const REFRESH_SKEW_MS = 5 * 60_000;
 
@@ -93,7 +98,7 @@ h1{font-size:1.25rem}p{line-height:1.5;color:#444}</style></head><body>${body}</
 }
 
 async function exchangeLinearToken(body: URLSearchParams): Promise<LinearTokenResponse> {
-  const res = await fetch(LINEAR_TOKEN, {
+  const res = await httpFetch(LINEAR_TOKEN, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
@@ -122,7 +127,7 @@ async function persistLinearTokens(
 async function fetchLinearViewer(
   accessToken: string,
 ): Promise<{ name?: string; organizationName?: string }> {
-  const res = await fetch(LINEAR_GRAPHQL, {
+  const res = await httpFetch(LINEAR_GRAPHQL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -335,7 +340,7 @@ async function revokeLinearToken(
     token,
     token_type_hint: tokenTypeHint,
   });
-  await fetch(LINEAR_REVOKE, {
+  await httpFetch(LINEAR_REVOKE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,

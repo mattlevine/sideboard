@@ -1,7 +1,21 @@
+import { httpFetch } from '../http/fetch.js';
 import type { IssueInfo } from '../types/thread.js';
 import { getLinearAuthToken, linearAuthorizationHeader } from './linear-oauth.js';
 
 const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
+
+const ISSUE_FIELDS = `
+  id
+  identifier
+  title
+  description
+  url
+  priority
+  state { id name type }
+  assignee { id name }
+  team { id key name states { nodes { id name type } } }
+  labels { nodes { name } }
+`;
 
 const ASSIGNED_ISSUES_QUERY = `
 query SideboardAssignedIssues($first: Int!) {
@@ -11,14 +25,55 @@ query SideboardAssignedIssues($first: Int!) {
       orderBy: updatedAt
       filter: { state: { type: { nin: ["completed", "canceled"] } } }
     ) {
-      nodes {
-        id
-        identifier
-        title
-        url
-        labels { nodes { name } }
-      }
+      nodes { ${ISSUE_FIELDS} }
     }
+  }
+}
+`;
+
+const TEAMS_QUERY = `
+query SideboardTeams {
+  viewer { id name }
+  teams(first: 50) {
+    nodes {
+      id
+      key
+      name
+      states { nodes { id name type } }
+    }
+  }
+}
+`;
+
+const ISSUE_QUERY = `
+query SideboardIssue($id: String!) {
+  issue(id: $id) { ${ISSUE_FIELDS} }
+}
+`;
+
+const ISSUE_CREATE = `
+mutation SideboardIssueCreate($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    issue { ${ISSUE_FIELDS} }
+  }
+}
+`;
+
+const ISSUE_UPDATE = `
+mutation SideboardIssueUpdate($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) {
+    success
+    issue { ${ISSUE_FIELDS} }
+  }
+}
+`;
+
+const COMMENT_CREATE = `
+mutation SideboardCommentCreate($input: CommentCreateInput!) {
+  commentCreate(input: $input) {
+    success
+    comment { id body url }
   }
 }
 `;
@@ -27,9 +82,220 @@ type LinearIssueNode = {
   id?: string;
   identifier?: string;
   title?: string;
+  description?: string | null;
   url?: string;
+  priority?: number | null;
+  state?: { id?: string; name?: string; type?: string } | null;
+  assignee?: { id?: string; name?: string } | null;
+  team?: {
+    id?: string;
+    key?: string;
+    name?: string;
+    states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> };
+  } | null;
   labels?: { nodes?: Array<{ name?: string }> };
 };
+
+export interface LinearWorkflowState {
+  id: string;
+  name: string;
+  type: string;
+}
+
+export interface LinearTeam {
+  id: string;
+  key: string;
+  name: string;
+  states: LinearWorkflowState[];
+}
+
+export interface LinearIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  url: string;
+  description?: string;
+  priority?: number;
+  state?: LinearWorkflowState;
+  assignee?: { id: string; name: string };
+  team?: { id: string; key: string; name: string; states: LinearWorkflowState[] };
+  labels: string[];
+}
+
+export interface LinearComment {
+  id: string;
+  body: string;
+  url?: string;
+}
+
+export interface LinearTeamsResult {
+  viewer: { id: string; name: string };
+  teams: LinearTeam[];
+}
+
+type GraphqlJson<T> = {
+  data?: T;
+  errors?: Array<{ message?: string }>;
+};
+
+export function rewriteLinearError(message: string): string {
+  if (/scope|permission|not (authorized|allowed)|unauthorized|insufficient/i.test(message)) {
+    return `${message} — Disconnect and Connect Linear in Account settings to grant write access.`;
+  }
+  return message;
+}
+
+async function requireLinearToken(apiKey?: string | null): Promise<string> {
+  const token = (apiKey ?? (await getLinearAuthToken()))?.trim();
+  if (!token) {
+    throw new Error('Linear is not connected — sign in from Account settings');
+  }
+  return token;
+}
+
+export async function linearGraphql<T>(
+  query: string,
+  variables?: Record<string, unknown>,
+  opts?: { apiKey?: string | null },
+): Promise<T> {
+  const apiKey = await requireLinearToken(opts?.apiKey);
+  const res = await httpFetch(LINEAR_GRAPHQL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: linearAuthorizationHeader(apiKey),
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(
+      rewriteLinearError(
+        `Linear API error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`,
+      ),
+    );
+  }
+
+  const json = (await res.json()) as GraphqlJson<T>;
+  if (json.errors?.length) {
+    throw new Error(
+      rewriteLinearError(json.errors.map((e) => e.message ?? 'Linear error').join('; ')),
+    );
+  }
+  if (json.data == null) {
+    throw new Error('Linear API returned no data');
+  }
+  return json.data;
+}
+
+function mapState(
+  node?: { id?: string; name?: string; type?: string } | null,
+): LinearWorkflowState | undefined {
+  if (!node?.id) return undefined;
+  return {
+    id: String(node.id),
+    name: String(node.name ?? ''),
+    type: String(node.type ?? ''),
+  };
+}
+
+function mapIssue(node: LinearIssueNode): LinearIssue {
+  const team = node.team;
+  return {
+    id: String(node.id ?? node.identifier ?? ''),
+    identifier: String(node.identifier ?? node.id ?? ''),
+    title: String(node.title ?? ''),
+    url: String(node.url ?? ''),
+    description: node.description?.trim() || undefined,
+    priority: typeof node.priority === 'number' ? node.priority : undefined,
+    state: mapState(node.state),
+    assignee: node.assignee?.id
+      ? { id: String(node.assignee.id), name: String(node.assignee.name ?? '') }
+      : undefined,
+    team: team?.id
+      ? {
+          id: String(team.id),
+          key: String(team.key ?? ''),
+          name: String(team.name ?? ''),
+          states: (team.states?.nodes ?? [])
+            .map((s) => mapState(s))
+            .filter((s): s is LinearWorkflowState => Boolean(s)),
+        }
+      : undefined,
+    labels: (node.labels?.nodes ?? [])
+      .map((l) => l.name)
+      .filter((n): n is string => Boolean(n)),
+  };
+}
+
+function toIssueInfo(issue: LinearIssue): IssueInfo {
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    url: issue.url,
+    labels: issue.labels,
+    provider: 'linear',
+  };
+}
+
+function mapTeam(node: {
+  id?: string;
+  key?: string;
+  name?: string;
+  states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> };
+}): LinearTeam {
+  return {
+    id: String(node.id ?? ''),
+    key: String(node.key ?? ''),
+    name: String(node.name ?? ''),
+    states: (node.states?.nodes ?? [])
+      .map((s) => mapState(s))
+      .filter((s): s is LinearWorkflowState => Boolean(s)),
+  };
+}
+
+export function resolveLinearTeam(teams: LinearTeam[], team: string): LinearTeam {
+  const t = team.trim();
+  if (!t) throw new Error('Linear team is required (id, key, or name from linear_list_teams)');
+  const lower = t.toLowerCase();
+  const found = teams.find(
+    (x) => x.id === t || x.key.toLowerCase() === lower || x.name.toLowerCase() === lower,
+  );
+  if (!found) {
+    const keys = teams.map((x) => x.key).filter(Boolean).join(', ') || '(none)';
+    throw new Error(`Linear team not found: ${team}. Known keys: ${keys}`);
+  }
+  return found;
+}
+
+export function resolveLinearState(
+  team: Pick<LinearTeam, 'key' | 'states'>,
+  state: string,
+): LinearWorkflowState {
+  const s = state.trim();
+  if (!s) throw new Error('Linear state is empty');
+  const lower = s.toLowerCase();
+  const found =
+    team.states.find((x) => x.id === s) ||
+    team.states.find((x) => x.name.toLowerCase() === lower) ||
+    team.states.find((x) => x.type.toLowerCase() === lower);
+  if (!found) {
+    const available =
+      team.states.map((x) => `${x.name} (${x.type})`).join(', ') || '(none)';
+    throw new Error(`Linear state not found on ${team.key}: ${state}. Available: ${available}`);
+  }
+  return found;
+}
+
+function normalizePriority(priority: number | undefined): number | undefined {
+  if (priority == null) return undefined;
+  if (!Number.isInteger(priority) || priority < 0 || priority > 4) {
+    throw new Error('Linear priority must be 0 (none), 1 (urgent), 2 (high), 3 (medium), or 4 (low)');
+  }
+  return priority;
+}
 
 /**
  * List open issues assigned to the authenticated Linear user via GraphQL.
@@ -38,55 +304,166 @@ type LinearIssueNode = {
 export async function listLinearIssuesDirect(
   opts?: { limit?: number; apiKey?: string | null },
 ): Promise<IssueInfo[]> {
-  const apiKey = (opts?.apiKey ?? (await getLinearAuthToken()))?.trim();
-  if (!apiKey) {
-    throw new Error('Linear is not connected — sign in from Account settings');
-  }
-
   const first = Math.max(1, Math.min(100, opts?.limit ?? 50));
-  const res = await fetch(LINEAR_GRAPHQL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: linearAuthorizationHeader(apiKey),
-    },
-    body: JSON.stringify({
-      query: ASSIGNED_ISSUES_QUERY,
-      variables: { first },
-    }),
-  });
+  const json = await linearGraphql<{
+    viewer?: { assignedIssues?: { nodes?: LinearIssueNode[] } };
+  }>(ASSIGNED_ISSUES_QUERY, { first }, opts);
+  return (json.viewer?.assignedIssues?.nodes ?? []).map((node) => toIssueInfo(mapIssue(node)));
+}
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(
-      `Linear API error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`,
-    );
-  }
-
-  const json = (await res.json()) as {
-    data?: {
-      viewer?: {
-        assignedIssues?: { nodes?: LinearIssueNode[] };
-      };
+export async function listLinearTeams(
+  opts?: { apiKey?: string | null },
+): Promise<LinearTeamsResult> {
+  const json = await linearGraphql<{
+    viewer?: { id?: string; name?: string };
+    teams?: {
+      nodes?: Array<{
+        id?: string;
+        key?: string;
+        name?: string;
+        states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> };
+      }>;
     };
-    errors?: Array<{ message?: string }>;
+  }>(TEAMS_QUERY, undefined, opts);
+  return {
+    viewer: {
+      id: String(json.viewer?.id ?? ''),
+      name: String(json.viewer?.name ?? ''),
+    },
+    teams: (json.teams?.nodes ?? []).map(mapTeam),
   };
+}
 
-  if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message ?? 'Linear error').join('; '));
+export async function getLinearIssue(
+  id: string,
+  opts?: { apiKey?: string | null },
+): Promise<LinearIssue> {
+  const issueId = id.trim();
+  if (!issueId) throw new Error('Linear issue id is required (uuid or ENG-123)');
+  const json = await linearGraphql<{ issue?: LinearIssueNode | null }>(
+    ISSUE_QUERY,
+    { id: issueId },
+    opts,
+  );
+  if (!json.issue) {
+    throw new Error(`Linear issue not found: ${issueId}`);
+  }
+  return mapIssue(json.issue);
+}
+
+export async function createLinearIssue(
+  input: {
+    team: string;
+    title: string;
+    description?: string;
+    state?: string;
+    assignee?: string | null;
+    priority?: number;
+  },
+  opts?: { apiKey?: string | null },
+): Promise<LinearIssue> {
+  const title = input.title.trim();
+  if (!title) throw new Error('Linear issue title is required');
+  const { viewer, teams } = await listLinearTeams(opts);
+  const team = resolveLinearTeam(teams, input.team);
+  const mutationInput: Record<string, unknown> = {
+    teamId: team.id,
+    title,
+  };
+  const description = input.description?.trim();
+  if (description) mutationInput.description = description;
+  if (input.state?.trim()) {
+    mutationInput.stateId = resolveLinearState(team, input.state).id;
+  }
+  const assignee = input.assignee === undefined ? undefined : input.assignee?.trim() || null;
+  if (assignee === 'me') mutationInput.assigneeId = viewer.id;
+  else if (assignee) mutationInput.assigneeId = assignee;
+  const priority = normalizePriority(input.priority);
+  if (priority != null) mutationInput.priority = priority;
+
+  const json = await linearGraphql<{
+    issueCreate?: { success?: boolean; issue?: LinearIssueNode | null };
+  }>(ISSUE_CREATE, { input: mutationInput }, opts);
+  if (!json.issueCreate?.success || !json.issueCreate.issue) {
+    throw new Error('Linear issueCreate failed');
+  }
+  return mapIssue(json.issueCreate.issue);
+}
+
+export async function updateLinearIssue(
+  input: {
+    id: string;
+    title?: string;
+    description?: string;
+    state?: string;
+    assignee?: string | null;
+    priority?: number;
+  },
+  opts?: { apiKey?: string | null },
+): Promise<LinearIssue> {
+  const issueId = input.id.trim();
+  if (!issueId) throw new Error('Linear issue id is required (uuid or ENG-123)');
+  const mutationInput: Record<string, unknown> = {};
+  if (input.title !== undefined) {
+    const title = input.title.trim();
+    if (!title) throw new Error('Linear issue title cannot be empty');
+    mutationInput.title = title;
+  }
+  if (input.description !== undefined) {
+    mutationInput.description = input.description;
+  }
+  if (input.state?.trim()) {
+    const existing = await getLinearIssue(issueId, opts);
+    const team = existing.team;
+    if (!team?.states.length) {
+      throw new Error(`Linear issue ${existing.identifier} has no workflow states to resolve "${input.state}"`);
+    }
+    mutationInput.stateId = resolveLinearState(team, input.state).id;
+  }
+  if (input.assignee !== undefined) {
+    const assignee = input.assignee?.trim() || null;
+    if (assignee === 'me') {
+      const { viewer } = await listLinearTeams(opts);
+      mutationInput.assigneeId = viewer.id;
+    } else {
+      mutationInput.assigneeId = assignee;
+    }
+  }
+  if (input.priority !== undefined) {
+    mutationInput.priority = normalizePriority(input.priority);
+  }
+  if (Object.keys(mutationInput).length === 0) {
+    throw new Error('linear_update_issue needs at least one of title, description, state, assignee, priority');
   }
 
-  const nodes = json.data?.viewer?.assignedIssues?.nodes ?? [];
-  return nodes.map((node) => ({
-    id: String(node.id ?? node.identifier ?? ''),
-    identifier: String(node.identifier ?? node.id ?? ''),
-    title: String(node.title ?? ''),
-    url: String(node.url ?? ''),
-    labels: (node.labels?.nodes ?? [])
-      .map((l) => l.name)
-      .filter((n): n is string => Boolean(n)),
-    provider: 'linear' as const,
-  }));
+  const json = await linearGraphql<{
+    issueUpdate?: { success?: boolean; issue?: LinearIssueNode | null };
+  }>(ISSUE_UPDATE, { id: issueId, input: mutationInput }, opts);
+  if (!json.issueUpdate?.success || !json.issueUpdate.issue) {
+    throw new Error('Linear issueUpdate failed');
+  }
+  return mapIssue(json.issueUpdate.issue);
+}
+
+export async function commentLinearIssue(
+  input: { id: string; body: string },
+  opts?: { apiKey?: string | null },
+): Promise<LinearComment> {
+  const issueId = input.id.trim();
+  const body = input.body.trim();
+  if (!issueId) throw new Error('Linear issue id is required (uuid or ENG-123)');
+  if (!body) throw new Error('Linear comment body is required');
+  const json = await linearGraphql<{
+    commentCreate?: { success?: boolean; comment?: { id?: string; body?: string; url?: string } | null };
+  }>(COMMENT_CREATE, { input: { issueId, body } }, opts);
+  if (!json.commentCreate?.success || !json.commentCreate.comment?.id) {
+    throw new Error('Linear commentCreate failed');
+  }
+  return {
+    id: String(json.commentCreate.comment.id),
+    body: String(json.commentCreate.comment.body ?? body),
+    url: json.commentCreate.comment.url?.trim() || undefined,
+  };
 }
 
 /** Probe Linear with the stored key (or provided key). */

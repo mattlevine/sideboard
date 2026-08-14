@@ -71,6 +71,9 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('list_branches');
     expect(prompt).toContain('list_prs');
     expect(prompt).toContain('list_issues');
+    expect(prompt).toContain('linear_create_issue');
+    expect(prompt).toContain('linear_update_issue');
+    expect(prompt).toContain('linear_comment');
     expect(prompt).toContain('create_thread');
     expect(prompt).toContain('Account defaults');
     expect(prompt).toContain('list_models');

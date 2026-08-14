@@ -33,6 +33,7 @@ export * from './integrations/github.js';
 export * from './integrations/linear.js';
 export * from './integrations/linear-oauth.js';
 export * from './integrations/issues.js';
+export { setHttpFetchImpl, formatFetchError, httpFetch } from './http/fetch.js';
 export * from './agents/index.js';
 export * from './agents/spawn.js';
 export * from './agents/message-parts.js';

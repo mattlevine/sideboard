@@ -764,8 +764,9 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Linear</div>
                   <p className="settings-hint">
-                    Connect Linear so Sideboard can use issue context from your account. Sign in
-                    with your browser — same pattern as Slack.
+                    Connect Linear so Sideboard can list, create, update, and comment on issues.
+                    Sign in with your browser — same pattern as Slack. If you connected before
+                    write access shipped, Disconnect and Connect via browser again.
                   </p>
                   {settings.integrations.hasLinearApiKey ? (
                     <div className="settings-toggle-row" style={{ marginTop: 10 }}>

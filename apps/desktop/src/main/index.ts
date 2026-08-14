@@ -98,6 +98,7 @@ import {
   run,
   runCloudConnect,
   saveAppSettings,
+  setHttpFetchImpl,
   startOrchestration,
   createGlobalChat,
   ensureCloudCoordinator,
@@ -1475,6 +1476,8 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  // Chromium networking — Node undici `fetch` fails as "fetch failed" on many VPNs.
+  setHttpFetchImpl(net.fetch.bind(net) as typeof fetch);
   try {
     initDesktopSecretVault();
   } catch (err) {

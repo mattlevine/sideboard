@@ -16,6 +16,7 @@ import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
 import { registerSlackTools } from './slack-tools.js';
+import { registerLinearTools } from './linear-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 
 const MAX_ORCH_THREADS = 5;
@@ -345,6 +346,7 @@ export async function startMcpServer(): Promise<void> {
   );
 
   registerSlackTools(server);
+  registerLinearTools(server);
 
   if (sideboardMcpProfile() !== 'worktree') {
   const { getCaffeinateHold, setCaffeinateHold } = await import(
