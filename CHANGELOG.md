@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.77] - 2026-08-14
+
+### Added
+
+- MCP Linear ticket tools: `linear_list_teams`, `linear_get_issue`, `linear_create_issue`, `linear_update_issue`, `linear_comment` (Account OAuth). Reconnect Linear if you connected before write access.
+- Awake badge next to the Sideboard wordmark when caffeinate is on (chat hold or Settings)
+
+### Changed
+
+- Linear OAuth requests `read,write`. Desktop Connect uses Chromium networking so VPNs/proxies that break Node `fetch` still reach `api.linear.app`.
+
 ## [0.1.76] - 2026-08-14
 
 ### Added
