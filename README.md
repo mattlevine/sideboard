@@ -1,38 +1,43 @@
 # Sideboard
 
-**Open control plane for a fleet of local coding agents.**
+**Local orchestration for a fleet of coding agents.** On your Mac, on the network you already sit on.
 
-One agent per git worktree is a crowded pattern in 2026 — Conductor, Cursor’s Agents window, Claude Code, and OSS boards (Superset, Emdash, Claude Squad) all spawn that. The remaining jobs are seeing the fleet, letting an agent reason about other threads, working the data next to the code, and leaving whenever you want.
+One agent per git worktree is a crowded pattern in 2026 — Conductor, Cursor’s Agents window, Claude Code, and OSS boards (Superset, Emdash, Claude Squad) all spawn that. The remaining job is an **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and Slack so a coworker can enter the loop — without moving the repo into someone else’s cloud.
 
-Sideboard is CLI + MCP + a Mac desktop for those jobs. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). The board, the MCP, and `attach` / `adopt` are the product.
+Sideboard is CLI + MCP + a Mac desktop for that tier. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). Compute stays on this machine (corporate VPN, private git, internal APIs). Slack is remote control, not a rented sandbox.
 
 1. **A global board for you** — status, live output, and fan-out across every thread
 2. **An MCP for the agents** — list threads, wait on turns, read diffs, orchestrate the fleet, and present artifacts, schemas, and files in the desktop UI
-3. **A door back to the native harness** — `attach` into Claude/Codex/OpenCode mid-flight, or `adopt` sessions that started elsewhere
+3. **Slack to this Mac** — DM/@mention the orchestrator; it can ping a coworker to review a PR a worktree just pushed; their reply comes back as information
 
-Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP — then move in and out of Sideboard as you choose.
+`attach` / `adopt` remain the door back to the native harness — move in and out of Sideboard as you choose.
+
+Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for Slack to reach them.
 
 ![Sideboard desktop — chat with Document artifact preview, worktree changes, and run panel](docs/assets/sideboard-desktop-review-v4.png)
 
-**Agents and backends are plugs, not the product.** CLI, MCP, and the desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is **JSON Schema → table/form**, not a CMS shell. The agent can invent a schema for whatever data it needs; wire inline JSON or another datasource later. CLI and MCP also run without the desktop app. Slack inbound is built in ([setup](#slack)).
+**Agents and backends are plugs, not the product.** CLI, MCP, and the desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is **JSON Schema → table/form**, not a CMS shell. The agent can invent a schema for whatever data it needs; wire inline JSON or another datasource later. CLI and MCP also run without the desktop app. Slack is built in ([setup](#slack)).
 
 ## Who it's for
 
-Fits if you already run several local CLI agents on a Mac and want a control plane you can script, an orchestrator agent can drive, and you can leave. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
+Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and Slack can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
 
-Use something else if you want a closed Mac board and will not use CLI/MCP ([Conductor](https://www.conductor.build/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
+Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
 
 Peer-by-peer notes: [Compare](docs/COMPARE.md).
 
 ## Why it exists
 
-Spawning worktrees is the shared primitive. Sideboard is built for **visibility, handoff, and a place to work the data next to the code**:
+Spawning worktrees is the shared primitive. Boards that stay human-only tend to put fleet orchestration in a **paid cloud**. Sideboard puts that tier on the Mac you already use, on the VPN it is already on:
 
 | Job | Typical tools | Sideboard |
 |-----|---------------|-----------|
 | Run N agents in isolated worktrees | Yes | Yes |
+| Orchestrate the fleet (agent-visible) | Human board, or a cloud API | MCP + Global board, on this Mac |
+| Stay on the corporate VPN | Cloud sandboxes leave it | Agents run as you, on this laptop’s network |
+| Coworker in the loop | Product cloud / shared sandbox | Slack: review ping; reply comes back as info |
+| Keep going when you step away | Cloud sandbox keeps running | Slack to this Mac — the machine must stay awake |
 | See the whole fleet as one board | App-locked or thin | First-class global board |
-| Let an agent *reason about* other threads | Opaque / none | MCP: list, send, wait, diff |
 | Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
 | Bring existing worktrees / Conductor workspaces in | Stuck or start over | `adopt` + Conductor import |
 | Review HTML / docs the agent built | Copy out, or locked chat UI | `present_artifact` → side column |
@@ -51,7 +56,7 @@ Also true, and useful on the way:
 - **Schema-agnostic / CMS-optional** — render any JSON Schema + `schemaUi`. CMS is a use case, not the category
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
-- **Integration-friendly** — Slack DMs and @mentions to your Mac ([setup](#slack))
+- **Local-first / Slack-remote** — agents stay on this Mac (VPN, private git, internal APIs); Slack is how you and a coworker reach them ([setup](#slack))
 
 Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Slack](#slack) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Security](SECURITY.md)
 
@@ -73,7 +78,7 @@ Download the latest Mac build from [GitHub Releases](https://github.com/mattlevi
 | Apple Silicon | https://github.com/mattlevine/sideboard/releases/download/v0.1.78/Sideboard-0.1.78-arm64.dmg |
 | Intel | https://github.com/mattlevine/sideboard/releases/download/v0.1.78/Sideboard-0.1.78.dmg |
 
-> Direct download links only work while the GitHub repo (or its releases) are **public**. The repo is currently private — make it public (or host the DMGs elsewhere) before sharing the README links.
+> Direct download links only work while the GitHub repo (or its releases) are **public**.
 
 The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently).
 
@@ -298,7 +303,9 @@ Callback URL for the Sideboard Linear OAuth app: `http://127.0.0.1:19848/callbac
 
 ## Slack
 
-Install the Sideboard Slack app once; each MacBook is its own destination (Personal, Work, …). DMs and `@mentions` go to the Global orchestrator on that Mac; replies post back to Slack.
+Slack is the remote surface for the **same local orchestrator** — not a cloud workspace. DMs and `@mentions` go to the Global orchestrator on this Mac; it can `slack_post` a coworker to review a PR a worktree just pushed; their reply is copied back into your orchestration chat as information (not a command). Replies from the orchestrator post back to Slack.
+
+Each MacBook is its own destination (Personal, Work, …).
 
 ```
 ┌────────────────┐     hosted relay      ┌──────────────────┐
@@ -310,7 +317,9 @@ Install the Sideboard Slack app once; each MacBook is its own destination (Perso
                                           Global orchestrator → worktrees
 ```
 
-Keep the desktop app running after you connect a workspace.
+**What stays on this Mac.** Agents, worktrees, repos, and secrets — including anything only reachable on the corporate VPN. **What leaves:** Slack message text, via `relay.sideboard.cloud`. The relay does not host worktrees.
+
+Keep the desktop app running after you connect a workspace. Slack cannot reach the fleet if this machine is asleep; turn on caffeinate from the orchestration chat when you need it to stay awake, and turn it off when you are done.
 
 ### Connect
 
