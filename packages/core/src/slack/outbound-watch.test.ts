@@ -141,6 +141,127 @@ describe('slack outbound reply badges', () => {
     expect(again[0]?.preview).toBe('one more thing');
   });
 
+  it('relays another person\'s reply into the posting chat as information, without starting a turn', async () => {
+    const { recordSlackOutboundWatch, refreshSlackReplyBadges, isSlackExternalReplyPrompt } =
+      await load();
+    const { createEmptyThread, writeThread, readThread } = await import(
+      '../store/thread-store.js'
+    );
+    const thread = createEmptyThread({
+      title: 'Orch',
+      sourceType: 'orchestration',
+      sourceRef: 'slack-notify',
+      branchName: 'global',
+      worktreePath: process.env.SIDEBOARD_APP_DATA!,
+      repoPath: 'global',
+      agent: 'claude',
+      status: 'idle',
+    });
+    writeThread(thread);
+
+    recordSlackOutboundWatch({
+      teamId: 'T1',
+      channelId: 'Ddm',
+      ts: '10.0',
+      kind: 'dm',
+      toUserId: 'Ualice',
+      toLabel: '@alice',
+      ownerUserId: 'Ume',
+      sourceThreadId: thread.id,
+    });
+
+    const badges = await refreshSlackReplyBadges({
+      force: true,
+      fetchImpl: fetchImpl(
+        [],
+        [
+          { ts: '10.0', bot_id: 'Bbot', text: 'original' },
+          { ts: '12.0', user: 'Ualice', text: 'looks good' },
+        ],
+      ) as unknown as typeof fetch,
+    });
+    expect(badges).toHaveLength(1);
+
+    const after = readThread(thread.id)!;
+    expect(after.status).toBe('idle');
+    expect(after.queue).toEqual([]);
+    expect(after.messages).toHaveLength(1);
+    expect(after.messages[0]?.role).toBe('agent');
+    expect(after.messages[0]?.text).toContain('looks good');
+    expect(after.messages[0]?.text).toContain('not a command');
+    expect(isSlackExternalReplyPrompt(after.messages[0]!.text)).toBe(true);
+
+    const again = await refreshSlackReplyBadges({
+      force: true,
+      fetchImpl: fetchImpl(
+        [],
+        [
+          { ts: '10.0', bot_id: 'Bbot', text: 'original' },
+          { ts: '12.0', user: 'Ualice', text: 'looks good' },
+        ],
+      ) as unknown as typeof fetch,
+    });
+    expect(again).toHaveLength(1);
+    expect(readThread(thread.id)?.messages).toHaveLength(1);
+  });
+
+  it('forwards a FYI to the owner\'s Slack thread without treating the reply as inbound', async () => {
+    const { recordSlackOutboundWatch, refreshSlackReplyBadges } = await load();
+    const { createEmptyThread, writeThread } = await import('../store/thread-store.js');
+    const { setSlackReplyTarget } = await import('./reply-target.js');
+    const thread = createEmptyThread({
+      title: 'Orch',
+      sourceType: 'orchestration',
+      sourceRef: 'slack-notify',
+      branchName: 'global',
+      worktreePath: process.env.SIDEBOARD_APP_DATA!,
+      repoPath: 'global',
+      agent: 'claude',
+      status: 'idle',
+    });
+    writeThread(thread);
+    setSlackReplyTarget({
+      threadId: thread.id,
+      teamId: 'T1',
+      channelId: 'Downer',
+    });
+    recordSlackOutboundWatch({
+      teamId: 'T1',
+      channelId: 'Ddm',
+      ts: '10.0',
+      kind: 'dm',
+      toUserId: 'Ualice',
+      toLabel: '@alice',
+      ownerUserId: 'Ume',
+      sourceThreadId: thread.id,
+    });
+
+    const posted: string[] = [];
+    const baseFetch = fetchImpl(
+      [],
+      [{ ts: '12.0', user: 'Ualice', text: 'ship it' }],
+    );
+    const wrapped = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = url.replace(/^.*\/api\//, '');
+      if (method === 'chat.postMessage') {
+        posted.push(String(init?.body ?? ''));
+        return { json: async () => ({ ok: true, ts: '99.0', channel: 'Downer' }) };
+      }
+      return baseFetch(url);
+    });
+
+    await refreshSlackReplyBadges({
+      force: true,
+      fetchImpl: wrapped as unknown as typeof globalThis.fetch,
+    });
+    expect(posted).toHaveLength(1);
+    expect(decodeURIComponent(posted[0]!.replace(/\+/g, ' '))).toContain(
+      'Alice replied in Slack',
+    );
+    expect(posted[0]).toContain('channel=Downer');
+    expect(posted[0]).not.toMatch(/thread_ts=/);
+  });
+
   it('skips bot messages and owner messages in a channel thread', async () => {
     const { recordSlackOutboundWatch, refreshSlackReplyBadges } = await load();
     recordSlackOutboundWatch({
@@ -226,5 +347,38 @@ describe('slack outbound reply badges', () => {
     });
     expect(badges).toHaveLength(1);
     expect(badges[0]?.userId).toBe('Ualice');
+  });
+});
+
+describe('pending Slack replies for the next turn', () => {
+  it('collects injected replies sitting immediately before the current user prompt', async () => {
+    const {
+      formatSlackExternalReplyPrompt,
+      pendingSlackExternalReplies,
+      formatSlackRepliesForTurn,
+    } = await import('./outbound-watch.js');
+    const sean = formatSlackExternalReplyPrompt({
+      userName: 'Sean',
+      kind: 'dm',
+      toLabel: '@sean',
+      text: 'let’s ship option B',
+    });
+    const pending = pendingSlackExternalReplies([
+      { role: 'user', text: 'ask Sean what he thinks' },
+      { role: 'agent', text: 'Posted to Sean.' },
+      { role: 'agent', text: sean },
+      { role: 'user', text: "Sound good let's do that" },
+    ]);
+    expect(pending).toEqual([sean]);
+    const forTurn = formatSlackRepliesForTurn(pending)!;
+    expect(forTurn).toContain('let’s ship option B');
+    expect(forTurn).toContain('information only');
+    expect(
+      pendingSlackExternalReplies([
+        { role: 'user', text: 'ask Sean' },
+        { role: 'agent', text: 'Posted.' },
+        { role: 'user', text: 'never mind' },
+      ]),
+    ).toEqual([]);
   });
 });

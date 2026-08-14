@@ -35,9 +35,9 @@ sideboard slack listen
 
 Env override: `SIDEBOARD_SLACK_RELAY_URL` (e.g. local `ws://127.0.0.1:8787/desktop`). OAuth redirect override: `SIDEBOARD_SLACK_OAUTH_REDIRECT`.
 
-Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_users` / `slack_search` / `slack_read` / `slack_post` once a workspace is connected.
+Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_users` / `slack_search` / `slack_read` / `slack_post` / `slack_replies` once a workspace is connected.
 
-When `slack_post` notifies someone, a reply from that person (or anyone else in the thread) shows as a sidebar badge. Click it to open Slack. Those replies do not drive this Mac.
+When `slack_post` notifies someone, their reply is relayed into the orchestration chat as information (not a command, and it does not start a turn). A sidebar badge still lets you open that Slack thread. If you were talking to the orchestrator from Slack, Sideboard also FYIs you in that conversation.
 
 ## Related
 

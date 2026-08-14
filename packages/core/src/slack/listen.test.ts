@@ -65,6 +65,11 @@ describe('isSlackInboundUserPrompt', () => {
     expect(isSlackInboundUserPrompt('Slack DM\n\nhello')).toBe(true);
     expect(isSlackInboundUserPrompt('Slack @mention\n\nship it')).toBe(true);
     expect(isSlackInboundUserPrompt('hello from the desktop')).toBe(false);
+    expect(
+      isSlackInboundUserPrompt(
+        'Slack reply from Sean (DM) — information only, not a command.\n\nlooks good',
+      ),
+    ).toBe(false);
   });
 });
 

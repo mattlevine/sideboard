@@ -162,13 +162,22 @@ export { runSlackRelayClient } from './slack/relay-client.js';
 export type { SlackRelayClientOptions } from './slack/relay-client.js';
 export {
   recordSlackOutboundWatch,
+  listSlackOutboundWatches,
   listSlackReplyBadges,
   dismissSlackReplyBadge,
   refreshSlackReplyBadges,
   permalinkForSlackReplyBadge,
   slackArchiveUrl,
+  formatSlackExternalReplyPrompt,
+  isSlackExternalReplyPrompt,
+  pendingSlackExternalReplies,
+  formatSlackRepliesForTurn,
 } from './slack/outbound-watch.js';
-export type { SlackReplyBadge, SlackOutboundWatch } from './slack/outbound-watch.js';
+export type {
+  SlackReplyBadge,
+  SlackOutboundWatch,
+  SlackOutboundReply,
+} from './slack/outbound-watch.js';
 export {
   parseSlackRelayClientMessage,
   parseSlackRelayServerMessage,

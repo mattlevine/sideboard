@@ -46,6 +46,7 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__slack_search',
   'mcp__sideboard__slack_read',
   'mcp__sideboard__slack_post',
+  'mcp__sideboard__slack_replies',
 ] as const;
 
 /** Legacy single-server allow list (CLI ~/.brightsy fallback). */

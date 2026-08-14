@@ -181,7 +181,7 @@ export interface IpcApi {
   /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */
   getSlackListenStatus(): Promise<SlackListenStatus>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
-  /** Unread Slack replies to messages this Mac posted (does not drive the Mac). */
+  /** Unread Slack replies to messages this Mac posted (relayed as info; does not start a turn). */
   getSlackReplyBadges(): Promise<SlackReplyBadge[]>;
   /** Open the Slack thread in the browser/app and clear that user's badge. */
   openSlackReply(badgeId: string): Promise<SlackReplyBadge[]>;

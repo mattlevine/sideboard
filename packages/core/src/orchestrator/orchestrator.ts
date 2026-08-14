@@ -1,4 +1,8 @@
 import { EventEmitter } from 'node:events';
+import {
+  formatSlackRepliesForTurn,
+  pendingSlackExternalReplies,
+} from '../slack/outbound-watch.js';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, humanizeAgentFailDetail } from '../agents/error-detail.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
@@ -795,11 +799,15 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatWorktreeReminder()
         : null;
+    const slackReplyContext = formatSlackRepliesForTurn(
+      pendingSlackExternalReplies(thread.messages),
+    );
     const agentPrompt = [
       thread.planMode ? PLAN_MODE_INSTRUCTION : null,
       orchestrationReminder,
       worktreeReminder,
       artifactReminder,
+      slackReplyContext,
       expandedPrompt,
     ]
       .filter(Boolean)

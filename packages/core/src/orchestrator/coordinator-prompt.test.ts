@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CLOUD_ORCHESTRATOR_GOAL } from '../brightsy/cloud-connect-constants.js';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,23 @@ import {
 } from './coordinator-prompt.js';
 
 describe('coordinator-prompt', () => {
+  const prevData = process.env.SIDEBOARD_APP_DATA;
+  const prevVault = process.env.SIDEBOARD_SECRET_VAULT;
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sb-coord-prompt-'));
+    process.env.SIDEBOARD_APP_DATA = dataDir;
+    process.env.SIDEBOARD_SECRET_VAULT = 'plain';
+  });
+
+  afterEach(() => {
+    if (prevData === undefined) delete process.env.SIDEBOARD_APP_DATA;
+    else process.env.SIDEBOARD_APP_DATA = prevData;
+    if (prevVault === undefined) delete process.env.SIDEBOARD_SECRET_VAULT;
+    else process.env.SIDEBOARD_SECRET_VAULT = prevVault;
+    rmSync(dataDir, { recursive: true, force: true });
+  });
   it('formats workspace inventory with optional github slug', () => {
     expect(formatWorkspaceInventory([])).toBe('(no registered workspaces)');
     expect(
@@ -58,6 +75,9 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('Account defaults');
     expect(prompt).toContain('list_models');
     expect(prompt).toContain('set_caffeinate');
+    expect(prompt).toContain('slack_post');
+    expect(prompt).toContain('slack_replies');
+    expect(prompt).toMatch(/not instructions|not a command/i);
     expect(prompt).toContain('fork_worktree');
     expect(prompt).toContain('fork_chat');
     expect(prompt).toMatch(/orchestration chat/i);
@@ -152,6 +172,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('parentThreadId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
       expect(agents).toContain('Sideboard MCP');
       expect(agents).toContain('set_caffeinate');
+      expect(agents).toContain('slack_replies');
       expect(agents).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
 
       // reconcile-style rewrite without an id must keep the prior uuid

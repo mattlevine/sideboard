@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.73] - 2026-08-13
+
+### Added
+
+- Orchestrator Slack outreach: when `slack_post` messages someone else, their reply is relayed into that orchestration chat (and FYI’d back to your Slack thread if you were talking there). It is information only — it does not start a turn or count as a command. The next user turn includes those replies in the prompt so resume still sees “Sean said …”.
+
 ## [0.1.72] - 2026-08-13
 
 ### Added
