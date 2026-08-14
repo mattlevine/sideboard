@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AgentKind, Autonomy, CaffeinateHoldState, ThinkingEffort, Thread } from '@sideboard-ai/core';
+import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { isOrchestratorThread, threadDisplayTitle } from '../lib/global-workspace';
-import { chatTabIsCaffeinated } from '../lib/caffeinate-tab';
+import { chatTabIsCaffeinated, useCaffeinateHold } from '../lib/caffeinate-tab';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
+import { CaffeinateBadge } from './CaffeinateBadge';
 import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 import { loadThreadDefaults } from '../lib/thread-defaults';
@@ -63,18 +64,6 @@ function basename(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
-function CaffeinateTabBadge() {
-  return (
-    <span
-      className="chat-tab-caffeinate"
-      title="Keeping this Mac awake (caffeinate)"
-      aria-label="Keeping this Mac awake"
-    >
-      awake
-    </span>
-  );
-}
-
 export function ChatTabs({
   chats,
   activeChatId,
@@ -119,9 +108,7 @@ export function ChatTabs({
     autonomy: 'default',
     effort: 'high',
   });
-  const [caffeinateHold, setCaffeinateHold] = useState<
-    (CaffeinateHoldState & { appCaffeinated?: boolean }) | null
-  >(null);
+  const caffeinateHold = useCaffeinateHold();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeChat = useMemo(
@@ -133,29 +120,6 @@ export function ChatTabs({
   useEffect(() => {
     if (editingId) inputRef.current?.focus();
   }, [editingId]);
-
-  useEffect(() => {
-    const api = window.sideboard.getCaffeinateHold;
-    if (!api) return;
-    let cancelled = false;
-    const apply = (state: CaffeinateHoldState & { appCaffeinated?: boolean }) => {
-      if (!cancelled) setCaffeinateHold(state);
-    };
-    void api()
-      .then(apply)
-      .catch(() => undefined);
-    const off = window.sideboard.onCaffeinateHoldChanged?.(apply);
-    const id = window.setInterval(() => {
-      void api()
-        .then(apply)
-        .catch(() => undefined);
-    }, 4000);
-    return () => {
-      cancelled = true;
-      off?.();
-      window.clearInterval(id);
-    };
-  }, []);
 
   async function openNewTabPicker() {
     const defaults = await loadThreadDefaults();
@@ -327,7 +291,7 @@ export function ChatTabs({
                   <span className="chat-tab-title" title={t.title}>
                     {threadDisplayTitle(t)}
                   </span>
-                  {caffeinated ? <CaffeinateTabBadge /> : null}
+                  {caffeinated ? <CaffeinateBadge /> : null}
                   {active && (
                     <button
                       type="button"

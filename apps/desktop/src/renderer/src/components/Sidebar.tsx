@@ -17,7 +17,9 @@ import {
   latestAgentResponseAt,
   unreadWorktreeKey,
 } from '../lib/unread-worktrees';
+import { useCaffeinateHold } from '../lib/caffeinate-tab';
 import { BrandMark } from './BrandMark';
+import { CaffeinateBadge } from './CaffeinateBadge';
 import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
@@ -756,6 +758,7 @@ export function Sidebar({
   slackReplies = [],
   onOpenSlackReply,
 }: Props) {
+  const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [archiveConfirm, setArchiveConfirm] = useState<{
@@ -828,6 +831,7 @@ export function Sidebar({
         <div className="brand">
           <BrandMark size="sm" />
           <span className="brand-name">Sideboard</span>
+          {caffeinateHold?.appCaffeinated ? <CaffeinateBadge /> : null}
           {slackReplies.length > 0 && (
             <div className="slack-reply-badges" role="list" aria-label="Slack replies">
               {slackReplies.map((badge) => (

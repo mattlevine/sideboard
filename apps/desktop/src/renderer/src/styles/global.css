@@ -2435,7 +2435,7 @@ body.resizing-panels webview {
   text-overflow: ellipsis;
 }
 
-.chat-tab-caffeinate {
+.caffeinate-badge {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -2453,7 +2453,7 @@ body.resizing-panels webview {
   opacity: 1;
 }
 
-.chat-tab:not(.active) .chat-tab-caffeinate {
+.chat-tab:not(.active) .caffeinate-badge {
   background: #ffd24a;
   color: #1a1208;
 }
