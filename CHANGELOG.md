@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.76] - 2026-08-14
+
+### Added
+
+- Orchestration chats show an **awake** chip on the tab while caffeinate is on (chat hold or Settings). The Mac dock and menu bar show a yellow status dot.
+- Repo `AGENTS.md` / `CLAUDE.md` point at `docs/system/` for agents working on this codebase.
+
 ## [0.1.75] - 2026-08-14
 
 ### Changed
