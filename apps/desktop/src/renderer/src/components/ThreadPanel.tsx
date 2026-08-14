@@ -40,7 +40,7 @@ import {
   setRightPaneSuppressed,
   type RightPaneSession,
 } from '../lib/right-pane-memory';
-import { formatTokenCount, sumUsage, totalTokens, usageTooltip } from '../lib/tokens';
+import { formatTokenCount, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, estimateContextWindow } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
@@ -1044,6 +1044,17 @@ export function ThreadPanel({
     () => sumUsage(thread.messages.map((m) => m.usage)),
     [thread.messages],
   );
+  const latestContextUsage = useMemo(() => {
+    for (let i = thread.messages.length - 1; i >= 0; i--) {
+      const m = thread.messages[i];
+      if (m?.role === 'agent' && m.usage) return m.usage;
+    }
+    return null;
+  }, [thread.messages]);
+  const contextWindow = estimateContextWindow(thread.agent, thread.model);
+  const contextRatio = latestContextUsage
+    ? contextFillRatio(latestContextUsage, contextWindow)
+    : null;
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
 
@@ -1299,6 +1310,12 @@ export function ThreadPanel({
         }
         usageTotalLabel={threadUsage ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok` : null}
         usageTotalTooltip={threadUsage ? `Thread total — ${usageTooltip(threadUsage)}` : undefined}
+        contextRatio={contextRatio}
+        contextTooltip={
+          latestContextUsage
+            ? contextMeterTooltip(latestContextUsage, contextWindow)
+            : undefined
+        }
         openMenu={
           isGlobalThread(thread) ? undefined : (
             <>
@@ -1598,6 +1615,8 @@ export function ThreadPanel({
                       ts={m.ts}
                       durationMs={m.durationMs ?? fallbackDuration}
                       usage={m.usage}
+                      agent={thread.agent}
+                      model={thread.model}
                       threadId={thread.id}
                       worktreePath={thread.worktreePath}
                       knownFilePaths={filePaths}

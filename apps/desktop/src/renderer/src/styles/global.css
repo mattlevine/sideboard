@@ -2503,9 +2503,41 @@ body.resizing-panels webview {
   gap: 8px;
 }
 
+.thread-meta.usage-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+
+.thread-meta.usage-cluster .usage-total {
+  font-variant-numeric: tabular-nums;
+}
+
 .thread-meta.usage-total {
   font-variant-numeric: tabular-nums;
   cursor: default;
+}
+
+.context-meter {
+  display: block;
+  flex-shrink: 0;
+}
+
+.context-meter-track {
+  stroke: var(--border);
+}
+
+.context-meter-fill {
+  stroke: var(--muted);
+}
+
+.context-meter.warn .context-meter-fill {
+  stroke: #e6b84d;
+}
+
+.context-meter.hot .context-meter-fill {
+  stroke: var(--err, #e85d5d);
 }
 
 .chat-tab-new-menu {
@@ -2951,6 +2983,9 @@ body.resizing-panels webview {
 }
 
 .msg-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
   margin-right: 2px;
   color: var(--muted);

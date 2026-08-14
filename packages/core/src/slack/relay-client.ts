@@ -159,7 +159,9 @@ function connectSession(
       }
       if (msg.type === 'registered') {
         log(
-          `Relay registered ${msg.teamId}/${msg.userId} · device ${msg.deviceId.slice(0, 8)}…`,
+          msg.deviceId && msg.deviceId !== 'unknown'
+            ? `Relay registered ${msg.teamId}/${msg.userId} · device ${msg.deviceId.slice(0, 8)}…`
+            : `Relay registered ${msg.teamId}/${msg.userId}`,
         );
         return;
       }
@@ -171,6 +173,17 @@ function connectSession(
         }
         pending.set(msg.eventId, msg.message);
         send(ws, { type: 'claim', eventId: msg.eventId });
+        // Older relays never answer claim_ok. Handle the event if no reply arrives.
+        const eventId = msg.eventId;
+        setTimeout(() => {
+          const inbound = pending.get(eventId);
+          if (!inbound) return;
+          pending.delete(eventId);
+          void Promise.resolve(opts.onEvent(inbound)).catch((err) => {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            log(`event error: ${errMsg}`);
+          });
+        }, 400);
         return;
       }
       if (msg.type === 'claim_denied') {

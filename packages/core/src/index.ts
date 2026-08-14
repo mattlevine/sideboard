@@ -60,6 +60,7 @@ export * from './plan/plan-file.js';
 export {
   coordinatorSystemPrompt,
   coordinatorTurnReminder,
+  SLACK_REPLY_FORMATTING,
   ensureGlobalCoordinatorCwd,
   formatWorkspaceInventory,
   enrichWorkspacesWithGithub,

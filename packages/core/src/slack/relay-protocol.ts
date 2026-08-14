@@ -88,8 +88,8 @@ export function parseSlackRelayServerMessage(raw: string): SlackRelayServerMessa
       const teamId = typeof parsed.teamId === 'string' ? parsed.teamId.trim() : '';
       const userId = typeof parsed.userId === 'string' ? parsed.userId.trim() : '';
       const deviceId = typeof parsed.deviceId === 'string' ? parsed.deviceId.trim() : '';
-      if (!teamId || !userId || !deviceId) return null;
-      return { type: 'registered', teamId, userId, deviceId };
+      if (!teamId || !userId) return null;
+      return { type: 'registered', teamId, userId, deviceId: deviceId || 'unknown' };
     }
     if (parsed.type === 'claim_ok' || parsed.type === 'claim_denied') {
       const eventId = typeof parsed.eventId === 'string' ? parsed.eventId.trim() : '';
@@ -101,9 +101,12 @@ export function parseSlackRelayServerMessage(raw: string): SlackRelayServerMessa
       return { type: 'error', message };
     }
     if (parsed.type === 'event') {
-      const eventId = typeof parsed.eventId === 'string' ? parsed.eventId.trim() : '';
+      const eventId =
+        typeof parsed.eventId === 'string' && parsed.eventId.trim()
+          ? parsed.eventId.trim()
+          : `legacy-${Date.now()}`;
       const msg = parsed.message;
-      if (!eventId || !msg || typeof msg !== 'object') return null;
+      if (!msg || typeof msg !== 'object') return null;
       if (
         typeof msg.teamId !== 'string' ||
         typeof msg.channelId !== 'string' ||

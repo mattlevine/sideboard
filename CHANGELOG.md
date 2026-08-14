@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.71] - 2026-08-13
+
+### Added
+
+- Context meter (circular fill) next to the token counter — latest-turn context vs estimated model window
+- Slack orchestrator replies: use Slack mrkdwn (`*bold*`, not `**markdown**`) — formatting guide in the Slack audience prompt and every Slack inbound turn
+
+### Fixed
+
+- Slack relay: tolerate older relay `registered` / `event` payloads; fall through if `claim_ok` never arrives
+
 ## [0.1.70] - 2026-08-13
 
 ### Added

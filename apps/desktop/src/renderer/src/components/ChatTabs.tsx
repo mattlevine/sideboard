@@ -5,6 +5,7 @@ import { isOrchestratorThread, threadDisplayTitle } from '../lib/global-workspac
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
+import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 
@@ -41,6 +42,9 @@ interface Props {
   /** Compact thread-wide token usage total (e.g. "Σ 12.3k tok"). */
   usageTotalLabel?: string | null;
   usageTotalTooltip?: string;
+  /** 0–1 context fill from the latest turn; omit to hide the meter. */
+  contextRatio?: number | null;
+  contextTooltip?: string;
   onSelectChat: (id: string) => void;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
@@ -75,6 +79,8 @@ export function ChatTabs({
   statusBadge = null,
   usageTotalLabel = null,
   usageTotalTooltip,
+  contextRatio = null,
+  contextTooltip,
   onSelectChat,
   onSelectFile,
   onCloseFile,
@@ -334,9 +340,16 @@ export function ChatTabs({
         />
       </div>
       <div className="chat-tabs-actions">
-        {usageTotalLabel && (
-          <span className="thread-meta usage-total" title={usageTotalTooltip}>
-            {usageTotalLabel}
+        {(usageTotalLabel || contextRatio != null) && (
+          <span className="thread-meta usage-cluster">
+            {contextRatio != null && (
+              <ContextMeter ratio={contextRatio} title={contextTooltip} />
+            )}
+            {usageTotalLabel && (
+              <span className="usage-total" title={usageTotalTooltip}>
+                {usageTotalLabel}
+              </span>
+            )}
           </span>
         )}
         {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}

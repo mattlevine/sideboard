@@ -83,6 +83,18 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Bash / Read / etc: allowed for (1) inspecting target worktrees / registered repo paths from MCP, and (2) greenfield setup under ~/sideboard/repos (git clone, gh repo create, git init+remote). Never git init/clone *inside* this synthetic home cwd — emptiness here is expected, not a bug.',
 ].join('\n');
 
+/**
+ * Formatting rules when the coordinator reply is posted into Slack (DM / @mention).
+ * Slack uses mrkdwn, not CommonMark — `**bold**` shows literal asterisks.
+ */
+export const SLACK_REPLY_FORMATTING = [
+  'Slack formatting (mandatory — your reply is posted verbatim to Slack):',
+  '- Use Slack mrkdwn, NOT GitHub/CommonMark markdown. Slack does not render `**bold**`, `# headings`, or `[label](url)`.',
+  '- Bold: *text* (single asterisks). Italic: _text_. Strikethrough: ~text~. Inline code: `code`.',
+  '- Links: <https://example.com|label> or bare URLs. Thread ids: plain `sideboard://thread/<id>` (no markdown link syntax).',
+  '- Prefer short paragraphs and *bold* section labels over markdown headings or bullet trees with `**`.',
+].join('\n');
+
 function accountDefaultsPlaybookLine(): string {
   const d = resolveThreadDefaults();
   const model = d.model?.trim() || 'Auto';
@@ -219,6 +231,7 @@ export function coordinatorSystemPrompt(opts: {
             'Your reply will be posted back in Slack — be concise and actionable.',
             'Sideboard signs the Slack reply with this Mac\'s destination name (Personal / Work). Do not prefix that name yourself.',
             'Call set_caffeinate enabled=true when they start a stretch of remote work so the Mac stays awake. Call set_caffeinate enabled=false when they say they are done, wrapping up, or going to sleep.',
+            SLACK_REPLY_FORMATTING,
           ]
         : [
             'You are a Sideboard orchestration agent: you oversee worktree agents across registered workspaces in the Sideboard app.',

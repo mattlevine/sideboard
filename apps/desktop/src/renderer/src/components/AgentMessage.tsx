@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MessagePart, TokenUsage } from '@sideboard-ai/core';
+import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
 import {
   extractRightPaneContents,
   isFilesPane,
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, totalTokens, usageTooltip } from '../lib/tokens';
+import { formatTokenCount, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, estimateContextWindow } from '../lib/tokens';
+import { ContextMeter } from './ContextMeter';
 import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';
 import { FloatingMenu } from './FloatingMenu';
@@ -24,6 +25,9 @@ interface Props {
   durationMs?: number;
   /** Token usage for this turn, when the agent CLI reports it. */
   usage?: TokenUsage;
+  /** Used with usage for the context-fill ring (defaults to Claude-sized window). */
+  agent?: AgentKind;
+  model?: string | null;
   /** When set (live turn), show a ticking timer from this epoch ms. */
   startedAt?: number;
   streaming?: boolean;
@@ -130,6 +134,8 @@ export function AgentMessage({
   parts,
   durationMs,
   usage,
+  agent,
+  model,
   startedAt,
   streaming,
   threadId,
@@ -344,6 +350,17 @@ export function AgentMessage({
             )}
             {usage && (
               <span className="msg-usage" title={usageTooltip(usage)}>
+                <ContextMeter
+                  ratio={contextFillRatio(
+                    usage,
+                    estimateContextWindow(agent ?? 'claude', model),
+                  )}
+                  title={contextMeterTooltip(
+                    usage,
+                    estimateContextWindow(agent ?? 'claude', model),
+                  )}
+                  size={12}
+                />
                 {formatTokenCount(totalTokens(usage))} tok
               </span>
             )}

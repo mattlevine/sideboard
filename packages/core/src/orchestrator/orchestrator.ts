@@ -147,6 +147,7 @@ import {
   coordinatorTurnReminder,
   enrichWorkspacesWithGithub,
   ensureGlobalCoordinatorCwd,
+  SLACK_REPLY_FORMATTING,
 } from './coordinator-prompt.js';
 
 interface RegisteredProcess {
@@ -769,7 +770,10 @@ export class Orchestrator {
             goal: thread.sourceRef || thread.title,
           }),
           slackInbound
-            ? 'This turn is a Slack DM or @mention. Your reply is posted back in Slack — keep it concise. Sideboard signs it with this Mac\'s destination name; do not prefix the name yourself.'
+            ? [
+                'This turn is a Slack DM or @mention. Your reply is posted back in Slack — keep it concise. Sideboard signs it with this Mac\'s destination name; do not prefix the name yourself.',
+                SLACK_REPLY_FORMATTING,
+              ].join('\n')
             : null,
         ]
           .filter(Boolean)

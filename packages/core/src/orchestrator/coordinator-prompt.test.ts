@@ -95,6 +95,9 @@ describe('coordinator-prompt', () => {
     });
     expect(prompt).toContain('Slack DM or @mention');
     expect(prompt).toContain('Do not prefix that name yourself');
+    expect(prompt).toContain('Slack mrkdwn');
+    expect(prompt).toContain('**bold**');
+    expect(prompt).toContain('*text*');
   });
 
   it('cloud audience keeps Brightsy reply framing', () => {
