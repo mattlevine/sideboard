@@ -150,7 +150,7 @@ function WorktreeArchiveCard({
       return;
     }
     const rect = anchorRef.current.getBoundingClientRect();
-    const width = 280;
+    const width = 320;
     let left = rect.right + 10;
     if (left + width > window.innerWidth - 12) {
       left = Math.max(12, rect.left - width - 10);
@@ -327,7 +327,7 @@ function WorktreeEditCard({
       const el = anchorRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const width = 280;
+      const width = 320;
       let left = rect.right + 10;
       if (left + width > window.innerWidth - 12) {
         left = Math.max(12, rect.left - width - 10);
@@ -696,7 +696,6 @@ function WorktreeSidebarRow({
             type="button"
             ref={archiveBtnRef}
             className={`icon-btn worktree-remove-btn${archiveHover ? ' is-hot' : ''}`}
-            title="Archive workspace"
             aria-label={`Archive ${worktreeLabel}`}
             aria-expanded={archiveHover}
             onMouseEnter={() => setArchiveCardOpen(true)}

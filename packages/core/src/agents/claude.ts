@@ -81,14 +81,14 @@ function usageFromClaude(usage: ClaudeUsage | undefined): TokenUsage | null {
   if (!usage) return null;
   const inputTokens = Number(usage.input_tokens ?? 0);
   const outputTokens = Number(usage.output_tokens ?? 0);
-  if (!inputTokens && !outputTokens) return null;
+  const cacheReadTokens = Number(usage.cache_read_input_tokens ?? 0);
+  const cacheWriteTokens = Number(usage.cache_creation_input_tokens ?? 0);
+  if (!inputTokens && !outputTokens && !cacheReadTokens && !cacheWriteTokens) return null;
   return {
     inputTokens,
     outputTokens,
-    cacheReadTokens: usage.cache_read_input_tokens ? Number(usage.cache_read_input_tokens) : undefined,
-    cacheWriteTokens: usage.cache_creation_input_tokens
-      ? Number(usage.cache_creation_input_tokens)
-      : undefined,
+    cacheReadTokens: cacheReadTokens || undefined,
+    cacheWriteTokens: cacheWriteTokens || undefined,
   };
 }
 
@@ -345,8 +345,13 @@ export const claudeAdapter: AgentAdapter = {
       }
 
       if (obj.type === 'assistant' || obj.type === 'user') {
-        const content = (obj as { message?: { content?: ContentBlock[] } }).message?.content;
-        const events = eventsFromContentBlocks(content);
+        const message = (obj as { message?: { content?: ContentBlock[]; usage?: ClaudeUsage } })
+          .message;
+        const events = eventsFromContentBlocks(message?.content);
+        if (obj.type === 'assistant') {
+          const usage = usageFromClaude(message?.usage);
+          if (usage) events.push({ type: 'usage', data: usage, scope: 'request' });
+        }
         // For assistant snapshots after streaming, prefer tool/thinking blocks;
         // text may duplicate stream deltas (spawn dedupes stdout).
         if (events.length === 0) return null;
@@ -414,7 +419,7 @@ export const claudeAdapter: AgentAdapter = {
           if (typeof text === 'string' && text) events.push({ type: 'stdout', data: text });
         }
         const usage = usageFromClaude((obj as { usage?: ClaudeUsage }).usage);
-        if (usage) events.push({ type: 'usage', data: usage });
+        if (usage) events.push({ type: 'usage', data: usage, scope: 'turn' });
         if (events.length === 0) return null;
         return events.length === 1 ? events[0]! : events;
       }

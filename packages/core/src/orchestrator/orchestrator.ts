@@ -18,6 +18,11 @@ import {
 } from '../git/worktree.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
+  AGENT_GIT_ACTIONS,
+  agentGitPrompt,
+  type AgentGitAction,
+} from '../git/agent-git-actions.js';
+import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
 } from '../git/pr-merge-archive.js';
@@ -1910,6 +1915,38 @@ export class Orchestrator {
     const { tab } = await requestReview(threadRef, (ref, prompt) => this.send(ref, prompt));
     this.emit({ type: 'status_changed', threadId: tab.id, status: tab.status });
     return tab;
+  }
+
+  /**
+   * Queue a desktop-git-button prompt on a worktree agent (commit/push/PR/merge).
+   * Orchestrators use this instead of running git/gh from the synthetic home.
+   */
+  async askGit(threadRef: string, action: AgentGitAction): Promise<Thread> {
+    if (!AGENT_GIT_ACTIONS.includes(action)) {
+      throw new Error(`Unknown git action: ${action}`);
+    }
+    const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'ask_git');
+    if (isOrchestratorThread(thread)) {
+      throw new Error(
+        'ask_git targets a worktree agent thread (not the orchestrator). Pass a child/worktree thread ref.',
+      );
+    }
+    if (action === 'merge' && !thread.prUrl) {
+      throw new Error(
+        'No pull request linked. Ask the worktree agent to open a draft PR first (ask_git create-draft).',
+      );
+    }
+    let prBase: string | undefined;
+    if (action === 'resolve-conflicts') {
+      try {
+        const details = await this.getPrDetails(threadRef);
+        prBase = details?.baseRefName?.trim() || undefined;
+      } catch {
+        // Fall back to the generic "Fix merge conflicts." phrase.
+      }
+    }
+    return this.send(threadRef, agentGitPrompt(action, { prBase }));
   }
 
   setThreadOptions(threadRef: string, patch: ThreadOptionsPatch): Thread {

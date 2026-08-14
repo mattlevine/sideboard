@@ -319,13 +319,14 @@ export const opencodeAdapter: AgentAdapter = {
           content: part?.output ?? part?.content ?? (obj as { output?: string; content?: string }).output ?? (obj as { content?: string }).content,
         };
       }
-      // Usage is reported incrementally per agentic step; spawn sums these.
+      // Usage is reported incrementally per agentic step; spawn sums billed
+      // totals and keeps the last step for the context meter.
       if (obj.type === 'step_finish' || obj.type === 'step-finish') {
         const part = (obj as { part?: { tokens?: OpencodeTokens } }).part;
         const usage = usageFromOpencode(
           part?.tokens ?? (obj as { tokens?: OpencodeTokens }).tokens,
         );
-        return usage ? { type: 'usage', data: usage } : null;
+        return usage ? { type: 'usage', data: usage, scope: 'request' } : null;
       }
       // Avoid dumping unknown JSON into the chat transcript / lastError path.
       return null;

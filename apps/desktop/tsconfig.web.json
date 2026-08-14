@@ -24,6 +24,7 @@
       "@sideboard/orchestrator-capable": ["../../packages/core/src/agents/orchestrator-capable.ts"],
       "@sideboard/plan-ask-user": ["../../packages/core/src/plan/ask-user.ts"],
       "@sideboard/plan-file": ["../../packages/core/src/plan/plan-present.ts"],
+      "@sideboard/agent-git-actions": ["../../packages/core/src/git/agent-git-actions.ts"],
       "@brightsy/ui-context": ["./node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx"]
     }
   },

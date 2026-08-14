@@ -5,6 +5,7 @@ import type {
   PrCheckRun,
   Thread,
 } from '@sideboard-ai/core';
+import { agentGitPrompt } from '@sideboard/agent-git-actions';
 import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
 import { FileTree } from './FileTree';
 import { MergeModal } from './MergeModal';
@@ -348,7 +349,9 @@ export function RightSidebar({
         return {
           ...prev,
           files,
-          dirty: prev.dirty || files.length > 0,
+          // Keep dirty from the includeMeta pass (`isDirty`). This list is
+          // commits-vs-trunk plus untracked — files.length is not local dirt.
+          dirty: prev.dirty,
           stat:
             files.length === prev.files.length
               ? prev.stat
@@ -771,13 +774,13 @@ export function RightSidebar({
   ) {
     setPrMenuOpen(false);
     const prompt =
-      action === 'resolve-conflicts'
-        ? `Merge origin/${prBase} into this branch. Then push.`
-        : action === 'commit-push'
-          ? 'Commit and push.'
-          : action === 'create-web'
-            ? 'Commit, push, and open a PR in the browser.'
-            : 'Commit, push, and open a draft PR.';
+      action === 'create-pr' || action === 'create-draft'
+        ? agentGitPrompt('create-draft')
+        : action === 'create-web'
+          ? agentGitPrompt('create-web')
+          : action === 'commit-push'
+            ? agentGitPrompt('commit-push')
+            : agentGitPrompt('resolve-conflicts', { prBase });
     setBusy(true);
     try {
       await window.sideboard.sendToThread(thread.id, prompt);

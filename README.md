@@ -43,7 +43,7 @@ Agents write code **and** invent data shapes (content, configs, feedback, ops ro
 
 A concrete loop: pull or edit page content and media in schema + files tabs, then have the agent write it into a **static site** in the same worktree (Astro, Next export, Eleventy, plain HTML) — review the data and the generated pages before you land.
 
-Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Use MCP when an agent needs *judgment* across threads or needs to open a pane. Land and purge stay human-only.
+Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Use MCP when an agent needs *judgment* across threads or needs to open a pane. CLI `land` and `purge` stay human-only; orchestrators merge GitHub PRs by asking the worktree agent (`ask_git`).
 
 Also true, and useful on the way:
 
@@ -276,9 +276,9 @@ Once connected, agents get tools to:
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids); `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
 - **Setup / run** — `run_setup`, `list_run_scripts`, `run_dev_script`, `stop_dev_script`
-- **Inspect / review / PRs** — `get_diff`; `request_review` (opens a Review chat tab on a worktree thread); ask worktree agents via `send_to_thread` to `gh pr create --draft` (no host draft-PR tool)
+- **Inspect / review / PRs** — `get_diff`; `request_review` (opens a Review chat tab on a worktree thread); `ask_git` (commit & push, draft PR, resolve conflicts, merge — same prompts as the desktop git buttons)
 
-Ready-for-review land / merge and `purge_thread` stay human-only. Coordinators open PRs only by asking the worktree agent.
+Ready-for-review land (`confirm_land`) and `purge_thread` stay human-only. Coordinators commit, push, open PRs, and merge by asking the worktree agent.
 
 ## Linear
 

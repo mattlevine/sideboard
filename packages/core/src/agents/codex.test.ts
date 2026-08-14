@@ -105,6 +105,7 @@ describe('codexAdapter.parseEvent', () => {
     expect(event).toEqual({
       type: 'usage',
       data: { inputTokens: 24763, outputTokens: 162, cacheReadTokens: 20000 },
+      scope: 'turn',
     });
   });
 

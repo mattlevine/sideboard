@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.74] - 2026-08-13
+
+### Added
+
+- Orchestration MCP `ask_git` — tell a worktree agent to commit & push, open a draft PR, resolve conflicts, or merge. The worktree agent runs git/gh; the orchestrator only queues the prompt.
+
+### Changed
+
+- Orchestrators may ask a worktree agent to commit, push, and merge (`ask_git` / `send_to_thread`); they do not merge themselves. `confirm_land` and `purge_thread` stay human-only
+
+### Fixed
+
+- Context meter uses the last API request’s prompt size (input + cache), not billed tokens summed across every tool round in the turn
+- Right sidebar git button shows **Merge** (not **Commit & push**) when the working tree is clean: the Changes list vs trunk is not treated as local dirt
+- Archive/git hover cards wrap long PR titles instead of stacking them on one line
+
 ## [0.1.73] - 2026-08-13
 
 ### Added

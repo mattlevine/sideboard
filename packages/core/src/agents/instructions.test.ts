@@ -63,6 +63,8 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/git push -u origin HEAD/i);
     expect(text).toMatch(/Never push to or open PRs against `upstream`/i);
     expect(text).toMatch(/Commit and push\./);
+    expect(text).toMatch(/Merge PR\./);
+    expect(text).toMatch(/gh stack merge/);
     expect(text).toMatch(/Short git requests/i);
   });
 });

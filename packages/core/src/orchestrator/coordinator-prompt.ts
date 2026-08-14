@@ -43,7 +43,7 @@ export function coordinatorGreenfieldPlaybook(reposDir: string): string {
     '- Examples:',
     `  - Clone: \`git clone <url> ${reposDir}/<name>\``,
     `  - New GitHub repo: \`gh repo create <owner>/<name> --private --clone -- ${reposDir}/<name>\` (or mkdir + git init + gh repo create + remote add + push)`,
-    '- Then: add_workspace with that absolute path → create_thread (repoPath + parentThreadId) → send_to_thread (build) → wait_for_turn → send_to_thread (`gh pr create --draft -R <origin-owner/name>`).',
+    '- Then: add_workspace with that absolute path → create_thread (repoPath + parentThreadId) → send_to_thread (build) → wait_for_turn → ask_git create-draft (or send_to_thread `gh pr create --draft -R <origin-owner/name>`).',
     '- Always target the child worktree\'s **origin** (`github:` slug from list_workspaces / `git remote get-url origin` in that worktree). Never open PRs against `upstream`.',
     '- Do coding work in the child worktree thread, not by editing files in this home cwd.',
   ].join('\n');
@@ -77,8 +77,9 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Inspect / review / PRs:',
   '- get_diff — compact diff summary',
   '- request_review — open a Review chat tab on a worktree thread (attaches .sideboard/review.md when present, else local guidelines; sends "Review changes in this workspace."); then wait_for_turn / get_turn_result on the returned id',
-  '- Ask the worktree agent via send_to_thread to open a draft PR with `gh pr create --draft -R <origin-owner/name>` (workspace `github:` slug / that worktree\'s origin — never upstream). Do not open PRs from the orchestrator yourself.',
-  'Human-only (do not attempt): merge, ready-for-review land, purge_thread.',
+  '- ask_git — tell a worktree agent to commit & push, open a draft PR, resolve conflicts, or merge (`Merge PR.`). You only queue that prompt — the worktree agent runs git/gh (including `gh pr merge`). Then wait_for_turn. Prefer this over paraphrasing.',
+  '- Or send_to_thread with those exact phrases: "Commit and push.", "Commit, push, and open a draft PR.", "Fix merge conflicts.", "Merge PR." (draft PRs: `gh pr create --draft -R <origin-owner/name>` using the workspace `github:` slug — never upstream). Never run git/gh from this orchestration cwd, and never merge the PR yourself.',
+  'Human-only (do not attempt): ready-for-review land (confirm_land), purge_thread.',
   'Thread links in replies: when mentioning a chat/thread for the user, include a markdown link `[Title](sideboard://thread/<id>)` using the full id (or the link field from create_thread / list_threads). Sideboard renders these as clickable opens.',
   'Bash / Read / etc: allowed for (1) inspecting target worktrees / registered repo paths from MCP, and (2) greenfield setup under ~/sideboard/repos (git clone, gh repo create, git init+remote). Never git init/clone *inside* this synthetic home cwd — emptiness here is expected, not a bug.',
 ].join('\n');
@@ -121,8 +122,8 @@ export function coordinatorTurnReminder(opts: {
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
     '- For "what\'s going on": call list_threads (and list_workspaces if needed). Summarize fleet status — do not ls/git-status this synthetic home.',
-    '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn.',
-    '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn → draft PR.',
+    '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn. Land with ask_git (commit-push / create-draft / merge) on the child, then wait_for_turn — never git/gh from this cwd.',
+    '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn → ask_git create-draft.',
     '- When naming threads for the user, link them as `[Title](sideboard://thread/<id>)`.',
     '- If they will wait on Slack or leave the Mac, call set_caffeinate enabled=true. When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false.',
   ]
@@ -194,9 +195,9 @@ export function ensureGlobalCoordinatorCwd(opts?: {
       : 'Pass `parentThreadId` for children (this chat\'s id from the turn reminder).',
     'Omit `agent` / `model` on `create_thread` unless you have a reason to override Account defaults.',
     'Never pass `agent=codex` when you yourself are Codex — nested Codex deadlocks on shared ~/.codex locks. Omit agent (Account default) or use cursor/claude.',
-    'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn.',
-    'Typical flow (new app): Bash create/clone under repos dir → add_workspace → create_thread → send_to_thread (implement) → wait_for_turn → draft PR via worktree agent.',
-    'Always ask worktree agents to open draft PRs (`send_to_thread` + `gh pr create --draft -R <origin>`); never open PRs from the orchestrator.',
+    'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn → ask_git create-draft → wait_for_turn → (when ready) ask_git merge → wait_for_turn.',
+    'Typical flow (new app): Bash create/clone under repos dir → add_workspace → create_thread → send_to_thread (implement) → wait_for_turn → ask_git create-draft.',
+    'Always ask worktree agents to commit, push, open draft PRs, and merge (`ask_git` / `send_to_thread`). The worktree agent runs git/gh; never merge from this orchestration cwd.',
   ].join('\n');
   // Always rewrite so tool playbook updates ship without manual cleanup.
   // Never throw — a sandboxed Codex MCP child that cannot write here must still
@@ -248,8 +249,8 @@ export function coordinatorSystemPrompt(opts: {
     'When creating threads, pass the correct repoPath for the target workspace.',
     `YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit parentThreadId (Sideboard binds it). Never invent a uuid.`,
     'Omit agent/model on create_thread unless you need to override Account defaults.',
-    'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread (implement) → wait_for_turn → send_to_thread (ask for `gh pr create --draft -R <origin-owner/name>` using the workspace github slug) → wait_for_turn. Never target upstream. Never open PRs from the orchestrator.',
-    'Typical flow (new app): Bash under repos dir (clone or gh repo create) → add_workspace → create_thread → send_to_thread → wait_for_turn → draft PR via worktree agent.',
+    'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread (implement) → wait_for_turn → ask_git create-draft → wait_for_turn → (when ready) ask_git merge → wait_for_turn. Never target upstream. Never git/gh from this orchestration cwd.',
+    'Typical flow (new app): Bash under repos dir (clone or gh repo create) → add_workspace → create_thread → send_to_thread → wait_for_turn → ask_git create-draft.',
     `Goal: ${opts.goal}`,
     'Registered workspaces:',
     formatWorkspaceInventory(opts.workspaces),

@@ -92,12 +92,15 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('run_dev_script');
     expect(prompt).toContain('get_diff');
     expect(prompt).toContain('request_review');
+    expect(prompt).toContain('ask_git');
+    expect(prompt).toContain('Commit and push.');
+    expect(prompt).toContain('Merge PR.');
     expect(prompt).not.toContain('create_draft_pr');
     expect(prompt).not.toContain('preview_land');
     expect(prompt).toContain('purge_thread');
+    expect(prompt).not.toMatch(/Human-only \(do not attempt\): merge,/);
     expect(prompt).toContain('parent-1');
     expect(prompt).toContain('github:acme/sideboard');
-    expect(prompt).toContain('Ask the worktree agent');
     expect(prompt).toContain('gh pr create --draft -R');
     expect(prompt).toMatch(/never upstream/i);
     expect(prompt).toContain('Greenfield');
@@ -148,6 +151,7 @@ describe('coordinator-prompt', () => {
     expect(text).toContain('Emptiness here is expected');
     expect(text).toContain('New repo');
     expect(text).toContain('add_workspace');
+    expect(text).toContain('ask_git');
     expect(text).toContain('sideboard://thread/');
     expect(text).toContain('set_caffeinate');
   });
@@ -171,6 +175,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
       expect(claude).toContain('parentThreadId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
       expect(agents).toContain('Sideboard MCP');
+      expect(agents).toContain('ask_git');
       expect(agents).toContain('set_caffeinate');
       expect(agents).toContain('slack_replies');
       expect(agents).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');

@@ -72,6 +72,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/plan/plan-present.ts',
         ),
+        '@sideboard/agent-git-actions': resolve(
+          __dirname,
+          '../../packages/core/src/git/agent-git-actions.ts',
+        ),
 
       },
     },

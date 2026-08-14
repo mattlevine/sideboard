@@ -16,7 +16,7 @@ import {
   stripBrightsyNdjsonNoise,
 } from './message-parts.js';
 import { ensureAgentPath } from './path.js';
-import { mergeUsage } from './usage.js';
+import { applyTurnUsage } from './usage.js';
 import type { AgentTurnInput } from './turn-input.js';
 
 export interface SpawnTurnHandle {
@@ -119,7 +119,7 @@ export async function spawnAgentTurn(
           continue;
         }
         if (parsed.type === 'usage') {
-          usage = mergeUsage(usage, parsed.data);
+          usage = applyTurnUsage(usage, parsed.data, parsed.scope ?? 'request');
           onEvent(parsed);
           continue;
         }

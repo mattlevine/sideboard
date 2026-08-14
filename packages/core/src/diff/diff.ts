@@ -825,13 +825,23 @@ export async function getDiff(
 
   const files = [...filesMap.values()].sort((a, b) => a.path.localeCompare(b.path));
 
+  // `dirty` is uncommitted working-tree dirt (`isDirty`), not "this scope has
+  // files". Commits-vs-merge-base lists the PR change set; treating that as
+  // dirty made the sidebar say Commit & push when the tree was already clean.
+  const dirty =
+    includeMeta
+      ? meta.dirty
+      : scope === 'commits'
+        ? false
+        : files.length > 0;
+
   return {
     scope,
     commitSha: scope === 'commits' ? commitSha : null,
     base: labelBase,
     files,
     stat: formatStat(files),
-    dirty: fileOnly || !includeMeta ? files.length > 0 : meta.dirty,
+    dirty,
     unpushed: meta.unpushed,
     hasLastTurnBase,
     commits: meta.commits,

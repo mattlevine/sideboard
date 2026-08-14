@@ -3620,7 +3620,7 @@ body.resizing-panels webview {
 .worktree-hover-card {
   position: fixed;
   z-index: 10050;
-  width: 280px;
+  width: 320px;
   max-width: calc(100vw - 24px);
   padding: 12px 12px 10px;
   border-radius: 12px;
@@ -3702,12 +3702,11 @@ body.resizing-panels webview {
 .worktree-hover-card-title {
   font-size: 14px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.4;
   letter-spacing: -0.01em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: block;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -3726,11 +3725,11 @@ button.worktree-hover-card-title:hover {
 .worktree-hover-card-preview {
   margin: 6px 0 0;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-height: calc(1.45em * 3);
   overflow: hidden;
 }
 

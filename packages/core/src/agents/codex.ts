@@ -381,7 +381,7 @@ export const codexAdapter: AgentAdapter = {
 
       if (type === 'turn.completed' || type === 'turn_completed') {
         const usage = usageFromCodex((obj as { usage?: CodexUsage }).usage);
-        return usage ? { type: 'usage', data: usage } : null;
+        return usage ? { type: 'usage', data: usage, scope: 'turn' } : null;
       }
 
       if (typeof obj.content === 'string' && obj.content.trim()) {

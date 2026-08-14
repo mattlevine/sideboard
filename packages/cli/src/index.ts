@@ -607,7 +607,7 @@ async function main(): Promise<void> {
         'You operate from the Global workspace (no git home). Use Sideboard MCP tools only.',
         'Use Sideboard MCP tools for persistent cross-agent threads, land/dev lifecycle, and work that outlives this session.',
         'For same-session Claude subtasks, prefer Claude Code native Agent(isolation: "worktree") instead.',
-        'You cannot confirm_land or purge_thread — those stay human-only.',
+        'You cannot confirm_land or purge_thread — those stay human-only. Commit, push, and merge via ask_git on the worktree thread.',
         `Goal: ${goal}`,
         repoPath ? `Pinned repo (legacy): ${repoPath}` : 'Workspace: Global',
         `Parent thread id (pass as parentThreadId when creating children): ${thread.id}`,

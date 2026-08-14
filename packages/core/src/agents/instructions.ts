@@ -26,7 +26,7 @@ export function formatRenameBranchDirective(
     '- Rename the git branch to a short kebab-case name that describes this task (what you are changing), e.g. `fix/panel-width` or `feat/dark-mode`:',
     '  `git branch -m <new-name>`',
     '- Prefer Conventional Commits style prefixes when they fit (`fix/`, `feat/`, `chore/`, `docs/`).',
-    '- Never push or merge to main/master from here.',
+    '- Never push this placeholder to main/master.',
   ];
   const custom = opts?.customPrompt?.trim();
   if (custom) {
@@ -79,7 +79,7 @@ export function formatWorktreeDirective(
     '- Prefer a concise imperative title (Conventional Commits style when it fits: feat:/fix:/chore:/docs:). Body should summarize intent, key changes, and test notes.',
   );
   lines.push(
-    '- Commit with messages that state the purpose of the change (same standard as the PR). Stay on this thread branch; never push or merge to main/master from here.',
+    '- Commit with messages that state the purpose of the change (same standard as the PR). Stay on this thread branch. Never push directly to main/master or merge locally into the main checkout. When asked to merge the PR, use GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
   );
   if (thread.prUrl) {
     lines.push(
@@ -111,13 +111,13 @@ export function formatWorktreeDirective(
     '- "Fix CI: <name>." → investigate that failing check, fix it, commit, and push.',
   );
   lines.push(
-    '- "Update the branch." / "Fix merge conflicts." → sync with the PR base (merge or rebase), resolve conflicts carefully, commit, and push until the PR is mergeable.',
+    '- "Update the branch." / "Fix merge conflicts." / "Merge origin/<base> into this branch. Then push." → sync with the PR base (merge or rebase), resolve conflicts carefully, commit, and push until the PR is mergeable.',
   );
   lines.push(
     '- "Address review comments." → read PR review feedback, make the requested changes, commit, and push.',
   );
   lines.push(
-    '- "Merge PR." → merge this thread\'s open pull request with `gh pr merge` (respect repo defaults / squash vs merge); do not force-push main/master.',
+    '- "Merge PR." → merge this thread\'s open pull request on GitHub. If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.',
   );
   return lines.join('\n');
 }

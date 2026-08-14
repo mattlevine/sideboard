@@ -84,4 +84,53 @@ describe('getDiff', () => {
     });
     expect(diff.files.map((f) => f.path).sort()).toEqual(['a.txt', 'b.txt']);
   });
+
+  async function repoWithPushedBranchChange() {
+    root = mkdtempSync(join(tmpdir(), 'sb-get-diff-'));
+    await git(root, ['init']);
+    await git(root, ['config', 'user.email', 'test@example.com']);
+    await git(root, ['config', 'user.name', 'Test']);
+    writeFileSync(join(root, 'a.txt'), 'a\n');
+    await git(root, ['add', '.']);
+    await git(root, ['commit', '-m', 'init']);
+    await git(root, ['branch', '-M', 'main']);
+    await git(root, ['checkout', '-b', 'feat']);
+    writeFileSync(join(root, 'a.txt'), 'a-on-branch\n');
+    await git(root, ['add', '.']);
+    await git(root, ['commit', '-m', 'feat']);
+  }
+
+  it('does not treat commits-vs-base files as working-tree dirty', async () => {
+    await repoWithPushedBranchChange();
+    const withoutMeta = await getDiff(root, root, {
+      base: 'main',
+      scope: 'commits',
+      includePatches: false,
+      includeMeta: false,
+      includeUntracked: false,
+    });
+    expect(withoutMeta.files.map((f) => f.path)).toEqual(['a.txt']);
+    expect(withoutMeta.dirty).toBe(false);
+
+    const withMeta = await getDiff(root, root, {
+      base: 'main',
+      scope: 'commits',
+      includePatches: false,
+      includeMeta: true,
+    });
+    expect(withMeta.files.map((f) => f.path)).toEqual(['a.txt']);
+    expect(withMeta.dirty).toBe(false);
+  });
+
+  it('reports dirty when the working tree has uncommitted edits', async () => {
+    await repoWithPushedBranchChange();
+    writeFileSync(join(root, 'a.txt'), 'a-dirty\n');
+    const diff = await getDiff(root, root, {
+      base: 'main',
+      scope: 'commits',
+      includePatches: false,
+      includeMeta: true,
+    });
+    expect(diff.dirty).toBe(true);
+  });
 });

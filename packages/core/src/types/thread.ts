@@ -41,6 +41,11 @@ export interface TokenUsage {
   outputTokens: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /**
+   * Tokens occupying the context window on the last API request of this turn
+   * (input + cache). Distinct from billed totals, which sum every tool round.
+   */
+  lastRequestTokens?: number;
 }
 
 export interface ThreadMessage {
@@ -428,7 +433,12 @@ export type AgentEvent =
       content?: string;
       isError?: boolean;
     }
-  | { type: 'usage'; data: TokenUsage }
+  | {
+      type: 'usage';
+      data: TokenUsage;
+      /** `request` = one API call; `turn` = billed total for the whole agent turn. */
+      scope?: 'request' | 'turn';
+    }
   | { type: 'exit'; data: number | null };
 
 export type OrchestratorEvent =

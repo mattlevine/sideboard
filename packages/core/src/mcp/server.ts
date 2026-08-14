@@ -16,6 +16,7 @@ import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
 import { registerSlackTools } from './slack-tools.js';
+import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 
 const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
@@ -41,8 +42,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 /**
  * Sideboard MCP server — agent-facing judgment surface.
- * Deliberately excludes ready-for-review confirm_land, purge_thread, and
- * host-owned draft PR creation. Orchestrators ask worktree agents to open PRs.
+ * Deliberately excludes ready-for-review confirm_land and purge_thread.
+ * Orchestrators commit, push, open PRs, and merge by telling worktree agents
+ * (`ask_git` / `send_to_thread`) — they do not run git/gh from the synthetic home.
  */
 export async function startMcpServer(): Promise<void> {
   const orch = getOrchestrator();
@@ -547,7 +549,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_thread',
-    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation. Set force_stop=true to interrupt an in-flight/queued turn (kill + clear queue) before queueing this prompt — use when the thread is mid-turn or has stale queued prompts you need to replace.',
+    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation. For commit/push/PR/merge, prefer ask_git (canonical desktop-button phrases). Set force_stop=true to interrupt an in-flight/queued turn (kill + clear queue) before queueing this prompt — use when the thread is mid-turn or has stale queued prompts you need to replace.',
     {
       ref: z.string(),
       prompt: z.string(),
@@ -579,7 +581,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Block until the thread finishes its current/queued turn (avoids polling). Use after send_to_thread to read the agent reply.',
+    'Block until the thread finishes its current/queued turn (avoids polling). Use after send_to_thread or ask_git to read the agent reply.',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -647,7 +649,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'archive_thread',
-    'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Coordinators open PRs only by asking the worktree agent.',
+    'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Coordinators commit, push, open PRs, and merge only by asking the worktree agent (ask_git).',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
@@ -746,6 +748,41 @@ export async function startMcpServer(): Promise<void> {
                 status: tab.status,
                 fromThreadId: from?.id ?? ref,
                 link: `sideboard://thread/${tab.id}`,
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    'ask_git',
+    'Tell a worktree agent to commit & push, open a draft PR, resolve conflicts, or merge the linked PR — same short prompts as the desktop git buttons. The worktree agent runs git/gh (`gh pr merge`); this only queues the prompt. Pass a worktree thread ref (not the orchestrator). Then wait_for_turn / get_turn_result. Do not run git or gh from the orchestration cwd.',
+    {
+      ref: z.string().describe('Worktree thread id/ref'),
+      action: z
+        .enum(AGENT_GIT_ACTIONS)
+        .describe(
+          'commit-push | create-draft | create-web | resolve-conflicts | merge',
+        ),
+    },
+    async ({ ref, action }) => {
+      try {
+        const thread = await orch.askGit(ref, action);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: thread.id,
+                status: thread.status,
+                queueLength: thread.queue.length,
+                action,
+                link: `sideboard://thread/${thread.id}`,
               }),
             },
           ],
@@ -1058,7 +1095,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_pr_stack',
-    'Load the GitHub PR stack for a thread worktree (`gh stack view --json`). Returns null JSON when the branch is not stacked. Prefer this before mergePr on stacked PRs.',
+    'Load the GitHub PR stack for a thread worktree (`gh stack view --json`). Returns null JSON when the branch is not stacked. Prefer this before ask_git merge on stacked PRs.',
     { ref: z.string() },
     async ({ ref }) => {
       const stack = await orch.getPrStack(ref);

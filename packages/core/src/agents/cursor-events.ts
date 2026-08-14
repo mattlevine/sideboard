@@ -226,7 +226,7 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
 
   if (msg.type === 'usage') {
     const usage = usageFromCursor(msg.usage);
-    if (usage) return [{ type: 'usage', data: usage }];
+    if (usage) return [{ type: 'usage', data: usage, scope: 'request' }];
   }
 
   if (msg.type === 'status' && msg.status === 'ERROR') {

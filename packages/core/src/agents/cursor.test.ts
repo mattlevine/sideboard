@@ -211,6 +211,7 @@ describe('cursorSdkMessageToEvents', () => {
       {
         type: 'usage',
         data: { inputTokens: 10, outputTokens: 4, cacheReadTokens: 2, cacheWriteTokens: undefined },
+        scope: 'request',
       },
     ]);
   });

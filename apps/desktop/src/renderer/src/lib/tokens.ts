@@ -7,9 +7,11 @@ export function totalTokens(u: TokenUsage): number {
 
 /**
  * Approximate tokens occupying the context window for a turn.
- * Matches common statusline math: input + cache read/write (not cumulative thread spend).
+ * Prefers last-request occupancy (one API call) over billed input+cache summed
+ * across every tool round in the turn.
  */
 export function contextTokens(u: TokenUsage): number {
+  if (u.lastRequestTokens != null && u.lastRequestTokens > 0) return u.lastRequestTokens;
   return u.inputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0);
 }
 
@@ -99,5 +101,5 @@ export function contextMeterTooltip(
 ): string {
   const used = contextTokens(usage);
   const pct = Math.round(contextFillRatio(usage, windowTokens) * 100);
-  return `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — from latest turn input + cache`;
+  return `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — last request input + cache`;
 }

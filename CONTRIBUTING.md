@@ -55,7 +55,7 @@ pnpm --filter @sideboard-ai/desktop typecheck
 
 ## Safety invariants (don’t break)
 
-- `confirm_land` / purge stay **human-only** (not exposed as MCP write-confirm tools)
+- `confirm_land` / purge stay **human-only** (not exposed as MCP write-confirm tools). Orchestrators merge GitHub PRs by telling the worktree agent (`ask_git`), not by calling host `mergePr`.
 - Landing on the default branch stays blocked
 - No `--yes` on `land` in v1
 

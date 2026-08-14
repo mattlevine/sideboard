@@ -303,6 +303,7 @@ describe('claudeAdapter.parseEvent', () => {
           cacheReadTokens: 900,
           cacheWriteTokens: 300,
         },
+        scope: 'turn',
       },
     ]);
   });
@@ -319,6 +320,7 @@ describe('claudeAdapter.parseEvent', () => {
     expect(event).toEqual({
       type: 'usage',
       data: { inputTokens: 10, outputTokens: 5 },
+      scope: 'turn',
     });
   });
 
@@ -371,6 +373,34 @@ describe('claudeAdapter.parseEvent', () => {
         id: 'toolu_1',
         name: 'Bash',
         input: { command: 'git status' },
+      },
+    ]);
+  });
+
+  it('extracts per-request usage from assistant message.usage', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          usage: {
+            input_tokens: 500,
+            output_tokens: 20,
+            cache_read_input_tokens: 80_000,
+          },
+          content: [{ type: 'text', text: 'ok' }],
+        },
+      }),
+    );
+    expect(event).toEqual([
+      { type: 'stdout', data: 'ok' },
+      {
+        type: 'usage',
+        data: {
+          inputTokens: 500,
+          outputTokens: 20,
+          cacheReadTokens: 80_000,
+        },
+        scope: 'request',
       },
     ]);
   });

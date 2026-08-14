@@ -19,6 +19,6 @@ We will acknowledge and work on a fix. Please give a reasonable window before pu
 
 ## Design notes
 
-- Landing and purge are intentionally human-gated (no MCP `confirm_land` / purge; no `--yes` on `land` in v1).
+- Landing (`confirm_land`) and purge are intentionally human-gated (no MCP `confirm_land` / purge; no `--yes` on `land` in v1). Orchestrators merge GitHub PRs by telling the worktree agent (`ask_git`).
 - Agents run with the permissions of your local user account. Treat inbound remote prompts as untrusted.
 - Optional cloud bridges (including Brightsy desktop tasks) should be enabled only when you intend remote control of this machine.

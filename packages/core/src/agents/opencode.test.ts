@@ -97,6 +97,7 @@ describe('opencodeAdapter.parseEvent', () => {
     expect(event).toEqual({
       type: 'usage',
       data: { inputTokens: 671, outputTokens: 8, cacheReadTokens: 21415 },
+      scope: 'request',
     });
   });
 
