@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdvancedAppSettings,
   AgentKind,
@@ -15,6 +15,7 @@ import type {
   ThinkingEffort,
   Thread,
 } from '@sideboard-ai/core';
+import { isLinearOAuthCancelled, isSlackOAuthCancelled } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
@@ -240,6 +241,7 @@ export function SettingsModal({
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
   const [setupLog, setSetupLog] = useState<string | null>(null);
+  const loginAbortRef = useRef<AbortController | null>(null);
 
   async function reload() {
     const slackListenApi = window.sideboard.getSlackListenStatus;
@@ -314,6 +316,14 @@ export function SettingsModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    return () => {
+      void window.sideboard.cancelSlackOAuth?.();
+      void window.sideboard.cancelLinearOAuth?.();
+      loginAbortRef.current?.abort();
+    };
+  }, []);
+
   const envKeys = useMemo(
     () => Object.keys(settings.environment).sort((a, b) => a.localeCompare(b)),
     [settings.environment],
@@ -354,11 +364,15 @@ export function SettingsModal({
   async function runLogin() {
     if (!activeAgent || setupBusy) return;
     const agentId = activeAgent.id;
+    loginAbortRef.current?.abort();
+    const ac = new AbortController();
+    loginAbortRef.current = ac;
     setSetupBusy('login');
     setSetupLog(null);
     setError(null);
     try {
       const result = await window.sideboard.loginAgent(agentId);
+      if (ac.signal.aborted) return;
       setSetupLog(
         [
           formatSetupResult(result),
@@ -374,7 +388,25 @@ export function SettingsModal({
       if (!result.openedTerminal) return;
       const deadline = Date.now() + 120_000;
       while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 2_000));
+        if (ac.signal.aborted) {
+          setSetupLog((prev) => `${prev ?? ''}\n\nCancelled — click Log in again when you want to retry.`);
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          const t = window.setTimeout(resolve, 2_000);
+          ac.signal.addEventListener(
+            'abort',
+            () => {
+              window.clearTimeout(t);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+        if (ac.signal.aborted) {
+          setSetupLog((prev) => `${prev ?? ''}\n\nCancelled — click Log in again when you want to retry.`);
+          return;
+        }
         const agents = await window.sideboard.detectAgents();
         setStatuses(agents);
         const st = statusFor(agents, agentId);
@@ -388,8 +420,11 @@ export function SettingsModal({
           `${prev ?? ''}\n\nStill waiting — click Refresh after the Terminal login finishes.`,
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!ac.signal.aborted) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
+      if (loginAbortRef.current === ac) loginAbortRef.current = null;
       setSetupBusy(null);
     }
   }
@@ -775,14 +810,25 @@ export function SettingsModal({
                           void window.sideboard
                             .startLinearOAuth()
                             .then((next) => applySettings(next))
-                            .catch((err) =>
-                              setError(err instanceof Error ? err.message : String(err)),
-                            )
+                            .catch((err) => {
+                              if (isLinearOAuthCancelled(err)) return;
+                              setError(err instanceof Error ? err.message : String(err));
+                            })
                             .finally(() => setLinearOauthBusy(false));
                         }}
                       >
                         {linearOauthBusy ? 'Waiting for Linear…' : 'Connect via browser'}
                       </button>
+                      {linearOauthBusy ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void window.sideboard.cancelLinearOAuth();
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
                       <input
                         type={showLinearKey ? 'text' : 'password'}
                         value={linearKeyDraft}
@@ -809,7 +855,9 @@ export function SettingsModal({
                   <p className="settings-hint">
                     Click <strong>Add via browser</strong> to install the Sideboard Slack app into a
                     workspace. Listening starts automatically. DMs and @mentions go to the Global
-                    orchestrator while Sideboard is running.
+                    orchestrator while Sideboard is running. Until the Slack app has{' '}
+                    <strong>Public Distribution</strong> on, Slack only offers the home workspace
+                    (Brightsy) — that is a Slack app setting, not a Sideboard picker.
                   </p>
                   {slackWorkspaces.length > 0 ? (
                     <div className="settings-check-list" style={{ marginTop: 10 }}>
@@ -908,14 +956,25 @@ export function SettingsModal({
                           .then((status) => {
                             if (status) setSlackListen(status);
                           })
-                          .catch((err) =>
-                            setError(err instanceof Error ? err.message : String(err)),
-                          )
+                          .catch((err) => {
+                            if (isSlackOAuthCancelled(err)) return;
+                            setError(err instanceof Error ? err.message : String(err));
+                          })
                           .finally(() => setSlackOauthBusy(false));
                       }}
                     >
                       {slackOauthBusy ? 'Waiting for Slack…' : 'Add via browser'}
                     </button>
+                    {slackOauthBusy ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void window.sideboard.cancelSlackOAuth();
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
                   </div>
                   <div style={{ marginTop: 16 }}>
                     <div className="settings-section-title">This Mac</div>
@@ -1125,6 +1184,16 @@ export function SettingsModal({
                         {setupBusy === 'login' ? 'Waiting for login…' : 'Log in'}
                       </button>
                     )}
+                    {setupBusy === 'login' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          loginAbortRef.current?.abort();
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       disabled={busy}

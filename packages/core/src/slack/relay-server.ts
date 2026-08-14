@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { slackOAuthBounceResponse } from './oauth-redirect.js';
 import { runSlackSocketMode } from './socket-mode.js';
 import { parseSlackRelayClientMessage } from './relay-protocol.js';
 import { SlackRelayHub } from './relay-hub.js';
@@ -43,6 +44,12 @@ export async function startSlackRelayServer(
     });
 
   const httpServer: Server = createServer((req, res) => {
+    const bounce = slackOAuthBounceResponse(req.url || '/');
+    if (bounce) {
+      res.writeHead(bounce.status, bounce.headers);
+      res.end(bounce.body);
+      return;
+    }
     if (req.url === '/health' || req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(

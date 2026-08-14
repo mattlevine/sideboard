@@ -130,7 +130,11 @@ export {
   startSlackOAuth,
   slackOAuthCredentials,
   hasBakedSlackOAuth,
+  isSlackOAuthCancelled,
+  SlackOAuthCancelledError,
+  SLACK_OAUTH_CANCELLED,
   SLACK_OAUTH_REDIRECT,
+  SLACK_OAUTH_LOCAL_CALLBACK,
   SLACK_OAUTH_PORT,
 } from './slack/oauth.js';
 export {

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.72] - 2026-08-13
+
+### Added
+
+- Slack **Add via browser**, Linear **Connect via browser**, and agent **Log in** have Cancel (closing the browser/Terminal no longer leaves Settings hung)
+
+### Changed
+
+- Slack OAuth redirect is HTTPS (`https://slack-relay.sideboard.cloud/callback`) so the app can be publicly distributed; the relay bounces to localhost
+- Slack settings note that the install page stays on the app’s home workspace (Brightsy) until Public Distribution is on
+
 ## [0.1.71] - 2026-08-13
 
 ### Added

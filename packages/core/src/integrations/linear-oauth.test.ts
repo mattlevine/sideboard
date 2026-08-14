@@ -7,6 +7,7 @@ import {
   linearAuthorizationHeader,
   linearOAuthAuthorizeUrl,
   LINEAR_OAUTH_REDIRECT,
+  startLinearOAuth,
 } from './linear-oauth.js';
 import { BAKED_LINEAR_CLIENT_ID, hasBakedLinearOAuth } from './linear-app.js';
 
@@ -113,5 +114,34 @@ describe('linear OAuth credentials', () => {
     expect(settings.loadAppSettings().integrations.linearAccessToken).toBe('new-access');
     expect(settings.loadAppSettings().integrations.linearRefreshToken).toBe('refresh-2');
     vi.unstubAllGlobals();
+  });
+
+  it('AbortSignal cancels a waiting Linear sign-in', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-linear-oauth-cancel-'));
+    delete process.env.SIDEBOARD_LINEAR_CLIENT_ID;
+    delete process.env.SIDEBOARD_LINEAR_CLIENT_SECRET;
+    const ac = new AbortController();
+    const pending = startLinearOAuth({
+      openUrl: () => {
+        ac.abort();
+      },
+      timeoutMs: 5_000,
+      signal: ac.signal,
+    });
+    await expect(pending).rejects.toMatchObject({ name: 'LinearOAuthCancelledError' });
+  });
+
+  it('already-aborted signal does not wait for Linear', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-linear-oauth-aborted-'));
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      startLinearOAuth({
+        openUrl: () => {
+          throw new Error('should not open the browser');
+        },
+        signal: ac.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'LinearOAuthCancelledError' });
   });
 });

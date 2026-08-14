@@ -55,7 +55,9 @@ import {
   connectSlackToken,
   disconnectSlackWorkspace,
   startSlackOAuth,
+  isSlackOAuthCancelled,
   startLinearOAuth,
+  isLinearOAuthCancelled,
   disconnectLinear,
   runSlackListen,
   resolveSlackListenMode,
@@ -738,18 +740,52 @@ function registerIpc(): void {
     syncSlackListenDaemon();
     return listSlackWorkspaces();
   });
+  let slackOauthAbort: AbortController | null = null;
   ipcMain.handle('startSlackOAuth', async () => {
-    await startSlackOAuth({
-      openUrl: (url) => shell.openExternal(url),
-    });
-    syncSlackListenDaemon();
-    return listSlackWorkspaces();
+    slackOauthAbort?.abort();
+    const ac = new AbortController();
+    slackOauthAbort = ac;
+    try {
+      await startSlackOAuth({
+        openUrl: (url) => shell.openExternal(url),
+        signal: ac.signal,
+      });
+      syncSlackListenDaemon();
+      return listSlackWorkspaces();
+    } catch (err) {
+      if (isSlackOAuthCancelled(err)) {
+        throw new Error('Slack sign-in cancelled');
+      }
+      throw err;
+    } finally {
+      if (slackOauthAbort === ac) slackOauthAbort = null;
+    }
   });
+  ipcMain.handle('cancelSlackOAuth', () => {
+    slackOauthAbort?.abort();
+  });
+  let linearOauthAbort: AbortController | null = null;
   ipcMain.handle('startLinearOAuth', async () => {
-    const saved = await startLinearOAuth({
-      openUrl: (url) => shell.openExternal(url),
-    });
-    return toPublicAppSettings(saved);
+    linearOauthAbort?.abort();
+    const ac = new AbortController();
+    linearOauthAbort = ac;
+    try {
+      const saved = await startLinearOAuth({
+        openUrl: (url) => shell.openExternal(url),
+        signal: ac.signal,
+      });
+      return toPublicAppSettings(saved);
+    } catch (err) {
+      if (isLinearOAuthCancelled(err)) {
+        throw new Error('Linear sign-in cancelled');
+      }
+      throw err;
+    } finally {
+      if (linearOauthAbort === ac) linearOauthAbort = null;
+    }
+  });
+  ipcMain.handle('cancelLinearOAuth', () => {
+    linearOauthAbort?.abort();
   });
   ipcMain.handle('disconnectLinear', async () => {
     const saved = await disconnectLinear();

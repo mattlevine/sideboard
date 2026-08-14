@@ -169,9 +169,13 @@ export interface IpcApi {
   connectSlackToken(token: string): Promise<SlackWorkspaceInfo[]>;
   /** Browser OAuth — opens Slack, waits for localhost callback. */
   startSlackOAuth(): Promise<SlackWorkspaceInfo[]>;
+  /** Abort an in-progress Slack browser sign-in (closes the localhost waiter). */
+  cancelSlackOAuth(): Promise<void>;
   disconnectSlackWorkspace(teamId: string): Promise<SlackWorkspaceInfo[]>;
   /** Browser OAuth — opens Linear, waits for localhost callback. */
   startLinearOAuth(): Promise<PublicAppSettings>;
+  /** Abort an in-progress Linear browser sign-in (closes the localhost waiter). */
+  cancelLinearOAuth(): Promise<void>;
   /** Revoke Linear OAuth (best-effort) and clear stored Linear credentials. */
   disconnectLinear(): Promise<PublicAppSettings>;
   /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */

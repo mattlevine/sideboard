@@ -9,6 +9,8 @@
 #
 # Custom domain:
 #   fly certs add slack-relay.sideboard.cloud -a sideboard-slack-relay
+#
+# HTTPS GET /callback is the Slack OAuth bounce (public distribution).
 
 app = 'sideboard-slack-relay'
 primary_region = 'sjc'

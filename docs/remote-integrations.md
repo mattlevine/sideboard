@@ -6,9 +6,9 @@ Sideboard’s built-in Slack path. Same steps as the [README](../README.md#slack
 
 **Settings → Account → Slack workspaces**
 
-1. **Add via browser** — install the official Sideboard Slack app (required for Listen; proves which Slack user owns this Mac).
+1. **Add via browser** — install the official Sideboard Slack app (required for Listen; proves which Slack user owns this Mac). Slack will send you to `brightsy.slack.com` until the app has **Public Distribution** enabled. OAuth redirect: `https://slack-relay.sideboard.cloud/callback`.
 2. **This Mac** — name the destination (`Personal`, `Work`, …). Personal and Work can both stay online.
-3. Keep Sideboard running until status shows `Relay connected · …`.
+3. Keep Sideboard running until status shows `Relay connected · …`. Use **Cancel** in Settings if you close the Slack tab.
 
 Messages route to the Slack user who connected that Mac. Someone else needs their own Sideboard online.
 
@@ -33,7 +33,7 @@ sideboard slack login
 sideboard slack listen
 ```
 
-Env override: `SIDEBOARD_SLACK_RELAY_URL` (e.g. local `ws://127.0.0.1:8787/desktop`).
+Env override: `SIDEBOARD_SLACK_RELAY_URL` (e.g. local `ws://127.0.0.1:8787/desktop`). OAuth redirect override: `SIDEBOARD_SLACK_OAUTH_REDIRECT`.
 
 Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_users` / `slack_search` / `slack_read` / `slack_post` once a workspace is connected.
 

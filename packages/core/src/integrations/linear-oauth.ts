@@ -200,13 +200,34 @@ export async function getLinearAuthToken(
   return apiKey || null;
 }
 
+export const LINEAR_OAUTH_CANCELLED = 'Linear sign-in cancelled';
+
+export class LinearOAuthCancelledError extends Error {
+  constructor(message = LINEAR_OAUTH_CANCELLED) {
+    super(message);
+    this.name = 'LinearOAuthCancelledError';
+  }
+}
+
+export function isLinearOAuthCancelled(err: unknown): boolean {
+  if (err instanceof LinearOAuthCancelledError) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes(LINEAR_OAUTH_CANCELLED)) return true;
+  return err instanceof Error && err.name === 'LinearOAuthCancelledError';
+}
+
 /**
  * Open Linear OAuth in the browser, listen on a localhost callback, store tokens.
+ * Pass `signal` so Settings Cancel / closing the modal can abort the wait.
  */
 export async function startLinearOAuth(opts?: {
   openUrl?: (url: string) => void | Promise<void>;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<AppSettings> {
+  if (opts?.signal?.aborted) {
+    throw new LinearOAuthCancelledError();
+  }
   const { clientId, clientSecret } = linearOAuthCredentials();
   const state = randomBytes(16).toString('hex');
   const pkce = createLinearPkce();
@@ -214,6 +235,15 @@ export async function startLinearOAuth(opts?: {
   const timeoutMs = opts?.timeoutMs ?? 5 * 60_000;
 
   const code = await new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const finish = (err?: Error, value?: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (err) reject(err);
+      else resolve(value!);
+    };
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       try {
         const url = new URL(req.url || '/', `http://127.0.0.1:${LINEAR_OAUTH_PORT}`);
@@ -228,15 +258,13 @@ export async function startLinearOAuth(opts?: {
         if (err) {
           res.writeHead(400, { 'Content-Type': 'text/html' });
           res.end(htmlPage('Linear', `<h1>Authorization cancelled</h1><p>${err}</p>`));
-          cleanup();
-          reject(new Error(`Linear OAuth: ${err}`));
+          finish(new LinearOAuthCancelledError(`Linear OAuth: ${err}`));
           return;
         }
         if (gotState !== state || !gotCode) {
           res.writeHead(400, { 'Content-Type': 'text/html' });
           res.end(htmlPage('Linear', '<h1>Invalid callback</h1><p>State or code missing.</p>'));
-          cleanup();
-          reject(new Error('Linear OAuth callback was invalid'));
+          finish(new Error('Linear OAuth callback was invalid'));
           return;
         }
         res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -246,39 +274,45 @@ export async function startLinearOAuth(opts?: {
             '<h1>Linear connected</h1><p>You can close this tab and return to Sideboard.</p>',
           ),
         );
-        cleanup();
-        resolve(gotCode);
+        finish(undefined, gotCode);
       } catch (e) {
-        cleanup();
-        reject(e instanceof Error ? e : new Error(String(e)));
+        finish(e instanceof Error ? e : new Error(String(e)));
       }
     });
 
     const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('Linear sign-in timed out — try again'));
+      finish(new Error('Linear sign-in timed out — try again'));
     }, timeoutMs);
+
+    const onAbort = () => finish(new LinearOAuthCancelledError());
 
     const cleanup = () => {
       clearTimeout(timer);
+      opts?.signal?.removeEventListener('abort', onAbort);
       server.close();
     };
 
+    opts?.signal?.addEventListener('abort', onAbort, { once: true });
+    if (opts?.signal?.aborted) {
+      onAbort();
+      return;
+    }
+
     server.on('error', (e) => {
-      cleanup();
-      reject(
+      finish(
         e instanceof Error && (e as NodeJS.ErrnoException).code === 'EADDRINUSE'
           ? new Error(
               `Port ${LINEAR_OAUTH_PORT} is in use. Close whatever is bound there, or paste a Linear API key instead.`,
             )
-          : e,
+          : e instanceof Error
+            ? e
+            : new Error(String(e)),
       );
     });
 
     server.listen(LINEAR_OAUTH_PORT, '127.0.0.1', () => {
       void Promise.resolve(opts?.openUrl?.(authorizeUrl)).catch((e) => {
-        cleanup();
-        reject(e instanceof Error ? e : new Error(String(e)));
+        finish(e instanceof Error ? e : new Error(String(e)));
       });
     });
   });

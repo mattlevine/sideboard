@@ -9,7 +9,8 @@ import { startSlackRelayServer } from '@sideboard-ai/core';
  *   HOST                       bind address (default 0.0.0.0)
  *
  * Desktop clients connect to wss://slack-relay.sideboard.cloud/desktop (or
- * SIDEBOARD_SLACK_RELAY_URL for local testing).
+ * SIDEBOARD_SLACK_RELAY_URL for local testing). GET /callback is the HTTPS
+ * OAuth bounce to http://127.0.0.1:19847/callback.
  */
 async function main(): Promise<void> {
   const appToken = process.env.SIDEBOARD_SLACK_APP_TOKEN?.trim() ?? '';

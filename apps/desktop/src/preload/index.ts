@@ -50,7 +50,9 @@ const api: IpcApi = {
   getSlackWorkspaces: () => ipcRenderer.invoke('getSlackWorkspaces'),
   connectSlackToken: (token) => ipcRenderer.invoke('connectSlackToken', token),
   startSlackOAuth: () => ipcRenderer.invoke('startSlackOAuth'),
+  cancelSlackOAuth: () => ipcRenderer.invoke('cancelSlackOAuth'),
   startLinearOAuth: () => ipcRenderer.invoke('startLinearOAuth'),
+  cancelLinearOAuth: () => ipcRenderer.invoke('cancelLinearOAuth'),
   disconnectLinear: () => ipcRenderer.invoke('disconnectLinear'),
   disconnectSlackWorkspace: (teamId) =>
     ipcRenderer.invoke('disconnectSlackWorkspace', teamId),

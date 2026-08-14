@@ -6,12 +6,18 @@ import {
   BAKED_SLACK_CLIENT_ID,
   BAKED_SLACK_CLIENT_SECRET,
 } from './baked-app.js';
+import {
+  SLACK_OAUTH_PORT,
+  slackOAuthRedirectUri,
+} from './oauth-redirect.js';
 
 export { hasBakedSlackOAuth } from './baked-app.js';
-
-/** Fixed port so the Slack app redirect URI can be registered once. */
-export const SLACK_OAUTH_PORT = 19847;
-export const SLACK_OAUTH_REDIRECT = `http://127.0.0.1:${SLACK_OAUTH_PORT}/callback`;
+export {
+  SLACK_OAUTH_PORT,
+  SLACK_OAUTH_REDIRECT,
+  SLACK_OAUTH_LOCAL_CALLBACK,
+  slackOAuthRedirectUri,
+} from './oauth-redirect.js';
 
 export const SLACK_BOT_SCOPES = [
   'app_mentions:read',
@@ -61,12 +67,34 @@ export function slackOAuthCredentials(): { clientId: string; clientSecret: strin
   return { clientId, clientSecret };
 }
 
+export const SLACK_OAUTH_CANCELLED = 'Slack sign-in cancelled';
+
+export class SlackOAuthCancelledError extends Error {
+  constructor(message = SLACK_OAUTH_CANCELLED) {
+    super(message);
+    this.name = 'SlackOAuthCancelledError';
+  }
+}
+
+export function isSlackOAuthCancelled(err: unknown): boolean {
+  if (err instanceof SlackOAuthCancelledError) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes(SLACK_OAUTH_CANCELLED)) return true;
+  return err instanceof Error && err.name === 'SlackOAuthCancelledError';
+}
+
+/**
+ * Slack authorize URL. We always start at slack.com; Slack then sends
+ * undistributed apps to the home workspace (today: brightsy.slack.com).
+ * Other teams appear in the picker only after Manage Distribution →
+ * Activate Public Distribution.
+ */
 export function slackOAuthAuthorizeUrl(clientId: string, state: string): string {
   const params = new URLSearchParams({
     client_id: clientId,
     scope: SLACK_BOT_SCOPES,
     user_scope: SLACK_USER_SCOPES,
-    redirect_uri: SLACK_OAUTH_REDIRECT,
+    redirect_uri: slackOAuthRedirectUri(),
     state,
   });
   return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
@@ -92,17 +120,33 @@ h1{font-size:1.25rem}p{line-height:1.5;color:#444}</style></head><body>${body}</
 
 /**
  * Open Slack OAuth in the browser, listen on a localhost callback, store tokens.
+ * Slack redirects to the hosted HTTPS bounce, which forwards here.
+ * Pass `signal` (or abort after start) so closing the browser tab is not the
+ * only way out — Settings Cancel and modal close abort this wait.
  */
 export async function startSlackOAuth(opts?: {
   openUrl?: (url: string) => void | Promise<void>;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<SlackWorkspaceInfo> {
+  if (opts?.signal?.aborted) {
+    throw new SlackOAuthCancelledError();
+  }
   const { clientId, clientSecret } = slackOAuthCredentials();
   const state = randomBytes(16).toString('hex');
   const authorizeUrl = slackOAuthAuthorizeUrl(clientId, state);
   const timeoutMs = opts?.timeoutMs ?? 5 * 60_000;
 
   const code = await new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const finish = (err?: Error, value?: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (err) reject(err);
+      else resolve(value!);
+    };
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       try {
         const url = new URL(req.url || '/', `http://127.0.0.1:${SLACK_OAUTH_PORT}`);
@@ -117,15 +161,13 @@ export async function startSlackOAuth(opts?: {
         if (err) {
           res.writeHead(400, { 'Content-Type': 'text/html' });
           res.end(htmlPage('Slack', `<h1>Authorization cancelled</h1><p>${err}</p>`));
-          cleanup();
-          reject(new Error(`Slack OAuth: ${err}`));
+          finish(new SlackOAuthCancelledError(`Slack OAuth: ${err}`));
           return;
         }
         if (gotState !== state || !gotCode) {
           res.writeHead(400, { 'Content-Type': 'text/html' });
           res.end(htmlPage('Slack', '<h1>Invalid callback</h1><p>State or code missing.</p>'));
-          cleanup();
-          reject(new Error('Slack OAuth callback was invalid'));
+          finish(new Error('Slack OAuth callback was invalid'));
           return;
         }
         res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -135,39 +177,45 @@ export async function startSlackOAuth(opts?: {
             '<h1>Slack workspace connected</h1><p>You can close this tab and return to Sideboard.</p>',
           ),
         );
-        cleanup();
-        resolve(gotCode);
+        finish(undefined, gotCode);
       } catch (e) {
-        cleanup();
-        reject(e instanceof Error ? e : new Error(String(e)));
+        finish(e instanceof Error ? e : new Error(String(e)));
       }
     });
 
     const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('Slack sign-in timed out — try again'));
+      finish(new Error('Slack sign-in timed out — try again'));
     }, timeoutMs);
+
+    const onAbort = () => finish(new SlackOAuthCancelledError());
 
     const cleanup = () => {
       clearTimeout(timer);
+      opts?.signal?.removeEventListener('abort', onAbort);
       server.close();
     };
 
+    opts?.signal?.addEventListener('abort', onAbort, { once: true });
+    if (opts?.signal?.aborted) {
+      onAbort();
+      return;
+    }
+
     server.on('error', (e) => {
-      cleanup();
-      reject(
+      finish(
         e instanceof Error && (e as NodeJS.ErrnoException).code === 'EADDRINUSE'
           ? new Error(
               `Port ${SLACK_OAUTH_PORT} is in use. Close whatever is bound there, or paste a Slack token instead.`,
             )
-          : e,
+          : e instanceof Error
+            ? e
+            : new Error(String(e)),
       );
     });
 
     server.listen(SLACK_OAUTH_PORT, '127.0.0.1', () => {
       void Promise.resolve(opts?.openUrl?.(authorizeUrl)).catch((e) => {
-        cleanup();
-        reject(e instanceof Error ? e : new Error(String(e)));
+        finish(e instanceof Error ? e : new Error(String(e)));
       });
     });
   });
@@ -176,7 +224,7 @@ export async function startSlackOAuth(opts?: {
     client_id: clientId,
     client_secret: clientSecret,
     code,
-    redirect_uri: SLACK_OAUTH_REDIRECT,
+    redirect_uri: slackOAuthRedirectUri(),
   });
   const res = await fetch('https://slack.com/api/oauth.v2.access', {
     method: 'POST',
