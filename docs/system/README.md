@@ -7,6 +7,7 @@ Canonical instructions for agents working **on this repository** (not for Sidebo
 | [architecture.md](architecture.md) | Layout, packages, how Slack/MCP/desktop fit |
 | [conventions.md](conventions.md) | Build, test, docs, release |
 | [safety.md](safety.md) | Human-only land/purge, secrets, remote control |
+| [deploy.md](deploy.md) | Marketing site + Slack relay on Fly |
 
 Product / user docs (not required for every change):
 

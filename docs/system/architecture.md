@@ -27,6 +27,7 @@ CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 | Board UI | `apps/desktop/src/renderer/` |
 | Electron main / IPC | `apps/desktop/src/main/` |
 | Slack listen / relay / OAuth | `packages/core/src/slack/`, `apps/slack-relay/` |
+| Marketing site | `site/` — same Fly app as the relay; [deploy.md](deploy.md) |
 | Git worktrees / land | `packages/core/src/git/`, `packages/core/src/land/` |
 
 Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm dev`) before expecting the app to pick them up.
