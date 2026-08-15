@@ -33,6 +33,7 @@ COPY --from=build /app/apps/slack-relay/dist apps/slack-relay/dist
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/packages/core/node_modules packages/core/node_modules
 COPY --from=build /app/apps/slack-relay/node_modules apps/slack-relay/node_modules
+COPY site /app/site
 
 WORKDIR /app/apps/slack-relay
 EXPOSE 8080

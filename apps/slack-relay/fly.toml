@@ -8,11 +8,18 @@
 #   fly secrets set SIDEBOARD_SLACK_APP_TOKEN=xapp-… -a sideboard-slack-relay
 #   fly secrets set SIDEBOARD_SLACK_CLIENT_SECRET=… -a sideboard-slack-relay
 #
-# Custom domain:
+# Custom domains:
 #   fly certs add relay.sideboard.cloud -a sideboard-slack-relay
+#   fly certs add www.sideboard.cloud -a sideboard-slack-relay
+#   fly certs add sideboard.cloud -a sideboard-slack-relay
+#   GoDaddy: AAAA sideboard.cloud → 2a09:8280:1::16a:3072:0
+#   (www is a CNAME to the apex; A 66.241.125.177 is already set)
 #
 # HTTPS GET /slack/callback exchanges Slack OAuth (client secret stays on this app).
 # Desktops poll GET /slack/oauth/result?state=…
+# GET / on www.sideboard.cloud serves the static marketing site (repo site/).
+# sideboard.cloud 301s to www.sideboard.cloud. relay.sideboard.cloud stays Slack.
+# GET /health stays JSON for Fly checks.
 
 app = 'sideboard-slack-relay'
 primary_region = 'sjc'
@@ -21,6 +28,10 @@ primary_region = 'sjc'
 
 [env]
   HOST = '0.0.0.0'
+  SIDEBOARD_SITE_ROOT = '/app/site'
+  SIDEBOARD_SITE_HOSTS = 'www.sideboard.cloud'
+  SIDEBOARD_SITE_REDIRECT_HOSTS = 'sideboard.cloud'
+  SIDEBOARD_SITE_CANONICAL = 'www.sideboard.cloud'
 
 [http_service]
   internal_port = 8080
