@@ -68,6 +68,23 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Merge PR\./);
     expect(text).toMatch(/gh stack merge/);
     expect(text).toMatch(/Short git requests/i);
+    expect(text).toMatch(/Git authentication \(Account → GitHub mode: auto\)/);
+    expect(text).not.toMatch(/GitHub app/i);
+  });
+
+  it('injects gh-mode instructions instead of the SSH fallback', () => {
+    const text = formatWorktreeDirective(
+      {
+        worktreePath: '/tmp/sideboard/workspaces/app/paris',
+        repoPath: '/Users/me/Projects/app',
+        branchName: 'thread/paris',
+      },
+      { githubSlug: 'acme/app', gitAuthMode: 'gh' },
+    );
+    expect(text).toMatch(/mode: gh CLI/);
+    expect(text).toMatch(/gh auth git-credential/);
+    expect(text).not.toMatch(/Permission denied \(publickey\)/);
+    expect(text).not.toMatch(/GitHub app/i);
   });
 });
 

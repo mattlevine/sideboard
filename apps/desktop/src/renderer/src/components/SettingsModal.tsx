@@ -9,6 +9,7 @@ import type {
   CliAgentKind,
   SlackListenStatus,
   GitHubStatus,
+  GithubGitAuthMode,
   IssueSource,
   PublicAppSettings,
   SlackWorkspaceInfo,
@@ -64,6 +65,7 @@ function emptyAppSettings(): PublicAppSettings {
       hasLinearOAuth: false,
       hasSlackClientSecret: false,
       hasSlackAppToken: false,
+      hasGithubPat: false,
     },
     defaults: {},
     advanced: {},
@@ -89,6 +91,7 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
       hasLinearOAuth: false,
       hasSlackClientSecret: false,
       hasSlackAppToken: false,
+      hasGithubPat: false,
       ...next.integrations,
     },
     defaults: next.defaults ?? {},
@@ -242,6 +245,8 @@ export function SettingsModal({
   const [slackDeviceLabelDraft, setSlackDeviceLabelDraft] = useState('');
   const [linearKeyDraft, setLinearKeyDraft] = useState('');
   const [showLinearKey, setShowLinearKey] = useState(false);
+  const [githubPatDraft, setGithubPatDraft] = useState('');
+  const [showGithubPat, setShowGithubPat] = useState(false);
   const [linearOauthBusy, setLinearOauthBusy] = useState(false);
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
@@ -488,6 +493,8 @@ export function SettingsModal({
     linearApiKey?: string | null;
     issueSource?: IssueSource | null;
     slackDeviceLabel?: string | null;
+    githubGitAuthMode?: GithubGitAuthMode | null;
+    githubPat?: string | null;
   }) {
     setBusy(true);
     setError(null);
@@ -495,6 +502,7 @@ export function SettingsModal({
       const next = await window.sideboard.updateIntegrationsSettings(patch);
       applySettings(next);
       setLinearKeyDraft('');
+      if ('githubPat' in patch) setGithubPatDraft('');
       if ('slackDeviceLabel' in patch) {
         setSlackDeviceLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
         const listenApi = window.sideboard.getSlackListenStatus;
@@ -716,8 +724,8 @@ export function SettingsModal({
                     <div>
                       <div className="settings-section-title">GitHub</div>
                       <p className="settings-hint">
-                        Connect GitHub to clone repos, create PRs, load comments and more. Uses the{' '}
-                        <code>gh</code> CLI on this machine.
+                        Choose how Sideboard and worktree agents authenticate git on this Mac.
+                        The selected mode is injected into agent prompts so they use the same path.
                       </p>
                       {githubStatus?.connected ? (
                         <p className="settings-status-text" style={{ marginTop: 8 }}>
@@ -758,6 +766,128 @@ export function SettingsModal({
                         Manage
                       </button>
                     </div>
+                  </div>
+                  <div className="settings-mode-list" role="radiogroup" aria-label="GitHub git authentication">
+                    {(
+                      [
+                        {
+                          id: 'auto' as const,
+                          title: 'Auto',
+                          badge: 'Recommended',
+                          hint: 'Keep remotes as-is (SSH first). If the agent has no ssh-agent, retry over HTTPS with gh.',
+                        },
+                        {
+                          id: 'gh' as const,
+                          title: 'gh CLI auth',
+                          hint: 'Rewrite git@github.com remotes to HTTPS and let gh supply credentials.',
+                        },
+                        {
+                          id: 'ssh' as const,
+                          title: 'SSH',
+                          hint: 'Keep SSH remotes. Use this Mac’s SSH agent — do not rewrite to HTTPS.',
+                        },
+                        {
+                          id: 'token' as const,
+                          title: 'Personal access token',
+                          hint: 'Store a PAT on this Mac. Agents get GH_TOKEN and HTTPS remotes.',
+                        },
+                      ] satisfies Array<{
+                        id: GithubGitAuthMode;
+                        title: string;
+                        hint: string;
+                        badge?: string;
+                      }>
+                    ).map((opt) => {
+                      const selected =
+                        (settings.integrations.githubGitAuthMode ?? 'auto') === opt.id;
+                      return (
+                        <label
+                          key={opt.id}
+                          className={`settings-mode-option${selected ? ' selected' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="github-git-auth-mode"
+                            checked={selected}
+                            disabled={busy}
+                            onChange={() =>
+                              void saveIntegrationsPatch({ githubGitAuthMode: opt.id })
+                            }
+                          />
+                          <div className="settings-mode-option-body">
+                            <div className="settings-mode-option-title">
+                              {opt.title}
+                              {opt.badge ? (
+                                <span className="settings-badge">{opt.badge}</span>
+                              ) : null}
+                            </div>
+                            <p className="settings-hint" style={{ marginTop: 4 }}>
+                              {opt.hint}
+                            </p>
+                            {opt.id === 'token' && selected ? (
+                              <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                                {settings.integrations.hasGithubPat ? (
+                                  <>
+                                    <p className="settings-status-text" style={{ flex: 1, margin: 0 }}>
+                                      Token saved on this Mac
+                                    </p>
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void saveIntegrationsPatch({ githubPat: null })
+                                      }
+                                    >
+                                      Clear
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <input
+                                      type={showGithubPat ? 'text' : 'password'}
+                                      value={githubPatDraft}
+                                      onChange={(e) => setGithubPatDraft(e.target.value)}
+                                      placeholder="ghp_… or github_pat_…"
+                                      style={{ flex: 1 }}
+                                      autoComplete="off"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="settings-inline-btn"
+                                      onClick={() => setShowGithubPat((v) => !v)}
+                                    >
+                                      {showGithubPat ? 'Hide' : 'Show'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={busy || !githubPatDraft.trim()}
+                                      onClick={() =>
+                                        void saveIntegrationsPatch({
+                                          githubPat: githubPatDraft.trim(),
+                                        })
+                                      }
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="settings-inline-btn"
+                                      onClick={() => {
+                                        void window.sideboard.openExternal(
+                                          'https://github.com/settings/tokens/new?scopes=repo,read:org,workflow',
+                                        );
+                                      }}
+                                    >
+                                      Create token
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
 

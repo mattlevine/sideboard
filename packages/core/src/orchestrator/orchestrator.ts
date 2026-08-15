@@ -847,6 +847,10 @@ export class Orchestrator {
     // stuffing those directives has contributed to empty model responses.
     const isBrightsy = fresh.agent === 'brightsy';
     const isOrchestration = isOrchestratorThread(fresh);
+    const { autoRenameBranchEnabled, getGithubGitAuthMode } = await import(
+      '../store/app-settings.js'
+    );
+    const gitAuthMode = getGithubGitAuthMode();
     // Orchestrators use Sideboard MCP across registered repos — not a single worktree PR playbook.
     const worktreeDirective =
       isBrightsy || isOrchestration
@@ -855,10 +859,10 @@ export class Orchestrator {
             githubSlug: await resolveGithubRepoSlug(fresh.worktreePath).catch(
               () => null,
             ),
+            gitAuthMode,
           });
     const artifactDirective = isBrightsy ? null : formatArtifactDirective();
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
-    const { autoRenameBranchEnabled } = await import('../store/app-settings.js');
     const renameBranchDirective =
       !isBrightsy && !isOrchestration && autoRenameBranchEnabled()
         ? formatRenameBranchDirective(fresh, {

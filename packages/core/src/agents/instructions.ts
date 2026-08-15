@@ -1,9 +1,11 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { formatGitAuthModeDirective } from '../git/git-auth-mode.js';
 import {
   isPlaceholderBranch,
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
+import type { GithubGitAuthMode } from '../store/app-settings.js';
 import type { AgentKind, Thread } from '../types/thread.js';
 
 function normPath(p: string): string {
@@ -42,7 +44,7 @@ export function formatRenameBranchDirective(
 export function formatWorktreeDirective(
   thread: Pick<Thread, 'worktreePath' | 'repoPath' | 'branchName'> &
     Partial<Pick<Thread, 'title' | 'prUrl'>>,
-  opts?: { githubSlug?: string | null },
+  opts?: { githubSlug?: string | null; gitAuthMode?: GithubGitAuthMode },
 ): string {
   const worktree = normPath(thread.worktreePath);
   const repo = normPath(thread.repoPath);
@@ -72,9 +74,8 @@ export function formatWorktreeDirective(
   lines.push(
     '- Push with `git push -u origin HEAD` (or the current branch name). Do not `git push upstream`.',
   );
-  lines.push(
-    '- If push fails with `Permission denied (publickey)`, this shell has no ssh-agent. `gh` is still logged in — retry over HTTPS (do not stop): `git -c url.https://github.com/.insteadOf=git@github.com: -c http.extraHeader="AUTHORIZATION: bearer $(gh auth token)" push -u origin HEAD`. Then create/update the PR with `gh` as below.',
-  );
+  lines.push('');
+  lines.push(formatGitAuthModeDirective(opts?.gitAuthMode ?? 'auto'));
   lines.push(
     '- Derive the PR title and body from what the changes actually do and why — inspect the diff/commits and the user request. Do not use the soccer-team worktree nickname or placeholder branch as the PR title.',
   );

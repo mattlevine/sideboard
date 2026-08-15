@@ -18,7 +18,13 @@ import {
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
 import { formatGhLandError, isGhRateLimitError } from './gh-errors.js';
+import { applyGithubGitAuthEnv } from './git-auth-mode.js';
 import { gh, git, resolveGhAuthToken } from './run.js';
+import {
+  getGithubGitAuthMode,
+  getGithubPat,
+  type GithubGitAuthMode,
+} from '../store/app-settings.js';
 import {
   buildMergeGateChecks,
   prIsInMergeQueue,
@@ -185,34 +191,26 @@ export async function ensureGhPreferOrigin(cwd: string): Promise<void> {
   });
 }
 
-/**
- * Rewrite GitHub SSH remotes to HTTPS and let `gh` supply credentials.
- * GUI / agent shells often have no ssh-agent; `gh` keyring still works.
- */
-export function githubAgentGitEnv(): Record<string, string> {
-  return {
-    GIT_CONFIG_COUNT: '3',
-    GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
-    GIT_CONFIG_VALUE_0: 'git@github.com:',
-    GIT_CONFIG_KEY_1: 'url.https://github.com/.insteadOf',
-    GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
-    GIT_CONFIG_KEY_2: 'credential.https://github.com.helper',
-    GIT_CONFIG_VALUE_2: '!gh auth git-credential',
-  };
-}
+export { githubAgentGitEnv } from './git-auth-mode.js';
 
 /**
  * Env pin so bare `gh` (and agents) target this checkout's **origin**, not
  * Makerkit-style `upstream`. `GH_REPO` is the CLI's documented override.
- * Also rewrites `git@github.com:` → HTTPS so `git push origin` works without SSH.
+ * HTTPS rewrite / `GH_TOKEN` follow Account → GitHub git-auth mode.
  */
 export async function originGhRepoEnv(
   cwd: string,
+  opts?: {
+    env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+    mode?: GithubGitAuthMode;
+  },
 ): Promise<Record<string, string>> {
   await ensureGhPreferOrigin(cwd);
   const slug = await resolveGithubRepoSlug(cwd);
+  const mode = opts?.mode ?? getGithubGitAuthMode();
+  const token = mode === 'token' ? getGithubPat() : null;
   return {
-    ...githubAgentGitEnv(),
+    ...applyGithubGitAuthEnv(opts?.env, { mode, token }),
     ...(slug ? { GH_REPO: slug } : {}),
   };
 }

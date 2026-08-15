@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
+    "dev": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_RENDERER_URL -u ELECTRON_NO_ASAR -u ELECTRON_FORCE_IS_PACKAGED -u CHROME_CRASHPAD_PIPE_NAME electron-vite dev",
     "predev": "pnpm -w --filter @sideboard-ai/core build",
     "build": "electron-vite build",
     "preview": "electron-vite preview",

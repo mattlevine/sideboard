@@ -93,6 +93,37 @@ describe('app settings', () => {
     expect(mod.resolveEffectiveIssueSource()).toBe('github');
   });
 
+  it('round-trips GitHub git-auth mode and vaults the PAT', async () => {
+    const mod = await load();
+    expect(mod.getGithubGitAuthMode()).toBe('auto');
+    expect(mod.getGithubPat()).toBeNull();
+
+    const saved = mod.updateIntegrationsSettings({
+      githubGitAuthMode: 'token',
+      githubPat: 'ghp_test_token',
+    });
+    expect(saved.integrations.githubGitAuthMode).toBe('token');
+    expect(saved.integrations.githubPat).toBe('ghp_test_token');
+    expect(mod.getGithubGitAuthMode()).toBe('token');
+    expect(mod.getGithubPat()).toBe('ghp_test_token');
+
+    const pub = mod.toPublicAppSettings(mod.loadAppSettings());
+    expect(pub.integrations.githubGitAuthMode).toBe('token');
+    expect(pub.integrations.hasGithubPat).toBe(true);
+    expect((pub.integrations as { githubPat?: string }).githubPat).toBeUndefined();
+
+    const ssh = mod.updateIntegrationsSettings({ githubGitAuthMode: 'ssh' });
+    expect(ssh.integrations.githubGitAuthMode).toBe('ssh');
+    expect(mod.getGithubGitAuthMode()).toBe('ssh');
+
+    const cleared = mod.updateIntegrationsSettings({ githubPat: null });
+    expect(cleared.integrations.githubPat).toBeUndefined();
+    expect(mod.getGithubPat()).toBeNull();
+    expect(mod.toPublicAppSettings(mod.loadAppSettings()).integrations.hasGithubPat).toBe(
+      false,
+    );
+  });
+
   it('round-trips Linear OAuth tokens in the vault and treats them as connected', async () => {
     const mod = await load();
     const saved = mod.saveLinearOAuth({
@@ -154,6 +185,39 @@ describe('app settings', () => {
     expect(cleared.integrations.slackListenEnabled).toBe(false);
     if (prevToken === undefined) delete process.env.SIDEBOARD_SLACK_APP_TOKEN;
     else process.env.SIDEBOARD_SLACK_APP_TOKEN = prevToken;
+  });
+
+  it('round-trips GitHub git-auth mode and vaults the PAT', async () => {
+    const mod = await load();
+    expect(mod.getGithubGitAuthMode()).toBe('auto');
+    expect(mod.getGithubPat()).toBeNull();
+
+    const saved = mod.updateIntegrationsSettings({
+      githubGitAuthMode: 'token',
+      githubPat: 'ghp_test_token',
+    });
+    expect(saved.integrations.githubGitAuthMode).toBe('token');
+    expect(saved.integrations.githubPat).toBe('ghp_test_token');
+    expect(mod.getGithubGitAuthMode()).toBe('token');
+    expect(mod.getGithubPat()).toBe('ghp_test_token');
+
+    const pub = mod.toPublicAppSettings(mod.loadAppSettings());
+    expect(pub.integrations.githubGitAuthMode).toBe('token');
+    expect(pub.integrations.hasGithubPat).toBe(true);
+    expect((pub.integrations as { githubPat?: string }).githubPat).toBeUndefined();
+
+    const ssh = mod.updateIntegrationsSettings({ githubGitAuthMode: 'ssh' });
+    expect(ssh.integrations.githubGitAuthMode).toBe('ssh');
+    expect(mod.getGithubPat()).toBe('ghp_test_token');
+
+    const cleared = mod.updateIntegrationsSettings({
+      githubGitAuthMode: null,
+      githubPat: null,
+    });
+    expect(cleared.integrations.githubGitAuthMode).toBeUndefined();
+    expect(cleared.integrations.githubPat).toBeUndefined();
+    expect(mod.getGithubGitAuthMode()).toBe('auto');
+    expect(mod.getGithubPat()).toBeNull();
   });
 
   it('round-trips default agent, model, and effort', async () => {
