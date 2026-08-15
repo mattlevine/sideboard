@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs — Sideboard</title>
+<meta name="description" content="Install the CLI and desktop, connect the MCP to your agents, wire up Slack and Linear, and configure worktrees per repo.">
+<meta property="og:title" content="Docs — Sideboard">
+<meta property="og:description" content="Install the CLI and desktop, connect the MCP to your agents, wire up Slack and Linear, and configure worktrees per repo.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sideboard.cloud/">
+<meta property="og:image" content="https://sideboard.cloud/desktop.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.png">
+<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code,pre{font-family:ui-monospace,"SF Mono",Menlo,monospace}</style>
+<style>.nav-link:hover,.foot-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}.btn-outline:hover{background:#202226}.card-link:hover{border-color:#0f7ed4}</style>
+</head>
+<body>
+<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
+<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
+<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
+<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
+<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
+</a>
+<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
+<a href="#install" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Install</a>
+<a href="#guides" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Guides</a>
+<a href="https://github.com/mattlevine/sideboard" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">GitHub</a>
+</div>
+</header>
+<div style="background:#17181a">
+
+<section style="max-width:1180px;margin:0 auto;padding:56px 40px 0">
+<span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Docs</span>
+<h1 style="font-weight:700;font-size:60px;line-height:1.06;letter-spacing:-.02em;margin:20px 0 0;max-width:800px">Everything you need to run the fleet</h1>
+<p style="font-size:20px;line-height:1.55;max-width:620px;margin:20px 0 0;color:#b3bcc4">Start with the CLI — it's the fastest way to see whether Sideboard fits how you already work. The desktop, MCP and Slack layer on top of the same local orchestrator.</p>
+</section>
+
+<section id="install" style="max-width:1180px;margin:0 auto;padding:72px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 24px">Install</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
+<div style="padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">CLI</h3>
+<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Ships the stdio MCP server too. Aliases: <code style="font-size:14px;color:#8cc8f5">side</code> → <code style="font-size:14px;color:#8cc8f5">sideboard</code>.</p>
+<pre style="margin:0;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto">npm i -g @sideboard-ai/cli
+sideboard detect</pre>
+</div>
+<div style="padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">Desktop</h3>
+<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Mac builds for Apple Silicon and Intel, from GitHub Releases. Auto-updates on launch and every four hours — never mid-session.</p>
+<a href="https://github.com/mattlevine/sideboard/releases/latest" style="display:inline-flex;align-items:center;padding:11px 22px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:15px" class="btn-blue">Latest release</a>
+</div>
+<div style="padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">Agent CLIs</h3>
+<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Sideboard shells out to each agent's own CLI. Install the ones you want on your PATH and authenticate; Cursor uses the official SDK key instead.</p>
+<pre style="margin:0;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto">npm i -g @anthropic-ai/claude-code
+npm i -g @openai/codex
+npm i -g opencode-ai@latest
+export CURSOR_API_KEY="cursor_..."</pre>
+</div>
+</div>
+</section>
+
+<section style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Quick start</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:620px;margin:0 0 24px">Board, send, inspect, attach when you want the native CLI, land when it's ready.</p>
+<pre style="margin:0;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">sideboard new --from branch:main --agent claude
+sideboard ls
+sideboard send &lt;thread&gt; "add a README note"
+sideboard diff &lt;thread&gt;
+sideboard attach &lt;thread&gt;        <span style="color:#6f777e"># native CLI, same session</span>
+sideboard land &lt;thread&gt;          <span style="color:#6f777e"># interactive y/N; no --yes in v1</span>
+sideboard adopt --from-conductor <span style="color:#6f777e"># import Conductor workspaces + history</span></pre>
+</section>
+
+<section style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Connect the MCP</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:660px;margin:0 0 24px">The desktop auto-injects the MCP into its own turns. Register it yourself when you want fleet tools from an agent running <em>outside</em> Sideboard.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px">
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">Claude Code</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">claude mcp add --scope user \
+  sideboard -- sideboard mcp</pre>
+</div>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">Cursor</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">{ "mcpServers": { "sideboard": {
+  "command": "sideboard",
+  "args": ["mcp"] } } }</pre>
+</div>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">Codex</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">[mcp_servers.sideboard]
+command = "sideboard"
+args = ["mcp"]</pre>
+</div>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">OpenCode</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">{ "mcp": { "sideboard": {
+  "type": "local",
+  "command": ["sideboard","mcp"] } } }</pre>
+</div>
+</div>
+<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_workspaces</code>, <code style="color:#8cc8f5">list_threads</code>), worktree chats (<code style="color:#8cc8f5">create_thread</code>, <code style="color:#8cc8f5">send_to_thread</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_worktree</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. Ready-for-review land and purge stay human-only.</p>
+</section>
+
+<section id="guides" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 24px">Guides</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px">
+<a href="https://github.com/mattlevine/sideboard#slack" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Slack</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Connect a workspace, name this Mac, and address it by prefix from a DM or channel.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/docs/agent-adapters.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Agent adapters</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">How each agent is spawned, what it supports, and how to add another one.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/docs/remote-integrations.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Remote integrations</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">The Slack relay, Linear OAuth, and what does and doesn't leave the machine.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/docs/COMPARE.md" id="compare" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Compare</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Peer-by-peer notes against Conductor, Cursor, Emdash and Superset.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/SECURITY.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Security</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Where credentials live, what the relay sees, and the v1 safety rails on landing.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/CONTRIBUTING.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Contributing</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Monorepo layout, local dev commands, and how releases are cut.</p>
+</a>
+</div>
+</section>
+
+<section style="max-width:1180px;margin:0 auto;padding:80px 40px 110px">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Repo config</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:660px;margin:0 0 24px">Worktrees live outside the repo at <code style="font-size:15px;color:#8cc8f5">~/sideboard/workspaces/&lt;repo-slug&gt;/&lt;team&gt;/</code>. Override per repo in <code style="font-size:15px;color:#8cc8f5">.sideboard/settings.toml</code> — an existing <code style="font-size:15px;color:#8cc8f5">.conductor/settings.toml</code> is used as a fallback.</p>
+<pre style="margin:0;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">[scripts]
+setup = "pnpm install"
+
+[scripts.run.dev]
+command = "PORT=${SIDEBOARD_PORT:-3000} pnpm --filter web dev"
+default = true</pre>
+</section>
+
+<footer style="border-top:1px solid #26292d">
+<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
+<span style="display:flex;align-items:center;gap:10px;margin-right:auto">
+<span style="position:relative;display:inline-block;width:24px;height:24px;flex:none">
+<span style="position:absolute;left:6px;top:6px;width:16px;height:16px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:16px">sideboard.cloud</span>
+</span>
+<a href="/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Home</a>
+<a href="https://github.com/mattlevine/sideboard" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">GitHub</a>
+<span style="color:#6f777e;font-size:14px">Apache-2.0</span>
+</div>
+</footer>
+
+</div>
+</body>
+</html>

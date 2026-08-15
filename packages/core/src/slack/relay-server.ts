@@ -16,6 +16,7 @@ import {
 import { runSlackSocketMode } from './socket-mode.js';
 import { parseSlackRelayClientMessage } from './relay-protocol.js';
 import { SlackRelayHub } from './relay-hub.js';
+import { hostnameAllowed, requestHostname, tryServeStatic } from './relay-static.js';
 
 export interface SlackRelayServerOptions {
   appToken: string;
@@ -32,6 +33,14 @@ export interface SlackRelayServerOptions {
   hub?: SlackRelayHub;
   /** Skip Slack Socket Mode (tests). */
   skipSocketMode?: boolean;
+  /** Optional marketing site root (Fly: `/app/site`). `/health` stays JSON. */
+  staticRoot?: string;
+  /** Hostnames that get the marketing site (e.g. `www.sideboard.cloud`). Empty = any host. */
+  staticHosts?: string[];
+  /** Apex (or aliases) that 301 to `canonicalSiteHost`. */
+  redirectHosts?: string[];
+  /** Canonical public site host (default `www.sideboard.cloud`). */
+  canonicalSiteHost?: string;
 }
 
 export interface SlackRelayServerHandle {
@@ -155,7 +164,30 @@ export async function startSlackRelayServer(
       const reqUrl = req.url || '/';
       if (await handleCallback(reqUrl, res)) return;
       if (handleResult(reqUrl, res)) return;
-      if (req.url === '/health' || req.url === '/') {
+      if (req.url === '/health') {
+        sendJson(res, 200, {
+          ok: true,
+          service: 'sideboard-slack-relay',
+          sessions: hub.listSessions().length,
+          oauth: Boolean(clientSecret),
+        });
+        return;
+      }
+      const hostname = requestHostname(req);
+      const canonical = (opts.canonicalSiteHost ?? 'www.sideboard.cloud').toLowerCase();
+      if (opts.redirectHosts?.includes(hostname) && hostname !== canonical) {
+        res.writeHead(301, { Location: `https://${canonical}${reqUrl}` });
+        res.end();
+        return;
+      }
+      if (
+        opts.staticRoot &&
+        hostnameAllowed(hostname, opts.staticHosts) &&
+        (await tryServeStatic(req, res, opts.staticRoot))
+      ) {
+        return;
+      }
+      if (req.url === '/') {
         sendJson(res, 200, {
           ok: true,
           service: 'sideboard-slack-relay',
