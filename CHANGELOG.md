@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Public Slack landing, privacy policy, and support pages at `/slack/`, `/privacy/`, `/support/` on www.sideboard.cloud
+
+### Changed
+
+- Mac desktop ships Apple Silicon (arm64) only; Intel (x64) DMG/zip dropped from the electron-builder targets
+
 ## [0.1.79] - 2026-08-14
 
 ### Added

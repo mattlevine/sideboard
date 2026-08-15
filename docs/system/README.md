@@ -8,6 +8,7 @@ Canonical instructions for agents working **on this repository** (not for Sidebo
 | [conventions.md](conventions.md) | Build, test, docs, release |
 | [safety.md](safety.md) | Human-only land/purge, secrets, remote control |
 | [deploy.md](deploy.md) | Marketing site + Slack relay on Fly |
+| [slack-marketplace.md](slack-marketplace.md) | Public Distribution + Slack Marketplace prerequisites |
 
 Product / user docs (not required for every change):
 
