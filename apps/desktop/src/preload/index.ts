@@ -156,6 +156,7 @@ const api: IpcApi = {
   previewLand: (threadRef) => ipcRenderer.invoke('previewLand', threadRef),
   confirmLand: (threadRef, opts) => ipcRenderer.invoke('confirmLand', threadRef, opts),
   mergePr: (threadRef) => ipcRenderer.invoke('mergePr', threadRef),
+  askGit: (threadRef, action) => ipcRenderer.invoke('askGit', threadRef, action),
   archiveThread: (threadRef) => ipcRenderer.invoke('archiveThread', threadRef),
   purgeThread: (threadRef, opts) => ipcRenderer.invoke('purgeThread', threadRef, opts),
   restoreThread: (threadRef) => ipcRenderer.invoke('restoreThread', threadRef),

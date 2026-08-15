@@ -1374,6 +1374,19 @@ function registerIpc(): void {
       orch.confirmLand(ref, opts),
   );
   ipcMain.handle('mergePr', (_e, ref: string) => orch.mergePr(ref));
+  ipcMain.handle(
+    'askGit',
+    (
+      _e,
+      ref: string,
+      action:
+        | 'commit-push'
+        | 'create-draft'
+        | 'create-web'
+        | 'resolve-conflicts'
+        | 'merge',
+    ) => orch.askGit(ref, action),
+  );
   ipcMain.handle('archiveThread', (_e, ref: string) => orch.archive(ref));
   ipcMain.handle('purgeThread', (_e, ref: string, opts?: { deleteBranch?: boolean }) =>
     orch.purge(ref, opts),

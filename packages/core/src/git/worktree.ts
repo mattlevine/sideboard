@@ -186,15 +186,35 @@ export async function ensureGhPreferOrigin(cwd: string): Promise<void> {
 }
 
 /**
+ * Rewrite GitHub SSH remotes to HTTPS and let `gh` supply credentials.
+ * GUI / agent shells often have no ssh-agent; `gh` keyring still works.
+ */
+export function githubAgentGitEnv(): Record<string, string> {
+  return {
+    GIT_CONFIG_COUNT: '3',
+    GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
+    GIT_CONFIG_VALUE_0: 'git@github.com:',
+    GIT_CONFIG_KEY_1: 'url.https://github.com/.insteadOf',
+    GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
+    GIT_CONFIG_KEY_2: 'credential.https://github.com.helper',
+    GIT_CONFIG_VALUE_2: '!gh auth git-credential',
+  };
+}
+
+/**
  * Env pin so bare `gh` (and agents) target this checkout's **origin**, not
  * Makerkit-style `upstream`. `GH_REPO` is the CLI's documented override.
+ * Also rewrites `git@github.com:` → HTTPS so `git push origin` works without SSH.
  */
 export async function originGhRepoEnv(
   cwd: string,
 ): Promise<Record<string, string>> {
   await ensureGhPreferOrigin(cwd);
   const slug = await resolveGithubRepoSlug(cwd);
-  return slug ? { GH_REPO: slug } : {};
+  return {
+    ...githubAgentGitEnv(),
+    ...(slug ? { GH_REPO: slug } : {}),
+  };
 }
 
 export async function resolveDefaultBranch(
@@ -1214,7 +1234,45 @@ export async function pushBranch(
   worktreePath: string,
   branchName: string,
 ): Promise<void> {
-  await git(['push', '-u', 'origin', branchName], worktreePath);
+  const ssh = await git(['push', '-u', 'origin', branchName], worktreePath, {
+    reject: false,
+  });
+  if (ssh.exitCode === 0) return;
+
+  const sshErr = (ssh.stderr || ssh.stdout).trim();
+  const slug = await resolveGithubRepoSlug(worktreePath);
+  const token = await resolveGhAuthToken(worktreePath);
+  if (!slug || !token) {
+    throw new Error(
+      sshErr ||
+        `git push origin ${branchName} failed` +
+          (!token
+            ? ' (no SSH agent and gh auth token unavailable — run: gh auth login)'
+            : ''),
+    );
+  }
+
+  // Dock/Finder/agent shells often lack ssh-agent; gh keyring still works.
+  // Keep remote name `origin` via insteadOf so upstream tracking stays correct.
+  const tryHttps = async (header: string) =>
+    git(['push', '-u', 'origin', branchName], worktreePath, {
+      reject: false,
+      env: { GIT_TERMINAL_PROMPT: '0' },
+      config: {
+        'url.https://github.com/.insteadOf': 'git@github.com:',
+        'http.extraHeader': header,
+      },
+    });
+
+  const bearer = await tryHttps(`AUTHORIZATION: bearer ${token}`);
+  if (bearer.exitCode === 0) return;
+
+  const basic = Buffer.from(`x-access-token:${token}`, 'utf8').toString('base64');
+  const basicPush = await tryHttps(`Authorization: Basic ${basic}`);
+  if (basicPush.exitCode === 0) return;
+
+  const httpsErr = (basicPush.stderr || bearer.stderr || bearer.stdout).trim();
+  throw new Error(httpsErr || sshErr || `git push origin ${branchName} failed`);
 }
 
 /** Merge an open pull request.

@@ -8,14 +8,20 @@ import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnF
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
+  createOrUpdatePr,
+  currentBranch,
   getPrChecks,
   getPrDetails,
   getPrMeta as fetchPrMeta,
+  isDirty,
   mergePr as mergeGithubPr,
+  pushBranch,
   removeWorktree,
+  resolveDefaultBranch,
   resolveGithubRepoSlug,
   resolvePrSelector,
 } from '../git/worktree.js';
+import { suggestPrMetadata } from '../land/pr-metadata.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
   AGENT_GIT_ACTIONS,
@@ -1929,8 +1935,9 @@ export class Orchestrator {
   }
 
   /**
-   * Queue a desktop-git-button prompt on a worktree agent (commit/push/PR/merge).
-   * Orchestrators use this instead of running git/gh from the synthetic home.
+   * Desktop git buttons + MCP `ask_git`.
+   * When the worktree is clean, push / open the PR here (HTTPS via `gh` if SSH
+   * is missing). When dirty, queue the worktree agent to commit first.
    */
   async askGit(threadRef: string, action: AgentGitAction): Promise<Thread> {
     if (!AGENT_GIT_ACTIONS.includes(action)) {
@@ -1948,6 +1955,16 @@ export class Orchestrator {
         'No pull request linked. Ask the worktree agent to open a draft PR first (ask_git create-draft).',
       );
     }
+    if (
+      (action === 'commit-push' ||
+        action === 'create-draft' ||
+        action === 'create-web') &&
+      thread.worktreePath?.trim() &&
+      !(await isDirty(thread.worktreePath))
+    ) {
+      await this.pushAndMaybeOpenPr(thread, action);
+      return this.requireThread(threadRef);
+    }
     let prBase: string | undefined;
     if (action === 'resolve-conflicts') {
       try {
@@ -1958,6 +1975,40 @@ export class Orchestrator {
       }
     }
     return this.send(threadRef, agentGitPrompt(action, { prBase }));
+  }
+
+  /** Push origin (gh HTTPS fallback) and create/update the PR when requested. */
+  private async pushAndMaybeOpenPr(
+    thread: Thread,
+    action: 'commit-push' | 'create-draft' | 'create-web',
+  ): Promise<void> {
+    const cwd = thread.worktreePath;
+    const branch = await currentBranch(cwd);
+    await pushBranch(cwd, branch);
+    if (action === 'commit-push') return;
+
+    const base = await resolveDefaultBranch(thread.repoPath);
+    const meta = await suggestPrMetadata(cwd, {
+      base,
+      fallbackTitle: thread.prTitle ?? thread.title,
+    });
+    const url = await createOrUpdatePr(cwd, {
+      title: meta.title,
+      body: meta.body,
+      base,
+      head: branch,
+      draft: action === 'create-draft',
+      web: action === 'create-web',
+    });
+    if (!url) return;
+    const patch: Partial<Thread> = { prUrl: url, prTitle: meta.title };
+    try {
+      const fetched = await fetchPrMeta(cwd, url);
+      if (fetched?.title) patch.prTitle = fetched.title;
+    } catch {
+      // URL alone is enough
+    }
+    updateThread(thread.id, patch);
   }
 
   setThreadOptions(threadRef: string, patch: ThreadOptionsPatch): Thread {

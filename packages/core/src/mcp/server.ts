@@ -44,8 +44,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 /**
  * Sideboard MCP server — agent-facing judgment surface.
  * Deliberately excludes ready-for-review confirm_land and purge_thread.
- * Orchestrators commit, push, open PRs, and merge by telling worktree agents
- * (`ask_git` / `send_to_thread`) — they do not run git/gh from the synthetic home.
+ * Orchestrators commit, push, open PRs, and merge via `ask_git` / `send_to_thread`
+ * — they do not run git/gh from the synthetic home. `ask_git` pushes itself when
+ * the worktree is already clean.
  */
 export async function startMcpServer(): Promise<void> {
   const orch = getOrchestrator();
@@ -764,7 +765,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Tell a worktree agent to commit & push, open a draft PR, resolve conflicts, or merge the linked PR — same short prompts as the desktop git buttons. The worktree agent runs git/gh (`gh pr merge`); this only queues the prompt. Pass a worktree thread ref (not the orchestrator). Then wait_for_turn / get_turn_result. Do not run git or gh from the orchestration cwd.',
+    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` if SSH is missing). When dirty, queues the worktree agent to commit; then wait_for_turn. Pass a worktree thread ref (not the orchestrator). Do not run git or gh from the orchestration cwd.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z

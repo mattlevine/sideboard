@@ -386,6 +386,16 @@ export interface IpcApi {
   ): Promise<LandResult>;
   /** Merge the thread's linked PR on GitHub (`gh pr merge`). */
   mergePr(threadRef: string): Promise<{ url: string; state: string }>;
+  /** Desktop git buttons: push/PR when clean, else queue the worktree agent. */
+  askGit(
+    threadRef: string,
+    action:
+      | 'commit-push'
+      | 'create-draft'
+      | 'create-web'
+      | 'resolve-conflicts'
+      | 'merge',
+  ): Promise<Thread>;
   archiveThread(threadRef: string): Promise<Thread>;
   purgeThread(threadRef: string, opts?: { deleteBranch?: boolean }): Promise<void>;
   restoreThread(threadRef: string): Promise<Thread>;

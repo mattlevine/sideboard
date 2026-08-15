@@ -78,7 +78,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Inspect / review / PRs:',
   '- get_diff — compact diff summary',
   '- request_review — open a Review chat tab on a worktree thread (attaches .sideboard/review.md when present, else local guidelines; sends "Review changes in this workspace."); then wait_for_turn / get_turn_result on the returned id',
-  '- ask_git — tell a worktree agent to commit & push, open a draft PR, resolve conflicts, or merge (`Merge PR.`). You only queue that prompt — the worktree agent runs git/gh (including `gh pr merge`). Then wait_for_turn. Prefer this over paraphrasing.',
+  '- ask_git — commit & push, open a draft PR, resolve conflicts, or merge. When the worktree is clean, Sideboard pushes / opens the PR itself. When dirty, it queues the worktree agent — then wait_for_turn. Prefer this over paraphrasing.',
   '- Or send_to_thread with those exact phrases: "Commit and push.", "Commit, push, and open a draft PR.", "Fix merge conflicts.", "Merge PR." (draft PRs: `gh pr create --draft -R <origin-owner/name>` using the workspace `github:` slug — never upstream). Never run git/gh from this orchestration cwd, and never merge the PR yourself.',
   'Human-only (do not attempt): ready-for-review land (confirm_land), purge_thread.',
   'Thread links in replies: when mentioning a chat/thread for the user, include a markdown link `[Title](sideboard://thread/<id>)` using the full id (or the link field from create_thread / list_threads). Sideboard renders these as clickable opens.',
