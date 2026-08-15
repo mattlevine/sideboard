@@ -188,7 +188,9 @@ describe('originGhRepoEnv', () => {
       exitCode: 0,
     });
 
-    await expect(originGhRepoEnv('/tmp/storycycle')).resolves.toMatchObject({
+    await expect(
+      originGhRepoEnv('/tmp/storycycle', { mode: 'gh' }),
+    ).resolves.toMatchObject({
       GH_REPO: 'mattlevine/storycycle-ai',
       GIT_CONFIG_COUNT: '3',
       GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
@@ -198,6 +200,21 @@ describe('originGhRepoEnv', () => {
       GIT_CONFIG_KEY_2: 'credential.https://github.com.helper',
       GIT_CONFIG_VALUE_2: '!gh auth git-credential',
     });
+  });
+
+  it('auto mode pins GH_REPO without rewriting SSH remotes', async () => {
+    gitMock.mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
+        return {
+          stdout: 'git@github.com:mattlevine/storycycle-ai.git',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+    const env = await originGhRepoEnv('/tmp/storycycle', { mode: 'auto' });
+    expect(env).toEqual({ GH_REPO: 'mattlevine/storycycle-ai' });
   });
 });
 

@@ -34,6 +34,7 @@ import type {
   BrightsyHarnessSettings,
   ClaudeHarnessSettings,
   CliAgentKind,
+  GithubGitAuthMode,
   IssueSource,
 } from '../store/app-settings.js';
 import type { Workspace } from '../store/workspaces.js';
@@ -155,6 +156,8 @@ export interface IpcApi {
     slackListenEnabled?: boolean | null;
     slackDeviceId?: string | null;
     slackDeviceLabel?: string | null;
+    githubGitAuthMode?: GithubGitAuthMode | null;
+    githubPat?: string | null;
   }): Promise<PublicAppSettings>;
   updateDefaultsSettings(patch: {
     agent?: AgentKind | null;

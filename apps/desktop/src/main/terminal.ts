@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { BrowserWindow } from 'electron';
-import type { Orchestrator } from '@sideboard-ai/core';
+import { stripNestedElectronEnv, type Orchestrator } from '@sideboard-ai/core';
 
 interface PtyLike {
   write: (data: string) => void;
@@ -156,7 +156,7 @@ export async function startTerminalSession(
     opts?.args ??
     (file === shell && process.platform === 'darwin' ? ['-l'] : []);
   const env: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...stripNestedElectronEnv(process.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
   };

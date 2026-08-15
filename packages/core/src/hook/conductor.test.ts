@@ -8,6 +8,7 @@ import {
   getRunMode,
   listRunScripts,
   resolveFilesToCopy,
+  stripNestedElectronEnv,
 } from './conductor.js';
 
 describe('resolveFilesToCopy', () => {
@@ -81,5 +82,40 @@ describe('buildWorkspaceScriptEnv', () => {
     expect(env.CONDUCTOR_ROOT_PATH).toBe('/tmp/repo');
     expect(env.SIDEBOARD_DEFAULT_BRANCH).toBe('main');
     expect(env.SIDEBOARD_IS_LOCAL).toBe('1');
+  });
+
+  it('strips inherited Electron/Chromium env so nested electron-vite can start', () => {
+    const env = buildWorkspaceScriptEnv(
+      {
+        worktreePath: '/tmp/ws/ajax',
+        repoPath: '/tmp/repo',
+        ports: [5173],
+      },
+      {
+        PATH: '/usr/bin',
+        ELECTRON_RUN_AS_NODE: '1',
+        ELECTRON_RENDERER_URL: 'http://localhost:5173',
+        CHROME_CRASHPAD_PIPE_NAME: 'crashpad_123',
+        SIDEBOARD_WORKSPACE_NAME: 'stale',
+      },
+    );
+    expect(env.PATH).toBe('/usr/bin');
+    expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    expect(env.ELECTRON_RENDERER_URL).toBeUndefined();
+    expect(env.CHROME_CRASHPAD_PIPE_NAME).toBeUndefined();
+    expect(env.SIDEBOARD_WORKSPACE_NAME).toBe('ajax');
+    expect(env.PORT).toBe('5173');
+  });
+});
+
+describe('stripNestedElectronEnv', () => {
+  it('copies the env and drops only Electron/Chrome keys', () => {
+    expect(
+      stripNestedElectronEnv({
+        HOME: '/Users/me',
+        ELECTRON_NO_ASAR: '1',
+        CHROME_DESKTOP: 'Sideboard.desktop',
+      }),
+    ).toEqual({ HOME: '/Users/me' });
   });
 });

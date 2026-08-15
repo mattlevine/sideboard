@@ -166,12 +166,34 @@ export interface WorkspaceScriptEnvOpts {
   ports?: number[];
 }
 
+/**
+ * Host Electron leaks Chromium / electron-vite env into child processes.
+ * This repo's default run script is `electron-vite dev`; a nested Electron
+ * that inherits those vars attaches to the parent's GPU/crashpad and dies:
+ *   GPU process exited unexpectedly: exit_code=15
+ *   Network service crashed, restarting service.
+ *   ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL … Command failed with signal "SIGTERM"
+ */
+const NESTED_ELECTRON_ENV_PREFIXES = ['ELECTRON_', 'CHROME_'] as const;
+
+export function stripNestedElectronEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...env };
+  for (const key of Object.keys(out)) {
+    if (NESTED_ELECTRON_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      delete out[key];
+    }
+  }
+  return out;
+}
+
 /** Build Conductor/Sideboard env vars for setup/run scripts. */
 export function buildWorkspaceScriptEnv(
   opts: WorkspaceScriptEnvOpts,
   baseEnv?: NodeJS.ProcessEnv,
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...(baseEnv ?? process.env) };
+  const env: NodeJS.ProcessEnv = stripNestedElectronEnv({
+    ...(baseEnv ?? process.env),
+  });
   const name = opts.workspaceName ?? basename(opts.worktreePath);
   const ports = opts.ports ?? [];
   const primary = ports[0];

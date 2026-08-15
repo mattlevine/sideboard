@@ -85,8 +85,22 @@ export interface BrightsyHarnessSettings {
 export type IssueSource = 'linear' | 'github';
 
 /**
+ * How Sideboard and worktree agents authenticate GitHub git operations.
+ * A declared mode so the app and injected prompts agree. Sideboard never
+ * uses a third-party GitHub App (including Conductor.build) for git auth.
+ * - `auto` (default): keep remotes as-is (SSH first); prompt HTTPS/`gh` fallback
+ * - `gh`: rewrite SSH remotes to HTTPS; `gh auth git-credential`
+ * - `ssh`: keep `git@` remotes; use this Mac’s SSH agent
+ * - `token`: stored PAT + HTTPS rewrite; `GH_TOKEN` in the agent env
+ */
+export type GithubGitAuthMode = 'auto' | 'gh' | 'ssh' | 'token';
+
+export const GITHUB_GIT_AUTH_MODES = ['auto', 'gh', 'ssh', 'token'] as const;
+
+/**
  * Sideboard-owned third-party connections (Account / Integrations).
- * GitHub uses machine `gh` auth; Linear uses OAuth (or a stored API key).
+ * GitHub uses a declared git-auth mode (`gh` / SSH / PAT); Linear uses OAuth
+ * (or a stored API key).
  */
 export interface IntegrationsSettings {
   /** Linear personal API key (https://linear.app/settings/api). Fallback when OAuth is unused. */
@@ -128,6 +142,13 @@ export interface IntegrationsSettings {
   slackDeviceId?: string;
   /** Human label for this Mac destination, e.g. Personal / Work. */
   slackDeviceLabel?: string;
+  /**
+   * How agents and Sideboard git helpers authenticate GitHub.
+   * Omitted = {@link getGithubGitAuthMode} default (`auto`).
+   */
+  githubGitAuthMode?: GithubGitAuthMode;
+  /** Fine-grained or classic PAT when mode is `token` (vaulted). */
+  githubPat?: string;
 }
 
 /**
@@ -222,12 +243,15 @@ export type PublicIntegrationsSettings = Omit<
   | 'linearClientSecret'
   | 'slackClientSecret'
   | 'slackAppToken'
+  | 'githubPat'
 > & {
   /** True when Linear is connected (OAuth or API key). */
   hasLinearApiKey: boolean;
   hasLinearOAuth: boolean;
   hasSlackClientSecret: boolean;
   hasSlackAppToken: boolean;
+  /** True when a GitHub PAT is stored (token mode). */
+  hasGithubPat: boolean;
 };
 
 /** Settings payload for the desktop UI. Secret values are omitted. */
@@ -253,12 +277,14 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   const integrations: IntegrationsSettings = { ...settings.integrations };
   const slackClientSecret = integrations.slackClientSecret;
   const slackAppToken = integrations.slackAppToken;
+  const githubPat = integrations.githubPat;
   delete integrations.linearApiKey;
   delete integrations.linearAccessToken;
   delete integrations.linearRefreshToken;
   delete integrations.linearClientSecret;
   delete integrations.slackClientSecret;
   delete integrations.slackAppToken;
+  delete integrations.githubPat;
   return {
     ...settings,
     environment,
@@ -268,6 +294,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
       hasLinearOAuth: hasLinearOAuth(settings.integrations),
       hasSlackClientSecret: Boolean(slackClientSecret?.trim()),
       hasSlackAppToken: Boolean(slackAppToken?.trim()),
+      hasGithubPat: Boolean(githubPat?.trim()),
     },
   };
 }
@@ -337,6 +364,7 @@ function normalizeBrightsy(raw: unknown): BrightsyHarnessSettings {
 }
 
 const ISSUE_SOURCES = new Set<IssueSource>(['linear', 'github']);
+const GIT_AUTH_MODES = new Set<GithubGitAuthMode>(GITHUB_GIT_AUTH_MODES);
 
 function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (!raw || typeof raw !== 'object') return {};
@@ -404,6 +432,16 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (typeof source.slackDeviceLabel === 'string') {
     const label = source.slackDeviceLabel.trim().slice(0, 64);
     if (label) out.slackDeviceLabel = label;
+  }
+  if (
+    typeof source.githubGitAuthMode === 'string' &&
+    GIT_AUTH_MODES.has(source.githubGitAuthMode as GithubGitAuthMode)
+  ) {
+    out.githubGitAuthMode = source.githubGitAuthMode as GithubGitAuthMode;
+  }
+  if (typeof source.githubPat === 'string') {
+    const pat = source.githubPat.trim();
+    if (pat) out.githubPat = pat;
   }
   return out;
 }
@@ -581,6 +619,7 @@ function diskHoldsSecrets(disk: AppSettings): boolean {
       disk.integrations.linearClientSecret ||
       disk.integrations.slackClientSecret ||
       disk.integrations.slackAppToken ||
+      disk.integrations.githubPat ||
       Object.keys(disk.environment).length > 0,
   );
 }
@@ -607,6 +646,9 @@ function mergeVault(disk: AppSettings): AppSettings {
   if (vault.slackAppToken && !integrations.slackAppToken) {
     integrations.slackAppToken = vault.slackAppToken;
   }
+  if (vault.githubPat && !integrations.githubPat) {
+    integrations.githubPat = vault.githubPat;
+  }
   return { ...disk, environment, integrations };
 }
 
@@ -618,12 +660,14 @@ function persistSplit(settings: AppSettings): void {
   const linearClientSecret = integrations.linearClientSecret;
   const slackClientSecret = integrations.slackClientSecret;
   const slackAppToken = integrations.slackAppToken;
+  const githubPat = integrations.githubPat;
   delete integrations.linearApiKey;
   delete integrations.linearAccessToken;
   delete integrations.linearRefreshToken;
   delete integrations.linearClientSecret;
   delete integrations.slackClientSecret;
   delete integrations.slackAppToken;
+  delete integrations.githubPat;
   writePrivateFile(
     appSettingsPath(),
     `${JSON.stringify({ ...settings, environment: {}, integrations }, null, 2)}\n`,
@@ -635,6 +679,7 @@ function persistSplit(settings: AppSettings): void {
     linearClientSecret,
     slackClientSecret,
     slackAppToken,
+    githubPat,
     environment: settings.environment,
   });
 }
@@ -765,6 +810,8 @@ export function updateIntegrationsSettings(
     slackListenEnabled?: boolean | null;
     slackDeviceId?: string | null;
     slackDeviceLabel?: string | null;
+    githubGitAuthMode?: GithubGitAuthMode | null;
+    githubPat?: string | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -837,6 +884,20 @@ export function updateIntegrationsSettings(
       delete integrations.slackDeviceLabel;
     } else {
       integrations.slackDeviceLabel = patch.slackDeviceLabel.trim().slice(0, 64);
+    }
+  }
+  if ('githubGitAuthMode' in patch) {
+    if (patch.githubGitAuthMode == null) {
+      delete integrations.githubGitAuthMode;
+    } else if (GIT_AUTH_MODES.has(patch.githubGitAuthMode)) {
+      integrations.githubGitAuthMode = patch.githubGitAuthMode;
+    }
+  }
+  if ('githubPat' in patch) {
+    if (patch.githubPat == null || patch.githubPat.trim() === '') {
+      delete integrations.githubPat;
+    } else {
+      integrations.githubPat = patch.githubPat.trim();
     }
   }
   return saveAppSettings({ ...current, integrations });
@@ -1021,6 +1082,21 @@ export function getIssueSource(
   settings: AppSettings = loadAppSettings(),
 ): IssueSource {
   return settings.integrations.issueSource ?? 'github';
+}
+
+/** Declared GitHub git-auth mode (default `auto`). */
+export function getGithubGitAuthMode(
+  settings: AppSettings = loadAppSettings(),
+): GithubGitAuthMode {
+  return settings.integrations.githubGitAuthMode ?? 'auto';
+}
+
+/** Stored GitHub PAT for `token` mode (null when unset). */
+export function getGithubPat(
+  settings: AppSettings = loadAppSettings(),
+): string | null {
+  const pat = settings.integrations.githubPat?.trim();
+  return pat || null;
 }
 
 /**

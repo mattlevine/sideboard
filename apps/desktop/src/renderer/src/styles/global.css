@@ -10215,6 +10215,53 @@ body:has(.update-banner) .team-toast-stack {
   cursor: default;
 }
 
+.settings-mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.settings-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.settings-mode-option.selected {
+  border-color: var(--accent, #6cb6ff);
+}
+
+.settings-mode-option input {
+  margin-top: 3px;
+}
+
+.settings-mode-option-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-mode-option-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
 .settings-toggle-row {
   display: flex;
   align-items: flex-start;

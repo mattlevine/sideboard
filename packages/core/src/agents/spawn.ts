@@ -67,10 +67,16 @@ export async function spawnAgentTurn(
   }
 
   // Pin bare `gh` to this worktree's origin (not upstream) for dual-remote repos.
+  // Git HTTPS rewrite / GH_TOKEN follow Account → GitHub git-auth mode.
   const env = childEnvWithAppSettings(cmd.env);
   if (!isOrchestratorThread(thread)) {
-    const originEnv = await originGhRepoEnv(thread.worktreePath).catch(() => ({}));
-    Object.assign(env, originEnv);
+    try {
+      const originEnv = await originGhRepoEnv(thread.worktreePath, { env });
+      Object.assign(env, originEnv);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.warn(`[sideboard] originGhRepoEnv failed (${thread.worktreePath}): ${detail}`);
+    }
   }
 
   const child = execa(cmd.file, cmd.args, {
