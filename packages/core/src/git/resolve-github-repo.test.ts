@@ -188,8 +188,15 @@ describe('originGhRepoEnv', () => {
       exitCode: 0,
     });
 
-    await expect(originGhRepoEnv('/tmp/storycycle')).resolves.toEqual({
+    await expect(originGhRepoEnv('/tmp/storycycle')).resolves.toMatchObject({
       GH_REPO: 'mattlevine/storycycle-ai',
+      GIT_CONFIG_COUNT: '3',
+      GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
+      GIT_CONFIG_VALUE_0: 'git@github.com:',
+      GIT_CONFIG_KEY_1: 'url.https://github.com/.insteadOf',
+      GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
+      GIT_CONFIG_KEY_2: 'credential.https://github.com.helper',
+      GIT_CONFIG_VALUE_2: '!gh auth git-credential',
     });
   });
 });

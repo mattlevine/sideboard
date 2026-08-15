@@ -5,7 +5,6 @@ import type {
   PrCheckRun,
   Thread,
 } from '@sideboard-ai/core';
-import { agentGitPrompt } from '@sideboard/agent-git-actions';
 import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
 import { FileTree } from './FileTree';
 import { MergeModal } from './MergeModal';
@@ -763,7 +762,7 @@ export function RightSidebar({
     }
   }
 
-  /** Conductor-style: git buttons queue a short instruction for the worktree agent. */
+  /** Desktop git buttons: Sideboard pushes when clean; otherwise the worktree agent commits. */
   async function askAgentGit(
     action:
       | 'create-pr'
@@ -773,17 +772,17 @@ export function RightSidebar({
       | 'resolve-conflicts',
   ) {
     setPrMenuOpen(false);
-    const prompt =
+    const gitAction =
       action === 'create-pr' || action === 'create-draft'
-        ? agentGitPrompt('create-draft')
+        ? 'create-draft'
         : action === 'create-web'
-          ? agentGitPrompt('create-web')
+          ? 'create-web'
           : action === 'commit-push'
-            ? agentGitPrompt('commit-push')
-            : agentGitPrompt('resolve-conflicts', { prBase });
+            ? 'commit-push'
+            : 'resolve-conflicts';
     setBusy(true);
     try {
-      await window.sideboard.sendToThread(thread.id, prompt);
+      await window.sideboard.askGit(thread.id, gitAction);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));

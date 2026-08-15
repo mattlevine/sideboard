@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Static marketing site (`site/index.html`, `site/docs/index.html`) at https://www.sideboard.cloud, served by the Slack relay Fly app. `relay.sideboard.cloud` stays Slack + `/health`.
 
+### Fixed
+
+- `git push` from the desktop and worktree agents falls back to HTTPS via `gh` when the SSH agent is missing (same path fetch already used). Sidebar Create PR / Commit & push run that push themselves when the tree is clean.
+
 ## [0.1.78] - 2026-08-14
 
 Fresh signed Mac desktop and npm packages of current main (Linear MCP write tools, awake wordmark badge).

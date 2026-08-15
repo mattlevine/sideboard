@@ -73,6 +73,9 @@ export function formatWorktreeDirective(
     '- Push with `git push -u origin HEAD` (or the current branch name). Do not `git push upstream`.',
   );
   lines.push(
+    '- If push fails with `Permission denied (publickey)`, this shell has no ssh-agent. `gh` is still logged in — retry over HTTPS (do not stop): `git -c url.https://github.com/.insteadOf=git@github.com: -c http.extraHeader="AUTHORIZATION: bearer $(gh auth token)" push -u origin HEAD`. Then create/update the PR with `gh` as below.',
+  );
+  lines.push(
     '- Derive the PR title and body from what the changes actually do and why — inspect the diff/commits and the user request. Do not use the soccer-team worktree nickname or placeholder branch as the PR title.',
   );
   lines.push(
