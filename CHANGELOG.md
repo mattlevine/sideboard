@@ -7,14 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.79] - 2026-08-14
+
 ### Added
 
 - Static marketing site (`site/index.html`, `site/docs/index.html`) at https://www.sideboard.cloud, served by the Slack relay Fly app. `relay.sideboard.cloud` stays Slack + `/health`.
+- Account → GitHub git-auth modes: auto / gh / SSH / PAT (no third-party GitHub App), so agents and remotes use the same path
 
 ### Fixed
 
 - Creating a worktree keeps the same processing overlay as archive until the first chat message appears, so the new chat no longer looks empty (as if you need to retype).
 - `git push` from the desktop and worktree agents falls back to HTTPS via `gh` when the SSH agent is missing (same path fetch already used). Sidebar Create PR / Commit & push run that push themselves when the tree is clean.
+- Nested Electron/Play launches strip inherited `ELECTRON_*` / `CHROME_*` so this repo's desktop `dev` does not kill the child GPU process
 
 ## [0.1.78] - 2026-08-14
 
