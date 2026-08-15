@@ -35,6 +35,11 @@ import {
   markWorktreeSeen,
   unreadWorktreeKey,
 } from './lib/unread-worktrees';
+import {
+  shouldHoldCreateOverlay,
+  threadHasVisibleFirstTurn,
+  type CreatePaneProgress,
+} from './lib/pane-progress';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
 const RIGHT_SIDEBAR_DEFAULT = 340;
@@ -86,11 +91,7 @@ interface CreateState {
 }
 
 /** Non-blocking status in the chat empty pane (create + archive teardown). */
-interface PaneProgress {
-  mode: 'create' | 'orchestration' | 'archive' | 'remove';
-  repoName: string;
-  selectionHint: string | null;
-}
+type PaneProgress = CreatePaneProgress;
 
 export function App() {
   const [repoPath, setRepoPath] = useState('');
@@ -520,6 +521,22 @@ export function App() {
     [threads, archived, selectedId],
   );
 
+  const holdCreateOverlay = shouldHoldCreateOverlay({
+    paneProgress,
+    selected,
+  });
+
+  useEffect(() => {
+    if (!paneProgress?.awaitingFirstPrompt || !paneProgress.threadId) return;
+    const t =
+      threads.find((x) => x.id === paneProgress.threadId) ??
+      archived.find((x) => x.id === paneProgress.threadId);
+    if (!t) return;
+    if (threadHasVisibleFirstTurn(t)) {
+      setPaneProgress(null);
+    }
+  }, [threads, archived, paneProgress]);
+
   const rightSidebarWorktreeKey = useMemo(() => {
     if (!selected || isGlobalThread(selected)) return null;
     return selected.worktreePath?.trim() || null;
@@ -892,7 +909,7 @@ export function App() {
         />
       )}
 
-      {view === 'thread' && selected && (
+      {view === 'thread' && selected && !holdCreateOverlay && (
         <div
           className={`thread-workspace${
             showRightSidebar && rightSidebarVisible ? ' has-right' : ''
@@ -1037,7 +1054,7 @@ export function App() {
           )}
         </div>
       )}
-      {view === 'thread' && paneProgress && !selected && (
+      {view === 'thread' && holdCreateOverlay && paneProgress && (
         <div className="panel thread-panel">
           <div className="chat">
             <div className="chat-empty">
@@ -1045,25 +1062,33 @@ export function App() {
                 variant="inline"
                 mode={paneProgress.mode}
                 repoName={paneProgress.repoName}
-                selectionHint={paneProgress.selectionHint}
+                selectionHint={
+                  paneProgress.awaitingFirstPrompt
+                    ? paneProgress.selectionHint
+                      ? `${paneProgress.selectionHint} · starting chat`
+                      : 'Starting chat'
+                    : paneProgress.selectionHint
+                }
               />
               <h3>
                 {paneProgress.mode === 'orchestration'
-                  ? 'What should we orchestrate?'
+                  ? 'Opening orchestration'
                   : paneProgress.mode === 'archive'
                     ? 'Removing worktree'
                     : paneProgress.mode === 'remove'
                       ? 'Removing project'
-                      : 'What are you working on?'}
+                      : 'Creating worktree'}
               </h3>
               <p>
                 {paneProgress.mode === 'orchestration'
-                  ? 'Preparing the coordinator chat…'
+                  ? 'Preparing the coordinator chat and sending your first message…'
                   : paneProgress.mode === 'archive'
                     ? 'Tearing down the worktree — you can keep browsing while this finishes.'
                     : paneProgress.mode === 'remove'
                       ? 'Archiving threads and removing the project from the sidebar…'
-                      : 'Creating your worktree — you can keep browsing while this finishes.'}
+                      : paneProgress.awaitingFirstPrompt
+                        ? 'Sending your first message — you can keep browsing while this finishes.'
+                        : 'Creating your worktree — you can keep browsing while this finishes.'}
               </p>
             </div>
           </div>
@@ -1103,11 +1128,36 @@ export function App() {
             window.alert(message);
           }}
           onCreated={(thread, opts) => {
-            setPaneProgress(null);
             upsertThread(thread);
             notifySoccerNickname(thread.title);
             void refresh();
-            if (opts?.stayOpen) return;
+            if (opts?.stayOpen) {
+              setPaneProgress(null);
+              return;
+            }
+            const awaitingFirstPrompt =
+              Boolean(opts?.hasPrompt) && !threadHasVisibleFirstTurn(thread);
+            if (awaitingFirstPrompt) {
+              setPaneProgress((prev) =>
+                prev
+                  ? { ...prev, threadId: thread.id, awaitingFirstPrompt: true }
+                  : {
+                      mode:
+                        thread.sourceType === 'orchestration'
+                          ? 'orchestration'
+                          : 'create',
+                      repoName:
+                        thread.repoPath.split('/').filter(Boolean).pop() ||
+                        thread.title ||
+                        'Workspace',
+                      selectionHint: 'Starting chat',
+                      threadId: thread.id,
+                      awaitingFirstPrompt: true,
+                    },
+              );
+            } else {
+              setPaneProgress(null);
+            }
             setSelectedId(thread.id);
             setView('thread');
             setMultiSelected(new Set([thread.id]));
