@@ -1552,39 +1552,62 @@ export function ThreadPanel({
             !showStreaming &&
             !thread.lastError && (
               <div className="chat-empty">
-                {setupRunning ? (
-                  <CreateProcessingOverlay
-                    variant="inline"
-                    mode="create"
-                    repoName={
-                      thread.repoPath.split('/').filter(Boolean).pop() ||
-                      thread.title ||
-                      'Workspace'
-                    }
-                    selectionHint="Running setup"
-                  />
-                ) : (
-                  <div className="chat-empty-mark" aria-hidden>
-                    <span className="chat-empty-cube" />
-                  </div>
-                )}
-                {thread.sourceType === 'orchestration' || isGlobalThread(thread) ? (
+                {setupRunning || thread.queue.length > 0 ? (
                   <>
-                    <h3>What should we orchestrate?</h3>
+                    <CreateProcessingOverlay
+                      variant="inline"
+                      mode={
+                        thread.sourceType === 'orchestration' ||
+                        isGlobalThread(thread)
+                          ? 'orchestration'
+                          : 'create'
+                      }
+                      repoName={
+                        thread.repoPath.split('/').filter(Boolean).pop() ||
+                        thread.title ||
+                        'Workspace'
+                      }
+                      selectionHint={
+                        setupRunning ? 'Running setup' : 'Starting chat'
+                      }
+                    />
+                    <h3>
+                      {thread.sourceType === 'orchestration' ||
+                      isGlobalThread(thread)
+                        ? 'Opening orchestration'
+                        : 'Creating worktree'}
+                    </h3>
                     <p>
-                      {isGlobalThread(thread)
-                        ? 'Steer worktree agents across registered repos with Sideboard MCP. Slack DMs and @mentions land here.'
-                        : 'Coordinate child worktree agents from this orchestration chat.'}{' '}
-                      Use <kbd>⌘L</kbd> to focus the composer.
+                      {setupRunning
+                        ? 'Running setup — you can keep browsing while this finishes.'
+                        : 'Sending your first message — you can keep browsing while this finishes.'}
                     </p>
                   </>
                 ) : (
                   <>
-                    <h3>What are you working on?</h3>
-                    <p>
-                      Ask Sideboard to explore this worktree, make changes, or summarize a PR. Use{' '}
-                      <kbd>⌘L</kbd> to focus the composer.
-                    </p>
+                    <div className="chat-empty-mark" aria-hidden>
+                      <span className="chat-empty-cube" />
+                    </div>
+                    {thread.sourceType === 'orchestration' ||
+                    isGlobalThread(thread) ? (
+                      <>
+                        <h3>What should we orchestrate?</h3>
+                        <p>
+                          {isGlobalThread(thread)
+                            ? 'Steer worktree agents across registered repos with Sideboard MCP. Slack DMs and @mentions land here.'
+                            : 'Coordinate child worktree agents from this orchestration chat.'}{' '}
+                          Use <kbd>⌘L</kbd> to focus the composer.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <h3>What are you working on?</h3>
+                        <p>
+                          Ask Sideboard to explore this worktree, make changes, or
+                          summarize a PR. Use <kbd>⌘L</kbd> to focus the composer.
+                        </p>
+                      </>
+                    )}
                   </>
                 )}
               </div>

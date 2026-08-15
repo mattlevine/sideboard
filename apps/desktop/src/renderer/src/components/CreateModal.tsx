@@ -48,7 +48,10 @@ interface Props {
   knownWorkspaces?: Workspace[];
   initialMode?: 'quick' | 'orchestration';
   onClose: () => void;
-  onCreated: (thread: Thread, opts?: { stayOpen?: boolean }) => void;
+  onCreated: (
+    thread: Thread,
+    opts?: { stayOpen?: boolean; hasPrompt?: boolean },
+  ) => void;
   /**
    * Fired when create starts and the modal will close so progress can move
    * into the chat empty state (non-blocking).
@@ -349,6 +352,9 @@ export function CreateModal({
             ? 'default branch'
             : selection.ref
       : null;
+    const firstPrompt =
+      mode === 'orchestration' ? goal.trim() : prompt.trim();
+    const hasPrompt = Boolean(firstPrompt);
 
     // Move progress into the chat empty state instead of blocking the modal,
     // unless "create more" keeps the dialog open.
@@ -380,10 +386,10 @@ export function CreateModal({
           ...draft,
         });
         if (createMore) {
-          onCreated(t, { stayOpen: true });
+          onCreated(t, { stayOpen: true, hasPrompt });
           resetDraft();
         } else {
-          onCreated(t);
+          onCreated(t, { hasPrompt });
         }
         return;
       }
@@ -432,10 +438,10 @@ export function CreateModal({
         attachments: createAttachments,
       });
       if (createMore) {
-        onCreated(t, { stayOpen: true });
+        onCreated(t, { stayOpen: true, hasPrompt });
         resetDraft();
       } else {
-        onCreated(t);
+        onCreated(t, { hasPrompt });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

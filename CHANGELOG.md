@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Creating a worktree keeps the same processing overlay as archive until the first chat message appears, so the new chat no longer looks empty (as if you need to retype).
 - `git push` from the desktop and worktree agents falls back to HTTPS via `gh` when the SSH agent is missing (same path fetch already used). Sidebar Create PR / Commit & push run that push themselves when the tree is clean.
 
 ## [0.1.78] - 2026-08-14
