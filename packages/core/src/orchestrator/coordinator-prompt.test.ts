@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  COORDINATOR_TOOL_PLAYBOOK,
   coordinatorSystemPrompt,
   coordinatorTurnReminder,
   ensureGlobalCoordinatorCwd,
@@ -52,7 +53,7 @@ describe('coordinator-prompt', () => {
     );
   });
 
-  it('desktop playbook covers create/chat/stop/archive and discovery tools', () => {
+  it('first-turn prompt is audience + inventory, not the fleet playbook', () => {
     const prompt = coordinatorSystemPrompt({
       goal: 'Ship the feature',
       parentId: 'parent-1',
@@ -67,49 +68,14 @@ describe('coordinator-prompt', () => {
       ],
     });
     expect(prompt).toContain('orchestration agent');
-    expect(prompt).toContain('list_workspaces');
-    expect(prompt).toContain('list_branches');
-    expect(prompt).toContain('list_prs');
-    expect(prompt).toContain('list_issues');
-    expect(prompt).toContain('linear_create_issue');
-    expect(prompt).toContain('linear_update_issue');
-    expect(prompt).toContain('linear_comment');
-    expect(prompt).toContain('create_thread');
-    expect(prompt).toContain('Account defaults');
-    expect(prompt).toContain('list_models');
-    expect(prompt).toContain('set_caffeinate');
-    expect(prompt).toContain('slack_post');
-    expect(prompt).toContain('slack_replies');
-    expect(prompt).toMatch(/not instructions|not a command/i);
-    expect(prompt).toContain('fork_worktree');
-    expect(prompt).toContain('fork_chat');
-    expect(prompt).toMatch(/orchestration chat/i);
-    expect(prompt).toContain('send_to_thread');
-    expect(prompt).toContain('wait_for_turn');
-    expect(prompt).toContain('stop_thread');
-    expect(prompt).toContain('force-stop');
-    expect(prompt).toContain('force_stop');
-    expect(prompt).toContain('archive_thread');
-    expect(prompt).toContain('restore_thread');
-    expect(prompt).toContain('run_setup');
-    expect(prompt).toContain('run_dev_script');
-    expect(prompt).toContain('get_diff');
-    expect(prompt).toContain('request_review');
-    expect(prompt).toContain('ask_git');
-    expect(prompt).toContain('Commit and push.');
-    expect(prompt).toContain('Merge PR.');
-    expect(prompt).not.toContain('create_draft_pr');
-    expect(prompt).not.toContain('preview_land');
-    expect(prompt).toContain('purge_thread');
-    expect(prompt).not.toMatch(/Human-only \(do not attempt\): merge,/);
     expect(prompt).toContain('parent-1');
     expect(prompt).toContain('github:acme/sideboard');
-    expect(prompt).toContain('gh pr create --draft -R');
-    expect(prompt).toMatch(/never upstream/i);
-    expect(prompt).toContain('Greenfield');
-    expect(prompt).toContain('add_workspace');
-    expect(prompt).toContain('sideboard/repos');
-    expect(prompt).toContain('sideboard://thread/');
+    expect(prompt).toContain('AGENTS.md');
+    expect(prompt).toContain('CLAUDE.md');
+    expect(prompt).not.toContain('Typical flow (existing)');
+    expect(prompt).not.toContain('force_stop: true');
+    expect(prompt).not.toContain('Greenfield (new app / new GitHub repo)');
+    expect(prompt).not.toContain(COORDINATOR_TOOL_PLAYBOOK.slice(0, 80));
   });
 
   it('slack audience tells the coordinator not to sign the destination name', () => {
@@ -173,15 +139,18 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('create_thread');
       expect(claude).toContain('oversee worktree agents');
       expect(claude).toContain('normal');
-      expect(claude).toContain('Greenfield');
       expect(claude).toContain('add_workspace');
       expect(claude).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
       expect(claude).toContain('parentThreadId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
-      expect(agents).toContain('Sideboard MCP');
-      expect(agents).toContain('ask_git');
-      expect(agents).toContain('set_caffeinate');
-      expect(agents).toContain('slack_replies');
-      expect(agents).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+      expect(claude).toBe(agents);
+      expect(claude).toContain(COORDINATOR_TOOL_PLAYBOOK.slice(0, 80));
+      expect(claude).toContain('Typical flow (existing)');
+      expect(claude).toContain('force_stop: true');
+      expect(claude).toContain('Greenfield');
+      expect(claude).toContain('ask_git');
+      expect(claude).toContain('set_caffeinate');
+      expect(claude).toContain('slack_replies');
+      expect(claude).toContain('Sideboard MCP');
 
       // reconcile-style rewrite without an id must keep the prior uuid
       ensureGlobalCoordinatorCwd();

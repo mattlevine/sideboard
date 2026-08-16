@@ -161,7 +161,7 @@ export interface AgentInstructionFile {
   content: string;
 }
 
-/** Relative paths checked per agent (first existing wins per path; all found are included). */
+/** Relative paths checked per agent (preferred first). Identical bodies are skipped. */
 const FILES_BY_AGENT: Record<AgentKind, string[]> = {
   claude: [
     'CLAUDE.md',
@@ -188,11 +188,12 @@ export function loadAgentInstructions(
   agent: AgentKind,
 ): AgentInstructionFile[] {
   const candidates = FILES_BY_AGENT[agent] ?? FILES_BY_AGENT.claude;
-  const seen = new Set<string>();
+  const seenPaths = new Set<string>();
+  const seenBodies = new Set<string>();
   const out: AgentInstructionFile[] = [];
 
   for (const rel of candidates) {
-    if (seen.has(rel)) continue;
+    if (seenPaths.has(rel)) continue;
     const abs = join(worktreePath, rel);
     if (!existsSync(abs)) continue;
     try {
@@ -202,7 +203,10 @@ export function loadAgentInstructions(
       if (content.length > MAX_CHARS_PER_FILE) {
         content = `${content.slice(0, MAX_CHARS_PER_FILE)}\n\n…(truncated)`;
       }
-      seen.add(rel);
+      const body = content.trim().replace(/\r\n/g, '\n');
+      if (seenBodies.has(body)) continue;
+      seenPaths.add(rel);
+      seenBodies.add(body);
       out.push({ relativePath: rel, content });
     } catch {
       // ignore unreadable

@@ -5,8 +5,31 @@ function sumOptional(a: number | undefined, b: number | undefined): number | und
   return (a ?? 0) + (b ?? 0);
 }
 
+/**
+ * OpenAI/Codex/Brightsy-shaped usage → Claude-shaped {@link TokenUsage}.
+ * `cachedInputTokens` is already inside `inputTokens`; reasoning is already
+ * inside `outputTokens` when the provider reports it separately.
+ */
+export function fromInclusiveInputUsage(opts: {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+}): TokenUsage | null {
+  const totalInput = Number(opts.inputTokens) || 0;
+  const outputTokens = Number(opts.outputTokens) || 0;
+  const cached = Number(opts.cachedInputTokens) || 0;
+  if (!totalInput && !outputTokens) return null;
+  const cacheReadTokens = cached > 0 ? Math.min(cached, totalInput) : 0;
+  return {
+    inputTokens: Math.max(0, totalInput - cacheReadTokens),
+    outputTokens,
+    cacheReadTokens: cacheReadTokens || undefined,
+  };
+}
+
 /** Prompt tokens occupying the context window for a single API call. */
 export function requestOccupancy(u: TokenUsage): number {
+  // Assumes Claude-shaped usage: inputTokens is uncached; cache hits are extra.
   return u.inputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0);
 }
 

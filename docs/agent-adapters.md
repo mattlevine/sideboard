@@ -50,6 +50,7 @@ Reference implementations:
 - Keep mechanical control on Sideboard’s CLI/MCP; the adapter owns turn spawn + session resume.
 - Chat-only agents (no local file edits) are fine — document that limitation like Brightsy.
 - Use `permissionMode()` from `types.ts` when the agent supports plan / autonomy modes.
+- Map usage to Claude-shaped `TokenUsage` (`inputTokens` uncached; cache extra). OpenAI-shaped CLIs (Codex, Brightsy) use `fromInclusiveInputUsage` — do not add cache or reasoning on top of inclusive totals.
 
 ## Out of scope for a first PR
 

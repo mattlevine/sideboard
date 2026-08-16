@@ -121,13 +121,23 @@ describe('formatRenameBranchDirective', () => {
 });
 
 describe('loadAgentInstructions', () => {
-  it('loads CLAUDE.md and AGENTS.md for claude', () => {
+  it('loads CLAUDE.md and AGENTS.md for claude when they differ', () => {
     const root = mkdtempSync(join(tmpdir(), 'sb-instr-'));
     writeFileSync(join(root, 'CLAUDE.md'), '# Claude rules\nUse pnpm.\n');
     writeFileSync(join(root, 'AGENTS.md'), '# Agents\nBe brief.\n');
 
     const files = loadAgentInstructions(root, 'claude');
     expect(files.map((f) => f.relativePath)).toEqual(['CLAUDE.md', 'AGENTS.md']);
+  });
+
+  it('skips AGENTS.md when it matches CLAUDE.md', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sb-instr-same-'));
+    const body = '# Sideboard Orchestration\nFollow MCP.\n';
+    writeFileSync(join(root, 'CLAUDE.md'), body);
+    writeFileSync(join(root, 'AGENTS.md'), `${body}\n`);
+
+    const files = loadAgentInstructions(root, 'claude');
+    expect(files.map((f) => f.relativePath)).toEqual(['CLAUDE.md']);
   });
 });
 

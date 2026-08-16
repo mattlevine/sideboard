@@ -1,6 +1,6 @@
 import type { AgentKind, TokenUsage } from '@sideboard-ai/core';
 
-/** Total tokens processed for a turn (input + output + cache reads/writes). */
+/** Total tokens processed for a turn (uncached input + output + cache reads/writes). */
 export function totalTokens(u: TokenUsage): number {
   return u.inputTokens + u.outputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0);
 }

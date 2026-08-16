@@ -135,6 +135,7 @@ export function coordinatorTurnReminder(opts: {
 /**
  * Write durable CLAUDE.md / AGENTS.md into the global synthetic cwd so Claude
  * (and other agents that load AGENTS.md) keep orchestrator identity on resume.
+ * Both files get the same body — they are filename aliases, not two documents.
  * When `orchestratorThreadId` is set, embed that uuid so Codex/Claude resume
  * cannot invent a stale parentThreadId.
  */
@@ -220,7 +221,6 @@ export function coordinatorSystemPrompt(opts: {
   audience?: 'cloud' | 'slack' | 'desktop';
 }): string {
   const audience = opts.audience ?? 'cloud';
-  const reposDir = sideboardReposDir();
   const intro =
     audience === 'cloud'
       ? [
@@ -240,18 +240,14 @@ export function coordinatorSystemPrompt(opts: {
             'Stay concise and actionable; prefer Sideboard MCP for fleet status; use Bash for greenfield repo setup and inspecting target worktree paths.',
           ];
 
+  // Fleet playbook lives in AGENTS.md / CLAUDE.md (same body) so CLIs auto-load
+  // one copy. This prefix is first-turn extras only — inventory, audience, goal.
   return [
     ...intro,
     'You operate across ALL registered workspaces below.',
     'You have no project git home — this process cwd is synthetic and empty on purpose.',
-    COORDINATOR_TOOL_PLAYBOOK,
-    accountDefaultsPlaybookLine(),
-    coordinatorGreenfieldPlaybook(reposDir),
-    'When creating threads, pass the correct repoPath for the target workspace.',
+    'Follow AGENTS.md / CLAUDE.md in this cwd for the fleet playbook (they are the same document).',
     `YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit parentThreadId (Sideboard binds it). Never invent a uuid.`,
-    'Omit agent/model on create_thread unless you need to override Account defaults.',
-    'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread (implement) → wait_for_turn → ask_git create-draft → wait_for_turn → (when ready) ask_git merge → wait_for_turn. Never target upstream. Never git/gh from this orchestration cwd.',
-    'Typical flow (new app): Bash under repos dir (clone or gh repo create) → add_workspace → create_thread → send_to_thread → wait_for_turn → ask_git create-draft.',
     `Goal: ${opts.goal}`,
     'Registered workspaces:',
     formatWorkspaceInventory(opts.workspaces),

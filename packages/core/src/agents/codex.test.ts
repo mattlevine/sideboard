@@ -104,7 +104,25 @@ describe('codexAdapter.parseEvent', () => {
     );
     expect(event).toEqual({
       type: 'usage',
-      data: { inputTokens: 24763, outputTokens: 162, cacheReadTokens: 20000 },
+      data: { inputTokens: 4763, outputTokens: 122, cacheReadTokens: 20000 },
+      scope: 'turn',
+    });
+  });
+
+  it('does not treat Codex cached_input_tokens as extra input', () => {
+    const event = codexAdapter.parseEvent(
+      JSON.stringify({
+        type: 'turn.completed',
+        usage: {
+          input_tokens: 18424,
+          cached_input_tokens: 11008,
+          output_tokens: 26,
+        },
+      }),
+    );
+    expect(event).toEqual({
+      type: 'usage',
+      data: { inputTokens: 7416, outputTokens: 26, cacheReadTokens: 11008 },
       scope: 'turn',
     });
   });

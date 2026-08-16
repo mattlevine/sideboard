@@ -52,13 +52,12 @@ describe('cloud-connect prompts', () => {
       ],
     });
     expect(prompt).toContain('ALL registered workspaces');
-    expect(prompt).toContain('list_workspaces');
-    expect(prompt).toContain('create_thread');
-    expect(prompt).toContain('send_to_thread');
+    expect(prompt).toContain('AGENTS.md');
     expect(prompt).toContain('no project git home');
     expect(prompt).toContain('- sideboard: /Users/me/sideboard');
     expect(prompt).toContain('- storycycle-ai: /Users/me/storycycle-ai');
     expect(prompt).not.toContain('Coordinator home repo');
+    expect(prompt).not.toContain('Typical flow (existing)');
     expect(prompt).toContain('parent-1');
   });
 

@@ -882,8 +882,9 @@ export class Orchestrator {
         : buildSessionSeed(prior);
     }
 
-    // Fresh orchestration sessions get the full fleet playbook + workspace inventory.
-    // Every turn also gets coordinatorTurnReminder in agentPrompt; global cwd has CLAUDE.md.
+    // Fresh orchestration sessions get audience + workspace inventory.
+    // Fleet playbook is AGENTS.md / CLAUDE.md in the global cwd (same body).
+    // Every turn also gets coordinatorTurnReminder in agentPrompt.
     let coordinatorDirective: string | null = null;
     if (isOrchestration) {
       if (isGlobalThread(fresh)) {

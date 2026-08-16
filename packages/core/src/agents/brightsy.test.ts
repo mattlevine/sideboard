@@ -157,7 +157,7 @@ describe('brightsyAdapter.parseEvent', () => {
     );
     expect(event).toEqual({
       type: 'usage',
-      data: { inputTokens: 19618, outputTokens: 29, cacheReadTokens: 100 },
+      data: { inputTokens: 19518, outputTokens: 29, cacheReadTokens: 100 },
     });
   });
 
