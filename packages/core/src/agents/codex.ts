@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { run } from '../git/run.js';
 import { resolveAgentExecutable } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
-import type { AgentEvent, AgentStatus, IssueInfo } from '../types/thread.js';
+import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage } from './error-detail.js';
 import { fromInclusiveInputUsage } from './usage.js';
 import {
