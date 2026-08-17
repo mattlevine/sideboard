@@ -8,7 +8,7 @@ Sideboard is pre-1.0. Security fixes land on `main` and tagged releases when pub
 
 Please **do not** open a public GitHub issue for security reports.
 
-Email the maintainers privately (or use GitHub Security Advisories on this repository when enabled) with:
+Email <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a> privately (or use GitHub Security Advisories on this repository when enabled) with:
 
 - Description of the issue
 - Steps to reproduce

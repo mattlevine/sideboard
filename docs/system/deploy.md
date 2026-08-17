@@ -30,6 +30,9 @@ Needs `flyctl` logged in (`fly auth whoami`). The image is built from the workin
 
 - https://www.sideboard.cloud/ — marketing
 - https://www.sideboard.cloud/docs/ — docs page
+- https://www.sideboard.cloud/slack/ — Slack app landing
+- https://www.sideboard.cloud/privacy/ — privacy policy
+- https://www.sideboard.cloud/support/ — support
 - https://relay.sideboard.cloud/health — JSON; Fly checks this
 
 A brief “not listening on 8080” warning during machine start is normal if Node is still booting; wait for the health check.

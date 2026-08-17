@@ -1,6 +1,6 @@
 {
   "name": "@sideboard-ai/desktop",
-  "version": "0.1.79",
+  "version": "0.1.80",
   "private": true,
   "description": "Sideboard desktop — agent-agnostic worktree orchestration",
   "license": "Apache-2.0",
@@ -83,15 +83,13 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ],

@@ -100,6 +100,8 @@ type OpencodeTokens = {
 
 function usageFromOpencode(tokens: OpencodeTokens | undefined): TokenUsage | null {
   if (!tokens) return null;
+  // OpenCode reports Anthropic-style cache (cache.read can exceed input) and
+  // separate reasoning tokens that are not included in `output`.
   const inputTokens = Number(tokens.input ?? 0);
   const outputTokens = Number(tokens.output ?? 0) + Number(tokens.reasoning ?? 0);
   if (!inputTokens && !outputTokens) return null;

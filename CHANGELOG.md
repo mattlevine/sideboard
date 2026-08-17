@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `/graph-engineering` (`.claude/skills/graph-engineering/SKILL.md`, Cursor symlink) — judge-first, disk state, growing rulebook. `AGENTS.md` points at it.
 - Marketing site and docs cover portable process skills (homepage compare table, `/docs/` repo config + guide card).
 
+## [0.1.80] - 2026-08-16
+
+### Added
+
+- Public Slack landing, privacy policy, and support pages at `/slack/`, `/privacy/`, `/support/` on www.sideboard.cloud
+
+### Changed
+
+- Mac desktop ships Apple Silicon (arm64) only; Intel (x64) DMG/zip dropped from the electron-builder targets
+- Orchestration first-turn prompt is audience + workspace inventory only; fleet playbook stays in `AGENTS.md` / `CLAUDE.md`
+
+### Fixed
+
+- Codex token badge no longer double-counts cache reads (`cached_input_tokens` is already inside Codex `input_tokens`) or reasoning (`reasoning_output_tokens` is already inside `output_tokens`)
+- Brightsy token badge no longer double-counts `prompt_tokens_details.cached_tokens` (same OpenAI-shaped usage as Codex)
+- Identical `AGENTS.md` / `CLAUDE.md` bodies are ingested once
+
 ## [0.1.79] - 2026-08-14
 
 ### Added

@@ -6,6 +6,7 @@ import { resolveAgentExecutable } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage } from './error-detail.js';
+import { fromInclusiveInputUsage } from './usage.js';
 import {
   buildInjectedMcpServers,
   shouldInjectBrightsyMcp,
@@ -93,14 +94,12 @@ type CodexUsage = {
 
 function usageFromCodex(usage: CodexUsage | undefined): TokenUsage | null {
   if (!usage) return null;
-  const inputTokens = Number(usage.input_tokens ?? 0);
-  const outputTokens = Number(usage.output_tokens ?? 0) + Number(usage.reasoning_output_tokens ?? 0);
-  if (!inputTokens && !outputTokens) return null;
-  return {
-    inputTokens,
-    outputTokens,
-    cacheReadTokens: usage.cached_input_tokens ? Number(usage.cached_input_tokens) : undefined,
-  };
+  // `reasoning_output_tokens` is a subset of `output_tokens` — do not add it.
+  return fromInclusiveInputUsage({
+    inputTokens: Number(usage.input_tokens ?? 0),
+    outputTokens: Number(usage.output_tokens ?? 0),
+    cachedInputTokens: Number(usage.cached_input_tokens ?? 0),
+  });
 }
 
 function codexConfigHasNetworkAccess(): boolean {

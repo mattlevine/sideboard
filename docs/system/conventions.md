@@ -29,4 +29,4 @@ pnpm --filter @sideboard-ai/desktop dev
 
 - Focused PRs. Include tests when changing adapters, MCP, or git land paths.
 - Do not commit or push unless the user asked.
-- Release: `pnpm release` (see README). npm publish uses `--no-git-checks`; desktop GitHub Releases are signed/notarized from `apps/desktop`. Marketing site + Slack relay: [deploy.md](deploy.md).
+- Release: `pnpm release` (see README). npm publish uses `--no-git-checks`; desktop GitHub Releases are signed/notarized from `apps/desktop` (**Apple Silicon / arm64 only**). Marketing site + Slack relay: [deploy.md](deploy.md).

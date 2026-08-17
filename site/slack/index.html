@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slack — Sideboard</title>
+<meta name="description" content="DM or @mention Sideboard from Slack. Agents, worktrees and secrets stay on your Mac. Message text goes through the relay.">
+<meta property="og:title" content="Slack — Sideboard">
+<meta property="og:description" content="DM or @mention Sideboard from Slack. Agents stay on your Mac.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.sideboard.cloud/slack/">
+<meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.png">
+<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code,pre{font-family:ui-monospace,"SF Mono",Menlo,monospace}</style>
+<style>.nav-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}.btn-outline:hover{background:#202226}</style>
+</head>
+<body>
+<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
+<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
+<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
+<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
+<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
+</a>
+<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
+<a href="/docs/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Docs</a>
+<a href="/privacy/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Privacy</a>
+<a href="/support/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Support</a>
+<a href="https://github.com/mattlevine/sideboard/releases/latest" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">Download for Mac</a>
+</div>
+</header>
+<div style="background:#17181a">
+
+<section style="max-width:1180px;margin:0 auto;padding:56px 40px 0">
+<span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Slack app</span>
+<h1 style="font-weight:700;font-size:56px;line-height:1.06;letter-spacing:-.02em;margin:20px 0 0;max-width:800px">Slack to this Mac, not a rented sandbox.</h1>
+<p style="font-size:20px;line-height:1.55;max-width:640px;margin:20px 0 0;color:#b3bcc4">DM or @mention Sideboard. The orchestrator on your Mac handles the turn. Agents, worktrees, repos and secrets stay on that machine — including anything only reachable on the corporate VPN. What leaves: Slack message text, through the relay.</p>
+</section>
+
+<section style="max-width:1180px;margin:0 auto;padding:56px 40px 0">
+<h2 style="font-weight:700;font-size:32px;letter-spacing:-.02em;margin:0 0 20px">How it works in Slack</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:20px;margin:0 0 8px">1. Install Sideboard on the Mac</h3>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Apple Silicon desktop from GitHub Releases. Keep the app running. Slack cannot reach a sleeping machine — turn on caffeinate from the orchestration chat when you step away.</p>
+</div>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:20px;margin:0 0 8px">2. Connect the workspace</h3>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">In Sideboard: Settings → Account → Slack workspaces → Add via browser. Name this Mac (<code style="font-size:13px;color:#8cc8f5">Work</code>, <code style="font-size:13px;color:#8cc8f5">Personal</code>, …). Wait until status shows Relay connected.</p>
+</div>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:20px;margin:0 0 8px">3. Talk to that Mac</h3>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">DM the bot <code style="font-size:13px;color:#8cc8f5">work: check the failing CI</code>, or in a channel <code style="font-size:13px;color:#8cc8f5">@sideboard work: ship it</code>. Prefix matches the Mac name. Send <code style="font-size:13px;color:#8cc8f5">stop</code> to interrupt a turn.</p>
+</div>
+</div>
+</section>
+
+<section style="max-width:1180px;margin:0 auto;padding:56px 40px 0">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px">
+<div style="padding:28px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">What you can do</h3>
+<ul style="margin:0;padding-left:1.15em;font-size:15.5px;line-height:1.65;color:#b3bcc4">
+<li>Drive the global orchestrator from a DM or @mention</li>
+<li>Have it ping a coworker to review a PR a worktree just pushed</li>
+<li>Get their Slack reply back in Sideboard as information, not a command</li>
+<li>List channels, read, and post from agents on this Mac (MCP)</li>
+</ul>
+</div>
+<div style="padding:28px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">What stays on the Mac</h3>
+<p style="margin:0;font-size:15.5px;line-height:1.65;color:#b3bcc4">Agents, git worktrees, repo contents, secrets, and VPN-only APIs. The relay at <code style="font-size:13px;color:#8cc8f5">relay.sideboard.cloud</code> routes Slack chat. It does not host worktrees. Someone else messaging the bot needs <em>their</em> Sideboard online.</p>
+</div>
+</div>
+</section>
+
+<section id="install" style="max-width:1180px;margin:0 auto;padding:56px 40px 0">
+<div style="border-radius:28px;background:#202226;border:1px solid #2c3036;padding:40px">
+<h2 style="font-weight:700;font-size:32px;letter-spacing:-.02em;margin:0 0 12px">Install</h2>
+<p style="margin:0 0 22px;font-size:16px;line-height:1.6;color:#b3bcc4;max-width:640px">Start from the desktop so tokens land on this Mac. Add to Slack from this page installs the bot in your workspace; then open Sideboard → Settings → Account → Slack and finish Add via browser if the Mac has not picked up the tokens yet.</p>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px">
+<a href="https://github.com/mattlevine/sideboard/releases/latest" style="display:inline-flex;align-items:center;padding:12px 24px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:15px" class="btn-blue">Download for Mac</a>
+<a id="add-to-slack" href="https://slack.com/oauth/v2/authorize?client_id=7592788819232.11813536272562&amp;scope=app_mentions:read,channels:history,channels:read,groups:history,groups:read,im:history,im:read,im:write,mpim:history,mpim:read,chat:write,chat:write.public,reactions:write,users:read,users:read.email,team:read&amp;user_scope=search:read,channels:history,channels:read,groups:history,im:history,mpim:history,chat:write,users:read&amp;redirect_uri=https://relay.sideboard.cloud/slack/callback">
+<img alt="Add to Slack" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x">
+</a>
+</div>
+<p style="margin:18px 0 0;font-size:14px;line-height:1.55;color:#8b949c">After Slack says the workspace is connected: open Sideboard, confirm Relay connected, name this Mac, then DM the bot. Uninstall from Slack → apps if you want the bot gone; disconnect the workspace in Sideboard Settings too.</p>
+</div>
+</section>
+
+<section style="max-width:1180px;margin:0 auto;padding:48px 40px 0">
+<p style="margin:0;font-size:15px;line-height:1.65;color:#8b949c;max-width:720px">Agents on this Mac (Claude Code, Codex, OpenCode, Cursor) can generate inaccurate responses. Double-check code and replies. Slack message text is not used to train Sideboard models — Sideboard does not host a model. See <a href="/privacy/">Privacy</a> and <a href="/support/">Support</a>.</p>
+</section>
+
+<section style="max-width:1180px;margin:0 auto;padding:48px 40px 110px">
+<p style="margin:0;font-size:14px;color:#6f777e">Free. English. You need a Mac running Sideboard; the Slack app does nothing on its own.</p>
+</section>
+
+</div>
+<footer style="border-top:1px solid #26292d">
+<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
+<span style="font-weight:700;font-size:16px;margin-right:auto">sideboard.cloud</span>
+<a href="/slack/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Slack</a>
+<a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Docs</a>
+<a href="/privacy/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Privacy</a>
+<a href="/support/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Support</a>
+<a href="https://github.com/mattlevine/sideboard" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">GitHub</a>
+</div>
+</footer>
+<script>
+(function () {
+  var a = document.getElementById('add-to-slack');
+  if (!a) return;
+  var state = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
+  var u = new URL(a.href);
+  u.searchParams.set('state', state);
+  a.href = u.toString();
+})();
+</script>
+</body>
+</html>

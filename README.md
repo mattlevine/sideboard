@@ -75,12 +75,9 @@ sideboard detect
 
 ### Desktop
 
-Download the latest Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
+Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-| Chip | DMG |
-|------|-----|
-| Apple Silicon | https://github.com/mattlevine/sideboard/releases/download/v0.1.79/Sideboard-0.1.79-arm64.dmg |
-| Intel | https://github.com/mattlevine/sideboard/releases/download/v0.1.79/Sideboard-0.1.79.dmg |
+https://github.com/mattlevine/sideboard/releases/download/v0.1.80/Sideboard-0.1.80-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 

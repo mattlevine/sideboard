@@ -9,6 +9,7 @@ import {
 import { loadBrightsyConfig } from '../brightsy/config.js';
 import { resolveAgentExecutable } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, TokenUsage } from '../types/thread.js';
+import { fromInclusiveInputUsage } from './usage.js';
 import {
   decodeBrightsyTarget,
   type BrightsyChatTarget,
@@ -34,15 +35,11 @@ type BrightsyUsage = {
 
 function usageFromBrightsy(usage: BrightsyUsage | undefined): TokenUsage | null {
   if (!usage) return null;
-  const inputTokens = Number(usage.prompt_tokens ?? 0);
-  const outputTokens = Number(usage.completion_tokens ?? 0);
-  if (!inputTokens && !outputTokens) return null;
-  const cached = Number(usage.prompt_tokens_details?.cached_tokens ?? 0);
-  return {
-    inputTokens,
-    outputTokens,
-    cacheReadTokens: cached || undefined,
-  };
+  return fromInclusiveInputUsage({
+    inputTokens: Number(usage.prompt_tokens ?? 0),
+    outputTokens: Number(usage.completion_tokens ?? 0),
+    cachedInputTokens: Number(usage.prompt_tokens_details?.cached_tokens ?? 0),
+  });
 }
 
 /**

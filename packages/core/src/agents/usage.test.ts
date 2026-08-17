@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { applyTurnUsage, contextTokens, requestOccupancy } from './usage.js';
+import {
+  applyTurnUsage,
+  contextTokens,
+  fromInclusiveInputUsage,
+  requestOccupancy,
+} from './usage.js';
+
+describe('fromInclusiveInputUsage', () => {
+  it('subtracts cached tokens that are already inside input', () => {
+    expect(
+      fromInclusiveInputUsage({
+        inputTokens: 18_424,
+        outputTokens: 26,
+        cachedInputTokens: 11_008,
+      }),
+    ).toEqual({
+      inputTokens: 7_416,
+      outputTokens: 26,
+      cacheReadTokens: 11_008,
+    });
+  });
+
+  it('leaves usage unchanged when nothing was cached', () => {
+    expect(
+      fromInclusiveInputUsage({ inputTokens: 100, outputTokens: 10 }),
+    ).toEqual({ inputTokens: 100, outputTokens: 10 });
+  });
+});
 
 describe('applyTurnUsage', () => {
   it('uses the last request occupancy for the meter, not the billed sum', () => {

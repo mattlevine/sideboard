@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — Sideboard</title>
+<meta name="description" content="What Sideboard collects, how Slack data is used, how long it is kept, and how to request access or deletion.">
+<meta property="og:title" content="Privacy — Sideboard">
+<meta property="og:description" content="What Sideboard collects, how Slack data is used, and how to request deletion.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.sideboard.cloud/privacy/">
+<meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.png">
+<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}h2{font-size:22px;margin:36px 0 10px}p,li{font-size:16px;line-height:1.65;color:#b3bcc4}ul{padding-left:1.2em}</style>
+<style>.nav-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}</style>
+</head>
+<body>
+<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
+<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
+<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
+<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
+<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
+</a>
+<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
+<a href="/slack/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Slack</a>
+<a href="/support/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Support</a>
+<a href="https://github.com/mattlevine/sideboard" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">GitHub</a>
+</div>
+</header>
+<article style="max-width:720px;margin:0 auto;padding:56px 40px 110px">
+<span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Privacy</span>
+<h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:18px 0 8px;color:#edf0f3">Privacy policy</h1>
+<p style="margin:0;color:#8b949c;font-size:14px">Last updated 15 August 2026. Sideboard is a local Mac app plus a Slack relay at <code>relay.sideboard.cloud</code>.</p>
+
+<h2>What this covers</h2>
+<p>This policy describes data handled by the Sideboard desktop/CLI on your computer and by the hosted Slack relay. It is written for people who install the Sideboard Slack app. The marketing site at www.sideboard.cloud does not require an account.</p>
+
+<h2>What we collect</h2>
+<ul>
+<li><strong>On your Mac.</strong> Workspace tokens, Slack team and user ids, device name, thread/worktree metadata, and chat you have with agents. Tokens live in an encrypted vault on disk (<code>slack-workspaces.json</code>), not in the renderer or in git.</li>
+<li><strong>Through the Slack relay.</strong> Slack OAuth codes and the resulting bot/user tokens (held in memory for about five minutes so the desktop can fetch them), then Slack message text, channel ids, user ids, and team ids needed to route DMs and @mentions to your Mac. The relay does not receive git repos, secrets, or VPN-only traffic.</li>
+<li><strong>We do not</strong> require a Sideboard cloud account. We do not sell Slack data. We do not use Slack data to train Sideboard models — Sideboard does not host a model.</li>
+</ul>
+
+<h2>How it is used</h2>
+<p>Slack message text is delivered to the Sideboard orchestrator on your Mac so you can drive agents from Slack and so review-ping replies can show up in chat. Agents you installed (Claude Code, Codex, OpenCode, Cursor, and others) may send that prompt text to the model provider <em>you</em> configured. Those providers have their own policies. Sideboard does not retain a product-side copy of Slack messages after they are handed to your Mac.</p>
+<p>OAuth exists so Listen can prove which Slack user owns this Mac and so the bot can post replies. The client secret stays on the relay, not in the Mac app.</p>
+
+<h2>Where it lives and how long</h2>
+<ul>
+<li><strong>Your Mac</strong> — until you disconnect the Slack workspace in Settings, uninstall Sideboard, or delete the local data directory.</li>
+<li><strong>Relay (Fly, region sjc)</strong> — in-memory sessions while your desktop is connected; OAuth pending results expire after about five minutes. Message text is not stored as a Sideboard database.</li>
+<li><strong>Slack</strong> — messages remain in your workspace under Slack’s own retention. Uninstalling the Sideboard app does not delete Slack history.</li>
+</ul>
+
+<h2>Access, transfer, and deletion</h2>
+<p>You can disconnect a workspace in Sideboard → Settings → Account → Slack, and remove the app from your Slack workspace (Apps → Sideboard → Remove). That drops tokens on the Mac and stops Listen for that team.</p>
+<p>To request access, export, or deletion of data Sideboard still holds (for example a leftover vault file, or a question about relay logs), email <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. That address is enough; you do not need another account. We will respond within two business days. For GDPR/CCPA-style deletion requests, say so in the email and include the Slack team id if you have it.</p>
+
+<h2>Contact</h2>
+<p>Privacy and data requests: <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. Also see <a href="/support/">Support</a> and <a href="/slack/">how the Slack app works</a>.</p>
+</article>
+<footer style="border-top:1px solid #26292d">
+<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
+<span style="font-weight:700;font-size:16px;margin-right:auto">sideboard.cloud</span>
+<a href="/slack/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Slack</a>
+<a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Docs</a>
+<a href="/privacy/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Privacy</a>
+<a href="/support/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Support</a>
+<a href="https://github.com/mattlevine/sideboard" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">GitHub</a>
+</div>
+</footer>
+</body>
+</html>

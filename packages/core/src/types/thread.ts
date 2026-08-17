@@ -37,8 +37,10 @@ export type MessagePart =
 
 /** Token usage for a single agent turn, aggregated across the turn's API calls. */
 export interface TokenUsage {
+  /** Uncached prompt tokens. Adapters must subtract provider cache hits first. */
   inputTokens: number;
   outputTokens: number;
+  /** Cache hits, not included in `inputTokens` (Claude-shaped). */
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
   /**

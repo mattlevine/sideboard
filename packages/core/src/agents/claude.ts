@@ -79,6 +79,7 @@ type ClaudeUsage = {
 
 function usageFromClaude(usage: ClaudeUsage | undefined): TokenUsage | null {
   if (!usage) return null;
+  // Anthropic: input_tokens is uncached; cache_read / cache_creation are extra.
   const inputTokens = Number(usage.input_tokens ?? 0);
   const outputTokens = Number(usage.output_tokens ?? 0);
   const cacheReadTokens = Number(usage.cache_read_input_tokens ?? 0);

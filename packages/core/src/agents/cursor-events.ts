@@ -50,6 +50,8 @@ export type CursorSdkStreamMessage = {
 
 function usageFromCursor(usage: CursorSdkStreamMessage['usage']): TokenUsage | null {
   if (!usage) return null;
+  // Cursor SDK TokenUsage is Claude-shaped: inputTokens is uncached; cache
+  // read/write are extra (`totalTokens` sums all four). Do not subtract.
   const inputTokens = Number(usage.inputTokens ?? 0);
   const outputTokens = Number(usage.outputTokens ?? 0);
   if (!inputTokens && !outputTokens) return null;
