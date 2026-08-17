@@ -20,6 +20,7 @@ export default defineConfig({
       '@sideboard/plan-ask-user': core('plan/ask-user.ts'),
       '@sideboard/plan-file': core('plan/plan-present.ts'),
       '@sideboard/agent-git-actions': core('git/agent-git-actions.ts'),
+      '@sideboard/review-request-template': core('review/review-request-template.ts'),
     },
   },
 });

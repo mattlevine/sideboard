@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Agent turns and Cursor's local runner strip inherited `ELECTRON_*` / `CHROME_*` from the host Sideboard.app. Nested Electron (Claude Code, Cursor agent, MCP via Electron-as-Node) was crashing at startup (`HasCustomHostObject` / `ElectronInitializeICUandStartNode`). Run scripts already stripped these; spawn did not.
+- Desktop renderer loads the stock Review template via a Vite alias instead of the `@sideboard-ai/core` barrel, so the Mac build no longer tries to bundle Node `fs`.
 
 ## [0.1.81] - 2026-08-16
 

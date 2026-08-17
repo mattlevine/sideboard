@@ -1,7 +1,5 @@
-import {
-  REVIEW_REQUEST_TEMPLATE,
-  type ThreadAttachment,
-} from '@sideboard-ai/core';
+import type { ThreadAttachment } from '@sideboard-ai/core';
+import { REVIEW_REQUEST_TEMPLATE } from '@sideboard/review-request-template';
 
 export { REVIEW_REQUEST_TEMPLATE };
 

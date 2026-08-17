@@ -32,7 +32,7 @@ CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 | Git worktrees / land | `packages/core/src/git/`, `packages/core/src/land/` |
 | Process skills | `packages/core/src/skills/` (discovery), `.claude/skills/` (committed guides) |
 
-Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm dev`) before expecting the app to pick them up.
+Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm dev`) before expecting the app to pick them up. The renderer may `import type` from `@sideboard-ai/core` but must not import values from the core barrel (that pulls Node `fs` into Vite). Value helpers go through `@sideboard/*` aliases in `apps/desktop/electron.vite.config.ts`.
 
 ## Process skills
 
