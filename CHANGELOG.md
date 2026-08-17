@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Worktree and orchestration agents can call MCP `ask_user` in any mode (not only Plan) when the user should pick from predefined options. The composer picker is the same UI as plan-mode questions. First-turn and per-turn prompts, plus the tool description, say to use it instead of plain chat bullets.
+
 ## [0.1.82] - 2026-08-16
 
 ### Added

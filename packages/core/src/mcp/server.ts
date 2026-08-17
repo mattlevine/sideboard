@@ -189,7 +189,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_user',
-    'Ask the user clarifying multiple-choice questions in Sideboard’s composer (plan mode). Before calling, write a short chat message explaining the decision and what each option means. Include a description on every option. Use for approach forks and requirements — not for “is the plan ready?”. After calling, stop and wait for their next message with answers.',
+    'Ask the user clarifying multiple-choice questions in Sideboard’s composer (any mode — not only Plan). Before calling, write a short chat message explaining the decision and what each option means. Include a description on every option. Use when the user should pick from predefined options (approach forks, requirements, which API) — not for “is the plan ready?”. After calling, stop and wait for their next message with answers.',
     {
       questions: z
         .array(

@@ -152,6 +152,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('set_caffeinate');
       expect(claude).toContain('slack_replies');
       expect(claude).toContain('Sideboard MCP');
+      expect(claude).toContain('ask_user');
       expect(claude).toContain('.claude/skills/');
       expect(claude).toContain('graph-engineering');
       expect(claude).toContain('/graph-engineering');

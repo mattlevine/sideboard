@@ -148,7 +148,8 @@ export function formatProcessGuideDirective(): string {
 }
 
 /**
- * Tell agents how Sideboard renders Claude-style artifacts (side column).
+ * Tell agents how Sideboard renders Claude-style artifacts (side column)
+ * and the composer multiple-choice picker (`ask_user`).
  * Claude Code has no claude.ai `artifact` tool — fences / present_artifact instead.
  */
 export function formatArtifactDirective(): string {
@@ -168,8 +169,26 @@ export function formatArtifactDirective(): string {
     'Files / media browser (CMS file manager column):',
     '4) Call Sideboard MCP `present_files` with optional title, path, and datasource (brightsy|memory).',
     '   Opens the Files column for browse/upload/pick. Do NOT say a file manager UI is missing.',
-    'Never say artifacts, CMS UI, or the Files column are unavailable. Prefer present_schema for list/edit/publish; present_files for storage UI; html fences for standalone pages.',
+    'Multiple-choice questions (any mode — not only Plan):',
+    '5) Call Sideboard MCP `ask_user` when the user should pick from predefined options (approach forks, requirements, which API). First write a short chat message that explains the decision and what each option means (tradeoffs, when to pick it). Include a description on every option. After calling, stop and wait for their next message with answers. Do not ask multiple-choice questions as plain chat bullets — use ask_user so Sideboard shows the composer picker.',
+    'Never say artifacts, CMS UI, or the Files column are unavailable. Prefer present_schema for list/edit/publish; present_files for storage UI; html fences for standalone pages; ask_user for predefined-option questions.',
   ].join('\n');
+}
+
+/**
+ * Short Sideboard UI reminder on every turn (survives CLI resume).
+ * Covers the side column and the composer multiple-choice picker.
+ */
+export function formatUiReminder(): string {
+  return [
+    'Sideboard side column (important):',
+    'There is no claude.ai Artifact tool here — that is normal.',
+    'HTML/SVG/markdown: ```html fence or MCP present_artifact.',
+    'CMS forms/tables: MCP present_schema (Brightsy resource_id or inline schema+schemaUi).',
+    'Files column: MCP present_files (brightsy account storage or memory).',
+    'Do not say artifacts/CMS UI are unavailable.',
+    'Multiple-choice questions: MCP ask_user (composer picker, any mode). Explain options in chat first, then wait for answers.',
+  ].join(' ');
 }
 
 export interface AgentInstructionFile {

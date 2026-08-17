@@ -61,6 +61,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- get_pr_stack / open_pr_stack_layers / add_stack_layer / create_pr_stack — GitHub stacked PRs (`gh stack`); one worktree per layer',
   '- list_models — only when you need a specific model (rare); otherwise omit model so Account defaults apply',
   '- list_threads / get_thread — fleet status (what is going on)',
+  '- ask_user — multiple-choice questions in the composer (any mode, not only Plan). Explain options in chat first, include a description on every option, then wait for answers.',
   '- set_caffeinate — keep this Mac awake across turns (macOS caffeinate). Turn on for Slack / away-from-keyboard work. Turn OFF when the user says they are done, wrapping up, going to sleep, or no longer need the machine awake. Closing this chat also releases it.',
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
