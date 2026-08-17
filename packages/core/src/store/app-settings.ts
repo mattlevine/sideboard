@@ -4,6 +4,7 @@ import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 import type { AgentKind } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
+import { stripNestedElectronEnv } from '../hook/nested-electron-env.js';
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
 import { loadSecretVault, saveSecretVault } from './secret-vault.js';
@@ -1426,7 +1427,10 @@ export function childEnvWithAppSettings(
   extra?: Record<string, string | undefined>,
 ): NodeJS.ProcessEnv {
   const settings = loadAppSettings();
-  const env: NodeJS.ProcessEnv = { ...process.env };
+  // Strip host Electron/Chromium keys so Claude Code / Cursor / nested
+  // electron-vite do not attach to Sideboard.app's GPU/crashpad.
+  // Intentional extras (e.g. ELECTRON_RUN_AS_NODE for asar scripts) re-apply after.
+  const env = stripNestedElectronEnv({ ...process.env });
   applyAppEnvironment(env, settings);
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {

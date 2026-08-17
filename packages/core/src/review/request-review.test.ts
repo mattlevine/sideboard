@@ -6,6 +6,7 @@ import {
   REPO_REVIEW_PATH,
   REVIEW_REQUEST_PATH,
   REVIEW_REQUEST_PREFILL,
+  REVIEW_REQUEST_TEMPLATE,
   buildReviewRequestAttachment,
   ensureReviewRequestFile,
   readExistingReviewRequestFile,
@@ -137,5 +138,11 @@ describe('requestReview', () => {
     expect(att.path).toBe(REPO_REVIEW_PATH);
     expect(att.name).toBe('review.md');
     expect(att.content).toBe('hello');
+  });
+
+  it('stock template asks reviewers to grow .claude/skills or review.md', () => {
+    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/Growing the rules/);
+    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/\.claude\/skills/);
+    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/not `\.sideboard\/skills`/);
   });
 });

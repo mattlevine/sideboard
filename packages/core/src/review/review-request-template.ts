@@ -115,4 +115,8 @@ File: src/client/frontends/desktop/core/UserData.ts
 
 **Approve** — Diff is scoped, behavior looks correct, and there are no blocking issues. Safe to merge.
 </example>
+
+## Growing the rules
+
+If a blocking issue is a missing or ambiguous repo rule that will recur, say so and propose one sentence for \`.sideboard/review.md\` or a \`.claude/skills/<name>/SKILL.md\`. Do not only patch this diff when the same miss will happen again. New skills go under \`.claude/skills\` (Claude Code / attach) — not \`.sideboard/skills\`.
 `;

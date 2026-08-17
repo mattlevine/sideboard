@@ -12,9 +12,15 @@ import { Agent, AgentBusyError, CursorAgentError, JsonlLocalAgentStore } from '@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
 import { appDataDir } from '../store/paths.js';
 import { formatUnknownDetail } from './error-detail.js';
 import { cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
+
+// Electron-as-Node already started this process. Drop inherited ELECTRON_*/
+// CHROME_* so the Cursor local agent and MCP children do not attach to
+// Sideboard.app's GPU/crashpad (HasCustomHostObject / ICU startup crash).
+dropNestedElectronEnvFromProcess();
 
 function emit(event: unknown): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);

@@ -30,5 +30,12 @@ CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 | Slack Marketplace / Public Distribution | [slack-marketplace.md](slack-marketplace.md) |
 | Marketing site | `site/` — same Fly app as the relay; [deploy.md](deploy.md) |
 | Git worktrees / land | `packages/core/src/git/`, `packages/core/src/land/` |
+| Process skills | `packages/core/src/skills/` (discovery), `.claude/skills/` (committed guides) |
 
 Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm dev`) before expecting the app to pick them up.
+
+## Process skills
+
+Recurring process guides are **Claude Code project skills** at `.claude/skills/<name>/SKILL.md` (committed). Sideboard discovers that folder (and `.cursor/skills`, legacy `.sideboard/skills`, …) for composer `/name` expand. Native Claude Code and `attach` load `.claude/skills` without Sideboard. New skills must not be written only under `.sideboard/skills`. The worktree playbook (`formatProcessGuideDirective`) and orchestrator playbook state this; the stock Review template asks reviewers to propose a sentence for `review.md` or a skill when a missing rule will recur.
+
+This repo ships [`.claude/skills/graph-engineering/SKILL.md`](../../.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`) — the method for fan-out / batch work. `.cursor/skills/graph-engineering` is a symlink so Cursor sees the same file. `AGENTS.md` / `CLAUDE.md` point at it for Codex and OpenCode.

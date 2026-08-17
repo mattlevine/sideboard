@@ -64,7 +64,7 @@ pnpm --filter @sideboard-ai/desktop typecheck
 1. Keep PRs focused (one adapter, one command, one UI fix).
 2. Include tests when changing adapters, MCP, or git land paths.
 3. Run build + tests before opening the PR (`pnpm --filter @sideboard-ai/core test`, etc.).
-4. Update docs/README when behavior or public CLI/MCP surface changes.
+4. Update docs/README (and `site/` when the public story changes) if behavior or the CLI/MCP/skills surface changes. Recurring process guides go in `.claude/skills/<name>/SKILL.md`, not `.sideboard/skills`.
 
 ## License
 

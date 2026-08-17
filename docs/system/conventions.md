@@ -21,8 +21,8 @@ pnpm --filter @sideboard-ai/desktop dev
 
 ## Docs
 
-- User-facing behavior (CLI, MCP, Slack URLs, install): update `README.md` and the matching file under `docs/`.
-- Agent-facing repo instructions: update `docs/system/` and keep root `AGENTS.md` / `CLAUDE.md` as pointers (same text in both).
+- User-facing behavior (CLI, MCP, Slack URLs, install, process skills): update `README.md`, the matching file under `docs/`, and `site/` (marketing + `/docs/`) when the public story changes.
+- Agent-facing repo instructions: update `docs/system/` and keep root `AGENTS.md` / `CLAUDE.md` as pointers (same text in both). Recurring method lives in `.claude/skills/<name>/SKILL.md`.
 - Architecture decisions belong in `docs/system/` in the same change (layout, host split, deploy, safety rails) — not only in chat or a code comment.
 
 ## Git / PRs

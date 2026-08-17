@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   formatArtifactDirective,
+  formatProcessGuideDirective,
   formatRenameBranchDirective,
   formatWorktreeDirective,
   formatWorktreeReminder,
@@ -19,6 +20,19 @@ describe('formatArtifactDirective', () => {
     expect(text).toMatch(/present_files/);
     expect(text).toMatch(/```html/);
     expect(text).toMatch(/Never say artifacts, CMS UI, or the Files column are unavailable/i);
+  });
+});
+
+describe('formatProcessGuideDirective', () => {
+  it('sends new skills to .claude/skills so native agents see them', () => {
+    const text = formatProcessGuideDirective();
+    expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
+    expect(text).toMatch(/graph-engineering/);
+    expect(text).toMatch(/\/graph-engineering/);
+    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills`/);
+    expect(text).toMatch(/attach/);
+    expect(text).toMatch(/AGENTS\.md/);
+    expect(text).toMatch(/one-off/);
   });
 });
 
@@ -70,6 +84,10 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Short git requests/i);
     expect(text).toMatch(/Git authentication \(Account → GitHub mode: auto\)/);
     expect(text).not.toMatch(/GitHub app/i);
+    expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
+    expect(text).toMatch(/graph-engineering/);
+    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills`/);
+    expect(text).toMatch(/Skip a guide for a one-off/);
   });
 
   it('injects gh-mode instructions instead of the SSH fallback', () => {

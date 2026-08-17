@@ -123,18 +123,34 @@ export function formatWorktreeDirective(
   lines.push(
     '- "Merge PR." → merge this thread\'s open pull request on GitHub. If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.',
   );
+  lines.push('');
+  lines.push(formatProcessGuideDirective());
   return lines.join('\n');
+}
+
+/** Short isolation line on every worktree turn (survives CLI resume). */
+export function formatWorktreeReminder(): string {
+  return 'Sideboard worktree: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout.';
+}
+
+/**
+ * Recurring-process guides: write Claude Code project skills so native CLIs
+ * (`attach`, `claude` in the checkout) see them without Sideboard.
+ */
+export function formatProcessGuideDirective(): string {
+  return [
+    'Process guides (recurring work only):',
+    '- If `.claude/skills/graph-engineering/SKILL.md` exists, follow it (`/graph-engineering`) for migrations, ports, batch fixes, and other fan-out. Judge first; state on disk; grow the rulebook; do not patch around it.',
+    '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill). Sideboard `/name`, Claude Code, and `attach` all load that path. Do not leave the method only in chat.',
+    '- Do not write new skills under `.sideboard/skills` — native agents do not scan it. Point Codex/OpenCode at the file from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.',
+    '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill (or `.sideboard/review.md`), do not patch around it.',
+  ].join('\n');
 }
 
 /**
  * Tell agents how Sideboard renders Claude-style artifacts (side column).
  * Claude Code has no claude.ai `artifact` tool — fences / present_artifact instead.
  */
-/** Short isolation line on every worktree turn (survives CLI resume). */
-export function formatWorktreeReminder(): string {
-  return 'Sideboard worktree: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout.';
-}
-
 export function formatArtifactDirective(): string {
   return [
     'Sideboard side column (desktop UI):',

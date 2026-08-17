@@ -151,6 +151,10 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('set_caffeinate');
       expect(claude).toContain('slack_replies');
       expect(claude).toContain('Sideboard MCP');
+      expect(claude).toContain('.claude/skills/');
+      expect(claude).toContain('graph-engineering');
+      expect(claude).toContain('/graph-engineering');
+      expect(claude).toMatch(/Do not use `\.sideboard\/skills` for new guides/);
 
       // reconcile-style rewrite without an id must keep the prior uuid
       ensureGlobalCoordinatorCwd();
