@@ -1,6 +1,6 @@
 {
   "name": "@sideboard-ai/core",
-  "version": "0.1.81",
+  "version": "0.1.82",
   "description": "Sideboard core — orchestration, agents, git worktrees, MCP server",
   "license": "Apache-2.0",
   "type": "module",
