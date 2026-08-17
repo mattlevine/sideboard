@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Recurring process guides go in `.claude/skills/<name>/SKILL.md` so Claude Code and `attach` see them without Sideboard. Worktree and orchestrator prompts, plus the stock Review template, say not to write new skills under `.sideboard/skills`.
+- Added `/graph-engineering` (`.claude/skills/graph-engineering/SKILL.md`, Cursor symlink) — judge-first, disk state, growing rulebook. `AGENTS.md` points at it.
+- Marketing site and docs cover portable process skills (homepage compare table, `/docs/` repo config + guide card).
+
 ## [0.1.79] - 2026-08-14
 
 ### Added

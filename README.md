@@ -39,6 +39,7 @@ Spawning worktrees is the shared primitive. Boards that stay human-only tend to 
 | Keep going when you step away | Cloud sandbox keeps running | Slack to this Mac — the machine must stay awake |
 | See the whole fleet as one board | App-locked or thin | First-class global board |
 | Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
+| Recurring process guides | Locked in the product, or chat memory | Committed `.claude/skills` — Claude Code and `attach` load them |
 | Bring existing worktrees / Conductor workspaces in | Stuck or start over | `adopt` + Conductor import |
 | Review HTML / docs the agent built | Copy out, or locked chat UI | `present_artifact` → side column |
 | Collect / edit structured data the agent needs | Spreadsheet, separate CMS, or markdown forever | `present_schema` → form/table from a schema the agent can create |
@@ -57,8 +58,9 @@ Also true, and useful on the way:
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
 - **Local-first / Slack-remote** — agents stay on this Mac (VPN, private git, internal APIs); Slack is how you and a coworker reach them ([setup](#slack))
+- **Portable process skills** — recurring guides are Claude Code project skills (`.claude/skills/<name>/SKILL.md`). Sideboard `/name`, Claude Code, and `attach` all load that path ([Process skills](#process-skills))
 
-Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Slack](#slack) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Security](SECURITY.md)
+Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Slack](#slack) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Process skills](#process-skills) · [Security](SECURITY.md)
 
 Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only)
 
@@ -421,6 +423,16 @@ Sideboard prefers `.sideboard/settings.toml` and falls back to `.conductor/setti
 ### Review guidelines
 
 Commit `.sideboard/review.md` to customize merge-readiness Review for the whole repo. The Review button attaches that file when present; otherwise it uses a local `.context/attachments/Review request.md` (gitignored) or seeds the stock template there. **Customize guidelines…** creates/opens `.sideboard/review.md` so you can check it in. Workspace-local chat scratch (plans, drops, review seeds) lives under `.context/attachments/` — same idea as Conductor’s `.context` vs committed `.sideboard/` / `.conductor/` config.
+
+### Process skills
+
+When the same shape of work will happen again, write a Claude Code project skill at `.claude/skills/<name>/SKILL.md` and commit it. Sideboard’s composer `/name` expander, Claude Code, and `attach` all load that path — so the guide works outside Sideboard. Do not put new skills in `.sideboard/skills` (Sideboard still scans it; other agents do not). Point Codex/OpenCode at the file from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.
+
+- **One-offs** should not create a skill. The first run is still a loop; corrections become sentences in the guide.
+- **Same miss twice** → edit the skill (or `.sideboard/review.md`) and rerun. Do not patch three threads and leave the process unchanged.
+- After merge to the default branch, **new worktrees inherit** the file. Existing siblings need an update from that branch.
+
+This repo’s method skill is [`.claude/skills/graph-engineering/SKILL.md`](.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`): judge first, state on disk, grow the rulebook, blind review, fix the process not the instances. A Cursor symlink lives at `.cursor/skills/graph-engineering`. Type `/graph-engineering` in the Sideboard composer to attach it.
 
 Older threads that already point at a repo-local path keep working; new threads always use the home-dir (or configured) root.
 

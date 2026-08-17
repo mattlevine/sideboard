@@ -135,6 +135,9 @@ function scanClaudePluginSkills(pluginsRoot: string, out: SkillInfo[]): void {
 /**
  * Discover skills from the worktree + user/CLI skill locations.
  * Workspace skills win over user/CLI when command names collide.
+ * New repo skills should be written to `.claude/skills` so Claude Code and
+ * `attach` load them without Sideboard. `.sideboard/skills` is still scanned
+ * (legacy) but native agents do not see it.
  */
 export function discoverSkills(worktreePath: string): SkillInfo[] {
   const home = homedir();

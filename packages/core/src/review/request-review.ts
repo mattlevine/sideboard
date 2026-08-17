@@ -6,6 +6,7 @@ import { isOrchestratorThread } from '../store/global-workspace.js';
 import { createChatTab } from '../threads/chat-tabs.js';
 import { findThreadByRef } from '../store/thread-store.js';
 import { REVIEW_REQUEST_TEMPLATE } from './review-request-template.js';
+export { REVIEW_REQUEST_TEMPLATE };
 import {
   ATTACHMENTS_DIR,
   LEGACY_ATTACHMENTS_DIR,

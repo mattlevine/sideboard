@@ -95,6 +95,10 @@ describe('coordinator-prompt', () => {
     expect(prompt).toContain('run_dev_script');
     expect(prompt).toContain('get_diff');
     expect(prompt).toContain('request_review');
+    expect(prompt).toContain('.claude/skills/');
+    expect(prompt).toContain('graph-engineering');
+    expect(prompt).toContain('/graph-engineering');
+    expect(prompt).toMatch(/Do not use `\.sideboard\/skills` for new guides/);
     expect(prompt).toContain('ask_git');
     expect(prompt).toContain('Commit and push.');
     expect(prompt).toContain('Merge PR.');
