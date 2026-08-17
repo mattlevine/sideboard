@@ -80,6 +80,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Never push to or open PRs against `upstream`/i);
     expect(text).toMatch(/Commit and push\./);
     expect(text).toMatch(/Merge PR\./);
+    expect(text).toMatch(/Do not merge the PR unless/);
     expect(text).toMatch(/gh stack merge/);
     expect(text).toMatch(/Short git requests/i);
     expect(text).toMatch(/Git authentication \(Account → GitHub mode: auto\)/);

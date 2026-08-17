@@ -7,15 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.82] - 2026-08-16
+
+### Added
+
+- Recurring process guides go in `.claude/skills/<name>/SKILL.md` so Claude Code and `attach` see them without Sideboard. Worktree and orchestrator prompts, plus the stock Review template, say not to write new skills under `.sideboard/skills`.
+- `/graph-engineering` (`.claude/skills/graph-engineering/SKILL.md`, Cursor symlink) — judge-first, disk state, growing rulebook. `AGENTS.md` points at it.
+- Marketing site and docs cover portable process skills (homepage compare table, `/docs/` repo config + guide card).
+
+### Changed
+
+- Orchestrators may tell a worktree agent to merge a GitHub PR (`ask_git` merge / “Merge PR.”) only when the user explicitly asked — not as a default “when ready” step.
+
 ### Fixed
 
 - Agent turns and Cursor's local runner strip inherited `ELECTRON_*` / `CHROME_*` from the host Sideboard.app. Nested Electron (Claude Code, Cursor agent, MCP via Electron-as-Node) was crashing at startup (`HasCustomHostObject` / `ElectronInitializeICUandStartNode`). Run scripts already stripped these; spawn did not.
 
-### Changed
+## [0.1.81] - 2026-08-16
 
-- Recurring process guides go in `.claude/skills/<name>/SKILL.md` so Claude Code and `attach` see them without Sideboard. Worktree and orchestrator prompts, plus the stock Review template, say not to write new skills under `.sideboard/skills`.
-- Added `/graph-engineering` (`.claude/skills/graph-engineering/SKILL.md`, Cursor symlink) — judge-first, disk state, growing rulebook. `AGENTS.md` points at it.
-- Marketing site and docs cover portable process skills (homepage compare table, `/docs/` repo config + guide card).
+Signed Mac desktop of 0.1.80.
 
 ## [0.1.80] - 2026-08-16
 

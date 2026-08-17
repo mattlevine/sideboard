@@ -79,6 +79,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- get_diff — compact diff summary',
   '- request_review — open a Review chat tab on a worktree thread (attaches .sideboard/review.md when present, else local guidelines; sends "Review changes in this workspace."); then wait_for_turn / get_turn_result on the returned id',
   '- ask_git — commit & push, open a draft PR, resolve conflicts, or merge. When the worktree is clean, Sideboard pushes / opens the PR itself. When dirty, it queues the worktree agent — then wait_for_turn. Prefer this over paraphrasing.',
+  '- Merge (`ask_git` action=merge / send_to_thread "Merge PR.") only when the user explicitly asked to merge that PR. Do not merge because the work looks done, CI is green, or a typical flow includes it.',
   '- Or send_to_thread with those exact phrases: "Commit and push.", "Commit, push, and open a draft PR.", "Fix merge conflicts.", "Merge PR." (draft PRs: `gh pr create --draft -R <origin-owner/name>` using the workspace `github:` slug — never upstream). Never run git/gh from this orchestration cwd, and never merge the PR yourself.',
   'Process guides:',
   '- Recurring multi-item / fan-out: if the child worktree has `.claude/skills/graph-engineering/SKILL.md`, tell the worker to follow it (`/graph-engineering`). Judge first; state on disk; grow the rulebook; do not patch three threads.',
@@ -127,7 +128,7 @@ export function coordinatorTurnReminder(opts: {
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
     '- For "what\'s going on": call list_threads (and list_workspaces if needed). Summarize fleet status — do not ls/git-status this synthetic home.',
-    '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn. Land with ask_git (commit-push / create-draft / merge) on the child, then wait_for_turn — never git/gh from this cwd.',
+    '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn. Commit/push/draft PR with ask_git on the child, then wait_for_turn — never git/gh from this cwd. Call ask_git merge only if the user explicitly asked to merge.',
     '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn → ask_git create-draft.',
     '- When naming threads for the user, link them as `[Title](sideboard://thread/<id>)`.',
     '- If they will wait on Slack or leave the Mac, call set_caffeinate enabled=true. When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false. Closing this chat also turns it off.',
@@ -201,9 +202,9 @@ export function ensureGlobalCoordinatorCwd(opts?: {
       : 'Pass `parentThreadId` for children (this chat\'s id from the turn reminder).',
     'Omit `agent` / `model` on `create_thread` unless you have a reason to override Account defaults.',
     'Never pass `agent=codex` when you yourself are Codex — nested Codex deadlocks on shared ~/.codex locks. Omit agent (Account default) or use cursor/claude.',
-    'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn → ask_git create-draft → wait_for_turn → (when ready) ask_git merge → wait_for_turn.',
+    'Typical flow (existing): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn → ask_git create-draft → wait_for_turn. Merge only if the user explicitly asked (`ask_git` merge).',
     'Typical flow (new app): Bash create/clone under repos dir → add_workspace → create_thread → send_to_thread (implement) → wait_for_turn → ask_git create-draft.',
-    'Always ask worktree agents to commit, push, open draft PRs, and merge (`ask_git` / `send_to_thread`). The worktree agent runs git/gh; never merge from this orchestration cwd.',
+    'Always ask worktree agents to commit, push, and open draft PRs (`ask_git` / `send_to_thread`). Tell them to merge only when the user explicitly asked. The worktree agent runs git/gh; never merge from this orchestration cwd.',
   ].join('\n');
   // Always rewrite so tool playbook updates ship without manual cleanup.
   // Never throw — a sandboxed Codex MCP child that cannot write here must still

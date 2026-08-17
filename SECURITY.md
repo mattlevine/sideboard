@@ -19,6 +19,6 @@ We will acknowledge and work on a fix. Please give a reasonable window before pu
 
 ## Design notes
 
-- Landing (`confirm_land`) and purge are intentionally human-gated (no MCP `confirm_land` / purge; no `--yes` on `land` in v1). Orchestrators merge GitHub PRs by telling the worktree agent (`ask_git`).
+- Landing (`confirm_land`) and purge are intentionally human-gated (no MCP `confirm_land` / purge; no `--yes` on `land` in v1). Orchestrators may tell a worktree agent to merge (`ask_git`) only when the user explicitly asked.
 - Agents run with the permissions of your local user account, on this Mac’s network. Treat inbound remote prompts as untrusted.
 - Slack reaches this machine through a hosted relay (message text only). Repos, secrets, and VPN-only endpoints stay on the Mac. Optional cloud bridges (including Brightsy desktop tasks) should be enabled only when you intend remote control of this machine. The Mac must stay awake for Slack to reach it.

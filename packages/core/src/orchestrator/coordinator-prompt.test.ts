@@ -121,6 +121,7 @@ describe('coordinator-prompt', () => {
     expect(text).toContain('New repo');
     expect(text).toContain('add_workspace');
     expect(text).toContain('ask_git');
+    expect(text).toContain('explicitly asked to merge');
     expect(text).toContain('sideboard://thread/');
     expect(text).toContain('set_caffeinate');
   });
@@ -155,6 +156,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('graph-engineering');
       expect(claude).toContain('/graph-engineering');
       expect(claude).toMatch(/Do not use `\.sideboard\/skills` for new guides/);
+      expect(claude).toContain('only if the user explicitly asked');
+      expect(claude).not.toContain('when ready) ask_git merge');
 
       // reconcile-style rewrite without an id must keep the prior uuid
       ensureGlobalCoordinatorCwd();

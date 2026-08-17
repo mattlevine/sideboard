@@ -33,14 +33,16 @@ Marketplace rejects `search:read` and dislikes broad user `*:history` without a 
 
 | Scope (today) | Keep? | Why / change |
 |---------------|-------|----------------|
-| Bot `app_mentions:read` | Yes | Route `@sideboard` |
-| Bot `im:*` / `mpim:*` | Yes | DMs to the orchestrator |
-| Bot `chat:write`, `chat:write.public`, `reactions:write` | Yes | Replies and review pings |
-| Bot `channels:read` / `groups:read` / `users:read` / `team:read` | Yes | MCP list channels/users |
-| Bot `channels:history` / `groups:history` | Justify or drop | Needed for `slack_read` in channels the bot is in; write the reason |
-| Bot `users:read.email` | Drop unless we can demo it | Not required for Listen |
-| User `search:read` | **Drop** | Explicitly unsuitable |
-| User `*:history` + `chat:write` | Justify or drop | Only if MCP must act *as the installing user*; otherwise bot token is enough |
+| Bot `app_mentions:read` | Yes | Route `@Sideboard` |
+| Bot `im:*` / `mpim:*` | Yes | DMs / group DMs to the orchestrator |
+| Bot `chat:write`, `chat:write.public`, `reactions:write` | Yes | Replies, post to public channels the bot is not in, seen reaction |
+| Bot `channels:read` / `groups:read` / `users:read` | Yes | MCP list channels/users; resolve `#name` / `@user` |
+| Bot `channels:history` / `groups:history` | Yes | MCP `slack_read` + `slack_replies` in channels the bot is in |
+| Bot `team:read` | Drop unless we call `team.info` | Workspace name today comes from `auth.test` |
+| Bot `users:read.email` | Drop unless we demo email lookup | `users.lookupByEmail` for `slack_post to=email`; not needed for Listen |
+| User `channels:read` + `*:history` + `users:read` | Yes (MCP) | `slack_list_*` / `slack_read` as the installer; Slack allows user history for MCP |
+| User `chat:write` | **Drop** | Posts as `@Sideboard` with the bot token |
+| User `search:read` | **Drop** | Explicitly unsuitable for Marketplace |
 
 Update `docs/slack-app-manifest.yaml` and `packages/core/src/slack/oauth.ts` together. Removing scopes requires every workspace to reinstall.
 
@@ -96,7 +98,7 @@ They install as a brand-new customer, including **uninstall**.
 | P3 | ≥ 5 active workspaces (28 days) | Unmet | Human: get 5 real teams on Listen | Count / date: |
 | P4 | ≥ 10 weekly active users | Unmet | Same | Count / date: |
 | P5 | Prepared to maintain + support (2 business days) | Unmet | Support page + monitored inbox | Support email: |
-| P6 | Meets guidelines (no forbidden scopes / remote-exec / LLM training) | Unmet | Scope cut; go/no-go on inbound commands; privacy copy | Scope justification list: |
+| P6 | Meets guidelines (no forbidden scopes / remote-exec / LLM training) | Unmet | Cut `search:read` + user `chat:write` from the app; then paste **Scope reasons** below | See Scope reasons |
 | P7 | Not private beta / unfinished | Unmet | Desktop + Slack path used in production by those 5 teams | |
 
 Do not submit while any row is Unmet. Slack returns incomplete apps and **resets the preliminary-review queue**.
@@ -113,7 +115,83 @@ Do not submit while any row is Unmet. Slack returns incomplete apps and **resets
 
 ### Scope reasons
 
-One sentence per remaining scope: **how Sideboard uses it**, not what the scope means. Empty until the scope table in §1 is final.
+Paste into Slack’s “Please add reasons for your app to request this scope.” Say **how Sideboard uses it**, not what the scope means ([data access](https://docs.slack.dev/slack-marketplace/slack-marketplace-app-guidelines-and-requirements/#data)). Two products: **Listen** (DM / `@Sideboard` → Mac orchestrator) and **MCP** (`slack_list_*`, `slack_read`, `slack_search`, `slack_post` on that Mac). Do not include drop-listed scopes in a Marketplace submit.
+
+#### Bot token — paste
+
+**`app_mentions:read`**  
+Receive `app_mention` events so `@Sideboard` in a channel the bot is in is forwarded to the orchestrator on the installing user’s Mac, which then replies in that thread.
+
+**`im:history`**  
+Receive `message.im` events (and later `conversations.history` on that DM) so a DM to `@Sideboard` is the prompt for the Mac orchestrator, including follow-ups in the same conversation.
+
+**`im:read`**  
+Resolve the DM conversation (id, members) when Listen or `slack_post` talks to a person, so we post into the correct D… channel.
+
+**`im:write`**  
+Call `conversations.open` when an agent (or the user) asks to DM someone (`slack_post to=@user`) so the bot can start that DM.
+
+**`mpim:history`**  
+Receive `message.mpim` events so group DMs that include `@Sideboard` are handled the same way as 1:1 DMs.
+
+**`mpim:read`**  
+Resolve the group-DM conversation so replies go back to that MPI, not a new 1:1.
+
+**`channels:read`**  
+Call `conversations.list` (public channels) so MCP `slack_list_channels` and `slack_post`/`slack_read` can resolve `#name` to a channel id.
+
+**`groups:read`**  
+Same `conversations.list` for private channels the bot has been invited to, so `#private-name` works for list/read/post.
+
+**`channels:history`**  
+Call `conversations.history` / `conversations.replies` in public channels the bot is in: MCP `slack_read`, and `slack_replies` watching human replies after the bot posts (e.g. a PR review ping).
+
+**`groups:history`**  
+Same history/replies APIs in private channels the bot was added to.
+
+**`chat:write`**  
+`chat.postMessage` as `@Sideboard`: Listen replies in the DM or mention thread, and MCP `slack_post` when the user asks the agent to ping someone.
+
+**`chat:write.public`**  
+`slack_post` to a public channel the bot is not in (no `/invite`), so an agent can notify `#eng` without joining every public channel at install. We do not auto-join channels.
+
+**`reactions:write`**  
+`reactions.add` (`+1`) on the inbound DM or `@mention` so Slack shows the bot saw the request before the Mac turn finishes.
+
+**`users:read`**  
+`users.list` / `users.info` so MCP `slack_list_users` can pick a person for a DM, and so reply-watching shows a display name instead of a user id.
+
+**`users:read.email`** — drop unless the review video shows email lookup.  
+`users.lookupByEmail` and email fields on `users.list` so `slack_post to=name@company.com` resolves to a user. We do not send email.
+
+**`team:read`** — drop unless we call `team.info`.  
+Workspace name in Account settings today comes from `auth.test`, which does not need this scope.
+
+#### User token — paste (MCP only)
+
+User scopes only when the app acts as the installer. User `*:history` is justified as MCP (`slack_read` / `slack_list_*`), which Slack’s data rules allow.
+
+**`channels:read`**  
+MCP `slack_list_channels` prefers the user token so the agent lists public channels the installer can see, including ones the bot is not in.
+
+**`channels:history`**  
+MCP `slack_read` (and thread replies) in public channels the installer can access, so the agent can pull context the bot token cannot see.
+
+**`groups:history`**  
+Same `slack_read` for private channels the installer is in.
+
+**`im:history`**  
+`slack_read` on the installer’s DMs when they ask the agent to read that conversation.
+
+**`mpim:history`**  
+Same for the installer’s group DMs.
+
+**`users:read`**  
+Resolve people while acting as the installer (`slack_list_users` / destination lookup) when the bot token is missing or insufficient.
+
+**`chat:write`** — **drop.** Posting is as `@Sideboard` with the bot token. User `chat:write` is only a fallback for pasted `xoxp-` tokens.
+
+**`search:read`** — **drop before Marketplace.** Powers MCP `slack_search` → `search.messages`. Slack lists this scope as unsuitable for listing. Remove from the dashboard, `packages/core/src/slack/oauth.ts`, and `docs/slack-app-manifest.yaml` (every workspace must reinstall). Public Distribution can still ship with it; listing cannot.
 
 ### Security & compliance (LLM)
 

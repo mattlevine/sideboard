@@ -83,7 +83,7 @@ export function formatWorktreeDirective(
     '- Prefer a concise imperative title (Conventional Commits style when it fits: feat:/fix:/chore:/docs:). Body should summarize intent, key changes, and test notes.',
   );
   lines.push(
-    '- Commit with messages that state the purpose of the change (same standard as the PR). Stay on this thread branch. Never push directly to main/master or merge locally into the main checkout. When asked to merge the PR, use GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
+    '- Commit with messages that state the purpose of the change (same standard as the PR). Stay on this thread branch. Never push directly to main/master or merge locally into the main checkout. Do not merge the PR unless this turn is a Merge PR request or the user explicitly asked. When merging, use GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
   );
   if (thread.prUrl) {
     lines.push(
@@ -121,7 +121,7 @@ export function formatWorktreeDirective(
     '- "Address review comments." → read PR review feedback, make the requested changes, commit, and push.',
   );
   lines.push(
-    '- "Merge PR." → merge this thread\'s open pull request on GitHub. If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.',
+    '- "Merge PR." → merge this thread\'s open pull request on GitHub (this phrase is the explicit ask). If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.',
   );
   lines.push('');
   lines.push(formatProcessGuideDirective());
