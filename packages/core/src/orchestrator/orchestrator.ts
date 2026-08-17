@@ -1700,6 +1700,8 @@ export class Orchestrator {
       baseRefName: '',
       headRefName: '',
       isInMergeQueue: false,
+      mergeable: null,
+      mergeStateStatus: null,
     };
     await this.persistPrMetaAndMaybeArchive(thread, metaLike);
     return { url: metaLike.url, state };
@@ -1968,7 +1970,7 @@ export class Orchestrator {
         const details = await this.getPrDetails(threadRef);
         prBase = details?.baseRefName?.trim() || undefined;
       } catch {
-        // Fall back to the generic "Fix merge conflicts." phrase.
+        // Fall back to the generic merge-remote-branch phrase.
       }
     }
     return this.send(threadRef, agentGitPrompt(action, { prBase }));

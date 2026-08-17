@@ -13,7 +13,9 @@ import { StackMap } from './StackMap';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
-import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks } from '../lib/pr-format';
+import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks, hasBranchBehindChecks, classifyMergeIssue } from '../lib/pr-format';
+import { agentGitPrompt } from '@sideboard/agent-git-actions';
+import { formatIpcInvokeError } from '@sideboard/gh-errors';
 import {
   ensureReviewRequestFile,
 } from '../lib/review-request';
@@ -166,6 +168,8 @@ export function RightSidebar({
     baseRefName: string;
     reviewDecision: string | null;
     isInMergeQueue: boolean;
+    mergeable: string | null;
+    mergeStateStatus: string | null;
   } | null>(null);
 
   /** Stable id for the worktree this sidebar instance is bound to. */
@@ -509,6 +513,8 @@ export function RightSidebar({
         baseRefName: meta.baseRefName,
         reviewDecision: meta.reviewDecision,
         isInMergeQueue: Boolean(meta.isInMergeQueue),
+        mergeable: meta.mergeable ?? null,
+        mergeStateStatus: meta.mergeStateStatus ?? null,
       });
     } catch {
       if (worktreeKeyRef.current !== forWorktree) return;
@@ -626,14 +632,30 @@ export function RightSidebar({
   const prDraft = Boolean(prMeta?.isDraft) && prOpen;
   const prReviewDecision = prOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null;
   const inMergeQueue = prOpen && Boolean(prMeta?.isInMergeQueue);
-  const mergeConflicts = prOpen && !inMergeQueue && hasMergeConflictChecks(prChecks);
+  const mergeIssue = classifyMergeIssue({
+    mergeable: prMeta?.mergeable,
+    mergeStateStatus: prMeta?.mergeStateStatus,
+    inMergeQueue,
+  });
+  const mergeConflicts =
+    prOpen &&
+    !inMergeQueue &&
+    (hasMergeConflictChecks(prChecks) || mergeIssue === 'conflicts');
+  const branchBehind =
+    prOpen &&
+    !inMergeQueue &&
+    !mergeConflicts &&
+    (hasBranchBehindChecks(prChecks) || mergeIssue === 'behind');
+  const mergeBlocked = mergeConflicts || branchBehind;
   const pillOpts = {
     merged: prMerged,
     closed: prClosed,
     draft: prDraft,
     reviewDecision: prReviewDecision,
     mergeConflicts,
+    branchBehind,
     inMergeQueue,
+    baseRefName: prMeta?.baseRefName,
   };
   const pillModifier = prUrl ? prPillModifier(pillOpts) : '';
   const pillStatus = prUrl ? prPillStatusLabel(pillOpts) : '';
@@ -662,6 +684,7 @@ export function RightSidebar({
     if (!prUrl) return 'Create PR';
     if (inMergeQueue) return 'Queued';
     if (mergeConflicts) return 'Resolve';
+    if (branchBehind) return 'Update';
     if (hasLocalChanges) return 'Commit & push';
     return 'Merge';
   }
@@ -672,6 +695,7 @@ export function RightSidebar({
     if (!prUrl) return '⎇';
     if (inMergeQueue) return '☰';
     if (mergeConflicts) return '⚡';
+    if (branchBehind) return '↑';
     if (hasLocalChanges) return '↑';
     return '⤵';
   }
@@ -681,7 +705,7 @@ export function RightSidebar({
       if (prUrl) void window.sideboard.openExternal(prUrl);
       return;
     }
-    if (mergeConflicts) {
+    if (mergeConflicts || branchBehind) {
       void askAgentGit('resolve-conflicts');
       return;
     }
@@ -713,6 +737,8 @@ export function RightSidebar({
               isDraft: false,
               reviewDecision: null,
               isInMergeQueue: false,
+              mergeable: null,
+              mergeStateStatus: null,
             }
           : {
               number: Number(num) || 0,
@@ -723,12 +749,14 @@ export function RightSidebar({
               baseRefName: 'main',
               reviewDecision: null,
               isInMergeQueue: false,
+              mergeable: null,
+              mergeStateStatus: null,
             },
       );
       onRefresh();
       void loadPrMeta();
     } catch (err) {
-      setMergeError(err instanceof Error ? err.message : String(err));
+      setMergeError(formatIpcInvokeError(err));
     } finally {
       setMergeBusy(false);
     }
@@ -745,10 +773,7 @@ export function RightSidebar({
     const kind = check.kind ?? 'ci';
     let prompt: string;
     if (kind === 'mergeability') {
-      prompt =
-        check.state.toUpperCase() === 'BEHIND'
-          ? 'Update the branch.'
-          : `Merge origin/${prBase} into this branch. Then push.`;
+      prompt = agentGitPrompt('resolve-conflicts', { prBase });
     } else if (kind === 'review') {
       prompt = 'Address review comments.';
     } else {
@@ -966,6 +991,8 @@ export function RightSidebar({
                         ? 'In GitHub merge queue — open on GitHub'
                         : mergeConflicts
                         ? `Ask the agent to merge origin/${prBase} and resolve conflicts`
+                        : branchBehind
+                          ? `Ask the agent to update this branch from origin/${prBase}`
                         : prUrl && !hasLocalChanges
                           ? 'Merge pull request on GitHub'
                           : prUrl
@@ -1004,7 +1031,7 @@ export function RightSidebar({
                               <span className="tool-menu-icon">↗</span>
                               <span>Open on GitHub</span>
                             </button>
-                          ) : mergeConflicts ? (
+                          ) : mergeBlocked ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -1666,6 +1693,12 @@ export function RightSidebar({
           error={mergeError}
           stackMerge={Boolean(thread.stackId)}
           onConfirm={() => void confirmMergePr()}
+          onFixConflicts={() => {
+            if (mergeBusy) return;
+            setMergeConfirm(false);
+            setMergeError(null);
+            void askAgentGit('resolve-conflicts');
+          }}
           onCancel={() => {
             if (!mergeBusy) {
               setMergeConfirm(false);

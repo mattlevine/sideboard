@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyMergeIssue,
   formatReviewDecision,
+  hasBranchBehindChecks,
   hasMergeConflictChecks,
   prPillModifier,
   prPillStatusLabel,
@@ -60,6 +62,28 @@ describe('pr pill status', () => {
         draft: true,
         reviewDecision: 'APPROVED',
         mergeConflicts: true,
+      }),
+    ).toBe('conflicts');
+  });
+
+  it('surfaces behind-base over draft', () => {
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: true,
+        reviewDecision: 'APPROVED',
+        branchBehind: true,
+        baseRefName: 'main',
+      }),
+    ).toBe('Behind main');
+    expect(
+      prPillModifier({
+        merged: false,
+        closed: false,
+        draft: true,
+        reviewDecision: 'APPROVED',
+        branchBehind: true,
       }),
     ).toBe('conflicts');
   });
@@ -133,5 +157,36 @@ describe('hasMergeConflictChecks', () => {
     expect(
       hasMergeConflictChecks([{ kind: 'mergeability', state: 'BEHIND', name: 'Branch behind' }]),
     ).toBe(false);
+  });
+});
+
+describe('hasBranchBehindChecks', () => {
+  it('detects BEHIND mergeability rows', () => {
+    expect(
+      hasBranchBehindChecks([{ kind: 'mergeability', state: 'BEHIND', name: 'Branch behind' }]),
+    ).toBe(true);
+    expect(
+      hasBranchBehindChecks([
+        { kind: 'mergeability', state: 'CONFLICTING', name: 'Merge conflicts' },
+      ]),
+    ).toBe(false);
+  });
+});
+
+describe('classifyMergeIssue', () => {
+  it('maps GitHub mergeable / mergeStateStatus', () => {
+    expect(
+      classifyMergeIssue({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }),
+    ).toBe('conflicts');
+    expect(classifyMergeIssue({ mergeable: 'MERGEABLE', mergeStateStatus: 'BEHIND' })).toBe(
+      'behind',
+    );
+    expect(
+      classifyMergeIssue({
+        mergeable: 'CONFLICTING',
+        mergeStateStatus: 'DIRTY',
+        inMergeQueue: true,
+      }),
+    ).toBeNull();
   });
 });

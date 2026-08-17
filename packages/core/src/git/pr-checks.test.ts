@@ -242,6 +242,7 @@ describe('getPrMeta', () => {
         headRefName: 'feat/queue',
         isInMergeQueue: true,
         mergeStateStatus: 'CLEAN',
+        mergeable: 'MERGEABLE',
       }),
       stderr: '',
       exitCode: 0,
@@ -250,6 +251,35 @@ describe('getPrMeta', () => {
       number: 42,
       state: 'OPEN',
       isInMergeQueue: true,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
     });
+  });
+
+  it('maps CONFLICTING onto PrMeta without a local probe', async () => {
+    ghMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        number: 17,
+        title: 'Conflicts',
+        url: 'https://github.com/acme/widgets/pull/17',
+        state: 'OPEN',
+        isDraft: true,
+        reviewDecision: null,
+        baseRefName: 'main',
+        headRefName: 'feat/x',
+        isInMergeQueue: false,
+        mergeStateStatus: 'DIRTY',
+        mergeable: 'CONFLICTING',
+      }),
+      stderr: '',
+      exitCode: 0,
+    });
+    await expect(getPrMeta('/tmp/wt', '17')).resolves.toMatchObject({
+      number: 17,
+      mergeable: 'CONFLICTING',
+      mergeStateStatus: 'DIRTY',
+      isInMergeQueue: false,
+    });
+    expect(gitMock.mock.calls.some((c) => c[0]?.[0] === 'merge-tree')).toBe(false);
   });
 });

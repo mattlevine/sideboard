@@ -115,7 +115,7 @@ export function formatWorktreeDirective(
     '- "Fix CI: <name>." → investigate that failing check, fix it, commit, and push.',
   );
   lines.push(
-    '- "Update the branch." / "Fix merge conflicts." / "Merge origin/<base> into this branch. Then push." → sync with the PR base (merge or rebase), resolve conflicts carefully, commit, and push until the PR is mergeable.',
+    '- "Merge the remote branch (<base>) into your branch and resolve conflicts. Then, commit and push your changes." → fetch the PR base, merge it into this branch, resolve conflicts carefully, commit, and push until the PR is mergeable.',
   );
   lines.push(
     '- "Address review comments." → read PR review feedback, make the requested changes, commit, and push.',

@@ -290,7 +290,7 @@ export interface PrDetails {
   checks: PrCheckRun[];
 }
 
-/** Lightweight PR fields for the sidebar pill (cheap GraphQL). */
+/** PR lifecycle + mergeability for the sidebar pill (cheap GraphQL + local merge-tree). */
 export interface PrMeta {
   number: number;
   title: string;
@@ -302,6 +302,10 @@ export interface PrMeta {
   headRefName: string;
   /** True when the PR is sitting in a GitHub merge queue. */
   isInMergeQueue: boolean;
+  /** GitHub `mergeable` (MERGEABLE / CONFLICTING / UNKNOWN). */
+  mergeable: string | null;
+  /** GitHub `mergeStateStatus` (CLEAN / DIRTY / BEHIND / BLOCKED / …). */
+  mergeStateStatus: string | null;
 }
 
 /** One layer in a GitHub PR stack (bottom = position 1). */

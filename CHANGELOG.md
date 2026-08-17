@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Cursor turns (Grok and other Cursor models) no longer crash injected Sideboard MCP at startup (`HasCustomHostObject` / `ElectronInitializeICUandStartNode`). Cursor's local agent is itself Electron and was re-attaching crashpad env when spawning Electron-as-Node; MCP and the Cursor runner now unset `ELECTRON_*` / `CHROME_*` immediately before exec.
+- Right sidebar PR pill and left-sidebar worktree hover show merge conflicts / behind-base against the default branch. A failed landing merge offers **Fix merge conflicts**, which asks the worktree agent to merge the remote base, resolve conflicts, then commit and push (Conductor’s phrasing).
 
 ## [0.1.82] - 2026-08-16
 

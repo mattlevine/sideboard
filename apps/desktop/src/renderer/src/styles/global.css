@@ -9213,6 +9213,13 @@ body:has(.update-banner) .team-toast-stack {
   line-height: 1.35;
 }
 
+.merge-modal-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+  gap: 8px;
+}
+
 .create-modal-content {
   display: flex;
   flex-direction: column;

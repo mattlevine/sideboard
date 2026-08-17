@@ -15,11 +15,13 @@ describe('agentGitPrompt', () => {
 
   it('names the PR base when resolving conflicts', () => {
     expect(agentGitPrompt('resolve-conflicts', { prBase: 'main' })).toBe(
-      'Merge origin/main into this branch. Then push.',
+      'Merge the remote branch (main) into your branch and resolve conflicts. Then, commit and push your changes.',
     );
     expect(agentGitPrompt('resolve-conflicts', { prBase: 'refs/heads/develop' })).toBe(
-      'Merge origin/develop into this branch. Then push.',
+      'Merge the remote branch (develop) into your branch and resolve conflicts. Then, commit and push your changes.',
     );
-    expect(agentGitPrompt('resolve-conflicts')).toBe('Fix merge conflicts.');
+    expect(agentGitPrompt('resolve-conflicts')).toBe(
+      'Merge the remote branch into your branch and resolve conflicts. Then, commit and push your changes.',
+    );
   });
 });

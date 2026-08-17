@@ -17,7 +17,7 @@ import {
   type TeamName,
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
-import { formatGhLandError, isGhRateLimitError } from './gh-errors.js';
+import { formatGhLandError, formatMergePrError, isGhRateLimitError } from './gh-errors.js';
 import { applyGithubGitAuthEnv } from './git-auth-mode.js';
 import { gh, git, resolveGhAuthToken } from './run.js';
 import {
@@ -533,6 +533,53 @@ export async function detectLocalMergeConflicts(
   return { conflicting, base: baseName, files };
 }
 
+/**
+ * When GitHub leaves mergeable UNKNOWN (or is silent), verify with merge-tree.
+ * Skip if GitHub already reports a conflict or the PR is in a merge queue.
+ */
+async function probeLocalMergeGate(
+  cwd: string,
+  gate: PrMergeGate | null,
+): Promise<{ gate: PrMergeGate | null; files: string[] }> {
+  const mergeable = (gate?.mergeable ?? '').toUpperCase();
+  const mergeState = (gate?.mergeStateStatus ?? '').toUpperCase();
+  const alreadyConflicting =
+    mergeable === 'CONFLICTING' || mergeState === 'DIRTY';
+  const inQueue = gate ? prIsInMergeQueue(gate) : false;
+  if (alreadyConflicting || inQueue) return { gate, files: [] };
+
+  try {
+    const local = await detectLocalMergeConflicts(cwd, gate?.baseRefName ?? null);
+    if (local.conflicting) {
+      return {
+        gate: {
+          mergeable: 'CONFLICTING',
+          mergeStateStatus: 'DIRTY',
+          reviewDecision: gate?.reviewDecision ?? null,
+          baseRefName: local.base,
+          url: gate?.url ?? null,
+          isInMergeQueue: false,
+        },
+        files: local.files,
+      };
+    }
+    if (gate && (mergeable === 'UNKNOWN' || mergeState === 'UNKNOWN')) {
+      return {
+        gate: {
+          ...gate,
+          mergeable: gate.mergeable === 'UNKNOWN' ? 'MERGEABLE' : gate.mergeable,
+          mergeStateStatus:
+            gate.mergeStateStatus === 'UNKNOWN' ? 'CLEAN' : gate.mergeStateStatus,
+        },
+        files: [],
+      };
+    }
+  } catch {
+    // Keep GitHub gate as-is if local probe fails.
+  }
+  return { gate, files: [] };
+}
+
 /** CI checks for a PR (`gh pr checks <selector> --json …`), plus synthetic
  * mergeability / review rows (conflicts are not reported by `gh pr checks`).
  * Returns `null` when no PR exists for the selector (so UI can show “link a PR”
@@ -580,66 +627,12 @@ export async function getPrChecks(
   }
 
   let gate = await fetchPrMergeGate(cwd, selector, slug);
-  // GitHub often returns mergeable=UNKNOWN; verify with a local merge-tree.
-  // Also probe when gh view fails but CI checks exist (PR is real).
-  const mergeable = (gate?.mergeable ?? '').toUpperCase();
-  const mergeState = (gate?.mergeStateStatus ?? '').toUpperCase();
-  // GitHub often leaves mergeable=UNKNOWN; always verify unless GH already
-  // reports an explicit conflict (local probe is cheap and more reliable).
-  // Skip when the PR is in a merge queue — the local worktree may lag the
-  // queue's temporary branch and would look dirty/conflicting.
-  const alreadyConflicting =
-    mergeable === 'CONFLICTING' || mergeState === 'DIRTY';
-  const inQueue = gate ? prIsInMergeQueue(gate) : false;
-  const needsLocalProbe = !alreadyConflicting && !inQueue;
-
-  if (needsLocalProbe) {
-    try {
-      const local = await detectLocalMergeConflicts(cwd, gate?.baseRefName ?? null);
-      if (local.conflicting) {
-        const fileHint =
-          local.files.length > 0
-            ? ` Conflicting paths: ${local.files.slice(0, 8).join(', ')}${local.files.length > 8 ? '…' : ''}.`
-            : '';
-        gate = {
-          mergeable: 'CONFLICTING',
-          mergeStateStatus: 'DIRTY',
-          reviewDecision: gate?.reviewDecision ?? null,
-          baseRefName: local.base,
-          url: gate?.url ?? null,
-          isInMergeQueue: false,
-        };
-        // Stash file hint on a synthetic description via gate url leave as-is;
-        // buildMergeGateChecks uses base name — enrich after.
-        const ciFailed = ciChecks.some((c) => c.bucket === 'fail');
-        const review = (gate.reviewDecision ?? '').toUpperCase();
-        const hasReviewRow =
-          review === 'CHANGES_REQUESTED' || review === 'REVIEW_REQUIRED';
-        const gateRows = buildMergeGateChecks(gate, {
-          suppressGenericBlocked: ciFailed || hasReviewRow,
-        }).map((row) =>
-          row.kind === 'mergeability' && row.name === 'Merge conflicts'
-            ? {
-                ...row,
-                description: `${row.description ?? ''}${fileHint}`.trim(),
-              }
-            : row,
-        );
-        return [...gateRows, ...ciChecks];
-      }
-      // Local merge is clean — don't surface a useless UNKNOWN pending row.
-      if (gate && (mergeable === 'UNKNOWN' || mergeState === 'UNKNOWN')) {
-        gate = {
-          ...gate,
-          mergeable: gate.mergeable === 'UNKNOWN' ? 'MERGEABLE' : gate.mergeable,
-          mergeStateStatus:
-            gate.mergeStateStatus === 'UNKNOWN' ? 'CLEAN' : gate.mergeStateStatus,
-        };
-      }
-    } catch {
-      // Keep GitHub gate as-is if local probe fails.
-    }
-  }
+  const probed = await probeLocalMergeGate(cwd, gate);
+  gate = probed.gate;
+  const fileHint =
+    probed.files.length > 0
+      ? ` Conflicting paths: ${probed.files.slice(0, 8).join(', ')}${probed.files.length > 8 ? '…' : ''}.`
+      : '';
 
   if (!gate) {
     return ciChecks;
@@ -652,11 +645,18 @@ export async function getPrChecks(
   const gateRows = buildMergeGateChecks(gate, {
     // Avoid duplicating "blocked" when CI failures or review rows already explain it.
     suppressGenericBlocked: ciFailed || hasReviewRow,
-  });
+  }).map((row) =>
+    fileHint && row.kind === 'mergeability' && row.name === 'Merge conflicts'
+      ? {
+          ...row,
+          description: `${row.description ?? ''}${fileHint}`.trim(),
+        }
+      : row,
+  );
   return [...gateRows, ...ciChecks];
 }
 
-/** Lightweight PR fields for the sidebar pill — avoids nested reviews/checks GraphQL. */
+/** PR lifecycle + mergeability for the sidebar pill (no CI check list). */
 export async function getPrMeta(
   cwd: string,
   selector: string,
@@ -667,7 +667,7 @@ export async function getPrMeta(
     'view',
     selector,
     '--json',
-    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,isInMergeQueue,mergeStateStatus',
+    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,isInMergeQueue,mergeStateStatus,mergeable',
   ];
   if (slug) viewArgs.push('--repo', slug);
   let { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
@@ -677,7 +677,7 @@ export async function getPrMeta(
       'view',
       selector,
       '--json',
-      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,mergeStateStatus',
+      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,mergeStateStatus,mergeable',
     ];
     if (slug) retry.push('--repo', slug);
     ({ stdout, exitCode, stderr } = await gh(retry, cwd, { reject: false }));
@@ -688,19 +688,37 @@ export async function getPrMeta(
   }
   try {
     const view = JSON.parse(stdout) as Record<string, unknown>;
+    const gate: PrMergeGate = {
+      mergeable:
+        typeof view.mergeable === 'string' && view.mergeable
+          ? view.mergeable
+          : null,
+      mergeStateStatus:
+        typeof view.mergeStateStatus === 'string' && view.mergeStateStatus
+          ? view.mergeStateStatus
+          : null,
+      reviewDecision:
+        typeof view.reviewDecision === 'string' && view.reviewDecision
+          ? view.reviewDecision
+          : null,
+      baseRefName: String(view.baseRefName ?? ''),
+      url: String(view.url ?? ''),
+      isInMergeQueue: parseInMergeQueue(view),
+    };
+    const probed = await probeLocalMergeGate(cwd, gate);
+    const resolved = probed.gate ?? gate;
     return {
       number: Number(view.number),
       title: String(view.title ?? ''),
       url: String(view.url ?? ''),
       state: String(view.state ?? ''),
       isDraft: Boolean(view.isDraft),
-      reviewDecision:
-        typeof view.reviewDecision === 'string' && view.reviewDecision
-          ? view.reviewDecision
-          : null,
-      baseRefName: String(view.baseRefName ?? ''),
+      reviewDecision: resolved.reviewDecision,
+      baseRefName: resolved.baseRefName || String(view.baseRefName ?? ''),
       headRefName: String(view.headRefName ?? ''),
-      isInMergeQueue: parseInMergeQueue(view),
+      isInMergeQueue: Boolean(resolved.isInMergeQueue),
+      mergeable: resolved.mergeable,
+      mergeStateStatus: resolved.mergeStateStatus,
     };
   } catch {
     return null;
@@ -1346,7 +1364,9 @@ export async function mergePr(
   if (slug) args.push('--repo', slug);
   const { exitCode, stderr, stdout } = await gh(args, cwd, { reject: false });
   if (exitCode !== 0) {
-    throw new Error(stderr.trim() || stdout.trim() || 'gh pr merge failed');
+    throw new Error(
+      formatMergePrError(stderr.trim() || stdout.trim() || 'gh pr merge failed'),
+    );
   }
 
   const after = await gh(viewArgs, cwd, { reject: false });

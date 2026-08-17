@@ -98,11 +98,29 @@ export function formatGhLandError(
   return detail || 'Failed to create or update pull request';
 }
 
+/** GitHub refused `gh pr merge` because the merge commit cannot be created. */
+export function isPrNotMergeableError(text: string): boolean {
+  return /not mergeable|cannot be cleanly created|cannot merge cleanly|Merge conflict|\bCONFLICTING\b|must be (updated|rebased)|branch is out of date|needs? to be (updated|rebased)|Resolve conflicts or update the branch/i.test(
+    text,
+  );
+}
+
+/** Short notice for a failed `gh pr merge` (drop the `--auto` hint). */
+export function formatMergePrError(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return 'gh pr merge failed';
+  if (isPrNotMergeableError(trimmed)) {
+    return 'This pull request cannot merge cleanly into the base branch. Resolve conflicts or update the branch, then retry.';
+  }
+  return extractGhErrorDetail(trimmed) || trimmed;
+}
+
 /** Strip Electron's IPC invoke wrapper, then humanize known gh failures. */
 export function formatIpcInvokeError(err: unknown): string {
   let msg = err instanceof Error ? err.message : String(err);
   msg = msg.replace(/^Error invoking remote method '[^']+':\s*/i, '');
   msg = msg.replace(/^ExecaError:\s*/i, '');
   msg = msg.replace(/^Error:\s*/i, '');
+  if (isPrNotMergeableError(msg)) return formatMergePrError(msg);
   return formatGhLandError(msg);
 }

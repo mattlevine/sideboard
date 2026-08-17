@@ -19,6 +19,21 @@ export function prIsInMergeQueue(
   return (gate.mergeStateStatus ?? '').toUpperCase() === 'QUEUED';
 }
 
+/** Conflict or behind-base — GitHub will not create a clean merge commit. */
+export type PrMergeIssue = 'conflicts' | 'behind';
+
+export function classifyPrMergeIssue(
+  gate: Pick<PrMergeGate, 'mergeable' | 'mergeStateStatus' | 'isInMergeQueue'> | null | undefined,
+): PrMergeIssue | null {
+  if (!gate) return null;
+  if (prIsInMergeQueue(gate)) return null;
+  const mergeable = (gate.mergeable ?? '').toUpperCase();
+  const mergeState = (gate.mergeStateStatus ?? '').toUpperCase();
+  if (mergeable === 'CONFLICTING' || mergeState === 'DIRTY') return 'conflicts';
+  if (mergeState === 'BEHIND') return 'behind';
+  return null;
+}
+
 export interface BuildMergeGateOptions {
   /**
    * When true (default), skip a generic "Merge blocked" row — that status usually

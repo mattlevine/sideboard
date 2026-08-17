@@ -11,7 +11,7 @@ import {
   threadDisplayTitle,
 } from '../lib/global-workspace';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
-import { prPillModifier, prPillStatusLabel } from '../lib/pr-format';
+import { classifyMergeIssue, prPillModifier, prPillStatusLabel } from '../lib/pr-format';
 import {
   isWorktreeUnread,
   latestAgentResponseAt,
@@ -92,6 +92,66 @@ function prNumberFromUrl(url: string | null | undefined): string | null {
   return m?.[1] ?? null;
 }
 
+type HoverPrMeta = {
+  number: number;
+  url: string;
+  state: string;
+  isDraft: boolean;
+  reviewDecision: string | null;
+  isInMergeQueue: boolean;
+  mergeable: string | null;
+  mergeStateStatus: string | null;
+  baseRefName: string;
+};
+
+function hoverPrFromIpc(meta: {
+  number: number;
+  url: string;
+  state: string;
+  isDraft: boolean;
+  reviewDecision: string | null;
+  isInMergeQueue?: boolean;
+  mergeable?: string | null;
+  mergeStateStatus?: string | null;
+  baseRefName?: string;
+}): HoverPrMeta {
+  return {
+    number: meta.number,
+    url: meta.url,
+    state: meta.state,
+    isDraft: meta.isDraft,
+    reviewDecision: meta.reviewDecision,
+    isInMergeQueue: Boolean(meta.isInMergeQueue),
+    mergeable: meta.mergeable ?? null,
+    mergeStateStatus: meta.mergeStateStatus ?? null,
+    baseRefName: meta.baseRefName ?? '',
+  };
+}
+
+function hoverPillOpts(prMeta: HoverPrMeta | null) {
+  const prState = (prMeta?.state ?? '').toUpperCase();
+  const prMerged = prState === 'MERGED';
+  const prClosed = prState === 'CLOSED';
+  const prIsOpen = Boolean(prMeta) && !prMerged && !prClosed;
+  const prDraft = Boolean(prMeta?.isDraft) && prIsOpen;
+  const inMergeQueue = prIsOpen && Boolean(prMeta?.isInMergeQueue);
+  const mergeIssue = classifyMergeIssue({
+    mergeable: prMeta?.mergeable,
+    mergeStateStatus: prMeta?.mergeStateStatus,
+    inMergeQueue,
+  });
+  return {
+    merged: prMerged,
+    closed: prClosed,
+    draft: prDraft,
+    reviewDecision: prIsOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null,
+    inMergeQueue,
+    mergeConflicts: mergeIssue === 'conflicts',
+    branchBehind: mergeIssue === 'behind',
+    baseRefName: prMeta?.baseRefName,
+  };
+}
+
 function worktreeSlug(thread: Thread): string {
   const base = thread.worktreePath.replace(/\/$/, '').split('/').pop();
   return base || thread.branchName.replace(/^thread\//, '') || 'workspace';
@@ -126,14 +186,7 @@ function WorktreeArchiveCard({
   onKeepOpen: (v: boolean) => void;
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const [prMeta, setPrMeta] = useState<{
-    number: number;
-    url: string;
-    state: string;
-    isDraft: boolean;
-    reviewDecision: string | null;
-    isInMergeQueue: boolean;
-  } | null>(null);
+  const [prMeta, setPrMeta] = useState<HoverPrMeta | null>(null);
   const slug = worktreeSlug(thread);
   const prUrl = prMeta?.url ?? thread.prUrl ?? null;
   const prNum =
@@ -175,14 +228,7 @@ function WorktreeArchiveCard({
           setPrMeta(null);
           return;
         }
-        setPrMeta({
-          number: meta.number,
-          url: meta.url,
-          state: meta.state,
-          isDraft: meta.isDraft,
-          reviewDecision: meta.reviewDecision,
-          isInMergeQueue: Boolean(meta.isInMergeQueue),
-        });
+        setPrMeta(hoverPrFromIpc(meta));
       } catch {
         if (!cancelled) setPrMeta(null);
       }
@@ -194,18 +240,7 @@ function WorktreeArchiveCard({
 
   if (!open || !pos) return null;
 
-  const prState = (prMeta?.state ?? '').toUpperCase();
-  const prMerged = prState === 'MERGED';
-  const prClosed = prState === 'CLOSED';
-  const prIsOpen = Boolean(prMeta) && !prMerged && !prClosed;
-  const prDraft = Boolean(prMeta?.isDraft) && prIsOpen;
-  const pillOpts = {
-    merged: prMerged,
-    closed: prClosed,
-    draft: prDraft,
-    reviewDecision: prIsOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null,
-    inMergeQueue: prIsOpen && Boolean(prMeta?.isInMergeQueue),
-  };
+  const pillOpts = hoverPillOpts(prMeta);
   const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
   const prStatusMod = prMeta ? prPillModifier(pillOpts) : '';
 
@@ -300,14 +335,7 @@ function WorktreeEditCard({
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
-  const [prMeta, setPrMeta] = useState<{
-    number: number;
-    url: string;
-    state: string;
-    isDraft: boolean;
-    reviewDecision: string | null;
-    isInMergeQueue: boolean;
-  } | null>(null);
+  const [prMeta, setPrMeta] = useState<HoverPrMeta | null>(null);
   const slug = worktreeSlug(thread);
   const prUrl = prMeta?.url ?? thread.prUrl ?? null;
   const prNum =
@@ -361,14 +389,7 @@ function WorktreeEditCard({
           setPrMeta(null);
           return;
         }
-        setPrMeta({
-          number: meta.number,
-          url: meta.url,
-          state: meta.state,
-          isDraft: meta.isDraft,
-          reviewDecision: meta.reviewDecision,
-          isInMergeQueue: Boolean(meta.isInMergeQueue),
-        });
+        setPrMeta(hoverPrFromIpc(meta));
       } catch {
         if (!cancelled) setPrMeta(null);
       }
@@ -402,18 +423,7 @@ function WorktreeEditCard({
       ? `+${additions} −${deletions}`
       : 'clean';
 
-  const prState = (prMeta?.state ?? '').toUpperCase();
-  const prMerged = prState === 'MERGED';
-  const prClosed = prState === 'CLOSED';
-  const prIsOpen = Boolean(prMeta) && !prMerged && !prClosed;
-  const prDraft = Boolean(prMeta?.isDraft) && prIsOpen;
-  const pillOpts = {
-    merged: prMerged,
-    closed: prClosed,
-    draft: prDraft,
-    reviewDecision: prIsOpen && !prDraft ? (prMeta?.reviewDecision ?? null) : null,
-    inMergeQueue: prIsOpen && Boolean(prMeta?.isInMergeQueue),
-  };
+  const pillOpts = hoverPillOpts(prMeta);
   // Only show a status pill once GitHub PR meta is loaded — never invent "Open".
   const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
   const prStatusMod = prMeta ? prPillModifier(pillOpts) : '';

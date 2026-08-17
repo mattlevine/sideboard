@@ -3,8 +3,10 @@ import {
   extractGhErrorDetail,
   formatGhLandError,
   formatIpcInvokeError,
+  formatMergePrError,
   formatRateLimitResetHint,
   isGhRateLimitError,
+  isPrNotMergeableError,
 } from './gh-errors.js';
 
 describe('isGhRateLimitError', () => {
@@ -88,5 +90,28 @@ describe('formatIpcInvokeError', () => {
     expect(formatIpcInvokeError(err)).toContain('GitHub API rate limit exceeded.');
     expect(formatIpcInvokeError(err)).not.toContain('Error invoking remote method');
     expect(formatIpcInvokeError(err)).not.toContain('gh pr create');
+  });
+
+  it('humanizes merge-not-clean IPC errors', () => {
+    const err = new Error(
+      "Error invoking remote method 'mergePr': Error: X Pull request mattlevine/sideboard#17 is not mergeable: the merge commit cannot be cleanly created. To have the pull request merged after all the requirements have been met, add the `--auto` flag.",
+    );
+    const msg = formatIpcInvokeError(err);
+    expect(msg).toContain('cannot merge cleanly');
+    expect(msg).not.toContain('--auto');
+    expect(msg).not.toContain('Error invoking remote method');
+    expect(isPrNotMergeableError(msg)).toBe(true);
+  });
+});
+
+describe('formatMergePrError', () => {
+  it('drops the gh --auto hint', () => {
+    expect(
+      formatMergePrError(
+        'X Pull request acme/widgets#1 is not mergeable: the merge commit cannot be cleanly created. To have the pull request merged after all the requirements have been met, add the `--auto` flag.',
+      ),
+    ).toBe(
+      'This pull request cannot merge cleanly into the base branch. Resolve conflicts or update the branch, then retry.',
+    );
   });
 });

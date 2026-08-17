@@ -1,4 +1,5 @@
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
+import { isPrNotMergeableError } from '@sideboard/gh-errors';
 
 interface Props {
   prNumber: string | null;
@@ -12,6 +13,8 @@ interface Props {
   stackMerge?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Send the worktree agent to resolve conflicts / update the base. */
+  onFixConflicts?: () => void;
 }
 
 /** Confirm + processing UI for merging a PR (mirrors create-thread overlay). */
@@ -26,6 +29,7 @@ export function MergeModal({
   stackMerge,
   onConfirm,
   onCancel,
+  onFixConflicts,
 }: Props) {
   const title = prNumber
     ? stackMerge
@@ -33,6 +37,7 @@ export function MergeModal({
       : `Merge #${prNumber}?`
     : 'Merge pull request?';
   const hint = prNumber ? `PR #${prNumber}` : branch;
+  const offerFix = Boolean(error && onFixConflicts && isPrNotMergeableError(error));
 
   return (
     <div
@@ -94,13 +99,23 @@ export function MergeModal({
             ) : null}
           </dl>
           {error ? <p className="land-confirm-error">{error}</p> : null}
-          <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+          <div className="row merge-modal-actions">
             <button type="button" disabled={busy} onClick={onCancel}>
               Cancel
             </button>
+            {offerFix ? (
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={onFixConflicts}
+              >
+                Fix merge conflicts
+              </button>
+            ) : null}
             <button
               type="button"
-              className="primary"
+              className={offerFix ? undefined : 'primary'}
               disabled={busy}
               onClick={onConfirm}
             >
@@ -112,3 +127,4 @@ export function MergeModal({
     </div>
   );
 }
+

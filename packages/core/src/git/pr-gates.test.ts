@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMergeGateChecks } from './pr-gates.js';
+import { buildMergeGateChecks, classifyPrMergeIssue } from './pr-gates.js';
 
 describe('buildMergeGateChecks', () => {
   it('surfaces merge conflicts as a failing row', () => {
@@ -90,5 +90,47 @@ describe('buildMergeGateChecks', () => {
       url: null,
     });
     expect(rows[0]).toMatchObject({ name: 'Merge queue', state: 'QUEUED', bucket: 'pending' });
+  });
+});
+
+describe('classifyPrMergeIssue', () => {
+  it('detects conflicts and behind, ignores queued PRs', () => {
+    expect(
+      classifyPrMergeIssue({
+        mergeable: 'CONFLICTING',
+        mergeStateStatus: 'DIRTY',
+        reviewDecision: null,
+        baseRefName: 'main',
+        url: null,
+      }),
+    ).toBe('conflicts');
+    expect(
+      classifyPrMergeIssue({
+        mergeable: 'MERGEABLE',
+        mergeStateStatus: 'BEHIND',
+        reviewDecision: null,
+        baseRefName: 'main',
+        url: null,
+      }),
+    ).toBe('behind');
+    expect(
+      classifyPrMergeIssue({
+        mergeable: 'CONFLICTING',
+        mergeStateStatus: 'DIRTY',
+        reviewDecision: null,
+        baseRefName: 'main',
+        url: null,
+        isInMergeQueue: true,
+      }),
+    ).toBeNull();
+    expect(
+      classifyPrMergeIssue({
+        mergeable: 'MERGEABLE',
+        mergeStateStatus: 'CLEAN',
+        reviewDecision: null,
+        baseRefName: 'main',
+        url: null,
+      }),
+    ).toBeNull();
   });
 });

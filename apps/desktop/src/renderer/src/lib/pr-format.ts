@@ -23,13 +23,15 @@ export function prPillModifier(opts: {
   reviewDecision: string | null | undefined;
   /** Open PR cannot merge until conflicts are resolved. */
   mergeConflicts?: boolean;
+  /** Head is behind the PR base (needs update before merge). */
+  branchBehind?: boolean;
   /** Open PR is waiting in a GitHub merge queue. */
   inMergeQueue?: boolean;
 }): string {
   if (opts.merged) return 'merged';
   if (opts.closed) return 'closed';
   if (opts.inMergeQueue) return 'queued';
-  if (opts.mergeConflicts) return 'conflicts';
+  if (opts.mergeConflicts || opts.branchBehind) return 'conflicts';
   if (opts.draft) return 'draft';
   const decision = (opts.reviewDecision ?? '').toUpperCase();
   if (decision === 'REVIEW_REQUIRED') return 'needs-approval';
@@ -45,14 +47,33 @@ export function prPillStatusLabel(opts: {
   draft: boolean;
   reviewDecision: string | null | undefined;
   mergeConflicts?: boolean;
+  branchBehind?: boolean;
   inMergeQueue?: boolean;
+  baseRefName?: string | null;
 }): string {
   if (opts.merged) return 'Merged';
   if (opts.closed) return 'Closed';
   if (opts.inMergeQueue) return 'Queued';
   if (opts.mergeConflicts) return 'Merge conflicts';
+  if (opts.branchBehind) {
+    const base = (opts.baseRefName ?? '').replace(/^refs\/heads\//, '').trim();
+    return base ? `Behind ${base}` : 'Behind base';
+  }
   if (opts.draft) return 'Draft';
   return formatReviewDecision(opts.reviewDecision) ?? 'Open';
+}
+
+export function classifyMergeIssue(opts: {
+  mergeable?: string | null;
+  mergeStateStatus?: string | null;
+  inMergeQueue?: boolean;
+}): 'conflicts' | 'behind' | null {
+  if (opts.inMergeQueue) return null;
+  const mergeable = (opts.mergeable ?? '').toUpperCase();
+  const mergeState = (opts.mergeStateStatus ?? '').toUpperCase();
+  if (mergeable === 'CONFLICTING' || mergeState === 'DIRTY') return 'conflicts';
+  if (mergeState === 'BEHIND') return 'behind';
+  return null;
 }
 
 /** True when Checks include a failing mergeability conflict row. */
@@ -66,6 +87,19 @@ export function hasMergeConflictChecks(
       return state === 'CONFLICTING' || state === 'DIRTY';
     }
     return /merge conflicts/i.test(c.name ?? '');
+  });
+}
+
+/** True when Checks include a failing behind-base mergeability row. */
+export function hasBranchBehindChecks(
+  checks: Array<Pick<PrCheckRun, 'kind' | 'state' | 'name'>> | null | undefined,
+): boolean {
+  if (!checks?.length) return false;
+  return checks.some((c) => {
+    if (c.kind === 'mergeability') {
+      return (c.state ?? '').toUpperCase() === 'BEHIND';
+    }
+    return /branch behind/i.test(c.name ?? '');
   });
 }
 

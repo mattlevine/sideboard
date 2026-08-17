@@ -23,9 +23,8 @@ export function agentGitPrompt(
       return 'Commit, push, and open a PR in the browser.';
     case 'resolve-conflicts': {
       const base = opts?.prBase?.trim().replace(/^refs\/heads\//, '');
-      return base
-        ? `Merge origin/${base} into this branch. Then push.`
-        : 'Fix merge conflicts.';
+      const named = base ? ` (${base})` : '';
+      return `Merge the remote branch${named} into your branch and resolve conflicts. Then, commit and push your changes.`;
     }
     case 'merge':
       return 'Merge PR.';
