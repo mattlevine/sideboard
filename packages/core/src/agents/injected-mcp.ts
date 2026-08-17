@@ -30,7 +30,7 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
 ] as const;
 
 /**
- * Worktree Claude turns: only auto-approve present_* UI tools
+ * Worktree Claude turns: only auto-approve present_* / ask_user UI tools
  * (not fleet control). Sideboard MCP is still injected so the tools are listed;
  * other sideboard tools remain permission-gated.
  */

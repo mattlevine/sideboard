@@ -6,6 +6,7 @@ import {
   formatArtifactDirective,
   formatProcessGuideDirective,
   formatRenameBranchDirective,
+  formatUiReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
   loadAgentInstructions,
@@ -13,13 +14,27 @@ import {
 } from './instructions.js';
 
 describe('formatArtifactDirective', () => {
-  it('points agents at present_artifact, present_schema, present_files, and html fences', () => {
+  it('points agents at present_artifact, present_schema, present_files, ask_user, and html fences', () => {
     const text = formatArtifactDirective();
     expect(text).toMatch(/present_artifact/);
     expect(text).toMatch(/present_schema/);
     expect(text).toMatch(/present_files/);
+    expect(text).toMatch(/ask_user/);
+    expect(text).toMatch(/any mode|not only Plan/i);
     expect(text).toMatch(/```html/);
     expect(text).toMatch(/Never say artifacts, CMS UI, or the Files column are unavailable/i);
+  });
+});
+
+describe('formatUiReminder', () => {
+  it('reminds resumed turns about the side column and ask_user picker', () => {
+    const text = formatUiReminder();
+    expect(text).toMatch(/present_artifact/);
+    expect(text).toMatch(/present_schema/);
+    expect(text).toMatch(/present_files/);
+    expect(text).toMatch(/ask_user/);
+    expect(text).toMatch(/any mode/i);
+    expect(text).toMatch(/Do not say artifacts\/CMS UI are unavailable/i);
   });
 });
 

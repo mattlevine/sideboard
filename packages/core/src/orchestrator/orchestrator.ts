@@ -132,6 +132,7 @@ import {
 import {
   formatArtifactDirective,
   formatRenameBranchDirective,
+  formatUiReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
 } from '../agents/instructions.js';
@@ -797,16 +798,7 @@ export class Orchestrator {
       : null;
     // Re-assert on every turn (incl. CLI --resume, which drops cachedPrefix).
     const artifactReminder =
-      thread.agent !== 'brightsy'
-        ? [
-            'Sideboard side column (important):',
-            'There is no claude.ai Artifact tool here — that is normal.',
-            'HTML/SVG/markdown: ```html fence or MCP present_artifact.',
-            'CMS forms/tables: MCP present_schema (Brightsy resource_id or inline schema+schemaUi).',
-            'Files column: MCP present_files (brightsy account storage or memory).',
-            'Do not say artifacts/CMS UI are unavailable.',
-          ].join(' ')
-        : null;
+      thread.agent !== 'brightsy' ? formatUiReminder() : null;
     const worktreeReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatWorktreeReminder()

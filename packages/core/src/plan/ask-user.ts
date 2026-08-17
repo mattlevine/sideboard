@@ -1,6 +1,7 @@
 /**
- * Plan-mode clarifying questions (AskUserQuestion / Sideboard ask_user).
- * Presented in the composer; answers are sent as a normal user message.
+ * Clarifying multiple-choice questions (AskUserQuestion / Sideboard ask_user).
+ * Available in any mode — not only Plan. Presented in the composer; answers
+ * are sent as a normal user message.
  */
 
 export interface PlanQuestionOption {
