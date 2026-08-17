@@ -14,7 +14,7 @@ import { SIDEBOARD_MCP_PROFILE_ENV } from '../mcp/profile.js';
 import { loadAppSettings } from '../store/app-settings.js';
 import { appDataDir } from '../store/paths.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
-import { resolveNodeLaunch } from './node-launch.js';
+import { applyNodeLaunch, resolveNodeLaunch } from './node-launch.js';
 
 export type InjectedMcpServer = {
   name: string;
@@ -248,11 +248,11 @@ export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
     const isCli = /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry);
     const scriptArgs = isCli ? [entry, 'mcp'] : [entry];
     // System `node` cannot read Electron app.asar — use Electron-as-Node there.
-    const launch = await resolveNodeLaunch(entry);
+    const launch = applyNodeLaunch(await resolveNodeLaunch(entry), scriptArgs);
     return {
       name: 'sideboard',
       command: launch.file,
-      args: scriptArgs,
+      args: launch.args,
       ...(Object.keys(launch.env).length > 0 ? { env: launch.env } : {}),
     };
   }

@@ -5,7 +5,7 @@ vi.mock('../git/run.js', () => ({
 }));
 
 import { run } from '../git/run.js';
-import { isAsarPath, resolveNodeLaunch } from './node-launch.js';
+import { applyNodeLaunch, isAsarPath, resolveNodeLaunch } from './node-launch.js';
 
 const runMock = vi.mocked(run);
 
@@ -48,5 +48,33 @@ describe('resolveNodeLaunch', () => {
     );
     expect(launch.file).toBe('/opt/homebrew/bin/node');
     expect(launch.env).toEqual({});
+  });
+
+  it('does not wrap system node', () => {
+    const applied = applyNodeLaunch(
+      { file: '/opt/homebrew/bin/node', env: {} },
+      ['/tmp/run-stdio.js'],
+    );
+    expect(applied).toEqual({
+      file: '/opt/homebrew/bin/node',
+      args: ['/tmp/run-stdio.js'],
+      env: {},
+    });
+  });
+
+  it('wraps Electron-as-Node launches', () => {
+    const applied = applyNodeLaunch(
+      { file: '/Apps/Sideboard.app/MacOS/Sideboard', env: { ELECTRON_RUN_AS_NODE: '1' } },
+      ['/tmp/run-stdio.js'],
+    );
+    expect(applied.env.ELECTRON_RUN_AS_NODE).toBe('1');
+    if (process.platform === 'win32') {
+      expect(applied.file).toBe('/Apps/Sideboard.app/MacOS/Sideboard');
+      expect(applied.args).toEqual(['/tmp/run-stdio.js']);
+      return;
+    }
+    expect(applied.file).toBe('/bin/sh');
+    expect(applied.args).toContain('/Apps/Sideboard.app/MacOS/Sideboard');
+    expect(applied.args.at(-1)).toBe('/tmp/run-stdio.js');
   });
 });

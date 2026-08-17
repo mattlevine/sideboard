@@ -34,6 +34,8 @@ CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 
 Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm dev`) before expecting the app to pick them up. The renderer may `import type` from `@sideboard-ai/core` but must not import values from the core barrel (that pulls Node `fs` into Vite). Value helpers go through `@sideboard/*` aliases in `apps/desktop/electron.vite.config.ts`.
 
+**Nested Electron.** Sideboard.app leaks `ELECTRON_*` / `CHROME_*` (crashpad/GPU) into children. A nested Electron then dies at startup (`HasCustomHostObject` / `ElectronInitializeICUandStartNode`). Agent spawn and run scripts strip those keys. That is not enough when the immediate parent is also Electron — Cursor's local agent (Grok and other Cursor models) merges MCP env onto its own crashpad pipe, and the crash happens in `ElectronInitializeICUandStartNode` before JS can unset env. Electron-as-Node MCP and the Cursor runner are launched through `/bin/sh` that unsets `ELECTRON_*`/`CHROME_*` and re-exports `ELECTRON_RUN_AS_NODE` before exec. Helpers live in `packages/core/src/hook/nested-electron-env.ts`.
+
 ## Process skills
 
 Recurring process guides are **Claude Code project skills** at `.claude/skills/<name>/SKILL.md` (committed). Sideboard discovers that folder (and `.cursor/skills`, legacy `.sideboard/skills`, …) for composer `/name` expand. Native Claude Code and `attach` load `.claude/skills` without Sideboard. New skills must not be written only under `.sideboard/skills`. The worktree playbook (`formatProcessGuideDirective`) and orchestrator playbook state this; the stock Review template asks reviewers to propose a sentence for `review.md` or a skill when a missing rule will recur.

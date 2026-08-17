@@ -17,7 +17,7 @@ import {
   toCursorMcpServers,
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
-import { resolveNodeLaunch } from './node-launch.js';
+import { applyNodeLaunch, resolveNodeLaunch } from './node-launch.js';
 import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
@@ -186,10 +186,13 @@ export const cursorAdapter: AgentAdapter = {
     // Scripts inside Electron's app.asar are invisible to system Node
     // (MODULE_NOT_FOUND) — use ELECTRON_RUN_AS_NODE in that case. The runner
     // uses JsonlLocalAgentStore so Electron's Node (no node:sqlite) is fine.
-    const launch = await resolveNodeLaunch(runner);
+    const launch = applyNodeLaunch(
+      await resolveNodeLaunch(runner),
+      isTs ? ['--import', 'tsx', runner] : [runner],
+    );
     return {
       file: launch.file,
-      args: isTs ? ['--import', 'tsx', runner] : [runner],
+      args: launch.args,
       cwd: thread.worktreePath,
       stdin: JSON.stringify(req),
       env: {

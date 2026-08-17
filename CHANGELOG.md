@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cursor turns (Grok and other Cursor models) no longer crash injected Sideboard MCP at startup (`HasCustomHostObject` / `ElectronInitializeICUandStartNode`). Cursor's local agent is itself Electron and was re-attaching crashpad env when spawning Electron-as-Node; MCP and the Cursor runner now unset `ELECTRON_*` / `CHROME_*` immediately before exec.
+
 ## [0.1.82] - 2026-08-16
 
 ### Added

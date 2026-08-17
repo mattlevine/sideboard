@@ -47,9 +47,12 @@ describe('injected-mcp', () => {
       expect(
         servers[0]!.command === 'node' ||
           /[/\\]node$/.test(servers[0]!.command) ||
-          servers[0]!.command === process.execPath,
+          servers[0]!.command === process.execPath ||
+          servers[0]!.command === '/bin/sh',
       ).toBe(true);
-      expect(servers[0]!.args?.[0]).toMatch(/run-stdio\.(js|cjs)$|cli[/\\]dist[/\\]index\.js$/);
+      expect(servers[0]!.args?.some((a) => /run-stdio\.(js|cjs)$|cli[/\\]dist[/\\]index\.js$/.test(a))).toBe(
+        true,
+      );
     }
 
     const { toCursorMcpServers, toCodexMcpConfigArgs, toOpencodeMcpConfigContent, writeMcpServersConfig } =
