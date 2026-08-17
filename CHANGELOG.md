@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Agent turns and Cursor's local runner strip inherited `ELECTRON_*` / `CHROME_*` from the host Sideboard.app. Nested Electron (Claude Code, Cursor agent, MCP via Electron-as-Node) was crashing at startup (`HasCustomHostObject` / `ElectronInitializeICUandStartNode`). Run scripts already stripped these; spawn did not.
+
 ### Changed
 
 - Recurring process guides go in `.claude/skills/<name>/SKILL.md` so Claude Code and `attach` see them without Sideboard. Worktree and orchestrator prompts, plus the stock Review template, say not to write new skills under `.sideboard/skills`.

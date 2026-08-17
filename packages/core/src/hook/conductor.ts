@@ -21,8 +21,10 @@ import {
   type RepoSettings,
   type RunScript,
 } from './settings.js';
+import { stripNestedElectronEnv } from './nested-electron-env.js';
 
 export type { RepoSettings, RunScript };
+export { stripNestedElectronEnv } from './nested-electron-env.js';
 export type ConductorSettings = RepoSettings;
 export {
   hasConductorHook,
@@ -164,26 +166,6 @@ export interface WorkspaceScriptEnvOpts {
   workspaceName?: string;
   defaultBranch?: string;
   ports?: number[];
-}
-
-/**
- * Host Electron leaks Chromium / electron-vite env into child processes.
- * This repo's default run script is `electron-vite dev`; a nested Electron
- * that inherits those vars attaches to the parent's GPU/crashpad and dies:
- *   GPU process exited unexpectedly: exit_code=15
- *   Network service crashed, restarting service.
- *   ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL … Command failed with signal "SIGTERM"
- */
-const NESTED_ELECTRON_ENV_PREFIXES = ['ELECTRON_', 'CHROME_'] as const;
-
-export function stripNestedElectronEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const out: NodeJS.ProcessEnv = { ...env };
-  for (const key of Object.keys(out)) {
-    if (NESTED_ELECTRON_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) {
-      delete out[key];
-    }
-  }
-  return out;
 }
 
 /** Build Conductor/Sideboard env vars for setup/run scripts. */

@@ -35,6 +35,31 @@ describe('app settings', () => {
     expect(cleared.environment.CURSOR_API_KEY).toBeUndefined();
   });
 
+  it('childEnvWithAppSettings strips host Electron env, then applies extras', async () => {
+    const prevRunAsNode = process.env.ELECTRON_RUN_AS_NODE;
+    const prevCrashpad = process.env.CHROME_CRASHPAD_PIPE_NAME;
+    process.env.ELECTRON_RUN_AS_NODE = '1';
+    process.env.CHROME_CRASHPAD_PIPE_NAME = 'pipe';
+    try {
+      const mod = await load();
+      const stripped = mod.childEnvWithAppSettings();
+      expect(stripped.ELECTRON_RUN_AS_NODE).toBeUndefined();
+      expect(stripped.CHROME_CRASHPAD_PIPE_NAME).toBeUndefined();
+      const withExtra = mod.childEnvWithAppSettings({
+        ELECTRON_RUN_AS_NODE: '1',
+        FOO: 'bar',
+      });
+      expect(withExtra.ELECTRON_RUN_AS_NODE).toBe('1');
+      expect(withExtra.CHROME_CRASHPAD_PIPE_NAME).toBeUndefined();
+      expect(withExtra.FOO).toBe('bar');
+    } finally {
+      if (prevRunAsNode === undefined) delete process.env.ELECTRON_RUN_AS_NODE;
+      else process.env.ELECTRON_RUN_AS_NODE = prevRunAsNode;
+      if (prevCrashpad === undefined) delete process.env.CHROME_CRASHPAD_PIPE_NAME;
+      else process.env.CHROME_CRASHPAD_PIPE_NAME = prevCrashpad;
+    }
+  });
+
   it('applyAppEnvironment fills gaps without overwriting host env', async () => {
     const mod = await load();
     mod.saveAppSettings({
