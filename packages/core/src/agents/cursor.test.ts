@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { cursorAdapter } from './cursor.js';
 import {
   cursorSdkMessageToEvents,
@@ -30,6 +33,13 @@ describe('cursor model helpers', () => {
 });
 
 describe('cursorAdapter.buildTurn', () => {
+  beforeEach(() => {
+    vi.stubEnv('SIDEBOARD_APP_DATA', mkdtempSync(join(tmpdir(), 'sideboard-cursor-')));
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('runs the SDK runner via node when available (else Electron RUN_AS_NODE)', async () => {
     const cmd = await cursorAdapter.buildTurn(baseThread, { prompt: 'hi' });
     expect(cmd.args.at(-1)).toMatch(/cursor-runner\.(js|cjs|ts)$/);
@@ -38,9 +48,11 @@ describe('cursorAdapter.buildTurn', () => {
       prompt: 'hi',
       cwd: '/tmp/wt',
     });
-    // Dev machines usually have `node` on PATH; Electron-only hosts fall back.
-    if (cmd.file === process.execPath) {
-      expect(cmd.env?.ELECTRON_RUN_AS_NODE).toBe('1');
+    // Dev machines usually have `node` on PATH; Electron-only hosts fall back
+    // to Electron-as-Node (wrapped in `/bin/sh` so nested Cursor Electron cannot
+    // leak crashpad env into the runner).
+    if (cmd.env?.ELECTRON_RUN_AS_NODE === '1') {
+      expect(cmd.file === process.execPath || cmd.file === '/bin/sh').toBe(true);
     } else {
       expect(cmd.file).toMatch(/node/);
       expect(cmd.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();

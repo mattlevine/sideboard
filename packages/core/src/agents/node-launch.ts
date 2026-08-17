@@ -6,6 +6,7 @@
  * Electron's own binary can, when launched with ELECTRON_RUN_AS_NODE=1.
  */
 
+import { wrapElectronAsNodeLaunch } from '../hook/nested-electron-env.js';
 import { run } from '../git/run.js';
 
 export function isAsarPath(filePath: string): boolean {
@@ -18,6 +19,24 @@ export type NodeLaunch = {
   /** Extra env for the child (merged by caller). */
   env: Record<string, string>;
 };
+
+export type AppliedNodeLaunch = {
+  file: string;
+  args: string[];
+  env: Record<string, string>;
+};
+
+/**
+ * Combine {@link resolveNodeLaunch} with script args. Electron-as-Node is
+ * wrapped so a nested Electron parent cannot leak crashpad/GPU env.
+ */
+export function applyNodeLaunch(launch: NodeLaunch, args: string[]): AppliedNodeLaunch {
+  if (!launch.env.ELECTRON_RUN_AS_NODE) {
+    return { file: launch.file, args, env: launch.env };
+  }
+  const wrapped = wrapElectronAsNodeLaunch(launch.file, args);
+  return { file: wrapped.file, args: wrapped.args, env: launch.env };
+}
 
 /**
  * Resolve how to run `scriptPath` with Node.
