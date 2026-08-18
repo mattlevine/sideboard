@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
+import { findConventionSetup } from './convention-setup.js';
+import { hasCursorWorktreeSetup } from './cursor-worktrees.js';
 
 export type RunMode = 'concurrent' | 'nonconcurrent';
 
@@ -381,9 +383,9 @@ export function workspaceSettingsSourceLabel(
 }
 
 export interface RepoSetupInfo {
-  /** `.sideboard` or `.conductor` settings exist. */
+  /** `.sideboard` / `.conductor` settings, Cursor worktrees.json, or a conventional setup script. */
   hasConfig: boolean;
-  /** `[scripts] setup = "..."` is defined in the loaded config. */
+  /** A setup command will run on new worktrees (settings, Cursor json, or script/setup). */
   hasSetupScript: boolean;
   configLabel: string | null;
 }
@@ -394,9 +396,21 @@ export function getRepoSetupInfo(
   repoPath?: string | null,
 ): RepoSetupInfo {
   const settings = loadWorkspaceSettings(worktreePath, repoPath);
+  const convention = findConventionSetup(worktreePath, repoPath);
+  const cursor = hasCursorWorktreeSetup(worktreePath, repoPath);
+  const hasSetupScript = Boolean(settings?.setup) || cursor || Boolean(convention);
+  let configLabel = workspaceSettingsSourceLabel(worktreePath, repoPath);
+  if (!settings?.setup) {
+    if (convention) configLabel = convention.source;
+    else if (cursor) {
+      configLabel = hasCursorWorktreeSetup(worktreePath)
+        ? '.cursor/worktrees.json (worktree)'
+        : '.cursor/worktrees.json (main repo)';
+    }
+  }
   return {
-    hasConfig: hasWorkspaceHook(worktreePath, repoPath),
-    hasSetupScript: Boolean(settings?.setup),
-    configLabel: workspaceSettingsSourceLabel(worktreePath, repoPath),
+    hasConfig: hasWorkspaceHook(worktreePath, repoPath) || cursor || Boolean(convention),
+    hasSetupScript,
+    configLabel,
   };
 }

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.87] - 2026-08-18
+
+### Changed
+
+- New worktrees run a repo setup script when one exists: `[scripts] setup` in `.sideboard` / `.conductor` settings, then `.cursor/worktrees.json`, then conventional `script/setup` / `bin/setup` / `scripts/setup(.sh)`. Setup runs in the background in parallel with the first agent turn.
+
 ## [0.1.86] - 2026-08-17
 
 ### Fixed

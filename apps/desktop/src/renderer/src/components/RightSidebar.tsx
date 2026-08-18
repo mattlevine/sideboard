@@ -1600,7 +1600,7 @@ export function RightSidebar({
                       ? 'Setup script output will appear here after running setup.'
                       : setupInfo.hasConfig
                         ? 'No setup script defined in settings.toml.'
-                        : 'No .sideboard or .conductor settings.toml in this worktree.'}
+                        : 'No setup script in this worktree (.sideboard/settings.toml, .cursor/worktrees.json, or script/setup).'}
                   </p>
                   {setupInfo.hasSetupScript ? (
                     <button

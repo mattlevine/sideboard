@@ -105,7 +105,8 @@ export async function createThread(
   writeThread(thread);
   await ensureWorkspace(repoPath);
 
-  // Setup runs via Orchestrator.runSetup after create (emits setup_* for the UI).
+  // Setup runs via Orchestrator.runSetup after create (settings.toml,
+  // .cursor/worktrees.json, or script/setup) in parallel with the first turn.
   return readThread(thread.id) ?? thread;
 }
 

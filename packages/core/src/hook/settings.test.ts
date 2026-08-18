@@ -144,6 +144,31 @@ describe('getRepoSetupInfo', () => {
       configLabel: '.sideboard/settings.toml (main repo)',
     });
   });
+
+  it('treats .cursor/worktrees.json as a setup script', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-setup-cursor-'));
+    mkdirSync(join(root, '.cursor'));
+    writeFileSync(
+      join(root, '.cursor', 'worktrees.json'),
+      JSON.stringify({ 'setup-worktree': ['echo hi'] }),
+    );
+    expect(getRepoSetupInfo(root)).toEqual({
+      hasConfig: true,
+      hasSetupScript: true,
+      configLabel: '.cursor/worktrees.json (worktree)',
+    });
+  });
+
+  it('treats script/setup as a setup script', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-setup-script-'));
+    mkdirSync(join(root, 'script'));
+    writeFileSync(join(root, 'script', 'setup'), '#!/bin/bash\necho hi\n');
+    expect(getRepoSetupInfo(root)).toEqual({
+      hasConfig: true,
+      hasSetupScript: true,
+      configLabel: 'script/setup (worktree)',
+    });
+  });
 });
 
 describe('settings.local.toml', () => {

@@ -22,7 +22,16 @@ import {
   type RunScript,
 } from './settings.js';
 import { stripNestedElectronEnv } from './nested-electron-env.js';
+import { findConventionSetup } from './convention-setup.js';
+import { runCursorWorktreeSetup } from './cursor-worktrees.js';
 import { resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
+
+export type SetupRunResult = {
+  ran: boolean;
+  exitCode: number | null;
+  source: string | null;
+  kill?: () => void;
+};
 
 export type { RepoSettings, RunScript };
 export { stripNestedElectronEnv } from './nested-electron-env.js';
@@ -324,17 +333,21 @@ async function spawnWorkspaceScript(
   };
 }
 
+async function attachAbort(handle: ScriptHandle, signal?: AbortSignal): Promise<number | null> {
+  if (signal) {
+    const onAbort = () => handle.kill();
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+  return handle.done;
+}
+
 export async function runSetupScript(
   repoPath: string,
   worktreePath: string,
   onLine?: (line: string) => void,
   opts?: { signal?: AbortSignal; defaultBranch?: string },
-): Promise<{
-  ran: boolean;
-  exitCode: number | null;
-  source: string | null;
-  kill?: () => void;
-}> {
+): Promise<SetupRunResult> {
   const settings = loadWorkspaceSettings(worktreePath, repoPath);
   if (!settings?.setup) return { ran: false, exitCode: null, source: null };
 
@@ -345,19 +358,60 @@ export async function runSetupScript(
     onLine,
   });
 
-  if (opts?.signal) {
-    const onAbort = () => handle.kill();
-    if (opts.signal.aborted) onAbort();
-    else opts.signal.addEventListener('abort', onAbort, { once: true });
-  }
-
-  const exitCode = await handle.done;
+  const exitCode = await attachAbort(handle, opts?.signal);
   return {
     ran: true,
     exitCode,
     source: workspaceSettingsSourceLabel(worktreePath, repoPath),
     kill: handle.kill,
   };
+}
+
+/** Run `script/setup`, `bin/setup`, or `scripts/setup(.sh)` when present. */
+export async function runConventionSetup(
+  repoPath: string,
+  worktreePath: string,
+  onLine?: (line: string) => void,
+  opts?: { signal?: AbortSignal; defaultBranch?: string },
+): Promise<SetupRunResult> {
+  const found = findConventionSetup(worktreePath, repoPath);
+  if (!found) return { ran: false, exitCode: null, source: null };
+
+  onLine?.(`[setup] ${found.source}`);
+  const handle = await spawnWorkspaceScript(found.command, {
+    worktreePath,
+    repoPath,
+    defaultBranch: opts?.defaultBranch,
+    onLine,
+  });
+
+  const exitCode = await attachAbort(handle, opts?.signal);
+  return {
+    ran: true,
+    exitCode,
+    source: found.source,
+    kill: handle.kill,
+  };
+}
+
+/**
+ * Setup for a new worktree. Order: Sideboard/Conductor `[scripts] setup`,
+ * then Cursor `.cursor/worktrees.json`, then conventional `script/setup` (etc).
+ */
+export async function runWorkspaceSetup(
+  repoPath: string,
+  worktreePath: string,
+  onLine?: (line: string) => void,
+  opts?: { signal?: AbortSignal; defaultBranch?: string },
+): Promise<SetupRunResult> {
+  let setup = await runSetupScript(repoPath, worktreePath, onLine, opts);
+  if (!setup.ran) {
+    setup = await runCursorWorktreeSetup(repoPath, worktreePath, onLine);
+  }
+  if (!setup.ran) {
+    setup = await runConventionSetup(repoPath, worktreePath, onLine, opts);
+  }
+  return setup;
 }
 
 export async function runArchiveScript(

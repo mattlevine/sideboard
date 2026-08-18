@@ -408,7 +408,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_thread',
-    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces. From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Then use send_to_thread to chat.`,
+    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces. From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn. Then use send_to_thread to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -989,7 +989,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'run_setup',
-    'Re-run workspace setup (Sideboard/Conductor settings or .cursor/worktrees.json)',
+    'Re-run workspace setup (Sideboard/Conductor settings, .cursor/worktrees.json, or script/setup). New worktrees already run this automatically.',
     { ref: z.string() },
     async ({ ref }) => {
       const result = await orch.runSetup(ref);

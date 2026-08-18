@@ -8,6 +8,8 @@ import {
   getRunMode,
   listRunScripts,
   resolveFilesToCopy,
+  runConventionSetup,
+  runWorkspaceSetup,
   stripNestedElectronEnv,
 } from './conductor.js';
 
@@ -117,5 +119,37 @@ describe('stripNestedElectronEnv', () => {
         CHROME_DESKTOP: 'Sideboard.desktop',
       }),
     ).toEqual({ HOME: '/Users/me' });
+  });
+});
+
+describe('runConventionSetup / runWorkspaceSetup', () => {
+  it('runs script/setup in the worktree', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-run-conv-'));
+    mkdirSync(join(wt, 'script'));
+    writeFileSync(join(wt, 'script', 'setup'), '#!/bin/bash\necho ran-setup\n');
+    const lines: string[] = [];
+    const result = await runConventionSetup(wt, wt, (l) => lines.push(l));
+    expect(result.ran).toBe(true);
+    expect(result.exitCode).toBe(0);
+    expect(result.source).toBe('script/setup (worktree)');
+    expect(lines.join('\n')).toContain('ran-setup');
+  });
+
+  it('prefers settings.toml setup over a conventional script', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-run-ws-'));
+    mkdirSync(join(wt, 'script'));
+    mkdirSync(join(wt, '.sideboard'));
+    writeFileSync(join(wt, 'script', 'setup'), '#!/bin/bash\necho from-convention\n');
+    writeFileSync(
+      join(wt, '.sideboard', 'settings.toml'),
+      `[scripts]\nsetup = "echo from-toml"\n`,
+    );
+    const lines: string[] = [];
+    const result = await runWorkspaceSetup(wt, wt, (l) => lines.push(l));
+    expect(result.ran).toBe(true);
+    expect(result.exitCode).toBe(0);
+    expect(result.source).toContain('settings.toml');
+    expect(lines.join('\n')).toContain('from-toml');
+    expect(lines.join('\n')).not.toContain('from-convention');
   });
 });

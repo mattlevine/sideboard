@@ -32,8 +32,7 @@ import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
 } from '../git/pr-merge-archive.js';
-import { runSetupScript, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
-import { runCursorWorktreeSetup } from '../hook/cursor-worktrees.js';
+import { runWorkspaceSetup, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
 import {
   cleanupOrphanWorktrees,
   findOrphanWorktrees,
@@ -492,8 +491,8 @@ export class Orchestrator {
     const thread = await createThread(input);
     this.emit({ type: 'status_changed', threadId: thread.id, status: thread.status });
 
-    // Return as soon as the worktree exists so the chat UI can open. Setup,
-    // optional auto-run, and the first prompt continue in the background.
+    // Return as soon as the worktree exists so the chat UI can open. Setup
+    // runs in the background in parallel with the first prompt.
     void this.finishCreateThread(thread.id, input.prompt?.trim() || undefined);
 
     return thread;
@@ -503,16 +502,7 @@ export class Orchestrator {
     threadId: string,
     prompt?: string,
   ): Promise<void> {
-    await this.runSetupAfterCreate(threadId);
-
-    const { autoRunAfterSetupEnabled } = await import('../store/app-settings.js');
-    if (autoRunAfterSetupEnabled()) {
-      try {
-        await this.startDev(threadId);
-      } catch {
-        // Best-effort — setup/run script may be missing.
-      }
-    }
+    const setup = this.runSetupAfterCreate(threadId);
 
     if (prompt) {
       try {
@@ -522,6 +512,17 @@ export class Orchestrator {
         updateThread(threadId, {
           lastError: `First prompt failed: ${message}`,
         });
+      }
+    }
+
+    await setup;
+
+    const { autoRunAfterSetupEnabled } = await import('../store/app-settings.js');
+    if (autoRunAfterSetupEnabled()) {
+      try {
+        await this.startDev(threadId);
+      } catch {
+        // Best-effort — setup/run script may be missing.
       }
     }
   }
@@ -1410,7 +1411,7 @@ export class Orchestrator {
     this.emit({ type: 'setup_started', threadId: thread.id });
 
     try {
-      let setup = await runSetupScript(
+      const setup = await runWorkspaceSetup(
         thread.repoPath,
         thread.worktreePath,
         (line) => {
@@ -1419,20 +1420,9 @@ export class Orchestrator {
         { signal: abort.signal },
       );
 
-      // Fall back to Cursor .cursor/worktrees.json when no Sideboard/Conductor setup
-      if (!setup.ran) {
-        setup = await runCursorWorktreeSetup(
-          thread.repoPath,
-          thread.worktreePath,
-          (line) => {
-            this.emit({ type: 'setup_output', threadId: thread.id, line });
-          },
-        );
-      }
-
       if (!setup.ran) {
         throw new Error(
-          'No setup script in .sideboard/settings.toml, .conductor/settings.toml, or .cursor/worktrees.json',
+          'No setup script in .sideboard/settings.toml, .conductor/settings.toml, .cursor/worktrees.json, or script/setup (bin/setup, scripts/setup)',
         );
       }
       if (setup.exitCode !== 0 && setup.exitCode !== null) {
@@ -1829,7 +1819,7 @@ export class Orchestrator {
       this.emit({ type: 'status_changed', threadId: t.id, status: t.status });
     }
     for (const id of result.createdThreadIds) {
-      await this.runSetupAfterCreate(id);
+      void this.runSetupAfterCreate(id);
     }
     return { stack: result.stack, threads: result.threads };
   }
@@ -1851,7 +1841,7 @@ export class Orchestrator {
       status: result.thread.status,
     });
     if (result.createdWorktree) {
-      await this.runSetupAfterCreate(result.thread.id);
+      void this.runSetupAfterCreate(result.thread.id);
     }
     return { stack: result.stack, thread: result.thread };
   }
@@ -1870,7 +1860,7 @@ export class Orchestrator {
       this.emit({ type: 'status_changed', threadId: t.id, status: t.status });
     }
     for (const id of result.createdThreadIds) {
-      await this.runSetupAfterCreate(id);
+      void this.runSetupAfterCreate(id);
     }
     return { stack: result.stack, threads: result.threads };
   }
@@ -1893,7 +1883,7 @@ export class Orchestrator {
       this.emit({ type: 'status_changed', threadId: t.id, status: t.status });
     }
     for (const id of result.createdThreadIds) {
-      await this.runSetupAfterCreate(id);
+      void this.runSetupAfterCreate(id);
     }
     return { stack: result.stack, threads: result.threads };
   }
@@ -2070,7 +2060,7 @@ export class Orchestrator {
   }): Promise<Thread> {
     const thread = await forkThreadWorktreeImpl(input);
     this.emit({ type: 'status_changed', threadId: thread.id, status: thread.status });
-    await this.runSetupAfterCreate(thread.id);
+    void this.runSetupAfterCreate(thread.id);
     return thread;
   }
 
@@ -2331,7 +2321,7 @@ export async function startOrchestration(opts: {
     planMode: opts.planMode,
     attachments: opts.attachments,
   };
-  const thread = await createThread({
+  const thread = await orch.createThread({
     sourceType: 'branch',
     sourceRef: 'default',
     ...createOpts,
@@ -2339,7 +2329,7 @@ export async function startOrchestration(opts: {
     const { resolveDefaultBranch, resolveRepoRoot } = await import('../git/worktree.js');
     const repo = await resolveRepoRoot(repoPath);
     const def = await resolveDefaultBranch(repo);
-    return createThread({
+    return orch.createThread({
       sourceType: 'branch',
       sourceRef: def,
       ...createOpts,
