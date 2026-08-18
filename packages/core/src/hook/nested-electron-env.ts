@@ -66,3 +66,14 @@ export function wrapElectronAsNodeLaunch(
     args: ['-c', STRIP_NESTED_ELECTRON_THEN_EXEC, 'sh', file, ...args],
   };
 }
+
+/** True when `command`/`args` already run {@link STRIP_NESTED_ELECTRON_THEN_EXEC}. */
+export function isStrippedElectronLaunch(
+  command: string,
+  args?: string[],
+): boolean {
+  return (
+    command === '/bin/sh' &&
+    Boolean(args?.[1]?.includes('ELECTRON_RUN_AS_NODE') && args[1].includes('unset'))
+  );
+}

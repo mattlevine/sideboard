@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.86] - 2026-08-17
+
+### Fixed
+
+- Cursor local runs no longer pin `wait_for_turn` on a wedged SDK session. `send({ local: { force: true } })` expires leftover RUNNING state, create/resume disable stall auto-retry (which can drop tool completions), and SIGTERM cancels the live run before exit.
+
+## [0.1.85] - 2026-08-17
+
+### Fixed
+
+- Cursor turns recover from unresumable local sessions (`Corrupt local agent checkpoint` / missing root blob / `Agent … not found`) by starting a fresh SDK agent instead of failing the turn. Crash dumps from Cursor's minified local agent and nested Electron (`HasCustomHostObject`) no longer become the thread `lastError`. Injected Cursor MCP no longer puts `ELECTRON_RUN_AS_NODE` in spawn env (the `/bin/sh` wrapper still sets it) so Cursor's Electron host cannot re-attach crashpad to Sideboard.app.
+- Cursor / Slack git no longer prompts for the macOS Keychain. Agents and injected MCP get `GH_TOKEN` plus HTTPS rewrite, an empty credential helper, and batch-mode SSH so unattended turns fail closed instead of waiting on a GUI dialog.
+- Codex workspace-write turns keep `GH_TOKEN` / `GIT_CONFIG_*` inside the sandbox (`shell_environment_policy`) and allow network so `git`/`gh` do not fall back to Keychain. Setup and run scripts get the same non-interactive git env.
+
 ## [0.1.83] - 2026-08-17
 
 ### Changed

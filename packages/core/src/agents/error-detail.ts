@@ -86,22 +86,52 @@ export function pushTurnStderr(tail: string[], line: string, maxLines = 12): voi
   while (tail.length > maxLines) tail.shift();
 }
 
+/** Cursor local-agent minified bundle dumped as a single stderr line on crash. */
+function looksLikeMinifiedJsDump(line: string): boolean {
+  if (line.length < 200) return false;
+  return (
+    /yield Promise\.all/.test(line) ||
+    /\(0,[A-Za-z$]\.\w+\)/.test(line) ||
+    /CURSOR_RIPGREP_PATH/.test(line)
+  );
+}
+
+function looksLikeNestedElectronCrash(line: string): boolean {
+  return /HasCustomHostObject|ElectronInitializeICUandStartNode/i.test(line);
+}
+
+const NESTED_ELECTRON_SUMMARY =
+  'Cursor local agent crashed at Electron startup (nested Chromium / HasCustomHostObject)';
+
+const MINIFIED_DUMP_SUMMARY =
+  'Cursor local agent crashed during startup (truncated crash dump)';
+
+function clipStderr(text: string, maxChars: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return trimmed.slice(0, maxChars);
+}
+
 /** Join recent stderr lines into a single lastError-friendly string. */
 export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
   if (tail.length === 0) return '';
+  const cursorStartup = [...tail]
+    .reverse()
+    .find((line) => /cursor startup failed:/i.test(line));
+  if (cursorStartup) return clipStderr(cursorStartup, maxChars);
+  if (tail.some(looksLikeNestedElectronCrash)) return NESTED_ELECTRON_SUMMARY;
   // Prefer the actionable MODULE_NOT_FOUND line over the stack frames that follow.
   const moduleMissing = [...tail]
     .reverse()
     .find((line) => /cannot find module/i.test(line));
-  if (moduleMissing) {
-    return moduleMissing.length <= maxChars
-      ? moduleMissing
-      : moduleMissing.slice(0, maxChars);
+  if (moduleMissing) return clipStderr(moduleMissing, maxChars);
+  const useful = tail.filter((line) => !looksLikeMinifiedJsDump(line));
+  if (useful.length === 0 && tail.some(looksLikeMinifiedJsDump)) {
+    return MINIFIED_DUMP_SUMMARY;
   }
   // Prefer the last non-empty meaningful chunk; keep a bit of prior context.
-  const joined = tail.slice(-6).join('\n').trim();
-  if (joined.length <= maxChars) return joined;
-  return joined.slice(joined.length - maxChars);
+  const joined = (useful.length ? useful : tail).slice(-6).join('\n').trim();
+  return clipStderr(joined, maxChars);
 }
 
 /**
@@ -120,7 +150,10 @@ export function looksLikeInvalidAgentSession(text: string): boolean {
     /invalid session/.test(lower) ||
     /session .+ (missing|expired|deleted|gone)/.test(lower) ||
     /cannot resume/.test(lower) ||
-    /failed to (load|resume|open) session/.test(lower)
+    /failed to (load|resume|open) session/.test(lower) ||
+    /corrupt local agent checkpoint/.test(lower) ||
+    /missing root blob/.test(lower) ||
+    /\bagent\b.{0,120}\bnot found\b/.test(lower)
   );
 }
 
@@ -186,6 +219,12 @@ export function humanizeAgentFailDetail(detail: string): string {
   }
   if (/context.*(too long|exceed)|prompt is too long|conversation too long/.test(lower)) {
     return `${raw} — start a new chat or compact context, then retry.`;
+  }
+  if (/hascustomhostobject|electroninitializeicuandstartnode|nested chromium/i.test(lower)) {
+    return `${raw} — retry the turn; if it keeps failing, pick another agent.`;
+  }
+  if (/corrupt local agent checkpoint|missing root blob|truncated crash dump/.test(lower)) {
+    return `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
   }
   return raw;
 }

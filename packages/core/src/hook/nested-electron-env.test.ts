@@ -6,6 +6,7 @@ import {
   STRIP_NESTED_ELECTRON_THEN_EXEC,
   stripNestedElectronEnv,
   wrapElectronAsNodeLaunch,
+  isStrippedElectronLaunch,
 } from './nested-electron-env.js';
 
 describe('nested-electron-env', () => {
@@ -79,5 +80,19 @@ describe('nested-electron-env', () => {
     expect(out).toContain('SIDEBOARD_APP_DATA=/tmp/data');
     expect(out).not.toMatch(/^CHROME_CRASHPAD_PIPE_NAME=/m);
     expect(out).not.toMatch(/^ELECTRON_NO_ASAR=/m);
+  });
+
+  it('detects an already-stripped /bin/sh launch', () => {
+    const wrapped = wrapElectronAsNodeLaunch('/Apps/Sideboard.app/MacOS/Sideboard', [
+      '/tmp/run-stdio.js',
+    ]);
+    if (process.platform === 'win32') {
+      expect(isStrippedElectronLaunch(wrapped.file, wrapped.args)).toBe(false);
+      return;
+    }
+    expect(isStrippedElectronLaunch(wrapped.file, wrapped.args)).toBe(true);
+    expect(isStrippedElectronLaunch('/opt/homebrew/bin/node', ['/tmp/run-stdio.js'])).toBe(
+      false,
+    );
   });
 });

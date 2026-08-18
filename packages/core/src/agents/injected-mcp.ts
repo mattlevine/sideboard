@@ -15,6 +15,11 @@ import { loadAppSettings } from '../store/app-settings.js';
 import { appDataDir } from '../store/paths.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
 import { applyNodeLaunch, resolveNodeLaunch } from './node-launch.js';
+import {
+  isStrippedElectronLaunch,
+  wrapElectronAsNodeLaunch,
+} from '../hook/nested-electron-env.js';
+import { resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 
 export type InjectedMcpServer = {
   name: string;
@@ -294,6 +299,13 @@ export async function buildInjectedMcpServers(opts: {
     if (orchId) {
       sideboard.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID = orchId;
     }
+    // Cursor (and some CLIs) spawn MCP with this env only — inherit GH_TOKEN /
+    // non-interactive git so MCP git/gh never pops the login Keychain.
+    try {
+      Object.assign(sideboard.env, await resolveAgentGitAuthEnv(sideboard.env));
+    } catch {
+      /* best-effort */
+    }
     servers.push(sideboard);
   }
 
@@ -331,10 +343,21 @@ export type CursorMcpServers = Record<
 export function toCursorMcpServers(servers: InjectedMcpServer[]): CursorMcpServers {
   const out: CursorMcpServers = {};
   for (const s of servers) {
+    const env = s.env ? { ...s.env } : undefined;
+    if (env) delete env.ELECTRON_RUN_AS_NODE;
+    let command = s.command;
+    let args = s.args;
+    // Cursor's local agent is Electron and merges MCP env onto crashpad.
+    // Always exec through the strip wrapper; never advertise RUN_AS_NODE in env.
+    if (process.platform !== 'win32' && !isStrippedElectronLaunch(command, args)) {
+      const wrapped = wrapElectronAsNodeLaunch(command, args ?? []);
+      command = wrapped.file;
+      args = wrapped.args;
+    }
     out[s.name] = {
-      command: s.command,
-      ...(s.args ? { args: s.args } : {}),
-      ...(s.env ? { env: s.env } : {}),
+      command,
+      ...(args && args.length > 0 ? { args } : {}),
+      ...(env && Object.keys(env).length > 0 ? { env } : {}),
     };
   }
   return out;

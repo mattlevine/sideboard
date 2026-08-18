@@ -35,7 +35,15 @@ export function applyNodeLaunch(launch: NodeLaunch, args: string[]): AppliedNode
     return { file: launch.file, args, env: launch.env };
   }
   const wrapped = wrapElectronAsNodeLaunch(launch.file, args);
-  return { file: wrapped.file, args: wrapped.args, env: launch.env };
+  if (process.platform === 'win32') {
+    return { file: wrapped.file, args: wrapped.args, env: launch.env };
+  }
+  // `/bin/sh` re-exports ELECTRON_RUN_AS_NODE. Omit it from spawn env so a
+  // nested Electron parent (Cursor's local agent) does not treat this MCP as
+  // Electron-as-Node while merging crashpad onto Sideboard.app.
+  const env = { ...launch.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  return { file: wrapped.file, args: wrapped.args, env };
 }
 
 /**

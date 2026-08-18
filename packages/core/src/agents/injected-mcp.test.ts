@@ -61,9 +61,19 @@ describe('injected-mcp', () => {
     // regression: stripped env → wrong ~/Library/.../sideboard store).
     expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
     expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
+    expect(servers[0]!.env?.GIT_TERMINAL_PROMPT).toBe('0');
+    expect(servers[0]!.env?.GH_PROMPT_DISABLED).toBe('1');
 
     const cursorMap = toCursorMcpServers(servers);
-    expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
+    if (process.platform === 'win32') {
+      expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
+    } else {
+      expect(cursorMap.sideboard?.command).toBe('/bin/sh');
+      expect(cursorMap.sideboard?.args?.some((a) => a.includes('ELECTRON_RUN_AS_NODE'))).toBe(
+        true,
+      );
+    }
+    expect(cursorMap.sideboard?.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect(cursorMap.sideboard?.env?.SIDEBOARD_APP_DATA).toBe(
       servers[0]!.env!.SIDEBOARD_APP_DATA,
     );

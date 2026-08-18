@@ -22,6 +22,7 @@ import {
   type RunScript,
 } from './settings.js';
 import { stripNestedElectronEnv } from './nested-electron-env.js';
+import { resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 
 export type { RepoSettings, RunScript };
 export { stripNestedElectronEnv } from './nested-electron-env.js';
@@ -294,6 +295,12 @@ async function spawnWorkspaceScript(
     },
     loginEnv,
   );
+  // Setup / run scripts often git fetch; they must not pop Keychain on Slack turns.
+  try {
+    Object.assign(env, await resolveAgentGitAuthEnv(env, { cwd: opts.worktreePath }));
+  } catch {
+    /* best-effort — script still runs */
+  }
 
   const shell = process.platform === 'darwin' ? 'zsh' : 'bash';
   const child = execa(shell, ['-lc', command], {

@@ -774,17 +774,17 @@ export function SettingsModal({
                           id: 'auto' as const,
                           title: 'Auto',
                           badge: 'Recommended',
-                          hint: 'Keep remotes as-is (SSH first). If the agent has no ssh-agent, retry over HTTPS with gh.',
+                          hint: 'HTTPS in the agent process using this Mac’s gh token. No Keychain prompts — required for Slack and unattended Cursor.',
                         },
                         {
                           id: 'gh' as const,
                           title: 'gh CLI auth',
-                          hint: 'Rewrite git@github.com remotes to HTTPS and let gh supply credentials.',
+                          hint: 'Rewrite git@github.com remotes to HTTPS and inject GH_TOKEN from gh (no Keychain).',
                         },
                         {
                           id: 'ssh' as const,
                           title: 'SSH',
-                          hint: 'Keep SSH remotes. Use this Mac’s SSH agent — do not rewrite to HTTPS.',
+                          hint: 'Keep SSH remotes. Batch-mode only — will not prompt Keychain. Slack/Cursor fail if ssh-agent is locked.',
                         },
                         {
                           id: 'token' as const,

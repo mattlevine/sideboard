@@ -90,8 +90,8 @@ describe('formatWorktreeDirective', () => {
     expect(text).toContain('gh pr create --draft -R mattlevine/storycycle-ai');
     expect(text).toMatch(/upstream instead of origin/i);
     expect(text).toMatch(/git push -u origin HEAD/i);
-    expect(text).toMatch(/Permission denied \(publickey\)/);
-    expect(text).toMatch(/AUTHORIZATION: bearer/);
+    expect(text).toMatch(/Keychain/);
+    expect(text).toMatch(/GH_TOKEN/);
     expect(text).toMatch(/Never push to or open PRs against `upstream`/i);
     expect(text).toMatch(/Commit and push\./);
     expect(text).toMatch(/Merge PR\./);
@@ -116,7 +116,7 @@ describe('formatWorktreeDirective', () => {
       { githubSlug: 'acme/app', gitAuthMode: 'gh' },
     );
     expect(text).toMatch(/mode: gh CLI/);
-    expect(text).toMatch(/gh auth git-credential/);
+    expect(text).toMatch(/GH_TOKEN/);
     expect(text).not.toMatch(/Permission denied \(publickey\)/);
     expect(text).not.toMatch(/GitHub app/i);
   });

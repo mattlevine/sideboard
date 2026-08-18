@@ -67,14 +67,15 @@ describe('resolveNodeLaunch', () => {
       { file: '/Apps/Sideboard.app/MacOS/Sideboard', env: { ELECTRON_RUN_AS_NODE: '1' } },
       ['/tmp/run-stdio.js'],
     );
-    expect(applied.env.ELECTRON_RUN_AS_NODE).toBe('1');
     if (process.platform === 'win32') {
       expect(applied.file).toBe('/Apps/Sideboard.app/MacOS/Sideboard');
       expect(applied.args).toEqual(['/tmp/run-stdio.js']);
+      expect(applied.env.ELECTRON_RUN_AS_NODE).toBe('1');
       return;
     }
     expect(applied.file).toBe('/bin/sh');
     expect(applied.args).toContain('/Apps/Sideboard.app/MacOS/Sideboard');
     expect(applied.args.at(-1)).toBe('/tmp/run-stdio.js');
+    expect(applied.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
   });
 });

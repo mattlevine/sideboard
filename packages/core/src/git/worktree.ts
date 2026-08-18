@@ -208,7 +208,12 @@ export async function originGhRepoEnv(
   await ensureGhPreferOrigin(cwd);
   const slug = await resolveGithubRepoSlug(cwd);
   const mode = opts?.mode ?? getGithubGitAuthMode();
-  const token = mode === 'token' ? getGithubPat() : null;
+  const token =
+    mode === 'token'
+      ? getGithubPat()
+      : mode === 'ssh'
+        ? null
+        : await resolveGhAuthToken(cwd);
   return {
     ...applyGithubGitAuthEnv(opts?.env, { mode, token }),
     ...(slug ? { GH_REPO: slug } : {}),

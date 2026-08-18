@@ -92,7 +92,16 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
       true,
     );
     expect(looksLikeInvalidAgentSession('failed to load session')).toBe(true);
+    expect(
+      looksLikeInvalidAgentSession(
+        'Cursor startup failed: Corrupt local agent checkpoint: missing root blob abc for agent agent-1',
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeInvalidAgentSession('Agent agent-1ff554d1-14d1-42ff-9034-b9d2fe69e5f2 not found'),
+    ).toBe(true);
     expect(looksLikeInvalidAgentSession('Credit balance is too low')).toBe(false);
+    expect(looksLikeInvalidAgentSession('model gpt-x not found')).toBe(false);
   });
 
   it('surfaces opaque exits with a generic hint', () => {
@@ -110,6 +119,42 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     pushTurnStderr(tail, 'Reconnecting...');
     pushTurnStderr(tail, 'Invalid User API Key');
     expect(summarizeTurnStderr(tail)).toBe('Invalid User API Key');
+  });
+
+  it('prefers Cursor startup failed over trailing minified dumps', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      'Cursor startup failed: Corrupt local agent checkpoint: missing root blob abc for agent agent-1',
+    );
+    pushTurnStderr(
+      tail,
+      `ce.now();yield Promise.all([(0,D.ly)(r.apiKey)]);const C="rg",M=process.env.CURSOR_RIPGREP_PATH;${'x'.repeat(200)}`,
+    );
+    expect(summarizeTurnStderr(tail)).toMatch(/Corrupt local agent checkpoint/);
+    expect(summarizeTurnStderr(tail)).not.toMatch(/CURSOR_RIPGREP_PATH/);
+  });
+
+  it('summarizes nested Electron crash stacks instead of dyld frames', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      '32: 0x10985baac v8::ValueSerializer::Delegate::HasCustomHostObject(v8::Isolate*) [/Applications/Sideboard.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework]',
+    );
+    pushTurnStderr(
+      tail,
+      '33: 0x1098574f4 ElectronInitializeICUandStartNode [/Applications/Sideboard.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework]',
+    );
+    expect(summarizeTurnStderr(tail)).toMatch(/nested Chromium/i);
+  });
+
+  it('does not surface a minified Cursor local-agent dump as lastError', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      `ce.now();yield Promise.all([(0,D.ly)(r.apiKey),(0,D.mU)(r.apiKey)]),u=performance.now()-e}const k=r.workingDirectory||process.cwd();const C="rg",M=process.env.CURSOR_RIPGREP_PATH;${'x'.repeat(80)}`,
+    );
+    expect(summarizeTurnStderr(tail)).toMatch(/truncated crash dump/i);
   });
 
   it('recovers session-limit text when stderr is empty', () => {

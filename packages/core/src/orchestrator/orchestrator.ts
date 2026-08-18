@@ -1001,9 +1001,9 @@ export class Orchestrator {
         lastStderr ||
         (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
 
-      // Claude / Codex / OpenCode: stale --resume / --session ids fail the turn.
-      // Drop the session and retry once with a seeded fresh CLI session (Cursor
-      // already recovers busy/not-found inside cursor-runner).
+      // Claude / Codex / OpenCode / Cursor: stale resume ids and corrupt Cursor
+      // JSONL checkpoints fail the turn. Drop the session and retry once with a
+      // seeded fresh CLI session (cursor-runner also recovers these in-process).
       if (
         exitCode !== 0 &&
         !assistantText &&
@@ -1011,7 +1011,6 @@ export class Orchestrator {
         !this.stoppedTurns.has(threadId) &&
         looksLikeInvalidAgentSession(detail) &&
         this.requireThread(threadId).sessionId &&
-        this.requireThread(threadId).agent !== 'cursor' &&
         this.requireThread(threadId).agent !== 'brightsy'
       ) {
         updateThread(threadId, { sessionId: null });

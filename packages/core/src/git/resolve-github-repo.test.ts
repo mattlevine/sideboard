@@ -8,9 +8,10 @@ vi.mock('./run.js', () => ({
   git: vi.fn(),
   gh: vi.fn(),
   run: vi.fn(),
+  resolveGhAuthToken: vi.fn(async () => 'gho_test_token'),
 }));
 
-import { gh, git } from './run.js';
+import { gh, git, resolveGhAuthToken } from './run.js';
 import {
   ensureGhPreferOrigin,
   originGhRepoEnv,
@@ -182,27 +183,34 @@ describe('originGhRepoEnv', () => {
       }
       return { stdout: '', stderr: '', exitCode: 1 };
     });
-    ghMock.mockResolvedValue({
-      stdout: 'mattlevine/storycycle-ai',
-      stderr: '',
-      exitCode: 0,
+    ghMock.mockImplementation(async (args) => {
+      if (args[0] === 'auth' && args[1] === 'token') {
+        return { stdout: 'gho_test_token', stderr: '', exitCode: 0 };
+      }
+      return {
+        stdout: 'mattlevine/storycycle-ai',
+        stderr: '',
+        exitCode: 0,
+      };
     });
 
     await expect(
       originGhRepoEnv('/tmp/storycycle', { mode: 'gh' }),
     ).resolves.toMatchObject({
       GH_REPO: 'mattlevine/storycycle-ai',
-      GIT_CONFIG_COUNT: '3',
+      GH_TOKEN: 'gho_test_token',
+      GIT_CONFIG_COUNT: '4',
       GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
       GIT_CONFIG_VALUE_0: 'git@github.com:',
       GIT_CONFIG_KEY_1: 'url.https://github.com/.insteadOf',
       GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
-      GIT_CONFIG_KEY_2: 'credential.https://github.com.helper',
-      GIT_CONFIG_VALUE_2: '!gh auth git-credential',
+      GIT_CONFIG_KEY_2: 'credential.helper',
+      GIT_CONFIG_VALUE_2: '',
+      GIT_TERMINAL_PROMPT: '0',
     });
   });
 
-  it('auto mode pins GH_REPO without rewriting SSH remotes', async () => {
+  it('auto mode rewrites SSH remotes and injects gh token without Keychain helpers', async () => {
     gitMock.mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
         return {
@@ -213,8 +221,16 @@ describe('originGhRepoEnv', () => {
       }
       return { stdout: '', stderr: '', exitCode: 1 };
     });
+    ghMock.mockResolvedValue({
+      stdout: 'gho_test_token',
+      stderr: '',
+      exitCode: 0,
+    });
     const env = await originGhRepoEnv('/tmp/storycycle', { mode: 'auto' });
-    expect(env).toEqual({ GH_REPO: 'mattlevine/storycycle-ai' });
+    expect(env.GH_REPO).toBe('mattlevine/storycycle-ai');
+    expect(env.GH_TOKEN).toBe('gho_test_token');
+    expect(env.GIT_CONFIG_VALUE_2).toBe('');
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0');
   });
 });
 

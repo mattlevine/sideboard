@@ -50,9 +50,13 @@ describe('cursorAdapter.buildTurn', () => {
     });
     // Dev machines usually have `node` on PATH; Electron-only hosts fall back
     // to Electron-as-Node (wrapped in `/bin/sh` so nested Cursor Electron cannot
-    // leak crashpad env into the runner).
-    if (cmd.env?.ELECTRON_RUN_AS_NODE === '1') {
-      expect(cmd.file === process.execPath || cmd.file === '/bin/sh').toBe(true);
+    // leak crashpad env into the runner). RUN_AS_NODE stays in the sh script,
+    // not spawn env.
+    if (cmd.file === '/bin/sh') {
+      expect(cmd.args?.some((a) => a.includes('ELECTRON_RUN_AS_NODE'))).toBe(true);
+      expect(cmd.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    } else if (cmd.env?.ELECTRON_RUN_AS_NODE === '1') {
+      expect(cmd.file).toBe(process.execPath);
     } else {
       expect(cmd.file).toMatch(/node/);
       expect(cmd.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();

@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CODEX_PROMPT_ARG_MAX, codexAdapter } from './codex.js';
 
 const baseThread = {
@@ -22,6 +25,13 @@ const baseThread = {
 };
 
 describe('codexAdapter.buildTurn', () => {
+  beforeEach(() => {
+    vi.stubEnv('SIDEBOARD_APP_DATA', mkdtempSync(join(tmpdir(), 'sideboard-codex-')));
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('uses read-only sandbox in plan mode', async () => {
     const cmd = await codexAdapter.buildTurn(
       { ...baseThread, planMode: true },
@@ -76,6 +86,24 @@ describe('codexAdapter.buildTurn', () => {
   it('skips git-repo trust check (global orchestration cwd is not a git repo)', async () => {
     const cmd = await codexAdapter.buildTurn(baseThread, { prompt: 'list threads' });
     expect(cmd.args).toContain('--skip-git-repo-check');
+  });
+
+  it('forwards git auth env through Codex sandbox (Keychain is unreachable there)', async () => {
+    const cmd = await codexAdapter.buildTurn(baseThread, { prompt: 'push' });
+    const cfg = cmd.args.filter((_, i) => cmd.args[i - 1] === '-c');
+    expect(cfg).toContain('shell_environment_policy.inherit="all"');
+    expect(cfg).toContain('shell_environment_policy.ignore_default_excludes=true');
+    expect(cfg).toContain('sandbox_workspace_write.network_access=true');
+  });
+
+  it('does not enable workspace-write network in plan mode', async () => {
+    const cmd = await codexAdapter.buildTurn(
+      { ...baseThread, planMode: true },
+      { prompt: 'plan migration' },
+    );
+    const cfg = cmd.args.filter((_, i) => cmd.args[i - 1] === '-c');
+    expect(cfg).toContain('shell_environment_policy.inherit="all"');
+    expect(cfg).not.toContain('sandbox_workspace_write.network_access=true');
   });
 
   it('uses danger-full-access sandbox for orchestration threads', async () => {

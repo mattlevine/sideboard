@@ -66,9 +66,12 @@ export async function git(
     env: {
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: process.env.GIT_ASKPASS || 'echo',
+      SSH_ASKPASS: process.env.SSH_ASKPASS || 'echo',
       GIT_SSH_COMMAND:
         process.env.GIT_SSH_COMMAND ||
         'ssh -o BatchMode=yes -o ConnectTimeout=15',
+      GCM_INTERACTIVE: 'never',
+      GH_PROMPT_DISABLED: '1',
       ...opts?.env,
     },
   });
@@ -83,12 +86,16 @@ export async function gh(
     cwd,
     reject: opts?.reject,
     timeoutMs: opts?.timeoutMs,
+    env: {
+      GH_PROMPT_DISABLED: '1',
+      GIT_TERMINAL_PROMPT: '0',
+    },
   });
 }
 
 /** GitHub CLI token for non-interactive HTTPS git (GUI apps often lack SSH agent). */
 export async function resolveGhAuthToken(cwd: string): Promise<string | null> {
-  const result = await gh(['auth', 'token'], cwd, { reject: false });
+  const result = await gh(['auth', 'token'], cwd, { reject: false, timeoutMs: 8_000 });
   if (result.exitCode !== 0) return null;
   const token = result.stdout.trim();
   return token || null;

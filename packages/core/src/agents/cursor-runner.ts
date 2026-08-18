@@ -8,12 +8,19 @@
  * Uses {@link JsonlLocalAgentStore} instead of the SDK's default SQLite store:
  * Electron's embedded Node (used via ELECTRON_RUN_AS_NODE) lacks `node:sqlite`.
  */
-import { Agent, AgentBusyError, CursorAgentError, JsonlLocalAgentStore } from '@cursor/sdk';
+import { Agent, CursorAgentError, JsonlLocalAgentStore } from '@cursor/sdk';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
 import { appDataDir } from '../store/paths.js';
+import {
+  cursorSendOptions,
+  cursorSessionRecoveryMessage,
+  isAgentBusyError,
+  isUnresumableCursorSession,
+  withCursorLocalHangGuards,
+} from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
 import { cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
 
@@ -62,12 +69,6 @@ function localAgentStore(): JsonlLocalAgentStore {
   const root = join(appDataDir(), 'cursor-sdk-store');
   mkdirSync(root, { recursive: true });
   return new JsonlLocalAgentStore(root);
-}
-
-function isAgentBusyError(err: unknown): boolean {
-  if (err instanceof AgentBusyError) return true;
-  const message = err instanceof Error ? err.message : String(err);
-  return /already has active run/i.test(message);
 }
 
 /**
@@ -138,17 +139,28 @@ async function main(): Promise<number> {
   });
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
   const store = localAgentStore();
-  const local = { cwd: req.cwd, store };
+  const local = withCursorLocalHangGuards({ cwd: req.cwd, store });
   // Inline MCP is not persisted on resume — pass every turn (create + resume + send).
   const mcpServers =
     req.mcpServers && Object.keys(req.mcpServers).length > 0
       ? req.mcpServers
       : undefined;
+  const createOpts = {
+    apiKey,
+    model,
+    mode,
+    local,
+    name: 'Sideboard' as const,
+    ...(mcpServers ? { mcpServers } : {}),
+  };
 
-  try {
-    let agent;
+  async function createAgent() {
+    return Agent.create(createOpts);
+  }
+
+  async function openAgent() {
     try {
-      agent = req.agentId
+      return req.agentId
         ? await Agent.resume(req.agentId, {
             apiKey,
             model,
@@ -156,55 +168,75 @@ async function main(): Promise<number> {
             local,
             ...(mcpServers ? { mcpServers } : {}),
           })
-        : await Agent.create({
-            apiKey,
-            model,
-            mode,
-            local,
-            name: 'Sideboard',
-            ...(mcpServers ? { mcpServers } : {}),
-          });
+        : await createAgent();
     } catch (err) {
-      // Stale / purged cloud agent ids fail resume with "Agent … not found".
-      // Start a fresh agent so follow-ups (and Review) aren't stuck on exit 1.
-      const message = err instanceof Error ? err.message : String(err);
-      if (!req.agentId || !/not found/i.test(message)) throw err;
+      // Stale / purged cloud ids, cwd-reused dead agents, and JSONL checkpoints
+      // whose root blob never landed ("Corrupt local agent checkpoint").
+      if (!isUnresumableCursorSession(err)) throw err;
       emit({
         type: 'stderr',
-        data: `Cursor agent ${req.agentId} not found — starting a new session`,
+        data: cursorSessionRecoveryMessage(err, req.agentId),
       });
-      agent = await Agent.create({
-        apiKey,
-        model,
-        mode,
-        local,
-        name: 'Sideboard',
-        ...(mcpServers ? { mcpServers } : {}),
-      });
+      return createAgent();
     }
+  }
 
+  async function sendPrompt(agent: Awaited<ReturnType<typeof createAgent>>) {
+    const sendOpts = cursorSendOptions(mcpServers);
     try {
-      emit({ type: 'session_id', data: agent.agentId });
+      return await agent.send(req.prompt, sendOpts);
+    } catch (err) {
+      if (!isAgentBusyError(err)) throw err;
+      const n = await cancelStaleLocalRuns(agent.agentId, {
+        cwd: req.cwd,
+        store,
+      });
+      emit({
+        type: 'stderr',
+        data:
+          n > 0
+            ? `Cursor agent had ${n} stale active run(s) — cancelled and retrying`
+            : 'Cursor agent busy — retrying send',
+      });
+      return agent.send(req.prompt, sendOpts);
+    }
+  }
 
-      const sendOpts = mcpServers ? { mcpServers } : undefined;
-      let run;
-      try {
-        run = await agent.send(req.prompt, sendOpts);
-      } catch (err) {
-        if (!isAgentBusyError(err)) throw err;
-        const n = await cancelStaleLocalRuns(agent.agentId, {
-          cwd: req.cwd,
-          store,
-        });
-        emit({
-          type: 'stderr',
-          data:
-            n > 0
-              ? `Cursor agent had ${n} stale active run(s) — cancelled and retrying`
-              : 'Cursor agent busy — retrying send',
-        });
-        run = await agent.send(req.prompt, sendOpts);
-      }
+  type LiveRun = {
+    cancel: () => Promise<unknown>;
+  };
+  let liveRun: LiveRun | null = null;
+  let shuttingDown = false;
+
+  const cancelLiveRun = async (): Promise<void> => {
+    const run = liveRun;
+    liveRun = null;
+    if (!run) return;
+    try {
+      await run.cancel();
+    } catch {
+      /* best-effort — persisted RUNNING is expired on the next send(force) */
+    }
+  };
+
+  const onSignal = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    void Promise.race([
+      cancelLiveRun(),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 2_000);
+      }),
+    ]).finally(() => process.exit(1));
+  };
+  process.once('SIGTERM', onSignal);
+  process.once('SIGINT', onSignal);
+
+  async function runTurn(agent: Awaited<ReturnType<typeof createAgent>>): Promise<number> {
+    emit({ type: 'session_id', data: agent.agentId });
+    const run = await sendPrompt(agent);
+    liveRun = run;
+    try {
       for await (const msg of run.stream()) {
         for (const event of cursorSdkMessageToEvents(msg as never)) {
           emit(event);
@@ -226,7 +258,28 @@ async function main(): Promise<number> {
       if (result.status === 'cancelled') return 0;
       return 0;
     } finally {
-      await agent[Symbol.asyncDispose]();
+      liveRun = null;
+    }
+  }
+
+  try {
+    let agent = await openAgent();
+    try {
+      try {
+        return await runTurn(agent);
+      } catch (err) {
+        // send() can throw the same unresumable errors after a "successful" resume.
+        if (!isUnresumableCursorSession(err)) throw err;
+        emit({
+          type: 'stderr',
+          data: cursorSessionRecoveryMessage(err, agent.agentId),
+        });
+        await agent[Symbol.asyncDispose]().catch(() => undefined);
+        agent = await createAgent();
+        return await runTurn(agent);
+      }
+    } finally {
+      await agent[Symbol.asyncDispose]().catch(() => undefined);
     }
   } catch (err) {
     if (err instanceof CursorAgentError) {
