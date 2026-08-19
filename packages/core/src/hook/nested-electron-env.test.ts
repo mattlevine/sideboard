@@ -2,9 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
   dropNestedElectronEnvFromProcess,
+  isElectronLikeCommand,
   isNestedElectronEnvKey,
   STRIP_NESTED_ELECTRON_THEN_EXEC,
   stripNestedElectronEnv,
+  unwrapStrippedElectronLaunch,
   wrapElectronAsNodeLaunch,
   isStrippedElectronLaunch,
 } from './nested-electron-env.js';
@@ -94,5 +96,28 @@ describe('nested-electron-env', () => {
     expect(isStrippedElectronLaunch('/opt/homebrew/bin/node', ['/tmp/run-stdio.js'])).toBe(
       false,
     );
+  });
+
+  it('does not treat real node as an Electron binary', () => {
+    expect(isElectronLikeCommand('/opt/homebrew/bin/node')).toBe(false);
+    expect(isElectronLikeCommand(process.execPath)).toBe(Boolean(process.versions.electron));
+    expect(
+      isElectronLikeCommand('/Apps/Sideboard.app/Contents/MacOS/Sideboard'),
+    ).toBe(true);
+    expect(isElectronLikeCommand('/Apps/Electron.app/Contents/MacOS/Electron')).toBe(true);
+  });
+
+  it('unwraps strip-then-exec argv back to the Electron binary', () => {
+    const wrapped = wrapElectronAsNodeLaunch('/Apps/Sideboard.app/MacOS/Sideboard', [
+      '/tmp/run-stdio.js',
+    ]);
+    if (process.platform === 'win32') {
+      expect(unwrapStrippedElectronLaunch(wrapped.file, wrapped.args)).toBeNull();
+      return;
+    }
+    expect(unwrapStrippedElectronLaunch(wrapped.file, wrapped.args)).toEqual({
+      file: '/Apps/Sideboard.app/MacOS/Sideboard',
+      args: ['/tmp/run-stdio.js'],
+    });
   });
 });

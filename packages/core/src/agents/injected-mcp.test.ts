@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BRIGHTSY_MCP_ALLOWED_TOOLS,
   SIDEBOARD_MCP_ALLOWED_TOOLS,
@@ -9,8 +11,13 @@ import {
   promptMentionsBrightsy,
   shouldInjectBrightsyMcp,
   threadRequestsBrightsyMcp,
+  toCodexMcpConfigArgs,
+  toCursorMcpServers,
+  toOpencodeMcpConfigContent,
+  writeMcpServersConfig,
 } from './injected-mcp.js';
 import { brightsyMcpServerName } from '../brightsy/connected-teams.js';
+import { wrapElectronAsNodeLaunch } from '../hook/nested-electron-env.js';
 
 describe('injected-mcp', () => {
   it('exports allow-tool wildcards', () => {
@@ -67,11 +74,13 @@ describe('injected-mcp', () => {
     const cursorMap = toCursorMcpServers(servers);
     if (process.platform === 'win32') {
       expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
+    } else if (cursorMap.sideboard?.command.endsWith('cursor-electron-as-node.sh')) {
+      expect(cursorMap.sideboard?.args).toBeUndefined();
     } else {
-      expect(cursorMap.sideboard?.command).toBe('/bin/sh');
-      expect(cursorMap.sideboard?.args?.some((a) => a.includes('ELECTRON_RUN_AS_NODE'))).toBe(
-        true,
-      );
+      // Real node — do not wrap with ELECTRON_RUN_AS_NODE (Cursor would start
+      // nested Electron on the first Sideboard MCP tool call).
+      expect(cursorMap.sideboard?.command).not.toBe('/bin/sh');
+      expect(JSON.stringify(cursorMap.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
     }
     expect(cursorMap.sideboard?.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect(cursorMap.sideboard?.env?.SIDEBOARD_APP_DATA).toBe(
@@ -330,5 +339,100 @@ describe('shouldInjectBrightsyMcp', () => {
         { connected: true, alwaysOnWorktree: true },
       ),
     ).toBe(true);
+  });
+});
+
+describe('toCursorMcpServers', () => {
+  beforeEach(() => {
+    vi.stubEnv('SIDEBOARD_APP_DATA', mkdtempSync(join(tmpdir(), 'sideboard-mcp-')));
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('leaves a real node launch unwrapped', () => {
+    const map = toCursorMcpServers([
+      {
+        name: 'sideboard',
+        command: '/opt/homebrew/bin/node',
+        args: ['/tmp/run-stdio.js'],
+        env: { SIDEBOARD_APP_DATA: '/tmp/data', ELECTRON_RUN_AS_NODE: '1' },
+      },
+    ]);
+    expect(map.sideboard?.command).toBe('/opt/homebrew/bin/node');
+    expect(map.sideboard?.args).toEqual(['/tmp/run-stdio.js']);
+    expect(map.sideboard?.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    expect(map.sideboard?.env?.SIDEBOARD_APP_DATA).toBe('/tmp/data');
+  });
+
+  it('hides Sideboard.app behind a wrapper script Cursor will exec as sh', () => {
+    if (process.platform === 'win32') return;
+    const electron = '/Applications/Sideboard.app/Contents/MacOS/Sideboard';
+    const map = toCursorMcpServers([
+      {
+        name: 'sideboard',
+        command: electron,
+        args: ['/tmp/run-stdio.js'],
+      },
+    ]);
+    expect(map.sideboard?.command).toMatch(/cursor-electron-as-node\.sh$/);
+    expect(map.sideboard?.args).toBeUndefined();
+    const body = readFileSync(map.sideboard!.command, 'utf8');
+    expect(body).toContain(electron);
+    expect(body).toContain('ELECTRON_RUN_AS_NODE=1');
+    expect(JSON.stringify(map.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
+    expect(JSON.stringify(map.sideboard)).not.toContain('Sideboard.app');
+  });
+
+  it('rewrites an already-stripped /bin/sh Electron launch to the wrapper file', () => {
+    if (process.platform === 'win32') return;
+    const wrapped = wrapElectronAsNodeLaunch(
+      '/Applications/Sideboard.app/Contents/MacOS/Sideboard',
+      ['/tmp/run-stdio.js'],
+    );
+    const map = toCursorMcpServers([
+      { name: 'sideboard', command: wrapped.file, args: wrapped.args },
+    ]);
+    expect(map.sideboard?.command).toMatch(/cursor-electron-as-node\.sh$/);
+    expect(map.sideboard?.command).not.toBe('/bin/sh');
+    expect(map.sideboard?.args).toBeUndefined();
+  });
+});
+
+describe('Claude / Codex / OpenCode MCP serializers', () => {
+  const nodeServer = {
+    name: 'sideboard',
+    command: '/opt/homebrew/bin/node',
+    args: ['/tmp/run-stdio.js'],
+    env: { SIDEBOARD_APP_DATA: '/tmp/data', ELECTRON_RUN_AS_NODE: '1' },
+  };
+
+  it('do not wrap real node or keep ELECTRON_RUN_AS_NODE in spawn env', () => {
+    const claudePath = writeMcpServersConfig([nodeServer]);
+    expect(claudePath).toBeTruthy();
+    const claude = JSON.parse(readFileSync(claudePath!, 'utf8')) as {
+      mcpServers: {
+        sideboard: { command: string; args?: string[]; env?: Record<string, string> };
+      };
+    };
+    expect(claude.mcpServers.sideboard.command).toBe('/opt/homebrew/bin/node');
+    expect(claude.mcpServers.sideboard.args).toEqual(['/tmp/run-stdio.js']);
+    expect(claude.mcpServers.sideboard.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    expect(claude.mcpServers.sideboard.env?.SIDEBOARD_APP_DATA).toBe('/tmp/data');
+
+    const codex = toCodexMcpConfigArgs([nodeServer]);
+    expect(codex.some((a) => a.includes('ELECTRON_RUN_AS_NODE'))).toBe(false);
+    expect(
+      codex.some((a) => a === 'mcp_servers.sideboard.command="/opt/homebrew/bin/node"'),
+    ).toBe(true);
+
+    const oc = JSON.parse(toOpencodeMcpConfigContent([nodeServer])) as {
+      mcp: {
+        sideboard: { command: string[]; environment?: Record<string, string> };
+      };
+    };
+    expect(oc.mcp.sideboard.command).toEqual(['/opt/homebrew/bin/node', '/tmp/run-stdio.js']);
+    expect(oc.mcp.sideboard.environment?.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    expect(oc.mcp.sideboard.environment?.SIDEBOARD_APP_DATA).toBe('/tmp/data');
   });
 });

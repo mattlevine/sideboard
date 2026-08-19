@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -16,8 +16,8 @@ import { appDataDir } from '../store/paths.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
 import { applyNodeLaunch, resolveNodeLaunch } from './node-launch.js';
 import {
-  isStrippedElectronLaunch,
-  wrapElectronAsNodeLaunch,
+  isElectronLikeCommand,
+  unwrapStrippedElectronLaunch,
 } from '../hook/nested-electron-env.js';
 import { resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 
@@ -339,25 +339,75 @@ export type CursorMcpServers = Record<
   }
 >;
 
+function shSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Cursor's local agent is Electron. If mcpServers.command is Sideboard.app
+ * (or `/bin/sh -c` with ELECTRON_RUN_AS_NODE in argv), Cursor treats MCP as
+ * Electron-as-Node, merges crashpad, and dies at HasCustomHostObject — often
+ * on the first Sideboard tool call, a few turns in.
+ *
+ * Real `node` is left alone. Electron-as-Node goes through a small shell
+ * script so Cursor never sees Sideboard.app or RUN_AS_NODE in command/args/env.
+ */
+function cursorSafeMcpLaunch(
+  command: string,
+  args: string[] | undefined,
+): { command: string; args?: string[] } {
+  if (process.platform === 'win32') {
+    return args && args.length > 0 ? { command, args } : { command };
+  }
+
+  const unwrapped = unwrapStrippedElectronLaunch(command, args);
+  const file = unwrapped?.file ?? command;
+  const fileArgs = unwrapped?.args ?? args ?? [];
+  if (!isElectronLikeCommand(file)) {
+    return fileArgs.length > 0 ? { command: file, args: fileArgs } : { command: file };
+  }
+
+  const dir = join(appDataDir(), 'mcp-launch');
+  mkdirSync(dir, { recursive: true });
+  const wrap = join(dir, 'cursor-electron-as-node.sh');
+  const execLine = [file, ...fileArgs].map(shSingleQuote).join(' ');
+  writeFileSync(
+    wrap,
+    [
+      '#!/bin/sh',
+      'vars=`printenv | awk -F= \'/^(ELECTRON_|CHROME_)/{print $1}\'`',
+      '[ -n "$vars" ] && unset $vars',
+      'export ELECTRON_RUN_AS_NODE=1',
+      `exec ${execLine} "$@"`,
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  return { command: wrap };
+}
+
+/** Drop RUN_AS_NODE from MCP spawn env. Cursor (and any Electron host) would
+ * treat that as nested Electron-as-Node; other CLIs do not need it in env
+ * because {@link applyNodeLaunch} already puts it in the `/bin/sh` wrapper. */
+function mcpSpawnEnv(
+  env?: Record<string, string>,
+): Record<string, string> | undefined {
+  if (!env) return undefined;
+  const out = { ...env };
+  delete out.ELECTRON_RUN_AS_NODE;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Convert injected MCP launches into Cursor SDK `mcpServers` map. */
 export function toCursorMcpServers(servers: InjectedMcpServer[]): CursorMcpServers {
   const out: CursorMcpServers = {};
   for (const s of servers) {
-    const env = s.env ? { ...s.env } : undefined;
-    if (env) delete env.ELECTRON_RUN_AS_NODE;
-    let command = s.command;
-    let args = s.args;
-    // Cursor's local agent is Electron and merges MCP env onto crashpad.
-    // Always exec through the strip wrapper; never advertise RUN_AS_NODE in env.
-    if (process.platform !== 'win32' && !isStrippedElectronLaunch(command, args)) {
-      const wrapped = wrapElectronAsNodeLaunch(command, args ?? []);
-      command = wrapped.file;
-      args = wrapped.args;
-    }
+    const env = mcpSpawnEnv(s.env);
+    const launch = cursorSafeMcpLaunch(s.command, s.args);
     out[s.name] = {
-      command,
-      ...(args && args.length > 0 ? { args } : {}),
-      ...(env && Object.keys(env).length > 0 ? { env } : {}),
+      command: launch.command,
+      ...(launch.args && launch.args.length > 0 ? { args: launch.args } : {}),
+      ...(env ? { env } : {}),
     };
   }
   return out;
@@ -375,8 +425,9 @@ export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
     if (s.args?.length) {
       args.push('-c', `${prefix}.args=${JSON.stringify(s.args)}`);
     }
-    if (s.env) {
-      for (const [key, value] of Object.entries(s.env)) {
+    const env = mcpSpawnEnv(s.env);
+    if (env) {
+      for (const [key, value] of Object.entries(env)) {
         args.push('-c', `${prefix}.env.${key}=${JSON.stringify(value)}`);
       }
     }
@@ -405,11 +456,12 @@ export function toOpencodeMcpConfigContent(servers: InjectedMcpServer[]): string
     }
   > = {};
   for (const s of servers) {
+    const env = mcpSpawnEnv(s.env);
     mcp[s.name] = {
       type: 'local',
       command: [s.command, ...(s.args ?? [])],
       enabled: true,
-      ...(s.env && Object.keys(s.env).length > 0 ? { environment: s.env } : {}),
+      ...(env ? { environment: env } : {}),
     };
   }
   return JSON.stringify({ mcp });
@@ -424,10 +476,11 @@ export function writeMcpServersConfig(servers: InjectedMcpServer[]): string | nu
     { command: string; args?: string[]; env?: Record<string, string> }
   > = {};
   for (const s of servers) {
+    const env = mcpSpawnEnv(s.env);
     mcpServers[s.name] = {
       command: s.command,
       ...(s.args ? { args: s.args } : {}),
-      ...(s.env ? { env: s.env } : {}),
+      ...(env ? { env } : {}),
     };
   }
 

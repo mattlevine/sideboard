@@ -77,3 +77,31 @@ export function isStrippedElectronLaunch(
     Boolean(args?.[1]?.includes('ELECTRON_RUN_AS_NODE') && args[1].includes('unset'))
   );
 }
+
+/**
+ * Electron GUI / Cursor local-agent binaries. Spawning these as MCP (even via
+ * `ELECTRON_RUN_AS_NODE`) is what triggers nested `HasCustomHostObject`.
+ * Do not treat `process.execPath` as Electron when this process is real Node
+ * (tests, CLI) — that would wrap `node` with `ELECTRON_RUN_AS_NODE`.
+ */
+export function isElectronLikeCommand(command: string): boolean {
+  const name = command.trim();
+  if (!name) return false;
+  if (process.versions.electron && name === process.execPath) return true;
+  return (
+    /(?:^|[/\\])Electron(?:\.exe)?$/i.test(name) ||
+    /Sideboard\.app[/\\]/i.test(name) ||
+    /Electron\.app[/\\]/i.test(name)
+  );
+}
+
+/** Binary + script args inside a {@link wrapElectronAsNodeLaunch} `/bin/sh -c` argv. */
+export function unwrapStrippedElectronLaunch(
+  command: string,
+  args?: string[],
+): { file: string; args: string[] } | null {
+  if (!isStrippedElectronLaunch(command, args) || !args || args.length < 4) {
+    return null;
+  }
+  return { file: args[3]!, args: args.slice(4) };
+}

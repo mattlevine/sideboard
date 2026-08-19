@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.88] - 2026-08-18
+
+### Fixed
+
+- Cursor MCP no longer wraps real `node` in `/bin/sh` that exports `ELECTRON_RUN_AS_NODE`. That made Cursor's local agent treat Sideboard MCP as nested Electron and crash at the first tool call (`HasCustomHostObject`). Packaged Electron-as-Node MCP uses a wrapper script whose `command` is the `.sh` path, not `Sideboard.app`.
+
 ## [0.1.87] - 2026-08-18
 
 ### Changed

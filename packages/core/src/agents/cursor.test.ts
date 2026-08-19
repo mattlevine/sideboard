@@ -70,6 +70,8 @@ describe('cursorAdapter.buildTurn', () => {
     };
     expect(req.mcpServers?.sideboard).toBeTruthy();
     expect(req.mcpServers!.sideboard.command).toBeTruthy();
+    expect(req.mcpServers!.sideboard.command).not.toBe('/bin/sh');
+    expect(JSON.stringify(req.mcpServers!.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
   });
 
   it('omits cachedPrefix on resumed Cursor sessions', async () => {
