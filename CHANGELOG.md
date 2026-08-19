@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.94] - 2026-08-19
+
 ### Fixed
 
 - Packaged Sideboard MCP (and Cursor runtime) no longer crash on `execa` with `SyntaxError: Named export 'getStreamAsArray' not found`. Staging had flattened `get-stream@5` (CJS, from extract-zip) over `get-stream@9` (ESM, what execa needs). Duplicate versions are nested under the dependent, and the isolated pack check imports execa.
