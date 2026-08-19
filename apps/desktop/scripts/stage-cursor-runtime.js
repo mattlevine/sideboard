@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Copy Cursor runner + @cursor/sdk onto a real filesystem tree under
- * apps/desktop/build/cursor-runtime. electron-builder `asarUnpack` cannot
- * follow pnpm workspace links outside apps/desktop (`must be under …`).
- * extraResources then ships this folder next to the asar so a real `node`
- * can exec the runner without nested Chromium.
+ * apps/desktop/build/cursor-runtime. Do not use asarUnpack — any unpack
+ * glob still calls getRelativePath on pnpm workspace files outside
+ * apps/desktop and aborts pack. extraResources ships this folder next
+ * to the asar so a real node can exec the runner without nested Chromium.
  */
 const fs = require('fs');
 const path = require('path');

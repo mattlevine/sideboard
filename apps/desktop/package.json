@@ -76,9 +76,6 @@
       "out/**/*",
       "package.json"
     ],
-    "asarUnpack": [
-      "**/*.node"
-    ],
     "extraResources": [
       {
         "from": "build/cursor-runtime",
