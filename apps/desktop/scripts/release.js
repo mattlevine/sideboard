@@ -180,6 +180,7 @@ if (doDesktop) {
   console.log(`🔨 Building Sideboard desktop ${nextVersion}…`);
   run('pnpm --filter @sideboard-ai/core build', { cwd: repoRoot });
   run('pnpm exec electron-vite build');
+  run('node scripts/stage-cursor-runtime.js');
 
   const publishFlag = `--publish ${publish}`;
   const builderCmd = [
@@ -211,6 +212,25 @@ if (doDesktop) {
     JSON.parse(text);
     console.log('✅ Verified app.asar package.json');
   }
+
+  const appResources = path.join(
+    desktopRoot,
+    'release/mac-arm64/Sideboard.app/Contents/Resources',
+  );
+  const cursorRunner = path.join(
+    appResources,
+    'cursor-runtime/core-dist/agents/cursor-runner.js',
+  );
+  const cursorRg = path.join(
+    appResources,
+    `cursor-runtime/node_modules/@cursor/sdk-darwin-arm64/bin/rg`,
+  );
+  if (!fs.existsSync(cursorRunner) || !fs.existsSync(cursorRg)) {
+    throw new Error(
+      'Packaged extraResources cursor-runtime is incomplete (runner or rg missing). Aborting release.',
+    );
+  }
+  console.log('✅ Verified extraResources cursor-runtime');
 }
 
 const tag = `v${nextVersion}`;

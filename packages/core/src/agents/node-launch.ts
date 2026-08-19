@@ -8,7 +8,8 @@
  * Cursor's local agent is itself Electron. If Sideboard spawns that agent
  * (or MCP) via Electron-as-Node, Cursor uses `process.execPath` (Sideboard.app)
  * for `.js` children and strips `ELECTRON_RUN_AS_NODE` — nested Chromium then
- * dies at HasCustomHostObject. Prefer a real Node plus asar-unpacked scripts.
+ * dies at HasCustomHostObject. Prefer a real Node plus extraResources (Cursor
+ * runner) or asar-unpacked scripts.
  */
 
 import { existsSync } from 'node:fs';

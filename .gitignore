@@ -10,6 +10,7 @@ coverage/
 *.log
 .turbo/
 apps/desktop/release/
+apps/desktop/build/cursor-runtime/
 apps/desktop/dist/
 *.dmg
 *.zip

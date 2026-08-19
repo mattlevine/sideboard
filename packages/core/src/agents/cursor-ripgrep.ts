@@ -4,14 +4,15 @@
  * then walks from `process.argv[1]` for `node_modules/@cursor/sdk-<plat>/bin/rg`.
  *
  * Inside Sideboard.app that walk lands on `app.asar/.../rg`, which macOS cannot
- * exec. Point the env var at `app.asar.unpacked/.../rg` (or a real filesystem
- * copy) before the SDK starts.
+ * exec. Point the env var at extraResources `cursor-runtime/.../rg` (or an
+ * unpacked sibling) before the SDK starts.
  */
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, parse, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isAsarPath, nodeReadableScriptPath } from './node-launch.js';
+import { packagedCursorRipgrepCandidate } from './packaged-runtime.js';
 
 const RIPGREP_ENV = 'CURSOR_RIPGREP_PATH';
 
@@ -65,6 +66,11 @@ export function resolveCursorRipgrepPath(opts?: {
   const env = opts?.env ?? process.env;
   const fromEnv = usableRipgrepPath(env[RIPGREP_ENV]);
   if (fromEnv) return fromEnv;
+
+  const fromPackaged = usableRipgrepPath(
+    packagedCursorRipgrepCandidate(platformRipgrepPackage(), rgBinaryName()),
+  );
+  if (fromPackaged) return fromPackaged;
 
   const start =
     opts?.startFile?.trim() ||

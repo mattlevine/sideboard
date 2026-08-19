@@ -74,4 +74,17 @@ describe('resolveCursorRipgrepPath', () => {
       CURSOR_RIPGREP_PATH: unpackedRg,
     });
   });
+
+  it('walks from extraResources cursor-runtime to bundled rg', () => {
+    root = mkdtempSync(join(tmpdir(), 'sideboard-rg-extra-'));
+    const runner = join(root, 'cursor-runtime', 'core-dist', 'agents', 'cursor-runner.js');
+    const rg = join(root, 'cursor-runtime', 'node_modules', pkg, 'bin', binName);
+    mkdirSync(join(runner, '..'), { recursive: true });
+    writeFileSync(runner, '');
+    mkdirSync(join(rg, '..'), { recursive: true });
+    writeFileSync(rg, '');
+    chmodSync(rg, 0o755);
+
+    expect(resolveCursorRipgrepPath({ env: {}, startFile: runner })).toBe(rg);
+  });
 });

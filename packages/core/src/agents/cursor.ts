@@ -19,6 +19,7 @@ import {
 import type { AgentModelInfo } from './model-info.js';
 import { cursorRipgrepEnv } from './cursor-ripgrep.js';
 import { applyNodeLaunch, resolveNodeLaunch } from './node-launch.js';
+import { packagedCursorRunnerPath } from './packaged-runtime.js';
 import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
@@ -108,6 +109,8 @@ function entryDir(): string {
 
 /** Resolve the compiled Cursor SDK runner (tsup emits dist/agents/cursor-runner.*). */
 export function cursorRunnerPath(): string {
+  const packaged = packagedCursorRunnerPath();
+  if (packaged) return packaged;
   const root = entryDir();
   const candidates = [
     join(root, 'agents', 'cursor-runner.js'),
@@ -184,9 +187,9 @@ export const cursorAdapter: AgentAdapter = {
     const runner = cursorRunnerPath();
     const isTs = runner.endsWith('.ts');
     // Prefer a real Node so Cursor's SDK does not spawn local-runtime .js via
-    // process.execPath (Sideboard.app) without ELECTRON_RUN_AS_NODE. Asar
-    // scripts are rewritten to app.asar.unpacked when electron-builder unpacks
-    // node_modules; otherwise Electron-as-Node is the fallback.
+    // process.execPath (Sideboard.app) without ELECTRON_RUN_AS_NODE. The
+    // packaged runner lives in extraResources (real files); otherwise
+    // Electron-as-Node is the fallback for asar paths.
     const launch = applyNodeLaunch(
       await resolveNodeLaunch(runner),
       isTs ? ['--import', 'tsx', runner] : [runner],
@@ -198,7 +201,7 @@ export const cursorAdapter: AgentAdapter = {
       stdin: JSON.stringify(req),
       env: {
         ...launch.env,
-        ...cursorRipgrepEnv(),
+        ...cursorRipgrepEnv({ startFile: runner }),
         ...(apiKey ? { CURSOR_API_KEY: apiKey } : {}),
       },
     };

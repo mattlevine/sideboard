@@ -252,8 +252,9 @@ export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
   if (entry) {
     const isCli = /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry);
     const scriptArgs = isCli ? [entry, 'mcp'] : [entry];
-    // System `node` cannot read Electron app.asar — unpack (`asarUnpack`) then
-    // real Node so Cursor never sees Sideboard.app as process.execPath.
+    // System `node` cannot read Electron app.asar. Prefer a real Node when the
+    // entry is on a normal filesystem; otherwise Electron-as-Node + wrapper so
+    // Cursor never sees Sideboard.app as MCP `command`.
     const launch = applyNodeLaunch(await resolveNodeLaunch(entry), scriptArgs);
     return {
       name: 'sideboard',
