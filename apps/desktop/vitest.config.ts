@@ -6,7 +6,7 @@ const core = (rel: string) => resolve(__dirname, '../../packages/core/src', rel)
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'],
   },
   resolve: {
     alias: {
