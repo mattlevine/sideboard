@@ -11,6 +11,7 @@ coverage/
 .turbo/
 apps/desktop/release/
 apps/desktop/build/cursor-runtime/
+apps/desktop/build/sideboard-mcp/
 apps/desktop/dist/
 *.dmg
 *.zip

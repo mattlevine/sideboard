@@ -96,8 +96,6 @@ function copyPackageAndDeps(name, seen, fromFile) {
   }
 }
 
-}
-
 function assertIsolatedRunnerLoads() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sideboard-cursor-runtime-'));
   try {
