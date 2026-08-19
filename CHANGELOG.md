@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.89] - 2026-08-19
+
+### Fixed
+
+- Agent streaming no longer paints one word at a time. Consecutive stdout/thinking frames are coalesced in spawn (Claude `content_block_delta`, Cursor, Codex, OpenCode, Brightsy), and the orchestrator no longer re-reads the thread JSON on every token.
+
 ## [0.1.88] - 2026-08-18
 
 ### Fixed

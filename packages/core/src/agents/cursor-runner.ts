@@ -23,6 +23,7 @@ import {
 } from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
 import { cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
+import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 
 // Electron-as-Node already started this process. Drop inherited ELECTRON_*/
 // CHROME_* so the Cursor local agent and MCP children do not attach to
@@ -236,12 +237,14 @@ async function main(): Promise<number> {
     emit({ type: 'session_id', data: agent.agentId });
     const run = await sendPrompt(agent);
     liveRun = run;
+    const stream = createAgentStreamCoalescer(emit);
     try {
       for await (const msg of run.stream()) {
         for (const event of cursorSdkMessageToEvents(msg as never)) {
-          emit(event);
+          stream.push(event);
         }
       }
+      stream.flush();
 
       const result = await run.wait();
       if (result.status === 'error') {
@@ -258,6 +261,7 @@ async function main(): Promise<number> {
       if (result.status === 'cancelled') return 0;
       return 0;
     } finally {
+      stream.flush();
       liveRun = null;
     }
   }

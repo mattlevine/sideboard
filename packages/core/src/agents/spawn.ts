@@ -19,6 +19,7 @@ import {
 import { ensureAgentPath } from './path.js';
 import { applyTurnUsage } from './usage.js';
 import type { AgentTurnInput } from './turn-input.js';
+import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 
 export interface SpawnTurnHandle {
   pid: number | undefined;
@@ -102,13 +103,16 @@ export async function spawnAgentTurn(
   let assistantText = '';
   let parts: MessagePart[] = [];
   let usage: TokenUsage | null = null;
+  // Claude content_block_delta / Cursor SDK / similar token streams would
+  // otherwise IPC + React-render on every word.
+  const outbound = createAgentStreamCoalescer(onEvent);
 
   const consume = (stream: NodeJS.ReadableStream | null, kind: 'stdout' | 'stderr') => {
     if (!stream) return;
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
     rl.on('line', (line) => {
       if (kind === 'stderr') {
-        onEvent({ type: 'stderr', data: line });
+        outbound.push({ type: 'stderr', data: line });
         return;
       }
       let events = normalizeParseResult(adapter.parseEvent(line));
@@ -124,12 +128,12 @@ export async function spawnAgentTurn(
       for (const parsed of events) {
         if (parsed.type === 'session_id') {
           sessionId = parsed.data;
-          onEvent(parsed);
+          outbound.push(parsed);
           continue;
         }
         if (parsed.type === 'usage') {
           usage = applyTurnUsage(usage, parsed.data, parsed.scope ?? 'request');
-          onEvent(parsed);
+          outbound.push(parsed);
           continue;
         }
         if (parsed.type === 'stdout') {
@@ -146,7 +150,7 @@ export async function spawnAgentTurn(
           assistantText += parsed.data;
         }
         parts = applyAgentEvent(parts, parsed);
-        onEvent(parsed);
+        outbound.push(parsed);
       }
     });
   };
@@ -155,6 +159,7 @@ export async function spawnAgentTurn(
   consume(child.stderr, 'stderr');
 
   const done = child.then((result) => {
+    outbound.flush();
     const exitCode = result.exitCode ?? null;
     onEvent({ type: 'exit', data: exitCode });
     const finalized = finalizeParts(parts);

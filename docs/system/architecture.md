@@ -42,6 +42,8 @@ Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm
 
 **Cursor local hang.** Local SDK `send()` does not throw `agent_busy`. A killed runner leaves a persisted RUNNING run, and HTTP/2 stall retries can drop `toolCallCompleted` so the run never finishes. Each Cursor runner `send()` uses `local.force`, create/resume set `enableAgentRetries: false`, and SIGTERM/SIGINT cancel the live run (2s cap) before exit. Helpers live in `packages/core/src/agents/cursor-session.ts`. Do not default `useHttp1ForAgent` — that path has produced instant RUNNING→ERROR with no content. Merge/push still belong on `ask_git`, not a worktree prompt like `Merge PR.`
 
+**Token-stream paint.** Claude `content_block_delta`, Cursor local `assistant`/`thinking`, and similar frames are often one word. `spawnAgentTurn` coalesces consecutive stdout/thinking (~32ms) before orchestrator IPC; the Cursor runner does the same before NDJSON. The orchestrator must not `readThread()` on stdout/thinking (sync JSON parse on the Electron main thread makes streaming look word-by-word). Helper: `packages/core/src/agents/cursor-stream-coalesce.ts`.
+
 ## Process skills
 
 Recurring process guides are **Claude Code project skills** at `.claude/skills/<name>/SKILL.md` (committed). Sideboard discovers that folder (and `.cursor/skills`, legacy `.sideboard/skills`, …) for composer `/name` expand. Native Claude Code and `attach` load `.claude/skills` without Sideboard. New skills must not be written only under `.sideboard/skills`. The worktree playbook (`formatProcessGuideDirective`) and orchestrator playbook state this; the stock Review template asks reviewers to propose a sentence for `review.md` or a skill when a missing rule will recur.

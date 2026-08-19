@@ -927,13 +927,17 @@ export class Orchestrator {
           }
           // Heal false "Process died (reconciled on startup)" while we still own the turn
           // (MCP subprocess reconcile used to stamp this mid tool-use).
-          const live = readThread(threadId);
-          if (
-            live?.lastError?.includes('reconciled on startup') &&
-            (this.activeTurns.has(threadId) || this.startingTurns.has(threadId))
-          ) {
-            setStatus(threadId, 'running');
-            this.emit({ type: 'status_changed', threadId, status: 'running' });
+          // Skip stdout/thinking — Cursor streams those word-by-word; a sync
+          // JSON read of the thread file on every token stalls the UI.
+          if (event.type !== 'stdout' && event.type !== 'thinking') {
+            const live = readThread(threadId);
+            if (
+              live?.lastError?.includes('reconciled on startup') &&
+              (this.activeTurns.has(threadId) || this.startingTurns.has(threadId))
+            ) {
+              setStatus(threadId, 'running');
+              this.emit({ type: 'status_changed', threadId, status: 'running' });
+            }
           }
         },
       );
