@@ -66,9 +66,10 @@ describe('cursorAdapter.buildTurn', () => {
   it('injects Sideboard MCP into the Cursor turn request', async () => {
     const cmd = await cursorAdapter.buildTurn(baseThread, { prompt: 'list threads' });
     const req = JSON.parse(cmd.stdin!) as {
-      mcpServers?: Record<string, { command: string; args?: string[] }>;
+      mcpServers?: Record<string, { type?: string; command: string; args?: string[] }>;
     };
     expect(req.mcpServers?.sideboard).toBeTruthy();
+    expect(req.mcpServers!.sideboard.type).toBe('stdio');
     expect(req.mcpServers!.sideboard.command).toBeTruthy();
     expect(req.mcpServers!.sideboard.command).not.toBe('/bin/sh');
     expect(JSON.stringify(req.mcpServers!.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');

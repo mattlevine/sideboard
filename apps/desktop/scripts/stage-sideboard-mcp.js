@@ -3,7 +3,12 @@
  * Copy CLI/core MCP onto a real filesystem tree under
  * apps/desktop/build/sideboard-mcp. extraResources ships this next to the
  * asar so packaged agents and other apps spawn `node …/run-stdio.js` — never
- * Sideboard.app as Node. `better-sqlite3` is rebuilt for host Node ABI.
+ * Sideboard.app as Node.
+ *
+ * Copying only `better-sqlite3` is not enough: tsup leaves `@modelcontextprotocol/sdk`,
+ * `execa`, `zod`, `@cursor/sdk`, etc. as runtime imports. Those resolve in the
+ * repo by walking up to root node_modules; inside Sideboard.app that walk
+ * stops at Resources/. Rebuild sqlite for host Node ABI after the copy.
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -16,6 +21,7 @@ const repoRoot = path.resolve(desktopRoot, '../..');
 const dest = path.join(desktopRoot, 'build', 'sideboard-mcp');
 const destNm = path.join(dest, 'node_modules');
 const corePkgJson = path.join(repoRoot, 'packages/core/package.json');
+const platformSdk = `@cursor/sdk-${process.platform}-${process.arch}`;
 
 function copyTree(from, to) {
   if (!fs.existsSync(from)) {
@@ -44,7 +50,13 @@ function resolvePkgJson(name, fromFile) {
   for (const p of candidates) {
     if (fs.existsSync(p)) return fs.realpathSync(p);
   }
-  const entry = req.resolve(name);
+  let entry;
+  try {
+    entry = req.resolve(name);
+  } catch (err) {
+    if (name.startsWith('@cursor/sdk-')) return null;
+    throw err;
+  }
   let dir = path.dirname(entry);
   for (let i = 0; i < 12; i++) {
     const pkgPath = path.join(dir, 'package.json');
@@ -67,6 +79,7 @@ function copyPackageAndDeps(name, seen, fromFile) {
   if (seen.has(name)) return;
   seen.add(name);
   const pkgJsonPath = resolvePkgJson(name, fromFile);
+  if (!pkgJsonPath) return;
   const pkgDir = path.dirname(pkgJsonPath);
   copyTree(pkgDir, path.join(destNm, ...name.split('/')));
   const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
@@ -74,6 +87,7 @@ function copyPackageAndDeps(name, seen, fromFile) {
     copyPackageAndDeps(dep, seen, pkgJsonPath);
   }
   for (const dep of Object.keys(pkg.optionalDependencies || {})) {
+    if (dep.startsWith('@cursor/sdk-') && dep !== platformSdk) continue;
     copyPackageAndDeps(dep, seen, pkgJsonPath);
   }
 }
@@ -100,13 +114,13 @@ function rebuildBetterSqlite3ForHostNode() {
   }
 }
 
-function assertIsolatedMcpNativeLoads() {
+function assertIsolatedMcpLoads() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sideboard-mcp-stage-'));
   try {
     const isolated = path.join(tmp, 'sideboard-mcp');
     fs.cpSync(dest, isolated, { recursive: true });
     const mcp = path.join(isolated, 'core-dist', 'mcp', 'run-stdio.js');
-    const result = spawnSync(
+    const sqlite = spawnSync(
       process.execPath,
       [
         '-e',
@@ -118,9 +132,24 @@ function assertIsolatedMcpNativeLoads() {
         env: { ...process.env, NODE_PATH: '' },
       },
     );
+    const sqliteOut = `${sqlite.stdout || ''}${sqlite.stderr || ''}`;
+    if (sqlite.status !== 0 || !/sqlite-ok/.test(sqliteOut)) {
+      throw new Error(`Isolated MCP better-sqlite3 failed to load:\n${sqliteOut}`);
+    }
+
+    const result = spawnSync(process.execPath, [mcp], {
+      encoding: 'utf8',
+      input: '',
+      timeout: 8000,
+      env: {
+        ...process.env,
+        NODE_PATH: '',
+        SIDEBOARD_APP_DATA: path.join(tmp, 'app-data'),
+      },
+    });
     const out = `${result.stdout || ''}${result.stderr || ''}`;
-    if (result.status !== 0 || !/sqlite-ok/.test(out)) {
-      throw new Error(`Isolated MCP better-sqlite3 failed to load:\n${out}`);
+    if (/ERR_MODULE_NOT_FOUND|Cannot find package|Cannot find module/i.test(out)) {
+      throw new Error(`Isolated MCP run-stdio failed to load:\n${out}`);
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -137,10 +166,13 @@ fs.writeFileSync(
   `${JSON.stringify({ name: 'sideboard-mcp', private: true, type: 'module' }, null, 2)}\n`,
 );
 
+const corePkg = JSON.parse(fs.readFileSync(corePkgJson, 'utf8'));
 const seen = new Set();
-copyPackageAndDeps('better-sqlite3', seen, corePkgJson);
+for (const name of Object.keys(corePkg.dependencies || {})) {
+  copyPackageAndDeps(name, seen, corePkgJson);
+}
 rebuildBetterSqlite3ForHostNode();
-assertIsolatedMcpNativeLoads();
+assertIsolatedMcpLoads();
 
 const mcp = path.join(dest, 'core-dist', 'mcp', 'run-stdio.js');
 const cli = path.join(dest, 'cli-dist', 'index.js');

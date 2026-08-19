@@ -240,11 +240,20 @@ if (doDesktop) {
     appResources,
     'sideboard-mcp/node_modules/better-sqlite3/package.json',
   );
-  if (!fs.existsSync(mcpEntry) || !fs.existsSync(mcpCli) || !fs.existsSync(mcpSqlite)) {
-    throw new Error(
-      'Packaged extraResources sideboard-mcp is incomplete (run-stdio, CLI, or sqlite missing). Aborting release.',
+    const mcpSdk = path.join(
+      appResources,
+      'sideboard-mcp/node_modules/@modelcontextprotocol/sdk/package.json',
     );
-  }
+    if (
+      !fs.existsSync(mcpEntry) ||
+      !fs.existsSync(mcpCli) ||
+      !fs.existsSync(mcpSqlite) ||
+      !fs.existsSync(mcpSdk)
+    ) {
+      throw new Error(
+        'Packaged extraResources sideboard-mcp is incomplete (run-stdio, CLI, sqlite, or MCP SDK missing). Aborting release.',
+      );
+    }
   console.log('✅ Verified extraResources sideboard-mcp');
 }
 

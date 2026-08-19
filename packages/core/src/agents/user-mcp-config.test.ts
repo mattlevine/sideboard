@@ -33,9 +33,10 @@ describe('user MCP config merge', () => {
     );
     const servers = next.mcpServers as Record<
       string,
-      { command: string; args?: string[]; env?: Record<string, string> }
+      { type?: string; command: string; args?: string[]; env?: Record<string, string> }
     >;
     expect(servers.other?.command).toBe('npx');
+    expect(servers.sideboard?.type).toBe('stdio');
     expect(servers.sideboard?.command).toBe('/opt/homebrew/bin/node');
     expect(servers.sideboard?.args?.[0]).toMatch(
       /sideboard-mcp[/\\]core-dist[/\\]mcp[/\\]run-stdio\.js$/,

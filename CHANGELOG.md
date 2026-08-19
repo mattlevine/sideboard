@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Packaged Sideboard MCP actually starts under system `node`. 0.1.92 shipped `sideboard-mcp` with `better-sqlite3` but not `@modelcontextprotocol/sdk` / `execa` / `zod` / `@cursor/sdk`, so Claude, Cursor, Codex, and OpenCode all failed live tool discovery (`ERR_MODULE_NOT_FOUND`). Staging now copies core's production dependency tree (same pattern as `cursor-runtime`) and the isolated pack check boots `run-stdio.js`. Cursor SDK / `~/.cursor/mcp.json` entries set `type: "stdio"`.
+
 ## [0.1.92] - 2026-08-19
 
 ### Fixed

@@ -73,6 +73,7 @@ describe('injected-mcp', () => {
     expect(servers[0]!.env?.GH_PROMPT_DISABLED).toBe('1');
 
     const cursorMap = toCursorMcpServers(servers);
+    expect(cursorMap.sideboard?.type).toBe('stdio');
     if (process.platform === 'win32') {
       expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
     } else {
@@ -387,6 +388,7 @@ describe('toCursorMcpServers', () => {
         env: { SIDEBOARD_APP_DATA: '/tmp/data', ELECTRON_RUN_AS_NODE: '1' },
       },
     ]);
+    expect(map.sideboard?.type).toBe('stdio');
     expect(map.sideboard?.command).toBe('/opt/homebrew/bin/node');
     expect(map.sideboard?.args).toEqual(['/tmp/run-stdio.js']);
     expect(map.sideboard?.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();

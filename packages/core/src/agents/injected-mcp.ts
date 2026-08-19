@@ -354,6 +354,7 @@ export async function buildInjectedMcpServers(opts: {
 export type CursorMcpServers = Record<
   string,
   {
+    type: 'stdio';
     command: string;
     args?: string[];
     env?: Record<string, string>;
@@ -400,6 +401,7 @@ export function toCursorMcpServers(servers: InjectedMcpServer[]): CursorMcpServe
     const env = mcpSpawnEnv(s.env);
     const launch = cursorSafeMcpLaunch(s.command, s.args);
     out[s.name] = {
+      type: 'stdio',
       command: launch.command,
       ...(launch.args && launch.args.length > 0 ? { args: launch.args } : {}),
       ...(env ? { env } : {}),

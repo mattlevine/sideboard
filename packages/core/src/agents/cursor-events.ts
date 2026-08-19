@@ -19,6 +19,7 @@ export type CursorTurnRequest = {
   mcpServers?: Record<
     string,
     {
+      type?: 'stdio';
       command: string;
       args?: string[];
       env?: Record<string, string>;

@@ -46,6 +46,7 @@ export function mergeSideboardIntoMcpServersJson(
   const servers = asObject(root.mcpServers);
   const env = stripElectronSpawnEnv(sideboard.env);
   servers.sideboard = {
+    type: 'stdio',
     command: sideboard.command,
     ...(sideboard.args && sideboard.args.length > 0 ? { args: sideboard.args } : {}),
     ...(env ? { env } : {}),
