@@ -92,7 +92,9 @@ function looksLikeMinifiedJsDump(line: string): boolean {
   return (
     /yield Promise\.all/.test(line) ||
     /\(0,[A-Za-z$]\.\w+\)/.test(line) ||
-    /CURSOR_RIPGREP_PATH/.test(line)
+    /CURSOR_RIPGREP_PATH/.test(line) ||
+    /findFilesWithRipgrep/.test(line) ||
+    /@cursor\/sdk\/dist\//.test(line)
   );
 }
 
@@ -120,6 +122,18 @@ export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
     .find((line) => /cursor startup failed:/i.test(line));
   if (cursorStartup) return clipStderr(cursorStartup, maxChars);
   if (tail.some(looksLikeNestedElectronCrash)) return NESTED_ELECTRON_SUMMARY;
+  if (
+    tail.some(
+      (line) =>
+        /\[resource_exhausted\]|resource_exhausted/i.test(line) ||
+        /findFilesWithRipgrep/.test(line),
+    )
+  ) {
+    return clipStderr(
+      'Cursor local file search failed (ripgrep / resource_exhausted). Wait a minute and retry; if it keeps happening, check Cursor usage.',
+      maxChars,
+    );
+  }
   // Prefer the actionable MODULE_NOT_FOUND line over the stack frames that follow.
   const moduleMissing = [...tail]
     .reverse()
@@ -171,7 +185,9 @@ export function looksLikeAgentFailureMessage(text: string): boolean {
       lower,
     ) ||
     /\b429\b|too many requests|rate.?limit/.test(lower) ||
-    /prompt is too long|context.*(too long|exceed)|conversation too long/.test(lower)
+    /prompt is too long|context.*(too long|exceed)|conversation too long/.test(lower) ||
+    /\[resource_exhausted\]|resource_exhausted/.test(lower) ||
+    /findFilesWithRipgrep/.test(text)
   );
 }
 
@@ -206,6 +222,9 @@ export function humanizeAgentFailDetail(detail: string): string {
   }
   if (/\b429\b|rate.?limit|too many requests/.test(lower)) {
     return `${raw} — wait a moment and retry.`;
+  }
+  if (/\[resource_exhausted\]|resource_exhausted|findfileswithripgrep/.test(lower)) {
+    return 'Cursor local file search failed (ripgrep / resource_exhausted). Wait a minute and retry; if it keeps happening, check Cursor usage.';
   }
   if (
     /invalid user api key|invalid api key|not logged in|not authenticated|unauthorized|authentication|please run.*login|codex login|claude auth|cursor api/.test(

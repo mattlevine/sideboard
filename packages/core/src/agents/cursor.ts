@@ -17,6 +17,7 @@ import {
   toCursorMcpServers,
 } from './injected-mcp.js';
 import type { AgentModelInfo } from './model-info.js';
+import { cursorRipgrepEnv } from './cursor-ripgrep.js';
 import { applyNodeLaunch, resolveNodeLaunch } from './node-launch.js';
 import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
@@ -182,10 +183,10 @@ export const cursorAdapter: AgentAdapter = {
 
     const runner = cursorRunnerPath();
     const isTs = runner.endsWith('.ts');
-    // Prefer a real Node on PATH when the runner is on a normal filesystem.
-    // Scripts inside Electron's app.asar are invisible to system Node
-    // (MODULE_NOT_FOUND) — use ELECTRON_RUN_AS_NODE in that case. The runner
-    // uses JsonlLocalAgentStore so Electron's Node (no node:sqlite) is fine.
+    // Prefer a real Node so Cursor's SDK does not spawn local-runtime .js via
+    // process.execPath (Sideboard.app) without ELECTRON_RUN_AS_NODE. Asar
+    // scripts are rewritten to app.asar.unpacked when electron-builder unpacks
+    // node_modules; otherwise Electron-as-Node is the fallback.
     const launch = applyNodeLaunch(
       await resolveNodeLaunch(runner),
       isTs ? ['--import', 'tsx', runner] : [runner],
@@ -197,6 +198,7 @@ export const cursorAdapter: AgentAdapter = {
       stdin: JSON.stringify(req),
       env: {
         ...launch.env,
+        ...cursorRipgrepEnv(),
         ...(apiKey ? { CURSOR_API_KEY: apiKey } : {}),
       },
     };

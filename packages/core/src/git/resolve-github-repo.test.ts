@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execaSync } from 'execa';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./run.js', () => ({
   git: vi.fn(),
@@ -11,7 +11,8 @@ vi.mock('./run.js', () => ({
   resolveGhAuthToken: vi.fn(async () => 'gho_test_token'),
 }));
 
-import { gh, git, resolveGhAuthToken } from './run.js';
+import { gh, git } from './run.js';
+import { resetGithubAgentTokenMemo } from './git-auth-mode.js';
 import {
   ensureGhPreferOrigin,
   originGhRepoEnv,
@@ -162,6 +163,22 @@ describe('ensureGhPreferOrigin', () => {
 });
 
 describe('originGhRepoEnv', () => {
+  let authDir: string;
+  const prevAuthDir = process.env.SIDEBOARD_GIT_AUTH_DIR;
+
+  beforeEach(() => {
+    authDir = mkdtempSync(join(tmpdir(), 'sideboard-git-auth-'));
+    process.env.SIDEBOARD_GIT_AUTH_DIR = authDir;
+    resetGithubAgentTokenMemo();
+  });
+
+  afterEach(() => {
+    if (prevAuthDir === undefined) delete process.env.SIDEBOARD_GIT_AUTH_DIR;
+    else process.env.SIDEBOARD_GIT_AUTH_DIR = prevAuthDir;
+    rmSync(authDir, { recursive: true, force: true });
+    resetGithubAgentTokenMemo();
+  });
+
   it('sets GH_REPO from origin even when upstream exists', async () => {
     gitMock.mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
@@ -194,20 +211,15 @@ describe('originGhRepoEnv', () => {
       };
     });
 
-    await expect(
-      originGhRepoEnv('/tmp/storycycle', { mode: 'gh' }),
-    ).resolves.toMatchObject({
-      GH_REPO: 'mattlevine/storycycle-ai',
-      GH_TOKEN: 'gho_test_token',
-      GIT_CONFIG_COUNT: '4',
-      GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
-      GIT_CONFIG_VALUE_0: 'git@github.com:',
-      GIT_CONFIG_KEY_1: 'url.https://github.com/.insteadOf',
-      GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
-      GIT_CONFIG_KEY_2: 'credential.helper',
-      GIT_CONFIG_VALUE_2: '',
-      GIT_TERMINAL_PROMPT: '0',
-    });
+    const env = await originGhRepoEnv('/tmp/storycycle', { mode: 'gh' });
+    expect(env.GH_REPO).toBe('mattlevine/storycycle-ai');
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(JSON.stringify(env)).not.toContain('gho_test_token');
+    expect(env.GIT_CONFIG_COUNT).toBe('4');
+    expect(env.GIT_CONFIG_VALUE_2).toBe('');
+    expect(env.GIT_CONFIG_VALUE_3).toMatch(/^store --file=/);
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0');
+    expect(env.GH_CONFIG_DIR).toBeTruthy();
   });
 
   it('auto mode rewrites SSH remotes and injects gh token without Keychain helpers', async () => {
@@ -228,8 +240,9 @@ describe('originGhRepoEnv', () => {
     });
     const env = await originGhRepoEnv('/tmp/storycycle', { mode: 'auto' });
     expect(env.GH_REPO).toBe('mattlevine/storycycle-ai');
-    expect(env.GH_TOKEN).toBe('gho_test_token');
-    expect(env.GIT_CONFIG_VALUE_2).toBe('');
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(JSON.stringify(env)).not.toContain('gho_test_token');
+    expect(env.GIT_CONFIG_VALUE_3).toMatch(/^store --file=/);
     expect(env.GIT_TERMINAL_PROMPT).toBe('0');
   });
 });

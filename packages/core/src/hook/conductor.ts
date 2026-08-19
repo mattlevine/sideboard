@@ -24,7 +24,7 @@ import {
 import { stripNestedElectronEnv } from './nested-electron-env.js';
 import { findConventionSetup } from './convention-setup.js';
 import { runCursorWorktreeSetup } from './cursor-worktrees.js';
-import { resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
+import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 
 export type SetupRunResult = {
   ran: boolean;
@@ -306,7 +306,10 @@ async function spawnWorkspaceScript(
   );
   // Setup / run scripts often git fetch; they must not pop Keychain on Slack turns.
   try {
-    Object.assign(env, await resolveAgentGitAuthEnv(env, { cwd: opts.worktreePath }));
+    mergeAgentGitAuthEnv(
+      env,
+      await resolveAgentGitAuthEnv(env, { cwd: opts.worktreePath }),
+    );
   } catch {
     /* best-effort — script still runs */
   }

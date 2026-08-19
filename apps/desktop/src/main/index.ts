@@ -55,6 +55,7 @@ import {
   claudeUserSettingsPath,
   detectAgents,
   ensureAgentPath,
+  warmGithubAgentAuth,
   getAgentSetupInfo,
   getOrchestrator,
   installAgent,
@@ -1501,6 +1502,13 @@ app.whenReady().then(async () => {
   }
   // GUI apps get a stripped PATH; make sure `claude` / friends resolve.
   ensureAgentPath();
+  // Keychain is OK here (app start). Later agent turns reuse ~/.sideboard-git-auth.
+  void warmGithubAgentAuth({ force: true }).catch((err) => {
+    console.warn(
+      'GitHub agent auth warm skipped:',
+      err instanceof Error ? err.message : err,
+    );
+  });
   // Conductor-style Settings → Environment (e.g. CURSOR_API_KEY).
   applyAppEnvironment(process.env);
   if (process.platform === 'darwin') {

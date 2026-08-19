@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline';
 import { execa } from 'execa';
 import { originGhRepoEnv } from '../git/worktree.js';
-import { resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
+import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 import { childEnvWithAppSettings } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, MessagePart, Thread, TokenUsage } from '../types/thread.js';
@@ -69,14 +69,13 @@ export async function spawnAgentTurn(
   }
 
   // Pin bare `gh` to this worktree's origin (not upstream) for dual-remote repos.
-  // HTTPS rewrite / GH_TOKEN / no-Keychain git follow Account → GitHub git-auth mode.
+  // GitHub auth is a warmed credential store + GH_CONFIG_DIR — not GH_TOKEN in env.
   const env = childEnvWithAppSettings(cmd.env);
   try {
     if (isOrchestratorThread(thread)) {
-      Object.assign(env, await resolveAgentGitAuthEnv(env));
+      mergeAgentGitAuthEnv(env, await resolveAgentGitAuthEnv(env));
     } else {
-      const originEnv = await originGhRepoEnv(thread.worktreePath, { env });
-      Object.assign(env, originEnv);
+      mergeAgentGitAuthEnv(env, await originGhRepoEnv(thread.worktreePath, { env }));
     }
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);

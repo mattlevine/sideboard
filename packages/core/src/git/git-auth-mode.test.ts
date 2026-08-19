@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   appendIndexedGitConfig,
   applyGithubGitAuthEnv,
   codexUnattendedGitConfigArgs,
   formatGitAuthModeDirective,
   githubAgentGitEnv,
+  mergeAgentGitAuthEnv,
   nonInteractiveGitProcessEnv,
+  resetGithubAgentTokenMemo,
 } from './git-auth-mode.js';
+import { githubCredentialStorePath, githubGhConfigDir } from './github-agent-auth.js';
 
 describe('nonInteractiveGitProcessEnv', () => {
   it('fails closed instead of prompting Keychain or SSH', () => {
@@ -21,15 +27,24 @@ describe('nonInteractiveGitProcessEnv', () => {
 
 describe('appendIndexedGitConfig', () => {
   it('starts at 0 when no inherited GIT_CONFIG_* is present', () => {
-    expect(githubAgentGitEnv()).toEqual({
-      GIT_CONFIG_COUNT: '3',
-      GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
-      GIT_CONFIG_VALUE_0: 'git@github.com:',
-      GIT_CONFIG_KEY_1: 'url.https://github.com/.insteadOf',
-      GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
-      GIT_CONFIG_KEY_2: 'credential.helper',
-      GIT_CONFIG_VALUE_2: '',
-    });
+    const dir = mkdtempSync(join(tmpdir(), 'sideboard-git-auth-'));
+    const prev = process.env.SIDEBOARD_GIT_AUTH_DIR;
+    process.env.SIDEBOARD_GIT_AUTH_DIR = dir;
+    try {
+      expect(githubAgentGitEnv()).toEqual({
+        GIT_CONFIG_COUNT: '3',
+        GIT_CONFIG_KEY_0: 'url.https://github.com/.insteadOf',
+        GIT_CONFIG_VALUE_0: 'git@github.com:',
+        GIT_CONFIG_KEY_1: 'url.https://github.com/.insteadOf',
+        GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
+        GIT_CONFIG_KEY_2: 'credential.helper',
+        GIT_CONFIG_VALUE_2: '',
+      });
+    } finally {
+      if (prev === undefined) delete process.env.SIDEBOARD_GIT_AUTH_DIR;
+      else process.env.SIDEBOARD_GIT_AUTH_DIR = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('appends after inherited indexed config', () => {
@@ -50,11 +65,28 @@ describe('appendIndexedGitConfig', () => {
 });
 
 describe('applyGithubGitAuthEnv', () => {
+  let dir: string;
+  const prev = process.env.SIDEBOARD_GIT_AUTH_DIR;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'sideboard-git-auth-'));
+    process.env.SIDEBOARD_GIT_AUTH_DIR = dir;
+    resetGithubAgentTokenMemo();
+  });
+
+  afterEach(() => {
+    if (prev === undefined) delete process.env.SIDEBOARD_GIT_AUTH_DIR;
+    else process.env.SIDEBOARD_GIT_AUTH_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+    resetGithubAgentTokenMemo();
+  });
+
   it('ssh stays batch-mode and does not rewrite remotes', () => {
     const env = applyGithubGitAuthEnv({}, { mode: 'ssh' });
     expect(env.GIT_CONFIG_COUNT).toBeUndefined();
     expect(env.GH_TOKEN).toBeUndefined();
     expect(env.GIT_SSH_COMMAND).toMatch(/BatchMode=yes/);
+    expect(env.GH_CONFIG_DIR).toBe(githubGhConfigDir());
   });
 
   it('auto rewrites SSH remotes to HTTPS and disables osxkeychain', () => {
@@ -65,32 +97,59 @@ describe('applyGithubGitAuthEnv', () => {
     expect(env.GIT_TERMINAL_PROMPT).toBe('0');
   });
 
-  it('gh injects GH_TOKEN and a bearer header so git never uses the Keychain', () => {
+  it('gh warms a credential store instead of putting the token in env', () => {
     const env = applyGithubGitAuthEnv({}, { mode: 'gh', token: 'gho_secret' });
-    expect(env.GH_TOKEN).toBe('gho_secret');
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(JSON.stringify(env)).not.toContain('gho_secret');
     expect(env.GIT_CONFIG_COUNT).toBe('4');
-    expect(env.GIT_CONFIG_KEY_3).toBe('http.https://github.com/.extraHeader');
-    expect(env.GIT_CONFIG_VALUE_3).toBe('AUTHORIZATION: bearer gho_secret');
+    expect(env.GIT_CONFIG_KEY_2).toBe('credential.helper');
+    expect(env.GIT_CONFIG_VALUE_2).toBe('');
+    expect(env.GIT_CONFIG_VALUE_3).toBe(`store --file=${githubCredentialStorePath()}`);
+    expect(env.GH_CONFIG_DIR).toBe(githubGhConfigDir());
   });
 
-  it('token rewrites remotes and sets GH_TOKEN when missing', () => {
+  it('token mode also keeps the PAT out of agent env', () => {
     const env = applyGithubGitAuthEnv({}, { mode: 'token', token: 'ghp_secret' });
-    expect(env.GH_TOKEN).toBe('ghp_secret');
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(JSON.stringify(env)).not.toContain('ghp_secret');
     expect(env.GIT_CONFIG_COUNT).toBe('4');
   });
 
-  it('does not overwrite an existing GH_TOKEN', () => {
+  it('uses an existing GH_TOKEN to warm the store but does not re-export it', () => {
     const env = applyGithubGitAuthEnv(
       { GH_TOKEN: 'from-shell' },
       { mode: 'token', token: 'ghp_secret' },
     );
     expect(env.GH_TOKEN).toBeUndefined();
-    expect(env.GIT_CONFIG_VALUE_3).toBe('AUTHORIZATION: bearer from-shell');
+    expect(JSON.stringify(env)).not.toContain('from-shell');
+    expect(JSON.stringify(env)).not.toContain('ghp_secret');
+    expect(env.GIT_CONFIG_VALUE_3).toContain('store --file=');
+  });
+
+  it('ssh still warms gh config when a token is available', () => {
+    const env = applyGithubGitAuthEnv({}, { mode: 'ssh', token: 'gho_secret' });
+    expect(env.GIT_CONFIG_COUNT).toBeUndefined();
+    expect(env.GH_CONFIG_DIR).toBe(githubGhConfigDir());
+    expect(JSON.stringify(env)).not.toContain('gho_secret');
+  });
+
+  it('mergeAgentGitAuthEnv strips inherited GH_TOKEN from the child env', () => {
+    const env: Record<string, string | undefined> = {
+      GH_TOKEN: 'from-shell',
+      GITHUB_TOKEN: 'also-secret',
+      PATH: '/usr/bin',
+    };
+    mergeAgentGitAuthEnv(env, applyGithubGitAuthEnv(env, { mode: 'gh', token: 'gho_secret' }));
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.PATH).toBe('/usr/bin');
+    expect(JSON.stringify(env)).not.toContain('from-shell');
+    expect(JSON.stringify(env)).not.toContain('gho_secret');
   });
 });
 
 describe('codexUnattendedGitConfigArgs', () => {
-  it('keeps GH_TOKEN / GIT_CONFIG in the sandbox and enables network for workspace-write', () => {
+  it('keeps GH_CONFIG_DIR / GIT_CONFIG in the sandbox and enables network for workspace-write', () => {
     expect(codexUnattendedGitConfigArgs('workspace-write')).toEqual([
       '-c',
       'shell_environment_policy.inherit="all"',
@@ -109,19 +168,22 @@ describe('codexUnattendedGitConfigArgs', () => {
 });
 
 describe('formatGitAuthModeDirective', () => {
-  it('auto tells agents HTTPS is in-process and Keychain must not appear', () => {
+  it('auto tells agents git/gh already work and Keychain must not appear', () => {
     const text = formatGitAuthModeDirective('auto');
     expect(text).toMatch(/mode: auto/);
     expect(text).toMatch(/Keychain/);
-    expect(text).toMatch(/GH_TOKEN/);
+    expect(text).toMatch(/already authenticate/);
+    expect(text).toMatch(/Do not set GitHub token environment variables/);
+    expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).not.toMatch(/GitHub app/i);
   });
 
-  it('gh tells agents remotes are rewritten without Keychain', () => {
+  it('gh tells agents remotes are rewritten without mentioning tokens', () => {
     const text = formatGitAuthModeDirective('gh');
     expect(text).toMatch(/mode: gh CLI/);
     expect(text).toMatch(/rewrites/);
-    expect(text).toMatch(/GH_TOKEN/);
+    expect(text).toMatch(/Do not set GitHub token environment variables/);
+    expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).not.toMatch(/gh auth git-credential/);
     expect(text).not.toMatch(/GitHub app/i);
   });
@@ -131,13 +193,14 @@ describe('formatGitAuthModeDirective', () => {
     expect(text).toMatch(/mode: SSH/);
     expect(text).toMatch(/Do not rewrite them to HTTPS/);
     expect(text).toMatch(/Keychain/);
+    expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).not.toMatch(/GitHub app/i);
   });
 
-  it('token mentions GH_TOKEN and never a GitHub app', () => {
+  it('token mode does not tell agents to read GH_TOKEN', () => {
     const text = formatGitAuthModeDirective('token');
     expect(text).toMatch(/personal access token/);
-    expect(text).toMatch(/GH_TOKEN/);
+    expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).not.toMatch(/GitHub app/i);
   });
 });

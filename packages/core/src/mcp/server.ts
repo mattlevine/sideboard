@@ -18,6 +18,7 @@ import { sideboardMcpProfile } from './profile.js';
 import { registerSlackTools } from './slack-tools.js';
 import { registerLinearTools } from './linear-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
+import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
 
 const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
@@ -51,6 +52,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  */
 export async function startMcpServer(): Promise<void> {
   const orch = getOrchestrator();
+  try {
+    await warmGithubAgentAuth();
+  } catch (err) {
+    console.error(
+      '[sideboard-mcp] GitHub agent auth warm skipped:',
+      err instanceof Error ? err.message : err,
+    );
+  }
   // Match desktop concurrency — caps are per-process, but using Account settings
   // avoids MCP defaulting to 3 while desktop runs higher.
   try {

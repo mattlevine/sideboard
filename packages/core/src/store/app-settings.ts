@@ -89,10 +89,10 @@ export type IssueSource = 'linear' | 'github';
  * How Sideboard and worktree agents authenticate GitHub git operations.
  * A declared mode so the app and injected prompts agree. Sideboard never
  * uses a third-party GitHub App (including Conductor.build) for git auth.
- * - `auto` (default): HTTPS in the agent process with `gh`’s token (no Keychain prompts)
- * - `gh`: same HTTPS rewrite; `GH_TOKEN` from `gh auth token`
+ * - `auto` (default): HTTPS in the agent process using this Mac’s gh token (no Keychain after app start)
+ * - `gh`: same HTTPS rewrite; token warmed into a credential store (not `GH_TOKEN` in agent env)
  * - `ssh`: keep `git@` remotes; batch-mode SSH (no Keychain dialog — fails if agent locked)
- * - `token`: stored PAT + HTTPS rewrite; `GH_TOKEN` in the agent env
+ * - `token`: stored PAT warmed into the same credential store + HTTPS rewrite
  */
 export type GithubGitAuthMode = 'auto' | 'gh' | 'ssh' | 'token';
 

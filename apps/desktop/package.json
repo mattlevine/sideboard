@@ -76,6 +76,9 @@
       "out/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/**"
+    ],
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",

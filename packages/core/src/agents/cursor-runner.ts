@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
 import { appDataDir } from '../store/paths.js';
+import { ensureCursorRipgrepPath } from './cursor-ripgrep.js';
 import {
   cursorSendOptions,
   cursorSessionRecoveryMessage,
@@ -29,6 +30,8 @@ import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 // CHROME_* so the Cursor local agent and MCP children do not attach to
 // Sideboard.app's GPU/crashpad (HasCustomHostObject / ICU startup crash).
 dropNestedElectronEnvFromProcess();
+// Local indexing uses rg; asar paths are not executable — pin unpacked/bin/rg.
+ensureCursorRipgrepPath();
 
 function emit(event: unknown): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);

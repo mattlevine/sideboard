@@ -6,7 +6,17 @@ vi.mock('./run.js', () => ({
   resolveGhAuthToken: vi.fn(),
 }));
 
+vi.mock('../store/app-settings.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../store/app-settings.js')>();
+  return {
+    ...actual,
+    getGithubGitAuthMode: () => 'auto' as const,
+    getGithubPat: () => null,
+  };
+});
+
 import { gh, git, resolveGhAuthToken } from './run.js';
+import { resetGithubAgentTokenMemo } from './git-auth-mode.js';
 import { fetchPrHead, resolveWorktreeStartPoint } from './worktree.js';
 
 const gitMock = vi.mocked(git);
@@ -17,6 +27,8 @@ describe('resolveWorktreeStartPoint', () => {
   beforeEach(() => {
     gitMock.mockReset();
     ghMock.mockReset();
+    tokenMock.mockReset();
+    resetGithubAgentTokenMemo();
   });
 
   it('prefers origin/<branch> after fetch so forks track remote main', async () => {
@@ -79,6 +91,7 @@ describe('fetchPrHead', () => {
     gitMock.mockReset();
     ghMock.mockReset();
     tokenMock.mockReset();
+    resetGithubAgentTokenMemo();
   });
 
   it('force-fetches pull/N/head into the local branch from origin', async () => {

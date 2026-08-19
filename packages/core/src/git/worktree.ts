@@ -18,11 +18,10 @@ import {
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
 import { formatGhLandError, formatMergePrError, isGhRateLimitError } from './gh-errors.js';
-import { applyGithubGitAuthEnv } from './git-auth-mode.js';
-import { gh, git, resolveGhAuthToken } from './run.js';
+import { applyGithubGitAuthEnv, resolveGithubAgentToken } from './git-auth-mode.js';
+import { gh, git } from './run.js';
 import {
   getGithubGitAuthMode,
-  getGithubPat,
   type GithubGitAuthMode,
 } from '../store/app-settings.js';
 import {
@@ -196,7 +195,8 @@ export { githubAgentGitEnv } from './git-auth-mode.js';
 /**
  * Env pin so bare `gh` (and agents) target this checkout's **origin**, not
  * Makerkit-style `upstream`. `GH_REPO` is the CLI's documented override.
- * HTTPS rewrite / `GH_TOKEN` follow Account → GitHub git-auth mode.
+ * HTTPS rewrite / credential helper follow Account → GitHub git-auth mode.
+ * Token is warmed into a store file — not `GH_TOKEN` in the child env.
  */
 export async function originGhRepoEnv(
   cwd: string,
@@ -208,12 +208,7 @@ export async function originGhRepoEnv(
   await ensureGhPreferOrigin(cwd);
   const slug = await resolveGithubRepoSlug(cwd);
   const mode = opts?.mode ?? getGithubGitAuthMode();
-  const token =
-    mode === 'token'
-      ? getGithubPat()
-      : mode === 'ssh'
-        ? null
-        : await resolveGhAuthToken(cwd);
+  const token = await resolveGithubAgentToken(mode, cwd);
   return {
     ...applyGithubGitAuthEnv(opts?.env, { mode, token }),
     ...(slug ? { GH_REPO: slug } : {}),
@@ -845,7 +840,7 @@ export async function fetchPrHead(
     } = { reject: false };
 
     if (opts?.ghAuth) {
-      const token = await resolveGhAuthToken(repoPath);
+      const token = await resolveGithubAgentToken(getGithubGitAuthMode(), repoPath);
       if (!token) {
         errors.push(`${label}: gh auth token unavailable`);
         return false;
@@ -913,7 +908,7 @@ export async function fetchPrHead(
           config?: Record<string, string>;
         } = { reject: false };
         if (opts?.ghAuth) {
-          const token = await resolveGhAuthToken(repoPath);
+          const token = await resolveGithubAgentToken(getGithubGitAuthMode(), repoPath);
           if (!token) return false;
           gitOpts.env = { GIT_TERMINAL_PROMPT: '0' };
           gitOpts.config = {
@@ -1262,7 +1257,7 @@ export async function pushBranch(
 
   const sshErr = (ssh.stderr || ssh.stdout).trim();
   const slug = await resolveGithubRepoSlug(worktreePath);
-  const token = await resolveGhAuthToken(worktreePath);
+  const token = await resolveGithubAgentToken(getGithubGitAuthMode(), worktreePath);
   if (!slug || !token) {
     throw new Error(
       sshErr ||

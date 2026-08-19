@@ -4,14 +4,63 @@
  * Electron packages app code in `app.asar`. A system `node` on PATH cannot
  * open files inside the archive (MODULE_NOT_FOUND, empty requireStack).
  * Electron's own binary can, when launched with ELECTRON_RUN_AS_NODE=1.
+ *
+ * Cursor's local agent is itself Electron. If Sideboard spawns that agent
+ * (or MCP) via Electron-as-Node, Cursor uses `process.execPath` (Sideboard.app)
+ * for `.js` children and strips `ELECTRON_RUN_AS_NODE` — nested Chromium then
+ * dies at HasCustomHostObject. Prefer a real Node plus asar-unpacked scripts.
  */
 
-import { wrapElectronAsNodeLaunch } from '../hook/nested-electron-env.js';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import {
+  isElectronLikeCommand,
+  wrapElectronAsNodeLaunch,
+} from '../hook/nested-electron-env.js';
 import { run } from '../git/run.js';
 
 export function isAsarPath(filePath: string): boolean {
   // Electron archive paths look like .../app.asar/node_modules/... or .../app.asar
+  // Do not treat app.asar.unpacked/... as asar — those files are real.
+  if (/\.asar\.unpacked([/\\]|$)/.test(filePath)) return false;
   return /\.asar([/\\]|$)/.test(filePath);
+}
+
+/** Sibling path electron-builder writes when `asarUnpack` matches. */
+export function unpackedAsarPath(filePath: string): string | null {
+  if (!isAsarPath(filePath)) return null;
+  const unpacked = filePath.replace(/\.asar(?=[/\\])/, '.asar.unpacked');
+  if (unpacked === filePath) return null;
+  return existsSync(unpacked) ? unpacked : null;
+}
+
+/** Script path a system `node` can actually read. */
+export function nodeReadableScriptPath(scriptPath: string): string {
+  return unpackedAsarPath(scriptPath) ?? scriptPath;
+}
+
+const WELL_KNOWN_NODE_BINS = [
+  '/opt/homebrew/bin/node',
+  '/usr/local/bin/node',
+];
+
+async function findSystemNode(): Promise<string | null> {
+  const whichNode = await run('which', ['node'], { reject: false });
+  const fromWhich =
+    whichNode.exitCode === 0 && whichNode.stdout.trim()
+      ? whichNode.stdout.trim()
+      : '';
+  if (fromWhich && !isElectronLikeCommand(fromWhich)) return fromWhich;
+  const fallbacks = [
+    ...WELL_KNOWN_NODE_BINS,
+    join(homedir(), '.local/share/fnm/aliases/default/bin/node'),
+    join(homedir(), '.nvm/current/bin/node'),
+  ];
+  for (const bin of fallbacks) {
+    if (existsSync(bin) && !isElectronLikeCommand(bin)) return bin;
+  }
+  return null;
 }
 
 export type NodeLaunch = {
@@ -31,10 +80,11 @@ export type AppliedNodeLaunch = {
  * wrapped so a nested Electron parent cannot leak crashpad/GPU env.
  */
 export function applyNodeLaunch(launch: NodeLaunch, args: string[]): AppliedNodeLaunch {
+  const readableArgs = args.map(nodeReadableScriptPath);
   if (!launch.env.ELECTRON_RUN_AS_NODE) {
-    return { file: launch.file, args, env: launch.env };
+    return { file: launch.file, args: readableArgs, env: launch.env };
   }
-  const wrapped = wrapElectronAsNodeLaunch(launch.file, args);
+  const wrapped = wrapElectronAsNodeLaunch(launch.file, readableArgs);
   if (process.platform === 'win32') {
     return { file: wrapped.file, args: wrapped.args, env: launch.env };
   }
@@ -52,20 +102,12 @@ export function applyNodeLaunch(launch: NodeLaunch, args: string[]): AppliedNode
  * Electron-as-Node for asar (and when `node` is missing).
  */
 export async function resolveNodeLaunch(scriptPath: string): Promise<NodeLaunch> {
-  if (isAsarPath(scriptPath)) {
-    return {
-      file: process.execPath,
-      env: { ELECTRON_RUN_AS_NODE: '1' },
-    };
-  }
-
-  const whichNode = await run('which', ['node'], { reject: false });
-  const nodeBin =
-    whichNode.exitCode === 0 && whichNode.stdout.trim()
-      ? whichNode.stdout.trim()
-      : null;
-  if (nodeBin) {
-    return { file: nodeBin, env: {} };
+  const script = nodeReadableScriptPath(scriptPath);
+  if (!isAsarPath(script)) {
+    const nodeBin = await findSystemNode();
+    if (nodeBin) {
+      return { file: nodeBin, env: {} };
+    }
   }
 
   return {

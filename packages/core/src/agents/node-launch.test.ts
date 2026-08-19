@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('../git/run.js', () => ({
   run: vi.fn(),
 }));
 
 import { run } from '../git/run.js';
-import { applyNodeLaunch, isAsarPath, resolveNodeLaunch } from './node-launch.js';
+import {
+  applyNodeLaunch,
+  isAsarPath,
+  nodeReadableScriptPath,
+  resolveNodeLaunch,
+} from './node-launch.js';
 
 const runMock = vi.mocked(run);
 
@@ -19,6 +27,14 @@ describe('isAsarPath', () => {
     expect(isAsarPath('/tmp/packages/core/dist/agents/cursor-runner.js')).toBe(
       false,
     );
+  });
+
+  it('does not treat app.asar.unpacked as asar', () => {
+    expect(
+      isAsarPath(
+        '/Apps/Sideboard.app/Contents/Resources/app.asar.unpacked/node_modules/x.js',
+      ),
+    ).toBe(false);
   });
 });
 
@@ -35,6 +51,30 @@ describe('resolveNodeLaunch', () => {
     expect(launch.env.ELECTRON_RUN_AS_NODE).toBe('1');
     // Must not bother looking up system node for asar.
     expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it('prefers system node for asar.unpacked scripts', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-asar-'));
+    try {
+      const unpacked = join(root, 'app.asar.unpacked', 'node_modules');
+      mkdirSync(unpacked, { recursive: true });
+      const script = join(unpacked, 'x.js');
+      writeFileSync(script, '');
+      runMock.mockResolvedValueOnce({
+        stdout: `${process.execPath}\n`,
+        stderr: '',
+        exitCode: 0,
+      });
+      const asarScript = join(root, 'app.asar', 'node_modules', 'x.js');
+      expect(nodeReadableScriptPath(asarScript)).toBe(script);
+      const launch = await resolveNodeLaunch(asarScript);
+      expect(launch.file).toBe(process.execPath);
+      expect(launch.env).toEqual({});
+      const applied = applyNodeLaunch(launch, [asarScript]);
+      expect(applied.args).toEqual([script]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('prefers system node for normal filesystem scripts', async () => {

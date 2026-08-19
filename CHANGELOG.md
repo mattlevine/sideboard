@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.90] - 2026-08-19
+
+### Fixed
+
+- Packaged Cursor turns no longer start nested Chromium (`HasCustomHostObject`). 0.1.89 still ran the Cursor SDK runner as Electron-as-Node, so Cursor spawned `.js` with `process.execPath` (Sideboard.app) and stripped `ELECTRON_RUN_AS_NODE`. The runner and MCP now use a real `node` plus `app.asar.unpacked` scripts.
+- Agents no longer get `GH_TOKEN` in their environment (Cursor treats that as leaking secrets; Codex's sandbox strips `*TOKEN*` and then `git`/`gh` hit Keychain). Sideboard warms GitHub auth once at app start into `~/.sideboard-git-auth/` and points `git`/`gh` at that store. MCP reuses the files so remote-desktop Keychain prompts do not repeat every turn.
+- Packaged Cursor turns no longer dump `findFilesWithRipgrep` asar stacks as `lastError`. The runner pins `CURSOR_RIPGREP_PATH` at the unpacked `@cursor/sdk-<plat>/bin/rg` (macOS cannot exec binaries from `app.asar`). `[resource_exhausted]` is shown as a short usage/rate-limit note.
+
 ## [0.1.89] - 2026-08-19
 
 ### Fixed

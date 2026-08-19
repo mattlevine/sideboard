@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import Database from 'better-sqlite3';
+import { createRequire } from 'node:module';
 import { resolveRepoRoot } from '../git/worktree.js';
 import {
   createEmptyThread,
@@ -32,6 +32,13 @@ const CONDUCTOR_APP_SUPPORT = join(
 
 const CONDUCTOR_DB = join(CONDUCTOR_APP_SUPPORT, 'conductor.db');
 const CURSOR_SDK_STORE = join(CONDUCTOR_APP_SUPPORT, 'cursor-sdk-store');
+
+/** Lazy so packaged MCP can run under system Node (Electron ABI .node would crash). */
+function openReadonlySqlite(file: string) {
+  const req = createRequire(import.meta.url);
+  const Database = req('better-sqlite3') as typeof import('better-sqlite3');
+  return new Database(file, { readonly: true, fileMustExist: true });
+}
 
 function mapAgentType(raw: string | null | undefined): AgentKind | null {
   if (!raw) return null;
@@ -145,7 +152,7 @@ export function listConductorWorkspaces(): ConductorWorkspace[] {
       }
     }
 
-    const db = new Database(snapshot, { readonly: true, fileMustExist: true });
+    const db = openReadonlySqlite(snapshot);
     try {
       // Defensive schema check
       const tables = db
@@ -257,7 +264,7 @@ export function importConductorWorkspace(workspaceId: string): Thread {
       }
     }
 
-    const db = new Database(snapshot, { readonly: true, fileMustExist: true });
+    const db = openReadonlySqlite(snapshot);
     try {
       const row = db
         .prepare(

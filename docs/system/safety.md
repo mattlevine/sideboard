@@ -18,4 +18,5 @@ Do not weaken these without an explicit human request.
 
 - Slack OAuth client secret stays on the hosted relay, not in `packages/core/src/slack/baked-app.ts`.
 - Workspace tokens live in encrypted `slack-workspaces.json` (vault). Never log or send raw tokens to the renderer, MCP tool results, or git.
+- GitHub agent auth lives in `~/.sideboard-git-auth/` (0600 credential store + `gh` hosts.yml). Warm at app start (Keychain OK). Do not put `GH_TOKEN` / bearer headers in agent env, prompts, or MCP spawn env — Cursor and Codex treat that as leaking secrets, and `gh auth token` per turn re-prompts Keychain over remote desktop.
 - Report vulnerabilities privately (see [../../SECURITY.md](../../SECURITY.md)).

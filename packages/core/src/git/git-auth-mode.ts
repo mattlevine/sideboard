@@ -1,15 +1,28 @@
 import { getGithubGitAuthMode, getGithubPat, type GithubGitAuthMode } from '../store/app-settings.js';
+import {
+  githubAgentAuthReady,
+  githubCredentialHelperGitConfig,
+  githubGhConfigEnv,
+  materializeGithubAgentAuth,
+} from './github-agent-auth.js';
 import { resolveGhAuthToken } from './run.js';
 
 const HTTPS_REWRITE: Array<{ key: string; value: string }> = [
   { key: 'url.https://github.com/.insteadOf', value: 'git@github.com:' },
   { key: 'url.https://github.com/.insteadOf', value: 'ssh://git@github.com/' },
-  // Empty helper disables ~/.gitconfig osxkeychain so GUI agents cannot pop
-  // "git-credential-osxkeychain wants to use the keychain".
-  { key: 'credential.helper', value: '' },
 ];
 
 type EnvLike = NodeJS.ProcessEnv | Record<string, string | undefined>;
+
+const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+let tokenMemo: { mode: GithubGitAuthMode; value: string | null; at: number } | null =
+  null;
+
+const GITHUB_CHILD_TOKEN_KEYS = [
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+  'GH_ENTERPRISE_TOKEN',
+] as const;
 
 /**
  * Fail closed instead of a macOS Keychain / SSH passphrase dialog.
@@ -50,67 +63,89 @@ export function appendIndexedGitConfig(
 /**
  * Rewrite GitHub SSH remotes to HTTPS for this process only (does not edit
  * the stored remote). Credential helper is cleared so osxkeychain cannot prompt.
+ * When Sideboard has warmed a credential store, git uses that file instead of
+ * embedding a token in env.
  */
 export function githubAgentGitEnv(existing?: EnvLike): Record<string, string> {
-  return appendIndexedGitConfig(existing, HTTPS_REWRITE);
-}
-
-function githubHttpsBearerEnv(existing: EnvLike | undefined, token: string): Record<string, string> {
-  const rewrite = githubAgentGitEnv(existing);
-  const header = appendIndexedGitConfig(
-    { ...existing, ...rewrite },
-    [
-      {
-        key: 'http.https://github.com/.extraHeader',
-        value: `AUTHORIZATION: bearer ${token}`,
-      },
-    ],
-  );
-  return { ...rewrite, ...header };
+  const helpers = githubAgentAuthReady()
+    ? githubCredentialHelperGitConfig()
+    : [{ key: 'credential.helper', value: '' }];
+  return appendIndexedGitConfig(existing, [...HTTPS_REWRITE, ...helpers]);
 }
 
 /**
  * Extra env for a worktree agent given Account → GitHub git-auth mode.
  * Does not set `GH_REPO` (caller adds that after resolving origin).
  *
- * `auto` and `gh` rewrite to HTTPS in-process and inject `GH_TOKEN` when
- * provided so unattended agents never talk to the login keychain.
+ * Token is written to a 0600 credential store + isolated `GH_CONFIG_DIR` in
+ * the Sideboard parent. Agent env does **not** include `GH_TOKEN` or a bearer
+ * extraHeader (those show up in `env` dumps and in Cursor's "don't expose
+ * tokens" guidance).
  */
 export function applyGithubGitAuthEnv(
   existing: EnvLike | undefined,
   opts: { mode: GithubGitAuthMode; token?: string | null },
 ): Record<string, string> {
   const out: Record<string, string> = { ...nonInteractiveGitProcessEnv() };
+  const token = (opts.token?.trim() || existing?.GH_TOKEN?.trim() || '') || '';
+  if (token) materializeGithubAgentAuth(token);
+  Object.assign(out, githubGhConfigEnv());
   if (opts.mode === 'ssh') return out;
-
-  const existingToken = existing?.GH_TOKEN?.trim() || '';
-  const provided = existingToken ? '' : opts.token?.trim() || '';
-  const token = existingToken || provided;
-  Object.assign(
-    out,
-    token ? githubHttpsBearerEnv(existing, token) : githubAgentGitEnv(existing),
-  );
-  if (provided) out.GH_TOKEN = provided;
+  Object.assign(out, githubAgentGitEnv(existing));
   return out;
 }
 
-/** PAT or `gh auth token`, resolved in the Sideboard parent (not the agent). */
+/** Drop inherited GitHub tokens so agents never see them in `env`. */
+export function scrubGithubTokensFromChildEnv(
+  env: Record<string, string | undefined> | NodeJS.ProcessEnv,
+): void {
+  for (const key of GITHUB_CHILD_TOKEN_KEYS) {
+    delete env[key];
+  }
+}
+
+/** Merge warmed git/gh env onto a child env and strip token variables. */
+export function mergeAgentGitAuthEnv(
+  env: Record<string, string | undefined> | NodeJS.ProcessEnv,
+  gitEnv: Record<string, string>,
+): void {
+  Object.assign(env, gitEnv);
+  scrubGithubTokensFromChildEnv(env);
+}
+
+/**
+ * PAT or `gh auth token`, resolved in the Sideboard parent (not the agent).
+ * SSH mode still returns a gh token so `gh pr` works; git remotes stay SSH.
+ */
 export async function resolveGithubAgentToken(
   mode: GithubGitAuthMode,
   cwd: string,
 ): Promise<string | null> {
-  if (mode === 'ssh') return null;
-  if (mode === 'token') return getGithubPat();
-  try {
-    return await resolveGhAuthToken(cwd);
-  } catch {
-    return null;
+  if (tokenMemo && tokenMemo.mode === mode && Date.now() - tokenMemo.at < TOKEN_TTL_MS) {
+    return tokenMemo.value;
   }
+  let value: string | null = null;
+  if (mode === 'token') {
+    value = getGithubPat();
+  } else {
+    try {
+      value = await resolveGhAuthToken(cwd);
+    } catch {
+      value = null;
+    }
+  }
+  tokenMemo = { mode, value, at: Date.now() };
+  return value;
+}
+
+/** Test helper — process-local token memo (avoids Keychain on every spawn). */
+export function resetGithubAgentTokenMemo(): void {
+  tokenMemo = null;
 }
 
 /**
- * Non-interactive GitHub env for agent / MCP children (HTTPS + token when
- * possible). Safe to call without a git checkout (`cwd` only needed for `gh`).
+ * Non-interactive GitHub env for agent / MCP children (HTTPS + warmed helper).
+ * Safe to call without a git checkout (`cwd` only needed for `gh`).
  * Always returns at least {@link nonInteractiveGitProcessEnv} — settings/vault
  * failures must not skip Keychain suppression.
  */
@@ -139,9 +174,24 @@ export async function resolveAgentGitAuthEnv(
 }
 
 /**
+ * Warm Keychain/`gh` once. Desktop startup uses `{ force: true }` (Keychain
+ * is OK then). MCP/CLI skip when credential files already exist so a nested
+ * MCP process does not prompt Keychain on every agent turn.
+ */
+export async function warmGithubAgentAuth(opts?: {
+  cwd?: string;
+  force?: boolean;
+}): Promise<void> {
+  if (!opts?.force && githubAgentAuthReady()) return;
+  await resolveAgentGitAuthEnv(undefined, opts);
+}
+
+/**
  * Codex `exec -c` so sandboxed shells keep Sideboard’s git env.
  * Default `shell_environment_policy` drops `*TOKEN*` / `*KEY*` and
  * `workspace-write` has no network — both force `gh`/git onto Keychain or a hang.
+ * Inherit is still required so `GH_CONFIG_DIR` / `GIT_CONFIG_*` reach the sandbox
+ * (those values are paths, not the token).
  */
 export function codexUnattendedGitConfigArgs(
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access' | string,
@@ -158,37 +208,41 @@ export function codexUnattendedGitConfigArgs(
   return args;
 }
 
-/** Injected prompt block so agents use the same git path as Sideboard. */
+/** Injected prompt block so agents use git/gh without hunting for tokens. */
 export function formatGitAuthModeDirective(mode: GithubGitAuthMode): string {
+  const shared = [
+    '- `git` and `gh` already authenticate in this process. Do not look for tokens in the environment, paste credentials into commands, or switch remotes to SSH.',
+    '- Do not set GitHub token environment variables, pass `--with-token`, or run `gh auth login` from this turn.',
+    '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below.',
+    '- If git/gh fail with auth errors, tell the user to run `gh auth login` on this Mac (or set a PAT in Account → GitHub). Do not wait for a Keychain dialog.',
+  ];
   switch (mode) {
     case 'gh':
       return [
         'Git authentication (Account → GitHub mode: gh CLI):',
         '- This process rewrites `git@github.com:` and `ssh://git@github.com/` to HTTPS.',
-        '- `GH_TOKEN` is injected from `gh auth token` (no macOS Keychain prompts). Do not switch remotes to SSH.',
-        '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below.',
+        ...shared,
       ].join('\n');
     case 'ssh':
       return [
         'Git authentication (Account → GitHub mode: SSH):',
         '- Keep SSH remotes (`git@github.com:…`). Do not rewrite them to HTTPS.',
         '- SSH is batch-mode: it will not prompt for a Keychain password. If push fails with `Permission denied (publickey)`, tell the user to unlock ssh-agent or switch Account → GitHub to Auto / gh CLI — do not rewrite remotes yourself.',
-        '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below (API still uses `gh`).',
+        '- `gh` already authenticates for PRs/API (no token in the environment). Do not set GitHub token environment variables or run `gh auth login` from this turn.',
+        '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below.',
       ].join('\n');
     case 'token':
       return [
         'Git authentication (Account → GitHub mode: personal access token):',
         '- This process rewrites GitHub SSH remotes to HTTPS.',
-        '- `GH_TOKEN` is set in the environment. Use HTTPS git and `gh`; do not paste the token into commands or chat.',
-        '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below.',
+        ...shared,
       ].join('\n');
     case 'auto':
     default:
       return [
         'Git authentication (Account → GitHub mode: auto):',
-        '- This process rewrites GitHub SSH remotes to HTTPS and authenticates with `GH_TOKEN` from `gh` so git/ssh never prompt the macOS Keychain (required for unattended orchestrator turns).',
-        '- Do not switch remotes to SSH. Push with `git push -u origin HEAD`.',
-        '- If HTTPS auth fails, tell the user to run `gh auth login` on this Mac or set Account → GitHub to a PAT — do not wait for a Keychain dialog.',
+        '- This process rewrites GitHub SSH remotes to HTTPS so git/ssh never prompt the macOS Keychain (required for unattended orchestrator turns).',
+        ...shared,
       ].join('\n');
   }
 }

@@ -19,7 +19,7 @@ import {
   isElectronLikeCommand,
   unwrapStrippedElectronLaunch,
 } from '../hook/nested-electron-env.js';
-import { resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
+import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 
 export type InjectedMcpServer = {
   name: string;
@@ -252,7 +252,8 @@ export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
   if (entry) {
     const isCli = /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry);
     const scriptArgs = isCli ? [entry, 'mcp'] : [entry];
-    // System `node` cannot read Electron app.asar — use Electron-as-Node there.
+    // System `node` cannot read Electron app.asar — unpack (`asarUnpack`) then
+    // real Node so Cursor never sees Sideboard.app as process.execPath.
     const launch = applyNodeLaunch(await resolveNodeLaunch(entry), scriptArgs);
     return {
       name: 'sideboard',
@@ -299,10 +300,13 @@ export async function buildInjectedMcpServers(opts: {
     if (orchId) {
       sideboard.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID = orchId;
     }
-    // Cursor (and some CLIs) spawn MCP with this env only — inherit GH_TOKEN /
-    // non-interactive git so MCP git/gh never pops the login Keychain.
+    // Cursor (and some CLIs) spawn MCP with this env only. GitHub auth is a
+    // warmed credential store + GH_CONFIG_DIR — never GH_TOKEN in MCP env.
     try {
-      Object.assign(sideboard.env, await resolveAgentGitAuthEnv(sideboard.env));
+      mergeAgentGitAuthEnv(
+        sideboard.env,
+        await resolveAgentGitAuthEnv(sideboard.env),
+      );
     } catch {
       /* best-effort */
     }
@@ -349,8 +353,11 @@ function shSingleQuote(value: string): string {
  * Electron-as-Node, merges crashpad, and dies at HasCustomHostObject — often
  * on the first Sideboard tool call, a few turns in.
  *
- * Real `node` is left alone. Electron-as-Node goes through a small shell
- * script so Cursor never sees Sideboard.app or RUN_AS_NODE in command/args/env.
+ * Real `node` is left alone. If the launch is still Electron-as-Node (no
+ * system Node / asar still packed), hide Sideboard.app behind a wrapper
+ * script so Cursor never sees it in command/args/env. That is a last resort:
+ * Cursor's SDK still uses process.execPath for `.js` MCP, so the Cursor
+ * runner itself must run under real Node (see node-launch.ts).
  */
 function cursorSafeMcpLaunch(
   command: string,

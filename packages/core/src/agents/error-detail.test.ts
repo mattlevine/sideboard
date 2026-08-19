@@ -157,6 +157,19 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(summarizeTurnStderr(tail)).toMatch(/truncated crash dump/i);
   });
 
+  it('summarizes Cursor findFilesWithRipgrep / resource_exhausted instead of asar stacks', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      'at file:///Applications/Sideboard.app/Contents/Resources/app.asar/node_modules/@cursor/sdk/dist/esm/357.js:1:487342 at AsyncGenerator.next (<anonymous>) at async Ie.findFilesWithRipgrep (file:///Applications/Sideboard.app/Contents/Resources/app.asar/node_modules/@cursor/sdk/dist/esm/357.js:1:494988) [resource_exhausted] Error Cursor run failed (run-80eeb45d-de78-48',
+    );
+    const summary = summarizeTurnStderr(tail);
+    expect(summary).toMatch(/ripgrep \/ resource_exhausted/i);
+    expect(summary).not.toMatch(/app\.asar/);
+    expect(formatTurnExitError(2, summary)).toMatch(/ripgrep \/ resource_exhausted/i);
+    expect(formatTurnExitError(2, summary)).not.toMatch(/^exit 2:/);
+  });
+
   it('recovers session-limit text when stderr is empty', () => {
     const msg =
       "You've hit your session limit · resets 7:10pm (America/Los_Angeles)";

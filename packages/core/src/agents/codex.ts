@@ -253,7 +253,8 @@ export const codexAdapter: AgentAdapter = {
       // `codex exec` rejects `--ask-for-approval` (global-only on newer CLIs).
       '-c',
       'approval_policy="never"',
-      // Seatbelt cannot use the login Keychain; default policy also strips GH_TOKEN.
+      // Seatbelt cannot use the login Keychain; inherit GH_CONFIG_DIR / GIT_CONFIG_*
+      // (default policy also strips *TOKEN* — we no longer put GH_TOKEN in env).
       ...codexUnattendedGitConfigArgs(mode.codexSandbox),
       ...(model ? (['--model', model] as const) : []),
       ...mcpOverrides,

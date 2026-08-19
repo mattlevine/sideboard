@@ -774,12 +774,12 @@ export function SettingsModal({
                           id: 'auto' as const,
                           title: 'Auto',
                           badge: 'Recommended',
-                          hint: 'HTTPS in the agent process using this Mac’s gh token. No Keychain prompts — required for Slack and unattended Cursor.',
+                          hint: 'HTTPS in the agent process using this Mac’s gh login. Keychain may prompt once at app start; Slack and unattended Cursor turns do not.',
                         },
                         {
                           id: 'gh' as const,
                           title: 'gh CLI auth',
-                          hint: 'Rewrite git@github.com remotes to HTTPS and inject GH_TOKEN from gh (no Keychain).',
+                          hint: 'Rewrite git@github.com remotes to HTTPS. git/gh use a Sideboard credential file — no GH_TOKEN in the agent, no Keychain after launch.',
                         },
                         {
                           id: 'ssh' as const,
@@ -789,7 +789,7 @@ export function SettingsModal({
                         {
                           id: 'token' as const,
                           title: 'Personal access token',
-                          hint: 'Store a PAT on this Mac. Agents get GH_TOKEN and HTTPS remotes.',
+                          hint: 'Store a PAT on this Mac. Agents get HTTPS remotes via the same credential file (token is not in their environment).',
                         },
                       ] satisfies Array<{
                         id: GithubGitAuthMode;

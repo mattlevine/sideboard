@@ -6,7 +6,17 @@ vi.mock('./run.js', () => ({
   resolveGhAuthToken: vi.fn(),
 }));
 
+vi.mock('../store/app-settings.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../store/app-settings.js')>();
+  return {
+    ...actual,
+    getGithubGitAuthMode: () => 'auto' as const,
+    getGithubPat: () => null,
+  };
+});
+
 import { git, resolveGhAuthToken } from './run.js';
+import { resetGithubAgentTokenMemo } from './git-auth-mode.js';
 import { pushBranch } from './worktree.js';
 
 const gitMock = vi.mocked(git);
@@ -15,6 +25,7 @@ const tokenMock = vi.mocked(resolveGhAuthToken);
 afterEach(() => {
   gitMock.mockReset();
   tokenMock.mockReset();
+  resetGithubAgentTokenMemo();
 });
 
 describe('pushBranch', () => {
