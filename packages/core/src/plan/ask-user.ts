@@ -1,7 +1,7 @@
 /**
  * Clarifying multiple-choice questions (AskUserQuestion / Sideboard ask_user).
- * Available in any mode — not only Plan. Presented in the composer; answers
- * are sent as a normal user message.
+ * For blocked concrete choices — not greetings or invented task menus.
+ * Presented in the composer; answers come back on the next user turn.
  */
 
 export interface PlanQuestionOption {

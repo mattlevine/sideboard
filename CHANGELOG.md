@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.91] - 2026-08-19
+
+### Fixed
+
+- Packaged Cursor turns load their ESM runner inside Sideboard.app. 0.1.90 shipped `cursor-runtime` with `@cursor/sdk` but not `execa` / `smol-toml` / SDK deps, so Node failed with `ERR_MODULE_NOT_FOUND` (`#cachedDefaultResolve`).
+- Agents no longer open the `ask_user` composer picker for greetings, check-ins, or invented “what next?” menus. The tool is only for when work is blocked on a concrete multiple-choice.
+
 ## [0.1.90] - 2026-08-19
 
 ### Fixed

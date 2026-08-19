@@ -32,6 +32,7 @@ describe('PLAN_MODE_INSTRUCTION', () => {
     expect(PLAN_MODE_INSTRUCTION).toMatch(/present_plan|\.context\/attachments\/plan\.md/i);
     expect(PLAN_MODE_INSTRUCTION).toMatch(/remain active/i);
     expect(PLAN_MODE_INSTRUCTION).toMatch(/ask_user/i);
+    expect(PLAN_MODE_INSTRUCTION).toMatch(/greetings|task menu/i);
     expect(PLAN_MODE_INSTRUCTION).toMatch(/chat message|tradeoff|description/i);
     expect(PLAN_MODE_INSTRUCTION).toMatch(/ExitPlanMode|Approve/i);
   });

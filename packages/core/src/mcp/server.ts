@@ -198,7 +198,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_user',
-    'Ask the user clarifying multiple-choice questions in Sideboard’s composer (any mode — not only Plan). Before calling, write a short chat message explaining the decision and what each option means. Include a description on every option. Use when the user should pick from predefined options (approach forks, requirements, which API) — not for “is the plan ready?”. After calling, stop and wait for their next message with answers.',
+    'Ask the user a clarifying multiple-choice question in Sideboard’s composer. Call only when work is blocked on choosing among a few concrete options (approach fork, which API, auth vs cookies). Do not call for greetings, check-ins, “hello”, open-ended how-can-I-help, or to invent a menu of possible next tasks — reply in chat instead. If one option is the obvious default, proceed without asking. Before calling, write a short chat message explaining the decision and what each option means. Include a description on every option. After calling, stop and wait for answers. Not for “is the plan ready?”.',
     {
       questions: z
         .array(

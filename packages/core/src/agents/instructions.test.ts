@@ -20,7 +20,8 @@ describe('formatArtifactDirective', () => {
     expect(text).toMatch(/present_schema/);
     expect(text).toMatch(/present_files/);
     expect(text).toMatch(/ask_user/);
-    expect(text).toMatch(/any mode|not only Plan/i);
+    expect(text).toMatch(/blocked on choosing|concrete options/i);
+    expect(text).toMatch(/hello|greetings/i);
     expect(text).toMatch(/```html/);
     expect(text).toMatch(/Never say artifacts, CMS UI, or the Files column are unavailable/i);
   });
@@ -33,7 +34,8 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/present_schema/);
     expect(text).toMatch(/present_files/);
     expect(text).toMatch(/ask_user/);
-    expect(text).toMatch(/any mode/i);
+    expect(text).toMatch(/hello|check-in|what next/i);
+    expect(text).toMatch(/reply in chat/i);
     expect(text).toMatch(/Do not say artifacts\/CMS UI are unavailable/i);
   });
 });
