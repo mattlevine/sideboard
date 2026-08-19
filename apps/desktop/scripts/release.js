@@ -179,7 +179,9 @@ if (doDesktop) {
   const notarizeArg = macNotarizeCliArg();
   console.log(`🔨 Building Sideboard desktop ${nextVersion}…`);
   run('pnpm --filter @sideboard-ai/core build', { cwd: repoRoot });
+  run('pnpm --filter @sideboard-ai/cli build', { cwd: repoRoot });
   run('pnpm exec electron-vite build');
+  run('node scripts/stage-sideboard-mcp.js');
   run('node scripts/stage-cursor-runtime.js');
 
   const publishFlag = `--publish ${publish}`;
@@ -231,6 +233,19 @@ if (doDesktop) {
     );
   }
   console.log('✅ Verified extraResources cursor-runtime');
+
+  const mcpEntry = path.join(appResources, 'sideboard-mcp/core-dist/mcp/run-stdio.js');
+  const mcpCli = path.join(appResources, 'sideboard-mcp/cli-dist/index.js');
+  const mcpSqlite = path.join(
+    appResources,
+    'sideboard-mcp/node_modules/better-sqlite3/package.json',
+  );
+  if (!fs.existsSync(mcpEntry) || !fs.existsSync(mcpCli) || !fs.existsSync(mcpSqlite)) {
+    throw new Error(
+      'Packaged extraResources sideboard-mcp is incomplete (run-stdio, CLI, or sqlite missing). Aborting release.',
+    );
+  }
+  console.log('✅ Verified extraResources sideboard-mcp');
 }
 
 const tag = `v${nextVersion}`;

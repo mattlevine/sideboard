@@ -13,7 +13,7 @@ import { StackMap } from './StackMap';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
-import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks, hasBranchBehindChecks, classifyMergeIssue } from '../lib/pr-format';
+import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks, hasBranchBehindChecks, classifyMergeIssue, checksFromRuns, checksTabShortLabel } from '../lib/pr-format';
 import { agentGitPrompt } from '@sideboard/agent-git-actions';
 import { formatIpcInvokeError } from '@sideboard/gh-errors';
 import {
@@ -525,7 +525,7 @@ export function RightSidebar({
   useEffect(() => {
     void loadPrMeta();
     // Intentionally omit thread.updatedAt — agent turns must not re-hit GraphQL.
-  }, [loadPrMeta, thread.prUrl, thread.branchName]);
+  }, [loadPrMeta, thread.prUrl, thread.branchName, thread.sourceRef, thread.sourceType]);
 
   // After a turn ends (this chat or a sibling in the same worktree), re-check
   // dirty/unpushed so Commit & push flips to Merge when the branch is clean.
@@ -558,7 +558,7 @@ export function RightSidebar({
             // getPrMeta may persist a newly discovered prUrl — refresh thread props.
             onRefresh();
           });
-          if (upper === 'checks') void loadPrChecks();
+          void loadPrChecks();
         }
       })();
     });
@@ -570,15 +570,13 @@ export function RightSidebar({
     reloadDiff,
     loadPrMeta,
     loadPrChecks,
-    upper,
     onRefresh,
     isCurrentWorktree,
   ]);
 
   useEffect(() => {
-    if (upper !== 'checks') return;
     void loadPrChecks();
-  }, [upper, thread.id, thread.prUrl, thread.branchName, loadPrChecks]);
+  }, [thread.id, thread.prUrl, thread.branchName, loadPrChecks]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -656,6 +654,7 @@ export function RightSidebar({
     branchBehind,
     inMergeQueue,
     baseRefName: prMeta?.baseRefName,
+    ...checksFromRuns(prChecks),
   };
   const pillModifier = prUrl ? prPillModifier(pillOpts) : '';
   const pillStatus = prUrl ? prPillStatusLabel(pillOpts) : '';
@@ -665,18 +664,17 @@ export function RightSidebar({
   const prBase =
     prMeta?.baseRefName?.trim().replace(/^refs\/heads\//, '') || 'main';
 
-  // Light poll while checks are pending (Checks tab only) or the PR is in a merge queue.
+  // Light poll while checks are pending or the PR is in a merge queue.
   useEffect(() => {
-    if (upper !== 'checks' && !inMergeQueue) return;
     const list = prChecks ?? [];
-    const pendingChecks = upper === 'checks' && list.some((c) => c.bucket === 'pending');
+    const pendingChecks = list.some((c) => c.bucket === 'pending');
     if (!pendingChecks && !inMergeQueue) return;
     const id = window.setInterval(() => {
       void loadPrMeta();
-      if (upper === 'checks') void loadPrChecks();
+      if (pendingChecks) void loadPrChecks();
     }, 15_000);
     return () => window.clearInterval(id);
-  }, [upper, prChecks, inMergeQueue, loadPrChecks, loadPrMeta]);
+  }, [prChecks, inMergeQueue, loadPrChecks, loadPrMeta]);
 
   function primaryGitLabel(): string {
     if (prMerged) return 'Live';
@@ -768,6 +766,10 @@ export function RightSidebar({
     const s = summarizeChecks(checksForBadge);
     return s.label ? `Checks ${s.label}` : 'Checks';
   }, [checksForBadge]);
+  const checksTabShort = useMemo(
+    () => checksTabShortLabel(checksForBadge),
+    [checksForBadge],
+  );
 
   async function fixCheckWithAgent(check: PrCheckRun) {
     const kind = check.kind ?? 'ci';
@@ -1189,7 +1191,7 @@ export function RightSidebar({
             title={checksTabLabel}
           >
             <span className="tab-full">{checksTabLabel}</span>
-            <span className="tab-short">CI</span>
+            <span className="tab-short">{checksTabShort}</span>
           </button>
           <div className="right-tabs-review">
             <button

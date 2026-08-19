@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -14,7 +14,12 @@ import { SIDEBOARD_MCP_PROFILE_ENV } from '../mcp/profile.js';
 import { loadAppSettings } from '../store/app-settings.js';
 import { appDataDir } from '../store/paths.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
-import { applyNodeLaunch, resolveNodeLaunch } from './node-launch.js';
+import {
+  applyNodeLaunch,
+  isAsarPath,
+  resolveNodeLaunch,
+} from './node-launch.js';
+import { packagedMcpStdioPath } from './packaged-runtime.js';
 import {
   isElectronLikeCommand,
   unwrapStrippedElectronLaunch,
@@ -222,6 +227,12 @@ export function findSideboardMcpJsEntry(): string | null {
   const override = process.env.SIDEBOARD_MCP_ENTRY?.trim() || process.env.SIDEBOARD_CLI?.trim();
   if (override && existsSync(override)) return override;
 
+  // Packaged extraResources copy is on a real filesystem — system `node` can
+  // exec it. The asar duplicate needs Electron-as-Node, which Cursor's local
+  // agent then reports as a dead MCP (live tool discovery fails).
+  const packaged = packagedMcpStdioPath();
+  if (packaged) return packaged;
+
   let dir = corePackageDir();
   for (let i = 0; i < 10; i++) {
     const candidates = [
@@ -234,7 +245,9 @@ export function findSideboardMcpJsEntry(): string | null {
       join(dir, 'cli/dist/index.js'),
     ];
     for (const p of candidates) {
-      if (existsSync(p)) return p;
+      // System `node` cannot read app.asar. Skip archive paths so we fall
+      // through to PATH `sideboard mcp` instead of Electron-as-Node.
+      if (existsSync(p) && !isAsarPath(p)) return p;
     }
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -252,16 +265,19 @@ export async function resolveSideboardMcpServer(): Promise<InjectedMcpServer> {
   if (entry) {
     const isCli = /[/\\]cli[/\\]dist[/\\]index\.js$/.test(entry);
     const scriptArgs = isCli ? [entry, 'mcp'] : [entry];
-    // System `node` cannot read Electron app.asar. Prefer a real Node when the
-    // entry is on a normal filesystem; otherwise Electron-as-Node + wrapper so
-    // Cursor never sees Sideboard.app as MCP `command`.
     const launch = applyNodeLaunch(await resolveNodeLaunch(entry), scriptArgs);
-    return {
-      name: 'sideboard',
-      command: launch.file,
-      args: launch.args,
-      ...(Object.keys(launch.env).length > 0 ? { env: launch.env } : {}),
-    };
+    // MCP is the CLI under real Node. Never Sideboard.app / Electron-as-Node.
+    if (
+      launch.file !== '/bin/sh' &&
+      !isElectronLikeCommand(launch.file)
+    ) {
+      return {
+        name: 'sideboard',
+        command: launch.file,
+        args: launch.args,
+        ...(Object.keys(launch.env).length > 0 ? { env: launch.env } : {}),
+      };
+    }
   }
 
   const which = await run('which', ['sideboard'], { reject: false });
@@ -344,21 +360,11 @@ export type CursorMcpServers = Record<
   }
 >;
 
-function shSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 /**
- * Cursor's local agent is Electron. If mcpServers.command is Sideboard.app
- * (or `/bin/sh -c` with ELECTRON_RUN_AS_NODE in argv), Cursor treats MCP as
- * Electron-as-Node, merges crashpad, and dies at HasCustomHostObject — often
- * on the first Sideboard tool call, a few turns in.
- *
- * Real `node` is left alone. If the launch is still Electron-as-Node (no
- * system Node / asar still packed), hide Sideboard.app behind a wrapper
- * script so Cursor never sees it in command/args/env. That is a last resort:
- * Cursor's SDK still uses process.execPath for `.js` MCP, so the Cursor
- * runner itself must run under real Node (see node-launch.ts).
+ * Cursor's local agent is Electron. MCP `command` must be real `node` (or
+ * `sideboard`), never Sideboard.app. Unwrap leftover `/bin/sh` Electron-as-Node
+ * launches so callers see the inner argv — do not hide Electron behind a
+ * wrapper script.
  */
 function cursorSafeMcpLaunch(
   command: string,
@@ -371,27 +377,7 @@ function cursorSafeMcpLaunch(
   const unwrapped = unwrapStrippedElectronLaunch(command, args);
   const file = unwrapped?.file ?? command;
   const fileArgs = unwrapped?.args ?? args ?? [];
-  if (!isElectronLikeCommand(file)) {
-    return fileArgs.length > 0 ? { command: file, args: fileArgs } : { command: file };
-  }
-
-  const dir = join(appDataDir(), 'mcp-launch');
-  mkdirSync(dir, { recursive: true });
-  const wrap = join(dir, 'cursor-electron-as-node.sh');
-  const execLine = [file, ...fileArgs].map(shSingleQuote).join(' ');
-  writeFileSync(
-    wrap,
-    [
-      '#!/bin/sh',
-      'vars=`printenv | awk -F= \'/^(ELECTRON_|CHROME_)/{print $1}\'`',
-      '[ -n "$vars" ] && unset $vars',
-      'export ELECTRON_RUN_AS_NODE=1',
-      `exec ${execLine} "$@"`,
-      '',
-    ].join('\n'),
-    { mode: 0o755 },
-  );
-  return { command: wrap };
+  return fileArgs.length > 0 ? { command: file, args: fileArgs } : { command: file };
 }
 
 /** Drop RUN_AS_NODE from MCP spawn env. Cursor (and any Electron host) would
@@ -402,6 +388,7 @@ function mcpSpawnEnv(
 ): Record<string, string> | undefined {
   if (!env) return undefined;
   const out = { ...env };
+  delete out.ELECTRON_RUN_AS_NODE;
   delete out.ELECTRON_RUN_AS_NODE;
   return Object.keys(out).length > 0 ? out : undefined;
 }

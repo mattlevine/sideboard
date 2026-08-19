@@ -20,6 +20,7 @@ import {
   resolveDefaultBranch,
   resolveGithubRepoSlug,
   resolvePrSelector,
+  resolvePrSelectors,
 } from '../git/worktree.js';
 import { suggestPrMetadata } from '../land/pr-metadata.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
@@ -1678,8 +1679,9 @@ export class Orchestrator {
   }
 
   async mergePr(threadRef: string): Promise<{ url: string; state: string }> {
-    const { thread, selector, cwd } = await this.withPrSelector(threadRef);
+    const { thread, selectors, cwd } = await this.withPrSelector(threadRef);
     this.assertNotGlobal(thread, 'Merge PR');
+    const selector = selectors[0];
     if (!selector) throw new Error('No pull request linked to this thread');
     const result = await mergeGithubPr(cwd, selector);
     const state = normalizePrState(result.state) || 'MERGED';
@@ -1700,35 +1702,40 @@ export class Orchestrator {
     return { url: metaLike.url, state };
   }
 
-  /** Resolve PR selector and optionally persist `prUrl` when found. */
+  /** Resolve PR selectors and optionally persist `prUrl` when found. */
   private async withPrSelector(threadRef: string): Promise<{
     thread: Thread;
-    selector: string | null;
+    selectors: string[];
     cwd: string;
   }> {
     const thread = this.requireThread(threadRef);
-    const selector = resolvePrSelector(thread);
+    const selectors = resolvePrSelectors(thread);
     const cwd = thread.worktreePath;
     if (!cwd?.trim()) {
       throw new Error(`Thread ${threadRef} has no worktreePath`);
     }
-    return { thread, selector, cwd };
+    return { thread, selectors, cwd };
   }
 
   async getPrChecks(threadRef: string): Promise<PrCheckRun[] | null> {
-    const { selector, cwd } = await this.withPrSelector(threadRef);
-    if (!selector) return null;
-    return getPrChecks(cwd, selector);
+    const { selectors, cwd } = await this.withPrSelector(threadRef);
+    for (const selector of selectors) {
+      const checks = await getPrChecks(cwd, selector);
+      if (checks) return checks;
+    }
+    return null;
   }
 
   async getPrMeta(threadRef: string): Promise<PrMeta | null> {
-    const { thread, selector, cwd } = await this.withPrSelector(threadRef);
-    if (!selector) return null;
-    const meta = await fetchPrMeta(cwd, selector);
-    if (meta) {
-      await this.persistPrMetaAndMaybeArchive(thread, meta);
+    const { thread, selectors, cwd } = await this.withPrSelector(threadRef);
+    for (const selector of selectors) {
+      const meta = await fetchPrMeta(cwd, selector);
+      if (meta) {
+        await this.persistPrMetaAndMaybeArchive(thread, meta);
+        return meta;
+      }
     }
-    return meta;
+    return null;
   }
 
   /**
@@ -1893,9 +1900,12 @@ export class Orchestrator {
   }
 
   async getPrDetails(threadRef: string): Promise<PrDetails | null> {
-    const { thread, selector, cwd } = await this.withPrSelector(threadRef);
-    if (!selector) return null;
-    const details = await getPrDetails(cwd, selector);
+    const { thread, selectors, cwd } = await this.withPrSelector(threadRef);
+    let details: PrDetails | null = null;
+    for (const selector of selectors) {
+      details = await getPrDetails(cwd, selector);
+      if (details) break;
+    }
     if (details) {
       const patch: Partial<Thread> = {};
       if (details.url && details.url !== thread.prUrl) patch.prUrl = details.url;

@@ -14,8 +14,8 @@
     "test": "vitest run --passWithNoTests",
     "postinstall": "electron-rebuild -f -w better-sqlite3,node-pty || true",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3,node-pty",
-    "dist": "pnpm run build && node scripts/stage-cursor-runtime.js && electron-builder --mac",
-    "dist:dir": "pnpm run build && node scripts/stage-cursor-runtime.js && electron-builder --mac --dir",
+    "dist": "pnpm run build && node scripts/stage-sideboard-mcp.js && node scripts/stage-cursor-runtime.js && electron-builder --mac",
+    "dist:dir": "pnpm run build && node scripts/stage-sideboard-mcp.js && node scripts/stage-cursor-runtime.js && electron-builder --mac --dir",
     "dist:mac": "node scripts/release.js patch mac never",
     "pack": "pnpm run dist:dir",
     "release": "node scripts/release.js"
@@ -80,6 +80,10 @@
       {
         "from": "build/cursor-runtime",
         "to": "cursor-runtime"
+      },
+      {
+        "from": "build/sideboard-mcp",
+        "to": "sideboard-mcp"
       }
     ],
     "mac": {

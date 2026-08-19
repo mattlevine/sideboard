@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.92] - 2026-08-19
+
+### Fixed
+
+- Packaged Cursor orchestration no longer reports Sideboard MCP as down. 0.1.91 still launched MCP via Electron-as-Node from `app.asar`, so Cursor's local agent failed live tool discovery (only `mcp_auth` remained). MCP is now the CLI under a real `node` (`Contents/Resources/sideboard-mcp` extraResources + Node-ABI `better-sqlite3`). Packaged Sideboard merges that same command into `~/.cursor/mcp.json` so Cursor IDE sees the same store (`~/Library/Application Support/sideboard`).
+- The right sidebar PR pill and Checks tab now show CI status (passing / pending / failing) without requiring you to open the Checks tab first.
+- Creating a workspace from a branch that already has a GitHub PR now attaches that PR (`#111` pill) instead of leaving **Create PR**. Create-from-branch still uses a `thread/*` worktree; Sideboard looks up the source branch’s open PR and the sidebar retries that head if `prUrl` was never stored.
+
 ## [0.1.91] - 2026-08-19
 
 ### Fixed

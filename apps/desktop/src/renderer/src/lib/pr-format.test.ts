@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { PrCheckRun } from '@sideboard-ai/core';
 import {
   classifyMergeIssue,
   formatReviewDecision,
@@ -6,6 +7,8 @@ import {
   hasMergeConflictChecks,
   prPillModifier,
   prPillStatusLabel,
+  checksFromRuns,
+  checksTabShortLabel,
 } from './pr-format';
 
 describe('formatReviewDecision', () => {
@@ -123,6 +126,54 @@ describe('pr pill status', () => {
     ).toBe('approved');
   });
 
+  it('surfaces CI check status when review is not the blocker', () => {
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: null,
+        checksPassed: true,
+      }),
+    ).toBe('Checks passing');
+    expect(
+      prPillModifier({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: null,
+        checksPassed: true,
+      }),
+    ).toBe('approved');
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: 'APPROVED',
+        checksFailed: true,
+      }),
+    ).toBe('Checks failing');
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: 'REVIEW_REQUIRED',
+        checksPassed: true,
+      }),
+    ).toBe('Needs approval');
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: 'APPROVED',
+        checksPending: true,
+      }),
+    ).toBe('Checks pending');
+  });
+
   it('shows Queued when the PR is in a GitHub merge queue', () => {
     expect(
       prPillStatusLabel({
@@ -188,5 +239,38 @@ describe('classifyMergeIssue', () => {
         inMergeQueue: true,
       }),
     ).toBeNull();
+  });
+});
+
+describe('checksFromRuns', () => {
+  const run = (bucket: PrCheckRun['bucket']): PrCheckRun => ({
+    name: 'CI',
+    state: 'SUCCESS',
+    bucket,
+    startedAt: null,
+    completedAt: null,
+    link: null,
+    description: null,
+    workflow: null,
+    kind: 'ci',
+  });
+
+  it('maps pass / fail / pending buckets', () => {
+    expect(checksFromRuns(null)).toEqual({
+      checksFailed: false,
+      checksPending: false,
+      checksPassed: false,
+    });
+    expect(checksFromRuns([run('pass')])).toEqual({
+      checksFailed: false,
+      checksPending: false,
+      checksPassed: true,
+    });
+    expect(checksFromRuns([run('fail')])).toMatchObject({
+      checksFailed: true,
+      checksPassed: false,
+    });
+    expect(checksTabShortLabel([run('pass')])).toBe('CI ✓');
+    expect(checksTabShortLabel([run('fail')])).toBe('CI 1✕');
   });
 });

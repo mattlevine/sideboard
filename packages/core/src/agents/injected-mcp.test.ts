@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ import {
   promptMentionsBrightsy,
   shouldInjectBrightsyMcp,
   threadRequestsBrightsyMcp,
+  resolveSideboardMcpServer,
   toCodexMcpConfigArgs,
   toCursorMcpServers,
   toOpencodeMcpConfigContent,
@@ -47,19 +48,19 @@ describe('injected-mcp', () => {
     expect(servers).toHaveLength(1);
     expect(servers[0]!.name).toBe('sideboard');
     // Dev machines without a global `sideboard` binary get `node <abs>/mcp/run-stdio.js`
-    // (absolute node from PATH, or Electron-as-Node for asar installs).
+    // (absolute node from PATH). Never Sideboard.app / Electron-as-Node when node exists.
     if (servers[0]!.command === 'sideboard') {
       expect(servers[0]!.args).toEqual(['mcp']);
     } else {
       expect(
-        servers[0]!.command === 'node' ||
-          /[/\\]node$/.test(servers[0]!.command) ||
-          servers[0]!.command === process.execPath ||
-          servers[0]!.command === '/bin/sh',
+        servers[0]!.command === 'node' || /[/\\]node$/.test(servers[0]!.command),
       ).toBe(true);
       expect(servers[0]!.args?.some((a) => /run-stdio\.(js|cjs)$|cli[/\\]dist[/\\]index\.js$/.test(a))).toBe(
         true,
       );
+      expect(servers[0]!.command).not.toMatch(/Sideboard\.app/);
+      expect(servers[0]!.command).not.toBe('/bin/sh');
+      expect(JSON.stringify(servers[0])).not.toContain('ELECTRON_RUN_AS_NODE');
     }
 
     const { toCursorMcpServers, toCodexMcpConfigArgs, toOpencodeMcpConfigContent, writeMcpServersConfig } =
@@ -74,12 +75,10 @@ describe('injected-mcp', () => {
     const cursorMap = toCursorMcpServers(servers);
     if (process.platform === 'win32') {
       expect(cursorMap.sideboard?.command).toBe(servers[0]!.command);
-    } else if (cursorMap.sideboard?.command.endsWith('cursor-electron-as-node.sh')) {
-      expect(cursorMap.sideboard?.args).toBeUndefined();
     } else {
-      // Real node — do not wrap with ELECTRON_RUN_AS_NODE (Cursor would start
-      // nested Electron on the first Sideboard MCP tool call).
+      expect(cursorMap.sideboard?.command).not.toMatch(/cursor-electron-as-node\.sh$/);
       expect(cursorMap.sideboard?.command).not.toBe('/bin/sh');
+      expect(cursorMap.sideboard?.command).not.toMatch(/Sideboard\.app/);
       expect(JSON.stringify(cursorMap.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
     }
     expect(cursorMap.sideboard?.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
@@ -134,6 +133,35 @@ describe('injected-mcp', () => {
   it('resolves MCP entry without throwing when import.meta.url is unavailable', async () => {
     const { findSideboardMcpJsEntry } = await import('./injected-mcp.js');
     expect(() => findSideboardMcpJsEntry()).not.toThrow();
+  });
+
+  it('prefers extraResources MCP over the asar/core dist copy', async () => {
+    const proc = process as NodeJS.Process & { resourcesPath?: string };
+    const previous = proc.resourcesPath;
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-mcp-packaged-'));
+    try {
+      const mcp = join(root, 'sideboard-mcp', 'core-dist', 'mcp', 'run-stdio.js');
+      mkdirSync(join(mcp, '..'), { recursive: true });
+      writeFileSync(mcp, '');
+      proc.resourcesPath = root;
+      const { findSideboardMcpJsEntry } = await import('./injected-mcp.js');
+      expect(findSideboardMcpJsEntry()).toBe(mcp);
+    } finally {
+      if (previous === undefined) delete proc.resourcesPath;
+      else proc.resourcesPath = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves Cursor MCP as real node, never Sideboard.app, when system node exists', async () => {
+    const server = await resolveSideboardMcpServer();
+    expect(server.command).not.toMatch(/Sideboard\.app/i);
+    expect(server.command).not.toBe('/bin/sh');
+    expect(JSON.stringify(server)).not.toContain('ELECTRON_RUN_AS_NODE');
+    const cursor = toCursorMcpServers([server]);
+    expect(cursor.sideboard?.command).not.toMatch(/Sideboard\.app/i);
+    expect(cursor.sideboard?.command).not.toMatch(/cursor-electron-as-node\.sh$/);
+    expect(JSON.stringify(cursor.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
   });
 
   it('injects SIDEBOARD_ORCHESTRATOR_THREAD_ID for orchestration turns', async () => {
@@ -365,7 +393,7 @@ describe('toCursorMcpServers', () => {
     expect(map.sideboard?.env?.SIDEBOARD_APP_DATA).toBe('/tmp/data');
   });
 
-  it('hides Sideboard.app behind a wrapper script Cursor will exec as sh', () => {
+  it('does not wrap Sideboard.app behind a cursor-electron-as-node.sh script', () => {
     if (process.platform === 'win32') return;
     const electron = '/Applications/Sideboard.app/Contents/MacOS/Sideboard';
     const map = toCursorMcpServers([
@@ -375,16 +403,12 @@ describe('toCursorMcpServers', () => {
         args: ['/tmp/run-stdio.js'],
       },
     ]);
-    expect(map.sideboard?.command).toMatch(/cursor-electron-as-node\.sh$/);
-    expect(map.sideboard?.args).toBeUndefined();
-    const body = readFileSync(map.sideboard!.command, 'utf8');
-    expect(body).toContain(electron);
-    expect(body).toContain('ELECTRON_RUN_AS_NODE=1');
-    expect(JSON.stringify(map.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
-    expect(JSON.stringify(map.sideboard)).not.toContain('Sideboard.app');
+    expect(map.sideboard?.command).toBe(electron);
+    expect(map.sideboard?.command).not.toMatch(/cursor-electron-as-node\.sh$/);
+    expect(map.sideboard?.args).toEqual(['/tmp/run-stdio.js']);
   });
 
-  it('rewrites an already-stripped /bin/sh Electron launch to the wrapper file', () => {
+  it('unwraps an already-stripped /bin/sh Electron launch instead of wrapping it', () => {
     if (process.platform === 'win32') return;
     const wrapped = wrapElectronAsNodeLaunch(
       '/Applications/Sideboard.app/Contents/MacOS/Sideboard',
@@ -393,9 +417,9 @@ describe('toCursorMcpServers', () => {
     const map = toCursorMcpServers([
       { name: 'sideboard', command: wrapped.file, args: wrapped.args },
     ]);
-    expect(map.sideboard?.command).toMatch(/cursor-electron-as-node\.sh$/);
+    expect(map.sideboard?.command).not.toMatch(/cursor-electron-as-node\.sh$/);
     expect(map.sideboard?.command).not.toBe('/bin/sh');
-    expect(map.sideboard?.args).toBeUndefined();
+    expect(map.sideboard?.command).toMatch(/Sideboard$/);
   });
 });
 

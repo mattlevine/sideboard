@@ -216,7 +216,9 @@ npm i -g @sideboard-ai/cli
 sideboard mcp          # same as: npx sideboard-mcp
 ```
 
-Sideboard desktop **auto-injects** this MCP into Claude / Cursor / Codex / OpenCode turns (orchestration and worktree). Use the steps below when you want Sideboard fleet tools from an agent **outside** Sideboard — Claude Code in a project, Cursor IDE Agent, Codex CLI, etc.
+Sideboard desktop **auto-injects** this MCP into Claude / Cursor / Codex / OpenCode turns (orchestration and worktree). The packaged Mac app also merges a `sideboard` entry into `~/.cursor/mcp.json` (and `~/.claude.json` if it already exists) so Cursor IDE / Claude Code see the same fleet and store as Sideboard.app (`SIDEBOARD_APP_DATA` → `~/Library/Application Support/sideboard`). Use the steps below when you want to register MCP yourself — Claude Code in a project, Cursor IDE Agent, Codex CLI, etc.
+
+Pin `SIDEBOARD_APP_DATA` if a `sideboard` binary on PATH should still hit this Mac’s Sideboard store.
 
 ### Connect Claude Code
 
@@ -239,13 +241,16 @@ Add a project or global MCP entry (Cursor → Settings → MCP, or `.cursor/mcp.
   "mcpServers": {
     "sideboard": {
       "command": "sideboard",
-      "args": ["mcp"]
+      "args": ["mcp"],
+      "env": {
+        "SIDEBOARD_APP_DATA": "/Users/you/Library/Application Support/sideboard"
+      }
     }
   }
 }
 ```
 
-Prefer `npx -y sideboard-mcp` for `command` / `args` if `sideboard` is not on Cursor’s PATH.
+Prefer `npx -y sideboard-mcp` for `command` / `args` if `sideboard` is not on Cursor’s PATH. Packaged Sideboard.app writes the absolute `node` + extraResources path here on launch (merge, does not clobber other servers).
 
 ### Connect Codex
 
@@ -255,7 +260,12 @@ Add to `~/.codex/config.toml` (or pass equivalent `-c` overrides):
 [mcp_servers.sideboard]
 command = "sideboard"
 args = ["mcp"]
+
+[mcp_servers.sideboard.env]
+SIDEBOARD_APP_DATA = "/Users/you/Library/Application Support/sideboard"
 ```
+
+Sideboard does not rewrite `~/.codex/config.toml`; add the block above (or equivalent `-c` overrides) so Codex CLI shares the packaged store.
 
 ### Connect OpenCode
 

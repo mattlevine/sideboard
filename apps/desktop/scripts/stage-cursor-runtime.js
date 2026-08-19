@@ -10,6 +10,9 @@
  * imports `execa` / `smol-toml`, and the SDK imports `@bufbuild/protobuf`,
  * `zod`, etc. Those resolve in the repo by walking up to root node_modules;
  * inside Sideboard.app that walk stops at Resources/.
+ *
+ * MCP stdio lives in a separate extraResources tree (`sideboard-mcp`), not
+ * this Cursor runner copy.
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -91,6 +94,8 @@ function copyPackageAndDeps(name, seen, fromFile) {
     if (dep.startsWith('@cursor/sdk-') && dep !== platformSdk) continue;
     copyPackageAndDeps(dep, seen, pkgJsonPath);
   }
+}
+
 }
 
 function assertIsolatedRunnerLoads() {

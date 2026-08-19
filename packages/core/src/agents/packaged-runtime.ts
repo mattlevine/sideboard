@@ -29,6 +29,21 @@ export function packagedCursorRunnerPath(): string | null {
   return dir ? join(dir, 'core-dist', 'agents', 'cursor-runner.js') : null;
 }
 
+/** Packaged CLI MCP extraResources dir (`Contents/Resources/sideboard-mcp`). */
+export function packagedMcpDir(): string | null {
+  const resources = electronResourcesPath();
+  if (!resources) return null;
+  const dir = join(resources, 'sideboard-mcp');
+  if (!existsSync(join(dir, 'core-dist', 'mcp', 'run-stdio.js'))) return null;
+  return dir;
+}
+
+/** Packaged MCP stdio entry on a real filesystem (system `node` can exec this). */
+export function packagedMcpStdioPath(): string | null {
+  const dir = packagedMcpDir();
+  return dir ? join(dir, 'core-dist', 'mcp', 'run-stdio.js') : null;
+}
+
 export function packagedCursorRipgrepCandidate(
   platformPkg: string,
   binName: string,

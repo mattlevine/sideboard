@@ -5,6 +5,7 @@ import {
   createThreadWorktree,
   fetchPrHead,
   getPr,
+  getPrForHeadBranch,
   resolveDefaultBranch,
   resolveRepoRoot,
 } from '../git/worktree.js';
@@ -45,6 +46,7 @@ export async function createThread(
   let sourceIsFork = false;
 
   let prUrl: string | null = null;
+  let prTitle: string | null = null;
   if (input.sourceType === 'pr') {
     const num = Number(input.sourceRef.replace(/^#/, ''));
     if (!Number.isFinite(num)) throw new Error(`Invalid PR number: ${input.sourceRef}`);
@@ -63,6 +65,14 @@ export async function createThread(
     // createThreadWorktree then forks from origin/<default>, not a stale local tip.
     if (!sourceRef || sourceRef === 'HEAD' || sourceRef === 'default') {
       sourceRef = await resolveDefaultBranch(repoPath);
+    } else {
+      // Worktree branch is still thread/<team>. Attach the existing GitHub PR
+      // for the source branch so the sidebar matches create-from-PR.
+      const existing = await getPrForHeadBranch(repoPath, sourceRef);
+      if (existing?.url) {
+        prUrl = existing.url;
+        prTitle = existing.title;
+      }
     }
   } else if (input.sourceType === 'adopt') {
     throw new Error('Use adoptThread() for adopt sources');
@@ -101,6 +111,7 @@ export async function createThread(
     parentThreadId: input.parentThreadId ?? null,
     status: 'idle',
     prUrl,
+    prTitle,
   });
   writeThread(thread);
   await ensureWorkspace(repoPath);

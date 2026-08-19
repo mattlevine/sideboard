@@ -7,7 +7,7 @@ vi.mock('./run.js', () => ({
 }));
 
 import { gh, git } from './run.js';
-import { getPrChecks, getPrMeta } from './worktree.js';
+import { getPrChecks, getPrForHeadBranch, getPrMeta } from './worktree.js';
 
 const ghMock = vi.mocked(gh);
 const gitMock = vi.mocked(git);
@@ -281,5 +281,68 @@ describe('getPrMeta', () => {
       isInMergeQueue: false,
     });
     expect(gitMock.mock.calls.some((c) => c[0]?.[0] === 'merge-tree')).toBe(false);
+  });
+});
+
+describe('getPrForHeadBranch', () => {
+  beforeEach(() => {
+    ghMock.mockReset();
+    gitMock.mockReset();
+    gitMock.mockResolvedValue({
+      stdout: 'git@github.com:acme/widgets.git',
+      stderr: '',
+      exitCode: 0,
+    });
+  });
+
+  it('returns the PR from gh pr view', async () => {
+    ghMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        number: 111,
+        title: 'Draft work',
+        headRefName: 'feat/existing',
+        url: 'https://github.com/acme/widgets/pull/111',
+        isCrossRepository: false,
+      }),
+      stderr: '',
+      exitCode: 0,
+    });
+    await expect(getPrForHeadBranch('/repo', 'feat/existing')).resolves.toMatchObject({
+      number: 111,
+      url: 'https://github.com/acme/widgets/pull/111',
+    });
+  });
+
+  it('falls back to gh pr list --head owner:branch', async () => {
+    ghMock
+      .mockResolvedValueOnce({
+        stdout: '',
+        stderr: 'no pull requests found',
+        exitCode: 1,
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 111,
+            title: 'Draft work',
+            headRefName: 'feat/existing',
+            url: 'https://github.com/acme/widgets/pull/111',
+            isCrossRepository: false,
+          },
+        ]),
+        stderr: '',
+        exitCode: 0,
+      });
+    await expect(getPrForHeadBranch('/repo', 'feat/existing')).resolves.toMatchObject({
+      number: 111,
+    });
+    const listArgs = ghMock.mock.calls[1]?.[0] as string[];
+    expect(listArgs).toContain('--head');
+    expect(listArgs).toContain('acme:feat/existing');
+  });
+
+  it('skips default branch names', async () => {
+    await expect(getPrForHeadBranch('/repo', 'main')).resolves.toBeNull();
+    expect(ghMock).not.toHaveBeenCalled();
   });
 });

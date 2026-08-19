@@ -130,6 +130,12 @@ export {
   SIDEBOARD_MCP_ALLOWED_TOOLS,
 } from './agents/injected-mcp.js';
 export {
+  mergeSideboardIntoMcpServersJson,
+  registerPackagedUserMcpClients,
+  userClaudeMcpConfigPath,
+  userCursorMcpConfigPath,
+} from './agents/user-mcp-config.js';
+export {
   listSlackWorkspaces,
   connectSlackToken,
   disconnectSlackWorkspace,

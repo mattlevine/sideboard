@@ -55,6 +55,7 @@ import {
   claudeUserSettingsPath,
   detectAgents,
   ensureAgentPath,
+  registerPackagedUserMcpClients,
   warmGithubAgentAuth,
   getAgentSetupInfo,
   getOrchestrator,
@@ -1502,6 +1503,14 @@ app.whenReady().then(async () => {
   }
   // GUI apps get a stripped PATH; make sure `claude` / friends resolve.
   ensureAgentPath();
+  if (app.isPackaged) {
+    void registerPackagedUserMcpClients().catch((err) => {
+      console.warn(
+        'User MCP registration skipped:',
+        err instanceof Error ? err.message : err,
+      );
+    });
+  }
   // Keychain is OK here (app start). Later agent turns reuse ~/.sideboard-git-auth.
   void warmGithubAgentAuth({ force: true }).catch((err) => {
     console.warn(

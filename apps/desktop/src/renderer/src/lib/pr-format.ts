@@ -27,16 +27,24 @@ export function prPillModifier(opts: {
   branchBehind?: boolean;
   /** Open PR is waiting in a GitHub merge queue. */
   inMergeQueue?: boolean;
+  /** CI failed (from `gh pr checks`). */
+  checksFailed?: boolean;
+  /** CI still running; no failures yet. */
+  checksPending?: boolean;
+  /** At least one CI check passed and none are failing/pending. */
+  checksPassed?: boolean;
 }): string {
   if (opts.merged) return 'merged';
   if (opts.closed) return 'closed';
   if (opts.inMergeQueue) return 'queued';
   if (opts.mergeConflicts || opts.branchBehind) return 'conflicts';
   if (opts.draft) return 'draft';
+  if (opts.checksFailed) return 'rejected';
   const decision = (opts.reviewDecision ?? '').toUpperCase();
   if (decision === 'REVIEW_REQUIRED') return 'needs-approval';
   if (decision === 'CHANGES_REQUESTED') return 'rejected';
-  if (decision === 'APPROVED') return 'approved';
+  if (opts.checksPending) return 'needs-approval';
+  if (decision === 'APPROVED' || opts.checksPassed) return 'approved';
   return 'open';
 }
 
@@ -50,6 +58,9 @@ export function prPillStatusLabel(opts: {
   branchBehind?: boolean;
   inMergeQueue?: boolean;
   baseRefName?: string | null;
+  checksFailed?: boolean;
+  checksPending?: boolean;
+  checksPassed?: boolean;
 }): string {
   if (opts.merged) return 'Merged';
   if (opts.closed) return 'Closed';
@@ -60,7 +71,13 @@ export function prPillStatusLabel(opts: {
     return base ? `Behind ${base}` : 'Behind base';
   }
   if (opts.draft) return 'Draft';
-  return formatReviewDecision(opts.reviewDecision) ?? 'Open';
+  if (opts.checksFailed) return 'Checks failing';
+  const review = formatReviewDecision(opts.reviewDecision);
+  if (review === 'Needs approval' || review === 'Rejected') return review;
+  if (opts.checksPending) return 'Checks pending';
+  if (review) return review;
+  if (opts.checksPassed) return 'Checks passing';
+  return 'Open';
 }
 
 export function classifyMergeIssue(opts: {
@@ -187,4 +204,30 @@ export function summarizeChecks(checks: PrCheckRun[]): {
   else if (pending > 0) label = `Pending (${pending}/${total})`;
   else label = `Passed (${passed}/${total})`;
   return { failed, pending, passed, total, label };
+}
+
+/** Flags for the PR pill from loaded `gh pr checks` rows. */
+export function checksFromRuns(checks: PrCheckRun[] | null | undefined): {
+  checksFailed: boolean;
+  checksPending: boolean;
+  checksPassed: boolean;
+} {
+  if (!checks?.length) {
+    return { checksFailed: false, checksPending: false, checksPassed: false };
+  }
+  const s = summarizeChecks(checks);
+  return {
+    checksFailed: s.failed > 0,
+    checksPending: s.failed === 0 && s.pending > 0,
+    checksPassed: s.failed === 0 && s.pending === 0 && s.passed > 0,
+  };
+}
+
+/** Compact Checks tab label (narrow right sidebar). */
+export function checksTabShortLabel(checks: PrCheckRun[] | null | undefined): string {
+  if (!checks?.length) return 'CI';
+  const s = summarizeChecks(checks);
+  if (s.failed > 0) return `CI ${s.failed}✕`;
+  if (s.pending > 0) return 'CI …';
+  return 'CI ✓';
 }

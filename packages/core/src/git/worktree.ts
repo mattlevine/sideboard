@@ -389,17 +389,109 @@ export async function getPr(
   return JSON.parse(stdout) as PrInfo;
 }
 
+function normalizeGitBranchName(ref: string): string {
+  return ref.trim().replace(/^refs\/heads\//, '').replace(/^origin\//, '');
+}
+
+/** Default / placeholder refs — not a feature branch that might already have a PR. */
+export function isDefaultishSourceRef(ref: string | null | undefined): boolean {
+  const n = normalizeGitBranchName(ref ?? '').toLowerCase();
+  return (
+    !n ||
+    n === 'head' ||
+    n === 'default' ||
+    n === 'main' ||
+    n === 'master' ||
+    n === 'develop' ||
+    n === 'trunk'
+  );
+}
+
+/**
+ * Ordered `gh pr view` / checks selectors.
+ * Create-from-branch still forks `thread/<team>`, so the worktree branch is not
+ * the GitHub head. Prefer persisted URL, then the worktree branch (PRs opened
+ * from this chat), then the source branch (existing PR you created from).
+ */
+export function resolvePrSelectors(
+  thread: Pick<Thread, 'prUrl' | 'sourceType' | 'sourceRef' | 'branchName'>,
+): string[] {
+  const out: string[] = [];
+  const push = (value: string | null | undefined) => {
+    const v = value?.trim();
+    if (!v || out.includes(v)) return;
+    out.push(v);
+  };
+  push(thread.prUrl);
+  if (thread.sourceType === 'pr' && thread.sourceRef?.trim()) {
+    push(thread.sourceRef.replace(/^#/, '').trim());
+  }
+  push(thread.branchName);
+  if (thread.sourceType === 'branch') {
+    const source = normalizeGitBranchName(thread.sourceRef ?? '');
+    if (source && !isDefaultishSourceRef(source) && source !== thread.branchName?.trim()) {
+      push(source);
+    }
+  }
+  return out;
+}
+
 /** Prefer PR URL, then PR source ref, then branch name for `gh pr …`. */
 export function resolvePrSelector(thread: Pick<
   Thread,
   'prUrl' | 'sourceType' | 'sourceRef' | 'branchName'
 >): string | null {
-  if (thread.prUrl?.trim()) return thread.prUrl.trim();
-  if (thread.sourceType === 'pr' && thread.sourceRef?.trim()) {
-    return thread.sourceRef.replace(/^#/, '').trim();
+  return resolvePrSelectors(thread)[0] ?? null;
+}
+
+/** Open PR whose head is this branch (create-from-branch / sidebar attach). */
+export async function getPrForHeadBranch(
+  repoPath: string,
+  branch: string,
+): Promise<PrInfo | null> {
+  const head = normalizeGitBranchName(branch);
+  if (!head || isDefaultishSourceRef(head)) return null;
+
+  const slug = await resolveGithubRepoSlug(repoPath);
+  const viewArgs = [
+    'pr',
+    'view',
+    head,
+    '--json',
+    'number,title,headRefName,url,isCrossRepository',
+  ];
+  if (slug) viewArgs.push('--repo', slug);
+  const viewed = await gh(viewArgs, repoPath, { reject: false });
+  if (viewed.exitCode === 0 && viewed.stdout.trim()) {
+    try {
+      return JSON.parse(viewed.stdout) as PrInfo;
+    } catch {
+      return null;
+    }
   }
-  if (thread.branchName?.trim()) return thread.branchName.trim();
-  return null;
+
+  const listHead = slug ? ghHeadRef(slug, head) : head;
+  const listArgs = [
+    'pr',
+    'list',
+    '--head',
+    listHead,
+    '--json',
+    'number,title,headRefName,url,isCrossRepository',
+    '--limit',
+    '1',
+    '--state',
+    'open',
+  ];
+  if (slug) listArgs.push('--repo', slug);
+  const listed = await gh(listArgs, repoPath, { reject: false });
+  if (listed.exitCode !== 0 || !listed.stdout.trim()) return null;
+  try {
+    const rows = JSON.parse(listed.stdout) as PrInfo[];
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeGhTime(value: unknown): string | null {
