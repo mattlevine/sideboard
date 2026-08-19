@@ -72,6 +72,13 @@ export function extractJsonErrorMessage(obj: Record<string, unknown>): string | 
 /** Node prints this as the last stderr line after a crash / uncaught exception. */
 const NODE_VERSION_FOOTER = /^Node\.js v\d+/i;
 
+function isPinnedStderrLine(line: string): boolean {
+  if (/^\s*at\s/.test(line)) return false;
+  return /cannot find (?:package|module)|ERR_MODULE_NOT_FOUND|cursor startup failed:/i.test(
+    line,
+  );
+}
+
 /**
  * Keep a rolling stderr tail for turn failure detail, skipping Node's version footer
  * so lastError isn't just "Node.js v23.6.0".
@@ -83,7 +90,11 @@ export function pushTurnStderr(tail: string[], line: string, maxLines = 12): voi
   // Codex emits non-fatal reconnect notices as type=error — don't let them stick as lastError.
   if (/^reconnecting\.\.\./i.test(trimmed)) return;
   tail.push(trimmed);
-  while (tail.length > maxLines) tail.shift();
+  while (tail.length > maxLines) {
+    const dropIdx = tail.findIndex((l) => !isPinnedStderrLine(l));
+    if (dropIdx === -1) tail.shift();
+    else tail.splice(dropIdx, 1);
+  }
 }
 
 /** Cursor local-agent minified bundle dumped as a single stderr line on crash. */
@@ -135,9 +146,10 @@ export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
     );
   }
   // Prefer the actionable MODULE_NOT_FOUND line over the stack frames that follow.
+  // Node ESM says "Cannot find package", CJS says "Cannot find module".
   const moduleMissing = [...tail]
     .reverse()
-    .find((line) => /cannot find module/i.test(line));
+    .find((line) => /cannot find (?:package|module)/i.test(line));
   if (moduleMissing) return clipStderr(moduleMissing, maxChars);
   const useful = tail.filter((line) => !looksLikeMinifiedJsDump(line));
   if (useful.length === 0 && tail.some(looksLikeMinifiedJsDump)) {

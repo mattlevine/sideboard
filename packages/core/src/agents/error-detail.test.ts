@@ -47,6 +47,31 @@ describe('pushTurnStderr / summarizeTurnStderr', () => {
     expect(summarizeTurnStderr(tail)).not.toMatch(/Node\.js v23/);
   });
 
+  it('prefers Cannot find package over ESM loader stack frames', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'execa' imported from /Apps/Sideboard.app/Contents/Resources/cursor-runtime/core-dist/chunk-LGXBYZZA.js",
+    );
+    pushTurnStderr(tail, 'at #cachedDefaultResolve (node:internal/modules/esm/loader:640:25)');
+    pushTurnStderr(tail, 'at ModuleLoader.resolve (node:internal/modules/esm/loader:623:38)');
+    pushTurnStderr(tail, "code: 'ERR_MODULE_NOT_FOUND'");
+    expect(summarizeTurnStderr(tail)).toMatch(/Cannot find package 'execa'/);
+    expect(summarizeTurnStderr(tail)).not.toMatch(/cachedDefaultResolve/);
+  });
+
+  it('keeps Cannot find package when the ESM stack fills the stderr tail', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'execa' imported from /Apps/Sideboard.app/Contents/Resources/cursor-runtime/core-dist/chunk-LGXBYZZA.js",
+    );
+    for (let i = 0; i < 20; i++) {
+      pushTurnStderr(tail, `at ModuleLoader.resolve (node:internal/modules/esm/loader:${i}:38)`);
+    }
+    expect(summarizeTurnStderr(tail)).toMatch(/Cannot find package 'execa'/);
+  });
+
   it('prefers Cannot find module over trailing stack frames', () => {
     const tail: string[] = [];
     pushTurnStderr(
