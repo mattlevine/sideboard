@@ -1,11 +1,13 @@
+import { isAbsolute } from 'node:path';
 import { getGithubGitAuthMode, getGithubPat, type GithubGitAuthMode } from '../store/app-settings.js';
 import {
+  githubAgentAuthDir,
   githubAgentAuthReady,
   githubCredentialHelperGitConfig,
   githubGhConfigEnv,
   materializeGithubAgentAuth,
 } from './github-agent-auth.js';
-import { resolveGhAuthToken } from './run.js';
+import { git, resolveGhAuthToken } from './run.js';
 
 const HTTPS_REWRITE: Array<{ key: string; value: string }> = [
   { key: 'url.https://github.com/.insteadOf', value: 'git@github.com:' },
@@ -186,15 +188,49 @@ export async function warmGithubAgentAuth(opts?: {
   await resolveAgentGitAuthEnv(undefined, opts);
 }
 
+function normalizeWritableRoot(raw: string): string | null {
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  return trimmed && isAbsolute(trimmed) ? trimmed : null;
+}
+
 /**
- * Codex `exec -c` so sandboxed shells keep Sideboard’s git env.
- * Default `shell_environment_policy` drops `*TOKEN*` / `*KEY*` and
- * `workspace-write` has no network — both force `gh`/git onto Keychain or a hang.
- * Inherit is still required so `GH_CONFIG_DIR` / `GIT_CONFIG_*` reach the sandbox
- * (those values are paths, not the token).
+ * Codex workspace-write mounts `.git` read-only unless `writable_roots` names
+ * the gitdir itself. Linked worktrees store `index.lock` under the main
+ * repo’s `.git/worktrees/<name>/`, which is outside `--cd`.
  */
+export async function resolveCodexGitWritableRoots(cwd: string): Promise<string[]> {
+  const roots = new Set<string>();
+  const authDir = normalizeWritableRoot(githubAgentAuthDir());
+  if (authDir) roots.add(authDir);
+
+  try {
+    const [gitDir, commonDir] = await Promise.all([
+      git(['rev-parse', '--absolute-git-dir'], cwd, { reject: false, timeoutMs: 5_000 }),
+      git(['rev-parse', '--path-format=absolute', '--git-common-dir'], cwd, {
+        reject: false,
+        timeoutMs: 5_000,
+      }),
+    ]);
+    const gitDirPath = gitDir.exitCode === 0 ? normalizeWritableRoot(gitDir.stdout) : null;
+    const commonPath =
+      commonDir.exitCode === 0 ? normalizeWritableRoot(commonDir.stdout) : null;
+    if (gitDirPath) roots.add(gitDirPath);
+    if (commonPath) roots.add(commonPath);
+  } catch {
+    /* cwd may not be a git checkout (tests, global orchestrator) */
+  }
+  return [...roots];
+}
+
+export function codexSandboxWritableRootsArgs(roots: string[]): string[] {
+  const abs = [...new Set(roots.map(normalizeWritableRoot).filter(Boolean))] as string[];
+  if (abs.length === 0) return [];
+  return ['-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(abs)}`];
+}
+
 export function codexUnattendedGitConfigArgs(
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access' | string,
+  opts?: { writableRoots?: string[] },
 ): string[] {
   const args = [
     '-c',
@@ -204,6 +240,7 @@ export function codexUnattendedGitConfigArgs(
   ];
   if (sandbox === 'workspace-write') {
     args.push('-c', 'sandbox_workspace_write.network_access=true');
+    args.push(...codexSandboxWritableRootsArgs(opts?.writableRoots ?? []));
   }
   return args;
 }

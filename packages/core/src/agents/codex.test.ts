@@ -94,6 +94,9 @@ describe('codexAdapter.buildTurn', () => {
     expect(cfg).toContain('shell_environment_policy.inherit="all"');
     expect(cfg).toContain('shell_environment_policy.ignore_default_excludes=true');
     expect(cfg).toContain('sandbox_workspace_write.network_access=true');
+    const writable = cfg.find((c) => c.startsWith('sandbox_workspace_write.writable_roots='));
+    expect(writable).toBeTruthy();
+    expect(writable).toContain('sideboard-git-auth');
   });
 
   it('does not enable workspace-write network in plan mode', async () => {

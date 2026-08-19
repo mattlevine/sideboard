@@ -165,6 +165,26 @@ describe('codexUnattendedGitConfigArgs', () => {
     expect(readOnly).not.toContain('sandbox_workspace_write.network_access=true');
     expect(codexUnattendedGitConfigArgs('danger-full-access')).toEqual(readOnly);
   });
+
+  it('names gitdirs in writable_roots so linked worktrees can commit', () => {
+    expect(
+      codexUnattendedGitConfigArgs('workspace-write', {
+        writableRoots: [
+          '/Users/me/repo/.git',
+          '/Users/me/repo/.git/worktrees/herediano',
+        ],
+      }),
+    ).toEqual([
+      '-c',
+      'shell_environment_policy.inherit="all"',
+      '-c',
+      'shell_environment_policy.ignore_default_excludes=true',
+      '-c',
+      'sandbox_workspace_write.network_access=true',
+      '-c',
+      'sandbox_workspace_write.writable_roots=["/Users/me/repo/.git","/Users/me/repo/.git/worktrees/herediano"]',
+    ]);
+  });
 });
 
 describe('formatGitAuthModeDirective', () => {

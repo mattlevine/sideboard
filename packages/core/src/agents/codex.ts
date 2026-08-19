@@ -7,7 +7,7 @@ import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage } from './error-detail.js';
 import { fromInclusiveInputUsage } from './usage.js';
-import { codexUnattendedGitConfigArgs } from '../git/git-auth-mode.js';
+import { codexUnattendedGitConfigArgs, resolveCodexGitWritableRoots } from '../git/git-auth-mode.js';
 import {
   buildInjectedMcpServers,
   shouldInjectBrightsyMcp,
@@ -253,9 +253,16 @@ export const codexAdapter: AgentAdapter = {
       // `codex exec` rejects `--ask-for-approval` (global-only on newer CLIs).
       '-c',
       'approval_policy="never"',
-      // Seatbelt cannot use the login Keychain; inherit GH_CONFIG_DIR / GIT_CONFIG_*
-      // (default policy also strips *TOKEN* — we no longer put GH_TOKEN in env).
-      ...codexUnattendedGitConfigArgs(mode.codexSandbox),
+      // Seatbelt cannot use the login Keychain; inherit GH_CONFIG_DIR / GIT_CONFIG_*.
+      // Default policy also strips *TOKEN*. Linked worktrees need the main
+      // repo `.git` (+ `.git/worktrees/<name>`) as writable_roots so git commit
+      // can create index.lock.
+      ...codexUnattendedGitConfigArgs(mode.codexSandbox, {
+        writableRoots:
+          mode.codexSandbox === 'workspace-write'
+            ? await resolveCodexGitWritableRoots(thread.worktreePath)
+            : [],
+      }),
       ...(model ? (['--model', model] as const) : []),
       ...mcpOverrides,
     ];
