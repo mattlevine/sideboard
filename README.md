@@ -77,7 +77,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.99/Sideboard-0.1.99-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.100/Sideboard-0.1.100-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
