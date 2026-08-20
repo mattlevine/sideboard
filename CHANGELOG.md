@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README and marketing-site hero screenshot refreshed (`sideboard-desktop-review-v5.png`, `site/desktop.png`) at native 2836×1604 PNG so it stays sharp on retina.
+
 ## [0.1.101] - 2026-08-20
 
 ### Changed
