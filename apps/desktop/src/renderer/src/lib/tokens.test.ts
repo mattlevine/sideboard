@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextTokens } from './tokens';
+import { contextFillRatio, contextTokens, formatTokenCount, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -34,5 +34,23 @@ describe('contextFillRatio', () => {
       lastRequestTokens: 90_000,
     };
     expect(contextFillRatio(usage, 200_000)).toBeCloseTo(0.45);
+  });
+});
+
+describe('message chip vs billed total', () => {
+  it('does not show cache-summed billed tokens as the chip (Slack hi / tool rounds)', () => {
+    const usage = {
+      inputTokens: 12_000,
+      outputTokens: 800,
+      cacheReadTokens: 80_000,
+      cacheWriteTokens: 82_000,
+      lastRequestTokens: 94_000,
+    };
+    expect(totalTokens(usage)).toBe(174_800);
+    expect(contextTokens(usage)).toBe(94_000);
+    expect(formatTokenCount(contextTokens(usage))).toBe('94k');
+    expect(formatTokenCount(totalTokens(usage))).toBe('175k');
+    expect(usageTooltip(usage)).toContain('Context ~94,000');
+    expect(usageTooltip(usage)).toContain('Billed 174,800');
   });
 });

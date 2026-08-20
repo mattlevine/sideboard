@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The agent message token chip no longer sums cache reads/writes from every tool round (a Slack “hi” looked like ~175k). It shows last-request context occupancy, matching the ring; billed totals stay in the tooltip.
+
 ## [0.1.96] - 2026-08-19
 
 ### Fixed

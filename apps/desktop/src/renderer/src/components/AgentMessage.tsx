@@ -6,7 +6,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, estimateContextWindow } from '../lib/tokens';
+import { formatTokenCount, contextTokens, usageTooltip, contextFillRatio, contextMeterTooltip, estimateContextWindow } from '../lib/tokens';
 import { ContextMeter } from './ContextMeter';
 import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';
@@ -361,7 +361,7 @@ export function AgentMessage({
                   )}
                   size={12}
                 />
-                {formatTokenCount(totalTokens(usage))} tok
+                {formatTokenCount(contextTokens(usage))} tok
               </span>
             )}
             <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>

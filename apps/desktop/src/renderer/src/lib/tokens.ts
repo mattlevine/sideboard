@@ -58,7 +58,14 @@ export function formatTokenCount(n: number): string {
 }
 
 export function usageTooltip(u: TokenUsage): string {
-  const bits = [`Input: ${u.inputTokens.toLocaleString()}`, `Output: ${u.outputTokens.toLocaleString()}`];
+  const billed = totalTokens(u);
+  const context = contextTokens(u);
+  const bits = [
+    `Context ~${context.toLocaleString()}`,
+    `Billed ${billed.toLocaleString()}`,
+    `Input: ${u.inputTokens.toLocaleString()}`,
+    `Output: ${u.outputTokens.toLocaleString()}`,
+  ];
   if (u.cacheReadTokens) bits.push(`Cache read: ${u.cacheReadTokens.toLocaleString()}`);
   if (u.cacheWriteTokens) bits.push(`Cache write: ${u.cacheWriteTokens.toLocaleString()}`);
   return bits.join(' · ');
