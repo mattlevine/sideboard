@@ -8,7 +8,12 @@ import {
   normalizeWorktreePath,
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
-import { isGlobalThread, isOrchestratorThread } from '../store/global-workspace.js';
+import {
+  isCloudCoordinatorThread,
+  isGlobalThread,
+  isOrchestratorThread,
+  isSlackCoordinatorThread,
+} from '../store/global-workspace.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 import {
   createEmptyThread,
@@ -140,6 +145,8 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     assertOrchestratorCapableAgent(nextAgent);
   }
 
+  const singletonInbox =
+    isSlackCoordinatorThread(from) || isCloudCoordinatorThread(from);
   const thread = createEmptyThread({
     title,
     // Chat-tab nicknames (soccer team or explicit) must stick. Post-turn
@@ -147,6 +154,10 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     // shared worktree folder name (e.g. fork "Arsenal" → "Monaco").
     userSetTitle: true,
     ...binding,
+    // Slack / Brightsy cloud identity stays on the original chat. A + tab
+    // that copies `slack:team:user` would steal inbound DMs after you close
+    // the connected chat.
+    sourceRef: singletonInbox ? title : binding.sourceRef,
     agent: nextAgent,
     model:
       input.model !== undefined

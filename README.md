@@ -359,6 +359,7 @@ The destination prefix is the **This Mac** name (case does not matter). Mentions
 - One Mac online → it handles unprefixed messages.
 - Personal and Work both online → unprefixed messages go to whichever claims first. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
 - A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
+- Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat.
 
 ### CLI
 

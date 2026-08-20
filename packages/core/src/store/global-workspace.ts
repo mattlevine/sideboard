@@ -225,7 +225,8 @@ export function isSlackCoordinatorThread(
   return isGlobalThread(thread) || thread.sourceType === 'orchestration';
 }
 
-function findSlackCoordinator(teamId: string, userId: string): Thread | undefined {
+/** Live Slack inbound chat for this Slack user, if any. Does not create. */
+export function findSlackCoordinator(teamId: string, userId: string): Thread | undefined {
   const ref = slackCoordinatorSourceRef(teamId, userId);
   return listThreads({ includeArchived: true }).find(
     (t) => t.status !== 'archived' && t.sourceRef === ref && isSlackCoordinatorThread(t),
@@ -236,58 +237,57 @@ function findSlackCoordinator(teamId: string, userId: string): Thread | undefine
  * Find or create a Global orchestration chat for one Slack user (team + user).
  * Inbound DMs/@mentions from that person continue this thread — not the Brightsy
  * cloud singleton and not other Slack users' chats.
+ *
+ * `forceNew` opens a replacement after the previous chat was closed/archived
+ * mid-turn (do not reuse a zombie that send() just rejected).
  */
 export function ensureSlackCoordinator(
   teamId: string,
   userId: string,
   agent: AgentKind,
+  opts?: { forceNew?: boolean },
 ): Thread {
   const defaults = resolveThreadDefaults();
   const desired = assertOrchestratorCapableAgent(agent);
   const ref = slackCoordinatorSourceRef(teamId, userId);
 
-  const existing = findSlackCoordinator(teamId, userId);
-  if (existing) {
-    const patch: Parameters<typeof updateThread>[1] = {};
-    if (existing.repoPath !== GLOBAL_WORKSPACE_ID) {
-      patch.repoPath = GLOBAL_WORKSPACE_ID;
-      patch.worktreePath = globalAgentCwd();
-      patch.branchName = 'global';
+  if (!opts?.forceNew) {
+    const existing = findSlackCoordinator(teamId, userId);
+    if (existing) {
+      const patch: Parameters<typeof updateThread>[1] = {};
+      if (existing.repoPath !== GLOBAL_WORKSPACE_ID) {
+        patch.repoPath = GLOBAL_WORKSPACE_ID;
+        patch.worktreePath = globalAgentCwd();
+        patch.branchName = 'global';
+      }
+      const hasAgentTurns = existing.messages.some((m) => m.role === 'agent');
+      const canRetarget =
+        !existing.sessionId &&
+        !hasAgentTurns &&
+        existing.status !== 'running' &&
+        existing.status !== 'queued';
+      if (canRetarget) {
+        if (existing.agent !== desired) patch.agent = desired;
+        if (existing.model !== defaults.model) patch.model = defaults.model;
+        if (existing.effort !== defaults.effort) patch.effort = defaults.effort;
+        if (existing.fast !== defaults.fast) patch.fast = defaults.fast;
+      }
+      if (Object.keys(patch).length > 0) {
+        return updateThread(existing.id, patch);
+      }
+      return existing;
     }
-    const hasAgentTurns = existing.messages.some((m) => m.role === 'agent');
-    const canRetarget =
-      !existing.sessionId &&
-      !hasAgentTurns &&
-      existing.status !== 'running' &&
-      existing.status !== 'queued';
-    if (canRetarget) {
-      if (existing.agent !== desired) patch.agent = desired;
-      if (existing.model !== defaults.model) patch.model = defaults.model;
-      if (existing.effort !== defaults.effort) patch.effort = defaults.effort;
-      if (existing.fast !== defaults.fast) patch.fast = defaults.fast;
-    }
-    if (Object.keys(patch).length > 0) {
-      return updateThread(existing.id, patch);
-    }
-    return existing;
   }
 
-  const created = createGlobalChat({
+  // Always return this chat. Picking the oldest live `slack:` thread would
+  // reuse a sibling tab or a coordinator that was just closed.
+  return createGlobalChat({
     sourceRef: ref,
     agent: desired,
     model: defaults.model,
     effort: defaults.effort,
     fast: defaults.fast,
   });
-  const all = listThreads({ includeArchived: true })
-    .filter(
-      (t) =>
-        t.status !== 'archived' &&
-        t.sourceRef === ref &&
-        isSlackCoordinatorThread(t),
-    )
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  return all[0] ?? created;
 }
 
 /** Find or create the singleton Brightsy cloud coordinator under Global. */

@@ -3,8 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Orchestrator } from '../orchestrator/orchestrator.js';
-import { ensureSlackCoordinator } from '../store/global-workspace.js';
-import { readThread, updateThread } from '../store/thread-store.js';
+import {
+  createGlobalChat,
+  ensureSlackCoordinator,
+  isSlackCoordinatorThread,
+} from '../store/global-workspace.js';
+import {
+  deleteThreadRecord,
+  listThreads,
+  readThread,
+  updateThread,
+} from '../store/thread-store.js';
 import {
   ackSlackInboundSeen,
   formatSlackInboundPrompt,
@@ -252,7 +261,12 @@ describe('handleSlackInbound interrupt', () => {
 
   function stubTurn(opts?: { waitStatus?: 'idle' | 'stopped'; reply?: string }) {
     const send = vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
-      return readThread(id)!;
+      const thread = readThread(id);
+      if (!thread) throw new Error(`Thread not found: ${id}`);
+      if (thread.status === 'archived') {
+        throw new Error(`Thread is archived: ${thread.id}`);
+      }
+      return thread;
     });
     const waitForTurn = vi
       .spyOn(Orchestrator.prototype, 'waitForTurn')
@@ -367,5 +381,90 @@ describe('handleSlackInbound interrupt', () => {
     expect(sentId).not.toBe(old.id);
     expect(readThread(String(sentId))?.sourceRef).toBe('slack:T1:Umatt');
     expect(readThread(old.id)?.status).toBe('archived');
+  });
+
+  it('opens a new coordinator after every Global chat was closed', async () => {
+    const slack = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    const other = createGlobalChat({ agent: 'claude', sourceRef: 'other goal' });
+    updateThread(slack.id, { status: 'archived' });
+    updateThread(other.id, { status: 'archived' });
+    const { send } = stubTurn();
+    const replies: string[] = [];
+    await handleSlackInbound(msg({ text: 'hello from empty board', userId: 'Umatt', ts: '6.0' }), {
+      agent: 'claude',
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    expect(send).toHaveBeenCalledOnce();
+    const sentId = String(send.mock.calls[0]?.[0]);
+    expect(sentId).not.toBe(slack.id);
+    expect(sentId).not.toBe(other.id);
+    expect(readThread(sentId)?.status).not.toBe('archived');
+    expect(replies.some((r) => r.includes('all done'))).toBe(true);
+  });
+
+  it('opens a new coordinator after the Slack chat was deleted', async () => {
+    const old = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    deleteThreadRecord(old.id);
+    const { send } = stubTurn();
+    await handleSlackInbound(msg({ text: 'hello again', userId: 'Umatt', ts: '7.0' }), {
+      agent: 'claude',
+      postReply: async () => undefined,
+      addReaction: async () => undefined,
+    });
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[0]).not.toBe(old.id);
+    expect(readThread(old.id)).toBeNull();
+  });
+
+  it('retries on a new chat when send hits an archived coordinator', async () => {
+    const old = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    let calls = 0;
+    const send = vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      calls += 1;
+      if (calls === 1) throw new Error(`Thread is archived: ${id}`);
+      const thread = readThread(id);
+      if (!thread) throw new Error(`Thread not found: ${id}`);
+      return thread;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(async (id) => {
+      updateThread(id, { status: 'idle' });
+      return readThread(id)!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'all done',
+      status: 'idle',
+      sessionId: null,
+    });
+    const replies: string[] = [];
+    await handleSlackInbound(msg({ text: 'hello after close', userId: 'Umatt', ts: '8.0' }), {
+      agent: 'claude',
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[0]?.[0]).toBe(old.id);
+    expect(send.mock.calls[1]?.[0]).not.toBe(old.id);
+    expect(replies.some((r) => /Thread is archived/i.test(r))).toBe(false);
+    expect(replies.some((r) => r.includes('all done'))).toBe(true);
+  });
+
+  it('does not create a Slack chat when interrupting an empty board', () => {
+    const old = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    updateThread(old.id, { status: 'archived' });
+    const interrupted = interruptSlackCoordinatorForInbound(
+      msg({ text: 'hi', userId: 'Umatt' }),
+      'claude',
+    );
+    expect(interrupted).toBe(false);
+    expect(
+      listThreads({ includeArchived: true }).filter(
+        (t) => t.status !== 'archived' && isSlackCoordinatorThread(t),
+      ),
+    ).toHaveLength(0);
   });
 });

@@ -8,7 +8,10 @@ import {
   ensureSlackDeviceIdentity,
   getDefaultAgent,
 } from '../store/app-settings.js';
-import { ensureSlackCoordinator } from '../store/global-workspace.js';
+import {
+  ensureSlackCoordinator,
+  findSlackCoordinator,
+} from '../store/global-workspace.js';
 import { readThread } from '../store/thread-store.js';
 import { SlackApiError, slackApi } from './api.js';
 import {
@@ -83,19 +86,26 @@ function slackInboundSuperseded(opts: SlackListenOptions): boolean {
   return opts.currentInboundGeneration() !== opts.inboundGeneration;
 }
 
+function slackCoordinatorGone(err: unknown): boolean {
+  const errMsg = err instanceof Error ? err.message : String(err);
+  return /thread not found|thread is archived/i.test(errMsg);
+}
+
 /**
  * Kill an in-flight Slack coordinator turn so a follow-up can start immediately.
  * Same force-stop as MCP `send_to_thread` (`clearQueue: true`).
+ * Does not create a chat — empty-board inbound is handled in handleSlackInbound.
  */
 export function interruptSlackCoordinatorForInbound(
   msg: SlackInboundMessage,
-  agent: AgentKind,
+  _agent: AgentKind,
   log: (line: string) => void = () => undefined,
 ): boolean {
   const userId = msg.userId?.trim();
   if (!userId) return false;
   try {
-    const coordinator = ensureSlackCoordinator(msg.teamId, userId, agent);
+    const coordinator = findSlackCoordinator(msg.teamId, userId);
+    if (!coordinator) return false;
     const fresh = readThread(coordinator.id) ?? coordinator;
     if (fresh.status !== 'running' && fresh.status !== 'queued') return false;
     getOrchestrator().stop(fresh.id, { clearQueue: true });
@@ -315,16 +325,16 @@ export async function handleSlackInbound(
     log(`skip superseded ${msg.kind} ${msg.ts}`);
     return;
   }
-  const coordinator = ensureSlackCoordinator(msg.teamId, userId, agent);
-  let fresh = readThread(coordinator.id) ?? coordinator;
-
   if (isSlackStopCommand(msg.text)) {
-    try {
-      getOrchestrator().stop(fresh.id, { clearQueue: true });
-      log(`stop ${msg.kind} ${msg.ts} → coordinator ${fresh.id.slice(0, 8)}`);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      log(`stop ${msg.ts}: ${errMsg}`);
+    const live = findSlackCoordinator(msg.teamId, userId);
+    if (live) {
+      try {
+        getOrchestrator().stop(live.id, { clearQueue: true });
+        log(`stop ${msg.kind} ${msg.ts} → coordinator ${live.id.slice(0, 8)}`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log(`stop ${msg.ts}: ${errMsg}`);
+      }
     }
     if (slackInboundSuperseded(opts)) {
       log(`skip superseded stop reply ${msg.ts}`);
@@ -335,10 +345,13 @@ export async function handleSlackInbound(
     return;
   }
 
+  const opened = ensureSlackCoordinator(msg.teamId, userId, agent);
+  let fresh = readThread(opened.id) ?? opened;
+
   // Follow-up while busy: interrupt-and-replace (do not wait for the old turn).
   if (fresh.status === 'running' || fresh.status === 'queued') {
     interruptSlackCoordinatorForInbound(msg, agent, log);
-    fresh = readThread(coordinator.id) ?? coordinator;
+    fresh = readThread(fresh.id) ?? fresh;
   }
 
   log(
@@ -346,26 +359,56 @@ export async function handleSlackInbound(
   );
 
   const prompt = formatSlackInboundPrompt(msg);
-  setSlackReplyTarget({
-    threadId: fresh.id,
-    teamId: msg.teamId,
-    channelId: msg.channelId,
-    threadTs: slackReplyThreadTs(msg),
-  });
-
   const orch = getOrchestrator();
+  const bindReplyTarget = (threadId: string) => {
+    setSlackReplyTarget({
+      threadId,
+      teamId: msg.teamId,
+      channelId: msg.channelId,
+      threadTs: slackReplyThreadTs(msg),
+    });
+  };
+  bindReplyTarget(fresh.id);
+
+  const runTurn = async (threadId: string) => {
+    await orch.send(threadId, prompt);
+    await orch.waitForTurn(threadId, 14 * 60 * 1000);
+  };
+
   let reply: string;
   try {
-    await orch.send(fresh.id, prompt);
-    await orch.waitForTurn(fresh.id, 14 * 60 * 1000);
+    try {
+      await runTurn(fresh.id);
+    } catch (err) {
+      if (!slackCoordinatorGone(err)) throw err;
+      log(`coordinator ${fresh.id.slice(0, 8)} gone, opening a new chat`);
+      fresh = ensureSlackCoordinator(msg.teamId, userId, agent, { forceNew: true });
+      bindReplyTarget(fresh.id);
+      await runTurn(fresh.id);
+    }
     if (slackInboundSuperseded(opts)) {
       log(`turn finished ${msg.ts} (superseded)`);
       return;
     }
-    const after = readThread(fresh.id);
-    if (!after || after.status === 'stopped' || after.status === 'archived') {
+    let after = readThread(fresh.id);
+    if (after?.status === 'stopped') {
       log(`turn finished ${msg.ts} (interrupted, skip post)`);
       return;
+    }
+    if (!after || after.status === 'archived') {
+      log(`coordinator ${fresh.id.slice(0, 8)} closed, opening a new chat`);
+      fresh = ensureSlackCoordinator(msg.teamId, userId, agent, { forceNew: true });
+      bindReplyTarget(fresh.id);
+      await runTurn(fresh.id);
+      if (slackInboundSuperseded(opts)) {
+        log(`turn finished ${msg.ts} (superseded)`);
+        return;
+      }
+      after = readThread(fresh.id);
+      if (!after || after.status === 'stopped' || after.status === 'archived') {
+        log(`turn finished ${msg.ts} (interrupted, skip post)`);
+        return;
+      }
     }
     reply = orch.getTurnResult(fresh.id).text.trim();
   } catch (err) {
@@ -374,8 +417,7 @@ export async function handleSlackInbound(
       return;
     }
     const errMsg = err instanceof Error ? err.message : String(err);
-    const gone = /thread not found/i.test(errMsg);
-    if (gone) {
+    if (slackCoordinatorGone(err)) {
       log(`turn finished ${msg.ts} (thread gone, skip post)`);
       return;
     }

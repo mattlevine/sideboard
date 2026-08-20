@@ -26,6 +26,7 @@ Prefix matches the **This Mac** name (case-insensitive). Mentions are stripped b
 - One Mac online → it handles unprefixed messages.
 - Both online → unprefixed races to the first claim. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
 - A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
+- Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat and replies there.
 
 ## CLI
 

@@ -117,6 +117,13 @@ describe('global-workspace', () => {
     expect(afterArchive.status).not.toBe('archived');
   });
 
+  it('ensureSlackCoordinator forceNew opens a replacement even if one is still live', () => {
+    const matt = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    const replacement = ensureSlackCoordinator('T1', 'Umatt', 'claude', { forceNew: true });
+    expect(replacement.id).not.toBe(matt.id);
+    expect(replacement.sourceRef).toBe(slackCoordinatorSourceRef('T1', 'Umatt'));
+  });
+
   it('heals legacy cloud-goal titles to soccer nicknames', () => {
     const cloud = ensureCloudCoordinator('claude');
     // Simulate pre-nickname cloud title.

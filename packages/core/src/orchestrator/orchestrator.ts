@@ -591,6 +591,9 @@ export class Orchestrator {
     }
     return withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
+      if (current.status === 'archived') {
+        throw new Error(`Thread is archived: ${thread.id}`);
+      }
       const queue = [...current.queue, prompt];
       this.haltDrain.delete(thread.id);
       const patch: Parameters<typeof updateThread>[1] = { queue, status: 'queued' };

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Slack Listen opens a new Global coordinator after you close every chat (or delete the Slack one). The previous inbound still posted `Thread is archived` / skipped the reply instead of retrying.
+
 ## [0.1.97] - 2026-08-19
 
 ### Fixed

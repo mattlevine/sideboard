@@ -180,4 +180,22 @@ describe('createChatTab', () => {
     expect(tab.sourceType).toBe('orchestration');
     expect(tab.repoPath).toBe('__global__');
   });
+
+  it('does not copy Slack inbound identity onto a sibling Global tab', async () => {
+    const { createChatTab } = await import('./chat-tabs.js');
+    const slack: Thread = {
+      ...source,
+      id: 'slack-orch',
+      title: 'Dundee',
+      sourceType: 'orchestration',
+      sourceRef: 'slack:T1:Umatt',
+      branchName: 'global',
+      worktreePath: '/tmp/sideboard-global',
+      repoPath: '__global__',
+    };
+    listed = [slack];
+    const tab = createChatTab({ fromThreadId: slack.id, title: 'Planning' });
+    expect(tab.sourceRef).toBe('Planning');
+    expect(tab.sourceRef).not.toMatch(/^slack:/);
+  });
 });
