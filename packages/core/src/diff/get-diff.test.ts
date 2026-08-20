@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
@@ -132,5 +132,70 @@ describe('getDiff', () => {
       includeMeta: true,
     });
     expect(diff.dirty).toBe(true);
+  });
+
+  it('counts unpushed against origin/<branch>, not a fork-from upstream', async () => {
+    root = mkdtempSync(join(tmpdir(), 'sb-get-diff-'));
+    const origin = join(root, 'origin.git');
+    const work = join(root, 'work');
+    mkdirSync(origin);
+    mkdirSync(work);
+    await git(origin, ['init', '--bare']);
+    await git(work, ['init']);
+    await git(work, ['config', 'user.email', 'test@example.com']);
+    await git(work, ['config', 'user.name', 'Test']);
+    writeFileSync(join(work, 'a.txt'), 'a\n');
+    await git(work, ['add', '.']);
+    await git(work, ['commit', '-m', 'init']);
+    await git(work, ['branch', '-M', 'main']);
+    await git(work, ['remote', 'add', 'origin', origin]);
+    await git(work, ['push', '-u', 'origin', 'main']);
+    await git(work, ['checkout', '-b', 'thread/foo']);
+    writeFileSync(join(work, 'a.txt'), 'a-on-thread\n');
+    await git(work, ['add', '.']);
+    await git(work, ['commit', '-m', 'thread']);
+    // Push the thread branch without retargeting @{upstream} away from main.
+    await git(work, ['push', 'origin', 'thread/foo']);
+    await git(work, ['branch', '--set-upstream-to=origin/main']);
+
+    const diff = await getDiff(work, work, {
+      base: 'main',
+      scope: 'commits',
+      includePatches: false,
+      includeMeta: true,
+    });
+    expect(diff.dirty).toBe(false);
+    expect(diff.unpushed).toBe(0);
+  });
+
+  it('still reports unpushed when this branch has no origin/<branch> tip', async () => {
+    root = mkdtempSync(join(tmpdir(), 'sb-get-diff-'));
+    const origin = join(root, 'origin.git');
+    const work = join(root, 'work');
+    mkdirSync(origin);
+    mkdirSync(work);
+    await git(origin, ['init', '--bare']);
+    await git(work, ['init']);
+    await git(work, ['config', 'user.email', 'test@example.com']);
+    await git(work, ['config', 'user.name', 'Test']);
+    writeFileSync(join(work, 'a.txt'), 'a\n');
+    await git(work, ['add', '.']);
+    await git(work, ['commit', '-m', 'init']);
+    await git(work, ['branch', '-M', 'main']);
+    await git(work, ['remote', 'add', 'origin', origin]);
+    await git(work, ['push', '-u', 'origin', 'main']);
+    await git(work, ['checkout', '-b', 'thread/foo']);
+    writeFileSync(join(work, 'a.txt'), 'a-on-thread\n');
+    await git(work, ['add', '.']);
+    await git(work, ['commit', '-m', 'thread']);
+    await git(work, ['branch', '--set-upstream-to=origin/main']);
+
+    const diff = await getDiff(work, work, {
+      base: 'main',
+      scope: 'commits',
+      includePatches: false,
+      includeMeta: true,
+    });
+    expect(diff.unpushed).toBe(1);
   });
 });

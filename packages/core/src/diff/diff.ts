@@ -121,32 +121,36 @@ async function resolveMergeBase(
   return mb;
 }
 
-/** Commits on HEAD not yet on the remote tracking branch (0 if none/unknown). */
+/** Commits on HEAD not yet on the remote copy of this branch (0 if none/unknown). */
 async function countUnpushedCommits(worktreePath: string): Promise<number> {
-  // Use the local upstream / origin/<branch> tip — never fetch. A remote
-  // round-trip here made every Changes refresh wait on the network.
+  // Prefer origin/<branch> over @{upstream}. Thread worktrees often track the
+  // fork-from ref (origin/main), so @{upstream}..HEAD stays non-zero after
+  // pushing the thread branch — which stuck the sidebar on "Commit & push"
+  // for clean draft PRs.
   const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
     reject: false,
   });
   const branch = head.stdout.trim();
+
+  if (branch && branch !== 'HEAD') {
+    const remote = await git(
+      ['rev-list', '--count', `origin/${branch}..HEAD`],
+      worktreePath,
+      { reject: false },
+    );
+    if (remote.exitCode === 0) {
+      const n = Number(remote.stdout.trim());
+      return Number.isFinite(n) ? n : 0;
+    }
+  }
 
   const upstream = await git(
     ['rev-list', '--count', '@{upstream}..HEAD'],
     worktreePath,
     { reject: false },
   );
-  if (upstream.exitCode === 0) {
-    const n = Number(upstream.stdout.trim());
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (!branch || branch === 'HEAD') return 0;
-  const remote = await git(
-    ['rev-list', '--count', `origin/${branch}..HEAD`],
-    worktreePath,
-    { reject: false },
-  );
-  if (remote.exitCode !== 0) return 0;
-  const n = Number(remote.stdout.trim());
+  if (upstream.exitCode !== 0) return 0;
+  const n = Number(upstream.stdout.trim());
   return Number.isFinite(n) ? n : 0;
 }
 

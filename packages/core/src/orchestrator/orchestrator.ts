@@ -167,6 +167,17 @@ import {
   SLACK_REPLY_FORMATTING,
 } from './coordinator-prompt.js';
 
+/** Persist status unless the thread was archived or purged mid-turn. */
+function writeLiveStatus(
+  threadId: string,
+  status: Thread['status'],
+  lastError?: string | null,
+): Thread | null {
+  const latest = readThread(threadId);
+  if (!latest || latest.status === 'archived') return latest;
+  return setStatus(threadId, status, lastError);
+}
+
 interface RegisteredProcess {
   kind: 'agent' | 'dev' | 'setup';
   pid?: number;
@@ -575,6 +586,9 @@ export class Orchestrator {
 
   async send(threadRef: string, prompt: string): Promise<Thread> {
     const thread = this.requireThread(threadRef);
+    if (thread.status === 'archived') {
+      throw new Error(`Thread is archived: ${thread.id}`);
+    }
     return withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       const queue = [...current.queue, prompt];
@@ -675,7 +689,7 @@ export class Orchestrator {
           break;
         }
         const thread = readThread(threadId);
-        if (!thread || thread.queue.length === 0) {
+        if (!thread || thread.status === 'archived' || thread.queue.length === 0) {
           if (thread && thread.status === 'queued') {
             setStatus(threadId, 'idle');
             this.emit({ type: 'status_changed', threadId, status: 'idle' });
@@ -711,7 +725,9 @@ export class Orchestrator {
   }
 
   private async runTurn(threadId: string, prompt: string): Promise<void> {
-    let thread = this.requireThread(threadId);
+    const existing = readThread(threadId);
+    if (!existing || existing.status === 'archived') return;
+    let thread = existing;
     // Drop Claude --resume when a Global chat previously acted like a worktree coder
     // (Bash on synthetic home, no Sideboard MCP) so identity prompts can re-seed.
     if (
@@ -721,11 +737,12 @@ export class Orchestrator {
     ) {
       thread = updateThread(threadId, { sessionId: null });
     }
+    const running = writeLiveStatus(threadId, 'running');
+    if (!running || running.status !== 'running') return;
     this.runningCount += 1;
     const turnStartedAt = Date.now();
     // Mark before setStatus so concurrent reconcile (or MCP) won't reclaim us.
     this.startingTurns.add(threadId);
-    setStatus(threadId, 'running');
     this.emit({ type: 'status_changed', threadId, status: 'running' });
     this.emit({ type: 'turn_started', threadId, prompt });
 
@@ -1108,8 +1125,8 @@ export class Orchestrator {
       // is sticky until the user turns it off — drop the session so the next
       // turn re-enters plan mode with --permission-mode plan instead of resuming
       // an exited-plan Claude session.
-      const afterTurn = this.requireThread(threadId);
-      if (afterTurn.planMode && afterTurn.worktreePath?.trim()) {
+      const afterTurn = readThread(threadId);
+      if (afterTurn && afterTurn.status !== 'archived' && afterTurn.planMode && afterTurn.worktreePath?.trim()) {
         const presented = extractPresentedPlan(parts);
         const exited = parts.some(
           (p) => p.type === 'tool' && /exitplanmode/i.test(p.name),
@@ -1124,6 +1141,8 @@ export class Orchestrator {
         }
       }
       if (
+        afterTurn &&
+        afterTurn.status !== 'archived' &&
         afterTurn.planMode &&
         afterTurn.agent === 'claude' &&
         parts.some(
@@ -1136,8 +1155,10 @@ export class Orchestrator {
       await syncThreadBranchFromGit(threadId);
       if (this.stoppedTurns.has(threadId)) {
         // Preserve intentional stop — do not overwrite with idle/error from kill exit.
-        setStatus(threadId, 'stopped');
-        this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+        const stopped = writeLiveStatus(threadId, 'stopped');
+        if (stopped?.status === 'stopped') {
+          this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+        }
         this.emit({ type: 'turn_finished', threadId, exitCode });
       } else {
         const failDetail = formatTurnExitError(exitCode, detail);
@@ -1149,16 +1170,19 @@ export class Orchestrator {
           (looksLikeAgentFailureMessage(chatText) ||
             (failDetail &&
               chatText.includes(failDetail.replace(/^exit\s*\d+:\s*/i, '').trim())));
-        setStatus(
+        const nextStatus = exitCode === 0 ? 'idle' : 'error';
+        const written = writeLiveStatus(
           threadId,
-          exitCode === 0 ? 'idle' : 'error',
+          nextStatus,
           exitCode === 0 || explainedInChat ? null : failDetail,
         );
-        this.emit({
-          type: 'status_changed',
-          threadId,
-          status: exitCode === 0 ? 'idle' : 'error',
-        });
+        if (written && written.status !== 'archived') {
+          this.emit({
+            type: 'status_changed',
+            threadId,
+            status: written.status,
+          });
+        }
         this.emit({ type: 'turn_finished', threadId, exitCode });
         if (exitCode !== 0) {
           const blob = [chatText, detail].filter(Boolean).join('\n');
@@ -1169,13 +1193,17 @@ export class Orchestrator {
       const message = err instanceof Error ? err.message : String(err);
       await syncThreadBranchFromGit(threadId).catch(() => undefined);
       if (this.stoppedTurns.has(threadId)) {
-        setStatus(threadId, 'stopped');
-        this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+        const stopped = writeLiveStatus(threadId, 'stopped');
+        if (stopped?.status === 'stopped') {
+          this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+        }
         this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
       } else {
-        setStatus(threadId, 'error', message);
-        this.emit({ type: 'error', threadId, message });
-        this.emit({ type: 'status_changed', threadId, status: 'error' });
+        const written = writeLiveStatus(threadId, 'error', message);
+        if (written?.status === 'error') {
+          this.emit({ type: 'error', threadId, message });
+          this.emit({ type: 'status_changed', threadId, status: 'error' });
+        }
         this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
         void this.maybeHandleOrchestrationQuotaFailover(threadId, message);
       }
@@ -1231,9 +1259,11 @@ export class Orchestrator {
     if (handle) handle.kill();
     const proc = this.processes.get(`${thread.id}:agent`);
     if (proc) proc.kill();
-    setStatus(thread.id, 'stopped');
-    this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
-    return this.requireThread(thread.id);
+    const stopped = writeLiveStatus(thread.id, 'stopped') ?? readThread(thread.id) ?? thread;
+    if (stopped.status === 'stopped') {
+      this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
+    }
+    return stopped;
   }
 
   async startDev(
@@ -1520,11 +1550,21 @@ export class Orchestrator {
       const off = this.on((event) => {
         if (event.type === 'turn_finished' && event.threadId === thread.id) {
           off();
-          resolve(this.requireThread(thread.id));
+          const latest = readThread(thread.id);
+          if (!latest) {
+            reject(new Error(`Thread not found: ${thread.id}`));
+            return;
+          }
+          resolve(latest);
         }
         if (event.type === 'error' && event.threadId === thread.id) {
           off();
-          resolve(this.requireThread(thread.id));
+          const latest = readThread(thread.id);
+          if (!latest) {
+            reject(new Error(`Thread not found: ${thread.id}`));
+            return;
+          }
+          resolve(latest);
         }
       });
       const timer = setInterval(() => {
@@ -1534,7 +1574,13 @@ export class Orchestrator {
           reject(new Error('wait_for_turn timed out'));
         }
         const current = readThread(thread.id);
-        if (current && !['running', 'queued'].includes(current.status)) {
+        if (!current) {
+          clearInterval(timer);
+          off();
+          reject(new Error(`Thread not found: ${thread.id}`));
+          return;
+        }
+        if (!['running', 'queued'].includes(current.status)) {
           clearInterval(timer);
           off();
           resolve(current);

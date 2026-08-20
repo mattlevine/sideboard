@@ -181,4 +181,13 @@ describe('Orchestrator.stop force-stop', () => {
     );
     expect(events.some((e) => e.type === 'status_changed')).toBe(true);
   });
+
+  it('does not un-archive a thread when stop runs after archive', async () => {
+    const thread = seedThread(['next']);
+    const orch = new Orchestrator();
+    await orch.archive(thread.id);
+    expect(readThread(thread.id)?.status).toBe('archived');
+    orch.stop(thread.id);
+    expect(readThread(thread.id)?.status).toBe('archived');
+  });
 });

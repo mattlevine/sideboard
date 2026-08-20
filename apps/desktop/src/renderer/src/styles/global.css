@@ -2296,6 +2296,13 @@ body.resizing-panels webview {
   color: var(--muted);
 }
 
+/* Hold-create overlay fills the main column with no chat-tabs drag chrome. */
+.panel.thread-panel.is-processing,
+.chat-empty:has(.create-processing) {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
 .chat-empty-mark {
   display: flex;
   justify-content: center;
@@ -6333,6 +6340,22 @@ button.worktree-hover-card-title:hover {
   display: inline;
 }
 
+/* Files/Changes/Checks labels overflow before chrome icons do. Collapse those
+   first so Review stays pinned at the default 340px width. */
+@container right-sidebar (max-width: 420px) {
+  .right-tabs-scroll .tab-full {
+    display: none;
+  }
+
+  .right-tabs-scroll .tab-short {
+    display: inline;
+  }
+
+  .right-tabs-scroll > button {
+    padding: 7px 8px;
+  }
+}
+
 /* Compact only when the pane is genuinely narrow — default width (340) must
    keep "Commit & push" / "Changes" / "Archive" text, not icons. */
 @container right-sidebar (max-width: 280px) {
@@ -6373,28 +6396,6 @@ button.worktree-hover-card-title:hover {
 
   .right-top .pr-pill .pr-status {
     display: none;
-  }
-
-  .right-tabs {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .right-tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .right-tabs .tab-full {
-    display: none;
-  }
-
-  .right-tabs .tab-short {
-    display: inline;
-  }
-
-  .right-tabs > button {
-    padding: 7px 8px;
-    flex-shrink: 0;
   }
 }
 
@@ -6756,6 +6757,8 @@ button.worktree-hover-card-title:hover {
 }
 
 .pr-pill-num {
+  /* Keep #123 visible when the pill is squeezed (Draft used to clip to status). */
+  flex-shrink: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -6793,6 +6796,9 @@ button.worktree-hover-card-title:hover {
 .pr-pill .pr-status {
   color: #9cdcfe;
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pr-pill.merged {
@@ -7318,16 +7324,31 @@ button.linkish:hover {
   min-width: 0;
 }
 
-.right-tabs > button {
+.right-tabs-scroll {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.right-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.right-tabs-scroll > button {
   border: none;
   background: transparent;
   border-radius: 6px 6px 0 0;
   color: var(--muted);
   padding: 7px 10px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.right-tabs > button.active {
+.right-tabs-scroll > button.active {
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -7335,13 +7356,14 @@ button.linkish:hover {
   margin-bottom: -1px;
 }
 
-/* Conductor-style action on the right of the Files/Changes/Checks row */
+/* Conductor-style action pinned on the right of the Files/Changes/Checks row */
 .right-tabs-review {
-  margin-left: auto;
+  margin-left: 0;
   margin-bottom: 4px;
   display: inline-flex;
   align-items: stretch;
   position: relative;
+  flex-shrink: 0;
 }
 
 .right-tabs-review-btn {
@@ -7386,9 +7408,9 @@ button.linkish:hover {
 }
 
 @container right-sidebar (max-width: 280px) {
-  /* Keep Review label when possible; eye alone is fine if space is tight */
+  /* Eye icon is enough at the minimum pane width; keep the control itself. */
   .right-tabs-review-btn .tab-full {
-    display: inline;
+    display: none;
   }
 }
 
@@ -8263,6 +8285,11 @@ button.linkish:hover {
   justify-content: center;
   /* Above composer-shell (25) and chat chrome; below composer pickers (11000) */
   z-index: 100;
+}
+
+/* Creating / merging / archiving: dimmed overlay is a window-move surface. */
+.modal-backdrop:has(.create-processing) {
+  -webkit-app-region: drag;
 }
 
 .modal {
@@ -9247,6 +9274,9 @@ body:has(.update-banner) .team-toast-stack {
   border-radius: inherit;
   background: rgba(28, 28, 30, 0.82);
   backdrop-filter: blur(2px);
+  /* hiddenInset window: this overlay covers sidebar/board chrome drag regions. */
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
 .create-processing.is-inline {

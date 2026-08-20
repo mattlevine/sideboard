@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.96] - 2026-08-19
+
+### Fixed
+
+- Slack Listen creates a new coordinator chat after you archive or delete the previous one, instead of going silent (no reaction, no thread). The inbound “seen” reaction is 👀 (`eyes`) rather than 👍.
+- After commit-and-push, a clean draft PR no longer stays on **Commit & push**. Unpushed is counted against `origin/<this-branch>` (thread worktrees often still track `main`). The Draft pill keeps the PR number (`#113 ↗ Draft`) instead of clipping it away.
+- The right-sidebar **Review** control stays pinned at typical pane widths. Files / Changes / Checks labels shorten first so Review is not pushed off-screen.
+
+### Changed
+
+- The create / worktree loading overlay is a window-move surface on the frameless Mac app, so you can drag Sideboard while worktree creation is in progress.
+
 ## [0.1.95] - 2026-08-19
 
 ### Changed

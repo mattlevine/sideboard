@@ -1166,33 +1166,35 @@ export function RightSidebar({
 
       <div className="right-upper">
         <div className="right-tabs">
-          <button
-            type="button"
-            className={upper === 'files' ? 'active' : ''}
-            onClick={() => setUpper('files')}
-            title="All files"
-          >
-            <span className="tab-full">All files</span>
-            <span className="tab-short">Files</span>
-          </button>
-          <button
-            type="button"
-            className={upper === 'changes' ? 'active' : ''}
-            onClick={() => setUpper('changes')}
-            title={changeCount ? `Changes (${changeCount})` : 'Changes'}
-          >
-            <span className="tab-full">Changes{changeCount ? ` ${changeCount}` : ''}</span>
-            <span className="tab-short">Δ{changeCount ? ` ${changeCount}` : ''}</span>
-          </button>
-          <button
-            type="button"
-            className={upper === 'checks' ? 'active' : ''}
-            onClick={() => setUpper('checks')}
-            title={checksTabLabel}
-          >
-            <span className="tab-full">{checksTabLabel}</span>
-            <span className="tab-short">{checksTabShort}</span>
-          </button>
+          <div className="right-tabs-scroll">
+            <button
+              type="button"
+              className={upper === 'files' ? 'active' : ''}
+              onClick={() => setUpper('files')}
+              title="All files"
+            >
+              <span className="tab-full">All files</span>
+              <span className="tab-short">Files</span>
+            </button>
+            <button
+              type="button"
+              className={upper === 'changes' ? 'active' : ''}
+              onClick={() => setUpper('changes')}
+              title={changeCount ? `Changes (${changeCount})` : 'Changes'}
+            >
+              <span className="tab-full">Changes{changeCount ? ` ${changeCount}` : ''}</span>
+              <span className="tab-short">Δ{changeCount ? ` ${changeCount}` : ''}</span>
+            </button>
+            <button
+              type="button"
+              className={upper === 'checks' ? 'active' : ''}
+              onClick={() => setUpper('checks')}
+              title={checksTabLabel}
+            >
+              <span className="tab-full">{checksTabLabel}</span>
+              <span className="tab-short">{checksTabShort}</span>
+            </button>
+          </div>
           <div className="right-tabs-review">
             <button
               ref={reviewBtnRef}

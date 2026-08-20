@@ -156,7 +156,7 @@ Same history/replies APIs in private channels the bot was added to.
 `slack_post` to a public channel the bot is not in (no `/invite`), so an agent can notify `#eng` without joining every public channel at install. We do not auto-join channels.
 
 **`reactions:write`**  
-`reactions.add` (`+1`) on the inbound DM or `@mention` so Slack shows the bot saw the request before the Mac turn finishes.
+`reactions.add` (`eyes`) on the inbound DM or `@mention` so Slack shows the bot saw the request before the Mac turn finishes.
 
 **`users:read`**  
 `users.list` / `users.info` so MCP `slack_list_users` can pick a person for a DM, and so reply-watching shows a display name instead of a user id.

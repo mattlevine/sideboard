@@ -1055,7 +1055,7 @@ export function App() {
         </div>
       )}
       {view === 'thread' && holdCreateOverlay && paneProgress && (
-        <div className="panel thread-panel">
+        <div className="panel thread-panel is-processing">
           <div className="chat">
             <div className="chat-empty">
               <CreateProcessingOverlay

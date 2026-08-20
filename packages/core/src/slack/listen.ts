@@ -68,7 +68,7 @@ export interface SlackListenOptions {
    */
   inboundGeneration?: number;
   currentInboundGeneration?: () => number;
-  /** Listen already acked; skip the thumbs-up in handleSlackInbound. */
+  /** Listen already acked; skip the eyes reaction in handleSlackInbound. */
   skipAck?: boolean;
 }
 
@@ -94,10 +94,10 @@ export function interruptSlackCoordinatorForInbound(
 ): boolean {
   const userId = msg.userId?.trim();
   if (!userId) return false;
-  const coordinator = ensureSlackCoordinator(msg.teamId, userId, agent);
-  const fresh = readThread(coordinator.id) ?? coordinator;
-  if (fresh.status !== 'running' && fresh.status !== 'queued') return false;
   try {
+    const coordinator = ensureSlackCoordinator(msg.teamId, userId, agent);
+    const fresh = readThread(coordinator.id) ?? coordinator;
+    if (fresh.status !== 'running' && fresh.status !== 'queued') return false;
     getOrchestrator().stop(fresh.id, { clearQueue: true });
     log(
       `interrupt ${msg.kind} ${msg.ts} → coordinator ${fresh.id.slice(0, 8)} (${fresh.status})`,
@@ -150,8 +150,8 @@ export function slackReplyThreadTs(msg: SlackInboundMessage): string | undefined
   return undefined;
 }
 
-/** Slack emoji short name for “seen / got it”. */
-export const SLACK_SEEN_REACTION = '+1';
+/** Slack emoji short name for “seen / looking at this”. */
+export const SLACK_SEEN_REACTION = 'eyes';
 
 function writeTokenForTeam(teamId: string): string {
   const workspaces = listSlackWorkspacesRaw();
@@ -169,7 +169,7 @@ function writeTokenForTeam(teamId: string): string {
   return slackTokenFor(ws, 'write');
 }
 
-/** Thumbs-up the inbound message so Slack shows the bot saw it. */
+/** Eyes-react the inbound message so Slack shows the bot saw it. */
 export async function ackSlackInboundSeen(
   msg: SlackInboundMessage,
   opts: Pick<SlackListenOptions, 'addReaction' | 'fetchImpl' | 'onLog'>,
@@ -363,7 +363,7 @@ export async function handleSlackInbound(
       return;
     }
     const after = readThread(fresh.id);
-    if (after?.status === 'stopped') {
+    if (!after || after.status === 'stopped' || after.status === 'archived') {
       log(`turn finished ${msg.ts} (interrupted, skip post)`);
       return;
     }
@@ -374,6 +374,11 @@ export async function handleSlackInbound(
       return;
     }
     const errMsg = err instanceof Error ? err.message : String(err);
+    const gone = /thread not found/i.test(errMsg);
+    if (gone) {
+      log(`turn finished ${msg.ts} (thread gone, skip post)`);
+      return;
+    }
     const timedOut = /timed out|timeout/i.test(errMsg);
     const errorReply = timedOut
       ? SLACK_LISTEN_TIMEOUT_REPLY

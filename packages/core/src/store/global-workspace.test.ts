@@ -108,6 +108,15 @@ describe('global-workspace', () => {
     expect(cloud.id).not.toBe(matt.id);
   });
 
+  it('ensureSlackCoordinator creates a new chat after the previous one is archived', () => {
+    const matt = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    updateThread(matt.id, { status: 'archived' });
+    const afterArchive = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    expect(afterArchive.id).not.toBe(matt.id);
+    expect(afterArchive.sourceRef).toBe(slackCoordinatorSourceRef('T1', 'Umatt'));
+    expect(afterArchive.status).not.toBe('archived');
+  });
+
   it('heals legacy cloud-goal titles to soccer nicknames', () => {
     const cloud = ensureCloudCoordinator('claude');
     // Simulate pre-nickname cloud title.

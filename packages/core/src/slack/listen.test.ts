@@ -120,7 +120,7 @@ describe('ackSlackInboundSeen', () => {
     });
   }
 
-  it('adds a thumbs-up reaction on the inbound message', async () => {
+  it('adds an eyes reaction on the inbound message', async () => {
     connectTeam();
     const fetchImpl = vi.fn(async (url: string) => {
       expect(url).toContain('reactions.add');
@@ -139,7 +139,7 @@ describe('ackSlackInboundSeen', () => {
   it('uses the addReaction stub when provided', async () => {
     const addReaction = vi.fn(async () => undefined);
     await ackSlackInboundSeen(msg({ text: 'hello' }), { addReaction });
-    expect(addReaction).toHaveBeenCalledWith(msg({ text: 'hello' }), '+1');
+    expect(addReaction).toHaveBeenCalledWith(msg({ text: 'hello' }), 'eyes');
   });
 
   it('ignores already_reacted', async () => {
@@ -350,5 +350,22 @@ describe('handleSlackInbound interrupt', () => {
     expect(send).not.toHaveBeenCalled();
     expect(readThread(coord.id)?.status).toBe('stopped');
     expect(replies.some((r) => r.includes(SLACK_LISTEN_STOPPED_REPLY))).toBe(true);
+  });
+
+  it('opens a new coordinator after the previous Slack chat was archived', async () => {
+    const old = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    updateThread(old.id, { status: 'archived' });
+    const { send } = stubTurn();
+    await handleSlackInbound(msg({ text: 'hello again', userId: 'Umatt', ts: '5.0' }), {
+      agent: 'claude',
+      postReply: async () => undefined,
+      addReaction: async () => undefined,
+    });
+    expect(send).toHaveBeenCalledOnce();
+    const sentId = send.mock.calls[0]?.[0];
+    expect(sentId).toBeTruthy();
+    expect(sentId).not.toBe(old.id);
+    expect(readThread(String(sentId))?.sourceRef).toBe('slack:T1:Umatt');
+    expect(readThread(old.id)?.status).toBe('archived');
   });
 });
