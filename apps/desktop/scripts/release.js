@@ -181,6 +181,7 @@ if (doDesktop) {
   run('pnpm --filter @sideboard-ai/core build', { cwd: repoRoot });
   run('pnpm --filter @sideboard-ai/cli build', { cwd: repoRoot });
   run('pnpm exec electron-vite build');
+  run('node scripts/stage-bundled-node.js');
   run('node scripts/stage-sideboard-mcp.js');
   run('node scripts/stage-cursor-runtime.js');
 
@@ -233,6 +234,22 @@ if (doDesktop) {
     );
   }
   console.log('✅ Verified extraResources cursor-runtime');
+
+  const bundledNode = path.join(appResources, 'node/bin/node');
+  if (!fs.existsSync(bundledNode)) {
+    throw new Error(
+      'Packaged extraResources node/bin/node is missing. Aborting release.',
+    );
+  }
+  const bundledVer = require('child_process').spawnSync(bundledNode, ['-v'], {
+    encoding: 'utf8',
+  });
+  if (bundledVer.status !== 0 || !/^v22\./.test((bundledVer.stdout || '').trim())) {
+    throw new Error(
+      `Packaged bundled Node is ${JSON.stringify(bundledVer.stdout?.trim())} (want v22.x). Aborting release.`,
+    );
+  }
+  console.log(`✅ Verified extraResources bundled Node ${(bundledVer.stdout || '').trim()}`);
 
   const mcpEntry = path.join(appResources, 'sideboard-mcp/core-dist/mcp/run-stdio.js');
   const mcpCli = path.join(appResources, 'sideboard-mcp/cli-dist/index.js');

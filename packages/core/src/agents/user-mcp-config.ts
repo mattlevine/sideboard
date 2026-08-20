@@ -83,7 +83,7 @@ function launchFromResolved(server: InjectedMcpServer): UserMcpStdioLaunch {
 }
 
 /**
- * Packaged Sideboard.app: upsert the same absolute `node` + extraResources MCP
+ * Packaged Sideboard.app: upsert the same absolute bundled `node` + extraResources MCP
  * into Cursor IDE (always) and Claude Code (only if ~/.claude.json already exists).
  * Codex is documented only — do not rewrite ~/.codex/config.toml.
  */

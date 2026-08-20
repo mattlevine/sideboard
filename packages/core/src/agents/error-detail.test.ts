@@ -7,8 +7,11 @@ import {
   humanizeAgentFailDetail,
   looksLikeAgentFailureMessage,
   looksLikeInvalidAgentSession,
+  looksLikeRetryableRunnerCrash,
+  shouldRetryFailedAgentTurn,
   pushTurnStderr,
   summarizeTurnStderr,
+  turnFailChatText,
 } from './error-detail.js';
 
 describe('formatUnknownDetail', () => {
@@ -129,6 +132,28 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(looksLikeInvalidAgentSession('model gpt-x not found')).toBe(false);
   });
 
+  it('retries native Node/Cursor runner crashes once', () => {
+    expect(
+      looksLikeRetryableRunnerCrash(
+        '30: 0x107aca130 uv_run [/opt/homebrew/Cellar/libuv/1.49.2/lib/libuv.1.dylib]',
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeRetryableRunnerCrash(
+        'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.',
+      ),
+    ).toBe(true);
+    expect(looksLikeRetryableRunnerCrash('')).toBe(true);
+    expect(looksLikeRetryableRunnerCrash('Credit balance is too low')).toBe(false);
+    expect(looksLikeRetryableRunnerCrash("Cannot find package 'execa'")).toBe(false);
+    expect(
+      shouldRetryFailedAgentTurn('Session not found', { hasSession: true }),
+    ).toBe(true);
+    expect(
+      shouldRetryFailedAgentTurn('Session not found', { hasSession: false }),
+    ).toBe(false);
+  });
+
   it('surfaces opaque exits with a generic hint', () => {
     expect(formatTurnExitError(1, '')).toMatch(/without details/i);
   });
@@ -173,6 +198,23 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(summarizeTurnStderr(tail)).toMatch(/nested Chromium/i);
   });
 
+  it('summarizes Homebrew Node + shared libuv stacks instead of hex frames', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      '30: 0x107aca130 uv_run [/opt/homebrew/Cellar/libuv/1.49.2/lib/libuv.1.dylib]',
+    );
+    pushTurnStderr(
+      tail,
+      '31: 0x10436a48c node::SpinEventLoopInternal(node::Environment*) [/opt/homebrew/Cellar/node/23.6.0/bin/node]',
+    );
+    const summary = summarizeTurnStderr(tail);
+    expect(summary).toMatch(/Homebrew Node \+ shared libuv/i);
+    expect(summary).toMatch(/brew install node@22/);
+    expect(summary).not.toMatch(/0x107aca130/);
+    expect(formatTurnExitError(1, summary)).toMatch(/brew install node@22/);
+  });
+
   it('does not surface a minified Cursor local-agent dump as lastError', () => {
     const tail: string[] = [];
     pushTurnStderr(
@@ -206,6 +248,20 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
 
   it('treats a bare exit code on stderr as empty detail', () => {
     expect(formatTurnExitError(1, 'exit 1')).toMatch(/without details/i);
+  });
+
+  it('puts runner crashes into chat text when the agent said nothing', () => {
+    const detail =
+      'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.';
+    expect(turnFailChatText({ exitCode: 1, assistantText: '', detail })).toBe(detail);
+    expect(
+      turnFailChatText({
+        exitCode: 1,
+        assistantText: 'already wrote a review',
+        detail,
+      }),
+    ).toBe('already wrote a review');
+    expect(turnFailChatText({ exitCode: 0, assistantText: '', detail })).toBe('');
   });
 
   it('keeps exit code for opaque CLI failures', () => {

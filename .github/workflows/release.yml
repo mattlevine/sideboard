@@ -45,6 +45,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @sideboard-ai/core build
+      - run: pnpm --filter @sideboard-ai/cli build
       - name: Build & publish Electron (signed)
         working-directory: apps/desktop
         env:
@@ -56,6 +57,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           pnpm exec electron-vite build
+          node scripts/stage-bundled-node.js
+          node scripts/stage-sideboard-mcp.js
+          node scripts/stage-cursor-runtime.js
           # electron-builder + electron-updater publish to GitHub Releases
           # Signing/notarization require the secrets above; unsigned builds still
           # upload artifacts for smoke testing but cannot auto-update on macOS.

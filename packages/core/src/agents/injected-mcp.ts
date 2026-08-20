@@ -227,9 +227,9 @@ export function findSideboardMcpJsEntry(): string | null {
   const override = process.env.SIDEBOARD_MCP_ENTRY?.trim() || process.env.SIDEBOARD_CLI?.trim();
   if (override && existsSync(override)) return override;
 
-  // Packaged extraResources copy is on a real filesystem — system `node` can
-  // exec it. The asar duplicate needs Electron-as-Node, which Cursor's local
-  // agent then reports as a dead MCP (live tool discovery fails).
+  // Packaged extraResources copy is on a real filesystem — bundled official
+  // Node (or system `node`) can exec it. The asar duplicate needs
+  // Electron-as-Node, which Cursor's local agent then reports as a dead MCP.
   const packaged = packagedMcpStdioPath();
   if (packaged) return packaged;
 

@@ -598,7 +598,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Block until the thread finishes its current/queued turn (avoids polling). Use after send_to_thread or ask_git to read the agent reply.',
+    'Block until the thread finishes its current/queued turn (avoids polling). Use after send_to_thread or ask_git. Returns status, text, and lastError. If status is error, lastError/text is the failure — switch agent, tell the user, or retry; do not treat empty text as success.',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -614,6 +614,7 @@ export async function startMcpServer(): Promise<void> {
               id: thread.id,
               status: result.status,
               text: result.text,
+              lastError: result.lastError,
             }),
           },
         ],
@@ -623,7 +624,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_turn_result',
-    'Final assistant message only (not full transcript)',
+    'Final assistant message (and lastError when the turn failed). Not the full transcript.',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);

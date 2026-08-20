@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,10 +12,25 @@ import {
   applyNodeLaunch,
   isAsarPath,
   nodeReadableScriptPath,
+  pickPreferredNodeBin,
   resolveNodeLaunch,
+  scoreNodeForAgentRuntime,
 } from './node-launch.js';
 
 const runMock = vi.mocked(run);
+
+function mockNodeLookups(bin: string, version = 'v22.14.0'): void {
+  runMock.mockImplementation(async (file, args) => {
+    if (file === 'which' || file === 'where') {
+      return { stdout: `${bin}\n`, stderr: '', exitCode: 0 };
+    }
+    if (args?.[0] === '-v') {
+      const v = file.includes('node@23') || file.includes('/Cellar/node/23') ? 'v23.6.0' : version;
+      return { stdout: `${v}\n`, stderr: '', exitCode: 0 };
+    }
+    return { stdout: '', stderr: '', exitCode: 1 };
+  });
+}
 
 describe('isAsarPath', () => {
   it('detects electron asar script paths', () => {
@@ -38,9 +53,53 @@ describe('isAsarPath', () => {
   });
 });
 
+describe('scoreNodeForAgentRuntime', () => {
+  it('prefers even LTS ≥20 over odd Current', () => {
+    expect(
+      scoreNodeForAgentRuntime({ path: '/opt/homebrew/opt/node@22/bin/node', version: 'v22.14.0' }),
+    ).toBeGreaterThan(
+      scoreNodeForAgentRuntime({ path: '/opt/homebrew/bin/node', version: 'v23.6.0' }),
+    );
+    expect(
+      pickPreferredNodeBin([
+        { path: '/opt/homebrew/bin/node', version: 'v23.6.0' },
+        { path: '/opt/homebrew/opt/node@22/bin/node', version: 'v22.14.0' },
+      ]),
+    ).toBe('/opt/homebrew/opt/node@22/bin/node');
+  });
+
+  it('scores by probed version, not keg name', () => {
+    const aliased = scoreNodeForAgentRuntime({
+      path: '/opt/homebrew/opt/node@22/bin/node',
+      version: 'v23.6.0',
+    });
+    const realLts = scoreNodeForAgentRuntime({
+      path: '/usr/local/bin/node',
+      version: 'v22.14.0',
+    });
+    expect(realLts).toBeGreaterThan(aliased);
+  });
+
+  it('rejects Node <20 below engines', () => {
+    expect(
+      scoreNodeForAgentRuntime({ path: '/usr/local/bin/node', version: 'v18.20.0' }),
+    ).toBeLessThan(
+      scoreNodeForAgentRuntime({ path: '/opt/homebrew/bin/node', version: 'v23.6.0' }),
+    );
+  });
+});
+
 describe('resolveNodeLaunch', () => {
+  const proc = process as NodeJS.Process & { resourcesPath?: string };
+  const previousResources = proc.resourcesPath;
+
   beforeEach(() => {
     runMock.mockReset();
+  });
+
+  afterEach(() => {
+    if (previousResources === undefined) delete proc.resourcesPath;
+    else proc.resourcesPath = previousResources;
   });
 
   it('uses Electron-as-Node for asar paths even when system node exists', async () => {
@@ -60,11 +119,7 @@ describe('resolveNodeLaunch', () => {
       mkdirSync(unpacked, { recursive: true });
       const script = join(unpacked, 'x.js');
       writeFileSync(script, '');
-      runMock.mockResolvedValueOnce({
-        stdout: `${process.execPath}\n`,
-        stderr: '',
-        exitCode: 0,
-      });
+      mockNodeLookups(process.execPath);
       const asarScript = join(root, 'app.asar', 'node_modules', 'x.js');
       expect(nodeReadableScriptPath(asarScript)).toBe(script);
       const launch = await resolveNodeLaunch(asarScript);
@@ -78,16 +133,32 @@ describe('resolveNodeLaunch', () => {
   });
 
   it('prefers system node for normal filesystem scripts', async () => {
-    runMock.mockResolvedValueOnce({
-      stdout: '/opt/homebrew/bin/node\n',
-      stderr: '',
-      exitCode: 0,
-    });
+    mockNodeLookups(process.execPath);
     const launch = await resolveNodeLaunch(
       '/Users/me/sideboard/packages/core/dist/agents/cursor-runner.js',
     );
-    expect(launch.file).toBe('/opt/homebrew/bin/node');
+    expect(launch.file).toBeTruthy();
     expect(launch.env).toEqual({});
+    expect(launch.file).not.toMatch(/Sideboard\.app/i);
+  });
+
+  it('prefers packaged extraResources Node over PATH', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-bundled-node-'));
+    try {
+      const bundled = join(root, 'node', 'bin', 'node');
+      mkdirSync(join(bundled, '..'), { recursive: true });
+      writeFileSync(bundled, '');
+      proc.resourcesPath = root;
+      mockNodeLookups('/opt/homebrew/bin/node');
+      const launch = await resolveNodeLaunch(
+        '/Users/me/sideboard/packages/core/dist/agents/cursor-runner.js',
+      );
+      expect(launch.file).toBe(bundled);
+      expect(launch.env).toEqual({});
+      expect(runMock).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('does not wrap system node', () => {

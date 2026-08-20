@@ -113,8 +113,19 @@ function looksLikeNestedElectronCrash(line: string): boolean {
   return /HasCustomHostObject|ElectronInitializeICUandStartNode/i.test(line);
 }
 
+function looksLikeHomebrewLibuvCrash(line: string): boolean {
+  const uvRun = /uv_run/i.test(line);
+  const spin = /SpinEventLoopInternal/i.test(line);
+  const homebrewUv = /Cellar\/libuv|libuv\.\d\.dylib/i.test(line);
+  const homebrewNode = /Cellar\/node\//i.test(line);
+  return (uvRun && (homebrewUv || spin || homebrewNode)) || (spin && (homebrewUv || homebrewNode));
+}
+
 const NESTED_ELECTRON_SUMMARY =
   'Cursor local agent crashed at Electron startup (nested Chromium / HasCustomHostObject)';
+
+const HOMEBREW_LIBUV_SUMMARY =
+  'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.';
 
 const MINIFIED_DUMP_SUMMARY =
   'Cursor local agent crashed during startup (truncated crash dump)';
@@ -133,6 +144,7 @@ export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
     .find((line) => /cursor startup failed:/i.test(line));
   if (cursorStartup) return clipStderr(cursorStartup, maxChars);
   if (tail.some(looksLikeNestedElectronCrash)) return NESTED_ELECTRON_SUMMARY;
+  if (tail.some(looksLikeHomebrewLibuvCrash)) return HOMEBREW_LIBUV_SUMMARY;
   if (
     tail.some(
       (line) =>
@@ -181,6 +193,33 @@ export function looksLikeInvalidAgentSession(text: string): boolean {
     /missing root blob/.test(lower) ||
     /\bagent\b.{0,120}\bnot found\b/.test(lower)
   );
+}
+
+/**
+ * Native Node/Cursor runner death (uv_run, nested Electron, truncated dump, or
+ * empty stderr). Orchestrator respawns once. Not credits/auth/module-missing —
+ * those will fail the same way.
+ */
+export function looksLikeRetryableRunnerCrash(text: string): boolean {
+  if (looksLikeAgentFailureMessage(text)) return false;
+  if (looksLikeInvalidAgentSession(text)) return false;
+  const lower = text.trim().toLowerCase();
+  if (/cannot find (?:package|module)|err_module_not_found/.test(lower)) return false;
+  if (!lower) return true;
+  return (
+    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
+      lower,
+    )
+  );
+}
+
+/** Stale resume id, or a dead Node/Cursor runner with no assistant output. */
+export function shouldRetryFailedAgentTurn(
+  detail: string,
+  opts: { hasSession: boolean },
+): boolean {
+  if (looksLikeInvalidAgentSession(detail) && opts.hasSession) return true;
+  return looksLikeRetryableRunnerCrash(detail);
 }
 
 /**
@@ -254,10 +293,33 @@ export function humanizeAgentFailDetail(detail: string): string {
   if (/hascustomhostobject|electroninitializeicuandstartnode|nested chromium/i.test(lower)) {
     return `${raw} — retry the turn; if it keeps failing, pick another agent.`;
   }
+  if (/homebrew node \+ shared libuv|uv_run|spineventloopinternal/i.test(lower)) {
+    return /brew install node@22/i.test(raw)
+      ? raw
+      : `${raw} — install Node 22 LTS (\`brew install node@22\`) and retry.`;
+  }
   if (/corrupt local agent checkpoint|missing root blob|truncated crash dump/.test(lower)) {
     return `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
   }
   return raw;
+}
+
+/**
+ * Transcript text for a finished turn. Runner crashes and other failures with
+ * no assistant output go in the agent bubble so wait_for_turn / get_turn_result
+ * (and a later retry) can plan around them — not only the lastError footer.
+ */
+export function turnFailChatText(opts: {
+  exitCode: number | null;
+  assistantText: string;
+  detail: string;
+}): string {
+  const chat = opts.assistantText.trim();
+  if (chat) return chat;
+  if (opts.exitCode === 0) return '';
+  const detail = opts.detail.trim();
+  if (detail) return humanizeAgentFailDetail(detail);
+  return formatTurnExitError(opts.exitCode ?? 1, '');
 }
 
 /** Build the thread lastError string for a non-zero agent exit. */

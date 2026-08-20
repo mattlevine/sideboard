@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  packagedBundledNodePath,
   packagedCursorRipgrepCandidate,
   packagedCursorRunnerPath,
   packagedCursorRuntimeDir,
@@ -29,6 +30,7 @@ describe('packaged extraResources paths', () => {
     expect(packagedCursorRuntimeDir()).toBeNull();
     expect(packagedCursorRunnerPath()).toBeNull();
     expect(packagedMcpStdioPath()).toBeNull();
+    expect(packagedBundledNodePath()).toBeNull();
   });
 
   it('resolves the Cursor runner and Sideboard MCP extraResources trees', () => {
@@ -39,11 +41,15 @@ describe('packaged extraResources paths', () => {
     const mcp = join(root, 'sideboard-mcp', 'core-dist', 'mcp', 'run-stdio.js');
     mkdirSync(join(mcp, '..'), { recursive: true });
     writeFileSync(mcp, '');
+    const bundled = join(root, 'node', 'bin', 'node');
+    mkdirSync(join(bundled, '..'), { recursive: true });
+    writeFileSync(bundled, '');
     proc.resourcesPath = root;
 
     expect(packagedCursorRuntimeDir()).toBe(join(root, 'cursor-runtime'));
     expect(packagedCursorRunnerPath()).toBe(runner);
     expect(packagedMcpStdioPath()).toBe(mcp);
+    expect(packagedBundledNodePath()).toBe(bundled);
     expect(packagedCursorRipgrepCandidate('@cursor/sdk-darwin-arm64', 'rg')).toBe(
       join(root, 'cursor-runtime', 'node_modules', '@cursor/sdk-darwin-arm64', 'bin', 'rg'),
     );

@@ -278,6 +278,7 @@ describe('handleSlackInbound interrupt', () => {
       text: opts?.reply ?? 'all done',
       status: opts?.waitStatus ?? 'idle',
       sessionId: null,
+      lastError: null,
     });
     return { send, waitForTurn, getTurnResult };
   }
@@ -437,6 +438,7 @@ describe('handleSlackInbound interrupt', () => {
       text: 'all done',
       status: 'idle',
       sessionId: null,
+      lastError: null,
     });
     const replies: string[] = [];
     await handleSlackInbound(msg({ text: 'hello after close', userId: 'Umatt', ts: '8.0' }), {

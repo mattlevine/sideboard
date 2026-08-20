@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.100] - 2026-08-20
+
+### Changed
+
+- `@cursor/sdk` 1.0.26 → 1.0.28 (local tool allowlists, browser login, local usage; engines.node `>=22.13`).
+- Packaged Sideboard.app ships official Node 22 LTS (`Contents/Resources/node/bin/node`) for Cursor and MCP. Homebrew Current + shared libuv is no longer the interpreter those extraResources trees run on. `better-sqlite3` is rebuilt against that bundled ABI.
+
+### Fixed
+
+- Cursor worktree turns prefer a probed even LTS Node (≥20) over Homebrew Current. Odd majors dynamically linked against Cellar `libuv` were aborting in `uv_run` / `SpinEventLoopInternal`; those stacks are summarized with an install hint instead of hex frames.
+- Failed worktree turns (runner crashes, CLI errors) are written into the agent transcript and returned on `wait_for_turn` / `get_turn_result` (`lastError` + `text`) so the orchestrator can switch agent or tell the user instead of seeing an empty reply.
+- A dead Node/Cursor runner with no assistant output is respawned once (same path as a stale session id). Credits, auth, and missing packages are not retried.
+
 ## [0.1.99] - 2026-08-20
 
 ### Fixed

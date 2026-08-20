@@ -4,6 +4,7 @@
  * electron-builder cannot `asarUnpack` pnpm workspace links that realpath
  * outside `apps/desktop`. Cursor's runner + `@cursor/sdk` + `rg` are copied
  * to `Contents/Resources/cursor-runtime` instead so a real `node` can exec them.
+ * Official Node 22 ships in `Contents/Resources/node/bin/node`.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -38,10 +39,22 @@ export function packagedMcpDir(): string | null {
   return dir;
 }
 
-/** Packaged MCP stdio entry on a real filesystem (system `node` can exec this). */
+/** Packaged MCP stdio entry on a real filesystem (bundled `node` can exec this). */
 export function packagedMcpStdioPath(): string | null {
   const dir = packagedMcpDir();
   return dir ? join(dir, 'core-dist', 'mcp', 'run-stdio.js') : null;
+}
+
+/**
+ * Official Node 22 shipped next to cursor-runtime / sideboard-mcp.
+ * Packaged Cursor + MCP must use this binary, not Homebrew Current.
+ */
+export function packagedBundledNodePath(): string | null {
+  const resources = electronResourcesPath();
+  if (!resources) return null;
+  const bin = join(resources, 'node', 'bin', 'node');
+  if (!existsSync(bin)) return null;
+  return bin;
 }
 
 export function packagedCursorRipgrepCandidate(

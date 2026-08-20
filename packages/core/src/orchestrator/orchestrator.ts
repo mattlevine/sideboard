@@ -4,7 +4,7 @@ import {
   pendingSlackExternalReplies,
 } from '../slack/outbound-watch.js';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, humanizeAgentFailDetail } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -1044,30 +1044,30 @@ export class Orchestrator {
         lastStderr ||
         (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
 
-      // Claude / Codex / OpenCode / Cursor: stale resume ids and corrupt Cursor
-      // JSONL checkpoints fail the turn. Drop the session and retry once with a
-      // seeded fresh CLI session (cursor-runner also recovers these in-process).
+      // Claude / Codex / OpenCode / Cursor: stale resume ids, corrupt Cursor
+      // JSONL checkpoints, or a dead Node runner. Drop the session and retry
+      // once with a seeded fresh CLI session (cursor-runner also recovers
+      // checkpoints in-process). Homebrew Current may die again on the retry;
+      // then lastError reaches the orchestrator.
       if (
         exitCode !== 0 &&
         !assistantText &&
         parts.length === 0 &&
         !this.stoppedTurns.has(threadId) &&
-        looksLikeInvalidAgentSession(detail) &&
-        this.requireThread(threadId).sessionId &&
-        this.requireThread(threadId).agent !== 'brightsy'
+        this.requireThread(threadId).agent !== 'brightsy' &&
+        shouldRetryFailedAgentTurn(detail, {
+          hasSession: Boolean(this.requireThread(threadId).sessionId),
+        })
       ) {
         updateThread(threadId, { sessionId: null });
-        pushTurnStderr(
-          stderrTail,
-          'Agent session missing — starting a fresh session',
-        );
+        const retryNote = looksLikeInvalidAgentSession(detail)
+          ? 'Agent session missing — starting a fresh session'
+          : 'Agent runner crashed — restarting Node once';
+        pushTurnStderr(stderrTail, retryNote);
         this.emit({
           type: 'turn_output',
           threadId,
-          event: {
-            type: 'stderr',
-            data: 'Agent session missing — starting a fresh session',
-          },
+          event: { type: 'stderr', data: retryNote },
         });
         const retryThread = this.requireThread(threadId);
         const prior = retryThread.messages.slice(0, -1);
@@ -1121,16 +1121,11 @@ export class Orchestrator {
           (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
       }
 
-      // Prefer putting human-readable limit/auth failures in the agent bubble
-      // (keeps duration/usage chips) instead of a bare lastError footer.
-      let chatText = assistantText;
-      if (
-        exitCode !== 0 &&
-        !chatText &&
-        looksLikeAgentFailureMessage(detail)
-      ) {
-        chatText = humanizeAgentFailDetail(detail);
-      }
+      // Put runner crashes / CLI failures with no assistant text in the agent
+      // bubble so wait_for_turn and a later retry can plan around them.
+      let chatText = this.stoppedTurns.has(threadId)
+        ? assistantText
+        : turnFailChatText({ exitCode, assistantText, detail });
       if (chatText || parts.length > 0) {
         appendMessage(threadId, {
           role: 'agent',
@@ -1617,13 +1612,21 @@ export class Orchestrator {
     });
   }
 
-  getTurnResult(threadRef: string): { text: string; status: string; sessionId: string | null } {
+  getTurnResult(threadRef: string): {
+    text: string;
+    status: string;
+    sessionId: string | null;
+    lastError: string | null;
+  } {
     const thread = this.requireThread(threadRef);
     const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+    const lastError = thread.lastError ?? null;
+    const text = (lastAgent?.text ?? '').trim() || (thread.status === 'error' ? lastError ?? '' : '');
     return {
-      text: lastAgent?.text ?? '',
+      text,
       status: thread.status,
       sessionId: thread.sessionId,
+      lastError,
     };
   }
 

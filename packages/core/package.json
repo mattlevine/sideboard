@@ -44,7 +44,7 @@
     "worktree"
   ],
   "dependencies": {
-    "@cursor/sdk": "^1.0.26",
+    "@cursor/sdk": "^1.0.28",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "better-sqlite3": "^11.9.1",
     "chokidar": "^4.0.3",
