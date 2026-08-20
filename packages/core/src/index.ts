@@ -159,12 +159,12 @@ export {
 export {
   runSlackListen,
   handleSlackInbound,
+  interruptSlackCoordinatorForInbound,
   formatSlackInboundPrompt,
   formatSlackSignedReply,
   ackSlackInboundSeen,
   resolveSlackListenMode,
   isInboundForThisDesktop,
-  SLACK_LISTEN_BUSY_REPLY,
   SLACK_LISTEN_STOPPED_REPLY,
   SLACK_LISTEN_TIMEOUT_REPLY,
   SLACK_SEEN_REACTION,

@@ -25,7 +25,7 @@ Prefix matches the **This Mac** name (case-insensitive). Mentions are stripped b
 
 - One Mac online → it handles unprefixed messages.
 - Both online → unprefixed races to the first claim. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
-- Send `stop` to interrupt an in-progress turn.
+- A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
 
 ## CLI
 

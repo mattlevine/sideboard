@@ -30,21 +30,15 @@ export {
 } from './socket-mode.js';
 export type { SlackInboundMessage } from './socket-mode.js';
 
-export const SLACK_LISTEN_BUSY_REPLY = [
-  'Sideboard is busy with an in-progress turn.',
-  'I did not start a new request.',
-  'Send "stop" to interrupt, or try again when idle.',
-].join(' ');
-
 export const SLACK_LISTEN_STOPPED_REPLY =
   'Sideboard stopped the in-progress turn. Send another message when you want to continue.';
 
 export const SLACK_LISTEN_TIMEOUT_REPLY = [
   'Sideboard timed out waiting for the local agent turn to finish.',
-  'Send "stop" to interrupt, or try again.',
+  'Send another message to interrupt and retry, or send "stop".',
 ].join(' ');
 
-/** Serialize inbound Slack handling so busy checks cannot interleave. */
+/** Serialize send+wait so two replacement turns do not overlap. Interrupt happens before this queue. */
 let handleChain: Promise<void> = Promise.resolve();
 
 function enqueueHandle(fn: () => Promise<void>): Promise<void> {
@@ -68,10 +62,52 @@ export interface SlackListenOptions {
   postReply?: (msg: SlackInboundMessage, text: string) => Promise<void>;
   /** Tests: ack reactions without talking to Slack Web API. */
   addReaction?: (msg: SlackInboundMessage, name: string) => Promise<void>;
+  /**
+   * Listen session token. After waitForTurn, skip posting if a newer inbound
+   * superseded this turn (interrupt-and-replace).
+   */
+  inboundGeneration?: number;
+  currentInboundGeneration?: () => number;
+  /** Listen already acked; skip the thumbs-up in handleSlackInbound. */
+  skipAck?: boolean;
 }
 
 function refreshWorkspaces() {
   return getOrchestrator().listWorkspaces();
+}
+
+function slackInboundSuperseded(opts: SlackListenOptions): boolean {
+  if (opts.inboundGeneration === undefined || !opts.currentInboundGeneration) {
+    return false;
+  }
+  return opts.currentInboundGeneration() !== opts.inboundGeneration;
+}
+
+/**
+ * Kill an in-flight Slack coordinator turn so a follow-up can start immediately.
+ * Same force-stop as MCP `send_to_thread` (`clearQueue: true`).
+ */
+export function interruptSlackCoordinatorForInbound(
+  msg: SlackInboundMessage,
+  agent: AgentKind,
+  log: (line: string) => void = () => undefined,
+): boolean {
+  const userId = msg.userId?.trim();
+  if (!userId) return false;
+  const coordinator = ensureSlackCoordinator(msg.teamId, userId, agent);
+  const fresh = readThread(coordinator.id) ?? coordinator;
+  if (fresh.status !== 'running' && fresh.status !== 'queued') return false;
+  try {
+    getOrchestrator().stop(fresh.id, { clearQueue: true });
+    log(
+      `interrupt ${msg.kind} ${msg.ts} → coordinator ${fresh.id.slice(0, 8)} (${fresh.status})`,
+    );
+    return true;
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    log(`interrupt ${msg.ts}: ${errMsg}`);
+    return false;
+  }
 }
 
 export function formatSlackInboundPrompt(msg: SlackInboundMessage): string {
@@ -257,7 +293,13 @@ export async function handleSlackInbound(
   opts: SlackListenOptions,
 ): Promise<void> {
   const log = opts.onLog ?? (() => undefined);
-  await ackSlackInboundSeen(msg, opts);
+  if (!opts.skipAck) {
+    await ackSlackInboundSeen(msg, opts);
+  }
+  if (slackInboundSuperseded(opts)) {
+    log(`skip superseded ${msg.kind} ${msg.ts}`);
+    return;
+  }
   const agent = coerceOrchestratorAgent(opts.agent ?? getDefaultAgent());
   const workspaces = refreshWorkspaces();
   for (const ws of workspaces) {
@@ -269,27 +311,34 @@ export async function handleSlackInbound(
     log(`skip ${msg.kind} ${msg.ts}: missing Slack user id`);
     return;
   }
+  if (slackInboundSuperseded(opts)) {
+    log(`skip superseded ${msg.kind} ${msg.ts}`);
+    return;
+  }
   const coordinator = ensureSlackCoordinator(msg.teamId, userId, agent);
-  const fresh = readThread(coordinator.id) ?? coordinator;
+  let fresh = readThread(coordinator.id) ?? coordinator;
 
   if (isSlackStopCommand(msg.text)) {
     try {
-      getOrchestrator().stop(fresh.id);
+      getOrchestrator().stop(fresh.id, { clearQueue: true });
       log(`stop ${msg.kind} ${msg.ts} → coordinator ${fresh.id.slice(0, 8)}`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       log(`stop ${msg.ts}: ${errMsg}`);
+    }
+    if (slackInboundSuperseded(opts)) {
+      log(`skip superseded stop reply ${msg.ts}`);
+      return;
     }
     await postSlackReply(msg, SLACK_LISTEN_STOPPED_REPLY, opts);
     log(`replied stopped ${msg.ts}`);
     return;
   }
 
+  // Follow-up while busy: interrupt-and-replace (do not wait for the old turn).
   if (fresh.status === 'running' || fresh.status === 'queued') {
-    log(`busy ${msg.kind} ${msg.ts} → coordinator ${fresh.id.slice(0, 8)} (${fresh.status})`);
-    await postSlackReply(msg, SLACK_LISTEN_BUSY_REPLY, opts);
-    log(`replied busy ${msg.ts}`);
-    return;
+    interruptSlackCoordinatorForInbound(msg, agent, log);
+    fresh = readThread(coordinator.id) ?? coordinator;
   }
 
   log(
@@ -309,8 +358,21 @@ export async function handleSlackInbound(
   try {
     await orch.send(fresh.id, prompt);
     await orch.waitForTurn(fresh.id, 14 * 60 * 1000);
+    if (slackInboundSuperseded(opts)) {
+      log(`turn finished ${msg.ts} (superseded)`);
+      return;
+    }
+    const after = readThread(fresh.id);
+    if (after?.status === 'stopped') {
+      log(`turn finished ${msg.ts} (interrupted, skip post)`);
+      return;
+    }
     reply = orch.getTurnResult(fresh.id).text.trim();
   } catch (err) {
+    if (slackInboundSuperseded(opts)) {
+      log(`turn error ${msg.ts} (superseded)`);
+      return;
+    }
     const errMsg = err instanceof Error ? err.message : String(err);
     const timedOut = /timed out|timeout/i.test(errMsg);
     const errorReply = timedOut
@@ -372,21 +434,38 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
   const log = opts.onLog ?? console.log;
   const connected = listSlackWorkspacesRaw();
   const orch = getOrchestrator();
+  const agent = coerceOrchestratorAgent(opts.agent ?? getDefaultAgent());
+  let inboundGeneration = 0;
   const off = orch.on((event) => {
     if (event.type !== 'turn_finished') return;
     void relayCoordinatorReplyToSlack(event.threadId, opts);
   });
 
-  const onInbound = (msg: SlackInboundMessage) =>
-    enqueueHandle(async () => {
-      if (!isInboundForThisDesktop(msg)) {
-        log(
-          `skip ${msg.kind} ${msg.ts}: Slack user ${msg.userId ?? '?'} is not connected on this Mac`,
-        );
+  const onInbound = (msg: SlackInboundMessage) => {
+    if (!isInboundForThisDesktop(msg)) {
+      log(
+        `skip ${msg.kind} ${msg.ts}: Slack user ${msg.userId ?? '?'} is not connected on this Mac`,
+      );
+      return;
+    }
+    const generation = ++inboundGeneration;
+    void ackSlackInboundSeen(msg, opts);
+    // Interrupt immediately so the previous waitForTurn unblocks — do not wait
+    // for the serialized handle queue (same pattern as Brightsy force-stop).
+    interruptSlackCoordinatorForInbound(msg, agent, log);
+    return enqueueHandle(async () => {
+      if (generation !== inboundGeneration) {
+        log(`skip superseded ${msg.kind} ${msg.ts}`);
         return;
       }
-      await handleSlackInbound(msg, opts);
+      await handleSlackInbound(msg, {
+        ...opts,
+        skipAck: true,
+        inboundGeneration: generation,
+        currentInboundGeneration: () => inboundGeneration,
+      });
     });
+  };
 
   try {
     const relay = (opts.relayUrl ?? slackRelayUrl()).trim();

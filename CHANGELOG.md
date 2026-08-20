@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Slack follow-up DMs and @mentions interrupt the in-progress coordinator turn and start a new request instead of replying that Sideboard is busy. Send `stop` to cancel without a replacement prompt.
+
 ## [0.1.94] - 2026-08-19
 
 ### Fixed

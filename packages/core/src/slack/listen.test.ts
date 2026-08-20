@@ -1,12 +1,18 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Orchestrator } from '../orchestrator/orchestrator.js';
+import { ensureSlackCoordinator } from '../store/global-workspace.js';
+import { readThread, updateThread } from '../store/thread-store.js';
 import {
   ackSlackInboundSeen,
   formatSlackInboundPrompt,
   formatSlackSignedReply,
+  handleSlackInbound,
+  interruptSlackCoordinatorForInbound,
   isSlackInboundUserPrompt,
+  SLACK_LISTEN_STOPPED_REPLY,
   SLACK_SEEN_REACTION,
   slackReplyThreadTs,
 } from './listen.js';
@@ -227,5 +233,122 @@ describe('isInboundForThisDesktop', () => {
         kind: 'dm',
       }),
     ).toBe(false);
+  });
+});
+
+describe('handleSlackInbound interrupt', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sb-slack-interrupt-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  function stubTurn(opts?: { waitStatus?: 'idle' | 'stopped'; reply?: string }) {
+    const send = vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      return readThread(id)!;
+    });
+    const waitForTurn = vi
+      .spyOn(Orchestrator.prototype, 'waitForTurn')
+      .mockImplementation(async (id) => {
+        updateThread(id, { status: opts?.waitStatus ?? 'idle' });
+        return readThread(id)!;
+      });
+    const getTurnResult = vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: opts?.reply ?? 'all done',
+      status: opts?.waitStatus ?? 'idle',
+      sessionId: null,
+    });
+    return { send, waitForTurn, getTurnResult };
+  }
+
+  it('force-stops a running coordinator so a follow-up can start', () => {
+    const coord = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    updateThread(coord.id, { status: 'running', queue: ['stale'] });
+    const logs: string[] = [];
+    const interrupted = interruptSlackCoordinatorForInbound(
+      msg({ text: 'do this instead', userId: 'Umatt' }),
+      'claude',
+      (line) => logs.push(line),
+    );
+    expect(interrupted).toBe(true);
+    expect(readThread(coord.id)?.status).toBe('stopped');
+    expect(readThread(coord.id)?.queue).toEqual([]);
+    expect(logs[0]).toMatch(/interrupt/);
+  });
+
+  it('interrupts a running turn and sends the new prompt instead of replying busy', async () => {
+    const coord = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    updateThread(coord.id, { status: 'running' });
+    const { send } = stubTurn();
+    const stop = vi.spyOn(Orchestrator.prototype, 'stop');
+    const replies: string[] = [];
+    const logs: string[] = [];
+    await handleSlackInbound(msg({ text: 'never mind, do this', userId: 'Umatt', ts: '2.0' }), {
+      agent: 'claude',
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+      onLog: (line) => logs.push(line),
+    });
+    expect(stop).toHaveBeenCalledWith(coord.id, { clearQueue: true });
+    expect(send).toHaveBeenCalledWith(coord.id, 'Slack DM\n\nnever mind, do this');
+    expect(replies.some((r) => /busy/i.test(r))).toBe(false);
+    expect(replies.some((r) => r.includes('all done'))).toBe(true);
+    expect(logs.some((l) => l.startsWith('interrupt '))).toBe(true);
+  });
+
+  it('does not post an interrupted turn to Slack', async () => {
+    ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    stubTurn({ waitStatus: 'stopped', reply: 'partial answer' });
+    const replies: string[] = [];
+    await handleSlackInbound(msg({ text: 'hello', userId: 'Umatt', ts: '3.0' }), {
+      agent: 'claude',
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    expect(replies).toEqual([]);
+  });
+
+  it('does not start a turn when a newer inbound superseded it', async () => {
+    const send = vi.spyOn(Orchestrator.prototype, 'send');
+    const replies: string[] = [];
+    await handleSlackInbound(msg({ text: 'old request', userId: 'Umatt', ts: '4.0' }), {
+      agent: 'claude',
+      inboundGeneration: 1,
+      currentInboundGeneration: () => 2,
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(replies).toEqual([]);
+  });
+
+  it('stop still cancels without starting a new turn', async () => {
+    const coord = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    updateThread(coord.id, { status: 'running' });
+    const send = vi.spyOn(Orchestrator.prototype, 'send');
+    const replies: string[] = [];
+    await handleSlackInbound(msg({ text: 'stop', userId: 'Umatt', ts: '5.0' }), {
+      agent: 'claude',
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(readThread(coord.id)?.status).toBe('stopped');
+    expect(replies.some((r) => r.includes(SLACK_LISTEN_STOPPED_REPLY))).toBe(true);
   });
 });
