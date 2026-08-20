@@ -93,7 +93,10 @@ describe('Orchestrator queued-message editing', () => {
     const internal = orch as unknown as {
       activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
       startingTurns: Set<string>;
+      drainQueue: (id: string) => Promise<void>;
     };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
     internal.activeTurns.set(thread.id, {
       pid: 1,
       kill,
@@ -104,6 +107,7 @@ describe('Orchestrator queued-message editing', () => {
     expect(kill).toHaveBeenCalledOnce();
     expect(updated.queue).toEqual(['second', 'first']);
     expect(updated.status).toBe('stopped');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 
   it('does not drain send() when another live process is the desktop host', async () => {
@@ -143,6 +147,38 @@ describe('Orchestrator queued-message editing', () => {
 
     await orch.send(thread.id, 'hello');
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
+  it('drainQueue SIGKILLs a wedged agentPid instead of waiting forever', async () => {
+    const child = spawn(
+      process.execPath,
+      ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'],
+      { stdio: 'ignore' },
+    );
+    try {
+      const thread = seedThread(['follow-up']);
+      const live = readThread(thread.id)!;
+      live.agentPid = child.pid!;
+      writeThread(live);
+      const orch = new Orchestrator();
+      const internal = orch as unknown as {
+        drainQueue: (id: string) => Promise<void>;
+        runTurn: (id: string, prompt: string) => Promise<void>;
+      };
+      const runTurn = vi.fn().mockResolvedValue(undefined);
+      internal.runTurn = runTurn;
+
+      await internal.drainQueue(thread.id);
+      expect(runTurn).toHaveBeenCalledWith(thread.id, 'follow-up');
+      expect(readThread(thread.id)?.agentPid).toBeNull();
+      expect(() => process.kill(child.pid!, 0)).toThrow();
+    } finally {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // already dead
+      }
+    }
   });
 
   it('Send now SIGTERMs a foreign live agentPid and then drains', async () => {

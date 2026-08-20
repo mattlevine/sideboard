@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.101] - 2026-08-20
+
+### Changed
+
+- Left sidebar rows use glyphs instead of color-only dots: spinner (running), clock (queued), alert (error), git-branch (uncommitted), outline circle (idle). Running/error win over git dirty.
+
+### Fixed
+
+- Several worktrees can be archived at once. Sibling chat tabs still tear down the checkout once; `git worktree add`/`remove` on the same repo wait in line so overlapping archives do not fail on `.git` locks. The sidebar shows an Archiving spinner on every in-flight row.
+- Orchestration `wait_for_turn` returns within 45s with `stillRunning` and a live tools/thinking snapshot instead of hanging until the MCP client kills the tool (~60s). Coordinators loop wait; they must not ping a busy worktree.
+- `listThreads` ignores `threads/<id>.live.json` sidecars. Listing them as threads made `get_thread` throw `startsWith` of undefined and crashed the orchestration turn on branch sync (`replace` of undefined).
+- Queued Send now / Edit / Remove land on the first press (`pointerdown`). A wedged agent child after Stop no longer pins `drainQueue` — Send now always arms drain, and a live `agentPid` is SIGKILL’d after 2.5s so the next message is not a no-op.
+
 ## [0.1.100] - 2026-08-20
 
 ### Changed

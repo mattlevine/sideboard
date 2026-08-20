@@ -315,6 +315,7 @@ export function ThreadPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
+  const queuedDockRef = useRef<HTMLDivElement>(null);
   const [composerDragOver, setComposerDragOver] = useState(false);
   const plusBtnRef = useRef<HTMLButtonElement>(null);
   const openBtnRef = useRef<HTMLButtonElement>(null);
@@ -859,6 +860,22 @@ export function ThreadPanel({
     } finally {
       setQueueBusyIndex(null);
     }
+  }
+
+  /** First press must count: pointerdown + preventDefault so composer blur
+   *  cannot shift the dock before mouseup. Keyboard still uses click (detail 0). */
+  function queueActionPointer(disabled: boolean, run: () => void) {
+    return {
+      onPointerDown: (e) => {
+        if (disabled || e.button !== 0) return;
+        e.preventDefault();
+        run();
+      },
+      onClick: (e) => {
+        if (disabled || e.detail > 0) return;
+        run();
+      },
+    };
   }
 
   async function implementPlan() {
@@ -1802,7 +1819,11 @@ export function ThreadPanel({
       )}
 
       {(thread.queue.length > 0 || pendingOptimistic) && (
-        <div className="queued-messages" aria-label="Queued messages">
+        <div
+          ref={queuedDockRef}
+          className="queued-messages"
+          aria-label="Queued messages"
+        >
           <div className="queued-messages-label">Queued</div>
           <div className="queued-messages-list">
             {thread.queue.map((text, i) => (
@@ -1847,7 +1868,7 @@ export function ThreadPanel({
                     <div className="queued-msg-text">{text}</div>
                     <div
                       className="queued-msg-actions"
-                      onMouseDown={(e) => {
+                      onPointerDown={(e) => {
                         // Composer collapse (blur) would shift this dock before
                         // mouseup, so the first click never reaches the button.
                         e.preventDefault();
@@ -1859,7 +1880,9 @@ export function ThreadPanel({
                         title="Send now — interrupts the current response"
                         aria-label="Send now"
                         disabled={queueBusyIndex === i}
-                        onClick={() => void sendQueuedNow(i)}
+                        {...queueActionPointer(queueBusyIndex === i, () => {
+                          void sendQueuedNow(i);
+                        })}
                       >
                         <QueuedSendNowIcon />
                       </button>
@@ -1869,7 +1892,9 @@ export function ThreadPanel({
                         title="Edit"
                         aria-label="Edit"
                         disabled={queueBusyIndex === i}
-                        onClick={() => startEditQueued(i, text)}
+                        {...queueActionPointer(queueBusyIndex === i, () => {
+                          startEditQueued(i, text);
+                        })}
                       >
                         <QueuedEditIcon />
                       </button>
@@ -1879,7 +1904,9 @@ export function ThreadPanel({
                         title="Remove"
                         aria-label="Remove"
                         disabled={queueBusyIndex === i}
-                        onClick={() => void removeQueued(i)}
+                        {...queueActionPointer(queueBusyIndex === i, () => {
+                          void removeQueued(i);
+                        })}
                       >
                         <QueuedRemoveIcon />
                       </button>
@@ -2003,14 +2030,21 @@ export function ThreadPanel({
                         : 'Ask to make changes, @mention files, run /commands'
               }
               onFocus={() => setComposerFocused(true)}
-              onBlur={() => {
-                // Delay so toolbar / autocomplete clicks can run first
+              onBlur={(e) => {
+                const next = e.relatedTarget as Node | null;
+                if (composerBoxRef.current?.contains(next)) return;
+                if (acRef.current?.contains(next)) return;
+                if (queuedDockRef.current?.contains(next)) return;
+                // Delay so toolbar / autocomplete / queue-dock clicks can run
+                // first. setTimeout(0) is too short: collapse still shifts the
+                // dock before mouseup in Chromium.
                 window.setTimeout(() => {
                   const active = document.activeElement;
                   if (composerBoxRef.current?.contains(active)) return;
                   if (acRef.current?.contains(active)) return;
+                  if (queuedDockRef.current?.contains(active)) return;
                   setComposerFocused(false);
-                }, 0);
+                }, 150);
               }}
               onPaste={(e) => {
                 const buf = largePasteBufferFromEvent(e, attachments);

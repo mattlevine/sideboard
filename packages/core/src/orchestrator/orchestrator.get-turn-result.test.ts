@@ -19,7 +19,7 @@ describe('Orchestrator.getTurnResult', () => {
   });
 
   function seed(opts: {
-    status: 'idle' | 'error';
+    status: 'idle' | 'error' | 'running';
     lastError?: string | null;
     agentText?: string;
   }) {
@@ -57,6 +57,7 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.status).toBe('error');
     expect(result.lastError).toMatch(/shared libuv/);
     expect(result.text).toBe(result.lastError);
+    expect(result.stillRunning).toBe(false);
   });
 
   it('keeps assistant text when present and still returns lastError', () => {
@@ -68,5 +69,20 @@ describe('Orchestrator.getTurnResult', () => {
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.text).toBe('partial review');
     expect(result.lastError).toBe('exit 1: boom');
+  });
+
+  it('includes live progress while the turn is still running', async () => {
+    const { writeTurnLive } = await import('../store/turn-live.js');
+    const thread = seed({ status: 'running' });
+    writeTurnLive(thread.id, {
+      updatedAt: '2026-08-20T21:00:00.000Z',
+      summary: 'Read foo.ts (3 tools)',
+      lastTool: 'Read foo.ts',
+      toolCount: 3,
+    });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.progress).toBe('Read foo.ts (3 tools)');
+    expect(result.lastActivityAt).toBe('2026-08-20T21:00:00.000Z');
   });
 });

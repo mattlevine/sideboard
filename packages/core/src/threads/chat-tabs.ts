@@ -97,9 +97,15 @@ function worktreeBindingFrom(from: Thread): Pick<
 }
 
 export function threadsSharingWorktree(worktreePath: string): Thread[] {
+  if (!worktreePath) return [];
   const key = normalizeWorktreePath(worktreePath);
   return listThreads({ includeArchived: true })
-    .filter((t) => sameWorktreePath(t.worktreePath, key) && t.status !== 'archived')
+    .filter(
+      (t) =>
+        Boolean(t.worktreePath) &&
+        sameWorktreePath(t.worktreePath, key) &&
+        t.status !== 'archived',
+    )
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 

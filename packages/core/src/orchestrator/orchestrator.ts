@@ -72,22 +72,16 @@ import {
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
 import { createThread } from '../threads/create.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
-
-/** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
-export function isPidAlive(pid: number): boolean {
-  if (!Number.isFinite(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
 import {
   createChatTab as createChatTabImpl,
   forkChatTab as forkChatTabImpl,
+  normalizeWorktreePath,
   threadsSharingWorktree,
 } from '../threads/chat-tabs.js';
+import { enqueueByKey } from '../util/enqueue-by-key.js';
+import { git } from '../git/run.js';
+import { withRepoGitLock } from '../git/repo-git-lock.js';
+import { clearTurnLive, noteTurnLiveEvent, readTurnLive } from '../store/turn-live.js';
 import { requestReview } from '../review/request-review.js';
 import { forkThreadWorktree as forkThreadWorktreeImpl } from '../threads/fork-worktree.js';
 import {
@@ -167,6 +161,33 @@ import {
   ensureGlobalCoordinatorCwd,
   SLACK_REPLY_FORMATTING,
 } from './coordinator-prompt.js';
+
+/** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
+export function isPidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Wait until pid exits, or `timeoutMs` elapses. */
+export async function waitForPidExit(
+  pid: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  const start = Date.now();
+  while (isPidAlive(pid)) {
+    if (Date.now() - start >= timeoutMs) return false;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  return true;
+}
+
+/** After Send now / Stop, do not pin drainQueue on a wedged agent child. */
+const STALE_AGENT_PID_WAIT_MS = 2_500;
 
 /** Persist status unless the thread was archived or purged mid-turn. */
 function writeLiveStatus(
@@ -686,16 +707,12 @@ export class Orchestrator {
       typeof livePid === 'number' &&
       livePid > 0 &&
       isPidAlive(livePid);
-    if (inFlight) {
+    if (inFlight || foreignLive) {
       this.stop(thread.id, { clearQueue: false, continueQueue: true });
-    } else {
-      // MCP-owned hung runners have a live agentPid but no in-process handle.
-      // Stop (SIGTERM) so drainQueue is not pinned forever; Send now can resume.
-      if (foreignLive) {
-        this.stop(thread.id, { clearQueue: false, continueQueue: true });
-      }
-      void this.drainQueue(thread.id);
     }
+    // Always arm drain. If a loop is already waiting on the dying child, this
+    // is a no-op; if Stop left no drain running, Send now must start one.
+    void this.drainQueue(thread.id);
     return this.requireThread(thread.id);
   }
 
@@ -727,9 +744,24 @@ export class Orchestrator {
         }
         // Cross-process / Cursor cloud: agent child may still be alive even if
         // this process briefly lost the handle — don't start a overlapping turn.
+        // Cap the wait: a wedged Cursor runner after SIGTERM used to pin Send now
+        // until the user clicked again (second click was a no-op while draining).
         const livePid = thread.agentPid;
         if (typeof livePid === 'number' && livePid > 0 && isPidAlive(livePid)) {
-          await new Promise((r) => setTimeout(r, 200));
+          const exited = await waitForPidExit(livePid, STALE_AGENT_PID_WAIT_MS);
+          if (!exited && isPidAlive(livePid)) {
+            try {
+              process.kill(livePid, 'SIGKILL');
+            } catch {
+              // ignore
+            }
+            await waitForPidExit(livePid, 400);
+            try {
+              updateThread(threadId, { agentPid: null });
+            } catch {
+              // Thread may have been archived.
+            }
+          }
           continue;
         }
 
@@ -957,6 +989,7 @@ export class Orchestrator {
         { cachedPrefix, prompt: agentPrompt },
         (event) => {
           this.emit({ type: 'turn_output', threadId, event });
+          noteTurnLiveEvent(threadId, event);
           if (event.type === 'session_id') {
             updateThread(threadId, { sessionId: event.data });
           }
@@ -1228,6 +1261,7 @@ export class Orchestrator {
       this.processes.delete(`${threadId}:agent`);
       this.stoppedTurns.delete(threadId);
       this.runningCount = Math.max(0, this.runningCount - 1);
+      clearTurnLive(threadId);
       try {
         updateThread(threadId, { agentPid: null });
       } catch {
@@ -1562,51 +1596,60 @@ export class Orchestrator {
     return created;
   }
 
-  async waitForTurn(threadRef: string, timeoutMs = 600_000): Promise<Thread> {
+  async waitForTurn(
+    threadRef: string,
+    timeoutMs = 600_000,
+    opts?: { resolveIfStillRunning?: boolean },
+  ): Promise<Thread> {
     const thread = this.requireThread(threadRef);
+    if (!['running', 'queued'].includes(thread.status)) {
+      return thread;
+    }
     const start = Date.now();
     return new Promise((resolve, reject) => {
-      if (!['running', 'queued'].includes(thread.status)) {
-        resolve(thread);
-        return;
-      }
+      let settled = false;
+      let timer: ReturnType<typeof setInterval> | undefined;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearInterval(timer);
+        off();
+        fn();
+      };
       const off = this.on((event) => {
         if (event.type === 'turn_finished' && event.threadId === thread.id) {
-          off();
           const latest = readThread(thread.id);
           if (!latest) {
-            reject(new Error(`Thread not found: ${thread.id}`));
+            finish(() => reject(new Error(`Thread not found: ${thread.id}`)));
             return;
           }
-          resolve(latest);
+          finish(() => resolve(latest));
         }
         if (event.type === 'error' && event.threadId === thread.id) {
-          off();
           const latest = readThread(thread.id);
           if (!latest) {
-            reject(new Error(`Thread not found: ${thread.id}`));
+            finish(() => reject(new Error(`Thread not found: ${thread.id}`)));
             return;
           }
-          resolve(latest);
+          finish(() => resolve(latest));
         }
       });
-      const timer = setInterval(() => {
-        if (Date.now() - start > timeoutMs) {
-          clearInterval(timer);
-          off();
-          reject(new Error('wait_for_turn timed out'));
-        }
+      timer = setInterval(() => {
         const current = readThread(thread.id);
         if (!current) {
-          clearInterval(timer);
-          off();
-          reject(new Error(`Thread not found: ${thread.id}`));
+          finish(() => reject(new Error(`Thread not found: ${thread.id}`)));
           return;
         }
         if (!['running', 'queued'].includes(current.status)) {
-          clearInterval(timer);
-          off();
-          resolve(current);
+          finish(() => resolve(current));
+          return;
+        }
+        if (Date.now() - start > timeoutMs) {
+          if (opts?.resolveIfStillRunning) {
+            finish(() => resolve(current));
+          } else {
+            finish(() => reject(new Error('wait_for_turn timed out')));
+          }
         }
       }, 200);
     });
@@ -1617,16 +1660,24 @@ export class Orchestrator {
     status: string;
     sessionId: string | null;
     lastError: string | null;
+    stillRunning: boolean;
+    progress: string | null;
+    lastActivityAt: string | null;
   } {
     const thread = this.requireThread(threadRef);
     const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
     const lastError = thread.lastError ?? null;
     const text = (lastAgent?.text ?? '').trim() || (thread.status === 'error' ? lastError ?? '' : '');
+    const stillRunning = thread.status === 'running' || thread.status === 'queued';
+    const live = stillRunning ? readTurnLive(thread.id) : null;
     return {
       text,
       status: thread.status,
       sessionId: thread.sessionId,
       lastError,
+      stillRunning,
+      progress: live?.summary ?? null,
+      lastActivityAt: live?.updatedAt ?? null,
     };
   }
 
@@ -2199,7 +2250,26 @@ export class Orchestrator {
     return threadsSharingWorktree(thread.worktreePath);
   }
 
+  /**
+   * Last-tab teardown must see siblings already archived. Serialize per
+   * worktree so parallel archive/purge of sibling tabs still removes once.
+   */
+  private enqueueWorktreeTeardown<T>(
+    thread: Thread,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const key = isGlobalThread(thread)
+      ? `archive:global:${thread.id}`
+      : `archive:wt:${normalizeWorktreePath(thread.worktreePath)}`;
+    return enqueueByKey(key, fn);
+  }
+
   async archive(threadRef: string): Promise<Thread> {
+    const thread = this.requireThread(threadRef);
+    return this.enqueueWorktreeTeardown(thread, () => this.archiveUnlocked(threadRef));
+  }
+
+  private async archiveUnlocked(threadRef: string): Promise<Thread> {
     const thread = this.requireThread(threadRef);
     this.stop(thread.id);
     this.releaseOrchestratorCaffeinate(thread);
@@ -2242,6 +2312,14 @@ export class Orchestrator {
 
   async purge(threadRef: string, opts?: { deleteBranch?: boolean }): Promise<void> {
     const thread = this.requireThread(threadRef);
+    await this.enqueueWorktreeTeardown(thread, () => this.purgeUnlocked(threadRef, opts));
+  }
+
+  private async purgeUnlocked(
+    threadRef: string,
+    opts?: { deleteBranch?: boolean },
+  ): Promise<void> {
+    const thread = this.requireThread(threadRef);
     this.stop(thread.id);
     this.releaseOrchestratorCaffeinate(thread);
     if (isGlobalThread(thread)) {
@@ -2280,11 +2358,10 @@ export class Orchestrator {
     if (!existsSync(thread.worktreePath)) {
       const { createThreadWorktree } = await import('../git/worktree.js');
       // Recreate worktree from existing branch
-      const { execa } = await import('execa');
       const slug = thread.worktreePath.split('/').pop()!;
       const dest = thread.worktreePath;
-      await execa('git', ['worktree', 'add', dest, thread.branchName], {
-        cwd: thread.repoPath,
+      await withRepoGitLock(thread.repoPath, async () => {
+        await git(['worktree', 'add', dest, thread.branchName], thread.repoPath);
       });
       void createThreadWorktree;
       void slug;

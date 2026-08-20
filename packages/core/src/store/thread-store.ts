@@ -184,8 +184,14 @@ function idPath(id: string): string {
   return id;
 }
 
+function isThreadRecordFile(name: string): boolean {
+  // Turn-progress sidecars are `threads/<id>.live.json` — they also end in
+  // `.json`, but they are not Thread records (no id / worktreePath).
+  return name.endsWith('.json') && !name.endsWith('.live.json');
+}
+
 export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {
-  const files = readdirSync(threadsDir()).filter((f) => f.endsWith('.json'));
+  const files = readdirSync(threadsDir()).filter(isThreadRecordFile);
   const threads = files
     .map((f) => {
       try {
@@ -196,7 +202,10 @@ export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {
         return null;
       }
     })
-    .filter((t): t is Thread => t !== null)
+    .filter(
+      (t): t is Thread =>
+        t !== null && typeof t.id === 'string' && t.id.length > 0,
+    )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   if (opts?.includeArchived) return threads;
@@ -243,7 +252,12 @@ export function setStatus(id: string, status: ThreadStatus, lastError?: string |
 export function findThreadByRef(ref: string): Thread | null {
   const all = listThreads({ includeArchived: true });
   return (
-    all.find((t) => t.id === ref || t.id.startsWith(ref) || t.branchName === ref || t.title === ref) ??
-    null
+    all.find(
+      (t) =>
+        t.id === ref ||
+        t.id.startsWith(ref) ||
+        t.branchName === ref ||
+        t.title === ref,
+    ) ?? null
   );
 }

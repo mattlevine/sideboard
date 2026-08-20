@@ -15,6 +15,11 @@ import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
+import {
+  MCP_WAIT_STILL_RUNNING_HINT,
+  mcpWaitForTurnTimeoutMs,
+} from './wait-for-turn.js';
+import { readTurnLive } from '../store/turn-live.js';
 import { registerSlackTools } from './slack-tools.js';
 import { registerLinearTools } from './linear-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
@@ -124,7 +129,12 @@ export async function startMcpServer(): Promise<void> {
           t.repoPath === GLOBAL_WORKSPACE_ID
             ? 'Orchestration'
             : basename(t.repoPath) || t.repoPath;
-        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}  sideboard://thread/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}`;
+        const live =
+          t.status === 'running' || t.status === 'queued'
+            ? readTurnLive(t.id)
+            : null;
+        const progress = live?.summary ? `  ${live.summary}` : '';
+        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}  sideboard://thread/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
       });
       return {
         content: [{ type: 'text', text: lines.join('\n') || '(no threads)' }],
@@ -134,13 +144,17 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_thread',
-    'Get a compact thread summary by id/ref',
+    'Get a compact thread summary by id/ref. While running, includes progress (last tool/thinking) and lastActivityAt.',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
       if (!t) {
         return { content: [{ type: 'text', text: `Thread not found: ${ref}` }], isError: true };
       }
+      const live =
+        t.status === 'running' || t.status === 'queued'
+          ? readTurnLive(t.id)
+          : null;
       const summary = {
         id: t.id,
         title: t.title,
@@ -156,6 +170,9 @@ export async function startMcpServer(): Promise<void> {
         devPort: t.devPort,
         prUrl: t.prUrl,
         lastError: t.lastError ?? null,
+        stillRunning: t.status === 'running' || t.status === 'queued',
+        progress: live?.summary ?? null,
+        lastActivityAt: live?.updatedAt ?? null,
       };
       return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
     },
@@ -598,13 +615,15 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Block until the thread finishes its current/queued turn (avoids polling). Use after send_to_thread or ask_git. Returns status, text, and lastError. If status is error, lastError/text is the failure — switch agent, tell the user, or retry; do not treat empty text as success.',
+    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. If stillRunning is true, progress is tools/thinking — call wait_for_turn again. Do not send a check-in prompt or assume a hang. On status error, lastError/text is the failure.',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
     },
     async ({ ref, timeoutMs }) => {
-      const thread = await orch.waitForTurn(ref, timeoutMs ?? 600_000);
+      const thread = await orch.waitForTurn(ref, mcpWaitForTurnTimeoutMs(timeoutMs), {
+        resolveIfStillRunning: true,
+      });
       const result = orch.getTurnResult(thread.id);
       return {
         content: [
@@ -615,6 +634,10 @@ export async function startMcpServer(): Promise<void> {
               status: result.status,
               text: result.text,
               lastError: result.lastError,
+              stillRunning: result.stillRunning,
+              progress: result.progress,
+              lastActivityAt: result.lastActivityAt,
+              hint: result.stillRunning ? MCP_WAIT_STILL_RUNNING_HINT : undefined,
             }),
           },
         ],
@@ -624,11 +647,21 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_turn_result',
-    'Final assistant message (and lastError when the turn failed). Not the full transcript.',
+    'Assistant message when the turn finished, or live progress while stillRunning. Not the full transcript.',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              ...result,
+              hint: result.stillRunning ? MCP_WAIT_STILL_RUNNING_HINT : undefined,
+            }),
+          },
+        ],
+      };
     },
   );
 
@@ -750,7 +783,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'request_review',
-    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .sideboard/review.md when present (else local Review request.md / stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn / get_turn_result on the returned review tab id.',
+    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .sideboard/review.md when present (else local Review request.md / stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
     { ref: z.string().describe('Worktree thread id/ref to review') },
     async ({ ref }) => {
       try {
@@ -779,7 +812,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` if SSH is missing). When dirty, queues the worktree agent to commit; then wait_for_turn. Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd.',
+    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` if SSH is missing). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z
@@ -835,7 +868,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fork_worktree',
-    'Fork a worktree agent chat into a NEW git worktree + chat (desktop “Fork to new workspace”). Seeds a transcript (through through_index, default all). Optional agent override. Leave model unset for Auto (default) — only pass model when you have a reason. Not for the orchestrator. Then send_to_thread / wait_for_turn on the returned id.',
+    'Fork a worktree agent chat into a NEW git worktree + chat (desktop “Fork to new workspace”). Seeds a transcript (through through_index, default all). Optional agent override. Leave model unset for Auto (default) — only pass model when you have a reason. Not for the orchestrator. Then send_to_thread / wait_for_turn (loop while stillRunning) on the returned id.',
     {
       ref: z.string().describe('Worktree thread id/ref to fork'),
       through_index: z
@@ -888,7 +921,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fork_chat',
-    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Slack / Global orchestrators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
+    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Slack / Global orchestrators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn (loop while stillRunning) on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
     {
       ref: z.string().describe('Thread id/ref to fork (worktree agent or orchestration chat)'),
       through_index: z

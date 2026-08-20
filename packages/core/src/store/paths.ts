@@ -76,6 +76,11 @@ export function threadFilePath(id: string): string {
   return join(threadsDir(), `${id}.json`);
 }
 
+/** Live in-flight turn snapshot (tools/thinking) — not the full thread JSON. */
+export function threadLivePath(id: string): string {
+  return join(threadsDir(), `${id}.live.json`);
+}
+
 export function threadLockPath(id: string): string {
   return join(locksDir(), `${id}.lock`);
 }

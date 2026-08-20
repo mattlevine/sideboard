@@ -21,6 +21,7 @@ import { useCaffeinateHold } from '../lib/caffeinate-tab';
 import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { SidebarToggle } from './SidebarToggle';
+import { ThreadStatusIcon } from './ThreadStatusIcon';
 
 interface Props {
   threads: Thread[];
@@ -38,8 +39,8 @@ interface Props {
     threadIds: string[],
     meta: { title: string; removesWorktree: boolean },
   ) => void | Promise<void>;
-  /** Thread id currently being archived (shows progress on its worktree row). */
-  archivingId?: string | null;
+  /** Thread ids currently being archived (shows progress on those worktree rows). */
+  archivingIds?: Set<string>;
   /** Unregister a project workspace (caller archives threads as needed). */
   onRemoveWorkspace?: (repoPath: string) => void | Promise<void>;
   onToggleSidebar: () => void;
@@ -74,7 +75,7 @@ function groupByWorktree(threads: Thread[]): Thread[][] {
   );
 }
 
-type WorktreeDiffStat = { additions: number; deletions: number };
+type WorktreeDiffStat = { additions: number; deletions: number; dirty: boolean };
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -562,7 +563,6 @@ function WorktreeSidebarRow({
   const archiveCloseTimer = useRef<number | null>(null);
   const gitCloseTimer = useRef<number | null>(null);
   const fetchGen = useRef(0);
-  const wantFetch = rowHover || gitCardOpen || archiveHover;
 
   function clearTimer(ref: { current: number | null }) {
     if (ref.current != null) {
@@ -608,12 +608,11 @@ function WorktreeSidebarRow({
     };
   }, []);
 
-  // Prefetch on row hover so git status is ready for the hover card.
+  // Load git dirty for the row glyph; refresh when the turn ends or on a slow poll.
   useEffect(() => {
-    if (!wantFetch) return;
-    const gen = ++fetchGen.current;
     let cancelled = false;
-    void (async () => {
+    const load = async () => {
+      const gen = ++fetchGen.current;
       try {
         const diff = await window.sideboard.getDiff(primary.id, {
           scope: 'uncommitted',
@@ -621,25 +620,27 @@ function WorktreeSidebarRow({
         });
         if (cancelled || gen !== fetchGen.current) return;
         const s = diff.scopeStats?.uncommitted;
-        setStat(
-          s
-            ? { additions: s.additions, deletions: s.deletions }
-            : { additions: 0, deletions: 0 },
-        );
+        setStat({
+          additions: s?.additions ?? 0,
+          deletions: s?.deletions ?? 0,
+          dirty: Boolean(diff.dirty) || (s != null && (s.additions > 0 || s.deletions > 0)),
+        });
         setLoaded(true);
       } catch {
         if (cancelled || gen !== fetchGen.current) return;
-        setStat({ additions: 0, deletions: 0 });
+        setStat({ additions: 0, deletions: 0, dirty: false });
         setLoaded(true);
       }
-    })();
+    };
+    void load();
+    const interval = window.setInterval(() => void load(), 12_000);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
-  }, [wantFetch, primary.id, primary.updatedAt, primary.worktreePath]);
+  }, [primary.id, primary.status, primary.worktreePath]);
 
-  const dirty =
-    loaded && stat != null && (stat.additions > 0 || stat.deletions > 0);
+  const dirty = loaded && Boolean(stat?.dirty);
 
   function requestArchive() {
     setArchiveHover(false);
@@ -673,7 +674,14 @@ function WorktreeSidebarRow({
       {archiving ? (
         <span className="thread-archive-spinner" aria-hidden />
       ) : (
-        <span className={`dot ${primary.status}`} />
+        <ThreadStatusIcon
+          status={primary.status}
+          dirty={dirty}
+          dirtyLoaded={loaded}
+          additions={stat?.additions ?? 0}
+          deletions={stat?.deletions ?? 0}
+          unread={unread}
+        />
       )}
       <div className="thread-item-body">
         <div
@@ -761,7 +769,7 @@ export function Sidebar({
   onNew,
   onPickRepo,
   onArchive,
-  archivingId = null,
+  archivingIds = new Set(),
   onRemoveWorkspace,
   onToggleSidebar,
   onOpenSettings,
@@ -940,7 +948,10 @@ export function Sidebar({
                         onSelect(primary.id, e.metaKey || e.ctrlKey || e.shiftKey)
                       }
                     >
-                      <span className={`dot ${primary.status}`} />
+                      <ThreadStatusIcon
+                        status={primary.status}
+                        unread={unread}
+                      />
                       <div className="thread-item-body">
                         <div
                           className="thread-title"
@@ -1074,7 +1085,7 @@ export function Sidebar({
                 view === 'thread' && group.some((t) => t.id === selectedId);
               const selected =
                 group.some((t) => multiSelected.has(t.id));
-              const archiving = group.some((t) => t.id === archivingId);
+              const archiving = group.some((t) => archivingIds.has(t.id));
               const unread = isWorktreeUnread(
                 unreadWorktreeKey(primary),
                 latestAgentResponseAt(group),

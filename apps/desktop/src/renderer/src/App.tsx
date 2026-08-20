@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
   DiffScope,
   MessagePart,
@@ -99,9 +99,14 @@ export function App() {
   const [archived, setArchived] = useState<Thread[]>([]);
   const [view, setView] = useState<'board' | 'thread'>('board');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
   const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set());
-  /** Thread currently tearing down via archive (sidebar shows progress). */
-  const [archivingId, setArchivingId] = useState<string | null>(null);
+  /** Threads currently tearing down via archive (sidebar shows progress on each). */
+  const [archivingIds, setArchivingIds] = useState<Set<string>>(() => new Set());
+  const archivingIdsRef = useRef<Set<string>>(new Set());
+  /** Keep the archive overlay until every in-flight teardown finishes. */
+  const archiveOverlayHeld = useRef(false);
   const [createState, setCreateState] = useState<CreateState | null>(null);
   /** Non-blocking create/archive status shown in the chat empty state. */
   const [paneProgress, setPaneProgress] = useState<PaneProgress | null>(null);
@@ -674,10 +679,33 @@ export function App() {
     });
   }
 
+  function markArchiving(ids: string[], add: boolean): number {
+    const next = new Set(archivingIdsRef.current);
+    for (const id of ids) {
+      if (add) next.add(id);
+      else next.delete(id);
+    }
+    archivingIdsRef.current = next;
+    setArchivingIds(next);
+    return next.size;
+  }
+
+  function syncArchiveOverlayHint(label?: string) {
+    if (!archiveOverlayHeld.current) return;
+    const n = archivingIdsRef.current.size;
+    setPaneProgress((prev) => ({
+      mode: 'archive',
+      repoName: label?.trim() || prev?.repoName || 'Worktree',
+      selectionHint:
+        n > 1 ? `${n} worktrees` : n === 1 ? 'removing worktree' : null,
+    }));
+  }
+
   /**
-   * Archive one or more chats. When a worktree is torn down, leave the chat
-   * immediately and show progress in the empty pane (same as create) — do not
-   * block on a modal overlay while git worktree remove runs.
+   * Archive one or more chats. Several worktrees can tear down at once;
+   * git worktree remove is serialized per repo. When the open chat’s worktree
+   * is removed, leave immediately and show progress in the empty pane — do not
+   * steal the pane if a different worktree is being archived.
    */
   async function archiveThreadsAndRefresh(
     ids: string[],
@@ -701,18 +729,18 @@ export function App() {
       (selectedId != null && idSet.has(selectedId)) ||
       [...multiSelected].some((id) => idSet.has(id));
 
-    // Tear-down: leave immediately + inline progress (non-blocking, like create).
-    if (removesWorktree) {
-      setPaneProgress({
-        mode: 'archive',
-        repoName: label,
-        selectionHint:
-          uniqueIds.length > 1 ? `${uniqueIds.length} chats` : 'removing worktree',
-      });
+    markArchiving(uniqueIds, true);
+
+    // Tear-down of the open chat: leave immediately + inline progress.
+    if (removesWorktree && leavesSelection) {
+      archiveOverlayHeld.current = true;
       setSelectedId(null);
       setMultiSelected(new Set());
       setView('thread');
-    } else if (leavesSelection) {
+      syncArchiveOverlayHint(label);
+    } else if (removesWorktree && archiveOverlayHeld.current) {
+      syncArchiveOverlayHint(label);
+    } else if (!removesWorktree && leavesSelection) {
       // Closing one tab among siblings — switch away without a progress pane.
       const sibling = threads.find(
         (t) =>
@@ -731,27 +759,39 @@ export function App() {
       }
     }
 
+    let alerted = false;
     try {
-      for (const id of uniqueIds) {
-        setArchivingId(id);
-        await window.sideboard.archiveThread(id);
-      }
+      const results = await Promise.allSettled(
+        uniqueIds.map((id) => window.sideboard.archiveThread(id)),
+      );
       await refresh();
+      const failed = results.find(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+      if (failed) {
+        const err = failed.reason;
+        window.alert(err instanceof Error ? err.message : String(err));
+        alerted = true;
+        throw err instanceof Error ? err : new Error(String(err));
+      }
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : String(err));
+      if (!alerted) {
+        window.alert(err instanceof Error ? err.message : String(err));
+      }
       throw err;
     } finally {
-      setArchivingId(null);
-      if (removesWorktree) {
+      const remaining = markArchiving(uniqueIds, false);
+      if (remaining === 0 && archiveOverlayHeld.current) {
+        archiveOverlayHeld.current = false;
         setPaneProgress((prev) => (prev?.mode === 'archive' ? null : prev));
-        setView('board');
-        setSelectedId(null);
+        if (selectedIdRef.current == null) {
+          setView('board');
+          setSelectedId(null);
+        }
+      } else if (archiveOverlayHeld.current) {
+        syncArchiveOverlayHint();
       }
     }
-  }
-
-  async function archiveThreadAndRefresh(id: string) {
-    return archiveThreadsAndRefresh([id], { removesWorktree: true });
   }
 
   async function removeWorkspaceAndRefresh(path: string) {
@@ -769,12 +809,21 @@ export function App() {
     setMultiSelected(new Set());
     setView('thread');
 
+    const workspaceIds = inWorkspace.map((t) => t.id);
+    markArchiving(workspaceIds, true);
+
     try {
-      for (const t of inWorkspace) {
-        setArchivingId(t.id);
-        await window.sideboard.archiveThread(t.id);
+      const results = await Promise.allSettled(
+        workspaceIds.map((id) => window.sideboard.archiveThread(id)),
+      );
+      const failed = results.find(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+      if (failed) {
+        throw failed.reason instanceof Error
+          ? failed.reason
+          : new Error(String(failed.reason));
       }
-      setArchivingId(null);
       await window.sideboard.removeWorkspace(path);
       if (repoPath === path || path === '/') {
         setRepoPath('');
@@ -790,7 +839,7 @@ export function App() {
       window.alert(err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
-      setArchivingId(null);
+      markArchiving(workspaceIds, false);
       setPaneProgress((prev) => (prev?.mode === 'remove' ? null : prev));
       setView('board');
       setSelectedId(null);
@@ -865,7 +914,7 @@ export function App() {
               })
             }
             onArchive={(ids, meta) => archiveThreadsAndRefresh(ids, meta)}
-            archivingId={archivingId}
+            archivingIds={archivingIds}
             onRemoveWorkspace={removeWorkspaceAndRefresh}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
@@ -1032,7 +1081,7 @@ export function App() {
                 onArchiveThread={(id, meta) =>
                   archiveThreadsAndRefresh([id], meta)
                 }
-                archiving={archivingId === selected.id}
+                archiving={selected ? archivingIds.has(selected.id) : false}
                 openFilePath={openFilePath}
                 changesPath={changesPath}
                 onOpenFile={openFile}
@@ -1074,7 +1123,9 @@ export function App() {
                 {paneProgress.mode === 'orchestration'
                   ? 'Opening orchestration'
                   : paneProgress.mode === 'archive'
-                    ? 'Removing worktree'
+                    ? archivingIds.size > 1
+                      ? 'Removing worktrees'
+                      : 'Removing worktree'
                     : paneProgress.mode === 'remove'
                       ? 'Removing project'
                       : 'Creating worktree'}
@@ -1083,7 +1134,9 @@ export function App() {
                 {paneProgress.mode === 'orchestration'
                   ? 'Preparing the coordinator chat and sending your first message…'
                   : paneProgress.mode === 'archive'
-                    ? 'Tearing down the worktree — you can keep browsing while this finishes.'
+                    ? archivingIds.size > 1
+                      ? 'Tearing down worktrees — you can keep browsing while this finishes.'
+                      : 'Tearing down the worktree — you can keep browsing while this finishes.'
                     : paneProgress.mode === 'remove'
                       ? 'Archiving threads and removing the project from the sidebar…'
                       : paneProgress.awaitingFirstPrompt

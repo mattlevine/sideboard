@@ -20,6 +20,7 @@ import { normalizeWorktreePath } from './worktree-labels.js';
 import { formatGhLandError, formatMergePrError, isGhRateLimitError } from './gh-errors.js';
 import { applyGithubGitAuthEnv, resolveGithubAgentToken } from './git-auth-mode.js';
 import { gh, git } from './run.js';
+import { withRepoGitLock } from './repo-git-lock.js';
 import {
   getGithubGitAuthMode,
   type GithubGitAuthMode,
@@ -1150,12 +1151,14 @@ export async function createThreadWorktree(opts: {
 
   // Conductor: one workspace per branch — if branch is already checked out,
   // create a sibling branch with -2/-3 suffix instead of failing cryptically.
-  const add = await git(
-    ['worktree', 'add', '-b', branchName, worktreePath, startPoint],
-    opts.repoPath,
-    { reject: false, timeoutMs: 60_000 },
-  );
-  if (add.exitCode !== 0) {
+  // Serialize with remove — git only allows one worktree mutation per repo.
+  const added = await withRepoGitLock(opts.repoPath, async () => {
+    const add = await git(
+      ['worktree', 'add', '-b', branchName, worktreePath, startPoint],
+      opts.repoPath,
+      { reject: false, timeoutMs: 60_000 },
+    );
+    if (add.exitCode === 0) return branchName;
     const err = `${add.stderr}\n${add.stdout}`;
     if (/already used by worktree|already exists|checked out/i.test(err)) {
       for (let n = 2; n <= 20; n++) {
@@ -1165,17 +1168,14 @@ export async function createThreadWorktree(opts: {
           opts.repoPath,
           { reject: false, timeoutMs: 60_000 },
         );
-        if (retry.exitCode === 0) {
-          branchName = alt;
-          await ensureGhPreferOrigin(worktreePath);
-          return { branchName, worktreePath };
-        }
+        if (retry.exitCode === 0) return alt;
       }
     }
     throw new Error(
       `Failed to create worktree: ${add.stderr.trim() || add.stdout.trim() || `exit ${add.exitCode}`}`,
     );
-  }
+  });
+  branchName = added;
 
   await ensureGhPreferOrigin(worktreePath);
   return { branchName, worktreePath };
@@ -1213,12 +1213,13 @@ export async function createExistingBranchWorktree(opts: {
   }
 
   const startPoint = await resolveWorktreeStartPoint(opts.repoPath, branchName);
-  const add = await git(
-    ['worktree', 'add', worktreePath, startPoint],
-    opts.repoPath,
-    { reject: false },
-  );
-  if (add.exitCode !== 0) {
+  await withRepoGitLock(opts.repoPath, async () => {
+    const add = await git(
+      ['worktree', 'add', worktreePath, startPoint],
+      opts.repoPath,
+      { reject: false },
+    );
+    if (add.exitCode === 0) return;
     // Prefer attaching the local branch name when startPoint was origin/….
     const retry = await git(
       ['worktree', 'add', worktreePath, branchName],
@@ -1236,7 +1237,7 @@ export async function createExistingBranchWorktree(opts: {
         }`,
       );
     }
-  }
+  });
 
   // Ensure HEAD is the named local branch (not detached).
   const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
@@ -1255,12 +1256,14 @@ export async function removeWorktree(
   worktreePath: string,
   opts?: { deleteBranch?: string },
 ): Promise<void> {
-  await git(['worktree', 'remove', '--force', worktreePath], repoPath, {
-    reject: false,
+  await withRepoGitLock(repoPath, async () => {
+    await git(['worktree', 'remove', '--force', worktreePath], repoPath, {
+      reject: false,
+    });
+    if (opts?.deleteBranch) {
+      await git(['branch', '-D', opts.deleteBranch], repoPath, { reject: false });
+    }
   });
-  if (opts?.deleteBranch) {
-    await git(['branch', '-D', opts.deleteBranch], repoPath, { reject: false });
-  }
 }
 
 export async function listWorktrees(repoPath: string): Promise<

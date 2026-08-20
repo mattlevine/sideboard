@@ -2,7 +2,7 @@ import { teamNameFromSlug } from './teams.js';
 
 /** Canonical worktree path for grouping tabs (browser-safe, no node:path). */
 export function normalizeWorktreePath(worktreePath: string): string {
-  const trimmed = worktreePath.replace(/\/+$/, '') || '/';
+  const trimmed = (worktreePath ?? '').replace(/\/+$/, '') || '/';
   const absolute = trimmed.startsWith('/');
   const parts = trimmed.split('/').filter((p) => p && p !== '.');
   const out: string[] = [];

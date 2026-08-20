@@ -2135,6 +2135,52 @@ body.resizing-panels webview {
   background: var(--border);
 }
 
+.thread-status-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.thread-status-icon svg {
+  display: block;
+}
+
+.thread-status-icon.is-running,
+.thread-status-icon.is-queued {
+  color: var(--warn);
+}
+
+.thread-status-icon.is-error {
+  color: var(--err);
+}
+
+.thread-status-icon.is-dirty {
+  color: var(--text);
+}
+
+.thread-status-icon.is-archived {
+  color: var(--muted-dim);
+}
+
+.thread-status-icon.is-unread.is-idle,
+.thread-status-icon.is-unread.is-dirty {
+  color: var(--accent);
+}
+
+.thread-status-icon.is-running svg {
+  animation: create-spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-status-icon.is-running svg {
+    animation: none;
+  }
+}
+
 .thread-item.archiving {
   opacity: 0.72;
   pointer-events: none;

@@ -7,7 +7,8 @@ import {
   readThread,
   writeThread,
 } from '../store/thread-store.js';
-import { isPidAlive, Orchestrator } from './orchestrator.js';
+import { isPidAlive, Orchestrator, waitForPidExit } from './orchestrator.js';
+import { spawn } from 'node:child_process';
 
 describe('Orchestrator.reconcile reclaim', () => {
   let dataDir: string;
@@ -44,6 +45,33 @@ describe('Orchestrator.reconcile reclaim', () => {
     expect(isPidAlive(process.pid)).toBe(true);
     expect(isPidAlive(0)).toBe(false);
     expect(isPidAlive(-1)).toBe(false);
+  });
+
+  it('waitForPidExit returns true after the child exits', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30)'], {
+      stdio: 'ignore',
+    });
+    try {
+      expect(await waitForPidExit(child.pid!, 1_000)).toBe(true);
+    } finally {
+      try {
+        child.kill();
+      } catch {
+        // already dead
+      }
+    }
+  });
+
+  it('waitForPidExit returns false when the child stays alive', async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    });
+    try {
+      expect(await waitForPidExit(child.pid!, 150)).toBe(false);
+      expect(isPidAlive(child.pid!)).toBe(true);
+    } finally {
+      child.kill();
+    }
   });
 
   it('does not reclaim by default (MCP-safe)', async () => {
