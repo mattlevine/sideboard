@@ -64,3 +64,43 @@ export function withCursorLocalHangGuards<T extends Record<string, unknown>>(
 ): T & { enableAgentRetries: false } {
   return { ...local, enableAgentRetries: false };
 }
+
+/**
+ * Local `run.stream()` can stall after the last assistant/tool frame (work is
+ * on disk, wait() never resolves). Treat idle as end-of-turn instead of hanging
+ * the Sideboard runner forever. Long enough for a quiet shell/test; short
+ * enough that wait_for_turn (10 min default) still sees a result.
+ */
+export const CURSOR_STREAM_IDLE_MS = 180_000;
+
+export async function* iterateUntilIdle<T>(
+  iterable: AsyncIterable<T>,
+  idleMs: number,
+  onIdle?: () => void,
+): AsyncGenerator<T> {
+  const iterator = iterable[Symbol.asyncIterator]();
+  try {
+    while (true) {
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      const next = iterator.next();
+      const raced = await Promise.race([
+        next.then((result) => ({ kind: 'item' as const, result })),
+        new Promise<{ kind: 'idle' }>((resolve) => {
+          idleTimer = setTimeout(() => resolve({ kind: 'idle' }), idleMs);
+          idleTimer.unref?.();
+        }),
+      ]);
+      if (idleTimer) clearTimeout(idleTimer);
+      if (raced.kind === 'idle') {
+        onIdle?.();
+        void iterator.return?.();
+        return;
+      }
+      if (raced.result.done) return;
+      yield raced.result.value;
+    }
+  } catch (err) {
+    void iterator.return?.();
+    throw err;
+  }
+}

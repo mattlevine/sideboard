@@ -16,10 +16,12 @@ import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js
 import { appDataDir } from '../store/paths.js';
 import { ensureCursorRipgrepPath } from './cursor-ripgrep.js';
 import {
+  CURSOR_STREAM_IDLE_MS,
   cursorSendOptions,
   cursorSessionRecoveryMessage,
   isAgentBusyError,
   isUnresumableCursorSession,
+  iterateUntilIdle,
   withCursorLocalHangGuards,
 } from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
@@ -241,15 +243,34 @@ async function main(): Promise<number> {
     const run = await sendPrompt(agent);
     liveRun = run;
     const stream = createAgentStreamCoalescer(emit);
+    let streamIdle = false;
     try {
-      for await (const msg of run.stream()) {
+      for await (const msg of iterateUntilIdle(
+        run.stream(),
+        CURSOR_STREAM_IDLE_MS,
+        () => {
+          streamIdle = true;
+          emit({
+            type: 'stderr',
+            data: 'Cursor stream idle — finishing the turn (SDK stream did not close)',
+          });
+          void cancelLiveRun();
+        },
+      )) {
         for (const event of cursorSdkMessageToEvents(msg as never)) {
           stream.push(event);
         }
       }
       stream.flush();
 
-      const result = await run.wait();
+      const result = streamIdle
+        ? await Promise.race([
+            run.wait(),
+            new Promise<{ status: 'cancelled' }>((resolve) => {
+              setTimeout(() => resolve({ status: 'cancelled' }), 5_000);
+            }),
+          ])
+        : await run.wait();
       if (result.status === 'error') {
         const detail = formatUnknownDetail(result.error);
         emit({

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.99] - 2026-08-20
+
+### Fixed
+
+- Orchestrator-spawned worktree chats (Cursor MCP `send_to_thread` while the board is open) run on the desktop host so thinking/tools stream in the UI. MCP no longer drains those queues in the stdio child (blank chat, Stop/Send now no-ops). Stop and Send now SIGTERM a live `agentPid` even when this process does not own the turn. Cursor local streams that stall after the last frame end after 3 minutes of silence instead of hanging `wait_for_turn`.
+
 ## [0.1.98] - 2026-08-19
 
 ### Fixed

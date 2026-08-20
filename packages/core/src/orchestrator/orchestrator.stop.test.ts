@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -189,5 +190,29 @@ describe('Orchestrator.stop force-stop', () => {
     expect(readThread(thread.id)?.status).toBe('archived');
     orch.stop(thread.id);
     expect(readThread(thread.id)?.status).toBe('archived');
+  });
+
+  it('SIGTERMs a live agentPid when this process has no turn handle', async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    });
+    try {
+      const thread = seedThread([]);
+      const live = readThread(thread.id)!;
+      live.agentPid = child.pid!;
+      live.status = 'running';
+      writeThread(live);
+      const orch = new Orchestrator();
+      orch.stop(thread.id, { clearQueue: false });
+      await vi.waitFor(() => {
+        expect(() => process.kill(child.pid!, 0)).toThrow();
+      });
+    } finally {
+      try {
+        child.kill();
+      } catch {
+        // already dead
+      }
+    }
   });
 });

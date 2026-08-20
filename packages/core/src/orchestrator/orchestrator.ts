@@ -69,6 +69,7 @@ import {
   updateThread,
   withThreadLock,
 } from '../store/thread-store.js';
+import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
 import { createThread } from '../threads/create.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 
@@ -605,7 +606,11 @@ export class Orchestrator {
       updateThread(thread.id, patch);
       this.emit({ type: 'queue_changed', threadId: thread.id, queue });
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'queued' });
-      void this.drainQueue(thread.id);
+      // MCP/CLI enqueue only while the board is alive — otherwise the turn
+      // runs in a stdio child with no renderer IPC (blank worktree chat).
+      if (thisProcessShouldDrainAgentQueues()) {
+        void this.drainQueue(thread.id);
+      }
       return this.requireThread(thread.id);
     });
   }
@@ -673,10 +678,22 @@ export class Orchestrator {
       return true;
     });
     if (!promoted) return this.requireThread(thread.id);
+    const current = this.requireThread(thread.id);
     const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
+    const livePid = current.agentPid;
+    const foreignLive =
+      !inFlight &&
+      typeof livePid === 'number' &&
+      livePid > 0 &&
+      isPidAlive(livePid);
     if (inFlight) {
       this.stop(thread.id, { clearQueue: false, continueQueue: true });
     } else {
+      // MCP-owned hung runners have a live agentPid but no in-process handle.
+      // Stop (SIGTERM) so drainQueue is not pinned forever; Send now can resume.
+      if (foreignLive) {
+        this.stop(thread.id, { clearQueue: false, continueQueue: true });
+      }
       void this.drainQueue(thread.id);
     }
     return this.requireThread(thread.id);
@@ -1262,6 +1279,14 @@ export class Orchestrator {
     if (handle) handle.kill();
     const proc = this.processes.get(`${thread.id}:agent`);
     if (proc) proc.kill();
+    const pid = thread.agentPid;
+    if (typeof pid === 'number' && pid > 0 && isPidAlive(pid)) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // Already signaled via handle, or the process exited.
+      }
+    }
     const stopped = writeLiveStatus(thread.id, 'stopped') ?? readThread(thread.id) ?? thread;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });

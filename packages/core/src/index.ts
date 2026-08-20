@@ -18,6 +18,14 @@ export {
   secureFileUnlocksWith,
 } from './store/secure-file.js';
 export * from './store/thread-store.js';
+export {
+  claimDesktopHost,
+  releaseDesktopHost,
+  desktopHostPidPath,
+  isDesktopHostAlive,
+  isThisProcessDesktopHost,
+  thisProcessShouldDrainAgentQueues,
+} from './store/desktop-host.js';
 export * from './store/workspaces.js';
 export * from './store/global-workspace.js';
 export * from './git/run.js';

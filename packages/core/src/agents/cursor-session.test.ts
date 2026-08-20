@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  CURSOR_STREAM_IDLE_MS,
   cursorErrorMessage,
   cursorSendOptions,
   cursorSessionRecoveryMessage,
   isAgentBusyError,
   isUnresumableCursorSession,
+  iterateUntilIdle,
   withCursorLocalHangGuards,
 } from './cursor-session.js';
 
@@ -96,5 +98,34 @@ describe('cursorSendOptions / withCursorLocalHangGuards', () => {
       cwd: '/tmp/wt',
       enableAgentRetries: false,
     });
+  });
+});
+
+describe('iterateUntilIdle', () => {
+  it('yields items then stops when the source ends', async () => {
+    async function* src() {
+      yield 1;
+      yield 2;
+    }
+    const out: number[] = [];
+    for await (const n of iterateUntilIdle(src(), 1_000)) out.push(n);
+    expect(out).toEqual([1, 2]);
+  });
+
+  it('stops after idleMs of silence', async () => {
+    async function* src() {
+      yield 'a';
+      await new Promise((r) => setTimeout(r, 80));
+      yield 'b';
+    }
+    const idle = vi.fn();
+    const out: string[] = [];
+    for await (const n of iterateUntilIdle(src(), 20, idle)) out.push(n);
+    expect(out).toEqual(['a']);
+    expect(idle).toHaveBeenCalledOnce();
+  });
+
+  it('exports a multi-minute default', () => {
+    expect(CURSOR_STREAM_IDLE_MS).toBe(180_000);
   });
 });

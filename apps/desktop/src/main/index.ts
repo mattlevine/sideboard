@@ -58,7 +58,9 @@ import {
   registerPackagedUserMcpClients,
   warmGithubAgentAuth,
   getAgentSetupInfo,
+  claimDesktopHost,
   getOrchestrator,
+  releaseDesktopHost,
   installAgent,
   listBranches,
   listBrightsyChatTargets,
@@ -1524,6 +1526,9 @@ app.whenReady().then(async () => {
     app.setName('Sideboard');
   }
   orch.setMaxConcurrent(maxConcurrentAgents());
+  // MCP/CLI send_to_thread must not spawn worktree turns in the stdio child —
+  // the board adopts persisted queues so live IPC reaches the chat UI.
+  claimDesktopHost();
   applyDockIcon();
   bindArtifactPreviewProtocol();
   registerIpc();
@@ -1565,6 +1570,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  try {
+    releaseDesktopHost();
+  } catch {
+    // ignore
+  }
   destroyUrlPreview();
   stopCloudConnectDaemon();
   stopSlackListenDaemon();

@@ -72,7 +72,10 @@ export async function startMcpServer(): Promise<void> {
   // the desktop orchestrator that owns activeTurns. Reclaiming here falsely
   // marks live parent turns as "Process died (reconciled on startup)".
   // Do not drain the whole fleet on every MCP stdio boot (present_* / tool
-  // calls): that steals queues into a short-lived process. Desktop adopts
+  // calls): that steals queues into a short-lived process. send_to_thread
+  // also skips drain while a desktop host pid is alive — otherwise the
+  // worktree Cursor/Claude child runs here with no renderer IPC (blank chat)
+  // and desktop Stop/Send now cannot see activeTurns. Desktop adopts
   // persisted queues via the thread-store watcher instead.
   try {
     await orch.reconcile(undefined, { reclaimStaleTurns: false, drainQueues: false });

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readThread, createEmptyThread, writeThread } from '../store/thread-store.js';
@@ -103,5 +104,74 @@ describe('Orchestrator queued-message editing', () => {
     expect(kill).toHaveBeenCalledOnce();
     expect(updated.queue).toEqual(['second', 'first']);
     expect(updated.status).toBe('stopped');
+  });
+
+  it('does not drain send() when another live process is the desktop host', async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    });
+    try {
+      writeFileSync(join(dataDir, 'desktop-host.pid'), `${child.pid}\n`);
+      const thread = seedThread([]);
+      const idle = readThread(thread.id)!;
+      idle.status = 'idle';
+      writeThread(idle);
+      const orch = new Orchestrator();
+      const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
+      const drainQueue = vi.fn().mockResolvedValue(undefined);
+      internal.drainQueue = drainQueue;
+
+      const updated = await orch.send(thread.id, 'hello');
+      expect(updated.queue).toEqual(['hello']);
+      expect(updated.status).toBe('queued');
+      expect(drainQueue).not.toHaveBeenCalled();
+    } finally {
+      child.kill();
+    }
+  });
+
+  it('drains send() when this process is the desktop host', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread([]);
+    const idle = readThread(thread.id)!;
+    idle.status = 'idle';
+    writeThread(idle);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+
+    await orch.send(thread.id, 'hello');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
+  it('Send now SIGTERMs a foreign live agentPid and then drains', async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    });
+    try {
+      const thread = seedThread(['follow-up']);
+      const live = readThread(thread.id)!;
+      live.agentPid = child.pid!;
+      live.status = 'running';
+      writeThread(live);
+      const orch = new Orchestrator();
+      const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
+      const drainQueue = vi.fn().mockResolvedValue(undefined);
+      internal.drainQueue = drainQueue;
+
+      const updated = await orch.sendQueuedMessageNow(thread.id, 0);
+      expect(drainQueue).toHaveBeenCalledWith(thread.id);
+      expect(updated.status).toBe('stopped');
+      await vi.waitFor(() => {
+        expect(() => process.kill(child.pid!, 0)).toThrow();
+      });
+    } finally {
+      try {
+        child.kill();
+      } catch {
+        // already dead
+      }
+    }
   });
 });
