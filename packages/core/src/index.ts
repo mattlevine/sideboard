@@ -170,12 +170,15 @@ export {
   interruptSlackCoordinatorForInbound,
   formatSlackInboundPrompt,
   formatSlackSignedReply,
+  formatSlackWorkingText,
   ackSlackInboundSeen,
   resolveSlackListenMode,
   isInboundForThisDesktop,
   SLACK_LISTEN_STOPPED_REPLY,
   SLACK_LISTEN_TIMEOUT_REPLY,
   SLACK_SEEN_REACTION,
+  SLACK_PROGRESS_DELAY_MS,
+  SLACK_PROGRESS_EDIT_MS,
 } from './slack/listen.js';
 export type { SlackListenOptions, SlackInboundMessage } from './slack/listen.js';
 export { SlackRelayHub } from './slack/relay-hub.js';

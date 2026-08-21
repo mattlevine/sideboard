@@ -360,6 +360,7 @@ The destination prefix is the **This Mac** name (case does not matter). Mentions
 - Personal and Work both online → unprefixed messages go to whichever claims first. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
 - A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
 - Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat.
+- Long turns post one `Working…` message after ~20s and edit it with the current tool. The final answer replaces that message.
 - If a DM never gets 👀, quit and reopen Sideboard so Listen re-registers. You do not need an orchestration chat already open.
 
 ### CLI

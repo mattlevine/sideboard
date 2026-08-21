@@ -8,6 +8,7 @@ import {
   ensureSlackCoordinator,
   isSlackCoordinatorThread,
 } from '../store/global-workspace.js';
+import { writeTurnLive } from '../store/turn-live.js';
 import {
   deleteThreadRecord,
   listThreads,
@@ -18,6 +19,7 @@ import {
   ackSlackInboundSeen,
   formatSlackInboundPrompt,
   formatSlackSignedReply,
+  formatSlackWorkingText,
   handleSlackInbound,
   interruptSlackCoordinatorForInbound,
   isSlackInboundUserPrompt,
@@ -51,6 +53,15 @@ describe('formatSlackInboundPrompt', () => {
     expect(formatSlackInboundPrompt(msg({ kind: 'mention', text: 'ship it' }))).toBe(
       'Slack @mention\n\nship it',
     );
+  });
+});
+
+describe('formatSlackWorkingText', () => {
+  it('prefixes a live tool summary and collapses empty/working snapshots', () => {
+    expect(formatSlackWorkingText(null)).toBe('Working…');
+    expect(formatSlackWorkingText('')).toBe('Working…');
+    expect(formatSlackWorkingText('Working…')).toBe('Working…');
+    expect(formatSlackWorkingText('create_thread')).toBe('Working… create_thread');
   });
 });
 
@@ -474,5 +485,94 @@ describe('handleSlackInbound interrupt', () => {
         (t) => t.status !== 'archived' && isSlackCoordinatorThread(t),
       ),
     ).toHaveLength(0);
+  });
+
+  it('posts one Working… message, edits it with live tools, then replaces it with the answer', async () => {
+    const coord = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    let releaseWait: (() => void) | undefined;
+    vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      updateThread(id, { status: 'running' });
+      return readThread(id)!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseWait = () => {
+            updateThread(coord.id, { status: 'idle' });
+            resolve(readThread(coord.id)!);
+          };
+        }),
+    );
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'all done',
+      status: 'idle',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+    });
+    const posts: string[] = [];
+    const updates: string[] = [];
+    const inbound = handleSlackInbound(msg({ text: 'long job', userId: 'Umatt', ts: '9.0' }), {
+      agent: 'claude',
+      progressDelayMs: 25,
+      progressEditMs: 20,
+      postReply: async (_m, text) => {
+        posts.push(text);
+        return { ts: '9.9' };
+      },
+      updateReply: async (_m, _ts, text) => {
+        updates.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    await vi.waitFor(() => expect(releaseWait).toBeTypeOf('function'));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(posts.some((p) => p.includes('Working…'))).toBe(true);
+    writeTurnLive(coord.id, {
+      updatedAt: new Date().toISOString(),
+      summary: 'create_thread',
+      toolCount: 1,
+    });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(updates.some((u) => u.includes('create_thread'))).toBe(true);
+    releaseWait!();
+    await inbound;
+    expect(updates.some((u) => u.includes('all done'))).toBe(true);
+    expect(posts.filter((p) => p.includes('all done'))).toEqual([]);
+  });
+
+  it('deletes the Working… placeholder when the turn is interrupted', async () => {
+    const coord = ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    let releaseWait: (() => void) | undefined;
+    vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      updateThread(id, { status: 'running' });
+      return readThread(id)!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseWait = () => {
+            updateThread(coord.id, { status: 'stopped' });
+            resolve(readThread(coord.id)!);
+          };
+        }),
+    );
+    const deleted: string[] = [];
+    const inbound = handleSlackInbound(msg({ text: 'long job', userId: 'Umatt', ts: '10.0' }), {
+      agent: 'claude',
+      progressDelayMs: 25,
+      postReply: async () => ({ ts: '10.1' }),
+      deleteReply: async (_m, ts) => {
+        deleted.push(ts);
+      },
+      addReaction: async () => undefined,
+    });
+    await vi.waitFor(() => expect(releaseWait).toBeTypeOf('function'));
+    await new Promise((r) => setTimeout(r, 40));
+    releaseWait!();
+    await inbound;
+    expect(deleted).toEqual(['10.1']);
   });
 });

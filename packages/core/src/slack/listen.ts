@@ -12,6 +12,7 @@ import {
   ensureSlackCoordinator,
   findSlackCoordinator,
 } from '../store/global-workspace.js';
+import { readTurnLive } from '../store/turn-live.js';
 import { readThread } from '../store/thread-store.js';
 import { SlackApiError, slackApi } from './api.js';
 import {
@@ -61,8 +62,18 @@ export interface SlackListenOptions {
   relayUrl?: string;
   fetchImpl?: typeof fetch;
   WebSocketImpl?: SlackSocketModeOptions['WebSocketImpl'];
-  /** Tests: handle without talking to Slack Web API. */
-  postReply?: (msg: SlackInboundMessage, text: string) => Promise<void>;
+  /** Tests: handle without talking to Slack Web API. Return `{ ts }` to allow chat.update. */
+  postReply?: (
+    msg: SlackInboundMessage,
+    text: string,
+  ) => Promise<{ ts?: string } | void>;
+  /** Tests: edit a previously posted reply (chat.update). */
+  updateReply?: (msg: SlackInboundMessage, ts: string, text: string) => Promise<void>;
+  /** Tests: delete a previously posted reply (chat.delete). */
+  deleteReply?: (msg: SlackInboundMessage, ts: string) => Promise<void>;
+  /** Tests: override Working… delay / edit cadence. */
+  progressDelayMs?: number;
+  progressEditMs?: number;
   /** Tests: ack reactions without talking to Slack Web API. */
   addReaction?: (msg: SlackInboundMessage, name: string) => Promise<void>;
   /**
@@ -160,6 +171,17 @@ export function slackReplyThreadTs(msg: SlackInboundMessage): string | undefined
   return undefined;
 }
 
+/** First Working… post after the turn is still running this long. */
+export const SLACK_PROGRESS_DELAY_MS = 20_000;
+/** Edit the Working… message at most this often. */
+export const SLACK_PROGRESS_EDIT_MS = 15_000;
+
+export function formatSlackWorkingText(summary?: string | null): string {
+  const line = (summary ?? '').trim();
+  if (!line || /^working/i.test(line)) return 'Working…';
+  return `Working… ${line}`;
+}
+
 /** Slack emoji short name for “seen / looking at this”. */
 export const SLACK_SEEN_REACTION = 'eyes';
 
@@ -211,12 +233,10 @@ export async function ackSlackInboundSeen(
   }
 }
 
-async function postSlackText(
+function replyStub(
   target: { teamId: string; channelId: string; threadTs?: string },
-  text: string,
-  opts: Pick<SlackListenOptions, 'postReply' | 'fetchImpl'>,
-): Promise<void> {
-  const stub: SlackInboundMessage = {
+): SlackInboundMessage {
+  return {
     teamId: target.teamId,
     channelId: target.channelId,
     ts: target.threadTs ?? '',
@@ -224,12 +244,23 @@ async function postSlackText(
     text: '',
     kind: 'dm',
   };
+}
+
+async function postSlackText(
+  target: { teamId: string; channelId: string; threadTs?: string },
+  text: string,
+  opts: Pick<SlackListenOptions, 'postReply' | 'fetchImpl' | 'onLog'>,
+): Promise<{ ts: string } | null> {
   if (opts.postReply) {
-    await opts.postReply(stub, text);
-    return;
+    const result = await opts.postReply(replyStub(target), text);
+    const ts =
+      result && typeof result === 'object' && typeof result.ts === 'string'
+        ? result.ts.trim()
+        : '';
+    return ts ? { ts } : null;
   }
   const token = writeTokenForTeam(target.teamId);
-  await slackApi(
+  const json = await slackApi<{ ts?: string }>(
     token,
     'chat.postMessage',
     {
@@ -239,22 +270,201 @@ async function postSlackText(
     },
     opts.fetchImpl,
   );
+  const ts = json.ts?.trim();
+  return ts ? { ts } : null;
+}
+
+async function updateSlackText(
+  target: { teamId: string; channelId: string; threadTs?: string },
+  ts: string,
+  text: string,
+  opts: Pick<SlackListenOptions, 'updateReply' | 'fetchImpl' | 'onLog'>,
+): Promise<void> {
+  if (opts.updateReply) {
+    await opts.updateReply(replyStub(target), ts, text);
+    return;
+  }
+  const token = writeTokenForTeam(target.teamId);
+  await slackApi(
+    token,
+    'chat.update',
+    {
+      channel: target.channelId,
+      ts,
+      text,
+    },
+    opts.fetchImpl,
+  );
+}
+
+async function deleteSlackText(
+  target: { teamId: string; channelId: string; threadTs?: string },
+  ts: string,
+  opts: Pick<SlackListenOptions, 'deleteReply' | 'fetchImpl' | 'onLog'>,
+): Promise<void> {
+  if (opts.deleteReply) {
+    await opts.deleteReply(replyStub(target), ts);
+    return;
+  }
+  const token = writeTokenForTeam(target.teamId);
+  await slackApi(
+    token,
+    'chat.delete',
+    {
+      channel: target.channelId,
+      ts,
+    },
+    opts.fetchImpl,
+  );
+}
+
+function replyTargetOf(msg: SlackInboundMessage): {
+  teamId: string;
+  channelId: string;
+  threadTs?: string;
+} {
+  return {
+    teamId: msg.teamId,
+    channelId: msg.channelId,
+    threadTs: slackReplyThreadTs(msg),
+  };
 }
 
 async function postSlackReply(
   msg: SlackInboundMessage,
   text: string,
-  opts: Pick<SlackListenOptions, 'postReply' | 'fetchImpl'>,
+  opts: Pick<SlackListenOptions, 'postReply' | 'fetchImpl' | 'onLog'>,
 ): Promise<void> {
-  await postSlackText(
-    {
-      teamId: msg.teamId,
-      channelId: msg.channelId,
-      threadTs: slackReplyThreadTs(msg),
+  await postSlackText(replyTargetOf(msg), signForThisMac(text), opts);
+}
+
+interface SlackTurnProgress {
+  stop: () => void;
+  discard: () => Promise<void>;
+  finishWith: (text: string) => Promise<void>;
+}
+
+function startSlackTurnProgress(
+  msg: SlackInboundMessage,
+  threadId: () => string,
+  opts: SlackListenOptions,
+): SlackTurnProgress {
+  const log = opts.onLog ?? (() => undefined);
+  const target = replyTargetOf(msg);
+  const delayMs = opts.progressDelayMs ?? SLACK_PROGRESS_DELAY_MS;
+  const editMs = opts.progressEditMs ?? SLACK_PROGRESS_EDIT_MS;
+  let stopped = false;
+  let postedTs: string | null = null;
+  let lastBody: string | null = null;
+  let chain: Promise<void> = Promise.resolve();
+  let editTimer: ReturnType<typeof setInterval> | null = null;
+
+  const run = (fn: () => Promise<void>): Promise<void> => {
+    const next = chain.then(fn, fn);
+    chain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
+
+  const stillLive = (): boolean => {
+    if (stopped || slackInboundSuperseded(opts)) return false;
+    const thread = readThread(threadId());
+    return Boolean(thread && (thread.status === 'running' || thread.status === 'queued'));
+  };
+
+  const postWorking = async (): Promise<void> => {
+    if (!stillLive()) return;
+    const summary = readTurnLive(threadId())?.summary ?? 'Working…';
+    const body = formatSlackWorkingText(summary);
+    try {
+      const posted = await postSlackText(target, signForThisMac(body), opts);
+      postedTs = posted?.ts ?? postedTs;
+      lastBody = body;
+      if (postedTs && !stopped && !editTimer) {
+        editTimer = setInterval(() => {
+          void run(editWorking);
+        }, editMs);
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log(`progress post error: ${errMsg}`);
+    }
+  };
+
+  const editWorking = async (): Promise<void> => {
+    if (!postedTs || !stillLive()) return;
+    const summary = readTurnLive(threadId())?.summary ?? 'Working…';
+    const body = formatSlackWorkingText(summary);
+    if (body === lastBody) return;
+    lastBody = body;
+    try {
+      await updateSlackText(target, postedTs, signForThisMac(body), opts);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log(`progress update error: ${errMsg}`);
+    }
+  };
+
+  const delayTimer = setTimeout(() => {
+    void run(postWorking);
+  }, delayMs);
+
+  const stop = (): void => {
+    stopped = true;
+    clearTimeout(delayTimer);
+    if (editTimer) {
+      clearInterval(editTimer);
+      editTimer = null;
+    }
+  };
+
+  return {
+    stop,
+    discard: () => {
+      stop();
+      return run(async () => {
+        if (!postedTs) return;
+        const ts = postedTs;
+        postedTs = null;
+        try {
+          await deleteSlackText(target, ts, opts);
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log(`progress delete error: ${errMsg}`);
+        }
+      });
     },
-    signForThisMac(text),
-    opts,
-  );
+    finishWith: (text: string) => {
+      stop();
+      return run(async () => {
+        const signed = signForThisMac(text.trim());
+        if (!signed) {
+          if (!postedTs) return;
+          const ts = postedTs;
+          postedTs = null;
+          try {
+            await deleteSlackText(target, ts, opts);
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            log(`progress delete error: ${errMsg}`);
+          }
+          return;
+        }
+        if (postedTs) {
+          try {
+            await updateSlackText(target, postedTs, signed, opts);
+            return;
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            log(`progress update error: ${errMsg}`);
+          }
+        }
+        await postSlackText(target, signed, opts);
+      });
+    },
+  };
 }
 
 const lastRelayed = new Map<string, string>();
@@ -370,9 +580,15 @@ export async function handleSlackInbound(
   };
   bindReplyTarget(fresh.id);
 
+  const progress = startSlackTurnProgress(msg, () => fresh.id, opts);
   const runTurn = async (threadId: string) => {
     await orch.send(threadId, prompt);
     await orch.waitForTurn(threadId, 14 * 60 * 1000);
+  };
+
+  const dropProgress = async (reason: string): Promise<void> => {
+    log(reason);
+    await progress.discard();
   };
 
   let reply: string;
@@ -387,12 +603,12 @@ export async function handleSlackInbound(
       await runTurn(fresh.id);
     }
     if (slackInboundSuperseded(opts)) {
-      log(`turn finished ${msg.ts} (superseded)`);
+      await dropProgress(`turn finished ${msg.ts} (superseded)`);
       return;
     }
     let after = readThread(fresh.id);
     if (after?.status === 'stopped') {
-      log(`turn finished ${msg.ts} (interrupted, skip post)`);
+      await dropProgress(`turn finished ${msg.ts} (interrupted, skip post)`);
       return;
     }
     if (!after || after.status === 'archived') {
@@ -401,49 +617,51 @@ export async function handleSlackInbound(
       bindReplyTarget(fresh.id);
       await runTurn(fresh.id);
       if (slackInboundSuperseded(opts)) {
-        log(`turn finished ${msg.ts} (superseded)`);
+        await dropProgress(`turn finished ${msg.ts} (superseded)`);
         return;
       }
       after = readThread(fresh.id);
       if (!after || after.status === 'stopped' || after.status === 'archived') {
-        log(`turn finished ${msg.ts} (interrupted, skip post)`);
+        await dropProgress(`turn finished ${msg.ts} (interrupted, skip post)`);
         return;
       }
     }
     reply = orch.getTurnResult(fresh.id).text.trim();
   } catch (err) {
     if (slackInboundSuperseded(opts)) {
-      log(`turn error ${msg.ts} (superseded)`);
+      await dropProgress(`turn error ${msg.ts} (superseded)`);
       return;
     }
     const errMsg = err instanceof Error ? err.message : String(err);
     if (slackCoordinatorGone(err)) {
-      log(`turn finished ${msg.ts} (thread gone, skip post)`);
+      await dropProgress(`turn finished ${msg.ts} (thread gone, skip post)`);
       return;
     }
     const timedOut = /timed out|timeout/i.test(errMsg);
     const errorReply = timedOut
       ? SLACK_LISTEN_TIMEOUT_REPLY
       : `Sideboard coordinator error: ${errMsg}`;
-    await postSlackReply(msg, errorReply, opts).catch((postErr) => {
+    try {
+      await progress.finishWith(errorReply);
+      log(`replied error ${msg.ts}: ${errMsg}`);
+    } catch (postErr) {
       const postMsg = postErr instanceof Error ? postErr.message : String(postErr);
       log(`post error: ${postMsg}`);
-    });
-    log(`replied error ${msg.ts}: ${errMsg}`);
+    }
     if (!timedOut) throw err;
     return;
   }
 
   if (!reply) {
-    log(`post error: no agent text to send for ${msg.ts}`);
+    await dropProgress(`post error: no agent text to send for ${msg.ts}`);
     return;
   }
   if (alreadyRelayed(fresh.id, reply)) {
-    log(`turn finished ${msg.ts} (already posted)`);
+    await dropProgress(`turn finished ${msg.ts} (already posted)`);
     return;
   }
   try {
-    await postSlackReply(msg, reply, opts);
+    await progress.finishWith(reply);
     markRelayed(fresh.id, reply);
     log(`replied ${msg.ts} (${reply.length} chars)`);
   } catch (err) {

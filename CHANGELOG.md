@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.103] - 2026-08-20
+
+### Added
+
+- Slack Listen posts one editable `Working…` message after ~20s on a long turn and `chat.update`s it from the live tool snapshot. The final answer (or an interrupt) replaces or deletes that placeholder so DMs are not silent until the coordinator finishes.
+
 ## [0.1.102] - 2026-08-20
 
 ### Fixed
