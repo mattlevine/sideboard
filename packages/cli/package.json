@@ -1,6 +1,6 @@
 {
   "name": "@sideboard-ai/cli",
-  "version": "0.1.102",
+  "version": "0.1.103",
   "description": "Sideboard CLI — agent-agnostic worktree orchestration (includes `sideboard mcp`)",
   "license": "Apache-2.0",
   "type": "module",
