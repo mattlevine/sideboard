@@ -10,6 +10,7 @@ import {
   parseThreadLink,
 } from '../lib/thread-link';
 import { normalizeMarkdownTables } from '../lib/normalize-markdown-tables';
+import { slackMrkdwnToMarkdown } from '../lib/slack-mrkdwn-to-markdown';
 import { MarkdownCodeBlock } from './MarkdownCodeBlock';
 import { MarkdownImage } from './MarkdownImage';
 
@@ -210,7 +211,7 @@ export function MarkdownMessage({
         urlTransform={markdownUrlTransform}
         components={components}
       >
-        {normalizeMarkdownTables(linkifyThreadUrls(text))}
+        {normalizeMarkdownTables(linkifyThreadUrls(slackMrkdwnToMarkdown(text)))}
       </ReactMarkdown>
     </div>
   );

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.105] - 2026-08-21
+
+### Fixed
+
+- Slack coordinator replies that use mrkdwn links (`<url|label>`) render as markdown in the Sideboard board instead of raw angle-bracket markup. Slack posting is unchanged.
+
+### Changed
+
+- Docs site Repo config is four cards (Worktrees, Setup, Review, Process skills) instead of one packed paragraph.
+
 ## [0.1.104] - 2026-08-20
 
 ### Added
