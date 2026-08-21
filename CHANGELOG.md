@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.106] - 2026-08-21
+
+### Fixed
+
+- Slack coordinator replies keep Slack line breaks in the board (single newlines and same-line PR-link runs), matching how Slack wraps them.
+
 ## [0.1.105] - 2026-08-21
 
 ### Fixed

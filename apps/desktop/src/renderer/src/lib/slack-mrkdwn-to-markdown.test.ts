@@ -35,4 +35,30 @@ describe('slackMrkdwnToMarkdown', () => {
     const input = '[#77 credits](https://github.com/acme/app/pull/77)';
     expect(slackMrkdwnToMarkdown(input)).toBe(input);
   });
+
+  it('keeps Slack newlines as hard line breaks', () => {
+    expect(
+      slackMrkdwnToMarkdown(
+        [
+          '<https://github.com/acme/app/pull/78|#78 IDOR> → `179800be`',
+          '<https://github.com/acme/app/pull/77|#77 credits> → `5885fdd2`',
+        ].join('\n'),
+      ),
+    ).toBe(
+      [
+        '[#78 IDOR](https://github.com/acme/app/pull/78) → `179800be`  ',
+        '[#77 credits](https://github.com/acme/app/pull/77) → `5885fdd2`',
+      ].join('\n'),
+    );
+  });
+
+  it('breaks a same-line hash-then-PR-link the way Slack wraps', () => {
+    expect(
+      slackMrkdwnToMarkdown(
+        '<https://github.com/acme/app/pull/78|#78 IDOR> → `179800be` <https://github.com/acme/app/pull/77|#77 credits> → `5885fdd2` (draft)',
+      ),
+    ).toBe(
+      '[#78 IDOR](https://github.com/acme/app/pull/78) → `179800be`  \n[#77 credits](https://github.com/acme/app/pull/77) → `5885fdd2` (draft)',
+    );
+  });
 });
