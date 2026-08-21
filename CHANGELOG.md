@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.107] - 2026-08-21
+
+### Fixed
+
+- Context meter always treats the window as 1M tokens (occupancy / 1M). ~346k on Cursor is ~35%, not red.
+
 ## [0.1.106] - 2026-08-21
 
 ### Fixed

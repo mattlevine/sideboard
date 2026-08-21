@@ -1,5 +1,8 @@
 import type { AgentKind, TokenUsage } from '@sideboard-ai/core';
 
+/** Assumed context window for every agent/model (meter fill = occupancy / this). */
+export const CONTEXT_WINDOW_TOKENS = 1_000_000;
+
 /** Total tokens processed for a turn (uncached input + output + cache reads/writes). */
 export function totalTokens(u: TokenUsage): number {
   return u.inputTokens + u.outputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0);
@@ -71,27 +74,20 @@ export function usageTooltip(u: TokenUsage): string {
   return bits.join(' · ');
 }
 
-/** Best-effort context window size when the agent does not report one. */
+/** Every agent is treated as a 1M window. Args kept so call sites stay stable. */
 export function estimateContextWindow(
-  agent: AgentKind,
-  model?: string | null,
+  _agent?: AgentKind,
+  _model?: string | null,
 ): number {
-  const m = (model ?? '').trim().toLowerCase();
-  if (
-    m.includes('1m') ||
-    m.includes('1000000') ||
-    m.includes('fable') ||
-    m.includes('opus-4-6') ||
-    m.includes('opus-4.6')
-  ) {
-    return 1_000_000;
-  }
-  if (agent === 'claude') return 200_000;
-  if (agent === 'cursor') return 200_000;
-  if (agent === 'codex') return 200_000;
-  if (agent === 'opencode') return 200_000;
-  if (agent === 'brightsy') return 128_000;
-  return 200_000;
+  return CONTEXT_WINDOW_TOKENS;
+}
+
+export function resolveContextWindow(
+  _agent?: AgentKind,
+  _model?: string | null,
+  _occupancyTokens?: number,
+): number {
+  return CONTEXT_WINDOW_TOKENS;
 }
 
 export function contextFillRatio(

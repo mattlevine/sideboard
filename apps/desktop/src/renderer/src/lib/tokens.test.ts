@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextTokens, formatTokenCount, totalTokens, usageTooltip } from './tokens';
+import { contextFillRatio, contextTokens, formatTokenCount, resolveContextWindow, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -34,6 +34,20 @@ describe('contextFillRatio', () => {
       lastRequestTokens: 90_000,
     };
     expect(contextFillRatio(usage, 200_000)).toBeCloseTo(0.45);
+  });
+});
+
+describe('resolveContextWindow', () => {
+  it('assumes 1M for every agent and model', () => {
+    expect(resolveContextWindow('claude', 'haiku', 80_000)).toBe(1_000_000);
+    expect(resolveContextWindow('cursor', 'composer-2.5', 80_000)).toBe(1_000_000);
+    expect(resolveContextWindow('brightsy', null, 80_000)).toBe(1_000_000);
+    expect(
+      contextFillRatio(
+        { inputTokens: 346_000, outputTokens: 10, lastRequestTokens: 346_000 },
+        resolveContextWindow('cursor', 'default', 346_000),
+      ),
+    ).toBeCloseTo(0.346);
   });
 });
 

@@ -40,7 +40,7 @@ import {
   setRightPaneSuppressed,
   type RightPaneSession,
 } from '../lib/right-pane-memory';
-import { formatTokenCount, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, estimateContextWindow } from '../lib/tokens';
+import { formatTokenCount, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
@@ -1068,7 +1068,11 @@ export function ThreadPanel({
     }
     return null;
   }, [thread.messages]);
-  const contextWindow = estimateContextWindow(thread.agent, thread.model);
+  const contextWindow = resolveContextWindow(
+    thread.agent,
+    thread.model,
+    latestContextUsage ? contextTokens(latestContextUsage) : 0,
+  );
   const contextRatio = latestContextUsage
     ? contextFillRatio(latestContextUsage, contextWindow)
     : null;

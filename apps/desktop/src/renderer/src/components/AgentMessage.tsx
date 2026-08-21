@@ -6,7 +6,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, contextTokens, usageTooltip, contextFillRatio, contextMeterTooltip, estimateContextWindow } from '../lib/tokens';
+import { formatTokenCount, contextTokens, usageTooltip, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
 import { ContextMeter } from './ContextMeter';
 import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';
@@ -156,6 +156,9 @@ export function AgentMessage({
   const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const diffAnchorRef = useRef<HTMLElement | null>(null);
+  const windowTokens = usage
+    ? resolveContextWindow(agent ?? 'claude', model, contextTokens(usage))
+    : 0;
 
   function openFileReference(link: FilePathLink) {
     setFileRef(link);
@@ -351,14 +354,8 @@ export function AgentMessage({
             {usage && (
               <span className="msg-usage" title={usageTooltip(usage)}>
                 <ContextMeter
-                  ratio={contextFillRatio(
-                    usage,
-                    estimateContextWindow(agent ?? 'claude', model),
-                  )}
-                  title={contextMeterTooltip(
-                    usage,
-                    estimateContextWindow(agent ?? 'claude', model),
-                  )}
+                  ratio={contextFillRatio(usage, windowTokens)}
+                  title={contextMeterTooltip(usage, windowTokens)}
                   size={12}
                 />
                 {formatTokenCount(contextTokens(usage))} tok
