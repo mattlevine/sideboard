@@ -14,6 +14,8 @@ describe('caffeinateIndicatorReasons', () => {
     agentsRunning: 0,
     whileSlackListen: false,
     slackListenRunning: false,
+    whileSchedules: false,
+    schedulesEnabled: false,
   };
 
   it('is empty when nothing is keeping the Mac awake', () => {
@@ -23,6 +25,9 @@ describe('caffeinateIndicatorReasons', () => {
     ).toEqual([]);
     expect(
       caffeinateIndicatorReasons({ ...off, whileSlackListen: true, slackListenRunning: false }),
+    ).toEqual([]);
+    expect(
+      caffeinateIndicatorReasons({ ...off, whileSchedules: true, schedulesEnabled: false }),
     ).toEqual([]);
   });
 
@@ -35,14 +40,19 @@ describe('caffeinateIndicatorReasons', () => {
       caffeinateIndicatorReasons({ ...off, whileSlackListen: true, slackListenRunning: true }),
     ).toEqual(['slack']);
     expect(
+      caffeinateIndicatorReasons({ ...off, whileSchedules: true, schedulesEnabled: true }),
+    ).toEqual(['schedules']);
+    expect(
       caffeinateIndicatorReasons({
         holdHeld: true,
         whileRunning: true,
         agentsRunning: 1,
         whileSlackListen: true,
         slackListenRunning: true,
+        whileSchedules: true,
+        schedulesEnabled: true,
       }),
-    ).toEqual(['chat', 'running', 'slack']);
+    ).toEqual(['chat', 'running', 'slack', 'schedules']);
   });
 });
 
@@ -54,6 +64,9 @@ describe('caffeinateIndicatorTooltip', () => {
     );
     expect(caffeinateIndicatorTooltip(['chat', 'slack'])).toBe(
       'Sideboard is keeping this Mac awake (orchestration chat and Slack Listen)',
+    );
+    expect(caffeinateIndicatorTooltip(['schedules'])).toBe(
+      'Sideboard is keeping this Mac awake (scheduled tasks)',
     );
   });
 });

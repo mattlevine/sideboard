@@ -150,6 +150,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('ask_git');
       expect(claude).toContain('set_caffeinate');
+      expect(claude).toContain('create_schedule');
       expect(claude).toContain('slack_replies');
       expect(claude).toContain('Sideboard MCP');
       expect(claude).toContain('ask_user');

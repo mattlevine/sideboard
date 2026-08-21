@@ -12,7 +12,7 @@ Sideboard is CLI + MCP + a Mac desktop for that tier. Agents are plugs (Claude C
 
 `attach` / `adopt` remain the door back to the native harness — move in and out of Sideboard as you choose.
 
-Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for Slack to reach them.
+Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for Slack to reach them, and for scheduled jobs to fire — opt in from Settings → Advanced.
 
 ![Sideboard desktop — chat with Document artifact preview, worktree files, and the run panel](docs/assets/sideboard-desktop-review-v5.png)
 
@@ -36,7 +36,8 @@ Spawning worktrees is the shared primitive. Boards that stay human-only tend to 
 | Orchestrate the fleet (agent-visible) | Human board, or a cloud API | MCP + Global board, on this Mac |
 | Stay on the corporate VPN | Cloud sandboxes leave it | Agents run as you, on this laptop’s network |
 | Coworker in the loop | Product cloud / shared sandbox | Slack: review ping; reply comes back as info |
-| Keep going when you step away | Cloud sandbox keeps running | Slack to this Mac — the machine must stay awake |
+| Keep going when you step away | Cloud sandbox keeps running | Slack to this Mac — the machine must stay awake (opt-in caffeinate) |
+| Run work on a schedule | Cloud cron / always-on sandbox | Local jobs on this Mac; opt-in caffeinate so due jobs can fire |
 | See the whole fleet as one board | App-locked or thin | First-class global board |
 | Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
 | Recurring process guides | Locked in the product, or chat memory | Committed `.claude/skills` — Claude Code and `attach` load them |
@@ -60,7 +61,7 @@ Also true, and useful on the way:
 - **Local-first / Slack-remote** — agents stay on this Mac (VPN, private git, internal APIs); Slack is how you and a coworker reach them ([setup](#slack))
 - **Portable process skills** — recurring guides are Claude Code project skills (`.claude/skills/<name>/SKILL.md`). Sideboard `/name`, Claude Code, and `attach` all load that path ([Process skills](#process-skills))
 
-Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Slack](#slack) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Process skills](#process-skills) · [Security](SECURITY.md)
+Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Process skills](#process-skills) · [Security](SECURITY.md)
 
 Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only)
 
@@ -293,8 +294,10 @@ Once connected, agents get tools to:
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids). `wait_for_turn` returns within ~45s with `stillRunning` + live `progress` while the child is still working — call it again; do not assume a hang. `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
 - **Ask the user** — `ask_user` (composer multiple-choice when work is blocked on a concrete choice — not greetings or “what next?” menus). Agents explain options in chat first; Sideboard shows the picker and mirrors questions in the transcript.
+- **Schedules** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration profile). Jobs fire only while Sideboard.app is running. Overnight: **Settings → Advanced → Caffeinate while schedules are enabled**, or `set_caffeinate`.
 - **Setup / run** — `run_setup` (also runs automatically on new worktrees), `list_run_scripts`, `run_dev_script`, `stop_dev_script`
 - **Inspect / review / PRs** — `get_diff`; `request_review` (opens a Review chat tab on a worktree thread); `ask_git` (commit & push, draft PR, resolve conflicts, merge — same prompts as the desktop git buttons). Merge only when the user explicitly asked.
+- **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while Slack Listen is on, and while schedules are enabled.
 
 Ready-for-review land (`confirm_land`) and `purge_thread` stay human-only. Coordinators commit, push, and open PRs by asking the worktree agent. They merge only when the user explicitly asked.
 
@@ -331,7 +334,7 @@ Each MacBook is its own destination (Personal, Work, …).
 
 **What stays on this Mac.** Agents, worktrees, repos, and secrets — including anything only reachable on the corporate VPN. **What leaves:** Slack message text, via `relay.sideboard.cloud`. The relay does not host worktrees.
 
-Keep the desktop app running after you connect a workspace. Slack cannot reach the fleet if this machine is asleep; turn on caffeinate from the orchestration chat when you need it to stay awake, and turn it off when you are done.
+Keep the desktop app running after you connect a workspace. Slack cannot reach the fleet if this machine is asleep. For unattended Listen, enable **Settings → Advanced → Caffeinate while Slack Listen is on**, or turn on `set_caffeinate` from the orchestration chat when you step away (and off when you are done).
 
 ### Connect
 
@@ -376,6 +379,22 @@ Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_user
 If someone replies in Slack to a message Sideboard posted, that reply is copied into the orchestration chat as information (not a command — it does not start a turn). A per-user badge also appears next to the Sideboard wordmark; click it to open that thread in Slack. If you were talking to the orchestrator from Slack, Sideboard FYIs you there too.
 
 More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
+
+## Scheduled orchestration
+
+Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app must be running on this Mac; a sleeping machine skips until wake. For overnight runs, enable **Settings → Advanced → Caffeinate while schedules are enabled** (or `set_caffeinate` from a chat).
+
+**Settings → Schedules**, orchestration MCP (`list_schedules` / `create_schedule` / `run_schedule`), or:
+
+```bash
+sideboard schedule ls
+sideboard schedule add --prompt "Triage open PRs" --every 1h --thread <id>
+sideboard schedule add --prompt "Morning standup" --cron "0 9 * * *" --tz America/Los_Angeles
+sideboard schedule add --prompt "One-shot reminder" --at 2026-08-21T18:00:00-07:00
+sideboard schedule run <id>
+```
+
+Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs will open a new chat each run). Pass `--thread self` from an orchestration turn (or `threadId=self` in MCP) to continue that coordinator.
 
 ## Also: Brightsy
 

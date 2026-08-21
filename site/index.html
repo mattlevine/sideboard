@@ -65,7 +65,7 @@
 <div style="display:flex;flex-direction:column;gap:10px;padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
 <span style="font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:#57aeee">02 — MCP</span>
 <h3 style="font-weight:700;font-size:25px;margin:0;line-height:1.15">An MCP for the agents</h3>
-<p style="margin:0;font-size:16px;line-height:1.55;color:#b3bcc4">List threads, wait on turns, read diffs, fork worktrees — and open panes in the desktop. The orchestrator is an agent too, and it can see the whole fleet.</p>
+<p style="margin:0;font-size:16px;line-height:1.55;color:#b3bcc4">List threads, wait on turns, read diffs, fork worktrees, schedule jobs that wake an orchestrator — and open panes in the desktop. The orchestrator is an agent too, and it can see the whole fleet.</p>
 </div>
 <div style="display:flex;flex-direction:column;gap:10px;padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
 <span style="font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:#57aeee">03 — Slack</span>
@@ -94,6 +94,8 @@
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Orchestrate the fleet, agent-visible</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Human board, or a cloud API</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">MCP + global board, on this Mac</td></tr>
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Stay on the corporate VPN</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Cloud sandboxes leave it</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">Agents run as you, on this network</td></tr>
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Coworker in the loop</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Product cloud or shared sandbox</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">Slack review ping, reply comes back</td></tr>
+<tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Keep going when you step away</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Cloud sandbox keeps running</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">Slack to this Mac — opt-in caffeinate</td></tr>
+<tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Run work on a schedule</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Cloud cron / always-on sandbox</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">Local jobs; opt-in caffeinate so they can fire</td></tr>
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Drop into the native CLI mid-session</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Weak, or one-way</td><td style="padding:13px 8px;border-bottom:1px solid #26292d"><code style="font-size:14px;color:#8cc8f5">attach</code> keeps the same session</td></tr>
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Recurring process guides</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Locked in the product, or chat memory</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">Committed <code style="font-size:14px;color:#8cc8f5">.claude/skills</code> — Claude Code and <code style="font-size:14px;color:#8cc8f5">attach</code> load them</td></tr>
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Bring existing worktrees in</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Stuck, or start over</td><td style="padding:13px 8px;border-bottom:1px solid #26292d"><code style="font-size:14px;color:#8cc8f5">adopt</code> + Conductor import</td></tr>
@@ -174,7 +176,7 @@ sideboard land &lt;thread&gt;</pre>
 <code style="padding:11px 20px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:15px">work: check the failing CI</code>
 <code style="padding:11px 20px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:15px">@sideboard personal: ship it</code>
 </div>
-<p style="font-size:14.5px;color:rgba(255,255,255,.6);margin-top:22px">Each Mac is its own destination. The machine has to stay awake — turn on caffeinate from the orchestration chat when you step away. <a href="/slack/" style="color:#fff;font-weight:700">Set up Slack</a></p>
+<p style="font-size:14.5px;color:rgba(255,255,255,.6);margin-top:22px">Each Mac is its own destination. The machine has to stay awake — Settings → Advanced → Caffeinate while Slack Listen is on, or turn on caffeinate from the orchestration chat when you step away. <a href="/slack/" style="color:#fff;font-weight:700">Set up Slack</a></p>
 </div>
 </div>
 </section>

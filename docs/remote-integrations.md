@@ -2,7 +2,7 @@
 
 Sideboard’s built-in Slack path. Same steps as the [README](../README.md#slack).
 
-Slack is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac (corporate VPN, private git, internal APIs). Message text goes through `relay.sideboard.cloud`; the relay does not host worktrees. The Mac must stay awake — Slack cannot reach a sleeping machine.
+Slack is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac (corporate VPN, private git, internal APIs). Message text goes through `relay.sideboard.cloud`; the relay does not host worktrees. The Mac must stay awake — Slack cannot reach a sleeping machine. For unattended Listen, enable **Settings → Advanced → Caffeinate while Slack Listen is on**, or `set_caffeinate` from the orchestration chat.
 
 ## Connect
 

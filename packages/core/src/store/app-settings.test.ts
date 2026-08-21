@@ -298,6 +298,7 @@ describe('app settings', () => {
     expect(mod.autoRunAfterSetupEnabled()).toBe(false);
     expect(mod.caffeinateWhileRunningEnabled()).toBe(false);
     expect(mod.caffeinateWhileSlackListenEnabled()).toBe(false);
+    expect(mod.caffeinateWhileSchedulesEnabled()).toBe(false);
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
     expect(mod.maxConcurrentAgents()).toBe(3);
@@ -307,6 +308,7 @@ describe('app settings', () => {
       autoRunAfterSetup: true,
       caffeinateWhileRunning: true,
       caffeinateWhileSlackListen: true,
+      caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
@@ -316,12 +318,14 @@ describe('app settings', () => {
       autoRunAfterSetup: true,
       caffeinateWhileRunning: true,
       caffeinateWhileSlackListen: true,
+      caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
     });
     expect(mod.autoRenameBranchEnabled()).toBe(false);
     expect(mod.caffeinateWhileSlackListenEnabled()).toBe(true);
+    expect(mod.caffeinateWhileSchedulesEnabled()).toBe(true);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(true);
     expect(mod.maxConcurrentAgents()).toBe(8);
   });

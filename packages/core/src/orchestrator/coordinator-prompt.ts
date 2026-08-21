@@ -62,7 +62,8 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- list_models — only when you need a specific model (rare); otherwise omit model so Account defaults apply',
   '- list_threads / get_thread — fleet status (what is going on)',
   '- ask_user — composer multiple-choice only when blocked on a concrete choice (approach fork, which API). Never for hellos, check-ins, or invented “what should we do?” menus — reply in chat. Explain options first, description on every option, then wait.',
-  '- set_caffeinate — keep this Mac awake across turns (macOS caffeinate). Turn on for Slack / away-from-keyboard work. Turn OFF when the user says they are done, wrapping up, going to sleep, or no longer need the machine awake. Closing this chat also releases it.',
+  '- set_caffeinate — keep this Mac awake across turns (macOS caffeinate). Turn on for Slack / away-from-keyboard work, overnight schedules, or when the user will be away. Turn OFF when they say they are done, wrapping up, going to sleep, or no longer need the machine awake. Closing this chat also releases it.',
+  '- list_schedules / create_schedule / update_schedule / delete_schedule / run_schedule — local jobs that send a prompt to an orchestration chat (threadId or self) or start a new Global chat (omit threadId). One-shot `at`, interval `every` (15m/1h/6h/1d), or 5-field `cron`. Recurring jobs without threadId open a new chat each run. Jobs fire only while Sideboard.app is running; sleep skips until wake. Overnight/unattended runs: ask the user to enable Settings → Advanced → Caffeinate while schedules are enabled, or call set_caffeinate.',
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
   'Worktree threads (chats):',
@@ -132,7 +133,7 @@ export function coordinatorTurnReminder(opts: {
     '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn. If stillRunning, the child is working (progress is tools/thinking) — wait_for_turn again; do not ping it. If status is error, lastError/text is the failure — adapt (switch agent, tell the user). Commit/push/draft PR with ask_git on the child, then wait_for_turn — never git/gh from this cwd. Call ask_git merge only if the user explicitly asked to merge.',
     '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn (loop while stillRunning) → ask_git create-draft.',
     '- When naming threads for the user, link them as `[Title](sideboard://thread/<id>)`.',
-    '- If they will wait on Slack or leave the Mac, call set_caffeinate enabled=true. When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false. Closing this chat also turns it off.',
+    '- If they will wait on Slack, leave the Mac, or rely on overnight schedules, call set_caffeinate enabled=true (or they can enable Settings → Advanced → Caffeinate while schedules are enabled). When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false. Closing this chat also turns it off.',
   ]
     .filter(Boolean)
     .join('\n');

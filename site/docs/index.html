@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Docs — Sideboard</title>
-<meta name="description" content="Install the CLI and desktop, connect the MCP to your agents, wire up Slack and Linear, and configure worktrees per repo.">
+<meta name="description" content="Install the CLI and desktop, connect the MCP to your agents, schedule orchestration jobs, wire up Slack and Linear, and configure worktrees per repo.">
 <meta property="og:title" content="Docs — Sideboard">
-<meta property="og:description" content="Install the CLI and desktop, connect the MCP to your agents, wire up Slack and Linear, and configure worktrees per repo.">
+<meta property="og:description" content="Install the CLI and desktop, connect the MCP to your agents, schedule orchestration jobs, wire up Slack and Linear, and configure worktrees per repo.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sideboard.cloud/">
 <meta property="og:image" content="https://sideboard.cloud/desktop.png">
@@ -27,6 +27,7 @@
 </a>
 <a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
 <a href="#install" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Install</a>
+<a href="#schedules" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Schedules</a>
 <a href="#guides" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Guides</a>
 <a href="https://github.com/mattlevine/sideboard" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">GitHub</a>
 </div>
@@ -73,6 +74,7 @@ sideboard send &lt;thread&gt; "add a README note"
 sideboard diff &lt;thread&gt;
 sideboard attach &lt;thread&gt;        <span style="color:#6f777e"># native CLI, same session</span>
 sideboard land &lt;thread&gt;          <span style="color:#6f777e"># interactive y/N; no --yes in v1</span>
+sideboard schedule ls
 sideboard adopt --from-conductor <span style="color:#6f777e"># import Conductor workspaces + history</span></pre>
 </section>
 
@@ -104,12 +106,26 @@ args = ["mcp"]</pre>
   "command": ["sideboard","mcp"] } } }</pre>
 </div>
 </div>
-<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_workspaces</code>, <code style="color:#8cc8f5">list_threads</code>), worktree chats (<code style="color:#8cc8f5">create_thread</code>, <code style="color:#8cc8f5">send_to_thread</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_worktree</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. <code style="color:#8cc8f5">wait_for_turn</code> returns within ~45s with <code style="color:#8cc8f5">stillRunning</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code style="color:#8cc8f5">ask_git</code>) only when the user explicitly asked.</p>
+<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_workspaces</code>, <code style="color:#8cc8f5">list_threads</code>), worktree chats (<code style="color:#8cc8f5">create_thread</code>, <code style="color:#8cc8f5">send_to_thread</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_worktree</code>), schedules (<code style="color:#8cc8f5">create_schedule</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. <code style="color:#8cc8f5">wait_for_turn</code> returns within ~45s with <code style="color:#8cc8f5">stillRunning</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code style="color:#8cc8f5">ask_git</code>) only when the user explicitly asked.</p>
+</section>
+
+<section id="schedules" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Scheduled orchestration</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:680px;margin:0 0 24px">Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app must be running. A sleeping Mac skips until wake.</p>
+<pre style="margin:0 0 20px;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">sideboard schedule ls
+sideboard schedule add --prompt "Triage open PRs" --every 1h --thread &lt;id&gt;
+sideboard schedule add --prompt "Morning standup" --cron "0 9 * * *" --tz America/Los_Angeles
+sideboard schedule run &lt;id&gt;</pre>
+<p style="font-size:15.5px;line-height:1.65;color:#b3bcc4;max-width:720px;margin:0">Same jobs from <strong>Settings → Schedules</strong> or orchestration MCP (<code style="color:#8cc8f5">create_schedule</code>, <code style="color:#8cc8f5">threadId=self</code> to continue this coordinator). Overnight: <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong> (off by default so a 9am cron does not pin the Mac awake), or <code style="color:#8cc8f5">set_caffeinate</code> from a chat. Recurring jobs with no target chat open a new Global chat each run.</p>
 </section>
 
 <section id="guides" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
 <h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 24px">Guides</h2>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px">
+<a href="#schedules" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Schedules</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Local jobs that wake an orchestration chat. Opt-in caffeinate so overnight runs can fire.</p>
+</a>
 <a href="/slack/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Slack</h4>
 <p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Connect a workspace, name this Mac, and address it by prefix from a DM or channel.</p>

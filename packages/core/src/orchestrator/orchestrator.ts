@@ -154,6 +154,7 @@ import {
   orchestratorSessionPoisonedByBuiltins,
 } from '../store/global-workspace.js';
 import { releaseCaffeinateHoldForThread } from '../store/caffeinate-hold.js';
+import { armSchedules } from './schedule-runner.js';
 import {
   coordinatorSystemPrompt,
   coordinatorTurnReminder,
@@ -356,6 +357,7 @@ export class Orchestrator {
 
     // Re-arm session-quota wait timers (and fire any that are already due).
     this.schedulePendingQuotaResumes();
+    armSchedules();
   }
 
   /**

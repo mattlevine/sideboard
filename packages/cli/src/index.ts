@@ -28,6 +28,14 @@ import {
   runSlackListen,
   SLACK_OAUTH_REDIRECT,
   LINEAR_OAUTH_REDIRECT,
+  createSchedule,
+  deleteSchedule,
+  fireSchedule,
+  formatScheduleWhen,
+  getSchedule,
+  listSchedules,
+  resolveScheduleThreadId,
+  updateSchedule,
   type AgentKind,
 } from '@sideboard-ai/core';
 
@@ -670,6 +678,135 @@ async function main(): Promise<void> {
     .description('Run the Sideboard MCP stdio server')
     .action(async () => {
       await startMcpServer();
+    });
+
+  const scheduleCmd = program
+    .command('schedule')
+    .description(
+      'Local jobs that trigger orchestration chats (Sideboard.app must be running to fire)',
+    );
+
+  scheduleCmd
+    .command('ls')
+    .description('List schedules')
+    .action(() => {
+      const rows = listSchedules();
+      if (rows.length === 0) {
+        console.log(chalk.dim('No schedules'));
+        return;
+      }
+      for (const row of rows) {
+        const target = row.threadId ? row.threadId.slice(0, 8) : 'new chat';
+        const on = row.enabled ? chalk.green('on ') : chalk.dim('off');
+        console.log(
+          `${row.id.slice(0, 8)}  ${on}  ${formatScheduleWhen(row.when)}  next ${row.nextRunAt}  ${target}  ${row.name}`,
+        );
+        if (row.lastError) console.log(chalk.red(`         ${row.lastError}`));
+      }
+    });
+
+  scheduleCmd
+    .command('add')
+    .requiredOption('--prompt <text>', 'prompt / goal queued when the job fires')
+    .option('--name <name>', 'short label')
+    .option('--at <iso>', 'one-shot ISO datetime')
+    .option('--every <duration>', 'interval (15m, 1h, 6h, 1d)')
+    .option('--cron <expr>', '5-field cron')
+    .option('--tz <iana>', 'timezone for cron')
+    .option(
+      '--thread <id>',
+      'existing orchestration chat (or self). Omit to create a new Global chat each run',
+    )
+    .option('--agent <agent>', 'claude|cursor|codex|opencode (new chats only)')
+    .action((opts) => {
+      const cadence = [opts.at, opts.every, opts.cron].filter(Boolean);
+      if (cadence.length !== 1) {
+        throw new Error('Pass exactly one of --at, --every, or --cron');
+      }
+      const when = opts.at
+        ? { kind: 'once' as const, at: String(opts.at) }
+        : opts.every
+          ? { kind: 'every' as const, every: String(opts.every) }
+          : {
+              kind: 'cron' as const,
+              expr: String(opts.cron),
+              tz: opts.tz ? String(opts.tz) : undefined,
+            };
+      const threadId = resolveScheduleThreadId(
+        opts.thread ? String(opts.thread) : undefined,
+      );
+      if (String(opts.thread ?? '').trim().toLowerCase() === 'self' && !threadId) {
+        throw new Error('--thread self needs SIDEBOARD_ORCHESTRATOR_THREAD_ID');
+      }
+      const agent = opts.agent ? parseAgent(String(opts.agent)) : undefined;
+      if (agent === 'brightsy') {
+        throw new Error('schedules cannot use brightsy — pick claude, cursor, codex, or opencode');
+      }
+      const row = createSchedule({
+        name: opts.name,
+        prompt: String(opts.prompt),
+        when,
+        threadId,
+        agent,
+        createdBy: 'cli',
+      });
+      if (!row.threadId && row.when.kind !== 'once') {
+        console.log(
+          chalk.yellow(
+            'Recurring schedule has no --thread: each run opens a new orchestration chat.',
+          ),
+        );
+      }
+      console.log(
+        chalk.green(
+          `Scheduled ${row.id.slice(0, 8)}  ${formatScheduleWhen(row.when)}  next ${row.nextRunAt}`,
+        ),
+      );
+      console.log(chalk.dim('Fires while Sideboard.app is running on this Mac.'));
+    });
+
+  scheduleCmd
+    .command('enable')
+    .argument('<id>', 'schedule id')
+    .action((id) => {
+      const row = updateSchedule(id, { enabled: true });
+      console.log(chalk.green(`Enabled ${row.id.slice(0, 8)}`));
+    });
+
+  scheduleCmd
+    .command('disable')
+    .argument('<id>', 'schedule id')
+    .action((id) => {
+      const row = updateSchedule(id, { enabled: false });
+      console.log(chalk.yellow(`Disabled ${row.id.slice(0, 8)}`));
+    });
+
+  scheduleCmd
+    .command('rm')
+    .argument('<id>', 'schedule id')
+    .action((id) => {
+      const row = getSchedule(id);
+      if (!row) throw new Error(`Schedule not found: ${id}`);
+      deleteSchedule(row.id);
+      console.log(chalk.yellow(`Removed ${row.id.slice(0, 8)}`));
+    });
+
+  scheduleCmd
+    .command('run')
+    .argument('<id>', 'schedule id')
+    .description('Fire now')
+    .action(async (id) => {
+      const row = await fireSchedule(id);
+      if (row.lastError) {
+        console.error(chalk.red(row.lastError));
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        chalk.green(
+          `Fired ${row.id.slice(0, 8)} → ${row.lastThreadId?.slice(0, 8) ?? 'thread'}`,
+        ),
+      );
     });
 
   const brightsyCmd = program

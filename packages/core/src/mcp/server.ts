@@ -22,6 +22,7 @@ import {
 import { readTurnLive } from '../store/turn-live.js';
 import { registerSlackTools } from './slack-tools.js';
 import { registerLinearTools } from './linear-tools.js';
+import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
 
@@ -380,6 +381,7 @@ export async function startMcpServer(): Promise<void> {
   registerLinearTools(server);
 
   if (sideboardMcpProfile() !== 'worktree') {
+  registerScheduleTools(server);
   const { getCaffeinateHold, setCaffeinateHold } = await import(
     '../store/caffeinate-hold.js'
   );

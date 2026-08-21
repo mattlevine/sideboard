@@ -19,9 +19,10 @@ import type {
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
+import { SchedulesSettings } from './SchedulesSettings';
 import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
 
-type NavId = 'account' | 'agents' | 'environment' | 'advanced' | 'history';
+type NavId = 'account' | 'agents' | 'environment' | 'schedules' | 'advanced' | 'history';
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
 
 const CLI_PATH_AGENTS = new Set<AgentPanel>(['claude', 'codex', 'opencode', 'brightsy']);
@@ -647,6 +648,16 @@ export function SettingsModal({
             </button>
             <button
               type="button"
+              className={`settings-nav-btn${nav === 'schedules' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('schedules');
+                setAgentPanel(null);
+              }}
+            >
+              Schedules
+            </button>
+            <button
+              type="button"
               className={`settings-nav-btn${nav === 'advanced' ? ' active' : ''}`}
               onClick={() => {
                 setNav('advanced');
@@ -674,8 +685,12 @@ export function SettingsModal({
                   ? 'Account'
                   : nav === 'environment'
                   ? 'Environment'
+                  : nav === 'schedules'
+                    ? 'Schedules'
                   : nav === 'advanced'
                     ? 'Advanced'
+                    : nav === 'history'
+                      ? 'History'
                     : activeAgent
                       ? activeAgent.label
                       : 'Agents'}
@@ -1796,6 +1811,35 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-toggle-row">
                     <div>
+                      <div className="settings-section-title">
+                        Caffeinate while schedules are enabled
+                      </div>
+                      <p className="settings-hint">
+                        Keep the Mac awake so due jobs can fire (macOS only). Off by default so
+                        a daily 9am cron does not pin the machine awake. Lid-close may still
+                        sleep on battery.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.caffeinateWhileSchedules ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.caffeinateWhileSchedules)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          caffeinateWhileSchedules: !advanced.caffeinateWhileSchedules,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
                       <div className="settings-section-title">Delete branch on purge</div>
                       <p className="settings-hint">
                         When purging a thread, also delete its git branch (Conductor{' '}
@@ -2076,6 +2120,8 @@ export function SettingsModal({
                 </div>
               </div>
             )}
+
+            {nav === 'schedules' && <SchedulesSettings />}
 
             {nav === 'history' && (
               <div className="settings-body">

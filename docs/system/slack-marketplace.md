@@ -60,7 +60,7 @@ Marketplace landing must be a **public web page for the Slack app**, not GitHub.
 
 | Page | URL (proposed) | Must include |
 |------|----------------|--------------|
-| Slack landing | `/slack/` | What it does in Slack, how it works (Mac must be awake), Add to Slack, path after install, LLM inaccuracy disclaimer, link to privacy |
+| Slack landing | `/slack/` | What it does in Slack, how it works (Mac must be awake — Settings → Advanced caffeinate while Listen is on, or `set_caffeinate` from a chat), Add to Slack, path after install, LLM inaccuracy disclaimer, link to privacy |
 | Privacy | `/privacy/` | Data collected, use, retention, access/transfer/delete, contact email (not GitHub-only) |
 | Support | `/support/` | Email or form, no extra account, respond within **2 business days** |
 

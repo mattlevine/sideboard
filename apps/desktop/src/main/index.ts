@@ -50,6 +50,7 @@ import {
   caffeinateHoldPath,
   caffeinateWhileRunningEnabled,
   caffeinateWhileSlackListenEnabled,
+  caffeinateWhileSchedulesEnabled,
   getCaffeinateHold,
   setCaffeinateHold,
   claudeUserSettingsPath,
@@ -109,6 +110,14 @@ import {
   hasConductorHook,
   getRepoSetupInfo,
   threadsDir,
+  schedulesPath,
+  listSchedules,
+  createSchedule,
+  updateSchedule,
+  deleteSchedule,
+  fireSchedule,
+  armSchedules,
+  hasEnabledSchedules,
   updateAdvancedSettings,
   updateAppEnvironment,
   updateBrightsySettings,
@@ -136,6 +145,8 @@ import {
   type OrchestratorEvent,
   type ThreadAttachment,
   type ThreadOptionsPatch,
+  type CreateScheduledTaskInput,
+  type UpdateScheduledTaskPatch,
 } from '@sideboard-ai/core';
 import { closeTsServer, setupTsServer } from './tsserver';
 
@@ -534,6 +545,8 @@ function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
     slackListenRunning,
+    whileSchedules: caffeinateWhileSchedulesEnabled(),
+    schedulesEnabled: hasEnabledSchedules(),
   });
   return { ...hold, appCaffeinated: reasons.length > 0 };
 }
@@ -546,6 +559,8 @@ function syncCaffeinateIndicator(): void {
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
     slackListenRunning,
+    whileSchedules: caffeinateWhileSchedulesEnabled(),
+    schedulesEnabled: hasEnabledSchedules(),
   });
   const active = state.appCaffeinated;
   const tooltip = caffeinateIndicatorTooltip(reasons);
@@ -672,6 +687,36 @@ function setupStoreWatcher(): void {
   });
 }
 
+function setupSchedulesWatcher(): void {
+  const file = schedulesPath();
+  const dir = dirname(file);
+  const name = basename(file);
+  mkdirSync(dir, { recursive: true });
+  const watcher = watch(dir, { ignoreInitial: true, depth: 0 });
+  let armTimer: ReturnType<typeof setTimeout> | null = null;
+  const notify = (changed: string) => {
+    if (basename(changed) !== name) return;
+    mainWindow?.webContents.send('schedules:changed');
+    if (armTimer) clearTimeout(armTimer);
+    armTimer = setTimeout(() => {
+      armTimer = null;
+      try {
+        armSchedules();
+        syncCaffeinate();
+      } catch {
+        // Best-effort — next change or startup will retry.
+      }
+    }, 250);
+  };
+  watcher.on('add', notify);
+  watcher.on('change', notify);
+  watcher.on('unlink', notify);
+  app.on('will-quit', () => {
+    if (armTimer) clearTimeout(armTimer);
+    void watcher.close();
+  });
+}
+
 function setupCaffeinateHoldWatcher(): void {
   const file = caffeinateHoldPath();
   const dir = dirname(file);
@@ -705,7 +750,7 @@ function stopCaffeinate(): void {
   caffeinateProc = null;
 }
 
-/** Keep the Mac awake while agents run, Slack Listen is on, or a chat holds caffeinate. */
+/** Keep the Mac awake while agents run, Slack Listen, schedules, or a chat holds caffeinate. */
 function syncCaffeinate(): void {
   if (process.platform !== 'darwin') {
     stopCaffeinate();
@@ -714,7 +759,8 @@ function syncCaffeinate(): void {
   }
   const keepAwake =
     (caffeinateWhileRunningEnabled() && orch.getRuntime().running > 0) ||
-    (caffeinateWhileSlackListenEnabled() && slackListenRunning);
+    (caffeinateWhileSlackListenEnabled() && slackListenRunning) ||
+    (caffeinateWhileSchedulesEnabled() && hasEnabledSchedules());
   if (keepAwake && !caffeinateProc) {
     try {
       caffeinateProc = spawn('caffeinate', ['-dimsu'], {
@@ -841,7 +887,8 @@ function registerIpc(): void {
     if (
       'caffeinateWhileRunning' in patch ||
       'caffeinateWhileSlackListen' in patch ||
-      'caffeinateWhileCloudConnect' in patch
+      'caffeinateWhileCloudConnect' in patch ||
+      'caffeinateWhileSchedules' in patch
     ) {
       syncCaffeinate();
     }
@@ -1180,6 +1227,32 @@ function registerIpc(): void {
       },
     ) => startOrchestration(opts),
   );
+  ipcMain.handle('listSchedules', () => listSchedules());
+  ipcMain.handle(
+    'createSchedule',
+    (_e, input: Omit<CreateScheduledTaskInput, 'createdBy'>) => {
+      const row = createSchedule({ ...input, createdBy: 'ui' });
+      syncCaffeinate();
+      return row;
+    },
+  );
+  ipcMain.handle(
+    'updateSchedule',
+    (_e, id: string, patch: UpdateScheduledTaskPatch) => {
+      const row = updateSchedule(id, patch);
+      syncCaffeinate();
+      return row;
+    },
+  );
+  ipcMain.handle('deleteSchedule', (_e, id: string) => {
+    deleteSchedule(id);
+    syncCaffeinate();
+  });
+  ipcMain.handle('runSchedule', async (_e, id: string) => {
+    const row = await fireSchedule(id);
+    syncCaffeinate();
+    return row;
+  });
   ipcMain.handle(
     'createGlobalChat',
     (
@@ -1534,6 +1607,7 @@ app.whenReady().then(async () => {
   registerIpc();
   setupNotifications();
   setupStoreWatcher();
+  setupSchedulesWatcher();
   setupCaffeinateHoldWatcher();
   setupUpdater();
   setupApplicationMenu(() => mainWindow);
@@ -1552,6 +1626,8 @@ app.whenReady().then(async () => {
   } catch {
     // Leave repoPath empty when cwd is not inside a git repo (typical for Dock launches).
   }
+  armSchedules();
+  syncCaffeinate();
   orch.listWorkspaces();
   createWindow();
   if (mainWindow) setupTsServer(mainWindow);

@@ -17,5 +17,5 @@ Product / user docs (not required for every change):
 - [../agent-adapters.md](../agent-adapters.md) — adding a coding agent
 - [../remote-integrations.md](../remote-integrations.md) — Slack listen / destinations
 - [../COMPARE.md](../COMPARE.md) — vs Conductor / other boards
-- [../../README.md](../../README.md) — product overview, [process skills](../../README.md#process-skills)
+- [../../README.md](../../README.md) — product overview, [process skills](../../README.md#process-skills), [scheduled orchestration](../../README.md#scheduled-orchestration)
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md) — PR checklist

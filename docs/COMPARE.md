@@ -15,7 +15,7 @@ A serious local orchestration tier would compete with that upsell. Sideboard is 
 | Where agents run | Free: your Mac. Paid: cloud sandbox, off-VPN | Always this Mac — inside the corporate VPN |
 | Orchestration | Human-oriented local board; programmatic control is the Cloud API | MCP + Global board, on this Mac |
 | Team / remote | Cloud multiplayer and shared workspaces | Slack to this Mac; `slack_post` a review ping; replies come back as info |
-| Away from the laptop | Cloud sandbox keeps running | Slack reaches this Mac only while it is awake |
+| Away from the laptop | Cloud sandbox keeps running | Slack reaches this Mac only while it is awake (opt-in caffeinate). Local schedules fire the same way. |
 | Session data | Cloud: Conductor’s servers. Local: your disk | Your Mac. Relay routes Slack chat only |
 | Lock-in | Sessions live in the app | `attach` / `adopt` — move in and out of native CLIs |
 

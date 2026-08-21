@@ -106,6 +106,18 @@ const api: IpcApi = {
     ipcRenderer.invoke('setThreadOptions', threadRef, patch),
   fanOut: (threadRefs, prompt) => ipcRenderer.invoke('fanOut', threadRefs, prompt),
   startOrchestration: (opts) => ipcRenderer.invoke('startOrchestration', opts),
+  listSchedules: () => ipcRenderer.invoke('listSchedules'),
+  createSchedule: (input) => ipcRenderer.invoke('createSchedule', input),
+  updateSchedule: (id, patch) => ipcRenderer.invoke('updateSchedule', id, patch),
+  deleteSchedule: (id) => ipcRenderer.invoke('deleteSchedule', id),
+  runSchedule: (id) => ipcRenderer.invoke('runSchedule', id),
+  onSchedulesChanged: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on('schedules:changed', handler);
+    return () => {
+      ipcRenderer.removeListener('schedules:changed', handler);
+    };
+  },
   createGlobalChat: (opts) => ipcRenderer.invoke('createGlobalChat', opts),
   ensureCloudCoordinator: (agent) =>
     ipcRenderer.invoke('ensureCloudCoordinator', agent),

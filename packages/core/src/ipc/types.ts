@@ -47,6 +47,11 @@ import type {
 import type { BrightsySession } from '../brightsy/accounts.js';
 import type { GitHubStatus } from '../integrations/github.js';
 import type { CaffeinateHoldState } from '../store/caffeinate-hold.js';
+import type {
+  CreateScheduledTaskInput,
+  ScheduledTask,
+  UpdateScheduledTaskPatch,
+} from '../store/schedules.js';
 import type { SlackReplyBadge } from '../slack/outbound-watch.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesResult } from '../integrations/issues.js';
@@ -264,6 +269,12 @@ export interface IpcApi {
     planMode?: boolean;
     attachments?: ThreadAttachment[];
   }): Promise<Thread>;
+  listSchedules(): Promise<ScheduledTask[]>;
+  createSchedule(input: Omit<CreateScheduledTaskInput, 'createdBy'>): Promise<ScheduledTask>;
+  updateSchedule(id: string, patch: UpdateScheduledTaskPatch): Promise<ScheduledTask>;
+  deleteSchedule(id: string): Promise<void>;
+  runSchedule(id: string): Promise<ScheduledTask>;
+  onSchedulesChanged(listener: () => void): () => void;
   createGlobalChat(opts: {
     title?: string;
     agent: AgentKind;

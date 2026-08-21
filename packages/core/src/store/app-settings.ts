@@ -180,6 +180,12 @@ export interface AdvancedAppSettings {
    */
   caffeinateWhileSlackListen?: boolean;
   /**
+   * Keep the Mac awake with `caffeinate` while any local schedule is enabled
+   * (so a due job can fire). Default off — a 9am cron should not pin the Mac
+   * awake 24/7 unless the user opts in.
+   */
+  caffeinateWhileSchedules?: boolean;
+  /**
    * @deprecated Prefer `caffeinateWhileSlackListen`. Still read on load for migration.
    */
   caffeinateWhileCloudConnect?: boolean;
@@ -488,6 +494,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   } else if (typeof source.caffeinateWhileCloudConnect === 'boolean') {
     // Migrate former Brightsy cloud-connect toggle.
     out.caffeinateWhileSlackListen = source.caffeinateWhileCloudConnect;
+  }
+  if (typeof source.caffeinateWhileSchedules === 'boolean') {
+    out.caffeinateWhileSchedules = source.caffeinateWhileSchedules;
   }
   if (typeof source.deleteBranchOnPurge === 'boolean') {
     out.deleteBranchOnPurge = source.deleteBranchOnPurge;
@@ -1223,6 +1232,9 @@ export function updateAdvancedSettings(
     advanced.caffeinateWhileSlackListen = patch.caffeinateWhileCloudConnect;
     delete advanced.caffeinateWhileCloudConnect;
   }
+  if (typeof patch.caffeinateWhileSchedules === 'boolean') {
+    advanced.caffeinateWhileSchedules = patch.caffeinateWhileSchedules;
+  }
   if (typeof patch.deleteBranchOnPurge === 'boolean') {
     advanced.deleteBranchOnPurge = patch.deleteBranchOnPurge;
   }
@@ -1289,6 +1301,12 @@ export function caffeinateWhileSlackListenEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.caffeinateWhileSlackListen);
+}
+
+export function caffeinateWhileSchedulesEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.caffeinateWhileSchedules);
 }
 
 /** @deprecated Use caffeinateWhileSlackListenEnabled. */

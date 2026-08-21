@@ -1,6 +1,6 @@
 import { deflateSync } from 'node:zlib';
 
-export type CaffeinateReason = 'chat' | 'running' | 'slack';
+export type CaffeinateReason = 'chat' | 'running' | 'slack' | 'schedules';
 
 export function caffeinateIndicatorReasons(opts: {
   holdHeld: boolean;
@@ -8,11 +8,14 @@ export function caffeinateIndicatorReasons(opts: {
   agentsRunning: number;
   whileSlackListen: boolean;
   slackListenRunning: boolean;
+  whileSchedules: boolean;
+  schedulesEnabled: boolean;
 }): CaffeinateReason[] {
   const reasons: CaffeinateReason[] = [];
   if (opts.holdHeld) reasons.push('chat');
   if (opts.whileRunning && opts.agentsRunning > 0) reasons.push('running');
   if (opts.whileSlackListen && opts.slackListenRunning) reasons.push('slack');
+  if (opts.whileSchedules && opts.schedulesEnabled) reasons.push('schedules');
   return reasons;
 }
 
@@ -20,6 +23,7 @@ const LABELS: Record<CaffeinateReason, string> = {
   chat: 'orchestration chat',
   running: 'agents running',
   slack: 'Slack Listen',
+  schedules: 'scheduled tasks',
 };
 
 export function caffeinateIndicatorTooltip(reasons: CaffeinateReason[]): string {

@@ -10174,6 +10174,12 @@ body:has(.update-banner) .team-toast-stack {
   word-break: break-word;
 }
 
+.settings-field textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+}
+
 .settings-hint {
   margin: 0;
   font-size: 12px;

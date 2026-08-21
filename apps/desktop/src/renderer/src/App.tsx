@@ -245,7 +245,7 @@ export function App() {
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<
-    'account' | 'agents' | 'environment' | 'advanced' | 'history'
+    'account' | 'agents' | 'environment' | 'schedules' | 'advanced' | 'history'
   >('account');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),

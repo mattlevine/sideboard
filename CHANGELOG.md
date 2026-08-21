@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.104] - 2026-08-20
+
+### Added
+
+- Local scheduled tasks that trigger orchestration agents (Settings → Schedules, `sideboard schedule`, MCP `create_schedule`). A due job sends a prompt to a named Global chat or starts a new one. Overnight runs opt in via **Settings → Advanced → Caffeinate while schedules are enabled** (default off) or `set_caffeinate`.
+
 ## [0.1.103] - 2026-08-20
 
 ### Added
