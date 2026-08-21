@@ -88,10 +88,13 @@ export function isElectronLikeCommand(command: string): boolean {
   const name = command.trim();
   if (!name) return false;
   if (process.versions.electron && name === process.execPath) return true;
+  // GUI binaries only. Official Node ships at
+  // `Sideboard.app/Contents/Resources/node/bin/node` — matching any path under
+  // the .app bundle made resolveNodeLaunch skip it and fall back to Homebrew.
   return (
     /(?:^|[/\\])Electron(?:\.exe)?$/i.test(name) ||
-    /Sideboard\.app[/\\]/i.test(name) ||
-    /Electron\.app[/\\]/i.test(name)
+    /(?:^|[/\\])Sideboard(?:\.exe)?$/i.test(name) ||
+    /(?:Sideboard|Electron)\.app[/\\]Contents[/\\]MacOS[/\\]/i.test(name)
   );
 }
 

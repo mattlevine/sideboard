@@ -21,7 +21,7 @@ Middle path: run a loop first, write down every correction, then use those notes
 
 1. **Judge first.** Before generating at scale, decide the command that means “this item passed” without opening the output (`test`, typecheck, schema check, or a yes/no model call). A thread going idle is a mood, not a judge. Break the judge on purpose once so a green result means something.
 
-2. **Write the rulebook.** Capture ambiguities in a file workers read: this skill, a sibling `.claude/skills/<name>/SKILL.md`, `AGENTS.md`, or `.sideboard/review.md`. Every “in that case it should…” is a sentence. Nothing bypasses it — if you hand-edit output to match what the rulebook should have said, you have two sources of truth.
+2. **Write the rulebook.** Capture ambiguities in a file workers read: this skill, a sibling `.claude/skills/<name>/SKILL.md`, `AGENTS.md`, or `.claude/skills/review/SKILL.md`. Every “in that case it should…” is a sentence. Nothing bypasses it — if you hand-edit output to match what the rulebook should have said, you have two sources of truth.
 
 3. **Pilot three, then delete.** Run three items two ways, diff them, fix the **rules**, throw away the pilot output so you do not keep two conventions.
 
@@ -31,7 +31,7 @@ Middle path: run a loop first, write down every correction, then use those notes
 
 6. **Checks by cost.** Anything a script can verify, a model must not. Fast checks (seconds) sit inside the loop. Slow checks (full CI, long compile) run once in a batch. Serialize the expensive operation (one build owner, many patchers).
 
-7. **Categories, not instances.** The same miss in the third file is one bad rule. Edit the skill / `review.md` / `AGENTS.md` and rerun the batch. Do not patch three files and leave the process unchanged.
+7. **Categories, not instances.** The same miss in the third file is one bad rule. Edit the skill / `.claude/skills/review/SKILL.md` / `AGENTS.md` and rerun the batch. Do not patch three files and leave the process unchanged.
 
 8. **Model by role.** Stronger model for reviewers and anything that writes rules other agents will follow. Workers can stay on the default.
 
@@ -52,7 +52,7 @@ After merge to the default branch, new worktrees inherit the file. Existing sibl
 |---|---|
 | Worker node | Worktree thread |
 | Judge | Tests / typecheck / `getPrChecks` — not “the agent said done” |
-| Rulebook | This skill, sibling skills, `AGENTS.md`, `.sideboard/review.md` |
+| Rulebook | This skill, sibling skills, `AGENTS.md`, `.claude/skills/review/SKILL.md` |
 | Blind reviewer | `request_review` (fresh tab, no worker chat) |
 | Disk queue | Worktrees + thread store; pending = no output / no passing judge |
 | Human gate | `confirm_land` / purge |

@@ -46,10 +46,12 @@ describe('formatProcessGuideDirective', () => {
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
     expect(text).toMatch(/graph-engineering/);
     expect(text).toMatch(/\/graph-engineering/);
-    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills`/);
+    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);
+    expect(text).toMatch(/That file is allowed/);
+    expect(text).toMatch(/that folder only/);
     expect(text).toMatch(/attach/);
     expect(text).toMatch(/AGENTS\.md/);
-    expect(text).toMatch(/one-off/);
+    expect(text).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
   });
 });
 
@@ -106,7 +108,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).not.toMatch(/GitHub app/i);
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
     expect(text).toMatch(/graph-engineering/);
-    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills`/);
+    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);
     expect(text).toMatch(/Skip a guide for a one-off/);
   });
 

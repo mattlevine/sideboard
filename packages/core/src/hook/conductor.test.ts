@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ import {
   runWorkspaceSetup,
   stripNestedElectronEnv,
 } from './conductor.js';
+import { REVIEW_SKILL_PATH } from '../review/request-review.js';
 
 describe('resolveFilesToCopy', () => {
   it('prefers .worktreeinclude over settings', () => {
@@ -151,5 +152,13 @@ describe('runConventionSetup / runWorkspaceSetup', () => {
     expect(result.source).toContain('settings.toml');
     expect(lines.join('\n')).toContain('from-toml');
     expect(lines.join('\n')).not.toContain('from-convention');
+  });
+
+  it('seeds .claude/skills/review/SKILL.md when missing', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-review-skill-'));
+    const lines: string[] = [];
+    await runWorkspaceSetup(wt, wt, (l) => lines.push(l));
+    expect(existsSync(join(wt, REVIEW_SKILL_PATH))).toBe(true);
+    expect(lines.join('\n')).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
   });
 });

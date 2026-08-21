@@ -5,22 +5,28 @@ import type { Thread, ThreadAttachment } from '../types/thread.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import { createChatTab } from '../threads/chat-tabs.js';
 import { findThreadByRef } from '../store/thread-store.js';
-import { REVIEW_REQUEST_TEMPLATE } from './review-request-template.js';
-export { REVIEW_REQUEST_TEMPLATE };
 import {
-  ATTACHMENTS_DIR,
-  LEGACY_ATTACHMENTS_DIR,
-  attachmentsGitignoreBody,
-} from '../paths/workspace-scratch.js';
+  REVIEW_REQUEST_TEMPLATE,
+  REVIEW_SKILL_NAME,
+  REVIEW_SKILL_PATH,
+  wrapReviewSkillMarkdown,
+} from './review-request-template.js';
+export {
+  REVIEW_REQUEST_TEMPLATE,
+  REVIEW_SKILL_NAME,
+  REVIEW_SKILL_PATH,
+  wrapReviewSkillMarkdown,
+};
+import { ATTACHMENTS_DIR, LEGACY_ATTACHMENTS_DIR } from '../paths/workspace-scratch.js';
 
-/** Committed per-repo review guidelines (preferred when present). */
+/** Legacy committed guidelines. New repos use {@link REVIEW_SKILL_PATH}. */
 export const REPO_REVIEW_PATH = '.sideboard/review.md';
 
 export const REPO_REVIEW_NAME = 'review.md';
 
 /**
  * Local scratch guidelines (gitignored under `.context/attachments/`).
- * Used as override when no repo file exists, or as the stock seed target.
+ * Used as a gitignored override when the review skill is absent.
  */
 export const REVIEW_REQUEST_PATH = `${ATTACHMENTS_DIR}/Review request.md`;
 
@@ -37,7 +43,7 @@ const LEGACY_REVIEW_TEMPLATE_MARKERS = [
   'HOW MANY FINDINGS TO RETURN:',
 ];
 
-export type ReviewGuidelinesSource = 'repo' | 'local' | 'stock';
+export type ReviewGuidelinesSource = 'skill' | 'repo' | 'local' | 'stock';
 
 export interface ResolvedReviewGuidelines {
   path: string;
@@ -69,116 +75,98 @@ function readTextIfPresent(abs: string): string | null {
   }
 }
 
-function ensureAttachmentsGitignore(worktreePath: string): void {
-  const gitignoreAbs = join(worktreePath, ATTACHMENTS_DIR, '.gitignore');
-  if (existsSync(gitignoreAbs)) return;
-  mkdirSync(dirname(gitignoreAbs), { recursive: true });
-  writeFileSync(gitignoreAbs, attachmentsGitignoreBody(), 'utf8');
+function readLocalGuidelines(worktreePath: string): { path: string; content: string } | null {
+  const localAbs = join(worktreePath, REVIEW_REQUEST_PATH);
+  const localContent = readTextIfPresent(localAbs);
+  if (localContent && !shouldRefreshReviewRequestTemplate(localContent)) {
+    return { path: REVIEW_REQUEST_PATH, content: localContent };
+  }
+  const legacyAbs = join(worktreePath, LEGACY_REVIEW_REQUEST_PATH);
+  const legacyContent = readTextIfPresent(legacyAbs);
+  if (legacyContent && !shouldRefreshReviewRequestTemplate(legacyContent)) {
+    return { path: LEGACY_REVIEW_REQUEST_PATH, content: legacyContent };
+  }
+  return null;
+}
+
+function skillGuidelines(content: string, source: ReviewGuidelinesSource): ResolvedReviewGuidelines {
+  return {
+    path: REVIEW_SKILL_PATH,
+    name: REVIEW_SKILL_NAME,
+    content,
+    source,
+  };
+}
+
+/**
+ * Write `.claude/skills/review/SKILL.md` when missing so Review, Claude Code,
+ * and `attach` share one committed file. Copies `.sideboard/review.md` or a
+ * customized local attachment when present. Does not git commit.
+ */
+export function ensureReviewSkillFile(worktreePath: string): {
+  path: string;
+  content: string;
+  wrote: boolean;
+} {
+  const abs = join(worktreePath, REVIEW_SKILL_PATH);
+  const existing = readTextIfPresent(abs);
+  if (existing) {
+    return { path: REVIEW_SKILL_PATH, content: existing, wrote: false };
+  }
+  const fromRepo = readTextIfPresent(join(worktreePath, REPO_REVIEW_PATH));
+  const fromLocal = readLocalGuidelines(worktreePath)?.content ?? null;
+  const content = wrapReviewSkillMarkdown(fromRepo ?? fromLocal ?? REVIEW_REQUEST_TEMPLATE);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, content, 'utf8');
+  return { path: REVIEW_SKILL_PATH, content, wrote: true };
 }
 
 /**
  * Resolve which review guidelines to attach:
- * 1. `.sideboard/review.md` (committed, per-repo)
- * 2. `.context/attachments/Review request.md` (local override)
- * 3. Legacy `.sideboard/attachments/Review request.md`
- * 4. Seed stock template into `.context/attachments/` (does not write the repo file)
+ * 1. `.claude/skills/review/SKILL.md` (committed Claude skill)
+ * 2. `.context/attachments/Review request.md` (local override, gitignored)
+ * 3. Legacy `.sideboard/review.md` / `.sideboard/attachments/`
+ * 4. Seed the review skill from stock (or copy legacy repo file)
  */
 export function resolveReviewGuidelines(worktreePath: string): ResolvedReviewGuidelines {
-  const repoAbs = join(worktreePath, REPO_REVIEW_PATH);
-  const repoContent = readTextIfPresent(repoAbs);
-  if (repoContent) {
-    return {
-      path: REPO_REVIEW_PATH,
-      name: REPO_REVIEW_NAME,
-      content: repoContent,
-      source: 'repo',
-    };
-  }
+  const skillContent = readTextIfPresent(join(worktreePath, REVIEW_SKILL_PATH));
+  if (skillContent) return skillGuidelines(skillContent, 'skill');
 
-  const localAbs = join(worktreePath, REVIEW_REQUEST_PATH);
-  const localContent = readTextIfPresent(localAbs);
-  if (localContent && !shouldRefreshReviewRequestTemplate(localContent)) {
+  const local = readLocalGuidelines(worktreePath);
+  if (local) {
     return {
-      path: REVIEW_REQUEST_PATH,
+      path: local.path,
       name: REVIEW_REQUEST_NAME,
-      content: localContent,
+      content: local.content,
       source: 'local',
     };
   }
 
-  const legacyAbs = join(worktreePath, LEGACY_REVIEW_REQUEST_PATH);
-  const legacyContent = readTextIfPresent(legacyAbs);
-  if (legacyContent && !shouldRefreshReviewRequestTemplate(legacyContent)) {
-    return {
-      path: LEGACY_REVIEW_REQUEST_PATH,
-      name: REVIEW_REQUEST_NAME,
-      content: legacyContent,
-      source: 'local',
-    };
-  }
-
-  ensureAttachmentsGitignore(worktreePath);
-  mkdirSync(dirname(localAbs), { recursive: true });
-  writeFileSync(localAbs, REVIEW_REQUEST_TEMPLATE, 'utf8');
-  return {
-    path: REVIEW_REQUEST_PATH,
-    name: REVIEW_REQUEST_NAME,
-    content: REVIEW_REQUEST_TEMPLATE,
-    source: 'stock',
-  };
+  const seeded = ensureReviewSkillFile(worktreePath);
+  return skillGuidelines(seeded.content, seeded.wrote ? 'stock' : 'skill');
 }
 
 /**
  * Ensure a file the user can edit for guidelines.
- * Prefers creating/opening committed `.sideboard/review.md` (per-repo).
- * Falls back to refreshing a legacy local attachments file only when that is
- * what already exists and the repo file does not.
+ * Prefers `.claude/skills/review/SKILL.md` (portable, committed).
  */
 export function ensureReviewRequestFile(worktreePath: string): ResolvedReviewGuidelines {
-  const repoAbs = join(worktreePath, REPO_REVIEW_PATH);
-  const repoContent = readTextIfPresent(repoAbs);
-  if (repoContent) {
-    return {
-      path: REPO_REVIEW_PATH,
-      name: REPO_REVIEW_NAME,
-      content: repoContent,
-      source: 'repo',
-    };
-  }
-
-  const localAbs = join(worktreePath, REVIEW_REQUEST_PATH);
-  const localContent =
-    readTextIfPresent(localAbs) ??
-    readTextIfPresent(join(worktreePath, LEGACY_REVIEW_REQUEST_PATH));
-  if (localContent && !shouldRefreshReviewRequestTemplate(localContent)) {
-    // Legacy local-only customize — don't force a repo file over an existing local one.
-    const path = existsSync(localAbs)
-      ? REVIEW_REQUEST_PATH
-      : LEGACY_REVIEW_REQUEST_PATH;
-    return {
-      path,
-      name: REVIEW_REQUEST_NAME,
-      content: localContent,
-      source: 'local',
-    };
-  }
-
-  mkdirSync(dirname(repoAbs), { recursive: true });
-  writeFileSync(repoAbs, REVIEW_REQUEST_TEMPLATE, 'utf8');
-  return {
-    path: REPO_REVIEW_PATH,
-    name: REPO_REVIEW_NAME,
-    content: REVIEW_REQUEST_TEMPLATE,
-    source: 'repo',
-  };
+  const seeded = ensureReviewSkillFile(worktreePath);
+  return skillGuidelines(seeded.content, 'skill');
 }
 
 export function buildReviewRequestAttachment(
   content: string,
   opts?: { path?: string; name?: string },
 ): ThreadAttachment {
-  const path = opts?.path ?? REVIEW_REQUEST_PATH;
-  const name = opts?.name ?? (path === REPO_REVIEW_PATH ? REPO_REVIEW_NAME : REVIEW_REQUEST_NAME);
+  const path = opts?.path ?? REVIEW_SKILL_PATH;
+  const name =
+    opts?.name ??
+    (path === REVIEW_SKILL_PATH
+      ? REVIEW_SKILL_NAME
+      : path === REPO_REVIEW_PATH
+        ? REPO_REVIEW_NAME
+        : REVIEW_REQUEST_NAME);
   return {
     id: randomUUID(),
     name,
@@ -190,10 +178,11 @@ export function buildReviewRequestAttachment(
 
 /**
  * Read existing guidelines without creating files.
- * Prefers repo `.sideboard/review.md`, then local attachments copy.
+ * Prefers the review skill, then legacy `.sideboard/review.md`, then local copy.
  */
 export function readExistingReviewRequestFile(worktreePath: string): string | null {
   return (
+    readTextIfPresent(join(worktreePath, REVIEW_SKILL_PATH)) ??
     readTextIfPresent(join(worktreePath, REPO_REVIEW_PATH)) ??
     readTextIfPresent(join(worktreePath, REVIEW_REQUEST_PATH)) ??
     readTextIfPresent(join(worktreePath, LEGACY_REVIEW_REQUEST_PATH))

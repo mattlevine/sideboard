@@ -25,6 +25,7 @@ import { stripNestedElectronEnv } from './nested-electron-env.js';
 import { findConventionSetup } from './convention-setup.js';
 import { runCursorWorktreeSetup } from './cursor-worktrees.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
+import { ensureReviewSkillFile, REVIEW_SKILL_PATH } from '../review/request-review.js';
 
 export type SetupRunResult = {
   ran: boolean;
@@ -398,8 +399,8 @@ export async function runConventionSetup(
 }
 
 /**
- * Setup for a new worktree. Order: Sideboard/Conductor `[scripts] setup`,
- * then Cursor `.cursor/worktrees.json`, then conventional `script/setup` (etc).
+ * Setup for a new worktree. Seeds `.claude/skills/review/SKILL.md` when missing,
+ * then `[scripts] setup`, Cursor `.cursor/worktrees.json`, then `script/setup`.
  */
 export async function runWorkspaceSetup(
   repoPath: string,
@@ -407,6 +408,12 @@ export async function runWorkspaceSetup(
   onLine?: (line: string) => void,
   opts?: { signal?: AbortSignal; defaultBranch?: string },
 ): Promise<SetupRunResult> {
+  const reviewSkill = ensureReviewSkillFile(worktreePath);
+  if (reviewSkill.wrote) {
+    onLine?.(
+      `[setup] wrote ${REVIEW_SKILL_PATH} — commit it so later worktrees inherit Review guidelines`,
+    );
+  }
   let setup = await runSetupScript(repoPath, worktreePath, onLine, opts);
   if (!setup.ran) {
     setup = await runCursorWorktreeSetup(repoPath, worktreePath, onLine);

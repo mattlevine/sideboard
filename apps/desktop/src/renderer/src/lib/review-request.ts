@@ -1,9 +1,14 @@
 import type { ThreadAttachment } from '@sideboard-ai/core';
-import { REVIEW_REQUEST_TEMPLATE } from '@sideboard/review-request-template';
+import {
+  REVIEW_REQUEST_TEMPLATE,
+  REVIEW_SKILL_NAME,
+  REVIEW_SKILL_PATH,
+  wrapReviewSkillMarkdown,
+} from '@sideboard/review-request-template';
 
-export { REVIEW_REQUEST_TEMPLATE };
+export { REVIEW_REQUEST_TEMPLATE, REVIEW_SKILL_NAME, REVIEW_SKILL_PATH };
 
-/** Committed per-repo review guidelines (preferred when present). */
+/** Legacy committed guidelines. New repos use {@link REVIEW_SKILL_PATH}. */
 export const REPO_REVIEW_PATH = '.sideboard/review.md';
 
 export const REPO_REVIEW_NAME = 'review.md';
@@ -38,8 +43,14 @@ export function buildReviewRequestAttachment(
   content: string,
   opts?: { path?: string; name?: string },
 ): ThreadAttachment {
-  const path = opts?.path ?? REVIEW_REQUEST_PATH;
-  const name = opts?.name ?? (path === REPO_REVIEW_PATH ? REPO_REVIEW_NAME : REVIEW_REQUEST_NAME);
+  const path = opts?.path ?? REVIEW_SKILL_PATH;
+  const name =
+    opts?.name ??
+    (path === REVIEW_SKILL_PATH
+      ? REVIEW_SKILL_NAME
+      : path === REPO_REVIEW_PATH
+        ? REPO_REVIEW_NAME
+        : REVIEW_REQUEST_NAME);
   return {
     id: crypto.randomUUID(),
     name,
@@ -49,7 +60,7 @@ export function buildReviewRequestAttachment(
   };
 }
 
-export type ReviewGuidelinesSource = 'repo' | 'local' | 'stock';
+export type ReviewGuidelinesSource = 'skill' | 'repo' | 'local' | 'stock';
 
 export interface ResolvedReviewGuidelines {
   path: string;
@@ -72,12 +83,13 @@ async function readTextIfPresent(threadId: string, relativePath: string): Promis
 
 /**
  * Read existing guidelines without creating files.
- * Prefers repo `.sideboard/review.md`, then local attachments copy.
+ * Prefers the review skill, then legacy `.sideboard/review.md`, then local copy.
  */
 export async function readExistingReviewRequestFile(
   threadId: string,
 ): Promise<string | null> {
   return (
+    (await readTextIfPresent(threadId, REVIEW_SKILL_PATH)) ??
     (await readTextIfPresent(threadId, REPO_REVIEW_PATH)) ??
     (await readTextIfPresent(threadId, REVIEW_REQUEST_PATH))
   );
@@ -85,37 +97,35 @@ export async function readExistingReviewRequestFile(
 
 /**
  * Ensure a file the user can edit for guidelines (Customize menu).
- * Prefers committed `.sideboard/review.md`. Keeps an existing local attachments
- * file if that is already customized and the repo file is absent.
+ * Writes `.claude/skills/review/SKILL.md` when missing (copies legacy
+ * `.sideboard/review.md` or a customized local attachment).
  */
 export async function ensureReviewRequestFile(
   threadId: string,
 ): Promise<ResolvedReviewGuidelines> {
+  const skillContent = await readTextIfPresent(threadId, REVIEW_SKILL_PATH);
+  if (skillContent) {
+    return {
+      path: REVIEW_SKILL_PATH,
+      name: REVIEW_SKILL_NAME,
+      content: skillContent,
+      source: 'skill',
+    };
+  }
+
   const repoContent = await readTextIfPresent(threadId, REPO_REVIEW_PATH);
-  if (repoContent) {
-    return {
-      path: REPO_REVIEW_PATH,
-      name: REPO_REVIEW_NAME,
-      content: repoContent,
-      source: 'repo',
-    };
-  }
-
   const localContent = await readTextIfPresent(threadId, REVIEW_REQUEST_PATH);
-  if (localContent && !shouldRefreshReviewRequestTemplate(localContent)) {
-    return {
-      path: REVIEW_REQUEST_PATH,
-      name: REVIEW_REQUEST_NAME,
-      content: localContent,
-      source: 'local',
-    };
-  }
-
-  await window.sideboard.writeFile(threadId, REPO_REVIEW_PATH, REVIEW_REQUEST_TEMPLATE);
+  const body =
+    repoContent ??
+    (localContent && !shouldRefreshReviewRequestTemplate(localContent)
+      ? localContent
+      : REVIEW_REQUEST_TEMPLATE);
+  const content = wrapReviewSkillMarkdown(body);
+  await window.sideboard.writeFile(threadId, REVIEW_SKILL_PATH, content);
   return {
-    path: REPO_REVIEW_PATH,
-    name: REPO_REVIEW_NAME,
-    content: REVIEW_REQUEST_TEMPLATE,
-    source: 'repo',
+    path: REVIEW_SKILL_PATH,
+    name: REVIEW_SKILL_NAME,
+    content,
+    source: 'skill',
   };
 }

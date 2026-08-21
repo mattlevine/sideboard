@@ -71,7 +71,7 @@ export interface SlackListenOptions {
   updateReply?: (msg: SlackInboundMessage, ts: string, text: string) => Promise<void>;
   /** Tests: delete a previously posted reply (chat.delete). */
   deleteReply?: (msg: SlackInboundMessage, ts: string) => Promise<void>;
-  /** Tests: override Working… delay / edit cadence. */
+  /** Tests: override Thinking… delay / edit cadence. */
   progressDelayMs?: number;
   progressEditMs?: number;
   /** Tests: ack reactions without talking to Slack Web API. */
@@ -171,15 +171,18 @@ export function slackReplyThreadTs(msg: SlackInboundMessage): string | undefined
   return undefined;
 }
 
-/** First Working… post after the turn is still running this long. */
+/** First Thinking… post after the turn is still running this long. */
 export const SLACK_PROGRESS_DELAY_MS = 20_000;
-/** Edit the Working… message at most this often. */
+/** Edit the Thinking… message at most this often. */
 export const SLACK_PROGRESS_EDIT_MS = 15_000;
+
+/** Same string as in-app agent thinking (`turn-live` / ThinkingIndicator). */
+export const SLACK_PROGRESS_PLACEHOLDER = 'Thinking…';
 
 export function formatSlackWorkingText(summary?: string | null): string {
   const line = (summary ?? '').trim();
-  if (!line || /^working/i.test(line)) return 'Working…';
-  return `Working… ${line}`;
+  if (!line || /^(working|thinking)/i.test(line)) return SLACK_PROGRESS_PLACEHOLDER;
+  return line;
 }
 
 /** Slack emoji short name for “seen / looking at this”. */
@@ -376,7 +379,7 @@ function startSlackTurnProgress(
 
   const postWorking = async (): Promise<void> => {
     if (!stillLive()) return;
-    const summary = readTurnLive(threadId())?.summary ?? 'Working…';
+    const summary = readTurnLive(threadId())?.summary ?? SLACK_PROGRESS_PLACEHOLDER;
     const body = formatSlackWorkingText(summary);
     try {
       const posted = await postSlackText(target, signForThisMac(body), opts);
@@ -395,7 +398,7 @@ function startSlackTurnProgress(
 
   const editWorking = async (): Promise<void> => {
     if (!postedTs || !stillLive()) return;
-    const summary = readTurnLive(threadId())?.summary ?? 'Working…';
+    const summary = readTurnLive(threadId())?.summary ?? SLACK_PROGRESS_PLACEHOLDER;
     const body = formatSlackWorkingText(summary);
     if (body === lastBody) return;
     lastBody = body;

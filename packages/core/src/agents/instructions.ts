@@ -142,8 +142,9 @@ export function formatProcessGuideDirective(): string {
     'Process guides (recurring work only):',
     '- If `.claude/skills/graph-engineering/SKILL.md` exists, follow it (`/graph-engineering`) for migrations, ports, batch fixes, and other fan-out. Judge first; state on disk; grow the rulebook; do not patch around it.',
     '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill). Sideboard `/name`, Claude Code, and `attach` all load that path. Do not leave the method only in chat.',
-    '- Do not write new skills under `.sideboard/skills` — native agents do not scan it. Point Codex/OpenCode at the file from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.',
-    '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill (or `.sideboard/review.md`), do not patch around it.',
+    '- Merge-readiness notes: create or edit `.claude/skills/review/SKILL.md` and commit it. That file is allowed. Do not use `.sideboard/review.md` for new notes (legacy; setup copies it into the skill).',
+    '- Do not write new skills under `.sideboard/skills/` (that folder only — other `.sideboard/` files such as settings.toml are fine). Point Codex/OpenCode at the Claude skill from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.',
+    '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
   ].join('\n');
 }
 

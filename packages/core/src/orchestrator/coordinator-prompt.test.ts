@@ -157,7 +157,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('.claude/skills/');
       expect(claude).toContain('graph-engineering');
       expect(claude).toContain('/graph-engineering');
-      expect(claude).toMatch(/Do not use `\.sideboard\/skills` for new guides/);
+      expect(claude).toMatch(/Do not use `\.sideboard\/skills\//);
       expect(claude).toContain('only if the user explicitly asked');
       expect(claude).not.toContain('when ready) ask_git merge');
 

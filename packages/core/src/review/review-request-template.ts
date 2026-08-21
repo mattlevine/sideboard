@@ -118,5 +118,29 @@ File: src/client/frontends/desktop/core/UserData.ts
 
 ## Growing the rules
 
-If a blocking issue is a missing or ambiguous repo rule that will recur, say so and propose one sentence for \`.sideboard/review.md\` or a \`.claude/skills/<name>/SKILL.md\`. Do not only patch this diff when the same miss will happen again. New skills go under \`.claude/skills\` (Claude Code / attach) — not \`.sideboard/skills\`.
+If a blocking issue is a missing or ambiguous repo rule that will recur, add one sentence to \`.claude/skills/review/SKILL.md\` (create the skill if it is missing — that is allowed and should be committed). Do not only patch this diff when the same miss will happen again. Do not write new skills under \`.sideboard/skills/\`. Do not use \`.sideboard/review.md\` for new notes.
 `;
+
+/** Committed Claude Code project skill — Review attaches this when present. */
+export const REVIEW_SKILL_PATH = '.claude/skills/review/SKILL.md';
+
+export const REVIEW_SKILL_NAME = 'review';
+
+const REVIEW_SKILL_FRONTMATTER = `---
+name: review
+description: >-
+  Merge-readiness review for this repository. Use when reviewing a PR, worktree
+  diff, or Sideboard Review (Approve / Approve with nits / Request changes).
+---
+
+`;
+
+/** Wrap guidelines as a Claude Code skill. Leaves existing frontmatter intact. */
+export function wrapReviewSkillMarkdown(body: string): string {
+  const trimmed = body.replace(/^\uFEFF/, '').trim();
+  const source = trimmed || REVIEW_REQUEST_TEMPLATE.trim();
+  if (/^---\s*\n[\s\S]*?\n---\s*\n/.test(source)) {
+    return source.endsWith('\n') ? source : `${source}\n`;
+  }
+  return `${REVIEW_SKILL_FRONTMATTER}${source}\n`;
+}

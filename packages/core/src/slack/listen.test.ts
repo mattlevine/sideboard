@@ -57,11 +57,13 @@ describe('formatSlackInboundPrompt', () => {
 });
 
 describe('formatSlackWorkingText', () => {
-  it('prefixes a live tool summary and collapses empty/working snapshots', () => {
-    expect(formatSlackWorkingText(null)).toBe('Working…');
-    expect(formatSlackWorkingText('')).toBe('Working…');
-    expect(formatSlackWorkingText('Working…')).toBe('Working…');
-    expect(formatSlackWorkingText('create_thread')).toBe('Working… create_thread');
+  it('maps empty/working snapshots to Thinking… and passes tool names through', () => {
+    expect(formatSlackWorkingText(null)).toBe('Thinking…');
+    expect(formatSlackWorkingText('')).toBe('Thinking…');
+    expect(formatSlackWorkingText('Working…')).toBe('Thinking…');
+    expect(formatSlackWorkingText('thinking...')).toBe('Thinking…');
+    expect(formatSlackWorkingText('Thinking…')).toBe('Thinking…');
+    expect(formatSlackWorkingText('create_thread')).toBe('create_thread');
   });
 });
 
@@ -487,7 +489,7 @@ describe('handleSlackInbound interrupt', () => {
     ).toHaveLength(0);
   });
 
-  it('posts one Working… message, edits it with live tools, then replaces it with the answer', async () => {
+  it('posts one Thinking… message, edits it with live tools, then replaces it with the answer', async () => {
     const coord = ensureSlackCoordinator('T1', 'Umatt', 'claude');
     let releaseWait: (() => void) | undefined;
     vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
@@ -529,7 +531,7 @@ describe('handleSlackInbound interrupt', () => {
     });
     await vi.waitFor(() => expect(releaseWait).toBeTypeOf('function'));
     await new Promise((r) => setTimeout(r, 40));
-    expect(posts.some((p) => p.includes('Working…'))).toBe(true);
+    expect(posts.some((p) => p.includes('Thinking…'))).toBe(true);
     writeTurnLive(coord.id, {
       updatedAt: new Date().toISOString(),
       summary: 'create_thread',
@@ -543,7 +545,7 @@ describe('handleSlackInbound interrupt', () => {
     expect(posts.filter((p) => p.includes('all done'))).toEqual([]);
   });
 
-  it('deletes the Working… placeholder when the turn is interrupted', async () => {
+  it('deletes the Thinking… placeholder when the turn is interrupted', async () => {
     const coord = ensureSlackCoordinator('T1', 'Umatt', 'claude');
     let releaseWait: (() => void) | undefined;
     vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {

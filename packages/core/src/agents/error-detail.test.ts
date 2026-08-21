@@ -144,6 +144,11 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
       ),
     ).toBe(true);
     expect(looksLikeRetryableRunnerCrash('')).toBe(true);
+    expect(
+      looksLikeRetryableRunnerCrash(
+        'Cursor run failed (run-efad13a4-5c61-401c-8e76-6559fd0908cc): Connection stalled',
+      ),
+    ).toBe(true);
     expect(looksLikeRetryableRunnerCrash('Credit balance is too low')).toBe(false);
     expect(looksLikeRetryableRunnerCrash("Cannot find package 'execa'")).toBe(false);
     expect(
@@ -183,6 +188,23 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     );
     expect(summarizeTurnStderr(tail)).toMatch(/Corrupt local agent checkpoint/);
     expect(summarizeTurnStderr(tail)).not.toMatch(/CURSOR_RIPGREP_PATH/);
+  });
+
+  it('prefers Cursor run failed over in-process checkpoint recovery notes', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      'Cursor agent agent-1 is unresumable (Corrupt local agent checkpoint: missing root blob abc for agent agent-1) — starting a new session',
+    );
+    pushTurnStderr(tail, 'Connection stalled');
+    pushTurnStderr(
+      tail,
+      'Cursor run failed (run-efad13a4-5c61-401c-8e76-6559fd0908cc): Connection stalled',
+    );
+    const summary = summarizeTurnStderr(tail);
+    expect(summary).toMatch(/Cursor run failed.*Connection stalled/i);
+    expect(summary).not.toMatch(/unresumable|missing root blob/i);
+    expect(formatTurnExitError(2, summary)).toMatch(/retry the turn/i);
   });
 
   it('summarizes nested Electron crash stacks instead of dyld frames', () => {

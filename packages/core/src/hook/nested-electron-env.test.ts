@@ -105,6 +105,11 @@ describe('nested-electron-env', () => {
       isElectronLikeCommand('/Apps/Sideboard.app/Contents/MacOS/Sideboard'),
     ).toBe(true);
     expect(isElectronLikeCommand('/Apps/Electron.app/Contents/MacOS/Electron')).toBe(true);
+    expect(
+      isElectronLikeCommand(
+        '/Applications/Sideboard.app/Contents/Resources/node/bin/node',
+      ),
+    ).toBe(false);
   });
 
   it('unwraps strip-then-exec argv back to the Electron binary', () => {

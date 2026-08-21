@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.108] - 2026-08-21
+
+### Changed
+
+- Slack Listen long-turn placeholder is `Thinking…` (same as in-app agent thinking), not `Working…`. Live tool names still replace that text on edit.
+- Worktree setup seeds `.claude/skills/review/SKILL.md` when missing (copies `.sideboard/review.md` if present). Review attaches that skill so agents can customize merge-readiness per repo. Sideboard does not auto-commit it. Worktree prompts say creating that skill is allowed; the ban is `.sideboard/skills/` only, not `.sideboard/review.md`.
+
+### Fixed
+
+- Packaged Cursor and MCP actually run on the bundled official Node 22. `isElectronLikeCommand` used to match any path under `Sideboard.app`, so `Contents/Resources/node/bin/node` was skipped and Homebrew Current + Cellar libuv kept crashing the runner.
+- Orchestrator `lastError` prefers `Cursor run failed:` (Connection stalled) over the in-process “unresumable checkpoint — starting a new session” note. Empty stalled turns are retried once.
+
 ## [0.1.107] - 2026-08-21
 
 ### Fixed

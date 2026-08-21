@@ -143,6 +143,12 @@ export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
     .reverse()
     .find((line) => /cursor startup failed:/i.test(line));
   if (cursorStartup) return clipStderr(cursorStartup, maxChars);
+  // In-process checkpoint recovery logs "unresumable — starting a new session"
+  // then the new run can still fail (Connection stalled). Prefer that failure.
+  const cursorRunFailed = [...tail]
+    .reverse()
+    .find((line) => /^cursor run failed\b/i.test(line.trim()));
+  if (cursorRunFailed) return clipStderr(cursorRunFailed, maxChars);
   if (tail.some(looksLikeNestedElectronCrash)) return NESTED_ELECTRON_SUMMARY;
   if (tail.some(looksLikeHomebrewLibuvCrash)) return HOMEBREW_LIBUV_SUMMARY;
   if (
@@ -207,7 +213,7 @@ export function looksLikeRetryableRunnerCrash(text: string): boolean {
   if (/cannot find (?:package|module)|err_module_not_found/.test(lower)) return false;
   if (!lower) return true;
   return (
-    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
+    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|connection stalled|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
       lower,
     )
   );
@@ -300,6 +306,11 @@ export function humanizeAgentFailDetail(detail: string): string {
   }
   if (/corrupt local agent checkpoint|missing root blob|truncated crash dump/.test(lower)) {
     return `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
+  }
+  if (/connection stalled/.test(lower)) {
+    return /retry the turn/i.test(raw)
+      ? raw
+      : `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
   }
   return raw;
 }

@@ -161,6 +161,25 @@ describe('resolveNodeLaunch', () => {
     }
   });
 
+  it('uses extraResources Node even when it lives under Sideboard.app', async () => {
+    const appRoot = mkdtempSync(join(tmpdir(), 'Sideboard.app-'));
+    try {
+      const resources = join(appRoot, 'Sideboard.app', 'Contents', 'Resources');
+      const bundled = join(resources, 'node', 'bin', 'node');
+      mkdirSync(join(bundled, '..'), { recursive: true });
+      writeFileSync(bundled, '');
+      proc.resourcesPath = resources;
+      mockNodeLookups('/opt/homebrew/bin/node');
+      const launch = await resolveNodeLaunch(
+        join(resources, 'cursor-runtime', 'core-dist', 'agents', 'cursor-runner.js'),
+      );
+      expect(launch.file).toBe(bundled);
+      expect(runMock).not.toHaveBeenCalled();
+    } finally {
+      rmSync(appRoot, { recursive: true, force: true });
+    }
+  });
+
   it('does not wrap system node', () => {
     const applied = applyNodeLaunch(
       { file: '/opt/homebrew/bin/node', env: {} },

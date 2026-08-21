@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.107/Sideboard-0.1.107-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.108/Sideboard-0.1.108-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -363,7 +363,7 @@ The destination prefix is the **This Mac** name (case does not matter). Mentions
 - Personal and Work both online → unprefixed messages go to whichever claims first. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
 - A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
 - Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat.
-- Long turns post one `Working…` message after ~20s and edit it with the current tool. The final answer replaces that message.
+- Long turns post one `Thinking…` message after ~20s and edit it with the current tool. The final answer replaces that message.
 - If a DM never gets 👀, quit and reopen Sideboard so Listen re-registers. You do not need an orchestration chat already open.
 
 ### CLI
@@ -454,14 +454,14 @@ New worktrees run setup automatically (create / fork / stack layer) in the backg
 
 ### Review guidelines
 
-Commit `.sideboard/review.md` to customize merge-readiness Review for the whole repo. The Review button attaches that file when present; otherwise it uses a local `.context/attachments/Review request.md` (gitignored) or seeds the stock template there. **Customize guidelines…** creates/opens `.sideboard/review.md` so you can check it in. Workspace-local chat scratch (plans, drops, review seeds) lives under `.context/attachments/` — same idea as Conductor’s `.context` vs committed `.sideboard/` / `.conductor/` config.
+New worktrees seed `.claude/skills/review/SKILL.md` when that file is missing (copied from `.sideboard/review.md` if you already have one). Commit the skill so later worktrees and native Claude Code / `attach` inherit the same merge-readiness bar. The Review button attaches that skill; **Customize guidelines…** creates or opens it. A gitignored `.context/attachments/Review request.md` still works as a local override until the skill exists. Workspace-local chat scratch (plans, drops) lives under `.context/attachments/` — same idea as Conductor’s `.context` vs committed `.sideboard/` / `.claude/` config.
 
 ### Process skills
 
 When the same shape of work will happen again, write a Claude Code project skill at `.claude/skills/<name>/SKILL.md` and commit it. Sideboard’s composer `/name` expander, Claude Code, and `attach` all load that path — so the guide works outside Sideboard. Do not put new skills in `.sideboard/skills` (Sideboard still scans it; other agents do not). Point Codex/OpenCode at the file from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.
 
 - **One-offs** should not create a skill. The first run is still a loop; corrections become sentences in the guide.
-- **Same miss twice** → edit the skill (or `.sideboard/review.md`) and rerun. Do not patch three threads and leave the process unchanged.
+- **Same miss twice** → edit the skill (or `.claude/skills/review/SKILL.md` for merge reviews) and rerun. Do not patch three threads and leave the process unchanged.
 - After merge to the default branch, **new worktrees inherit** the file. Existing siblings need an update from that branch.
 
 This repo’s method skill is [`.claude/skills/graph-engineering/SKILL.md`](.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`): judge first, state on disk, grow the rulebook, blind review, fix the process not the instances. A Cursor symlink lives at `.cursor/skills/graph-engineering`. Type `/graph-engineering` in the Sideboard composer to attach it.

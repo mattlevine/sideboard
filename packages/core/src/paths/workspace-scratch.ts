@@ -1,6 +1,7 @@
 /**
  * Workspace-local scratch (Conductor-style `.context/`), not committed.
- * Repo-owned Sideboard config stays under `.sideboard/` (settings, review.md).
+ * Repo-owned Sideboard config stays under `.sideboard/` (settings) and
+ * `.claude/skills/` (review + process guides).
  */
 
 /** Preferred local attachments root (plan, drops, review seed). */

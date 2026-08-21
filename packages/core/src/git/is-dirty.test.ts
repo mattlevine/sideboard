@@ -16,6 +16,7 @@ describe('isSideboardScratchPath', () => {
       true,
     );
     expect(isSideboardScratchPath('.sideboard/review.md')).toBe(false);
+    expect(isSideboardScratchPath('.claude/skills/review/SKILL.md')).toBe(false);
     expect(isSideboardScratchPath('apps/web/lib/foo.ts')).toBe(false);
   });
 });

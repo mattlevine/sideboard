@@ -27,7 +27,7 @@ Prefix matches the **This Mac** name (case-insensitive). Mentions are stripped b
 - Both online → unprefixed races to the first claim. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
 - A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
 - Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat and replies there.
-- Turns that run longer than ~20s post one `Working…` message (edited with the current tool, e.g. `create_thread`). The final answer replaces that message. Fast turns stay quiet after 👀.
+- Turns that run longer than ~20s post one `Thinking…` message (edited with the current tool, e.g. `create_thread`). The final answer replaces that message. Fast turns stay quiet after 👀.
 
 If a DM never gets 👀 and no new Global chat appears, Listen is not registered with the relay (`https://relay.sideboard.cloud/health` `sessions: 0`). Quit and reopen Sideboard so it reconnects. Settings → Account should show `Relay connected`. You do not need an orchestration chat already open.
 
