@@ -1,6 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import type { SlackInboundMessage } from './socket-mode.js';
 
+/** Keep the Fly/NAT mapping alive; missing pong reconnects Listen. */
+export const SLACK_RELAY_PING_INTERVAL_MS = 20_000;
+export const SLACK_RELAY_PONG_TIMEOUT_MS = 15_000;
+
 /** Desktop → relay */
 export type SlackRelayClientMessage =
   | {

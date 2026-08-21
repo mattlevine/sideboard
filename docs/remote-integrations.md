@@ -28,6 +28,8 @@ Prefix matches the **This Mac** name (case-insensitive). Mentions are stripped b
 - A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
 - Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat and replies there.
 
+If a DM never gets 👀 and no new Global chat appears, Listen is not registered with the relay (`https://relay.sideboard.cloud/health` `sessions: 0`). Quit and reopen Sideboard so it reconnects. Settings → Account should show `Relay connected`. You do not need an orchestration chat already open.
+
 ## CLI
 
 ```bash

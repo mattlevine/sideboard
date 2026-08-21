@@ -24,7 +24,7 @@ fly deploy --config apps/slack-relay/fly.toml --dockerfile apps/slack-relay/Dock
 
 Needs `flyctl` logged in (`fly auth whoami`). The image is built from the working tree — uncommitted `site/` edits go live. Commit them only if the human asked.
 
-`apps/slack-relay/Dockerfile` copies `site/` to `/app/site`. `fly.toml` sets `SIDEBOARD_SITE_ROOT=/app/site` and the host split above.
+`apps/slack-relay/Dockerfile` copies `site/` to `/app/site`. `fly.toml` sets `SIDEBOARD_SITE_ROOT=/app/site` and the host split above. `http_service.http_options.idle_timeout` is 3600s so Fly’s proxy does not drop a quiet desktop WebSocket; the desktop still JSON-pings every 20s because home NAT can drop idle TCP without a close.
 
 ## Check
 

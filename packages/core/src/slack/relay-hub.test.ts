@@ -16,6 +16,13 @@ function fakeSocket() {
 }
 
 describe('SlackRelayHub', () => {
+  it('answers ping with pong', async () => {
+    const { socket, sent } = fakeSocket();
+    const hub = new SlackRelayHub();
+    await hub.handleClientMessage(socket, { type: 'ping' });
+    expect(JSON.parse(sent[0]!)).toEqual({ type: 'pong' });
+  });
+
   it('rejects register when user token identity does not match claimed user', async () => {
     const { socket, sent } = fakeSocket();
     const hub = new SlackRelayHub({

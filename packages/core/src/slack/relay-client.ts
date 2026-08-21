@@ -1,5 +1,7 @@
 import {
   parseSlackRelayServerMessage,
+  SLACK_RELAY_PING_INTERVAL_MS,
+  SLACK_RELAY_PONG_TIMEOUT_MS,
   type SlackRelayClientMessage,
 } from './relay-protocol.js';
 import { resolveWebSocket, type SlackInboundMessage, type SlackWebSocketCtor } from './socket-mode.js';
@@ -26,6 +28,9 @@ export interface SlackRelayClientOptions {
   onEvent: (msg: SlackInboundMessage) => void | Promise<void>;
   onLog?: (line: string) => void;
   WebSocketImpl?: SlackWebSocketCtor;
+  /** Tests: override keepalive cadence. */
+  pingIntervalMs?: number;
+  pongTimeoutMs?: number;
 }
 
 const BACKOFF_START_MS = 1_000;
@@ -117,10 +122,21 @@ function connectSession(
     const allowedUsers = new Set(
       opts.workspaces.map((w) => `${w.teamId.trim()}:${w.userId.trim()}`),
     );
+    const pingMs = opts.pingIntervalMs ?? SLACK_RELAY_PING_INTERVAL_MS;
+    const pongMs = opts.pongTimeoutMs ?? SLACK_RELAY_PONG_TIMEOUT_MS;
+    let pingTimer: ReturnType<typeof setInterval> | null = null;
+    let pongTimer: ReturnType<typeof setTimeout> | null = null;
+    const stopKeepalive = () => {
+      if (pingTimer) clearInterval(pingTimer);
+      if (pongTimer) clearTimeout(pongTimer);
+      pingTimer = null;
+      pongTimer = null;
+    };
     const finish = (err?: Error) => {
       if (settled) return;
       settled = true;
       pending.clear();
+      stopKeepalive();
       opts.signal?.removeEventListener('abort', onAbort);
       if (err) reject(err);
       else resolve();
@@ -134,6 +150,27 @@ function connectSession(
       finish();
     };
     opts.signal?.addEventListener('abort', onAbort, { once: true });
+
+    const armPongTimeout = () => {
+      if (pongTimer) clearTimeout(pongTimer);
+      pongTimer = setTimeout(() => {
+        log('relay error: ping timeout');
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+        finish(new Error('relay ping timeout'));
+      }, pongMs);
+    };
+    const pingOnce = () => {
+      try {
+        send(ws, { type: 'ping' });
+        armPongTimeout();
+      } catch (err) {
+        finish(err instanceof Error ? err : new Error('relay ping failed'));
+      }
+    };
 
     ws.addEventListener('open', () => {
       const label = opts.deviceLabel?.trim() || opts.deviceId.trim();
@@ -149,6 +186,8 @@ function connectSession(
           userToken: wsInfo.userToken,
         });
       }
+      pingOnce();
+      pingTimer = setInterval(pingOnce, pingMs);
     });
     ws.addEventListener('error', () => {
       finish(new Error('WebSocket error'));
@@ -160,7 +199,13 @@ function connectSession(
       const raw = typeof ev.data === 'string' ? ev.data : String(ev.data ?? '');
       const msg = parseSlackRelayServerMessage(raw);
       if (!msg) return;
-      if (msg.type === 'pong') return;
+      if (msg.type === 'pong') {
+        if (pongTimer) {
+          clearTimeout(pongTimer);
+          pongTimer = null;
+        }
+        return;
+      }
       if (msg.type === 'error') {
         log(`relay error: ${msg.message}`);
         return;

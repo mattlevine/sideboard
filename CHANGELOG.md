@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.102] - 2026-08-20
+
+### Fixed
+
+- Slack Listen JSON-pings the hosted relay every 20s and reconnects on a missing pong. A quiet Fly/NAT drop used to leave the Mac thinking it was connected while `/health` showed `sessions: 0`, so DMs were skipped even with Sideboard open (including an empty board).
+
 ### Changed
 
 - README and marketing-site hero screenshot refreshed (`sideboard-desktop-review-v5.png`, `site/desktop.png`) at native 2830×1600 PNG so it stays sharp on retina.

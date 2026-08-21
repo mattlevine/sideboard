@@ -41,6 +41,10 @@ primary_region = 'sjc'
   min_machines_running = 1
   processes = ['app']
 
+  # Seconds. Desktop also JSON-pings every 20s so NAT/proxy idle cannot leave a zombie Listen.
+  [http_service.http_options]
+    idle_timeout = 3600
+
   [[http_service.checks]]
     interval = '15s'
     timeout = '5s'

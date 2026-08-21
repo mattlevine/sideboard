@@ -14,7 +14,10 @@ import {
   slackOAuthRelayRedirectUri,
 } from './oauth-exchange.js';
 import { runSlackSocketMode } from './socket-mode.js';
-import { parseSlackRelayClientMessage } from './relay-protocol.js';
+import {
+  parseSlackRelayClientMessage,
+  SLACK_RELAY_PING_INTERVAL_MS,
+} from './relay-protocol.js';
 import { SlackRelayHub } from './relay-hub.js';
 import { hostnameAllowed, requestHostname, tryServeStatic } from './relay-static.js';
 
@@ -221,6 +224,20 @@ export async function startSlackRelayServer(
         }
       },
     };
+    const ping = setInterval(() => {
+      if (ws.readyState !== ws.OPEN) {
+        clearInterval(ping);
+        return;
+      }
+      try {
+        ws.ping();
+      } catch {
+        clearInterval(ping);
+      }
+    }, SLACK_RELAY_PING_INTERVAL_MS);
+    const stopPing = () => clearInterval(ping);
+    ws.on('close', stopPing);
+    ws.on('error', stopPing);
     log('desktop connected');
     ws.on('message', (data) => {
       const raw = typeof data === 'string' ? data : data.toString('utf8');
