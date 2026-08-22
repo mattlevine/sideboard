@@ -35,8 +35,16 @@ const STEPS_ARCHIVE = [
   'Almost done',
 ] as const;
 
+const STEPS_COWBOY = [
+  'Starting chat',
+  'Opening the project folder',
+  'Sending first message',
+  'Almost ready',
+] as const;
+
 type OverlayMode =
   | 'create'
+  | 'cowboy'
   | 'orchestration'
   | 'merge'
   | 'remove'
@@ -46,6 +54,8 @@ function stepsForMode(mode: OverlayMode) {
   switch (mode) {
     case 'orchestration':
       return STEPS_ORCH;
+    case 'cowboy':
+      return STEPS_COWBOY;
     case 'merge':
       return STEPS_MERGE;
     case 'remove':

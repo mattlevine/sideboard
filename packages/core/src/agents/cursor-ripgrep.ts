@@ -10,7 +10,6 @@
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, parse, resolve as resolvePath } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { isAsarPath, nodeReadableScriptPath } from './node-launch.js';
 import { packagedCursorRipgrepCandidate } from './packaged-runtime.js';
 
@@ -75,7 +74,9 @@ export function resolveCursorRipgrepPath(opts?: {
   const start =
     opts?.startFile?.trim() ||
     process.argv[1] ||
-    fileURLToPath(import.meta.url);
+    // CJS bundle only — ESM has no __filename; argv[1] is the running script.
+    // eslint-disable-next-line camelcase
+    (typeof __filename !== 'undefined' ? __filename : '');
 
   return walkForBundledRipgrep(start) ?? requireResolveBundledRipgrep(start);
 }

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.111] - 2026-08-22
+
+### Fixed
+
+- Queued follow-ups sit inside the composer (same width) on worktree, cowboy, and orchestration chats, including file/diff overlay, instead of a separate full-bleed dock the overlay could cover.
+- Idle sends (agent not streaming, no follow-ups) paint in the transcript. The composer queue is only for messages waiting behind a live turn or parked after Stop.
+- Cowboy chats no longer show a “Creating worktree” overlay while the first prompt is queued. Queued messages match user-bubble layout (radius, type size, wrapping).
+- Packaged Cursor `uv_run` abort stacks from bundled official Node are no longer labeled as Homebrew libuv (`brew install node@22`). V8 JavaScript-heap OOM (common when the local agent indexes a large project folder) is summarized as such and is not retried.
+- CJS core/MCP builds no longer warn on empty `import.meta` when lazily loading `better-sqlite3` or resolving bundled ripgrep.
+
 ## [0.1.110] - 2026-08-22
 
 ### Added

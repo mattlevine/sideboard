@@ -57,7 +57,7 @@ interface Props {
    * into the chat empty state (non-blocking).
    */
   onCreateStart?: (info: {
-    mode: Mode;
+    mode: Mode | 'cowboy';
     repoName: string;
     selectionHint: string | null;
   }) => void;
@@ -370,9 +370,9 @@ export function CreateModal({
     const moveToChat = !createMore;
     if (moveToChat) {
       onCreateStart?.({
-        mode,
+        mode: cowboy ? 'cowboy' : mode,
         repoName,
-        selectionHint,
+        selectionHint: cowboy ? 'on main' : selectionHint,
       });
       onClose();
     } else {
@@ -494,10 +494,12 @@ export function CreateModal({
       >
         {busy ? (
           <CreateProcessingOverlay
-            mode={mode}
+            mode={cowboy ? 'cowboy' : mode}
             repoName={repoName}
             selectionHint={
-              selection
+              cowboy
+                ? 'on main'
+                : selection
                 ? selection.kind === 'pr'
                   ? `PR #${selection.ref}`
                   : selection.kind === 'ticket'

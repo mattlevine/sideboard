@@ -1088,7 +1088,7 @@ export class Orchestrator {
       // JSONL checkpoints, or a dead Node runner. Drop the session and retry
       // once with a seeded fresh CLI session (cursor-runner also recovers
       // checkpoints in-process). Homebrew Current may die again on the retry;
-      // then lastError reaches the orchestrator.
+      // V8 OOM is not retried. Then lastError reaches the orchestrator.
       if (
         exitCode !== 0 &&
         !assistantText &&

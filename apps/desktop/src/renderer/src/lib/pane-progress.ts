@@ -7,7 +7,7 @@ export type FirstTurnThread = {
 };
 
 export type CreatePaneProgress = {
-  mode: 'create' | 'orchestration' | 'archive' | 'remove';
+  mode: 'create' | 'cowboy' | 'orchestration' | 'archive' | 'remove';
   repoName: string;
   selectionHint: string | null;
   /** Set once create returns so we can hold the overlay on that chat. */

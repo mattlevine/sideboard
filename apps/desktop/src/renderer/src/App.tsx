@@ -1129,7 +1129,9 @@ export function App() {
                       : 'Removing worktree'
                     : paneProgress.mode === 'remove'
                       ? 'Removing project'
-                      : 'Creating worktree'}
+                      : paneProgress.mode === 'cowboy'
+                        ? 'Starting chat'
+                        : 'Creating worktree'}
               </h3>
               <p>
                 {paneProgress.mode === 'orchestration'
@@ -1140,9 +1142,11 @@ export function App() {
                       : 'Tearing down the worktree — you can keep browsing while this finishes.'
                     : paneProgress.mode === 'remove'
                       ? 'Archiving threads and removing the project from the sidebar…'
-                      : paneProgress.awaitingFirstPrompt
-                        ? 'Sending your first message — you can keep browsing while this finishes.'
-                        : 'Creating your worktree — you can keep browsing while this finishes.'}
+                      : paneProgress.mode === 'cowboy'
+                        ? 'Working in the project folder — you can keep browsing while this finishes.'
+                        : paneProgress.awaitingFirstPrompt
+                          ? 'Sending your first message — you can keep browsing while this finishes.'
+                          : 'Creating your worktree — you can keep browsing while this finishes.'}
               </p>
             </div>
           </div>
@@ -1199,7 +1203,9 @@ export function App() {
                       mode:
                         thread.sourceType === 'orchestration'
                           ? 'orchestration'
-                          : 'create',
+                          : thread.cowboy
+                            ? 'cowboy'
+                            : 'create',
                       repoName:
                         thread.repoPath.split('/').filter(Boolean).pop() ||
                         thread.title ||

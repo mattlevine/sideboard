@@ -33,9 +33,20 @@ const CONDUCTOR_APP_SUPPORT = join(
 const CONDUCTOR_DB = join(CONDUCTOR_APP_SUPPORT, 'conductor.db');
 const CURSOR_SDK_STORE = join(CONDUCTOR_APP_SUPPORT, 'cursor-sdk-store');
 
+/**
+ * Filename for `createRequire` so we load `better-sqlite3` next to this module
+ * (packaged MCP under real Node). Do not use `import.meta.url` — tsup CJS
+ * leaves it empty and warns.
+ */
+function thisModuleFile(): string {
+  // eslint-disable-next-line camelcase
+  const cjsFile = typeof __filename !== 'undefined' ? __filename : '';
+  return cjsFile || process.argv[1] || join(process.cwd(), 'package.json');
+}
+
 /** Lazy so packaged MCP can run under system Node (Electron ABI .node would crash). */
 function openReadonlySqlite(file: string) {
-  const req = createRequire(import.meta.url);
+  const req = createRequire(thisModuleFile());
   const Database = req('better-sqlite3') as typeof import('better-sqlite3');
   return new Database(file, { readonly: true, fileMustExist: true });
 }

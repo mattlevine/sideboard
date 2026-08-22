@@ -8,6 +8,7 @@ import {
   looksLikeAgentFailureMessage,
   looksLikeInvalidAgentSession,
   looksLikeRetryableRunnerCrash,
+  looksLikeV8Oom,
   shouldRetryFailedAgentTurn,
   pushTurnStderr,
   summarizeTurnStderr,
@@ -235,6 +236,51 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(summary).toMatch(/brew install node@22/);
     expect(summary).not.toMatch(/0x107aca130/);
     expect(formatTurnExitError(1, summary)).toMatch(/brew install node@22/);
+  });
+
+  it('does not tell users to brew-install Node when bundled official Node aborted', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      '31: 0x10100c130 uv__io_poll [/Applications/Sideboard.app/Contents/Resources/node/bin/node]',
+    );
+    pushTurnStderr(
+      tail,
+      '32: 0x100ff8300 uv_run [/Applications/Sideboard.app/Contents/Resources/node/bin/node]',
+    );
+    pushTurnStderr(
+      tail,
+      '33: 0x10030f394 node::SpinEventLoopInternal(node::Environment*) [/Applications/Sideboard.app/Contents/Resources/node/bin/node]',
+    );
+    const summary = summarizeTurnStderr(tail);
+    expect(summary).toMatch(/Cursor runner crashed in Node/i);
+    expect(summary).not.toMatch(/Homebrew|brew install|0x10100c130/i);
+    expect(formatTurnExitError(1, summary)).not.toMatch(/brew install/);
+    expect(
+      humanizeAgentFailDetail(
+        '31: 0x10100c130 uv__io_poll [/Applications/Sideboard.app/Contents/Resources/node/bin/node]\n32: 0x100ff8300 uv_run [/Applications/Sideboard.app/Contents/Resources/node/bin/node]',
+      ),
+    ).not.toMatch(/brew install/);
+  });
+
+  it('keeps V8 OOM over trailing native frames and does not retry it', () => {
+    const tail: string[] = [];
+    pushTurnStderr(
+      tail,
+      'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory',
+    );
+    for (let i = 0; i < 20; i++) {
+      pushTurnStderr(
+        tail,
+        `${i}: 0x10100c130 uv__io_poll [/Applications/Sideboard.app/Contents/Resources/node/bin/node]`,
+      );
+    }
+    const summary = summarizeTurnStderr(tail);
+    expect(summary).toMatch(/ran out of memory/i);
+    expect(summary).not.toMatch(/brew install|0x10100c130/i);
+    expect(looksLikeV8Oom(summary)).toBe(true);
+    expect(looksLikeRetryableRunnerCrash(summary)).toBe(false);
+    expect(formatTurnExitError(1, summary)).toMatch(/ran out of memory/i);
   });
 
   it('does not surface a minified Cursor local-agent dump as lastError', () => {

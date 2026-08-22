@@ -88,6 +88,7 @@ import {
   readRightColumnWidth,
   writeRightColumnWidth,
 } from '../lib/panel-widths';
+import { splitTurnQueue } from '../lib/visible-follow-up-queue';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -248,6 +249,7 @@ export function ThreadPanel({
   const [busy, setBusy] = useState(false);
   const [setupRunning, setSetupRunning] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
+  const [pendingInTranscript, setPendingInTranscript] = useState(false);
   const [editingQueueIndex, setEditingQueueIndex] = useState<number | null>(null);
   const [queueEditText, setQueueEditText] = useState('');
   const [queueBusyIndex, setQueueBusyIndex] = useState<number | null>(null);
@@ -571,18 +573,47 @@ export function ThreadPanel({
 
   useEffect(() => {
     setDismissedPlanQuestionsId(null);
+    setPendingUser(null);
+    setPendingInTranscript(false);
+    setPendingAttachments([]);
   }, [thread.id]);
 
   useEffect(() => {
     if (!pendingUser) return;
-    const matched =
-      thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) ||
-      thread.queue.includes(pendingUser);
-    if (matched) {
+    const inMessages = thread.messages.some(
+      (m) => m.role === 'user' && m.text === pendingUser,
+    );
+    if (inMessages) {
       setPendingUser(null);
+      setPendingInTranscript(false);
+      setPendingAttachments([]);
+      return;
+    }
+    const queueIndex = thread.queue.indexOf(pendingUser);
+    if (queueIndex < 0) return;
+    const turnBusy =
+      Boolean(liveOutput) ||
+      liveParts.length > 0 ||
+      thread.status === 'running' ||
+      Boolean(turnStartedAt);
+    const isCurrentTurnPrompt =
+      pendingInTranscript ||
+      (!turnBusy && thread.status === 'queued' && queueIndex === 0);
+    if (!isCurrentTurnPrompt) {
+      setPendingUser(null);
+      setPendingInTranscript(false);
       setPendingAttachments([]);
     }
-  }, [thread.messages, thread.queue, pendingUser]);
+  }, [
+    thread.messages,
+    thread.queue,
+    thread.status,
+    pendingUser,
+    pendingInTranscript,
+    liveOutput,
+    liveParts,
+    turnStartedAt,
+  ]);
 
   useEffect(() => {
     if (editingQueueIndex === null) return;
@@ -695,8 +726,7 @@ export function ThreadPanel({
   const showStreaming =
     Boolean(liveOutput) ||
     liveParts.length > 0 ||
-    thread.status === 'running' ||
-    (thread.status === 'queued' && Boolean(pendingUser));
+    thread.status === 'running';
 
   const liveHasPresentPlan = liveParts.some(
     (p) => p.type === 'tool' && /present_plan$/i.test(p.name ?? ''),
@@ -742,15 +772,44 @@ export function ThreadPanel({
     return -1;
   }, [thread.messages]);
 
-  /** True from `turn_started` to `turn_finished` — a turn is actively in flight. */
-  const turnInFlight = Boolean(turnStartedAt);
-  const pendingOptimistic =
-    turnInFlight &&
+  const turnBusy =
+    showStreaming || thread.status === 'running' || Boolean(turnStartedAt);
+
+  const { currentTurnPrompt: currentTurnFromQueue, followUps: followUpQueue } =
+    splitTurnQueue(thread.queue, thread.status, turnBusy);
+  const queueIndexOffset = currentTurnFromQueue ? 1 : 0;
+
+  const pendingNotLanded =
     pendingUser &&
     !thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) &&
     !thread.queue.includes(pendingUser)
       ? pendingUser
       : null;
+
+  /** Idle send (empty follow-up queue, agent not streaming) → transcript. */
+  const pendingTranscript =
+    pendingInTranscript &&
+    pendingUser &&
+    !thread.messages.some((m) => m.role === 'user' && m.text === pendingUser)
+      ? pendingUser
+      : currentTurnFromQueue &&
+          !thread.messages.some(
+            (m) => m.role === 'user' && m.text === currentTurnFromQueue,
+          )
+        ? currentTurnFromQueue
+        : !turnBusy && pendingNotLanded
+          ? pendingNotLanded
+          : null;
+
+  /** Follow-up while a turn is in flight (or already queued behind one). */
+  const pendingQueue =
+    pendingNotLanded &&
+    !pendingInTranscript &&
+    (turnBusy || Boolean(currentTurnFromQueue) || followUpQueue.length > 0)
+      ? pendingNotLanded
+      : null;
+
+  const showQueueDock = followUpQueue.length > 0 || Boolean(pendingQueue);
 
   function pickAutocomplete(item: AutocompleteItem) {
     if (!acQuery) return;
@@ -770,13 +829,24 @@ export function ThreadPanel({
     [],
   );
 
+  function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
+    setPendingUser(text);
+    setPendingInTranscript(!turnBusy && thread.queue.length === 0);
+    setPendingAttachments(attachments);
+  }
+
+  function clearPendingSend() {
+    setPendingUser(null);
+    setPendingInTranscript(false);
+    setPendingAttachments([]);
+  }
+
   async function send() {
     const text = prompt.trim();
     if (!text || busy) return;
     const snapshotAttachments = [...(thread.attachments ?? [])];
     setBusy(true);
-    setPendingUser(text);
-    setPendingAttachments(snapshotAttachments);
+    beginPendingSend(text, snapshotAttachments);
     setPrompt('');
     setCursor(0);
     suppressArtifactAutoOpen.current = false;
@@ -784,8 +854,7 @@ export function ThreadPanel({
       await window.sideboard.sendToThread(thread.id, text);
       onRefresh();
     } catch (err) {
-      setPendingUser(null);
-      setPendingAttachments([]);
+      clearPendingSend();
       setPrompt(text);
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
@@ -887,12 +956,14 @@ export function ThreadPanel({
       ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
       : `Implement the plan in ${PLAN_FILE_REL}.`;
     setPendingUser(text);
+    setPendingInTranscript(!turnBusy && thread.queue.length === 0);
     setPrompt('');
     try {
       await window.sideboard.sendToThread(thread.id, text);
       onRefresh();
     } catch (err) {
       setPendingUser(null);
+      setPendingInTranscript(false);
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -1571,10 +1642,11 @@ export function ThreadPanel({
         <div className="chat" ref={chatRef}>
           {thread.messages.length === 0 &&
             !pendingUser &&
+            !pendingTranscript &&
             !showStreaming &&
             !thread.lastError && (
               <div className="chat-empty">
-                {setupRunning || thread.queue.length > 0 ? (
+                {setupRunning ? (
                   <>
                     <CreateProcessingOverlay
                       variant="inline"
@@ -1582,7 +1654,9 @@ export function ThreadPanel({
                         thread.sourceType === 'orchestration' ||
                         isGlobalThread(thread)
                           ? 'orchestration'
-                          : 'create'
+                          : thread.cowboy
+                            ? 'cowboy'
+                            : 'create'
                       }
                       repoName={
                         thread.repoPath.split('/').filter(Boolean).pop() ||
@@ -1597,12 +1671,16 @@ export function ThreadPanel({
                       {thread.sourceType === 'orchestration' ||
                       isGlobalThread(thread)
                         ? 'Opening orchestration'
-                        : 'Creating worktree'}
+                        : thread.cowboy
+                          ? 'Starting chat'
+                          : 'Creating worktree'}
                     </h3>
                     <p>
                       {setupRunning
                         ? 'Running setup — you can keep browsing while this finishes.'
-                        : 'Sending your first message — you can keep browsing while this finishes.'}
+                        : thread.cowboy
+                          ? 'Working in the project folder — you can keep browsing while this finishes.'
+                          : 'Sending your first message — you can keep browsing while this finishes.'}
                     </p>
                   </>
                 ) : (
@@ -1727,23 +1805,23 @@ export function ThreadPanel({
               </div>
             );
           })}
-          {pendingUser &&
-            !turnInFlight &&
-            !thread.messages.some((m) => m.role === 'user' && m.text === pendingUser) && (
-              <div className="msg user pending">
-                <div className="msg-user-body">
-                  {pendingAttachments.length > 0 && (
-                    <ComposerAttachmentChips
-                      attachments={pendingAttachments}
-                      className="msg-attachments"
-                      expandImages
-                      onOpen={onSelectFile}
-                    />
-                  )}
-                  <div className="msg-body">{pendingUser}</div>
-                </div>
+          {pendingTranscript && (
+            <div className="msg user pending">
+              <div className="msg-user-body">
+                {pendingAttachments.length > 0 && (
+                  <ComposerAttachmentChips
+                    attachments={pendingAttachments}
+                    className="msg-attachments"
+                    expandImages
+                    onOpen={onSelectFile}
+                  />
+                )}
+                {pendingTranscript ? (
+                  <div className="msg-body">{pendingTranscript}</div>
+                ) : null}
               </div>
-            )}
+            </div>
+          )}
           {showStreaming && (
             <>
               <div
@@ -1832,115 +1910,138 @@ export function ThreadPanel({
         </div>
       )}
 
-      {(thread.queue.length > 0 || pendingOptimistic) && (
-        <div
-          ref={queuedDockRef}
-          className="queued-messages"
-          aria-label="Queued messages"
-        >
-          <div className="queued-messages-label">Queued</div>
-          <div className="queued-messages-list">
-            {thread.queue.map((text, i) => (
-              <div
-                key={`queued-${i}`}
-                className={`queued-msg${editingQueueIndex === i ? ' editing' : ''}`}
-              >
-                {editingQueueIndex === i ? (
-                  <div className="queued-msg-edit">
-                    <textarea
-                      autoFocus
-                      rows={Math.min(6, Math.max(2, text.split('\n').length))}
-                      value={queueEditText}
-                      onChange={(e) => setQueueEditText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          void saveEditQueued(i);
-                        }
-                        if (e.key === 'Escape') {
-                          e.preventDefault();
-                          cancelEditQueued();
-                        }
-                      }}
-                    />
-                    <div className="queued-msg-edit-actions">
-                      <button type="button" onClick={cancelEditQueued}>
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={queueBusyIndex === i || !queueEditText.trim()}
-                        onClick={() => void saveEditQueued(i)}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="queued-msg-text">{text}</div>
-                    <div
-                      className="queued-msg-actions"
-                      onPointerDown={(e) => {
-                        // Composer collapse (blur) would shift this dock before
-                        // mouseup, so the first click never reaches the button.
-                        e.preventDefault();
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="queued-msg-icon-btn"
-                        title="Send now — interrupts the current response"
-                        aria-label="Send now"
-                        disabled={queueBusyIndex === i}
-                        {...queueActionPointer(queueBusyIndex === i, () => {
-                          void sendQueuedNow(i);
-                        })}
-                      >
-                        <QueuedSendNowIcon />
-                      </button>
-                      <button
-                        type="button"
-                        className="queued-msg-icon-btn"
-                        title="Edit"
-                        aria-label="Edit"
-                        disabled={queueBusyIndex === i}
-                        {...queueActionPointer(queueBusyIndex === i, () => {
-                          startEditQueued(i, text);
-                        })}
-                      >
-                        <QueuedEditIcon />
-                      </button>
-                      <button
-                        type="button"
-                        className="queued-msg-icon-btn danger"
-                        title="Remove"
-                        aria-label="Remove"
-                        disabled={queueBusyIndex === i}
-                        {...queueActionPointer(queueBusyIndex === i, () => {
-                          void removeQueued(i);
-                        })}
-                      >
-                        <QueuedRemoveIcon />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-            {pendingOptimistic && (
-              <div className="queued-msg pending">
-                <div className="queued-msg-text">{pendingOptimistic}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <div
-        className={`composer-shell${openFilePath || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}`}
+        className={`composer-shell${openFilePath || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}${
+          showQueueDock ? ' has-queue' : ''
+        }`}
       >
+        {showQueueDock && (
+          <div
+            ref={queuedDockRef}
+            className="queued-messages"
+            aria-label="Queued messages"
+          >
+            <div className="queued-messages-label">Queued</div>
+            <div className="queued-messages-list">
+              {followUpQueue.map((text, i) => {
+                const queueIndex = i + queueIndexOffset;
+                return (
+                <div
+                  key={`queued-${queueIndex}`}
+                  className={`queued-msg${editingQueueIndex === queueIndex ? ' editing' : ''}`}
+                >
+                  {editingQueueIndex === queueIndex ? (
+                    <div className="queued-msg-edit">
+                      <textarea
+                        autoFocus
+                        rows={Math.min(6, Math.max(2, text.split('\n').length))}
+                        value={queueEditText}
+                        onChange={(e) => setQueueEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void saveEditQueued(queueIndex);
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelEditQueued();
+                          }
+                        }}
+                      />
+                      <div className="queued-msg-edit-actions">
+                        <button type="button" onClick={cancelEditQueued}>
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={
+                            queueBusyIndex === queueIndex || !queueEditText.trim()
+                          }
+                          onClick={() => void saveEditQueued(queueIndex)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="queued-msg-text">{text}</div>
+                      <div
+                        className="queued-msg-actions"
+                        onPointerDown={(e) => {
+                          // Composer collapse (blur) would shift this dock before
+                          // mouseup, so the first click never reaches the button.
+                          e.preventDefault();
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="queued-msg-icon-btn"
+                          title="Send now — interrupts the current response"
+                          aria-label="Send now"
+                          disabled={queueBusyIndex === queueIndex}
+                          {...queueActionPointer(
+                            queueBusyIndex === queueIndex,
+                            () => {
+                              void sendQueuedNow(queueIndex);
+                            },
+                          )}
+                        >
+                          <QueuedSendNowIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className="queued-msg-icon-btn"
+                          title="Edit"
+                          aria-label="Edit"
+                          disabled={queueBusyIndex === queueIndex}
+                          {...queueActionPointer(
+                            queueBusyIndex === queueIndex,
+                            () => {
+                              startEditQueued(queueIndex, text);
+                            },
+                          )}
+                        >
+                          <QueuedEditIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className="queued-msg-icon-btn danger"
+                          title="Remove"
+                          aria-label="Remove"
+                          disabled={queueBusyIndex === queueIndex}
+                          {...queueActionPointer(
+                            queueBusyIndex === queueIndex,
+                            () => {
+                              void removeQueued(queueIndex);
+                            },
+                          )}
+                        >
+                          <QueuedRemoveIcon />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                );
+              })}
+              {pendingQueue && (
+                <div className="queued-msg pending">
+                  {pendingAttachments.length > 0 && (
+                    <ComposerAttachmentChips
+                      attachments={pendingAttachments}
+                      className="msg-attachments"
+                      expandImages={false}
+                      onOpen={onSelectFile}
+                    />
+                  )}
+                  <div className="queued-msg-text">{pendingQueue}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <div
           ref={composerBoxRef}
           className={`composer-box${composerExpanded ? ' expanded' : ' collapsed'}${
@@ -1996,13 +2097,13 @@ export function ThreadPanel({
                 setDismissedPlanQuestionsId(pendingPlanQuestions.id);
                 void (async () => {
                   setBusy(true);
-                  setPendingUser(message);
+                  beginPendingSend(message);
                   try {
                     await window.sideboard.sendToThread(thread.id, message);
                     setPrompt('');
                     onRefresh();
                   } catch (err) {
-                    setPendingUser(null);
+                    clearPendingSend();
                     window.alert(err instanceof Error ? err.message : String(err));
                   } finally {
                     setBusy(false);

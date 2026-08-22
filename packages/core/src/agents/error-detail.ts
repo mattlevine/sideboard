@@ -74,7 +74,7 @@ const NODE_VERSION_FOOTER = /^Node\.js v\d+/i;
 
 function isPinnedStderrLine(line: string): boolean {
   if (/^\s*at\s/.test(line)) return false;
-  return /cannot find (?:package|module)|ERR_MODULE_NOT_FOUND|cursor startup failed:/i.test(
+  return /cannot find (?:package|module)|ERR_MODULE_NOT_FOUND|cursor startup failed:|FATAL ERROR|heap out of memory|javascript heap|OOMErrorHandler|FatalProcessOutOfMemory/i.test(
     line,
   );
 }
@@ -113,12 +113,24 @@ function looksLikeNestedElectronCrash(line: string): boolean {
   return /HasCustomHostObject|ElectronInitializeICUandStartNode/i.test(line);
 }
 
-function looksLikeHomebrewLibuvCrash(line: string): boolean {
-  const uvRun = /uv_run/i.test(line);
-  const spin = /SpinEventLoopInternal/i.test(line);
-  const homebrewUv = /Cellar\/libuv|libuv\.\d\.dylib/i.test(line);
-  const homebrewNode = /Cellar\/node\//i.test(line);
-  return (uvRun && (homebrewUv || spin || homebrewNode)) || (spin && (homebrewUv || homebrewNode));
+function looksLikeNativeEventLoopCrash(text: string): boolean {
+  return /uv_run|uv__io_poll|SpinEventLoopInternal/i.test(text);
+}
+
+/** V8 abort while allocating a string / hitting the heap limit. */
+export function looksLikeV8Oom(text: string): boolean {
+  return /javascript heap|reached heap limit|OOMErrorHandler|FatalProcessOutOfMemory|Allocation failed - JavaScript heap/i.test(
+    text,
+  );
+}
+
+/**
+ * Homebrew Current + Cellar libuv. Do not match official Node shipped inside
+ * Sideboard.app — those stacks also contain uv_run / SpinEventLoopInternal.
+ */
+function looksLikeHomebrewLibuvCrash(text: string): boolean {
+  if (!looksLikeNativeEventLoopCrash(text)) return false;
+  return /Cellar\/(?:libuv|node)|libuv\.\d+\.dylib/i.test(text);
 }
 
 const NESTED_ELECTRON_SUMMARY =
@@ -126,6 +138,12 @@ const NESTED_ELECTRON_SUMMARY =
 
 const HOMEBREW_LIBUV_SUMMARY =
   'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.';
+
+const BUNDLED_NODE_CRASH_SUMMARY =
+  'Cursor runner crashed in Node. Retry the turn.';
+
+const V8_OOM_SUMMARY =
+  'Cursor runner ran out of memory (JavaScript heap). Retry; if it keeps happening, exclude large files from the project folder or start a new chat.';
 
 const MINIFIED_DUMP_SUMMARY =
   'Cursor local agent crashed during startup (truncated crash dump)';
@@ -150,7 +168,12 @@ export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
     .find((line) => /^cursor run failed\b/i.test(line.trim()));
   if (cursorRunFailed) return clipStderr(cursorRunFailed, maxChars);
   if (tail.some(looksLikeNestedElectronCrash)) return NESTED_ELECTRON_SUMMARY;
-  if (tail.some(looksLikeHomebrewLibuvCrash)) return HOMEBREW_LIBUV_SUMMARY;
+  const blob = tail.join('\n');
+  if (looksLikeV8Oom(blob)) return V8_OOM_SUMMARY;
+  if (looksLikeHomebrewLibuvCrash(blob)) return HOMEBREW_LIBUV_SUMMARY;
+  if (looksLikeNativeEventLoopCrash(blob)) {
+    return BUNDLED_NODE_CRASH_SUMMARY;
+  }
   if (
     tail.some(
       (line) =>
@@ -203,17 +226,18 @@ export function looksLikeInvalidAgentSession(text: string): boolean {
 
 /**
  * Native Node/Cursor runner death (uv_run, nested Electron, truncated dump, or
- * empty stderr). Orchestrator respawns once. Not credits/auth/module-missing —
+ * empty stderr). Orchestrator respawns once. Not credits/auth/module-missing/OOM —
  * those will fail the same way.
  */
 export function looksLikeRetryableRunnerCrash(text: string): boolean {
   if (looksLikeAgentFailureMessage(text)) return false;
   if (looksLikeInvalidAgentSession(text)) return false;
+  if (looksLikeV8Oom(text)) return false;
   const lower = text.trim().toLowerCase();
   if (/cannot find (?:package|module)|err_module_not_found/.test(lower)) return false;
   if (!lower) return true;
   return (
-    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|connection stalled|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
+    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|cursor runner crashed in node|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|connection stalled|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
       lower,
     )
   );
@@ -299,10 +323,16 @@ export function humanizeAgentFailDetail(detail: string): string {
   if (/hascustomhostobject|electroninitializeicuandstartnode|nested chromium/i.test(lower)) {
     return `${raw} — retry the turn; if it keeps failing, pick another agent.`;
   }
-  if (/homebrew node \+ shared libuv|uv_run|spineventloopinternal/i.test(lower)) {
+  if (looksLikeV8Oom(raw) || /javascript heap out of memory/i.test(lower)) {
+    return /ran out of memory/i.test(raw) ? raw : V8_OOM_SUMMARY;
+  }
+  if (/homebrew node \+ shared libuv|Cellar\/(?:libuv|node)|libuv\.\d+\.dylib/i.test(raw)) {
     return /brew install node@22/i.test(raw)
       ? raw
       : `${raw} — install Node 22 LTS (\`brew install node@22\`) and retry.`;
+  }
+  if (/uv_run|spineventloopinternal|uv__io_poll|cursor runner crashed in node/i.test(lower)) {
+    return /retry the turn/i.test(raw) ? raw : BUNDLED_NODE_CRASH_SUMMARY;
   }
   if (/corrupt local agent checkpoint|missing root blob|truncated crash dump/.test(lower)) {
     return `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
