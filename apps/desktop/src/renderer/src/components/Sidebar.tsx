@@ -1240,12 +1240,10 @@ export function Sidebar({
         <button
           type="button"
           className="sidebar-footer-btn"
-          title="Sideboard on GitHub"
-          aria-label="Sideboard on GitHub"
+          title="Sideboard"
+          aria-label="Sideboard"
           onClick={() =>
-            void window.sideboard.openExternal(
-              'https://github.com/mattlevine/sideboard',
-            )
+            void window.sideboard.openExternal('https://www.sideboard.cloud')
           }
         >
           <span className="sidebar-footer-icon help" aria-hidden>

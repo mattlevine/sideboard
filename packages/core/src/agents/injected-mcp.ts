@@ -15,6 +15,7 @@ import { loadAppSettings } from '../store/app-settings.js';
 import { appDataDir } from '../store/paths.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
 import {
+  applyAgentRunnerHeapEnv,
   applyNodeLaunch,
   isAsarPath,
   resolveNodeLaunch,
@@ -320,6 +321,7 @@ export async function buildInjectedMcpServers(opts: {
     } catch {
       /* best-effort */
     }
+    applyAgentRunnerHeapEnv(sideboard.env);
     servers.push(sideboard);
   }
 

@@ -29,6 +29,49 @@ import {
 import { run } from '../git/run.js';
 import { packagedBundledNodePath } from './packaged-runtime.js';
 
+/**
+ * Node CLIs (Claude Code, OpenCode, Brightsy, Cursor runner) and Node MCP
+ * children index the worktree in V8. The default heap (~2–4 GiB) OOMs on
+ * large cowboy folders. Raise the ceiling via NODE_OPTIONS so the process
+ * and its children inherit it. A larger explicit `--max-old-space-size`
+ * is left alone; a smaller one is bumped.
+ */
+export const AGENT_RUNNER_MAX_OLD_SPACE_MB = 8192;
+
+const MAX_OLD_SPACE_FLAG =
+  /(?:^|\s)(--max[-_]old[-_]space[-_]size)(?:[= ](\d+))?(?=\s|$)/;
+
+export function withMaxOldSpaceSize(
+  nodeOptions: string | undefined,
+  heapMb: number,
+): string {
+  const existing = (nodeOptions ?? '').trim();
+  const match = MAX_OLD_SPACE_FLAG.exec(existing);
+  if (match) {
+    const current = match[2] ? Number(match[2]) : 0;
+    if (Number.isFinite(current) && current >= heapMb) return existing;
+    return existing.replace(MAX_OLD_SPACE_FLAG, ` --max-old-space-size=${heapMb}`).trim();
+  }
+  return existing
+    ? `${existing} --max-old-space-size=${heapMb}`
+    : `--max-old-space-size=${heapMb}`;
+}
+
+export function applyAgentRunnerHeapEnv(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+): void {
+  env.NODE_OPTIONS = withMaxOldSpaceSize(
+    env.NODE_OPTIONS,
+    AGENT_RUNNER_MAX_OLD_SPACE_MB,
+  );
+}
+
+function envWithAgentHeap(env: Record<string, string>): Record<string, string> {
+  const next = { ...env };
+  applyAgentRunnerHeapEnv(next);
+  return next as Record<string, string>;
+}
+
 export function isAsarPath(filePath: string): boolean {
   // Electron archive paths look like .../app.asar/node_modules/... or .../app.asar
   // Do not treat app.asar.unpacked/... as asar — those files are real.
@@ -226,16 +269,24 @@ export type AppliedNodeLaunch = {
 export function applyNodeLaunch(launch: NodeLaunch, args: string[]): AppliedNodeLaunch {
   const readableArgs = args.map(nodeReadableScriptPath);
   if (!launch.env.ELECTRON_RUN_AS_NODE) {
-    return { file: launch.file, args: readableArgs, env: launch.env };
+    return {
+      file: launch.file,
+      args: readableArgs,
+      env: envWithAgentHeap(launch.env),
+    };
   }
   const wrapped = wrapElectronAsNodeLaunch(launch.file, readableArgs);
   if (process.platform === 'win32') {
-    return { file: wrapped.file, args: wrapped.args, env: launch.env };
+    return {
+      file: wrapped.file,
+      args: wrapped.args,
+      env: envWithAgentHeap(launch.env),
+    };
   }
   // `/bin/sh` re-exports ELECTRON_RUN_AS_NODE. Omit it from spawn env so a
   // nested Electron parent (Cursor's local agent) does not treat this MCP as
   // Electron-as-Node while merging crashpad onto Sideboard.app.
-  const env = { ...launch.env };
+  const env = envWithAgentHeap(launch.env);
   delete env.ELECTRON_RUN_AS_NODE;
   return { file: wrapped.file, args: wrapped.args, env };
 }

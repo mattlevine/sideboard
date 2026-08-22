@@ -263,7 +263,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     ).not.toMatch(/brew install/);
   });
 
-  it('keeps V8 OOM over trailing native frames and does not retry it', () => {
+  it('keeps V8 OOM over trailing native frames and retries it only with a session', () => {
     const tail: string[] = [];
     pushTurnStderr(
       tail,
@@ -280,6 +280,8 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(summary).not.toMatch(/brew install|0x10100c130/i);
     expect(looksLikeV8Oom(summary)).toBe(true);
     expect(looksLikeRetryableRunnerCrash(summary)).toBe(false);
+    expect(shouldRetryFailedAgentTurn(summary, { hasSession: false })).toBe(false);
+    expect(shouldRetryFailedAgentTurn(summary, { hasSession: true })).toBe(true);
     expect(formatTurnExitError(1, summary)).toMatch(/ran out of memory/i);
   });
 

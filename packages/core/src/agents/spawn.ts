@@ -16,10 +16,17 @@ import {
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
 } from './message-parts.js';
+import { applyAgentRunnerHeapEnv } from './node-launch.js';
 import { ensureAgentPath } from './path.js';
 import { applyTurnUsage } from './usage.js';
 import type { AgentTurnInput } from './turn-input.js';
 import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
+
+export {
+  AGENT_RUNNER_MAX_OLD_SPACE_MB,
+  applyAgentRunnerHeapEnv,
+  withMaxOldSpaceSize,
+} from './node-launch.js';
 
 export interface SpawnTurnHandle {
   pid: number | undefined;
@@ -91,6 +98,7 @@ export async function spawnAgentTurn(
   // GitHub auth is a warmed credential store + GH_CONFIG_DIR — not GH_TOKEN in env.
   const env = childEnvWithAppSettings(cmd.env);
   applyPromptCacheTtlEnv(thread.agent, env);
+  applyAgentRunnerHeapEnv(env);
   try {
     if (isOrchestratorThread(thread)) {
       mergeAgentGitAuthEnv(env, await resolveAgentGitAuthEnv(env));

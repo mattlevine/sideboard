@@ -143,7 +143,7 @@ const BUNDLED_NODE_CRASH_SUMMARY =
   'Cursor runner crashed in Node. Retry the turn.';
 
 const V8_OOM_SUMMARY =
-  'Cursor runner ran out of memory (JavaScript heap). Retry; if it keeps happening, exclude large files from the project folder or start a new chat.';
+  'Agent ran out of memory (JavaScript heap). If it keeps happening, exclude large files from the project folder.';
 
 const MINIFIED_DUMP_SUMMARY =
   'Cursor local agent crashed during startup (truncated crash dump)';
@@ -226,8 +226,9 @@ export function looksLikeInvalidAgentSession(text: string): boolean {
 
 /**
  * Native Node/Cursor runner death (uv_run, nested Electron, truncated dump, or
- * empty stderr). Orchestrator respawns once. Not credits/auth/module-missing/OOM —
- * those will fail the same way.
+ * empty stderr). Orchestrator respawns once. Not credits/auth/module-missing —
+ * those will fail the same way. V8 OOM is retried only when a session exists
+ * (fresh chat drops leaked heap); first-turn indexing OOM is not.
  */
 export function looksLikeRetryableRunnerCrash(text: string): boolean {
   if (looksLikeAgentFailureMessage(text)) return false;
@@ -243,12 +244,13 @@ export function looksLikeRetryableRunnerCrash(text: string): boolean {
   );
 }
 
-/** Stale resume id, or a dead Node/Cursor runner with no assistant output. */
+/** Stale resume id, V8 OOM with a live session, or a dead Node/Cursor runner. */
 export function shouldRetryFailedAgentTurn(
   detail: string,
   opts: { hasSession: boolean },
 ): boolean {
   if (looksLikeInvalidAgentSession(detail) && opts.hasSession) return true;
+  if (looksLikeV8Oom(detail) && opts.hasSession) return true;
   return looksLikeRetryableRunnerCrash(detail);
 }
 

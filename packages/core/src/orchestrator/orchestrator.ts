@@ -4,7 +4,7 @@ import {
   pendingSlackExternalReplies,
 } from '../slack/outbound-watch.js';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -1085,10 +1085,11 @@ export class Orchestrator {
         (exitCode !== 0 ? fallbackTurnFailDetail(assistantText) : '');
 
       // Claude / Codex / OpenCode / Cursor: stale resume ids, corrupt Cursor
-      // JSONL checkpoints, or a dead Node runner. Drop the session and retry
-      // once with a seeded fresh CLI session (cursor-runner also recovers
-      // checkpoints in-process). Homebrew Current may die again on the retry;
-      // V8 OOM is not retried. Then lastError reaches the orchestrator.
+      // JSONL checkpoints, a dead Node runner, or V8 heap OOM with an existing
+      // session. Drop the session and retry once with a seeded fresh CLI
+      // session (cursor-runner also recovers checkpoints in-process). Homebrew
+      // Current may die again on the retry; first-turn indexing OOM (no
+      // session) is not retried. Then lastError reaches the orchestrator.
       if (
         exitCode !== 0 &&
         !assistantText &&
@@ -1102,7 +1103,9 @@ export class Orchestrator {
         updateThread(threadId, { sessionId: null });
         const retryNote = looksLikeInvalidAgentSession(detail)
           ? 'Agent session missing — starting a fresh session'
-          : 'Agent runner crashed — restarting Node once';
+          : looksLikeV8Oom(detail)
+            ? 'Agent ran out of memory — starting a fresh session'
+            : 'Agent runner crashed — restarting Node once';
         pushTurnStderr(stderrTail, retryNote);
         this.emit({
           type: 'turn_output',

@@ -83,6 +83,7 @@ describe('injected-mcp', () => {
     expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
     expect(servers[0]!.env?.GIT_TERMINAL_PROMPT).toBe('0');
     expect(servers[0]!.env?.GH_PROMPT_DISABLED).toBe('1');
+    expect(servers[0]!.env?.NODE_OPTIONS).toMatch(/--max-old-space-size=8192/);
 
     const cursorMap = toCursorMcpServers(servers);
     expect(cursorMap.sideboard?.type).toBe('stdio');
@@ -95,6 +96,7 @@ describe('injected-mcp', () => {
       expect(JSON.stringify(cursorMap.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
     }
     expect(cursorMap.sideboard?.env?.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    expect(cursorMap.sideboard?.env?.NODE_OPTIONS).toMatch(/--max-old-space-size=8192/);
     expect(cursorMap.sideboard?.env?.SIDEBOARD_APP_DATA).toBe(
       servers[0]!.env!.SIDEBOARD_APP_DATA,
     );
@@ -117,6 +119,9 @@ describe('injected-mcp', () => {
         a.includes('mcp_servers.sideboard.env.SIDEBOARD_APP_DATA='),
       ),
     ).toBe(true);
+    expect(
+      codexArgs.some((a) => a.includes('mcp_servers.sideboard.env.NODE_OPTIONS=')),
+    ).toBe(true);
 
     const oc = JSON.parse(toOpencodeMcpConfigContent(servers)) as {
       mcp: {
@@ -132,6 +137,9 @@ describe('injected-mcp', () => {
     expect(oc.mcp.sideboard.environment?.SIDEBOARD_APP_DATA).toBe(
       servers[0]!.env!.SIDEBOARD_APP_DATA,
     );
+    expect(oc.mcp.sideboard.environment?.NODE_OPTIONS).toMatch(
+      /--max-old-space-size=8192/,
+    );
 
     const claudeCfgPath = writeMcpServersConfig(servers);
     expect(claudeCfgPath).toBeTruthy();
@@ -140,6 +148,9 @@ describe('injected-mcp', () => {
     };
     expect(claudeCfg.mcpServers.sideboard.env?.SIDEBOARD_APP_DATA).toBe(
       servers[0]!.env!.SIDEBOARD_APP_DATA,
+    );
+    expect(claudeCfg.mcpServers.sideboard.env?.NODE_OPTIONS).toMatch(
+      /--max-old-space-size=8192/,
     );
   });
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.112] - 2026-08-22
+
+### Fixed
+
+- Agent turns raise V8 `--max-old-space-size` to 8 GiB via `NODE_OPTIONS` (Claude Code, Codex, OpenCode, Brightsy, Cursor, and injected Sideboard MCP). Large project folders were hitting the default JavaScript heap.
+- V8 JavaScript-heap OOM on a live session is retried once with a fresh chat (same path as a dead runner). First-turn indexing OOM is not retried.
+
 ## [0.1.111] - 2026-08-22
 
 ### Fixed
