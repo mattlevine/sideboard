@@ -4,8 +4,10 @@ import {
   applyCompaction,
   buildSessionSeed,
   estimateThreadChars,
+  lastRequestOccupancy,
   maybeCompactContext,
   shouldCompactContext,
+  shouldResetSessionForOccupancy,
   splitForCompaction,
 } from './context-compact.js';
 
@@ -92,7 +94,7 @@ describe('context compact', () => {
     expect(seed).toContain('ok\n'.repeat(40).trimEnd());
   });
 
-  it('maybeCompactContext clears session and persists summary', async () => {
+  it('maybeCompactContext keeps the CLI session when occupancy is below the window', async () => {
     const messages = fatThread(20, 6_000);
     const thread = {
       id: 't1',
@@ -133,9 +135,71 @@ describe('context compact', () => {
     );
 
     expect(result.didCompact).toBe(true);
-    expect(result.thread.sessionId).toBeNull();
+    expect(result.thread.sessionId).toBe('sess-123');
     expect(result.thread.messages[0]?.role).toBe('summary');
     expect(result.thread.messages[0]?.text).toContain('Compacted goals');
     expect(result.method).toBe('extractive');
+  });
+
+  it('maybeCompactContext clears session when last-request occupancy is near the window', async () => {
+    const messages = fatThread(20, 6_000);
+    messages[messages.length - 1] = {
+      ...messages[messages.length - 1]!,
+      role: 'agent',
+      usage: { inputTokens: 200_000, outputTokens: 1_000, lastRequestTokens: 800_000 },
+    };
+    const thread = {
+      id: 't1',
+      title: 'test',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'feat',
+      worktreePath: '/tmp',
+      repoPath: '/tmp',
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      fast: false,
+      planMode: false,
+      sessionId: 'sess-123',
+      autonomy: 'default',
+      sourceIsFork: false,
+      status: 'idle',
+      queue: [],
+      parentThreadId: null,
+      devPort: null,
+      prUrl: null,
+      prTitle: null,
+      prState: null,
+      stackId: null,
+      stackLayer: null,
+      userSetTitle: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages,
+      attachments: [],
+    } satisfies Thread;
+
+    const result = await maybeCompactContext(
+      thread,
+      { maxChars: 50_000, minMessages: 10, keepRecentMessages: 6, keepRecentChars: 12_000 },
+      async () => ({ summary: '- Near window', method: 'extractive' }),
+    );
+
+    expect(result.didCompact).toBe(true);
+    expect(result.thread.sessionId).toBeNull();
+  });
+
+  it('occupancy helpers read lastRequestTokens from the latest usage', () => {
+    expect(lastRequestOccupancy({ messages: [] })).toBe(0);
+    const messages = fatThread(4, 10);
+    messages[3] = {
+      ...messages[3]!,
+      role: 'agent',
+      usage: { inputTokens: 10, outputTokens: 2, lastRequestTokens: 12_000 },
+    };
+    expect(lastRequestOccupancy({ messages })).toBe(12_000);
+    expect(shouldResetSessionForOccupancy({ messages }, 10_000)).toBe(true);
+    expect(shouldResetSessionForOccupancy({ messages }, 20_000)).toBe(false);
   });
 });

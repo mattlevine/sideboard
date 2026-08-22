@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { SIDEBOARD_MCP_PROFILE_ENV, sideboardMcpProfile } from './profile.js';
+import {
+  SIDEBOARD_MCP_PROFILE_ENV,
+  WORKTREE_MCP_TOOLS,
+  sideboardMcpProfile,
+} from './profile.js';
 
 describe('sideboardMcpProfile', () => {
   it('defaults to orchestration (CLI / Cursor MCP keep the fleet)', () => {
@@ -19,5 +23,17 @@ describe('sideboardMcpProfile', () => {
     expect(sideboardMcpProfile({ [SIDEBOARD_MCP_PROFILE_ENV]: 'Worktree' })).toBe(
       'worktree',
     );
+  });
+
+  it('worktree MCP catalog is the five UI tools only', () => {
+    expect([...WORKTREE_MCP_TOOLS]).toEqual([
+      'present_artifact',
+      'ask_user',
+      'present_plan',
+      'present_schema',
+      'present_files',
+    ]);
+    expect(WORKTREE_MCP_TOOLS).not.toContain('list_threads');
+    expect(WORKTREE_MCP_TOOLS).not.toContain('list_teams');
   });
 });

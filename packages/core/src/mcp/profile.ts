@@ -3,6 +3,15 @@ export type SideboardMcpProfile = 'worktree' | 'orchestration';
 
 export const SIDEBOARD_MCP_PROFILE_ENV = 'SIDEBOARD_MCP_PROFILE';
 
+/** Tools registered when SIDEBOARD_MCP_PROFILE=worktree (coding chats). */
+export const WORKTREE_MCP_TOOLS = [
+  'present_artifact',
+  'ask_user',
+  'present_plan',
+  'present_schema',
+  'present_files',
+] as const;
+
 export function sideboardMcpProfile(
   env: NodeJS.ProcessEnv = process.env,
 ): SideboardMcpProfile {

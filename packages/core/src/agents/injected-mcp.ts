@@ -40,9 +40,9 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
 ] as const;
 
 /**
- * Worktree Claude turns: only auto-approve present_* / ask_user UI tools
- * (not fleet control). Sideboard MCP is still injected so the tools are listed;
- * other sideboard tools remain permission-gated.
+ * Worktree Claude turns: auto-approve the UI tools that the worktree MCP
+ * profile actually registers (present_* / ask_user). Slack/Linear/list_* are
+ * orchestration-only so they stay out of the cached tools prefix.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_artifact',
@@ -50,13 +50,6 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_files',
   'mcp__sideboard__ask_user',
   'mcp__sideboard__present_plan',
-  'mcp__sideboard__list_teams',
-  'mcp__sideboard__slack_list_channels',
-  'mcp__sideboard__slack_list_users',
-  'mcp__sideboard__slack_search',
-  'mcp__sideboard__slack_read',
-  'mcp__sideboard__slack_post',
-  'mcp__sideboard__slack_replies',
 ] as const;
 
 /** Legacy single-server allow list (CLI ~/.brightsy fallback). */

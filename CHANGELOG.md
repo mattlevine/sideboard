@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.109] - 2026-08-21
+
+### Changed
+
+- Worktree Sideboard MCP lists only the five UI tools (`present_*` / `ask_user`). Slack, Linear, and `list_workspaces` / `list_threads` / `get_thread` stay on the orchestration profile so coding turns do not pay the fleet tools prefix.
+- Transcript compaction no longer drops the CLI session (prompt cache) unless last-request occupancy is at least 750k tokens. The board still summarizes older turns for the UI and for a later seed.
+- Orchestration per-turn reminder is identity only (thread id + parentThreadId). The fleet playbook stays in `AGENTS.md` / `CLAUDE.md`.
+- Claude Code and OpenCode turns opt into a 1-hour prompt-cache TTL unless `FORCE_PROMPT_CACHING_5M` / `OPENCODE_ANTHROPIC_FORCE_PROMPT_CACHING_5M` is set.
+
+### Fixed
+
+- Slack `•` lists in the board render as markdown lists. Conversion used to run only when the reply had an `<https://…>` link, so a bullet run with no URL collapsed into one wrapped paragraph.
+
 ## [0.1.108] - 2026-08-21
 
 ### Changed

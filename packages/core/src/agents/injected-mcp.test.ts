@@ -26,6 +26,18 @@ describe('injected-mcp', () => {
     expect(BRIGHTSY_MCP_ALLOWED_TOOLS).toContain('mcp__brightsy__*');
   });
 
+  it('worktree Claude allow-list is UI tools only (no Slack/Linear/list_*)', async () => {
+    const { SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS } = await import('./injected-mcp.js');
+    expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS).toEqual([
+      'mcp__sideboard__present_artifact',
+      'mcp__sideboard__present_schema',
+      'mcp__sideboard__present_files',
+      'mcp__sideboard__ask_user',
+      'mcp__sideboard__present_plan',
+    ]);
+    expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.join(' ')).not.toMatch(/slack|list_teams/i);
+  });
+
   it('builds allow tools per server name', () => {
     expect(brightsyMcpAllowedTools(['brightsy_acme', 'brightsy_beta'])).toEqual([
       'mcp__brightsy_acme',

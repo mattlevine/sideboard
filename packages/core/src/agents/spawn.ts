@@ -4,7 +4,7 @@ import { originGhRepoEnv } from '../git/worktree.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 import { childEnvWithAppSettings } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
-import type { AgentEvent, MessagePart, Thread, TokenUsage } from '../types/thread.js';
+import type { AgentEvent, AgentKind, MessagePart, Thread, TokenUsage } from '../types/thread.js';
 import { parseBrightsyCliLine } from './brightsy.js';
 import { getAdapter } from './index.js';
 import { assertOrchestratorCapableAgent } from './orchestrator-capable.js';
@@ -31,6 +31,25 @@ export interface SpawnTurnHandle {
     parts: MessagePart[];
     usage: TokenUsage | null;
   }>;
+}
+
+/**
+ * Opt into 1h prompt-cache TTL for desktop gaps (read a diff, Slack, schedules).
+ * Claude Code / OpenCode default to 5m on API keys. Honor an explicit 5m force.
+ */
+export function applyPromptCacheTtlEnv(
+  agent: AgentKind,
+  env: NodeJS.ProcessEnv,
+): void {
+  if (agent === 'claude' && env.FORCE_PROMPT_CACHING_5M !== '1') {
+    env.ENABLE_PROMPT_CACHING_1H ??= '1';
+  }
+  if (
+    agent === 'opencode' &&
+    env.OPENCODE_ANTHROPIC_FORCE_PROMPT_CACHING_5M !== '1'
+  ) {
+    env.OPENCODE_ANTHROPIC_PROMPT_CACHING_1H ??= '1';
+  }
 }
 
 export async function spawnAgentTurn(
@@ -71,6 +90,7 @@ export async function spawnAgentTurn(
   // Pin bare `gh` to this worktree's origin (not upstream) for dual-remote repos.
   // GitHub auth is a warmed credential store + GH_CONFIG_DIR — not GH_TOKEN in env.
   const env = childEnvWithAppSettings(cmd.env);
+  applyPromptCacheTtlEnv(thread.agent, env);
   try {
     if (isOrchestratorThread(thread)) {
       mergeAgentGitAuthEnv(env, await resolveAgentGitAuthEnv(env));

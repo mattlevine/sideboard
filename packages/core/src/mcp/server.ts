@@ -96,7 +96,11 @@ export async function startMcpServer(): Promise<void> {
     name: 'sideboard',
     version: '0.1.0',
   });
+  // Worktree profile: present_* / ask_user only. Fleet list_*, Slack, Linear,
+  // and create/send/wait live on orchestration (tools are the cached prefix).
+  const worktreeProfile = sideboardMcpProfile() === 'worktree';
 
+  if (!worktreeProfile) {
   server.tool(
     'list_workspaces',
     'List registered Sideboard workspaces (repos). Each line is name, path, and github:owner/repo when resolvable — use path as repoPath for list_branches/list_prs/list_issues/create_thread.',
@@ -178,6 +182,7 @@ export async function startMcpServer(): Promise<void> {
       return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
     },
   );
+  }
 
   server.tool(
     'present_artifact',
@@ -377,10 +382,9 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
+  if (!worktreeProfile) {
   registerSlackTools(server);
   registerLinearTools(server);
-
-  if (sideboardMcpProfile() !== 'worktree') {
   registerScheduleTools(server);
   const { getCaffeinateHold, setCaffeinateHold } = await import(
     '../store/caffeinate-hold.js'

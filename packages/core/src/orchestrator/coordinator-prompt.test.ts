@@ -105,25 +105,25 @@ describe('coordinator-prompt', () => {
     expect(prompt).not.toContain('Coordinator home repo');
   });
 
-  it('turn reminder asserts fleet-oversight role every turn', () => {
+  it('turn reminder is a short identity line, not the fleet playbook', () => {
     const text = coordinatorTurnReminder({
       parentId: 'abc-123',
       goal: 'Cloud-connected Sideboard orchestrator',
     });
-    expect(text).toContain('oversee Sideboard worktree agents');
-    expect(text).toContain('not yourself checked out');
+    expect(text).toContain('oversee worktree agents');
+    expect(text).toContain('synthetic empty cwd');
     expect(text).toContain('abc-123');
     expect(text).toContain('YOUR orchestration thread id');
     expect(text).toContain('parentThreadId="abc-123"');
-    expect(text).toContain('synthetic');
+    expect(text).toContain('AGENTS.md');
     expect(text).toContain('list_threads');
-    expect(text).toContain('Emptiness here is expected');
-    expect(text).toContain('New repo');
-    expect(text).toContain('add_workspace');
-    expect(text).toContain('ask_git');
-    expect(text).toContain('explicitly asked to merge');
     expect(text).toContain('sideboard://thread/');
-    expect(text).toContain('set_caffeinate');
+    expect(text).toContain('Merge only if the user asked');
+    expect(text).not.toContain('Typical flow (existing)');
+    expect(text).not.toContain('force_stop: true');
+    expect(text).not.toContain('add_workspace');
+    expect(text).not.toContain('set_caffeinate');
+    expect(text.length).toBeLessThan(900);
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {

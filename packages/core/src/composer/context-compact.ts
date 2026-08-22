@@ -1,14 +1,25 @@
+import { contextTokens } from '../agents/usage.js';
 import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
 import { summarizeConversation } from './summarize.js';
 
-/** Rough char budget before we compact (≈ 25k tokens at ~4 chars/token). */
-export const CONTEXT_COMPACT_CHARS = 100_000;
+/**
+ * Sideboard transcript budget before summarizing older turns for the board /
+ * future seed (≈ 100k tokens at ~4 chars/token). Independent of the CLI
+ * session — compacting the store does not clear sessionId.
+ */
+export const CONTEXT_COMPACT_CHARS = 400_000;
 /** Keep this much recent transcript after compaction. */
 export const CONTEXT_KEEP_RECENT_CHARS = 24_000;
 /** Always keep at least this many trailing messages. */
 export const CONTEXT_KEEP_RECENT_MESSAGES = 12;
 /** Don't bother compacting tiny threads. */
 export const CONTEXT_MIN_MESSAGES = 10;
+/**
+ * Last-request occupancy at which the next turn should start a fresh CLI
+ * session (seeded from the compacted transcript). ~75% of the 1M ring.
+ * Below this, keep sessionId so prompt cache survives.
+ */
+export const SESSION_RESET_OCCUPANCY_TOKENS = 750_000;
 
 export interface CompactThresholds {
   maxChars?: number;
@@ -215,9 +226,30 @@ export interface CompactResult {
   olderCount?: number;
 }
 
+/** Last agent turn's context-window occupancy, or 0. */
+export function lastRequestOccupancy(thread: Pick<Thread, 'messages'>): number {
+  for (let i = thread.messages.length - 1; i >= 0; i--) {
+    const usage = thread.messages[i]?.usage;
+    if (usage) return contextTokens(usage);
+  }
+  return 0;
+}
+
 /**
- * If the thread transcript is oversized, summarize older turns, keep recent ones,
- * and clear sessionId so the next agent turn starts fresh with a seed prompt.
+ * True when the CLI session should be dropped so the next turn reseeds from
+ * the (possibly compacted) Sideboard transcript instead of overflowing.
+ */
+export function shouldResetSessionForOccupancy(
+  thread: Pick<Thread, 'messages'>,
+  occupancyTokens: number = SESSION_RESET_OCCUPANCY_TOKENS,
+): boolean {
+  return lastRequestOccupancy(thread) >= occupancyTokens;
+}
+
+/**
+ * If the thread transcript is oversized, summarize older turns and keep recent
+ * ones. The CLI session stays unless last-request occupancy is near the window
+ * — killing --resume on every compact was a full prompt-cache miss.
  */
 export async function maybeCompactContext(
   thread: Thread,
@@ -241,11 +273,12 @@ export async function maybeCompactContext(
   });
 
   const messages = applyCompaction(thread.messages, summary, thresholds);
+  const resetSession = shouldResetSessionForOccupancy({ messages: thread.messages });
   // Persist via caller (updateThread) — return the patched shape here.
   const next: Thread = {
     ...thread,
     messages,
-    sessionId: null,
+    sessionId: resetSession ? null : thread.sessionId,
     updatedAt: new Date().toISOString(),
   };
 

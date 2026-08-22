@@ -61,4 +61,38 @@ describe('slackMrkdwnToMarkdown', () => {
       '[#78 IDOR](https://github.com/acme/app/pull/78) → `179800be`  \n[#77 credits](https://github.com/acme/app/pull/77) → `5885fdd2` (draft)',
     );
   });
+
+  it('turns Slack • lists into markdown lists without requiring a URL', () => {
+    expect(
+      slackMrkdwnToMarkdown(
+        [
+          '*17 Brightsy record types*',
+          'NL search on: `blog` `contact`',
+          '• _Test Note_ `test-note` — `8a9c7927`',
+          '• _Test Record_ `test-record` — `bbbbbbbb`',
+        ].join('\n'),
+      ),
+    ).toBe(
+      [
+        '*17 Brightsy record types*  ',
+        'NL search on: `blog` `contact`  ',
+        '- _Test Note_ `test-note` — `8a9c7927`  ',
+        '- _Test Record_ `test-record` — `bbbbbbbb`',
+      ].join('\n'),
+    );
+  });
+
+  it('splits a same-line Slack • run the way the client wraps lists', () => {
+    expect(
+      slackMrkdwnToMarkdown(
+        '• _Task_ `task` — `aaaa` • _Company_ `company` — `bbbb`',
+      ),
+    ).toBe('- _Task_ `task` — `aaaa`  \n- _Company_ `company` — `bbbb`');
+  });
+
+  it('does not rewrite a • inside inline code', () => {
+    expect(slackMrkdwnToMarkdown('Keep `• not a list` in code')).toBe(
+      'Keep `• not a list` in code',
+    );
+  });
 });

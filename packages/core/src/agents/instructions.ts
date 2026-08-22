@@ -182,15 +182,7 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return [
-    'Sideboard side column (important):',
-    'There is no claude.ai Artifact tool here — that is normal.',
-    'HTML/SVG/markdown: ```html fence or MCP present_artifact.',
-    'CMS forms/tables: MCP present_schema (Brightsy resource_id or inline schema+schemaUi).',
-    'Files column: MCP present_files (brightsy account storage or memory).',
-    'Do not say artifacts/CMS UI are unavailable.',
-    'ask_user: only when blocked on a real multiple-choice (approach fork, which API). Never for hellos, check-ins, or “what next?” menus — reply in chat.',
-  ].join(' ');
+  return 'Sideboard UI: html fence or present_artifact / present_schema / present_files; ask_user only for a real multiple-choice (not hellos or “what next?”) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
 }
 
 export interface AgentInstructionFile {

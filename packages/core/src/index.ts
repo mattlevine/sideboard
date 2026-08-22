@@ -91,7 +91,11 @@ export * from './git/apply-into-main.js';
 export * from './git/clone-repo.js';
 export * from './git/orphan-cleanup.js';
 export { startMcpServer } from './mcp/server.js';
-export { sideboardMcpProfile, SIDEBOARD_MCP_PROFILE_ENV } from './mcp/profile.js';
+export {
+  sideboardMcpProfile,
+  SIDEBOARD_MCP_PROFILE_ENV,
+  WORKTREE_MCP_TOOLS,
+} from './mcp/profile.js';
 export type { SideboardMcpProfile } from './mcp/profile.js';
 export type { IpcApi, CloudConnectStatus, SlackListenStatus } from './ipc/types.js';
 export { loadBrightsyConfig, brightsyConfigPath } from './brightsy/config.js';

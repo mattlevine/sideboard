@@ -145,6 +145,9 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__present_schema');
     expect(allowed).toContain('mcp__sideboard__present_files');
     expect(allowed).toContain('mcp__sideboard__ask_user');
+    expect(allowed).toContain('mcp__sideboard__present_plan');
+    expect(allowed).not.toContain('mcp__sideboard__slack_post');
+    expect(allowed).not.toContain('mcp__sideboard__list_teams');
     expect(allowed).not.toContain('mcp__sideboard__*');
     const mcpIdx = cmd.args.indexOf('--mcp-config');
     expect(mcpIdx).toBeGreaterThan(-1);

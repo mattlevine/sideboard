@@ -813,7 +813,7 @@ export class Orchestrator {
       if (compact.didCompact) {
         thread = updateThread(threadId, {
           messages: compact.thread.messages,
-          sessionId: null,
+          sessionId: compact.thread.sessionId,
         });
         this.emit({
           type: 'context_compacted',

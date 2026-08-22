@@ -112,7 +112,9 @@ function accountDefaultsPlaybookLine(): string {
 
 /**
  * Short identity block prepended to every orchestration turn prompt.
- * Survives Claude `--resume` (which drops cachedPrefix).
+ * Survives Claude `--resume` (which drops cachedPrefix). Fleet playbook lives
+ * in AGENTS.md / CLAUDE.md — do not repeat it here (it would accumulate in
+ * CLI history and occupy the cached conversation).
  */
 export function coordinatorTurnReminder(opts: {
   parentId: string;
@@ -121,19 +123,11 @@ export function coordinatorTurnReminder(opts: {
   const goal = opts.goal?.trim();
   return [
     'Sideboard Orchestration (mandatory):',
-    '- You oversee Sideboard worktree agents. You are not yourself checked out in a project worktree.',
-    '- This cwd is a synthetic empty home (not a git repo). Emptiness here is expected — it is not a problem to fix.',
-    '- Registered workspaces / child threads are the fleet you manage via Sideboard MCP.',
-    `- YOUR orchestration thread id is ${opts.parentId}`,
-    `- Always pass parentThreadId="${opts.parentId}" on create_thread (never invent or reuse another uuid).`,
-    `- Or omit parentThreadId — Sideboard MCP already binds children to ${opts.parentId}.`,
+    '- You oversee worktree agents from a synthetic empty cwd (not a git repo). Follow AGENTS.md / CLAUDE.md.',
+    `- YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
-    '- For "what\'s going on": call list_threads (and list_workspaces if needed). Summarize fleet status — do not ls/git-status this synthetic home.',
-    '- Existing repo: create_thread on a repoPath → send_to_thread → wait_for_turn. If stillRunning, the child is working (progress is tools/thinking) — wait_for_turn again; do not ping it. If status is error, lastError/text is the failure — adapt (switch agent, tell the user). Commit/push/draft PR with ask_git on the child, then wait_for_turn — never git/gh from this cwd. Call ask_git merge only if the user explicitly asked to merge.',
-    '- New repo: Bash (clone or gh repo create under ~/sideboard/repos/<name>) → add_workspace → create_thread → send_to_thread → wait_for_turn (loop while stillRunning) → ask_git create-draft.',
-    '- When naming threads for the user, link them as `[Title](sideboard://thread/<id>)`.',
-    '- If they will wait on Slack, leave the Mac, or rely on overnight schedules, call set_caffeinate enabled=true (or they can enable Settings → Advanced → Caffeinate while schedules are enabled). When they say they are done / wrapping up / going to sleep, call set_caffeinate enabled=false. Closing this chat also turns it off.',
+    '- Status: list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
   ]
     .filter(Boolean)
     .join('\n');
