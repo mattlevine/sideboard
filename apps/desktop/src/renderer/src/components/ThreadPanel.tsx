@@ -1042,7 +1042,8 @@ export function ThreadPanel({
   const attachments = thread.attachments ?? [];
 
   async function archiveChatTab(id: string) {
-    const removesWorktree = chats.length <= 1 && !isGlobalThread(thread);
+    const removesWorktree =
+      chats.length <= 1 && !isGlobalThread(thread) && !thread.cowboy;
     const tab = chats.find((c) => c.id === id);
     const title = tab?.title?.trim() || closeConfirm?.title || 'Untitled';
     if (onArchiveThread) {
@@ -1432,7 +1433,7 @@ export function ThreadPanel({
               </h3>
               <p className="confirm-dialog-message">
                 {closeChatTabMessage(closeConfirm.title, closeConfirm.chatCount, {
-                  removesWorktree: !isGlobalThread(thread),
+                  removesWorktree: !isGlobalThread(thread) && !thread.cowboy,
                 })}
               </p>
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
@@ -1618,6 +1619,15 @@ export function ThreadPanel({
                             ? 'Steer worktree agents across registered repos with Sideboard MCP. Slack DMs and @mentions land here.'
                             : 'Coordinate child worktree agents from this orchestration chat.'}{' '}
                           Use <kbd>⌘L</kbd> to focus the composer.
+                        </p>
+                      </>
+                    ) : thread.cowboy ? (
+                      <>
+                        <h3>What are you changing on main?</h3>
+                        <p>
+                          This chat edits the project folder on {thread.branchName} and
+                          can push there. Archive does not delete the folder. Use{' '}
+                          <kbd>⌘L</kbd> to focus the composer.
                         </p>
                       </>
                     ) : (

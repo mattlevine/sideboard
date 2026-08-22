@@ -193,6 +193,83 @@ describe('opencodeAdapter.parseEvent', () => {
   it('does not dump unknown JSON into stdout', () => {
     expect(opencodeAdapter.parseEvent(JSON.stringify({ type: 'mystery', foo: 1 }))).toBeNull();
   });
+
+  it('keys task tools by child session id and maps subtask streams', () => {
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'tool_use',
+          sessionID: 'ses_parent',
+          part: {
+            callID: 'call_task',
+            tool: 'task',
+            state: {
+              status: 'completed',
+              input: { description: 'Explore auth', prompt: 'Find login' },
+              output: 'done',
+              metadata: { sessionId: 'ses_child' },
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'ses_child',
+        name: 'task',
+        input: { description: 'Explore auth', prompt: 'Find login' },
+      },
+      { type: 'tool_result', id: 'ses_child', content: 'done', isError: false },
+    ]);
+
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'subtask_delta',
+          childSessionID: 'ses_child',
+          delta: 'scan login',
+        }),
+      ),
+    ).toEqual([
+      { type: 'tool_use', id: 'ses_child', name: 'task' },
+      { type: 'thinking', data: 'scan login', parentId: 'ses_child' },
+    ]);
+
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'subtask_event',
+          childSessionID: 'ses_child',
+          part: {
+            type: 'tool',
+            callID: 'bash1',
+            tool: 'bash',
+            state: {
+              status: 'completed',
+              input: { command: 'ls' },
+              output: 'ok',
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      { type: 'tool_use', id: 'ses_child', name: 'task' },
+      {
+        type: 'tool_use',
+        id: 'bash1',
+        name: 'bash',
+        input: { command: 'ls' },
+        parentId: 'ses_child',
+      },
+      {
+        type: 'tool_result',
+        id: 'bash1',
+        content: 'ok',
+        isError: false,
+        parentId: 'ses_child',
+      },
+    ]);
+  });
 });
 
 describe('opencodeAdapter.resolveSessionId', () => {

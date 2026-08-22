@@ -17,8 +17,8 @@ export type Autonomy = 'default' | 'full';
 
 /** Structured agent turn content (thinking / tools / text). */
 export type MessagePart =
-  | { type: 'text'; text: string }
-  | { type: 'thinking'; text: string }
+  | { type: 'text'; text: string; parentId?: string }
+  | { type: 'thinking'; text: string; parentId?: string }
   | {
       type: 'tool';
       id: string;
@@ -33,6 +33,11 @@ export type MessagePart =
       filePath?: string;
       additions?: number;
       deletions?: number;
+      /**
+       * When set, this part belongs inside a parent tool (Cursor Task / Agent
+       * subagent stream). Omitted on top-level parts.
+       */
+      parentId?: string;
     };
 
 /** Token usage for a single agent turn, aggregated across the turn's API calls. */
@@ -127,6 +132,12 @@ export interface Thread {
    * Cleared when `prState` becomes a non-merged open state again.
    */
   skipAutoArchiveOnMerge?: boolean;
+  /**
+   * Work in the registered project folder on the default branch (no `thread/*`
+   * worktree). Land is commit+push to that branch, not a PR. Archive/purge
+   * must not delete the project folder.
+   */
+  cowboy?: boolean;
   /**
    * Stable id for a GitHub PR stack this thread belongs to (shared across layer worktrees).
    * Null when not part of a stack.
@@ -414,30 +425,35 @@ export interface LandPreview {
   blocked: boolean;
   blockReason?: string;
   isFork: boolean;
+  /** Direct push to the default branch (no PR). */
+  cowboy?: boolean;
 }
 
 export interface LandResult {
-  prUrl: string;
+  prUrl: string | null;
   pushed: boolean;
   committed: boolean;
 }
 
 export type AgentEvent =
-  | { type: 'stdout'; data: string }
+  | { type: 'stdout'; data: string; parentId?: string }
   | { type: 'stderr'; data: string }
   | { type: 'session_id'; data: string }
-  | { type: 'thinking'; data: string }
+  | { type: 'thinking'; data: string; parentId?: string }
   | {
       type: 'tool_use';
       id: string;
       name: string;
       input?: Record<string, unknown>;
+      /** Cursor Task / Agent nested stream — inner events set this to the parent call id. */
+      parentId?: string;
     }
   | {
       type: 'tool_result';
       id: string;
       content?: string;
       isError?: boolean;
+      parentId?: string;
     }
   | {
       type: 'usage';
@@ -522,6 +538,11 @@ export interface CreateThreadInput {
   parentThreadId?: string | null;
   /** Optional first prompt — queued after the thread is created (Conductor-style). */
   prompt?: string;
+  /**
+   * Use the project checkout on the default branch (no isolated worktree).
+   * Pushes go to that branch; archive does not remove the folder.
+   */
+  cowboy?: boolean;
 }
 
 export interface AdoptInput {

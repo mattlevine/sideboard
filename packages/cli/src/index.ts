@@ -144,6 +144,7 @@ async function main(): Promise<void> {
     .requiredOption('--agent <agent>', 'claude|codex|opencode|brightsy|cursor')
     .option('--repo <path>', 'repo path', process.cwd())
     .option('--title <title>', 'thread title')
+    .option('--cowboy', 'work on the project checkout (default branch); requires Settings → Advanced → Cowboy mode')
     .action(async (opts) => {
       await orch.reconcile(opts.repo);
       const { sourceType, sourceRef } = parseFrom(opts.from);
@@ -162,6 +163,7 @@ async function main(): Promise<void> {
         agent,
         repoPath,
         title: opts.title,
+        cowboy: Boolean(opts.cowboy),
       });
       console.log(chalk.green(`Created ${thread.id.slice(0, 8)}  ${thread.branchName}`));
       console.log(`  worktree: ${thread.worktreePath}`);
@@ -543,16 +545,22 @@ async function main(): Promise<void> {
         return;
       }
       const ok = await confirm(
-        opts.draft
-          ? 'Push and create/update DRAFT PR?'
-          : 'Push and create/update PR?',
+        preview.cowboy
+          ? `Commit and push directly to ${preview.branch}?`
+          : opts.draft
+            ? 'Push and create/update DRAFT PR?'
+            : 'Push and create/update PR?',
       );
       if (!ok) {
         console.log('Aborted');
         return;
       }
       const result = await orch.confirmLand(thread, { draft: Boolean(opts.draft) });
-      console.log(chalk.green(`PR: ${result.prUrl}`));
+      if (result.prUrl) {
+        console.log(chalk.green(`PR: ${result.prUrl}`));
+      } else {
+        console.log(chalk.green(`Pushed ${preview.branch}`));
+      }
     });
 
   program

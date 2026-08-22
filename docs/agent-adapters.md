@@ -22,7 +22,7 @@ export interface AgentAdapter {
 |--------|---------|
 | `detect` | Report installed / authenticated for `sideboard detect` |
 | `buildTurn` | Spawn command for a non-interactive turn (file, args, cwd, optional stdin/env) |
-| `parseEvent` | Map one stdout/stderr line → `AgentEvent`(s) for the board / store |
+| `parseEvent` | Map one stdout/stderr line → `AgentEvent`(s) for the board / store. Nested subagent streams set `parentId` to the parent tool id (`task` / `Agent` / `spawn_agent`). |
 | `resolveSessionId` | Resume the same native session when possible |
 | `buildAttach` | Interactive CLI attach (`sideboard attach`) — same session when possible |
 | `listLinearIssues` | Optional Linear MCP bridge for ticket sources |
@@ -51,6 +51,7 @@ Reference implementations:
 - Chat-only agents (no local file edits) are fine — document that limitation like Brightsy.
 - Use `permissionMode()` from `types.ts` when the agent supports plan / autonomy modes.
 - Map usage to Claude-shaped `TokenUsage` (`inputTokens` uncached; cache extra). OpenAI-shaped CLIs (Codex, Brightsy) use `fromInclusiveInputUsage` — do not add cache or reasoning on top of inclusive totals.
+- Nested Task / Agent / `spawn_agent` streams should set `parentId` so the board can nest them under the parent tool. Nested stdout is not the parent answer.
 
 ## Out of scope for a first PR
 

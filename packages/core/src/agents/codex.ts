@@ -314,6 +314,9 @@ export const codexAdapter: AgentAdapter = {
           error?: { message?: string } | null;
           command?: string;
           aggregated_output?: string;
+          prompt?: string;
+          receiver_thread_ids?: unknown;
+          agents_states?: Record<string, { status?: string; message?: string | null }>;
         };
         const itemType = item.type ?? item.item_type;
 
@@ -363,6 +366,42 @@ export const codexAdapter: AgentAdapter = {
               type: 'tool_result',
               id: item.id,
               content: item.aggregated_output,
+              isError: item.status === 'failed',
+            });
+          }
+          return events.length === 1 ? events[0]! : events;
+        }
+        if (itemType === 'collab_tool_call' && item.id) {
+          const rawTool = typeof item.tool === 'string' ? item.tool : 'spawn_agent';
+          const name = /spawn/i.test(rawTool) ? 'spawn_agent' : rawTool;
+          const input: Record<string, unknown> = {};
+          if (item.prompt) input.prompt = item.prompt;
+          if (Array.isArray(item.receiver_thread_ids)) {
+            input.receiver_thread_ids = item.receiver_thread_ids;
+          }
+          const events: AgentEvent[] = [{ type: 'tool_use', id: item.id, name, input }];
+          const finished =
+            type === 'item.completed' ||
+            item.status === 'completed' ||
+            item.status === 'failed';
+          if (finished) {
+            const nested: string[] = [];
+            if (item.agents_states && typeof item.agents_states === 'object') {
+              for (const value of Object.values(item.agents_states)) {
+                const msg =
+                  value && typeof value === 'object' && typeof value.message === 'string'
+                    ? value.message.trim()
+                    : '';
+                if (msg) nested.push(msg);
+              }
+            }
+            for (const text of nested) {
+              events.push({ type: 'stdout', data: text, parentId: item.id });
+            }
+            events.push({
+              type: 'tool_result',
+              id: item.id,
+              content: nested.join('\n') || undefined,
               isError: item.status === 'failed',
             });
           }

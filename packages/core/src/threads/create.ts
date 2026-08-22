@@ -3,6 +3,7 @@ import { requireAgent } from '../detect/detect.js';
 import {
   allocateTeamSlug,
   createThreadWorktree,
+  currentBranch,
   fetchPrHead,
   getPr,
   getPrForHeadBranch,
@@ -40,6 +41,56 @@ export async function createThread(
   const repoPath = await resolveRepoRoot(input.repoPath);
   if (!existsSync(repoPath)) {
     throw new Error(`Repo not found: ${repoPath}`);
+  }
+
+  if (input.cowboy) {
+    const { cowboyModeEnabled } = await import('../store/app-settings.js');
+    if (!cowboyModeEnabled()) {
+      throw new Error(
+        'Cowboy mode is off. Enable it in Settings → Advanced.',
+      );
+    }
+    if (input.sourceType === 'pr' || input.sourceType === 'ticket' || input.sourceType === 'adopt') {
+      throw new Error(
+        'Cowboy mode works on the project folder (default branch), not a PR, ticket, or adopt.',
+      );
+    }
+    const defaultBranch = await resolveDefaultBranch(repoPath, { network: false });
+    const head = await currentBranch(repoPath);
+    if (head === 'HEAD') {
+      throw new Error(
+        'Cowboy mode needs a named branch in the project folder (not a detached HEAD).',
+      );
+    }
+    if (head !== defaultBranch) {
+      throw new Error(
+        `Cowboy mode uses ${defaultBranch} in the project folder. Switch that checkout to ${defaultBranch} first (currently ${head}).`,
+      );
+    }
+    const explicitTitle = input.title?.trim();
+    const thread = createEmptyThread({
+      title: explicitTitle || `Cowboy · ${head}`,
+      userSetTitle: Boolean(explicitTitle),
+      sourceType: 'branch',
+      sourceRef: head,
+      branchName: head,
+      worktreePath: repoPath,
+      repoPath,
+      agent: resolved.agent,
+      autonomy: input.autonomy ?? 'default',
+      model: resolved.model,
+      effort: resolved.effort,
+      fast: resolved.fast,
+      planMode: Boolean(input.planMode),
+      attachments: input.attachments ?? [],
+      sourceIsFork: false,
+      parentThreadId: input.parentThreadId ?? null,
+      status: 'idle',
+      cowboy: true,
+    });
+    writeThread(thread);
+    await ensureWorkspace(repoPath);
+    return readThread(thread.id) ?? thread;
   }
 
   let sourceRef = input.sourceRef;

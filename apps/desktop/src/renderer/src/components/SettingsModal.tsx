@@ -1866,6 +1866,33 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-toggle-row">
                     <div>
+                      <div className="settings-section-title">Cowboy mode</div>
+                      <p className="settings-hint">
+                        New chats can opt into the project folder on the default branch (no
+                        isolated worktree) and push there. Off by default. Archive does not
+                        delete the folder. After enabling, pick Cowboy from New chat → ⋯.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.cowboyMode ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.cowboyMode)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          cowboyMode: !advanced.cowboyMode,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
                       <div className="settings-section-title">Auto-archive on merge</div>
                       <p className="settings-hint">
                         Optional Conductor-style behavior: when a linked PR merges, archive the

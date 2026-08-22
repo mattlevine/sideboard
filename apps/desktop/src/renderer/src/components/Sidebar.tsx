@@ -694,6 +694,7 @@ function WorktreeSidebarRow({
         >
           {worktreeLabel}
           {primary.sourceType === 'orchestration' ? ' ✦' : ''}
+          {primary.cowboy ? <span className="board-badge">cowboy</span> : null}
         </div>
         <div className="thread-meta">
           {archiving
@@ -1109,6 +1110,7 @@ export function Sidebar({
                         title: worktreeLabel,
                         chatCount: chats.length,
                         threadIds: chats.map((c) => c.id),
+                        removesWorktree: !primary.cowboy,
                       })
                     }
                   />
@@ -1135,7 +1137,9 @@ export function Sidebar({
             <div className="create-modal-content">
               <h3 id="archive-worktree-title" className="merge-modal-title">
                 {archiveConfirm.removesWorktree === false
-                  ? 'Archive orchestration?'
+                  ? archiveConfirm.title === 'Orchestration'
+                    ? 'Archive orchestration?'
+                    : 'Archive cowboy chat?'
                   : 'Archive worktree?'}
               </h3>
               <p className="confirm-dialog-message">

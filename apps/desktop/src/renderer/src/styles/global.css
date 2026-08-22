@@ -2379,6 +2379,14 @@ body.resizing-panels webview {
   line-height: 1.5;
 }
 
+.chat-empty-action {
+  margin-top: 18px;
+}
+
+.chat-empty-action button.primary {
+  padding: 8px 16px;
+}
+
 .chat-empty kbd {
   font-family: var(--mono);
   font-size: 11px;
@@ -2704,6 +2712,37 @@ body.resizing-panels webview {
   flex-direction: column;
   gap: 10px;
   padding: 2px 0 4px;
+}
+
+.turn-subagent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #1c1c1e;
+}
+
+.turn-subagent.running {
+  border-color: rgba(117, 190, 255, 0.28);
+}
+
+.turn-subagent-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+
+.turn-subagent-waiting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .turn-thinking-label {
@@ -9008,6 +9047,13 @@ body:has(.update-banner) .team-toast-stack {
   flex-direction: column;
   gap: 16px;
   background: var(--bg);
+}
+
+.board-body.is-empty {
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  gap: 0;
 }
 
 .board-repo-header {

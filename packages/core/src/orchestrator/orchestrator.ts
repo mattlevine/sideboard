@@ -71,6 +71,7 @@ import {
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
 import { createThread } from '../threads/create.js';
+import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 import {
   createChatTab as createChatTabImpl,
@@ -538,7 +539,9 @@ export class Orchestrator {
     threadId: string,
     prompt?: string,
   ): Promise<void> {
-    const setup = this.runSetupAfterCreate(threadId);
+    const created = this.getThread(threadId);
+    const skipSetup = isCowboyThread(created);
+    const setup = skipSetup ? Promise.resolve() : this.runSetupAfterCreate(threadId);
 
     if (prompt) {
       try {
@@ -552,6 +555,8 @@ export class Orchestrator {
     }
 
     await setup;
+
+    if (skipSetup) return;
 
     const { autoRunAfterSetupEnabled } = await import('../store/app-settings.js');
     if (autoRunAfterSetupEnabled()) {
@@ -2284,18 +2289,20 @@ export class Orchestrator {
     // Only tear down the worktree when this is the last active chat tab.
     if (siblings.length === 0) {
       this.stopDev(thread.id);
-      try {
-        await runArchiveScript(thread.repoPath, thread.worktreePath, (line) => {
-          this.emit({
-            type: 'turn_output',
-            threadId: thread.id,
-            event: { type: 'stdout', data: `[archive] ${line}` },
+      if (shouldRemoveWorktreeOnTeardown(thread)) {
+        try {
+          await runArchiveScript(thread.repoPath, thread.worktreePath, (line) => {
+            this.emit({
+              type: 'turn_output',
+              threadId: thread.id,
+              event: { type: 'stdout', data: `[archive] ${line}` },
+            });
           });
-        });
-      } catch {
-        // Best-effort archive script
+        } catch {
+          // Best-effort archive script
+        }
+        await removeWorktree(thread.repoPath, thread.worktreePath);
       }
-      await removeWorktree(thread.repoPath, thread.worktreePath);
     }
     const archived = setStatus(thread.id, 'archived');
     this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
@@ -2331,16 +2338,18 @@ export class Orchestrator {
     const siblings = threadsSharingWorktree(thread.worktreePath).filter((t) => t.id !== thread.id);
     if (siblings.length === 0) {
       this.stopDev(thread.id);
-      try {
-        await runArchiveScript(thread.repoPath, thread.worktreePath);
-      } catch {
-        // Best-effort
+      if (shouldRemoveWorktreeOnTeardown(thread)) {
+        try {
+          await runArchiveScript(thread.repoPath, thread.worktreePath);
+        } catch {
+          // Best-effort
+        }
+        const { deleteBranchOnPurgeEnabled } = await import('../store/app-settings.js');
+        const deleteBranch = opts?.deleteBranch ?? deleteBranchOnPurgeEnabled();
+        await removeWorktree(thread.repoPath, thread.worktreePath, {
+          deleteBranch: deleteBranch ? thread.branchName : undefined,
+        });
       }
-      const { deleteBranchOnPurgeEnabled } = await import('../store/app-settings.js');
-      const deleteBranch = opts?.deleteBranch ?? deleteBranchOnPurgeEnabled();
-      await removeWorktree(thread.repoPath, thread.worktreePath, {
-        deleteBranch: deleteBranch ? thread.branchName : undefined,
-      });
     }
     deleteThreadRecord(thread.id);
   }
@@ -2358,6 +2367,11 @@ export class Orchestrator {
       return restored;
     }
     if (!existsSync(thread.worktreePath)) {
+      if (isCowboyThread(thread) || isPrimaryCheckoutThread(thread)) {
+        throw new Error(
+          `Cowboy checkout missing: ${thread.worktreePath}. Re-add the project folder, then restore.`,
+        );
+      }
       const { createThreadWorktree } = await import('../git/worktree.js');
       // Recreate worktree from existing branch
       const slug = thread.worktreePath.split('/').pop()!;

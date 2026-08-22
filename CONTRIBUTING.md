@@ -56,7 +56,7 @@ pnpm --filter @sideboard-ai/desktop typecheck
 ## Safety invariants (don’t break)
 
 - `confirm_land` / purge stay **human-only** (not exposed as MCP write-confirm tools). Orchestrators may tell a worktree agent to merge (`ask_git`) **only when the user explicitly asked**, never by calling host `mergePr`.
-- Landing on the default branch stays blocked
+- Landing on the default branch stays blocked except cowboy threads (explicit create; commit+push in the project folder)
 - No `--yes` on `land` in v1
 
 ## Pull requests

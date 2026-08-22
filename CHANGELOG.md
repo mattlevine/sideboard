@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.110] - 2026-08-22
+
+### Added
+
+- Cursor Task / Agent subagent turns stream inner thinking and tools into the board (nested card under the parent tool), matching the Cursor app’s nested transcript more closely.
+- Claude Code Task / Agent subagent messages with `parent_tool_use_id` nest the same way. Turns set `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT` and auto-approve `Task` + `Agent`.
+- Codex `spawn_agent` (`collab_tool_call`) is a subagent card; OpenCode `task` / `subtask_*` events nest when the CLI emits them.
+- Cowboy mode: Settings → Advanced unlocks chats that work in the project folder on the default branch (off by default). New chat → ⋯ → Cowboy, or CLI `--cowboy` / MCP `create_thread cowboy=true`. Land is commit+push. Archive does not delete the folder.
+
+### Changed
+
+- Orchestration home with no chats uses the empty-chat layout (centered prompt) and a New chat button instead of a blank board list.
+
 ## [0.1.109] - 2026-08-21
 
 ### Changed

@@ -99,6 +99,7 @@
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Drop into the native CLI mid-session</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Weak, or one-way</td><td style="padding:13px 8px;border-bottom:1px solid #26292d"><code style="font-size:14px;color:#8cc8f5">attach</code> keeps the same session</td></tr>
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Recurring process guides</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Locked in the product, or chat memory</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">Committed <code style="font-size:14px;color:#8cc8f5">.claude/skills</code> — Claude Code and <code style="font-size:14px;color:#8cc8f5">attach</code> load them</td></tr>
 <tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Bring existing worktrees in</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Stuck, or start over</td><td style="padding:13px 8px;border-bottom:1px solid #26292d"><code style="font-size:14px;color:#8cc8f5">adopt</code> + Conductor import</td></tr>
+<tr><td style="padding:13px 8px;border-bottom:1px solid #26292d">Work on main in the project folder</td><td style="padding:13px 8px;border-bottom:1px solid #26292d;color:#8b949c">Always a sidecar worktree, or no rail</td><td style="padding:13px 8px;border-bottom:1px solid #26292d">Opt-in cowboy (off by default)</td></tr>
 <tr><td style="padding:13px 8px">Data the agent invents</td><td style="padding:13px 8px;color:#8b949c">Spreadsheet, CMS, or markdown forever</td><td style="padding:13px 8px">Schema → form, beside the diff</td></tr>
 </tbody>
 </table>
@@ -113,7 +114,7 @@
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:38px">
 <div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:20px;margin:0 0 8px">Chat</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">The worktree agent driving that branch — Claude Code, Codex, OpenCode or Cursor.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">The worktree agent driving that branch — Claude Code, Codex, OpenCode or Cursor. Nested Task / Agent work streams in a card under the parent tool.</p>
 </div>
 <div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:20px;margin:0 0 8px">Structure column</h4>
@@ -137,7 +138,7 @@
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:56px;align-items:start">
 <div>
 <h2 style="font-weight:700;font-size:44px;line-height:1.08;letter-spacing:-.02em;margin:0">The loop</h2>
-<p style="font-size:17px;line-height:1.6;color:#b3bcc4;margin-top:18px">Board, send, inspect, attach when I want the native CLI, land when it's ready. Landing on the default branch is blocked, dirty worktrees need an explicit confirm, and there is no <code style="font-size:15px;color:#8cc8f5">--yes</code> on <code style="font-size:15px;color:#8cc8f5">land</code>.</p>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;margin-top:18px">Board, send, inspect, attach when I want the native CLI, land when it's ready. Landing on the default branch is blocked (unless you opt into cowboy mode), dirty worktrees need an explicit confirm, and there is no <code style="font-size:15px;color:#8cc8f5">--yes</code> on <code style="font-size:15px;color:#8cc8f5">land</code>.</p>
 <pre style="margin:22px 0 0;padding:26px;border-radius:24px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14.5px;line-height:1.85;overflow-x:auto">sideboard detect
 sideboard new --from branch:main --agent claude
 sideboard send &lt;thread&gt; "add a README note"

@@ -164,6 +164,8 @@ export function CreateModal({
   const [prompt, setPrompt] = useState('');
   const [goal, setGoal] = useState('');
   const [createMore, setCreateMore] = useState(false);
+  const [cowboyAllowed, setCowboyAllowed] = useState(false);
+  const [cowboy, setCowboy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [createDragOver, setCreateDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -274,7 +276,12 @@ export function CreateModal({
     });
     void window.sideboard
       .getAppSettings()
-      .then((s) => setLinearConnected(Boolean(s.integrations?.hasLinearApiKey)))
+      .then((s) => {
+        setLinearConnected(Boolean(s.integrations?.hasLinearApiKey));
+        const allowed = Boolean(s.advanced?.cowboyMode);
+        setCowboyAllowed(allowed);
+        setCowboy(false);
+      })
       .catch(() => setLinearConnected(false));
   }, [initialRepoPath]);
 
@@ -320,6 +327,7 @@ export function CreateModal({
 
   function setModeAndCoerce(next: Mode) {
     setMode(next);
+    if (next === 'orchestration') setCowboy(false);
     setOptions((prev) => coerceOptionsForMode(prev, next));
   }
 
@@ -329,6 +337,7 @@ export function CreateModal({
     setSelection(null);
     setAttachments([]);
     setError(null);
+    setCowboy(false);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
@@ -399,7 +408,10 @@ export function CreateModal({
       let title: string | undefined;
       let createAttachments = [...attachments];
 
-      if (selection) {
+      if (cowboy) {
+        sourceType = 'branch';
+        sourceRef = 'default';
+      } else if (selection) {
         if (selection.kind === 'pr') {
           sourceType = 'pr';
           sourceRef = selection.ref;
@@ -434,6 +446,7 @@ export function CreateModal({
         repoPath,
         title,
         prompt: prompt.trim() || undefined,
+        cowboy: cowboy || undefined,
         ...draft,
         attachments: createAttachments,
       });
@@ -595,6 +608,23 @@ export function CreateModal({
               >
                 <span>{mode === 'orchestration' ? '✓ ' : ''}Orchestration</span>
               </button>
+              {cowboyAllowed ? (
+                <button
+                  type="button"
+                  className={cowboy ? 'selected' : ''}
+                  disabled={mode === 'orchestration'}
+                  onClick={() => {
+                    setCowboy((v) => {
+                      const next = !v;
+                      if (next) setSelection(null);
+                      return next;
+                    });
+                    setMoreMenuOpen(false);
+                  }}
+                >
+                  <span>{cowboy ? '✓ ' : ''}Cowboy (work on main)</span>
+                </button>
+              ) : null}
               <div className="menu-section">Projects</div>
               <button type="button" onClick={() => void addWorkspace()}>
                 <span>Add project…</span>
@@ -606,14 +636,16 @@ export function CreateModal({
             <button
               type="button"
               className="create-from-trigger"
-              disabled={!repoPath || mode === 'orchestration' || busy}
+              disabled={!repoPath || mode === 'orchestration' || cowboy || busy}
               onClick={() => setPickerOpen(true)}
             >
               <span className="composer-picker-icons" aria-hidden>
                 <span className="picker-logo github tiny" />
                 {linearConnected ? <span className="picker-logo linear tiny" /> : null}
               </span>
-              <span className="create-from-label">{selectionLabel(selection)}</span>
+              <span className="create-from-label">
+                {cowboy ? 'on main' : selectionLabel(selection)}
+              </span>
               <span className="create-from-chevron">▾</span>
             </button>
           </div>
@@ -655,6 +687,12 @@ export function CreateModal({
             });
           }}
         >
+          {cowboy && mode !== 'orchestration' && (
+            <div className="composer-plan-banner">
+              Cowboy mode edits the project folder on the default branch and can push
+              there. Archive will not delete the folder.
+            </div>
+          )}
           {options.planMode && (
             <div className="composer-plan-banner">
               Plan mode stays on until you turn it off (no file edits).
@@ -678,7 +716,9 @@ export function CreateModal({
             placeholder={
               mode === 'orchestration'
                 ? 'Coordination goal across threads…'
-                : 'What do you want to work on?'
+                : cowboy
+                  ? 'What are you changing on main?'
+                  : 'What do you want to work on?'
             }
             onPaste={(e) => {
               if (busy) return;

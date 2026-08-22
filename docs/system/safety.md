@@ -6,7 +6,7 @@ Do not weaken these without an explicit human request.
 
 - Ready-for-review **land** (`confirm_land`) and **purge** are human-only. Not MCP write-confirm tools. No `--yes` on `land` in v1.
 - Orchestrators may tell a **worktree** agent to merge (`ask_git` / “Merge PR.”) **only when the user explicitly asked**. They never call host `mergePr` from the coordinator cwd, and they do not merge just because a PR looks ready.
-- Landing on `main` / `master` stays blocked.
+- Landing on `main` / `master` stays blocked **except cowboy threads** (Settings → Advanced → Cowboy mode, then New chat → ⋯ → Cowboy). Cowboy land is commit+push to the default branch in the project folder — still human-only `confirm_land`, no MCP write-confirm. Archive/purge must not delete that folder.
 
 ## Agents and remotes
 

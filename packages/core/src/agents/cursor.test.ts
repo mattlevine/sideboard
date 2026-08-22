@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cursorAdapter } from './cursor.js';
 import {
+  cursorDeltaToEvents,
   cursorSdkMessageToEvents,
   parseCursorRunnerLine,
 } from './cursor-events.js';
@@ -250,6 +251,68 @@ describe('cursorSdkMessageToEvents', () => {
         error: { message: 'Model unavailable' },
       } as never),
     ).toEqual([{ type: 'stderr', data: 'Model unavailable' }]);
+  });
+});
+
+describe('cursorDeltaToEvents', () => {
+  it('maps nested task thinking and tools onto the parent call id', () => {
+    expect(
+      cursorDeltaToEvents({
+        type: 'tool-call-delta',
+        callId: 'task1',
+        taskUpdate: { type: 'thinking-delta', text: 'scan login' },
+      }),
+    ).toEqual([{ type: 'thinking', data: 'scan login', parentId: 'task1' }]);
+
+    expect(
+      cursorDeltaToEvents({
+        type: 'tool-call-delta',
+        callId: 'task1',
+        taskUpdate: {
+          type: 'tool-call-started',
+          callId: 'r1',
+          toolCall: { type: 'readFile', args: { path: 'src/auth.ts' } },
+        },
+      }),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'r1',
+        name: 'readFile',
+        input: { path: 'src/auth.ts' },
+        parentId: 'task1',
+      },
+    ]);
+
+    expect(
+      cursorDeltaToEvents({
+        type: 'tool-call-delta',
+        callId: 'task1',
+        taskUpdate: {
+          type: 'tool-call-completed',
+          callId: 'r1',
+          toolCall: {
+            type: 'readFile',
+            args: { path: 'src/auth.ts' },
+            result: 'ok',
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'r1',
+        name: 'readFile',
+        input: { path: 'src/auth.ts' },
+        parentId: 'task1',
+      },
+      { type: 'tool_result', id: 'r1', content: 'ok', isError: false, parentId: 'task1' },
+    ]);
+  });
+
+  it('ignores top-level text-delta so run.stream is not duplicated', () => {
+    expect(cursorDeltaToEvents({ type: 'text-delta', text: 'Hello' })).toEqual([]);
+    expect(cursorDeltaToEvents({ type: 'thinking-delta', text: 'hmm' })).toEqual([]);
   });
 });
 

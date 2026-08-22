@@ -107,6 +107,9 @@ describe('claudeAdapter.buildTurn', () => {
       .filter(Boolean);
     expect(allowed).toContain('WebFetch');
     expect(allowed).toContain('WebSearch');
+    expect(allowed).toContain('Task');
+    expect(allowed).toContain('Agent');
+    expect(cmd.env?.CLAUDE_CODE_FORWARD_SUBAGENT_TEXT).toBe('1');
   });
 
   it('passes --chrome and auto-approves Chrome MCP tools when enabled', async () => {
@@ -379,6 +382,48 @@ describe('claudeAdapter.parseEvent', () => {
         input: { command: 'git status' },
       },
     ]);
+  });
+
+  it('nests Task/Agent subagent messages via parent_tool_use_id', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'assistant',
+        parent_tool_use_id: 'toolu_task',
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'scan auth' },
+            {
+              type: 'tool_use',
+              id: 'toolu_read',
+              name: 'Read',
+              input: { file_path: 'src/auth.ts' },
+            },
+          ],
+        },
+      }),
+    );
+    expect(event).toEqual([
+      { type: 'thinking', data: 'scan auth', parentId: 'toolu_task' },
+      {
+        type: 'tool_use',
+        id: 'toolu_read',
+        name: 'Read',
+        input: { file_path: 'src/auth.ts' },
+        parentId: 'toolu_task',
+      },
+    ]);
+  });
+
+  it('nests stream_event deltas via parent_tool_use_id', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'stream_event',
+          parent_tool_use_id: 'toolu_task',
+          event: { type: 'content_block_delta', delta: { thinking: 'scan' } },
+        }),
+      ),
+    ).toEqual({ type: 'thinking', data: 'scan', parentId: 'toolu_task' });
   });
 
   it('extracts per-request usage from assistant message.usage', () => {

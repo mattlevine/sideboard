@@ -269,6 +269,55 @@ describe('codexAdapter.parseEvent', () => {
     ).toEqual({ type: 'stderr', data: 'exit 127' });
   });
 
+  it('maps collab spawn_agent as a subagent tool card', () => {
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.started',
+          item: {
+            id: 'item_spawn',
+            type: 'collab_tool_call',
+            tool: 'spawn_agent',
+            status: 'in_progress',
+            prompt: 'Review the auth module',
+          },
+        }),
+      ),
+    ).toEqual({
+      type: 'tool_use',
+      id: 'item_spawn',
+      name: 'spawn_agent',
+      input: { prompt: 'Review the auth module' },
+    });
+
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.completed',
+          item: {
+            id: 'item_spawn',
+            type: 'collab_tool_call',
+            tool: 'spawn_agent',
+            status: 'completed',
+            prompt: 'Review the auth module',
+            agents_states: {
+              t_child: { status: 'completed', message: 'Looks fine.' },
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'item_spawn',
+        name: 'spawn_agent',
+        input: { prompt: 'Review the auth module' },
+      },
+      { type: 'stdout', data: 'Looks fine.', parentId: 'item_spawn' },
+      { type: 'tool_result', id: 'item_spawn', content: 'Looks fine.', isError: false },
+    ]);
+  });
+
   it('does not dump unknown JSON into stdout', () => {
     expect(codexAdapter.parseEvent(JSON.stringify({ type: 'mystery', foo: 1 }))).toBeNull();
   });

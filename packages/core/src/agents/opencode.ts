@@ -4,6 +4,7 @@ import { resolveAgentExecutable } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
+import { withEventParentId } from './message-parts.js';
 import {
   buildInjectedMcpServers,
   shouldInjectBrightsyMcp,
@@ -28,6 +29,33 @@ const FALLBACK_OPENCODE_MODELS: AgentModelInfo[] = [
 
 let cachedOpencodeModels: { at: number; models: AgentModelInfo[] } | null = null;
 const OPENCODE_MODEL_CACHE_MS = 5 * 60 * 1000;
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+function str(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+function opencodeToolId(
+  name: string,
+  callId: string | undefined,
+  metadata: Record<string, unknown> | undefined,
+): string {
+  const sessionId = str(metadata?.sessionId) ?? str(metadata?.sessionID);
+  if (name === 'task' && sessionId) return sessionId;
+  return callId || `tool-${Date.now()}`;
+}
+
+/** Placeholder parent so nested events group before the completed `task` tool_use. */
+function withTaskParent(parentId: string, nested: AgentEvent | AgentEvent[]): AgentEvent[] {
+  const events = Array.isArray(nested) ? nested : [nested];
+  return [{ type: 'tool_use', id: parentId, name: 'task' }, ...events];
+}
 
 function displayNameFromOpencodeId(id: string): string {
   const slash = id.indexOf('/');
@@ -257,6 +285,7 @@ export const opencodeAdapter: AgentAdapter = {
               input?: Record<string, unknown>;
               output?: unknown;
               error?: unknown;
+              metadata?: Record<string, unknown>;
             };
           };
           id?: string;
@@ -264,11 +293,6 @@ export const opencodeAdapter: AgentAdapter = {
           tool?: string;
           input?: Record<string, unknown>;
         }).part;
-        const id =
-          part?.callID ??
-          part?.id ??
-          (obj as { id?: string }).id ??
-          `tool-${Date.now()}`;
         const name =
           part?.tool ??
           part?.name ??
@@ -282,6 +306,12 @@ export const opencodeAdapter: AgentAdapter = {
             : undefined) ??
           part?.input ??
           (obj as { input?: Record<string, unknown> }).input;
+        const metadata = asRecord(state?.metadata);
+        const id = opencodeToolId(
+          name,
+          part?.callID ?? part?.id ?? (obj as { id?: string }).id,
+          metadata,
+        );
         const events: AgentEvent[] = [{ type: 'tool_use', id, name, input }];
         // OpenCode emits tool_use only when the call finishes (status completed).
         const output = state?.output;
@@ -300,6 +330,63 @@ export const opencodeAdapter: AgentAdapter = {
           });
         }
         return events.length === 1 ? events[0]! : events;
+      }
+      if (obj.type === 'subtask_delta') {
+        const parentId =
+          str((obj as { childSessionID?: string }).childSessionID) ??
+          str((obj as { childSessionId?: string }).childSessionId);
+        const delta = str((obj as { delta?: string }).delta);
+        if (parentId && delta) {
+          return withTaskParent(
+            parentId,
+            withEventParentId({ type: 'thinking', data: delta }, parentId),
+          );
+        }
+        return null;
+      }
+      if (obj.type === 'subtask_event') {
+        const parentId =
+          str((obj as { childSessionID?: string }).childSessionID) ??
+          str((obj as { childSessionId?: string }).childSessionId);
+        const part = asRecord((obj as { part?: unknown }).part);
+        if (!parentId || !part) return null;
+        if (part.type === 'text' && str(part.text)) {
+          return withTaskParent(
+            parentId,
+            withEventParentId({ type: 'stdout', data: str(part.text)! }, parentId),
+          );
+        }
+        if (part.type === 'tool' || str(part.tool)) {
+          const name = str(part.tool) ?? str(part.name) ?? 'tool';
+          const id =
+            str(part.callID) ?? str(part.id) ?? `${parentId}-${name}`;
+          const state = asRecord(part.state);
+          const input = asRecord(state?.input) ?? asRecord(part.input);
+          const nested: AgentEvent[] = [
+            withEventParentId({ type: 'tool_use', id, name, input }, parentId),
+          ];
+          const output = state?.output ?? part.output;
+          if (output != null || state?.status === 'completed' || state?.status === 'error') {
+            nested.push(
+              withEventParentId(
+                {
+                  type: 'tool_result',
+                  id,
+                  content:
+                    typeof output === 'string'
+                      ? output
+                      : output != null
+                        ? JSON.stringify(output)
+                        : undefined,
+                  isError: state?.status === 'error' || state?.status === 'failed',
+                },
+                parentId,
+              ),
+            );
+          }
+          return withTaskParent(parentId, nested);
+        }
+        return null;
       }
       if (obj.type === 'tool_result') {
         const part = (obj as {

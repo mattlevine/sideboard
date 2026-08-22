@@ -443,7 +443,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_thread',
-    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces. From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn. Then use send_to_thread to chat.`,
+    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -460,6 +460,12 @@ export async function startMcpServer(): Promise<void> {
         ),
       repoPath: z.string(),
       title: z.string().optional(),
+      cowboy: z
+        .boolean()
+        .optional()
+        .describe(
+          'If true, work in the project folder on the default branch (no thread/* worktree). Requires Settings → Advanced → Cowboy mode. Land is commit+push to that branch. Archive does not delete the folder.',
+        ),
       parentThreadId: z
         .string()
         .optional()
@@ -536,6 +542,7 @@ export async function startMcpServer(): Promise<void> {
             repoPath: args.repoPath,
             title: args.title,
             parentThreadId: parentId || null,
+            cowboy: args.cowboy || undefined,
           }),
           CREATE_THREAD_TIMEOUT_MS,
           'create_thread',
@@ -557,6 +564,7 @@ export async function startMcpServer(): Promise<void> {
                 agent: thread.agent,
                 model: thread.model,
                 status: thread.status,
+                cowboy: Boolean(thread.cowboy),
                 link: `sideboard://thread/${thread.id}`,
                 parentThreadId: thread.parentThreadId,
                 ...(agentCoercedFrom

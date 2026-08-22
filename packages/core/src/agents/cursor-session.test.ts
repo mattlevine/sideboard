@@ -125,6 +125,27 @@ describe('iterateUntilIdle', () => {
     expect(idle).toHaveBeenCalledOnce();
   });
 
+  it('stays open when activity is bumped during stream silence', async () => {
+    const activity = { at: Date.now() };
+    const tick = setInterval(() => {
+      activity.at = Date.now();
+    }, 10);
+    async function* src() {
+      yield 'a';
+      await new Promise((r) => setTimeout(r, 80));
+      yield 'b';
+    }
+    const idle = vi.fn();
+    const out: string[] = [];
+    try {
+      for await (const n of iterateUntilIdle(src(), 40, idle, activity)) out.push(n);
+    } finally {
+      clearInterval(tick);
+    }
+    expect(out).toEqual(['a', 'b']);
+    expect(idle).not.toHaveBeenCalled();
+  });
+
   it('exports a multi-minute default', () => {
     expect(CURSOR_STREAM_IDLE_MS).toBe(180_000);
   });

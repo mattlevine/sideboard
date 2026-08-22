@@ -3,6 +3,7 @@ import {
   applyAgentEvent,
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
+  toolDescription,
   toolDetail,
 } from './message-parts.js';
 
@@ -28,6 +29,50 @@ describe('applyAgentEvent', () => {
     });
     expect(parts[2]).toMatchObject({ type: 'text', text: 'Done.' });
     expect(partsToAssistantText(parts)).toBe('Done.');
+  });
+
+  it('nests Cursor subagent parts under a parentId and keeps them out of the answer', () => {
+    let parts = applyAgentEvent([], {
+      type: 'tool_use',
+      id: 'task1',
+      name: 'task',
+      input: { description: 'Explore auth', prompt: 'Find the login flow' },
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'thinking',
+      data: 'look at src/auth',
+      parentId: 'task1',
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'tool_use',
+      id: 'r1',
+      name: 'readFile',
+      input: { path: 'src/auth.ts' },
+      parentId: 'task1',
+    });
+    parts = applyAgentEvent(parts, { type: 'stdout', data: 'Parent answer.' });
+    parts = applyAgentEvent(parts, {
+      type: 'stdout',
+      data: 'nested note',
+      parentId: 'task1',
+    });
+
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      id: 'task1',
+      description: 'Explore auth',
+    });
+    expect(parts[1]).toMatchObject({
+      type: 'thinking',
+      text: 'look at src/auth',
+      parentId: 'task1',
+    });
+    expect(parts[2]).toMatchObject({
+      type: 'tool',
+      id: 'r1',
+      parentId: 'task1',
+    });
+    expect(partsToAssistantText(parts)).toBe('Parent answer.');
   });
 
   it('updates existing tool_use by id', () => {
@@ -111,6 +156,28 @@ describe('applyAgentEvent', () => {
 describe('toolDetail', () => {
   it('prefers command for bash', () => {
     expect(toolDetail('Bash', { command: 'ls -la' })).toBe('ls -la');
+  });
+
+  it('labels Cursor task tools from description', () => {
+    expect(
+      toolDescription('task', {
+        description: 'Explore auth',
+        prompt: 'Find login',
+        subagentType: { kind: 'explore', name: 'explore' },
+      }),
+    ).toBe('explore: Explore auth');
+  });
+
+  it('labels Codex spawn_agent and Claude Agent tools', () => {
+    expect(toolDescription('spawn_agent', { prompt: 'Review the auth module' })).toBe(
+      'Review the auth module',
+    );
+    expect(
+      toolDescription('Agent', {
+        description: 'Explore auth',
+        subagent_type: 'Explore',
+      }),
+    ).toBe('Explore: Explore auth');
   });
 });
 

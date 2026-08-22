@@ -195,6 +195,12 @@ export interface AdvancedAppSettings {
    */
   deleteBranchOnPurge?: boolean;
   /**
+   * Allow chats that work in the project folder on the default branch
+   * (no `thread/*` worktree). Land is commit+push to that branch.
+   * Default off — turn on in Settings → Advanced.
+   */
+  cowboyMode?: boolean;
+  /**
    * When a linked PR becomes MERGED, archive the worktree’s chats.
    * Conductor: auto-archive on merge (opt-in; default off).
    */
@@ -500,6 +506,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.deleteBranchOnPurge === 'boolean') {
     out.deleteBranchOnPurge = source.deleteBranchOnPurge;
+  }
+  if (typeof source.cowboyMode === 'boolean') {
+    out.cowboyMode = source.cowboyMode;
   }
   if (typeof source.autoArchiveOnMerge === 'boolean') {
     out.autoArchiveOnMerge = source.autoArchiveOnMerge;
@@ -1238,6 +1247,9 @@ export function updateAdvancedSettings(
   if (typeof patch.deleteBranchOnPurge === 'boolean') {
     advanced.deleteBranchOnPurge = patch.deleteBranchOnPurge;
   }
+  if (typeof patch.cowboyMode === 'boolean') {
+    advanced.cowboyMode = patch.cowboyMode;
+  }
   if (typeof patch.autoArchiveOnMerge === 'boolean') {
     advanced.autoArchiveOnMerge = patch.autoArchiveOnMerge;
   }
@@ -1320,6 +1332,13 @@ export function deleteBranchOnPurgeEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.deleteBranchOnPurge);
+}
+
+/** Default off. When on, create may use the project checkout on the default branch. */
+export function cowboyModeEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.cowboyMode);
 }
 
 /** Conductor-style opt-in — default off. */

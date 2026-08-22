@@ -2,6 +2,7 @@ import type { LandPreview, LandResult, Thread } from '../types/thread.js';
 import {
   commitAll,
   createOrUpdatePr,
+  currentBranch,
   isDirty,
   pushBranch,
   resolveDefaultBranch,
@@ -9,6 +10,7 @@ import {
 import { getDiff } from '../diff/diff.js';
 import { suggestPrMetadata } from './pr-metadata.js';
 import { formatGhLandError } from '../git/gh-errors.js';
+import { isCowboyThread } from '../threads/cowboy.js';
 
 export async function previewLand(thread: Thread): Promise<LandPreview> {
   if (thread.sourceIsFork) {
@@ -23,17 +25,25 @@ export async function previewLand(thread: Thread): Promise<LandPreview> {
     };
   }
 
-  const target = await resolveDefaultBranch(thread.repoPath);
-  if (thread.branchName === target || thread.branchName === 'main' || thread.branchName === 'master') {
-    // Hard-block if the *thread branch* is the default — should never happen
-    // with our create path, but guard anyway.
+  if (isCowboyThread(thread)) {
+    const current = await currentBranch(thread.worktreePath);
+    const dirty = await isDirty(thread.worktreePath);
+    const diff = await getDiff(thread.worktreePath, thread.repoPath, { base: current });
+    return {
+      branch: current,
+      target: current,
+      diffStat: diff.stat,
+      dirty,
+      blocked: false,
+      isFork: false,
+      cowboy: true,
+    };
   }
 
+  const target = await resolveDefaultBranch(thread.repoPath);
+
   // Also block if somehow checked out default
-  const { stdout: head } = await import('../git/run.js').then(({ git }) =>
-    git(['rev-parse', '--abbrev-ref', 'HEAD'], thread.worktreePath),
-  );
-  const current = head.trim();
+  const current = await currentBranch(thread.worktreePath);
   if (current === target) {
     return {
       branch: current,
@@ -64,6 +74,20 @@ export async function confirmLand(
   const preview = await previewLand(thread);
   if (preview.blocked) {
     throw new Error(preview.blockReason ?? 'Land blocked');
+  }
+
+  if (preview.cowboy) {
+    const meta = await suggestPrMetadata(thread.worktreePath, {
+      base: preview.branch,
+      fallbackTitle: thread.title,
+      sourceLabel: `${thread.sourceType}:${thread.sourceRef}`,
+    });
+    let committed = false;
+    if (preview.dirty) {
+      committed = await commitAll(thread.worktreePath, meta.commitMessage);
+    }
+    await pushBranch(thread.worktreePath, preview.branch);
+    return { prUrl: null, pushed: true, committed };
   }
 
   const meta = await suggestPrMetadata(thread.worktreePath, {

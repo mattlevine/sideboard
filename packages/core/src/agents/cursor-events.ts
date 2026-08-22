@@ -255,6 +255,71 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
   return [];
 }
 
+/**
+ * Subset of Cursor SDK `InteractionUpdate` used for nested Task / Agent streams.
+ * Tests stay free of the SDK package.
+ */
+export type CursorInteractionUpdate = {
+  type?: string;
+  text?: string;
+  callId?: string;
+  toolCall?: { type?: string; args?: unknown; result?: unknown };
+  taskUpdate?: CursorInteractionUpdate;
+};
+
+function nestedUpdateToEvents(
+  update: CursorInteractionUpdate,
+  parentId: string,
+): AgentEvent[] {
+  if (update.type === 'thinking-delta' && update.text) {
+    return [{ type: 'thinking', data: update.text, parentId }];
+  }
+  if (update.type === 'text-delta' && update.text) {
+    return [{ type: 'stdout', data: update.text, parentId }];
+  }
+  if (
+    (update.type === 'tool-call-started' || update.type === 'tool-call-completed') &&
+    update.callId &&
+    update.toolCall
+  ) {
+    const rawName = typeof update.toolCall.type === 'string' ? update.toolCall.type : 'tool';
+    const normalized = normalizeCursorToolCall(rawName, update.toolCall.args);
+    const events: AgentEvent[] = [
+      {
+        type: 'tool_use',
+        id: update.callId,
+        name: normalized.name,
+        input: normalized.input,
+        parentId,
+      },
+    ];
+    if (update.type === 'tool-call-completed') {
+      events.push({
+        type: 'tool_result',
+        id: update.callId,
+        content: unwrapCursorToolResult(update.toolCall.result),
+        isError: cursorToolResultIsError(undefined, update.toolCall.result),
+        parentId,
+      });
+    }
+    return events;
+  }
+  return [];
+}
+
+/**
+ * Map a Cursor `send({ onDelta })` update to Sideboard events.
+ * Only nested `tool-call-delta` is consumed — top-level text/thinking/tools
+ * already arrive via `run.stream()` and must not be duplicated.
+ */
+export function cursorDeltaToEvents(update: CursorInteractionUpdate | null | undefined): AgentEvent[] {
+  if (!update?.type) return [];
+  if (update.type === 'tool-call-delta' && update.callId && update.taskUpdate) {
+    return nestedUpdateToEvents(update.taskUpdate, update.callId);
+  }
+  return [];
+}
+
 /** Parse one NDJSON line emitted by the Cursor runner (already Sideboard AgentEvents). */
 export function parseCursorRunnerLine(line: string): AgentEvent | AgentEvent[] | null {
   const trimmed = line.trim();

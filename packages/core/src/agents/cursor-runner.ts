@@ -25,7 +25,7 @@ import {
   withCursorLocalHangGuards,
 } from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
-import { cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
+import { cursorDeltaToEvents, cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
 import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 
 // Electron-as-Node already started this process. Drop inherited ELECTRON_*/
@@ -187,8 +187,14 @@ async function main(): Promise<number> {
     }
   }
 
-  async function sendPrompt(agent: Awaited<ReturnType<typeof createAgent>>) {
-    const sendOpts = cursorSendOptions(mcpServers);
+  async function sendPrompt(
+    agent: Awaited<ReturnType<typeof createAgent>>,
+    extra?: { onDelta?: (args: { update: unknown }) => void },
+  ) {
+    const sendOpts = {
+      ...cursorSendOptions(mcpServers),
+      ...extra,
+    };
     try {
       return await agent.send(req.prompt, sendOpts);
     } catch (err) {
@@ -240,9 +246,20 @@ async function main(): Promise<number> {
 
   async function runTurn(agent: Awaited<ReturnType<typeof createAgent>>): Promise<number> {
     emit({ type: 'session_id', data: agent.agentId });
-    const run = await sendPrompt(agent);
-    liveRun = run;
     const stream = createAgentStreamCoalescer(emit);
+    const activity = { at: Date.now() };
+    const bump = (): void => {
+      activity.at = Date.now();
+    };
+    const run = await sendPrompt(agent, {
+      onDelta: ({ update }) => {
+        bump();
+        for (const event of cursorDeltaToEvents(update as never)) {
+          stream.push(event);
+        }
+      },
+    });
+    liveRun = run;
     let streamIdle = false;
     try {
       for await (const msg of iterateUntilIdle(
@@ -256,7 +273,9 @@ async function main(): Promise<number> {
           });
           void cancelLiveRun();
         },
+        activity,
       )) {
+        bump();
         for (const event of cursorSdkMessageToEvents(msg as never)) {
           stream.push(event);
         }

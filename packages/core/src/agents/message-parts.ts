@@ -49,6 +49,21 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/present_files$/i.test(name)) {
     return str(input?.title) ? `Files ${str(input?.title)}` : 'Present files';
   }
+  if (isSubagentToolName(name)) {
+    const desc = str(input?.description);
+    const sub = asRecord(input?.subagentType);
+    const kind =
+      str(sub?.name) ?? str(sub?.kind) ?? str(input?.subagent_type) ?? str(input?.subagentType);
+    if (/^spawn_agent$/i.test(name)) {
+      return str(input?.prompt) ?? desc ?? 'Subagent';
+    }
+    if (/connectedAgentRequest/i.test(name)) {
+      return str(input?.agent_id) ? `Ask connected agent` : 'Ask connected agent';
+    }
+    if (desc && kind) return `${kind}: ${desc}`;
+    if (desc) return desc;
+    return 'Subagent';
+  }
   if (/^(create|update)_artifact$/i.test(name.replace(/^mcp__[^_]+__/, ''))) {
     return str(input?.title) ? `Artifact ${str(input?.title)}` : 'Artifact';
   }
@@ -73,6 +88,42 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/grep/i.test(name)) return 'Search files';
   if (/glob/i.test(name)) return 'Find files';
   return n;
+}
+
+export function isSubagentToolName(name: string | undefined): boolean {
+  const n = (name ?? '').trim();
+  if (/^(task|agent|spawn_agent)$/i.test(n)) return true;
+  return /connectedAgentRequest/i.test(n);
+}
+
+export function messagePartParentId(part: MessagePart): string | undefined {
+  if ('parentId' in part && typeof part.parentId === 'string' && part.parentId.trim()) {
+    return part.parentId;
+  }
+  return undefined;
+}
+
+function sameParentId(a?: string, b?: string): boolean {
+  return (a ?? '') === (b ?? '');
+}
+
+/** Attach a Cursor/Claude/Codex nested-stream parent without clobbering one already set. */
+export function withEventParentId(event: AgentEvent, parentId?: string): AgentEvent {
+  if (!parentId) return event;
+  if (
+    event.type === 'stdout' ||
+    event.type === 'thinking' ||
+    event.type === 'tool_use' ||
+    event.type === 'tool_result'
+  ) {
+    return { ...event, parentId: event.parentId ?? parentId };
+  }
+  return event;
+}
+
+export function withEventsParentId(events: AgentEvent[], parentId?: string): AgentEvent[] {
+  if (!parentId) return events;
+  return events.map((event) => withEventParentId(event, parentId));
 }
 
 export function toolFilePath(input?: Record<string, unknown>): string | undefined {
@@ -135,10 +186,18 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
     if (!data) return parts;
     const next = [...parts];
     const last = next[next.length - 1];
-    if (last?.type === 'text') {
-      next[next.length - 1] = { type: 'text', text: last.text + data };
+    if (last?.type === 'text' && sameParentId(last.parentId, event.parentId)) {
+      next[next.length - 1] = {
+        type: 'text',
+        text: last.text + data,
+        ...(event.parentId ? { parentId: event.parentId } : {}),
+      };
     } else {
-      next.push({ type: 'text', text: data });
+      next.push({
+        type: 'text',
+        text: data,
+        ...(event.parentId ? { parentId: event.parentId } : {}),
+      });
     }
     return next;
   }
@@ -148,10 +207,18 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
     if (!data) return parts;
     const next = [...parts];
     const last = next[next.length - 1];
-    if (last?.type === 'thinking') {
-      next[next.length - 1] = { type: 'thinking', text: last.text + data };
+    if (last?.type === 'thinking' && sameParentId(last.parentId, event.parentId)) {
+      next[next.length - 1] = {
+        type: 'thinking',
+        text: last.text + data,
+        ...(event.parentId ? { parentId: event.parentId } : {}),
+      };
     } else {
-      next.push({ type: 'thinking', text: data });
+      next.push({
+        type: 'thinking',
+        text: data,
+        ...(event.parentId ? { parentId: event.parentId } : {}),
+      });
     }
     return next;
   }
@@ -163,15 +230,18 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
     if (existing >= 0) {
       const prev = parts[existing] as Extract<MessagePart, { type: 'tool' }>;
       const next = [...parts];
+      const mergedInput =
+        input && Object.keys(input).length > 0 ? input : (prev.input ?? input);
       next[existing] = {
         ...prev,
         name: event.name || prev.name,
-        input: input ?? prev.input,
-        description: toolDescription(event.name || prev.name, input ?? prev.input),
-        detail: toolDetail(event.name || prev.name, input ?? prev.input) ?? prev.detail,
-        filePath: toolFilePath(input) ?? prev.filePath,
+        input: mergedInput,
+        description: toolDescription(event.name || prev.name, mergedInput),
+        detail: toolDetail(event.name || prev.name, mergedInput) ?? prev.detail,
+        filePath: toolFilePath(mergedInput) ?? prev.filePath,
         additions: diff.additions ?? prev.additions,
         deletions: diff.deletions ?? prev.deletions,
+        parentId: event.parentId ?? prev.parentId,
       };
       return next;
     }
@@ -186,6 +256,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         detail: toolDetail(event.name, input),
         status: 'running',
         filePath: toolFilePath(input),
+        ...(event.parentId ? { parentId: event.parentId } : {}),
         ...diff,
       },
     ];
@@ -205,6 +276,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
           description: 'tool',
           status: event.isError ? ('error' as const) : ('done' as const),
           result: event.content,
+          ...(event.parentId ? { parentId: event.parentId } : {}),
           ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
           ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
         },
@@ -227,7 +299,10 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
 
 export function partsToAssistantText(parts: MessagePart[]): string {
   return parts
-    .filter((p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text')
+    .filter(
+      (p): p is Extract<MessagePart, { type: 'text' }> =>
+        p.type === 'text' && !messagePartParentId(p),
+    )
     .map((p) => p.text)
     .join('')
     .trim();

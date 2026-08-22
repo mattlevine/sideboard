@@ -72,6 +72,7 @@ function worktreeBindingFrom(from: Thread): Pick<
   | 'skipAutoArchiveOnMerge'
   | 'stackId'
   | 'stackLayer'
+  | 'cowboy'
 > {
   return {
     worktreePath: normalizeWorktreePath(from.worktreePath),
@@ -93,6 +94,7 @@ function worktreeBindingFrom(from: Thread): Pick<
     skipAutoArchiveOnMerge: from.skipAutoArchiveOnMerge,
     stackId: from.stackId,
     stackLayer: from.stackLayer,
+    cowboy: from.cowboy,
   };
 }
 

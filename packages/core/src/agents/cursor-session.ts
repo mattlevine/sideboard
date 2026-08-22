@@ -77,27 +77,39 @@ export async function* iterateUntilIdle<T>(
   iterable: AsyncIterable<T>,
   idleMs: number,
   onIdle?: () => void,
+  activity?: { at: number },
 ): AsyncGenerator<T> {
   const iterator = iterable[Symbol.asyncIterator]();
+  const bump = (): void => {
+    if (activity) activity.at = Date.now();
+  };
   try {
+    let pending = iterator.next();
     while (true) {
+      const waitMs = activity
+        ? Math.max(0, idleMs - (Date.now() - activity.at))
+        : idleMs;
       let idleTimer: ReturnType<typeof setTimeout> | undefined;
-      const next = iterator.next();
       const raced = await Promise.race([
-        next.then((result) => ({ kind: 'item' as const, result })),
+        pending.then((result) => ({ kind: 'item' as const, result })),
         new Promise<{ kind: 'idle' }>((resolve) => {
-          idleTimer = setTimeout(() => resolve({ kind: 'idle' }), idleMs);
+          idleTimer = setTimeout(() => resolve({ kind: 'idle' }), waitMs);
           idleTimer.unref?.();
         }),
       ]);
       if (idleTimer) clearTimeout(idleTimer);
       if (raced.kind === 'idle') {
+        if (activity && Date.now() - activity.at < idleMs) {
+          continue;
+        }
         onIdle?.();
         void iterator.return?.();
         return;
       }
       if (raced.result.done) return;
+      bump();
       yield raced.result.value;
+      pending = iterator.next();
     }
   } catch (err) {
     void iterator.return?.();

@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.109/Sideboard-0.1.109-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.110/Sideboard-0.1.110-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -180,7 +180,7 @@ A worktree chat is **repo + worktree + CMS** in one view:
 | Zone | Layer | What it is |
 |------|-------|------------|
 | **Far right** | Repo | Connected git worktree — Files / Changes / CI / Review, Setup / Run / Terminal |
-| **Chat** | Worktree agent | The thread driving that worktree |
+| **Chat** | Worktree agent | The thread driving that worktree. Nested Task / Agent / `spawn_agent` work shows as a card under the parent tool. |
 | **Structure column** (tabs) | CMS / data | Artifacts, schema → form/table, file manager — content and files the agent needs you to see or edit |
 
 Agents open structure tabs via MCP (or you reopen them from message chips). Tabs stick per chat until you close them.
@@ -434,6 +434,8 @@ Worktrees live **outside** the repo (Conductor-style):
 
 New threads pick an unused famous soccer team (e.g. `liverpool`, `ajax`) for the worktree directory and a placeholder `thread/<team>` branch — same idea as Conductor’s city nicknames. On the first agent turn, Sideboard asks the agent to rename the branch to match the task; the sidebar then shows the PR title (if any) or that branch name.
 
+**Cowboy mode** skips the extra worktree: the chat runs in the registered project folder, which must already be on the default branch. Enable **Settings → Advanced → Cowboy mode** (off by default), then pick Cowboy from New chat → ⋯. CLI `--cowboy` and MCP `create_thread cowboy=true` also require that setting. Land is commit+push to that branch (no PR). Archiving the chat does not delete the project folder.
+
 Override per repo in `.sideboard/settings.toml`:
 
 ```toml
@@ -470,7 +472,7 @@ Older threads that already point at a repo-local path keep working; new threads 
 
 ## Safety (v1)
 
-- Landing on the default branch is blocked
+- Landing on the default branch is blocked, except **cowboy** chats (project folder on `main` / default; land is commit+push)
 - Dirty worktrees require an explicit land confirm (auto-commit then push/PR)
 - Fork PRs are not landed in v1
 - No `--yes` on `land`

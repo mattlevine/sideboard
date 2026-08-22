@@ -69,6 +69,7 @@ export CURSOR_API_KEY="cursor_..."</pre>
 <h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Quick start</h2>
 <p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:620px;margin:0 0 24px">Board, send, inspect, attach when you want the native CLI, land when it's ready.</p>
 <pre style="margin:0;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">sideboard new --from branch:main --agent claude
+sideboard new --from branch:main --cowboy   <span style="color:#6f777e"># project folder on default branch; Settings → Advanced first</span>
 sideboard ls
 sideboard send &lt;thread&gt; "add a README note"
 sideboard diff &lt;thread&gt;
@@ -106,7 +107,7 @@ args = ["mcp"]</pre>
   "command": ["sideboard","mcp"] } } }</pre>
 </div>
 </div>
-<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_workspaces</code>, <code style="color:#8cc8f5">list_threads</code>), worktree chats (<code style="color:#8cc8f5">create_thread</code>, <code style="color:#8cc8f5">send_to_thread</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_worktree</code>), schedules (<code style="color:#8cc8f5">create_schedule</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. <code style="color:#8cc8f5">wait_for_turn</code> returns within ~45s with <code style="color:#8cc8f5">stillRunning</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code style="color:#8cc8f5">ask_git</code>) only when the user explicitly asked.</p>
+<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_workspaces</code>, <code style="color:#8cc8f5">list_threads</code>), worktree chats (<code style="color:#8cc8f5">create_thread</code>, <code style="color:#8cc8f5">send_to_thread</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_worktree</code>), schedules (<code style="color:#8cc8f5">create_schedule</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. <code style="color:#8cc8f5">create_thread cowboy=true</code> (and CLI <code style="color:#8cc8f5">--cowboy</code>) needs Settings → Advanced → Cowboy mode first — then the child works in the project folder on the default branch. <code style="color:#8cc8f5">wait_for_turn</code> returns within ~45s with <code style="color:#8cc8f5">stillRunning</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code style="color:#8cc8f5">ask_git</code>) only when the user explicitly asked.</p>
 </section>
 
 <section id="schedules" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
@@ -163,7 +164,7 @@ sideboard schedule run &lt;id&gt;</pre>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:24px">
 <div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Worktrees</h3>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Checkouts live outside the repo at <code style="font-size:13.5px;color:#8cc8f5">~/sideboard/workspaces/&lt;repo-slug&gt;/&lt;team&gt;/</code>. Override the root in settings.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Checkouts live outside the repo at <code style="font-size:13.5px;color:#8cc8f5">~/sideboard/workspaces/&lt;repo-slug&gt;/&lt;team&gt;/</code>. Override the root in settings. Opt-in cowboy (Settings → Advanced, then New chat → ⋯) works in the project folder on the default branch instead.</p>
 </div>
 <div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Setup</h3>

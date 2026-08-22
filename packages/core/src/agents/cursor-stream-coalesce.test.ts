@@ -43,6 +43,19 @@ describe('createAgentStreamCoalescer', () => {
     ]);
   });
 
+  it('does not merge nested thinking into parent thinking', () => {
+    vi.useFakeTimers();
+    const out: AgentEvent[] = [];
+    const c = createAgentStreamCoalescer((e) => out.push(e), { intervalMs: 32 });
+    c.push({ type: 'thinking', data: 'parent' });
+    c.push({ type: 'thinking', data: 'child', parentId: 'task1' });
+    vi.advanceTimersByTime(32);
+    expect(out).toEqual([
+      { type: 'thinking', data: 'parent' },
+      { type: 'thinking', data: 'child', parentId: 'task1' },
+    ]);
+  });
+
   it('flush() emits leftover text immediately', () => {
     vi.useFakeTimers();
     const out: AgentEvent[] = [];

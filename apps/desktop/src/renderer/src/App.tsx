@@ -361,6 +361,7 @@ export function App() {
         const ev = event.event;
         if (
           ev.type === 'stdout' &&
+          !ev.parentId &&
           !(
             /^\s*\{/.test(ev.data) &&
             /"type"\s*:\s*"(tool_use|tool_result|tool|thinking|usage|done|error)"/.test(

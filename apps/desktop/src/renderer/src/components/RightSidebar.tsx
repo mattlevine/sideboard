@@ -679,6 +679,7 @@ export function RightSidebar({
   function primaryGitLabel(): string {
     if (prMerged) return 'Live';
     if (prClosed) return 'Closed';
+    if (thread.cowboy) return hasLocalChanges ? 'Commit & push' : 'Push';
     if (!prUrl) return 'Create PR';
     if (inMergeQueue) return 'Queued';
     if (mergeConflicts) return 'Resolve';
@@ -690,6 +691,7 @@ export function RightSidebar({
   function primaryGitIcon(): string {
     if (prMerged) return '●';
     if (prClosed) return '✕';
+    if (thread.cowboy) return '↑';
     if (!prUrl) return '⎇';
     if (inMergeQueue) return '☰';
     if (mergeConflicts) return '⚡';
@@ -713,6 +715,10 @@ export function RightSidebar({
       return;
     }
     if (prUrl) {
+      void askAgentGit('commit-push');
+      return;
+    }
+    if (thread.cowboy) {
       void askAgentGit('commit-push');
       return;
     }
@@ -1742,7 +1748,8 @@ export function RightSidebar({
                   type="button"
                   className="primary"
                   onClick={() => {
-                    const removesWorktree = archiveConfirm.chatCount <= 1;
+                    const removesWorktree =
+                      archiveConfirm.chatCount <= 1 && !thread.cowboy;
                     const title =
                       thread.title.trim() ||
                       thread.branchName.replace(/^thread\//, '');

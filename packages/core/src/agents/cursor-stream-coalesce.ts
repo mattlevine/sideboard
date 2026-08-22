@@ -8,6 +8,10 @@ function isTextEvent(
   return event.type === 'stdout' || event.type === 'thinking';
 }
 
+function parentKey(event: { parentId?: string }): string {
+  return event.parentId ?? '';
+}
+
 /**
  * Token-stream CLIs (Claude `content_block_delta`, Cursor local SDK, …) often
  * emit one-word stdout/thinking frames. Flushing each through orchestrator IPC
@@ -19,7 +23,7 @@ export function createAgentStreamCoalescer(
   opts?: { intervalMs?: number },
 ): { push: (event: AgentEvent) => void; flush: () => void } {
   const intervalMs = opts?.intervalMs ?? 32;
-  let pending: { type: TextEventType; data: string } | null = null;
+  let pending: { type: TextEventType; data: string; parentId?: string } | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   const flush = (): void => {
@@ -30,7 +34,11 @@ export function createAgentStreamCoalescer(
     if (!pending) return;
     const event = pending;
     pending = null;
-    emit({ type: event.type, data: event.data });
+    emit({
+      type: event.type,
+      data: event.data,
+      ...(event.parentId ? { parentId: event.parentId } : {}),
+    });
   };
 
   const schedule = (): void => {
@@ -47,11 +55,15 @@ export function createAgentStreamCoalescer(
         return;
       }
       if (!event.data) return;
-      if (pending && pending.type === event.type) {
+      if (pending && pending.type === event.type && parentKey(pending) === parentKey(event)) {
         pending.data += event.data;
       } else {
         flush();
-        pending = { type: event.type, data: event.data };
+        pending = {
+          type: event.type,
+          data: event.data,
+          ...(event.parentId ? { parentId: event.parentId } : {}),
+        };
       }
       schedule();
     },

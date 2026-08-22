@@ -7,6 +7,7 @@ import {
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { mcpAllowTools, parseMcpList } from './claude-mcp.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
+import { withEventParentId } from './message-parts.js';
 import {
   brightsyMcpAllowedTools,
   buildInjectedMcpServers,
@@ -35,6 +36,9 @@ const BASE_ALLOWED_TOOLS = [
   'Grep',
   'WebFetch',
   'WebSearch',
+  // Subagents (Claude Code v2.1.63 renamed Task → Agent; allow both).
+  'Task',
+  'Agent',
 ];
 
 /**
@@ -127,26 +131,34 @@ export function claudeResultErrorDetail(obj: Record<string, unknown>): string | 
   return 'Claude turn failed';
 }
 
-function eventsFromContentBlocks(blocks: ContentBlock[] | undefined): AgentEvent[] {
+function eventsFromContentBlocks(
+  blocks: ContentBlock[] | undefined,
+  parentId?: string,
+): AgentEvent[] {
   if (!blocks?.length) return [];
   const out: AgentEvent[] = [];
   for (const block of blocks) {
     if (!block?.type) continue;
     if (block.type === 'text' && block.text) {
-      out.push({ type: 'stdout', data: block.text });
+      out.push(withEventParentId({ type: 'stdout', data: block.text }, parentId));
       continue;
     }
     if ((block.type === 'thinking' || block.type === 'redacted_thinking') && block.thinking) {
-      out.push({ type: 'thinking', data: block.thinking });
+      out.push(withEventParentId({ type: 'thinking', data: block.thinking }, parentId));
       continue;
     }
     if (block.type === 'tool_use' && block.id && block.name) {
-      out.push({
-        type: 'tool_use',
-        id: block.id,
-        name: block.name,
-        input: block.input,
-      });
+      out.push(
+        withEventParentId(
+          {
+            type: 'tool_use',
+            id: block.id,
+            name: block.name,
+            input: block.input,
+          },
+          parentId,
+        ),
+      );
       continue;
     }
     if (block.type === 'tool_result' && block.tool_use_id) {
@@ -166,15 +178,31 @@ function eventsFromContentBlocks(blocks: ContentBlock[] | undefined): AgentEvent
             : block.content != null
               ? JSON.stringify(block.content)
               : undefined;
-      out.push({
-        type: 'tool_result',
-        id: block.tool_use_id,
-        content,
-        isError: Boolean(block.is_error),
-      });
+      out.push(
+        withEventParentId(
+          {
+            type: 'tool_result',
+            id: block.tool_use_id,
+            content,
+            isError: Boolean(block.is_error),
+          },
+          parentId,
+        ),
+      );
     }
   }
   return out;
+}
+
+function claudeParentToolUseId(obj: Record<string, unknown>): string | undefined {
+  const nested =
+    obj.event && typeof obj.event === 'object' && !Array.isArray(obj.event)
+      ? (obj.event as Record<string, unknown>)
+      : undefined;
+  for (const id of [obj.parent_tool_use_id, nested?.parent_tool_use_id]) {
+    if (typeof id === 'string' && id.trim()) return id.trim();
+  }
+  return undefined;
 }
 
 export const claudeAdapter: AgentAdapter = {
@@ -324,6 +352,8 @@ export const claudeAdapter: AgentAdapter = {
       args,
       cwd: thread.worktreePath,
       stdin: useStdin ? `${promptText}\n` : undefined,
+      // Nested Task/Agent thinking+text in stream-json (Claude Code 2.1.211+).
+      env: { CLAUDE_CODE_FORWARD_SUBAGENT_TEXT: '1' },
     };
   },
 
@@ -346,9 +376,10 @@ export const claudeAdapter: AgentAdapter = {
       }
 
       if (obj.type === 'assistant' || obj.type === 'user') {
+        const parentId = claudeParentToolUseId(obj);
         const message = (obj as { message?: { content?: ContentBlock[]; usage?: ClaudeUsage } })
           .message;
-        const events = eventsFromContentBlocks(message?.content);
+        const events = eventsFromContentBlocks(message?.content, parentId);
         if (obj.type === 'assistant') {
           const usage = usageFromClaude(message?.usage);
           if (usage) events.push({ type: 'usage', data: usage, scope: 'request' });
@@ -361,6 +392,7 @@ export const claudeAdapter: AgentAdapter = {
 
       // Token streaming from --include-partial-messages
       if (obj.type === 'stream_event') {
+        const parentId = claudeParentToolUseId(obj);
         const event = (
           obj as {
             event?: {
@@ -379,30 +411,40 @@ export const claudeAdapter: AgentAdapter = {
         if (event.type === 'content_block_start' && event.content_block) {
           const block = event.content_block;
           if (block.type === 'tool_use' && block.id && block.name) {
-            return {
-              type: 'tool_use',
-              id: block.id,
-              name: block.name,
-              input: block.input,
-            };
+            return withEventParentId(
+              {
+                type: 'tool_use',
+                id: block.id,
+                name: block.name,
+                input: block.input,
+              },
+              parentId,
+            );
           }
           if (block.type === 'thinking' && block.thinking) {
-            return { type: 'thinking', data: block.thinking };
+            return withEventParentId({ type: 'thinking', data: block.thinking }, parentId);
           }
           return null;
         }
         if (event.type === 'content_block_delta' && event.delta) {
-          if (event.delta.text) return { type: 'stdout', data: event.delta.text };
-          if (event.delta.thinking) return { type: 'thinking', data: event.delta.thinking };
+          if (event.delta.text) {
+            return withEventParentId({ type: 'stdout', data: event.delta.text }, parentId);
+          }
+          if (event.delta.thinking) {
+            return withEventParentId({ type: 'thinking', data: event.delta.thinking }, parentId);
+          }
           return null;
         }
         return null;
       }
 
       if (obj.type === 'content_block_delta') {
+        const parentId = claudeParentToolUseId(obj);
         const delta = (obj as { delta?: { text?: string; thinking?: string } }).delta;
-        if (delta?.text) return { type: 'stdout', data: delta.text };
-        if (delta?.thinking) return { type: 'thinking', data: delta.thinking };
+        if (delta?.text) return withEventParentId({ type: 'stdout', data: delta.text }, parentId);
+        if (delta?.thinking) {
+          return withEventParentId({ type: 'thinking', data: delta.thinking }, parentId);
+        }
         return null;
       }
 

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
+import { isSubagentToolName, messagePartParentId } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
   isFilesPane,
@@ -94,7 +95,9 @@ function stripBrightsyNdjsonNoise(text: string): string {
 
 function finalText(text: string, parts: MessagePart[] | undefined): string {
   if (!parts?.length) return stripBrightsyNdjsonNoise(text);
-  const texts = parts.filter((p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text');
+  const texts = parts.filter(
+    (p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text' && !p.parentId,
+  );
   if (texts.length === 0) return stripBrightsyNdjsonNoise(text);
   return stripBrightsyNdjsonNoise(texts[texts.length - 1]!.text.trim() || text);
 }
@@ -114,6 +117,34 @@ function toolChips(parts: MessagePart[]): ToolPart[] {
     seen.add(key);
     return true;
   });
+}
+
+function thinkingPreview(text: string, live: boolean): string {
+  if (live && text.length > 280) return `…${text.slice(-280)}`;
+  if (text.length > 160) return `${text.slice(0, 157)}…`;
+  return text;
+}
+
+function groupTranscript(parts: MessagePart[]): {
+  top: MessagePart[];
+  children: Map<string, MessagePart[]>;
+} {
+  const toolIds = new Set(
+    parts.filter((p): p is ToolPart => p.type === 'tool').map((p) => p.id),
+  );
+  const children = new Map<string, MessagePart[]>();
+  const top: MessagePart[] = [];
+  for (const part of parts) {
+    const parentId = messagePartParentId(part);
+    if (parentId && toolIds.has(parentId)) {
+      const list = children.get(parentId) ?? [];
+      list.push(part);
+      children.set(parentId, list);
+    } else {
+      top.push(part);
+    }
+  }
+  return { top, children };
 }
 
 function hasCodeDiff(tool: ToolPart): boolean {
@@ -165,13 +196,17 @@ export function AgentMessage({
   }
 
   const safeParts = parts ?? [];
+  const grouped = groupTranscript(safeParts);
   const toolCount = safeParts.filter(
     (p) =>
       p.type === 'tool' &&
       !/present_plan$/i.test(p.name ?? '') &&
       !/ask_user|AskUserQuestion/i.test(p.name ?? ''),
   ).length;
-  const messageCount = safeParts.filter((p) => p.type === 'text').length;
+  const subagentCount = safeParts.filter(
+    (p) => p.type === 'tool' && !p.parentId && isSubagentToolName(p.name),
+  ).length;
+  const messageCount = safeParts.filter((p) => p.type === 'text' && !p.parentId).length;
   const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
   const hasTranscript = toolCount > 0 || thinkingCount > 0;
   const answer = finalText(text, safeParts);
@@ -182,15 +217,12 @@ export function AgentMessage({
     [answer, text, safeParts, idPrefix],
   );
   const durationLabel = useLiveDuration(startedAt, durationMs);
-  let lastThinkingIdx = -1;
-  for (let j = safeParts.length - 1; j >= 0; j--) {
-    if (safeParts[j]?.type === 'thinking') {
-      lastThinkingIdx = j;
-      break;
-    }
-  }
+  const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
 
   const summaryBits: string[] = [];
+  if (subagentCount > 0) {
+    summaryBits.push(`${subagentCount} subagent${subagentCount === 1 ? '' : 's'}`);
+  }
   if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
   if (messageCount > 0) summaryBits.push(`${messageCount} message${messageCount === 1 ? '' : 's'}`);
   else if (thinkingCount > 0) summaryBits.push(`${thinkingCount} thinking`);
@@ -206,6 +238,115 @@ export function AgentMessage({
   function openDiff(tool: ToolPart, anchor?: HTMLElement | null) {
     diffAnchorRef.current = anchor ?? moreBtnRef.current;
     setDiffTool((prev) => (prev?.id === tool.id ? null : tool));
+  }
+
+  function renderThinking(part: Extract<MessagePart, { type: 'thinking' }>, key: string) {
+    const isLive = Boolean(streaming && part === lastThinking);
+    return (
+      <div key={key} className={`turn-thinking${isLive ? ' live' : ''}`}>
+        <div className="turn-thinking-label">
+          {isLive ? (
+            <ActivityMark tone="active" size="sm" />
+          ) : (
+            <span className="turn-icon brain" aria-hidden>
+              ✶
+            </span>
+          )}
+          Thinking
+          {isLive ? (
+            <span className="thinking-indicator-dots" aria-hidden>
+              <span />
+              <span />
+              <span />
+            </span>
+          ) : null}
+        </div>
+        <div className="turn-thinking-pill">{thinkingPreview(part.text, isLive)}</div>
+      </div>
+    );
+  }
+
+  function renderToolRow(part: ToolPart, key: string) {
+    if (/present_plan$/i.test(part.name ?? '')) return null;
+    if (/ask_user|AskUserQuestion/i.test(part.name ?? '')) return null;
+    const clickable = hasCodeDiff(part);
+    const isRunning = part.status === 'running';
+    return (
+      <div key={key} className={`turn-tool${isRunning ? ' running' : ''}`}>
+        {isRunning ? (
+          <ActivityMark tone="active" size="sm" />
+        ) : (
+          <span className="turn-icon term" aria-hidden>
+            ›_
+          </span>
+        )}
+        <span className="turn-tool-desc">{part.description ?? part.name}</span>
+        {part.detail && (
+          <button
+            type="button"
+            className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}
+            title={clickable ? 'Show diff' : part.detail}
+            onClick={(e) => {
+              if (clickable) openDiff(part, e.currentTarget);
+            }}
+          >
+            {part.detail}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  function renderParts(list: MessagePart[], keyPrefix: string): ReactNode {
+    return list.map((part, i) => {
+      const key = `${keyPrefix}-${i}`;
+      if (part.type === 'thinking') return renderThinking(part, key);
+      if (part.type === 'tool') {
+        const kids = grouped.children.get(part.id) ?? [];
+        const row = renderToolRow(part, `${key}-row`);
+        if (!row) return null;
+        const showNested = kids.length > 0 || isSubagentToolName(part.name);
+        if (!showNested) return row;
+        return (
+          <div
+            key={key}
+            className={`turn-subagent${part.status === 'running' ? ' running' : ''}`}
+          >
+            {row}
+            <div className="turn-subagent-stream">
+              {kids.length > 0
+                ? renderParts(kids, key)
+                : streaming && part.status === 'running'
+                  ? (
+                      <div className="turn-subagent-waiting">
+                        <span className="thinking-indicator-label">Working</span>
+                        <span className="thinking-indicator-dots" aria-hidden>
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                      </div>
+                    )
+                  : null}
+            </div>
+          </div>
+        );
+      }
+      if (part.type === 'text' && part.text.trim()) {
+        return (
+          <div key={key} className="turn-text">
+            <MarkdownMessage
+              text={part.text}
+              knownFilePaths={knownFilePaths}
+              onFileReferenceClick={threadId ? openFileReference : undefined}
+              onThreadLinkClick={onOpenThread}
+              isStreaming={streaming}
+            />
+          </div>
+        );
+      }
+      return null;
+    });
   }
 
   return (
@@ -229,89 +370,7 @@ export function AgentMessage({
 
           {expanded && (
             <div className="turn-details">
-              {safeParts.map((part, i) => {
-                if (part.type === 'thinking') {
-                  const isLive = Boolean(streaming && i === lastThinkingIdx);
-                  return (
-                    <div
-                      key={`th-${i}`}
-                      className={`turn-thinking${isLive ? ' live' : ''}`}
-                    >
-                      <div className="turn-thinking-label">
-                        {isLive ? (
-                          <ActivityMark tone="active" size="sm" />
-                        ) : (
-                          <span className="turn-icon brain" aria-hidden>
-                            ✶
-                          </span>
-                        )}
-                        Thinking
-                        {isLive ? (
-                          <span className="thinking-indicator-dots" aria-hidden>
-                            <span />
-                            <span />
-                            <span />
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="turn-thinking-pill">
-                        {part.text.length > 160 ? `${part.text.slice(0, 157)}…` : part.text}
-                      </div>
-                    </div>
-                  );
-                }
-                if (part.type === 'tool') {
-                  // Plan body is rendered as PlanApprovalCard in the chat stream.
-                  if (/present_plan$/i.test(part.name ?? '')) return null;
-                  // Questions are rendered as a chat brief + composer panel.
-                  if (/ask_user|AskUserQuestion/i.test(part.name ?? '')) return null;
-                  const clickable = hasCodeDiff(part);
-                  const isRunning = part.status === 'running';
-                  return (
-                    <div
-                      key={`tool-${part.id}-${i}`}
-                      className={`turn-tool${isRunning ? ' running' : ''}`}
-                    >
-                      {isRunning ? (
-                        <ActivityMark tone="active" size="sm" />
-                      ) : (
-                        <span className="turn-icon term" aria-hidden>
-                          ›_
-                        </span>
-                      )}
-                      <span className="turn-tool-desc">
-                        {part.description ?? part.name}
-                      </span>
-                      {part.detail && (
-                        <button
-                          type="button"
-                          className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}
-                          title={clickable ? 'Show diff' : part.detail}
-                          onClick={(e) => {
-                            if (clickable) openDiff(part, e.currentTarget);
-                          }}
-                        >
-                          {part.detail}
-                        </button>
-                      )}
-                    </div>
-                  );
-                }
-                if (part.type === 'text' && part.text.trim()) {
-                  return (
-                    <div key={`tx-${i}`} className="turn-text">
-                      <MarkdownMessage
-                        text={part.text}
-                        knownFilePaths={knownFilePaths}
-                        onFileReferenceClick={threadId ? openFileReference : undefined}
-                        onThreadLinkClick={onOpenThread}
-                        isStreaming={streaming}
-                      />
-                    </div>
-                  );
-                }
-                return null;
-              })}
+              {renderParts(grouped.top, 'top')}
             </div>
           )}
         </div>

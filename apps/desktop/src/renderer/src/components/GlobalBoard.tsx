@@ -84,19 +84,36 @@ export function GlobalBoard({
         </div>
       </div>
 
-      <FleetActivityBar runtime={runtime} compact />
+      {globalChats.length > 0 && (
+        <>
+          <FleetActivityBar runtime={runtime} compact />
+          <p className="board-lede">
+            Chats that steer worktree agents across your registered workspaces. Slack DMs and
+            @mentions land on the Global orchestrator.
+          </p>
+        </>
+      )}
 
-      <p className="board-lede">
-        Chats that steer worktree agents across your registered workspaces. Slack DMs and
-        @mentions land on the Global orchestrator.
-      </p>
-
-      <div className="board-body">
-        {globalChats.length === 0 && (
-          <div className="empty">
-            No orchestration chats yet. Create a chat to get started.
+      {globalChats.length === 0 ? (
+        <div className="board-body is-empty">
+          <div className="chat-empty">
+            <div className="chat-empty-mark" aria-hidden>
+              <span className="chat-empty-cube" />
+            </div>
+            <h3>What should we orchestrate?</h3>
+            <p>
+              Chats that steer worktree agents across your registered workspaces. Slack DMs
+              and @mentions land on the Global orchestrator.
+            </p>
+            <div className="chat-empty-action">
+              <button type="button" className="primary" onClick={onNewGlobalChat}>
+                New chat
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      ) : (
+      <div className="board-body">
         <div className="board-table">
           {globalChats.map((t) => {
             const { text: previewText, markdown: previewIsMarkdown } = previewForThread(
@@ -161,6 +178,7 @@ export function GlobalBoard({
           })}
         </div>
       </div>
+      )}
     </section>
   );
 }
