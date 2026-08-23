@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  DiffFile,
   DiffResult,
   DiffScope,
   PrCheckRun,
@@ -86,6 +87,40 @@ function prNumber(url: string | null | undefined): string | null {
   if (!url) return null;
   const m = url.match(/\/pull\/(\d+)/);
   return m?.[1] ?? null;
+}
+
+function diffFilesEqual(a: DiffFile[], b: DiffFile[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!;
+    const y = b[i]!;
+    if (
+      x.path !== y.path ||
+      x.status !== y.status ||
+      x.additions !== y.additions ||
+      x.deletions !== y.deletions ||
+      x.patch !== y.patch
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * `reloadDiff` fetches the same scope in 2-3 passes (bare list, then meta,
+ * then untracked) so it can paint fast. Each pass returns a brand-new
+ * `DiffResult` even when nothing actually changed — during an active agent
+ * turn that reload fires repeatedly (see the `thread.updatedAt` effect
+ * below), and replacing `files` wholesale each time gave every row a new
+ * array identity, flashing the M/A badges and stat counts on every poll.
+ * Reuse the previous `files` array when its content is unchanged so React
+ * only re-renders rows that actually differ.
+ */
+function mergeDiffResult(prev: DiffResult | null, next: DiffResult): DiffResult {
+  if (!prev) return next;
+  return diffFilesEqual(prev.files, next.files) ? { ...next, files: prev.files } : next;
 }
 
 function sameWorktreePath(a: string, b: string): boolean {
@@ -320,7 +355,7 @@ export function RightSidebar({
 
     const apply = (d: DiffResult, fromMeta: boolean) => {
       if (cancelled || worktreeKeyRef.current !== forWorktree) return;
-      setDiff(d);
+      setDiff((prev) => mergeDiffResult(prev, d));
       if (
         (diffScope === 'commits' && !commitSha) ||
         diffScope === 'uncommitted'
@@ -339,9 +374,14 @@ export function RightSidebar({
       setDiff((prev) => {
         if (!prev) return d;
         const map = new Map(prev.files.map((f) => [f.path, f]));
+        let added = false;
         for (const f of d.files) {
-          if (!map.has(f.path)) map.set(f.path, f);
+          if (!map.has(f.path)) {
+            map.set(f.path, f);
+            added = true;
+          }
         }
+        if (!added) return prev;
         const files = [...map.values()].sort((a, b) => a.path.localeCompare(b.path));
         if (
           (diffScope === 'commits' && !commitSha) ||
