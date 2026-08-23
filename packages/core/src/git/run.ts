@@ -1,5 +1,6 @@
 import { execa, type ExecaError } from 'execa';
 import { ensureAgentPath } from '../agents/path.js';
+import { clearStaleIndexLocks, isIndexLockError } from './stale-lock.js';
 
 export async function run(
   file: string,
@@ -39,6 +40,26 @@ export async function run(
   }
 }
 
+/** Resolve gitdir + git-common-dir so a stale `index.lock` can be found and removed. */
+export async function resolveGitDirsForLockRecovery(
+  cwd: string,
+  env: Record<string, string> = {},
+): Promise<string[]> {
+  const dirs = new Set<string>();
+  const [gitDir, commonDir] = await Promise.all([
+    run('git', ['rev-parse', '--absolute-git-dir'], { cwd, reject: false, env, timeoutMs: 5_000 }),
+    run('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      cwd,
+      reject: false,
+      env,
+      timeoutMs: 5_000,
+    }),
+  ]);
+  if (gitDir.exitCode === 0 && gitDir.stdout.trim()) dirs.add(gitDir.stdout.trim());
+  if (commonDir.exitCode === 0 && commonDir.stdout.trim()) dirs.add(commonDir.stdout.trim());
+  return [...dirs];
+}
+
 export async function git(
   args: string[],
   cwd: string,
@@ -58,23 +79,40 @@ export async function git(
       prefix.push('-c', `${key}=${value}`);
     }
   }
-  return run('git', ['--no-pager', ...prefix, ...args], {
-    cwd,
-    reject: opts?.reject,
-    timeoutMs: opts?.timeoutMs,
+  const gitArgs = ['--no-pager', ...prefix, ...args];
+  const env = {
     // Never block forever on a credential/SSH prompt inside MCP / Electron.
-    env: {
-      GIT_TERMINAL_PROMPT: '0',
-      GIT_ASKPASS: process.env.GIT_ASKPASS || 'echo',
-      SSH_ASKPASS: process.env.SSH_ASKPASS || 'echo',
-      GIT_SSH_COMMAND:
-        process.env.GIT_SSH_COMMAND ||
-        'ssh -o BatchMode=yes -o ConnectTimeout=15',
-      GCM_INTERACTIVE: 'never',
-      GH_PROMPT_DISABLED: '1',
-      ...opts?.env,
-    },
-  });
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: process.env.GIT_ASKPASS || 'echo',
+    SSH_ASKPASS: process.env.SSH_ASKPASS || 'echo',
+    GIT_SSH_COMMAND:
+      process.env.GIT_SSH_COMMAND ||
+      'ssh -o BatchMode=yes -o ConnectTimeout=15',
+    GCM_INTERACTIVE: 'never',
+    GH_PROMPT_DISABLED: '1',
+    ...opts?.env,
+  };
+
+  let result = await run('git', gitArgs, { cwd, reject: false, timeoutMs: opts?.timeoutMs, env });
+
+  // A crashed/OOM-killed git child (agent commit, Sideboard push/land) can leave
+  // index.lock behind, which blocks every further git command — Sideboard's own
+  // actions and the user's own terminal git alike. If the lock is old enough to
+  // be abandoned rather than in active use, clear it and retry once.
+  if (result.exitCode !== 0 && isIndexLockError(result.stderr)) {
+    const gitDirs = await resolveGitDirsForLockRecovery(cwd, env);
+    const cleared = clearStaleIndexLocks(gitDirs);
+    if (cleared.length > 0) {
+      result = await run('git', gitArgs, { cwd, reject: false, timeoutMs: opts?.timeoutMs, env });
+    }
+  }
+
+  if ((opts?.reject ?? true) && result.exitCode !== 0) {
+    throw new Error(
+      `Command failed with exit code ${result.exitCode}: git ${gitArgs.join(' ')}\n${result.stderr}`,
+    );
+  }
+  return result;
 }
 
 export async function gh(

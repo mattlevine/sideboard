@@ -5,6 +5,8 @@ import {
 } from '../slack/outbound-watch.js';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
+import { resolveGitDirsForLockRecovery } from '../git/run.js';
+import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -1101,6 +1103,20 @@ export class Orchestrator {
         })
       ) {
         updateThread(threadId, { sessionId: null });
+        // A dead git child (e.g. a commit killed mid-write by the same OOM/crash)
+        // can leave index.lock behind, which blocks every further git command —
+        // Sideboard's own actions and the user's own terminal git alike. We just
+        // confirmed this turn's process is gone, so clear it now instead of
+        // waiting on the generic staleness timeout in git/run.ts.
+        try {
+          const gitDirs = await resolveGitDirsForLockRecovery(thread.worktreePath);
+          const clearedLocks = clearStaleIndexLocks(gitDirs, 2_000);
+          if (clearedLocks.length > 0) {
+            pushTurnStderr(stderrTail, 'Cleared a stale git lock left by the crashed agent process');
+          }
+        } catch {
+          // Best-effort — a real git repo check will surface any remaining lock.
+        }
         const retryNote = looksLikeInvalidAgentSession(detail)
           ? 'Agent session missing — starting a fresh session'
           : looksLikeV8Oom(detail)
