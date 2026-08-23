@@ -186,6 +186,42 @@ describe('opencodeAdapter.parseEvent', () => {
     ]);
   });
 
+  it('tails bash output while the tool is still running', () => {
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'tool_use',
+          sessionID: 'ses_keep',
+          part: {
+            id: 'prt_bash',
+            callID: 'bash_live',
+            tool: 'bash',
+            type: 'tool',
+            state: {
+              status: 'running',
+              input: { command: 'pnpm build' },
+              output: 'vite v6 building…\n',
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'bash_live',
+        name: 'bash',
+        input: { command: 'pnpm build' },
+      },
+      {
+        type: 'tool_result',
+        id: 'bash_live',
+        content: 'vite v6 building…\n',
+        isError: false,
+        partial: true,
+      },
+    ]);
+  });
+
   it('maps error events to stderr (including nested objects)', () => {
     expect(
       opencodeAdapter.parseEvent(

@@ -187,7 +187,7 @@ Agents open structure tabs via MCP (or you reopen them from message chips). Tabs
 
 ### Schema → form (not “a CMS product”)
 
-`present_schema` takes **JSON Schema + optional `schemaUi`** and renders a filterable table and/or form. The agent can **create the schema** for whatever it needs — articles, feedback, config, checklists, research rows — then hand you a UI to fill or correct it. That might back a CMS, feed a **static website** build in the worktree, or be a one-off shape for the turn.
+`present_schema` takes **JSON Schema + optional `schemaUi`** and renders a filterable table and/or form. The agent can **create the schema** for whatever it needs — articles, feedback, config, checklists, research rows — then hand you a UI to fill or correct it. That might back a CMS, feed a **static website** build in the worktree, or be a one-off shape for the turn. A markdown table in chat is enough to *read* the data; use this tool when you need to filter, edit, or persist rows (including after a markdown table, if you ask for an editable one).
 
 Same chrome for every backend:
 

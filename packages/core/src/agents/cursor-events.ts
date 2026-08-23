@@ -198,7 +198,7 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
   if (msg.type === 'tool_call' && msg.call_id && msg.name) {
     const normalized = normalizeCursorToolCall(msg.name, msg.args);
     if (msg.status === 'running') {
-      return [
+      const events: AgentEvent[] = [
         {
           type: 'tool_use',
           id: msg.call_id,
@@ -206,6 +206,16 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
           input: normalized.input,
         },
       ];
+      const live = unwrapCursorToolResult(msg.result);
+      if (live) {
+        events.push({
+          type: 'tool_result',
+          id: msg.call_id,
+          content: live,
+          partial: true,
+        });
+      }
+      return events;
     }
     if (msg.status === 'completed' || msg.status === 'error') {
       // Always upsert tool_use on completion — Cursor sometimes skips `running`,
@@ -301,6 +311,17 @@ function nestedUpdateToEvents(
         isError: cursorToolResultIsError(undefined, update.toolCall.result),
         parentId,
       });
+    } else {
+      const live = unwrapCursorToolResult(update.toolCall.result);
+      if (live) {
+        events.push({
+          type: 'tool_result',
+          id: update.callId,
+          content: live,
+          partial: true,
+          parentId,
+        });
+      }
     }
     return events;
   }

@@ -157,14 +157,15 @@ export function formatArtifactDirective(): string {
   return [
     'Sideboard side column (desktop UI):',
     'claude.ai’s “Artifact” tool does NOT exist in Claude Code. That is expected.',
+    'Do not unprompted-duplicate a payload. Chat markdown (including tables) already renders in the transcript — do not also call present_schema with those same rows just to display them. If the user asks for an editable / interactive table, call present_schema even if markdown already showed the data. Do not also call present_artifact for a document you already fenced in chat.',
     'Documents (HTML/SVG/markdown):',
     '1) Emit a fenced code block tagged `html` (preferred), `svg`, or `markdown` with the FULL document — Sideboard opens a side column. Example:',
     '```html',
     '<!DOCTYPE html><html><head><title>Demo</title></head><body><h1>Hi</h1></body></html>',
     '```',
-    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown), and content.',
+    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown), and content — not both a fence and this tool for the same body.',
     'CMS / JSON Schema forms & tables (Brightsy or any schema+schemaUi source):',
-    '3) Call Sideboard MCP `present_schema` with title, mode (table|form), and either:',
+    '3) Call Sideboard MCP `present_schema` when the user needs to filter, edit, publish, or persist rows — including after you already showed a markdown table, if they then ask for an editable table. If they only need to read the data, a markdown table is enough. When you do call it, pass title, mode (table|form), and either:',
     '   - datasource=brightsy + resource_id (record type UUID) after fetching types via Brightsy MCP, or',
     '   - datasource=inline + resource: { id, title, schema, schemaUi } and optional records/record.',
     'Files / media browser (CMS file manager column):',
@@ -173,7 +174,7 @@ export function formatArtifactDirective(): string {
     'Multiple-choice questions:',
     '5) Call Sideboard MCP `ask_user` only when work is blocked on choosing among a few concrete options (approach forks, which API, auth vs cookies). First write a short chat message that explains the decision and what each option means (tradeoffs, when to pick it). Include a description on every option. After calling, stop and wait for their next message with answers. If you are asking a real multiple-choice, use ask_user rather than chat bullets so Sideboard shows the composer picker.',
     'Do not call ask_user for greetings, check-ins, “hello”, open-ended how-can-I-help, or to invent a menu of possible next tasks — reply in chat. If one option is the obvious default, proceed without asking.',
-    'Never say artifacts, CMS UI, or the Files column are unavailable. Prefer present_schema for list/edit/publish; present_files for storage UI; html fences for standalone pages; ask_user only for those blocked predefined-option questions.',
+    'Never say artifacts, CMS UI, or the Files column are unavailable. present_schema is for interactive list/edit/publish (use it when they ask to edit, even if chat already had a markdown table); present_files for storage UI; html fences for standalone pages; ask_user only for those blocked predefined-option questions.',
   ].join('\n');
 }
 
@@ -182,7 +183,7 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: html fence or present_artifact / present_schema / present_files; ask_user only for a real multiple-choice (not hellos or “what next?”) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. ask_user only for a real multiple-choice (not hellos or “what next?”) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
 }
 
 export interface AgentInstructionFile {

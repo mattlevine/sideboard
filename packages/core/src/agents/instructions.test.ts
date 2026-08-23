@@ -24,6 +24,8 @@ describe('formatArtifactDirective', () => {
     expect(text).toMatch(/hello|greetings/i);
     expect(text).toMatch(/```html/);
     expect(text).toMatch(/Never say artifacts, CMS UI, or the Files column are unavailable/i);
+    expect(text).toMatch(/Do not unprompted-duplicate|markdown table/i);
+    expect(text).toMatch(/editable|asks for an editable/i);
   });
 });
 
@@ -37,6 +39,8 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/hello|check-in|what next/i);
     expect(text).toMatch(/reply in chat/i);
     expect(text).toMatch(/Do not say artifacts\/CMS UI are unavailable/i);
+    expect(text).toMatch(/markdown table is enough|present_schema if they ask to edit/i);
+    expect(text).toMatch(/not both for the same document/i);
   });
 });
 

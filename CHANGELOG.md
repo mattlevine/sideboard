@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.116] - 2026-08-23
+
+### Added
+
+- Chat shows a Cursor-style live log under running shell tools. Codex streams `aggregated_output` while the command is in progress; Claude, Cursor, OpenCode, and Brightsy use the same pane when their CLI emits output (often when the command finishes). Click still opens the inspector.
+
+### Changed
+
+- Agents are told not to also call `present_schema` just to re-display a markdown table. If the user then asks for an editable / interactive table, `present_schema` is still the right tool.
+
 ## [0.1.115] - 2026-08-23
 
 ### Changed

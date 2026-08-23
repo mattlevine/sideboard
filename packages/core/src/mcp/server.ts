@@ -188,7 +188,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'present_artifact',
-    'Show an HTML, SVG, markdown, or React document in Sideboard’s Claude-style side column (desktop). Use instead of claude.ai’s artifact tool — pass the full document content. Prefer type=html for interactive pages. For type=react, pass a single component module that `export default`s a component (JSX/TSX ok) — Sideboard bootstraps React/ReactDOM/Babel and renders it; only `react`/`react-dom` imports are available, no other npm packages.',
+    'Show an HTML, SVG, markdown, or React document in Sideboard’s Claude-style side column (desktop). Use instead of claude.ai’s artifact tool — pass the full document content. Do not also emit the same document as a chat html/markdown fence. Prefer type=html for interactive pages. For type=react, pass a single component module that `export default`s a component (JSX/TSX ok) — Sideboard bootstraps React/ReactDOM/Babel and renders it; only `react`/`react-dom` imports are available, no other npm packages.',
     {
       title: z.string().describe('Short title shown in the artifact pane header'),
       type: z
@@ -309,7 +309,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'present_schema',
-    'Open Sideboard’s schema-driven side column (filterable table and/or form). Pass JSON Schema + optional schemaUi. Prefer datasource=inline with embedded resource/records. Use datasource=brightsy with resource_id only when the user is logged into Brightsy.',
+    'Open Sideboard’s schema-driven side column (filterable table and/or form) when the user needs to filter, edit, publish, or persist records. Do not call this just to re-display rows you already wrote as a markdown table. If the user asks for an editable / interactive table, call this even if chat already showed those rows. Pass JSON Schema + optional schemaUi. Prefer datasource=inline with embedded resource/records. Use datasource=brightsy with resource_id only when the user is logged into Brightsy.',
     {
       title: z.string().describe('Pane title'),
       mode: z

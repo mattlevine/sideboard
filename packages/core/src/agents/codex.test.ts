@@ -237,6 +237,36 @@ describe('codexAdapter.parseEvent', () => {
     expect(event).toEqual({ type: 'session_id', data: 'thread-123' });
   });
 
+  it('tails in-progress command_execution aggregated_output', () => {
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.updated',
+          item: {
+            id: 'item_cmd',
+            type: 'command_execution',
+            command: 'pnpm build',
+            status: 'in_progress',
+            aggregated_output: 'vite v6 building…\n',
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'item_cmd',
+        name: 'Bash',
+        input: { command: 'pnpm build' },
+      },
+      {
+        type: 'tool_result',
+        id: 'item_cmd',
+        content: 'vite v6 building…\n',
+        partial: true,
+      },
+    ]);
+  });
+
   it('does not steal session_id from item.started collab children', () => {
     expect(
       codexAdapter.parseEvent(

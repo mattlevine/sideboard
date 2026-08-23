@@ -138,6 +138,30 @@ describe('cursorSdkMessageToEvents', () => {
     expect(
       cursorSdkMessageToEvents({
         type: 'tool_call',
+        call_id: 'sh1',
+        name: 'Shell',
+        status: 'running',
+        args: { command: 'pnpm build' },
+        result: 'bundling…\n',
+      }),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'sh1',
+        name: 'Shell',
+        input: { command: 'pnpm build' },
+      },
+      {
+        type: 'tool_result',
+        id: 'sh1',
+        content: 'bundling…\n',
+        partial: true,
+      },
+    ]);
+
+    expect(
+      cursorSdkMessageToEvents({
+        type: 'tool_call',
         call_id: 'c1',
         name: 'Read',
         status: 'completed',

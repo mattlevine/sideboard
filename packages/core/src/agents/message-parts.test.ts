@@ -207,6 +207,39 @@ describe('applyAgentEvent', () => {
       },
     ]);
   });
+
+  it('partial tool_result tails output without finishing the tool', () => {
+    let parts = applyAgentEvent([], {
+      type: 'tool_use',
+      id: 'bash1',
+      name: 'Bash',
+      input: { command: 'pnpm build' },
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'tool_result',
+      id: 'bash1',
+      content: 'bundling…\n',
+      partial: true,
+    });
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      status: 'running',
+      result: 'bundling…\n',
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'tool_use',
+      id: 'bash1',
+      name: 'Bash',
+      input: { command: 'pnpm build' },
+    });
+    expect(parts[0]).toMatchObject({ status: 'running', result: 'bundling…\n' });
+    parts = applyAgentEvent(parts, {
+      type: 'tool_result',
+      id: 'bash1',
+      content: 'bundling…\ndone\n',
+    });
+    expect(parts[0]).toMatchObject({ status: 'done', result: 'bundling…\ndone\n' });
+  });
 });
 
 describe('toolDetail', () => {

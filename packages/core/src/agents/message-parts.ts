@@ -159,6 +159,10 @@ function classifyTool(name: string): 'edit' | 'read' | 'search' | 'shell' | 'oth
   return 'other';
 }
 
+export function isShellToolName(name: string | undefined): boolean {
+  return classifyTool(name ?? '') === 'shell';
+}
+
 /**
  * Cursor-style footer for a finished (or in-flight) turn: “Edited foo.ts, 1 search, ran 2 commands”.
  */
@@ -465,6 +469,30 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
   if (event.type === 'tool_result') {
     const existing = parts.findIndex((p) => p.type === 'tool' && p.id === event.id);
     const fromResult = parseDiffStat(event.content);
+    if (event.partial) {
+      if (existing < 0) {
+        return [
+          ...parts,
+          {
+            type: 'tool' as const,
+            id: event.id,
+            name: 'tool',
+            description: 'tool',
+            status: event.isError ? ('error' as const) : ('running' as const),
+            result: event.content,
+            ...(event.parentId ? { parentId: event.parentId } : {}),
+          },
+        ];
+      }
+      return parts.map((p, i) => {
+        if (i !== existing || p.type !== 'tool') return p;
+        if (p.status === 'done' || p.status === 'error') return p;
+        return {
+          ...p,
+          result: event.content ?? p.result,
+        };
+      });
+    }
     if (existing < 0) {
       // Orphan result (e.g. Cursor completed without a prior running event).
       return [

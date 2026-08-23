@@ -357,16 +357,27 @@ export const codexAdapter: AgentAdapter = {
           const events: AgentEvent[] = [
             { type: 'tool_use', id: item.id, name: 'Bash', input },
           ];
-          if (
+          const finished =
             type === 'item.completed' ||
             item.status === 'completed' ||
-            item.status === 'failed'
-          ) {
+            item.status === 'failed';
+          const output =
+            typeof item.aggregated_output === 'string' && item.aggregated_output
+              ? item.aggregated_output
+              : undefined;
+          if (finished) {
             events.push({
               type: 'tool_result',
               id: item.id,
-              content: item.aggregated_output,
+              content: output,
               isError: item.status === 'failed',
+            });
+          } else if (output) {
+            events.push({
+              type: 'tool_result',
+              id: item.id,
+              content: output,
+              partial: true,
             });
           }
           return events.length === 1 ? events[0]! : events;

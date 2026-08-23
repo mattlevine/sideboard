@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { isSubagentToolName, messagePartParentId, toolActivityLine } from '@sideboard/message-parts';
+import { isShellToolName, isSubagentToolName, messagePartParentId, toolActivityLine } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
   isFilesPane,
@@ -154,6 +154,33 @@ function thinkingPreview(text: string, live: boolean): string {
   return text;
 }
 
+function clipToolTail(text: string, max = 12000): string {
+  if (text.length <= max) return text;
+  return `…${text.slice(-max)}`;
+}
+
+function ToolOutputTail({ text, live }: { text: string; live: boolean }) {
+  const preRef = useRef<HTMLPreElement>(null);
+  const pinToEnd = useRef(true);
+  useEffect(() => {
+    const el = preRef.current;
+    if (!el || !pinToEnd.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [text]);
+  return (
+    <pre
+      ref={preRef}
+      className={`turn-tool-tail${live ? ' live' : ''}`}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        pinToEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+      }}
+    >
+      {clipToolTail(text)}
+    </pre>
+  );
+}
+
 function groupTranscript(parts: MessagePart[]): {
   top: MessagePart[];
   children: Map<string, MessagePart[]>;
@@ -216,6 +243,7 @@ export function AgentMessage({
   const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const diffAnchorRef = useRef<HTMLElement | null>(null);
+  const openedForTail = useRef(false);
   const windowTokens = usage
     ? resolveContextWindow(agent ?? 'claude', model, contextTokens(usage))
     : 0;
@@ -235,6 +263,22 @@ export function AgentMessage({
       !/ask_user|AskUserQuestion/i.test(p.name ?? ''),
   );
   const showTrace = usedTools || thinkingCount > 0;
+  const liveShell = Boolean(
+    streaming &&
+      safeParts.some(
+        (p) => p.type === 'tool' && p.status === 'running' && isShellToolName(p.name),
+      ),
+  );
+  useEffect(() => {
+    if (!streaming) {
+      openedForTail.current = false;
+      return;
+    }
+    if (liveShell && !openedForTail.current) {
+      openedForTail.current = true;
+      setExpanded(true);
+    }
+  }, [streaming, liveShell]);
   const answer = finalText(text, safeParts);
   const chips = useMemo(() => toolChips(safeParts, Boolean(streaming)), [safeParts, streaming]);
   const activityLine = useMemo(() => toolActivityLine(safeParts), [safeParts]);
@@ -295,27 +339,30 @@ export function AgentMessage({
     const clickable = hasCodeDiff(part);
     const isRunning = part.status === 'running';
     const detail = toolRowDetail(part, kids, Boolean(streaming));
+    const tail = isShellToolName(part.name) ? part.result?.trim() : '';
     return (
-      <button
-        key={key}
-        type="button"
-        className={`turn-tool${isRunning ? ' running' : ''}${diffTool?.id === part.id ? ' active' : ''}`}
-        onClick={(e) => openInspector(part, e.currentTarget)}
-      >
-        {isRunning ? (
-          <ActivityMark tone="active" size="sm" />
-        ) : (
-          <span className="turn-icon term" aria-hidden>
-            ›_
-          </span>
-        )}
-        <span className="turn-tool-desc">{part.description ?? part.name}</span>
-        {detail && (
-          <span className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}>
-            {detail}
-          </span>
-        )}
-      </button>
+      <div key={key} className="turn-tool-block">
+        <button
+          type="button"
+          className={`turn-tool${isRunning ? ' running' : ''}${diffTool?.id === part.id ? ' active' : ''}`}
+          onClick={(e) => openInspector(part, e.currentTarget)}
+        >
+          {isRunning ? (
+            <ActivityMark tone="active" size="sm" />
+          ) : (
+            <span className="turn-icon term" aria-hidden>
+              ›_
+            </span>
+          )}
+          <span className="turn-tool-desc">{part.description ?? part.name}</span>
+          {detail && (
+            <span className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}>
+              {detail}
+            </span>
+          )}
+        </button>
+        {tail ? <ToolOutputTail text={part.result!} live={isRunning} /> : null}
+      </div>
     );
   }
 

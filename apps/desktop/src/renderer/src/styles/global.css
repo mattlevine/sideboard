@@ -2817,6 +2817,35 @@ body.resizing-panels webview {
   color: var(--text);
 }
 
+.turn-tool-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.turn-tool-tail {
+  margin: 0;
+  max-height: min(28vh, 220px);
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #141210;
+  border: 1px solid var(--border);
+  color: #e8e2d6;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.turn-tool-tail.live {
+  border-color: var(--accent-dim);
+}
+
 .turn-text {
   font-size: var(--font-size-chat);
 }

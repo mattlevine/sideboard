@@ -323,9 +323,16 @@ export const opencodeAdapter: AgentAdapter = {
           metadata,
         );
         const events: AgentEvent[] = [{ type: 'tool_use', id, name, input }];
-        // OpenCode emits tool_use only when the call finishes (status completed).
         const output = state?.output;
-        if (output != null || state?.status === 'completed' || state?.status === 'error') {
+        const finished =
+          state?.status === 'completed' ||
+          state?.status === 'error' ||
+          state?.status === 'failed';
+        const running =
+          state?.status === 'running' ||
+          state?.status === 'in_progress' ||
+          state?.status === 'pending';
+        if (output != null || finished) {
           const content =
             typeof output === 'string'
               ? output
@@ -337,6 +344,7 @@ export const opencodeAdapter: AgentAdapter = {
             id,
             content,
             isError: state?.status === 'error' || state?.status === 'failed',
+            ...(running && !finished ? { partial: true } : {}),
           });
         }
         return events.length === 1 ? events[0]! : events;
@@ -376,7 +384,15 @@ export const opencodeAdapter: AgentAdapter = {
             withEventParentId({ type: 'tool_use', id, name, input }, parentId),
           ];
           const output = state?.output ?? part.output;
-          if (output != null || state?.status === 'completed' || state?.status === 'error') {
+          const finished =
+            state?.status === 'completed' ||
+            state?.status === 'error' ||
+            state?.status === 'failed';
+          const running =
+            state?.status === 'running' ||
+            state?.status === 'in_progress' ||
+            state?.status === 'pending';
+          if (output != null || finished) {
             nested.push(
               withEventParentId(
                 {
@@ -389,6 +405,7 @@ export const opencodeAdapter: AgentAdapter = {
                         ? JSON.stringify(output)
                         : undefined,
                   isError: state?.status === 'error' || state?.status === 'failed',
+                  ...(running && !finished ? { partial: true } : {}),
                 },
                 parentId,
               ),

@@ -460,6 +460,11 @@ export type AgentEvent =
       content?: string;
       isError?: boolean;
       parentId?: string;
+      /**
+       * Update `result` without finishing the tool (live command tail).
+       * Codex `command_execution.aggregated_output` while in progress.
+       */
+      partial?: boolean;
     }
   | {
       type: 'usage';
