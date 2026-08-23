@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.117] - 2026-08-23
+
+### Changed
+
+- Chat only shows the live shell log after a command has been running for a few seconds. Short `ls` / `git status` calls stay a one-line row; click still opens the inspector.
+- Streaming turns show the brand mark and bouncing dots from the moment you send, including the wait before the first token.
+- Live Thinking / Working labels use a wave across the word; the duration sits next to them only after the turn finishes. A chevron appears on hover.
+- Agent messages always show the elapsed-time chip in the footer again (`12s`), including while thinking/tools are visible.
+
 ## [0.1.116] - 2026-08-23
 
 ### Added

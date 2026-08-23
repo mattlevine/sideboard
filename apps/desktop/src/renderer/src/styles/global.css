@@ -2684,17 +2684,33 @@ body.resizing-panels webview {
   color: var(--text);
 }
 
+.turn-summary:hover:not(:disabled) {
+  background: transparent;
+}
+
 .turn-chevron {
-  display: inline-block;
-  width: 1em;
-  font-size: 0.85em;
-  line-height: 1;
-  opacity: 0.75;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  opacity: 0.7;
+  flex-shrink: 0;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.turn-chevron.open {
+  transform: rotate(90deg);
+}
+
+.turn-summary:not(:hover):not(:focus-visible) .turn-chevron {
+  opacity: 0;
 }
 
 .turn-summary-text {
   color: inherit;
+  display: inline-flex;
+  align-items: baseline;
 }
 
 .turn-summary-icons {
@@ -2781,6 +2797,10 @@ body.resizing-panels webview {
   border: none;
   text-align: left;
   cursor: pointer;
+}
+
+.turn-tool:hover:not(:disabled) {
+  background: transparent;
 }
 
 .turn-tool:hover .turn-tool-pill,
@@ -2897,7 +2917,8 @@ body.resizing-panels webview {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 4px 2px;
+  margin-top: 8px;
+  padding: 4px 0 2px;
   min-height: 22px;
   color: var(--muted);
 }
@@ -2917,6 +2938,25 @@ body.resizing-panels webview {
 
 .thinking-indicator-label {
   font-size: inherit;
+}
+
+.thinking-wave {
+  display: inline-block;
+  background-image: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--muted) 36%,
+    var(--text) 50%,
+    var(--muted) 64%,
+    var(--muted) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 120% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-wave 2.2s ease-in-out infinite;
 }
 
 .thinking-indicator-dots {
@@ -3104,6 +3144,15 @@ body.resizing-panels webview {
   }
 }
 
+@keyframes thinking-wave {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -20% 0;
+  }
+}
+
 @keyframes thinking-pill-pulse {
   0%,
   100% {
@@ -3121,6 +3170,13 @@ body.resizing-panels webview {
   .activity-mark-brand,
   .turn-tool-pill.live {
     animation: none !important;
+  }
+
+  .thinking-wave {
+    animation: none !important;
+    background: none !important;
+    color: inherit !important;
+    -webkit-text-fill-color: inherit !important;
   }
 
   .thinking-indicator-dots span {
@@ -4941,8 +4997,8 @@ button.worktree-hover-card-title:hover {
   opacity: 0.75;
 }
 
-.chat > .msg-stream-activity {
-  order: 1;
+.agent-msg > .msg-stream-activity {
+  margin-top: 10px;
 }
 
 /* Same width as the composer box on every chat surface (worktree, cowboy,

@@ -15,11 +15,8 @@ export function ThinkingIndicator({
   return (
     <span className={`thinking-indicator${queued ? ' queued' : ''}`} aria-live="polite">
       {showMark ? <ActivityMark tone={queued ? 'queued' : 'active'} size="sm" /> : null}
-      <span className="thinking-indicator-label">{queued ? 'Queued' : label}</span>
-      <span className="thinking-indicator-dots" aria-hidden>
-        <span />
-        <span />
-        <span />
+      <span className="thinking-indicator-label">
+        {queued ? 'Queued' : <span className="thinking-wave">{label}</span>}
       </span>
     </span>
   );

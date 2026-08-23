@@ -61,6 +61,7 @@ import {
   useAgentModels,
   useCursorModels,
 } from './CursorModelMenu';
+import { ActivityMark } from './ActivityMark';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import {
   applyAutocomplete,
@@ -725,7 +726,10 @@ export function ThreadPanel({
   const showStreaming =
     Boolean(liveOutput) ||
     liveParts.length > 0 ||
-    thread.status === 'running';
+    thread.status === 'running' ||
+    thread.status === 'queued' ||
+    Boolean(turnStartedAt) ||
+    Boolean(pendingUser && pendingInTranscript);
 
   const liveHasPresentPlan = liveParts.some(
     (p) => p.type === 'tool' && /present_plan$/i.test(p.name ?? ''),
@@ -1853,7 +1857,27 @@ export function ThreadPanel({
                   }
                 />
               ) : (
-                <ThinkingIndicator queued={thread.status === 'queued'} />
+                <>
+                  <ThinkingIndicator
+                    queued={thread.status === 'queued'}
+                    showMark={false}
+                  />
+                  <div
+                    className="msg-stream-activity"
+                    aria-live="polite"
+                    aria-label={thread.status === 'queued' ? 'Queued' : 'Generating'}
+                  >
+                    <ActivityMark
+                      tone={thread.status === 'queued' ? 'queued' : 'active'}
+                      size="sm"
+                    />
+                    <span className="thinking-indicator-dots" aria-hidden>
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                  </div>
+                </>
               )}
               {showPlanQuestions &&
                 pendingPlanQuestions &&

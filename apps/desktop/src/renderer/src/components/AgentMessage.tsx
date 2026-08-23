@@ -18,6 +18,10 @@ import { ToolDiffPopover } from './ToolDiffPopover';
 
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
 
+function StreamingVerb({ verb }: { verb: string }) {
+  return <span className="thinking-wave">{verb}</span>;
+}
+
 interface Props {
   text: string;
   parts?: MessagePart[];
@@ -159,6 +163,49 @@ function clipToolTail(text: string, max = 12000): string {
   return `…${text.slice(-max)}`;
 }
 
+/** Wait this long before painting a live log so `ls` / `git status` never flash a pane. */
+const SHELL_TAIL_AFTER_MS = 3000;
+
+function useLongRunningShellIds(parts: MessagePart[], delayMs = SHELL_TAIL_AFTER_MS): Set<string> {
+  const firstSeenAt = useRef(new Map<string, number>());
+  const [longRunning, setLongRunning] = useState<Set<string>>(() => new Set());
+  const runningKey = parts
+    .filter((p): p is ToolPart => p.type === 'tool' && p.status === 'running' && isShellToolName(p.name))
+    .map((p) => p.id)
+    .join('\0');
+
+  useEffect(() => {
+    const runningIds = runningKey ? runningKey.split('\0') : [];
+    const running = new Set(runningIds);
+    const now = Date.now();
+    for (const id of [...firstSeenAt.current.keys()]) {
+      if (!running.has(id)) firstSeenAt.current.delete(id);
+    }
+    for (const id of running) {
+      if (!firstSeenAt.current.has(id)) firstSeenAt.current.set(id, now);
+    }
+
+    const sync = () => {
+      const t = Date.now();
+      const next = new Set<string>();
+      for (const [id, at] of firstSeenAt.current) {
+        if (t - at >= delayMs) next.add(id);
+      }
+      setLongRunning((prev) => {
+        if (prev.size === next.size && [...next].every((id) => prev.has(id))) return prev;
+        return next;
+      });
+    };
+
+    sync();
+    if (running.size === 0) return;
+    const timer = window.setInterval(sync, 250);
+    return () => window.clearInterval(timer);
+  }, [runningKey, delayMs]);
+
+  return longRunning;
+}
+
 function ToolOutputTail({ text, live }: { text: string; live: boolean }) {
   const preRef = useRef<HTMLPreElement>(null);
   const pinToEnd = useRef(true);
@@ -237,13 +284,13 @@ export function AgentMessage({
   onForkWorkspace,
   hideAnswer = false,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => Boolean(streaming));
   const [menuOpen, setMenuOpen] = useState(false);
   const [diffTool, setDiffTool] = useState<ToolPart | null>(null);
   const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const diffAnchorRef = useRef<HTMLElement | null>(null);
-  const openedForTail = useRef(false);
+  const userToggledTrace = useRef(false);
   const windowTokens = usage
     ? resolveContextWindow(agent ?? 'claude', model, contextTokens(usage))
     : 0;
@@ -253,6 +300,7 @@ export function AgentMessage({
   }
 
   const safeParts = parts ?? [];
+  const longRunningShells = useLongRunningShellIds(safeParts);
   const grouped = groupTranscript(safeParts);
   const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
   const usedTools = safeParts.some(
@@ -263,22 +311,14 @@ export function AgentMessage({
       !/ask_user|AskUserQuestion/i.test(p.name ?? ''),
   );
   const showTrace = usedTools || thinkingCount > 0;
-  const liveShell = Boolean(
-    streaming &&
-      safeParts.some(
-        (p) => p.type === 'tool' && p.status === 'running' && isShellToolName(p.name),
-      ),
-  );
   useEffect(() => {
-    if (!streaming) {
-      openedForTail.current = false;
+    if (streaming) {
+      if (!userToggledTrace.current) setExpanded(true);
       return;
     }
-    if (liveShell && !openedForTail.current) {
-      openedForTail.current = true;
-      setExpanded(true);
-    }
-  }, [streaming, liveShell]);
+    userToggledTrace.current = false;
+    setExpanded(false);
+  }, [streaming]);
   const answer = finalText(text, safeParts);
   const chips = useMemo(() => toolChips(safeParts, Boolean(streaming)), [safeParts, streaming]);
   const activityLine = useMemo(() => toolActivityLine(safeParts), [safeParts]);
@@ -292,20 +332,14 @@ export function AgentMessage({
   const briefThought =
     !durationLabel || (/^\d+s$/.test(durationLabel) && Number(durationLabel.slice(0, -1)) < 8);
   const traceLabel = usedTools
-    ? streaming
-      ? durationLabel
-        ? `Working ${durationLabel}`
-        : 'Working'
+    ? durationLabel
+      ? `Worked for ${durationLabel}`
+      : 'Worked'
+    : briefThought
+      ? 'Thought briefly'
       : durationLabel
-        ? `Worked for ${durationLabel}`
-        : 'Worked'
-    : streaming
-      ? 'Thinking'
-      : briefThought
-        ? 'Thought briefly'
-        : durationLabel
-          ? `Thought ${durationLabel}`
-          : 'Thought';
+        ? `Thought ${durationLabel}`
+        : 'Thought';
 
   async function copyAnswer() {
     try {
@@ -339,7 +373,10 @@ export function AgentMessage({
     const clickable = hasCodeDiff(part);
     const isRunning = part.status === 'running';
     const detail = toolRowDetail(part, kids, Boolean(streaming));
-    const tail = isShellToolName(part.name) ? part.result?.trim() : '';
+    const showTail =
+      isRunning &&
+      longRunningShells.has(part.id) &&
+      Boolean(part.result?.trim());
     return (
       <div key={key} className="turn-tool-block">
         <button
@@ -361,7 +398,7 @@ export function AgentMessage({
             </span>
           )}
         </button>
-        {tail ? <ToolOutputTail text={part.result!} live={isRunning} /> : null}
+        {showTail ? <ToolOutputTail text={part.result!} live /> : null}
       </div>
     );
   }
@@ -389,14 +426,11 @@ export function AgentMessage({
                   ? (
                       <div className="turn-subagent-waiting">
                         <span className="thinking-indicator-label">
-                          {part.description && part.description !== part.name
-                            ? part.description
-                            : 'Working'}
-                        </span>
-                        <span className="thinking-indicator-dots" aria-hidden>
-                          <span />
-                          <span />
-                          <span />
+                          <span className="thinking-wave">
+                            {part.description && part.description !== part.name
+                              ? part.description
+                              : 'Working'}
+                          </span>
                         </span>
                       </div>
                     )
@@ -415,13 +449,31 @@ export function AgentMessage({
         <div className="turn-transcript">
           <button
             type="button"
-            className="turn-summary"
-            onClick={() => setExpanded((v) => !v)}
+            className={`turn-summary${streaming ? ' live' : ''}${expanded ? ' open' : ''}`}
+            onClick={() => {
+              userToggledTrace.current = true;
+              setExpanded((v) => !v);
+            }}
             aria-expanded={expanded}
           >
-            <span className="turn-summary-text">{traceLabel}</span>
+            <span className="turn-summary-text">
+              {streaming ? (
+                <StreamingVerb verb={usedTools ? 'Working' : 'Thinking'} />
+              ) : (
+                traceLabel
+              )}
+            </span>
             <span className={`turn-chevron${expanded ? ' open' : ''}`} aria-hidden>
-              {expanded ? '∨' : '>'}
+              <svg viewBox="0 0 12 12" width="10" height="10">
+                <path
+                  d="M4.25 2.4 8.5 6 4.25 9.6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </span>
           </button>
           {expanded && (
@@ -456,11 +508,13 @@ export function AgentMessage({
 
       {streaming && !showTrace && (
         <div className="msg-body waiting-inline">
-          <span className="thinking-indicator-label">Thinking</span>
+          <span className="thinking-indicator-label">
+            <StreamingVerb verb="Thinking" />
+          </span>
         </div>
       )}
 
-      {((!showTrace && durationLabel) ||
+      {(durationLabel ||
         usage ||
         chips.length > 0 ||
         paneContents.length > 0 ||
@@ -468,7 +522,7 @@ export function AgentMessage({
         onForkWorkspace) && (
         <div className="msg-footer">
           <div className="msg-footer-left">
-            {!showTrace && durationLabel && (
+            {durationLabel && (
               <span className={`msg-age${startedAt != null ? ' live' : ''}`}>{durationLabel}</span>
             )}
             {usage && (
@@ -585,6 +639,17 @@ export function AgentMessage({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {streaming && (
+        <div className="msg-stream-activity" aria-live="polite" aria-label="Generating">
+          <ActivityMark tone="active" size="sm" />
+          <span className="thinking-indicator-dots" aria-hidden>
+            <span />
+            <span />
+            <span />
+          </span>
         </div>
       )}
 
