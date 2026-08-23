@@ -95,4 +95,20 @@ describe('noteTurnLiveEvent', () => {
     ]);
     clearTurnLive(thread.id);
   });
+
+  it('does not flush immediately on a partial tool_result', () => {
+    vi.useFakeTimers();
+    const id = '22222222-2222-4222-8222-222222222222';
+    noteTurnLiveEvent(id, {
+      type: 'tool_result',
+      id: 't1',
+      content: 'hello',
+      partial: true,
+    });
+    expect(readTurnLive(id)).toBeNull();
+    vi.advanceTimersByTime(800);
+    expect(readTurnLive(id)?.summary).toBeTruthy();
+    clearTurnLive(id);
+    vi.useRealTimers();
+  });
 });

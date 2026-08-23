@@ -175,6 +175,7 @@ export const cursorAdapter: AgentAdapter = {
     const req: CursorTurnRequest = {
       prompt,
       cwd: thread.worktreePath,
+      threadId: thread.id,
       agentId,
       model: thread.model,
       effort: thread.effort,

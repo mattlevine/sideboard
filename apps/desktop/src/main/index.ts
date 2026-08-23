@@ -110,6 +110,7 @@ import {
   hasConductorHook,
   getRepoSetupInfo,
   threadsDir,
+  isThreadRecordFile,
   schedulesPath,
   listSchedules,
   createSchedule,
@@ -664,7 +665,9 @@ function setupStoreWatcher(): void {
   const dir = threadsDir();
   const watcher = watch(dir, { ignoreInitial: true, depth: 0 });
   let adoptTimer: ReturnType<typeof setTimeout> | null = null;
-  const notify = () => {
+  let notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  const flushNotify = () => {
+    notifyTimer = null;
     mainWindow?.webContents.send('threads:changed');
     // MCP stdio (separate process) enqueues via send_to_thread; when that child
     // exits mid-wait, queues stay on disk. Adopt them into the desktop drain.
@@ -678,10 +681,18 @@ function setupStoreWatcher(): void {
       }
     }, 250);
   };
+  const notify = (changed: string) => {
+    // Ignore `<id>.live.json` and atomic `*.tmp` — those fire on every tool
+    // chunk and made the renderer re-parse every thread JSON on the UI thread.
+    if (!isThreadRecordFile(changed)) return;
+    if (notifyTimer) clearTimeout(notifyTimer);
+    notifyTimer = setTimeout(flushNotify, 250);
+  };
   watcher.on('add', notify);
   watcher.on('change', notify);
   watcher.on('unlink', notify);
   app.on('will-quit', () => {
+    if (notifyTimer) clearTimeout(notifyTimer);
     if (adoptTimer) clearTimeout(adoptTimer);
     void watcher.close();
   });

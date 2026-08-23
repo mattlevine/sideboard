@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.118] - 2026-08-23
+
+### Fixed
+
+- Concurrent Cursor chats no longer share one JSONL catalog. Each thread writes `cursor-sdk-store/threads/<threadId>/`, and a missing `Run … not found for agent …` row starts a fresh session instead of failing the turn.
+- Running several agents at once no longer freezes board navigation. Live `*.live.json` sidecar writes no longer trigger a full thread-list reload, tool tails no longer re-parse every transcript on the main thread, and the chat UI paints stream tokens once per animation frame.
+
+### Changed
+
+- Expanded thinking shows the full stream in a scrollable pane (pinned to the latest line while it runs) instead of a 280-character tail.
+
 ## [0.1.117] - 2026-08-23
 
 ### Changed

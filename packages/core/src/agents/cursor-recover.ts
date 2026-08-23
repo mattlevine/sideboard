@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { appDataDir } from '../store/paths.js';
+import { cursorSdkRunsNdjsonSearchPaths } from './cursor-store.js';
 
 export interface RecoveredCursorRun {
   runId: string;
@@ -15,10 +14,23 @@ export interface RecoveredCursorRun {
 export function recoverFinishedCursorRun(opts: {
   agentId: string;
   startedAfterMs: number;
+  threadId?: string | null;
 }): RecoveredCursorRun | null {
   const agentId = opts.agentId.trim();
   if (!agentId) return null;
-  const runsPath = join(appDataDir(), 'cursor-sdk-store', 'runs.ndjson');
+  let best: RecoveredCursorRun | null = null;
+  for (const runsPath of cursorSdkRunsNdjsonSearchPaths(opts.threadId)) {
+    const hit = scanFinishedCursorRuns(runsPath, agentId, opts.startedAfterMs);
+    if (hit && (!best || hit.endedAt >= best.endedAt)) best = hit;
+  }
+  return best;
+}
+
+function scanFinishedCursorRuns(
+  runsPath: string,
+  agentId: string,
+  startedAfterMs: number,
+): RecoveredCursorRun | null {
   if (!existsSync(runsPath)) return null;
   try {
     const lines = readFileSync(runsPath, 'utf8').split('\n');
@@ -44,7 +56,7 @@ export function recoverFinishedCursorRun(opts: {
       if (typeof row.result !== 'string' || !row.result.trim()) continue;
       const endedAt = typeof row.endedAt === 'number' ? row.endedAt : 0;
       const createdAt = typeof row.createdAt === 'number' ? row.createdAt : 0;
-      if (createdAt < opts.startedAfterMs && endedAt < opts.startedAfterMs) continue;
+      if (createdAt < startedAfterMs && endedAt < startedAfterMs) continue;
       if (!best || endedAt >= best.endedAt) {
         best = { runId: row.runId || '', result: row.result.trim(), endedAt };
       }

@@ -10,11 +10,10 @@
  */
 import { Agent, CursorAgentError, JsonlLocalAgentStore } from '@cursor/sdk';
 import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
-import { appDataDir } from '../store/paths.js';
 import { ensureCursorRipgrepPath } from './cursor-ripgrep.js';
+import { cursorSdkStoreDir } from './cursor-store.js';
 import {
   CURSOR_STREAM_IDLE_MS,
   cursorSendOptions,
@@ -71,8 +70,8 @@ function modelSelection(
 }
 
 /** Durable local agent metadata (Conductor-style JSONL, not SQLite). */
-function localAgentStore(): JsonlLocalAgentStore {
-  const root = join(appDataDir(), 'cursor-sdk-store');
+function localAgentStore(threadId?: string | null): JsonlLocalAgentStore {
+  const root = cursorSdkStoreDir(threadId);
   mkdirSync(root, { recursive: true });
   return new JsonlLocalAgentStore(root);
 }
@@ -144,7 +143,7 @@ async function main(): Promise<number> {
     fast: Boolean(req.fast),
   });
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
-  const store = localAgentStore();
+  const store = localAgentStore(req.threadId);
   const local = withCursorLocalHangGuards({ cwd: req.cwd, store });
   // Inline MCP is not persisted on resume — pass every turn (create + resume + send).
   const mcpServers =

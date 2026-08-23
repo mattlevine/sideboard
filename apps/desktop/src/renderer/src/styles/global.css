@@ -2771,15 +2771,19 @@ body.resizing-panels webview {
 }
 
 .turn-thinking.live .turn-thinking-pill {
-  animation: thinking-pill-pulse 1.8s ease-in-out infinite;
+  animation: none;
 }
 
 .turn-thinking-pill {
   display: block;
   max-width: 100%;
+  max-height: min(40vh, 320px);
+  overflow: auto;
   color: var(--muted);
   font-size: inherit;
   line-height: var(--line-height-chat);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .turn-tool {

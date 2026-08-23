@@ -48,6 +48,7 @@ describe('cursorAdapter.buildTurn', () => {
     expect(JSON.parse(cmd.stdin!)).toMatchObject({
       prompt: 'hi',
       cwd: '/tmp/wt',
+      threadId: 't1',
     });
     // Dev machines usually have `node` on PATH; Electron-only hosts fall back
     // to Electron-as-Node (wrapped in `/bin/sh` so nested Cursor Electron cannot

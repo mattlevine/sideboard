@@ -111,7 +111,9 @@ export function noteTurnLiveEvent(threadId: string, event: AgentEvent): void {
     buffers.delete(threadId);
     return;
   }
-  const immediate = event.type === 'tool_use' || event.type === 'tool_result';
+  const immediate =
+    event.type === 'tool_use' ||
+    (event.type === 'tool_result' && !event.partial);
   if (immediate) flush(threadId);
   else scheduleFlush(threadId);
 }

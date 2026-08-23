@@ -5,6 +5,8 @@ import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js'
 export type CursorTurnRequest = {
   prompt: string;
   cwd: string;
+  /** Isolates the JSONL catalog so concurrent Cursor runners do not clobber runs. */
+  threadId?: string | null;
   agentId?: string | null;
   model?: string | null;
   /** Reasoning effort (independent of {@link CursorTurnRequest.fast}). */

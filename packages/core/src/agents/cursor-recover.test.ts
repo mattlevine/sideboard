@@ -75,4 +75,27 @@ describe('recoverFinishedCursorRun', () => {
       recoverFinishedCursorRun({ agentId: 'agent-1', startedAfterMs: 0 }),
     ).toBeNull();
   });
+
+  it('recovers a finished run from the thread-scoped catalog', () => {
+    const scopedDir = join(dataDir, 'cursor-sdk-store', 'threads', 'thread-1');
+    mkdirSync(scopedDir, { recursive: true });
+    writeFileSync(
+      join(scopedDir, 'runs.ndjson'),
+      JSON.stringify({
+        runId: 'run-scoped',
+        agentId: 'agent-1',
+        status: 'finished',
+        result: 'from thread store',
+        createdAt: 5000,
+        endedAt: 6000,
+      }),
+    );
+    const hit = recoverFinishedCursorRun({
+      agentId: 'agent-1',
+      startedAfterMs: 0,
+      threadId: 'thread-1',
+    });
+    expect(hit?.runId).toBe('run-scoped');
+    expect(hit?.result).toBe('from thread store');
+  });
 });

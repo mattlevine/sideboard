@@ -220,7 +220,8 @@ export function looksLikeInvalidAgentSession(text: string): boolean {
     /failed to (load|resume|open) session/.test(lower) ||
     /corrupt local agent checkpoint/.test(lower) ||
     /missing root blob/.test(lower) ||
-    /\bagent\b.{0,120}\bnot found\b/.test(lower)
+    /\bagent\b.{0,120}\bnot found\b/.test(lower) ||
+    /\brun\b.{0,80}\bnot found for agent\b/.test(lower)
   );
 }
 

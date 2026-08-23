@@ -85,6 +85,7 @@ import { enqueueByKey } from '../util/enqueue-by-key.js';
 import { git } from '../git/run.js';
 import { withRepoGitLock } from '../git/repo-git-lock.js';
 import { clearTurnLive, noteTurnLiveEvent, readTurnLive } from '../store/turn-live.js';
+import { shouldReadThreadToHealReconcile } from './reconcile-heal.js';
 import { requestReview } from '../review/request-review.js';
 import { forkThreadWorktree as forkThreadWorktreeImpl } from '../threads/fork-worktree.js';
 import {
@@ -219,6 +220,8 @@ export class Orchestrator {
   private readonly draining = new Set<string>();
   /** Threads past setStatus(running) but not yet in activeTurns (spawn in flight). */
   private readonly startingTurns = new Set<string>();
+  /** Last sync thread-file read for false-stop heal (throttled per thread). */
+  private readonly lastReconcileHealAt = new Map<string, number>();
   /**
    * Threads intentionally force-stopped. Prevents runTurn from re-asserting
    * `running` after spawn, and from overwriting `stopped` with idle/error when
@@ -1007,9 +1010,17 @@ export class Orchestrator {
           }
           // Heal false "Process died (reconciled on startup)" while we still own the turn
           // (MCP subprocess reconcile used to stamp this mid tool-use).
-          // Skip stdout/thinking — Cursor streams those word-by-word; a sync
-          // JSON read of the thread file on every token stalls the UI.
-          if (event.type !== 'stdout' && event.type !== 'thinking') {
+          // Do not parse the full transcript on every tool_result/stderr/usage —
+          // concurrent agents doing that stall Electron navigation.
+          const now = Date.now();
+          if (
+            shouldReadThreadToHealReconcile(
+              event.type,
+              this.lastReconcileHealAt.get(threadId),
+              now,
+            )
+          ) {
+            this.lastReconcileHealAt.set(threadId, now);
             const live = readThread(threadId);
             if (
               live?.lastError?.includes('reconciled on startup') &&
@@ -1070,6 +1081,7 @@ export class Orchestrator {
             const recovered = recoverFinishedCursorRun({
               agentId: sessionId,
               startedAfterMs: turnStartedAt - 5_000,
+              threadId,
             });
             if (recovered?.result) {
               assistantText = recovered.result;

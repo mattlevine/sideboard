@@ -129,6 +129,11 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(
       looksLikeInvalidAgentSession('Agent agent-1ff554d1-14d1-42ff-9034-b9d2fe69e5f2 not found'),
     ).toBe(true);
+    expect(
+      looksLikeInvalidAgentSession(
+        'Cursor startup failed: Run run-fafc1435-48a8-41ad-b506-d649a5fb34a9 not found for agent agent-cd0cd0da-30de-4d5a-8e0a-3b984e889994',
+      ),
+    ).toBe(true);
     expect(looksLikeInvalidAgentSession('Credit balance is too low')).toBe(false);
     expect(looksLikeInvalidAgentSession('model gpt-x not found')).toBe(false);
   });

@@ -9,7 +9,7 @@ import type {
   Workspace,
 } from '@sideboard-ai/core';
 import { lookupSoccerTeam } from '@sideboard/teams';
-import { applyAgentEvent } from '@sideboard/message-parts';
+import { foldLivePaintOps, type LivePaintOp } from './lib/live-paint';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateModal } from './components/CreateModal';
@@ -281,16 +281,30 @@ export function App() {
     });
   }
 
+  const refreshBusy = useRef(false);
+  const refreshQueued = useRef(false);
   const refresh = useCallback(async () => {
-    const [all, rt, ws] = await Promise.all([
-      window.sideboard.getThreads(true),
-      window.sideboard.getRuntime(),
-      window.sideboard.listWorkspaces().catch(() => [] as Workspace[]),
-    ]);
-    setThreads(all.filter((t) => t.status !== 'archived'));
-    setArchived(all.filter((t) => t.status === 'archived'));
-    setRuntime(rt);
-    setWorkspaces(Array.isArray(ws) ? ws : []);
+    if (refreshBusy.current) {
+      refreshQueued.current = true;
+      return;
+    }
+    refreshBusy.current = true;
+    try {
+      do {
+        refreshQueued.current = false;
+        const [all, rt, ws] = await Promise.all([
+          window.sideboard.getThreads(true),
+          window.sideboard.getRuntime(),
+          window.sideboard.listWorkspaces().catch(() => [] as Workspace[]),
+        ]);
+        setThreads(all.filter((t) => t.status !== 'archived'));
+        setArchived(all.filter((t) => t.status === 'archived'));
+        setRuntime(rt);
+        setWorkspaces(Array.isArray(ws) ? ws : []);
+      } while (refreshQueued.current);
+    } finally {
+      refreshBusy.current = false;
+    }
   }, []);
 
   const refreshWorkspaces = useCallback(async () => {
@@ -353,54 +367,51 @@ export function App() {
       }
     });
     void refresh();
+    const pendingLive = { current: [] as LivePaintOp[] };
+    const liveSnapshot = {
+      current: {
+        output: {} as Record<string, string>,
+        parts: {} as Record<string, MessagePart[]>,
+        startedAt: {} as Record<string, number>,
+      },
+    };
+    let liveRaf = 0;
+    const flushLive = () => {
+      liveRaf = 0;
+      const ops = pendingLive.current;
+      pendingLive.current = [];
+      if (ops.length === 0) return;
+      const next = foldLivePaintOps(liveSnapshot.current, ops, Date.now());
+      liveSnapshot.current = next;
+      setLiveByThread(next.output);
+      setLivePartsByThread(next.parts);
+      setTurnStartedAtByThread(next.startedAt);
+    };
+    const queueLive = (op: LivePaintOp) => {
+      pendingLive.current.push(op);
+      if (liveRaf) return;
+      liveRaf = requestAnimationFrame(flushLive);
+    };
     const offThreads = window.sideboard.onThreadsChanged(() => {
       void refresh();
     });
     const offEvents = window.sideboard.onEvent((event: OrchestratorEvent) => {
       if (event.type === 'turn_output') {
-        const ev = event.event;
-        if (
-          ev.type === 'stdout' &&
-          !ev.parentId &&
-          !(
-            /^\s*\{/.test(ev.data) &&
-            /"type"\s*:\s*"(tool_use|tool_result|tool|thinking|usage|done|error)"/.test(
-              ev.data,
-            )
-          )
-        ) {
-          setLiveByThread((prev) => ({
-            ...prev,
-            [event.threadId]: `${prev[event.threadId] ?? ''}${ev.data}`,
-          }));
-        }
-        if (
-          ev.type === 'stdout' ||
-          ev.type === 'thinking' ||
-          ev.type === 'tool_use' ||
-          ev.type === 'tool_result'
-        ) {
-          setLivePartsByThread((prev) => ({
-            ...prev,
-            [event.threadId]: applyAgentEvent(prev[event.threadId] ?? [], ev),
-          }));
-        }
+        queueLive({
+          kind: 'output',
+          threadId: event.threadId,
+          event: event.event,
+        });
+        return;
       }
       if (event.type === 'turn_started') {
-        setLiveByThread((prev) => ({ ...prev, [event.threadId]: '' }));
-        setLivePartsByThread((prev) => ({ ...prev, [event.threadId]: [] }));
-        setTurnStartedAtByThread((prev) => ({ ...prev, [event.threadId]: Date.now() }));
+        queueLive({ kind: 'started', threadId: event.threadId });
+        return;
       }
       if (event.type === 'turn_finished') {
         // Keep the streamed bubble until refresh lands the persisted agent message
         void refresh().then(() => {
-          setLiveByThread((prev) => ({ ...prev, [event.threadId]: '' }));
-          setLivePartsByThread((prev) => ({ ...prev, [event.threadId]: [] }));
-          setTurnStartedAtByThread((prev) => {
-            const next = { ...prev };
-            delete next[event.threadId];
-            return next;
-          });
+          queueLive({ kind: 'clear', threadId: event.threadId });
         });
         return;
       }
@@ -452,6 +463,7 @@ export function App() {
       setSettingsOpen(true);
     });
     return () => {
+      if (liveRaf) cancelAnimationFrame(liveRaf);
       offThreads();
       offEvents();
       offAvailable();

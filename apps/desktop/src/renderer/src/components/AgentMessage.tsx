@@ -158,6 +158,28 @@ function thinkingPreview(text: string, live: boolean): string {
   return text;
 }
 
+function ThinkingBody({ text, live }: { text: string; live: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const pinToEnd = useRef(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !pinToEnd.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [text]);
+  return (
+    <div
+      ref={ref}
+      className={`turn-thinking-pill${live ? ' live' : ''}`}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        pinToEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
 function clipToolTail(text: string, max = 12000): string {
   if (text.length <= max) return text;
   return `…${text.slice(-max)}`;
@@ -362,7 +384,7 @@ export function AgentMessage({
     const isLive = Boolean(streaming && part === lastThinking);
     return (
       <div key={key} className={`turn-thinking${isLive ? ' live' : ''}`}>
-        <div className="turn-thinking-pill">{thinkingPreview(part.text, isLive)}</div>
+        <ThinkingBody text={part.text} live={isLive} />
       </div>
     );
   }

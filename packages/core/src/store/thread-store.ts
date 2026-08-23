@@ -7,6 +7,7 @@ import {
   writeFileSync,
   readdirSync,
 } from 'node:fs';
+import { basename } from 'node:path';
 import lockfile from 'proper-lockfile';
 import type { Thread, ThreadMessage, ThreadStatus } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
@@ -187,7 +188,9 @@ function idPath(id: string): string {
   return id;
 }
 
-function isThreadRecordFile(name: string): boolean {
+/** True for `threads/<id>.json` — not live sidecars or atomic `*.tmp` writes. */
+export function isThreadRecordFile(nameOrPath: string): boolean {
+  const name = basename(nameOrPath);
   // Turn-progress sidecars are `threads/<id>.live.json` — they also end in
   // `.json`, but they are not Thread records (no id / worktreePath).
   return name.endsWith('.json') && !name.endsWith('.live.json');

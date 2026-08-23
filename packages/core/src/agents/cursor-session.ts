@@ -27,6 +27,8 @@ export function isUnresumableCursorSession(err: unknown): boolean {
     /corrupt local agent checkpoint/.test(lower) ||
     /missing root blob/.test(lower) ||
     /\bagent\b.{0,120}\bnot found\b/.test(lower) ||
+    // Shared JSONL last-write-wins: `Run run-… not found for agent agent-…`
+    /\brun\b.{0,80}\bnot found for agent\b/.test(lower) ||
     /cannot resume/.test(lower)
   );
 }

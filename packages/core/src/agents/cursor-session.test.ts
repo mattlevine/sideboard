@@ -57,6 +57,23 @@ describe('isUnresumableCursorSession', () => {
     ).toBe(true);
   });
 
+  it('detects a missing local run row (concurrent JSONL rewrite)', () => {
+    expect(
+      isUnresumableCursorSession(
+        new Error(
+          'Run run-fafc1435-48a8-41ad-b506-d649a5fb34a9 not found for agent agent-cd0cd0da-30de-4d5a-8e0a-3b984e889994',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isUnresumableCursorSession(
+        new Error(
+          'Cursor startup failed: Run run-fafc1435-48a8-41ad-b506-d649a5fb34a9 not found for agent agent-cd0cd0da-30de-4d5a-8e0a-3b984e889994',
+        ),
+      ),
+    ).toBe(true);
+  });
+
   it('ignores auth, model, and busy failures', () => {
     expect(isUnresumableCursorSession(new Error('invalid API key'))).toBe(false);
     expect(isUnresumableCursorSession(new Error('model gpt-x not found'))).toBe(false);
