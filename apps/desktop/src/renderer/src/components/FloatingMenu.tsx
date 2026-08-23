@@ -150,7 +150,11 @@ export function FloatingMenu({
   if (!open) return null;
 
   return createPortal(
-    <div ref={menuRef} className={`tool-menu floating-menu ${className}`.trim()} style={style}>
+    <div
+      ref={menuRef}
+      className={`tool-menu floating-menu ${className}`.trim()}
+      style={style}
+    >
       {hasFooter ? <div className="floating-menu-scroll">{children}</div> : children}
       {hasFooter ? <div className="floating-menu-footer">{footer}</div> : null}
     </div>,

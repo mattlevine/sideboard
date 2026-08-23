@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { isSubagentToolName, messagePartParentId } from '@sideboard/message-parts';
+import { isSubagentToolName, messagePartParentId, toolActivityLine } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
   isFilesPane,
@@ -210,7 +210,7 @@ export function AgentMessage({
   onForkWorkspace,
   hideAnswer = false,
 }: Props) {
-  const [expanded, setExpanded] = useState(Boolean(streaming));
+  const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [diffTool, setDiffTool] = useState<ToolPart | null>(null);
   const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
@@ -226,20 +226,18 @@ export function AgentMessage({
 
   const safeParts = parts ?? [];
   const grouped = groupTranscript(safeParts);
-  const toolCount = safeParts.filter(
+  const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
+  const usedTools = safeParts.some(
     (p) =>
       p.type === 'tool' &&
+      !p.parentId &&
       !/present_plan$/i.test(p.name ?? '') &&
       !/ask_user|AskUserQuestion/i.test(p.name ?? ''),
-  ).length;
-  const subagentCount = safeParts.filter(
-    (p) => p.type === 'tool' && !p.parentId && isSubagentToolName(p.name),
-  ).length;
-  const messageCount = safeParts.filter((p) => p.type === 'text' && !p.parentId).length;
-  const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
-  const hasTranscript = toolCount > 0 || thinkingCount > 0;
+  );
+  const showTrace = usedTools || thinkingCount > 0;
   const answer = finalText(text, safeParts);
   const chips = useMemo(() => toolChips(safeParts, Boolean(streaming)), [safeParts, streaming]);
+  const activityLine = useMemo(() => toolActivityLine(safeParts), [safeParts]);
   const idPrefix = artifactIdPrefix ?? (streaming ? 'live' : 'msg');
   const paneContents = useMemo(
     () => extractRightPaneContents(answer || text, safeParts, idPrefix),
@@ -247,14 +245,23 @@ export function AgentMessage({
   );
   const durationLabel = useLiveDuration(startedAt, durationMs);
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
-
-  const summaryBits: string[] = [];
-  if (subagentCount > 0) {
-    summaryBits.push(`${subagentCount} subagent${subagentCount === 1 ? '' : 's'}`);
-  }
-  if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
-  if (messageCount > 0) summaryBits.push(`${messageCount} message${messageCount === 1 ? '' : 's'}`);
-  else if (thinkingCount > 0) summaryBits.push(`${thinkingCount} thinking`);
+  const briefThought =
+    !durationLabel || (/^\d+s$/.test(durationLabel) && Number(durationLabel.slice(0, -1)) < 8);
+  const traceLabel = usedTools
+    ? streaming
+      ? durationLabel
+        ? `Working ${durationLabel}`
+        : 'Working'
+      : durationLabel
+        ? `Worked for ${durationLabel}`
+        : 'Worked'
+    : streaming
+      ? 'Thinking'
+      : briefThought
+        ? 'Thought briefly'
+        : durationLabel
+          ? `Thought ${durationLabel}`
+          : 'Thought';
 
   async function copyAnswer() {
     try {
@@ -264,32 +271,19 @@ export function AgentMessage({
     }
   }
 
-  function openDiff(tool: ToolPart, anchor?: HTMLElement | null) {
-    diffAnchorRef.current = anchor ?? moreBtnRef.current;
+  function openInspector(tool: ToolPart, anchor: HTMLElement) {
+    diffAnchorRef.current = anchor;
     setDiffTool((prev) => (prev?.id === tool.id ? null : tool));
+  }
+
+  function closeInspector() {
+    setDiffTool(null);
   }
 
   function renderThinking(part: Extract<MessagePart, { type: 'thinking' }>, key: string) {
     const isLive = Boolean(streaming && part === lastThinking);
     return (
       <div key={key} className={`turn-thinking${isLive ? ' live' : ''}`}>
-        <div className="turn-thinking-label">
-          {isLive ? (
-            <ActivityMark tone="active" size="sm" />
-          ) : (
-            <span className="turn-icon brain" aria-hidden>
-              ✶
-            </span>
-          )}
-          Thinking
-          {isLive ? (
-            <span className="thinking-indicator-dots" aria-hidden>
-              <span />
-              <span />
-              <span />
-            </span>
-          ) : null}
-        </div>
         <div className="turn-thinking-pill">{thinkingPreview(part.text, isLive)}</div>
       </div>
     );
@@ -302,7 +296,12 @@ export function AgentMessage({
     const isRunning = part.status === 'running';
     const detail = toolRowDetail(part, kids, Boolean(streaming));
     return (
-      <div key={key} className={`turn-tool${isRunning ? ' running' : ''}`}>
+      <button
+        key={key}
+        type="button"
+        className={`turn-tool${isRunning ? ' running' : ''}${diffTool?.id === part.id ? ' active' : ''}`}
+        onClick={(e) => openInspector(part, e.currentTarget)}
+      >
         {isRunning ? (
           <ActivityMark tone="active" size="sm" />
         ) : (
@@ -312,18 +311,11 @@ export function AgentMessage({
         )}
         <span className="turn-tool-desc">{part.description ?? part.name}</span>
         {detail && (
-          <button
-            type="button"
-            className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}
-            title={clickable ? 'Show diff' : detail}
-            onClick={(e) => {
-              if (clickable) openDiff(part, e.currentTarget);
-            }}
-          >
+          <span className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}>
             {detail}
-          </button>
+          </span>
         )}
-      </div>
+      </button>
     );
   }
 
@@ -366,26 +358,13 @@ export function AgentMessage({
           </div>
         );
       }
-      if (part.type === 'text' && part.text.trim()) {
-        return (
-          <div key={key} className="turn-text">
-            <MarkdownMessage
-              text={part.text}
-              knownFilePaths={knownFilePaths}
-              onFileReferenceClick={threadId ? openFileReference : undefined}
-              onThreadLinkClick={onOpenThread}
-              isStreaming={streaming}
-            />
-          </div>
-        );
-      }
       return null;
     });
   }
 
   return (
     <div className={`agent-msg${streaming ? ' streaming' : ''}`}>
-      {hasTranscript && (
+      {showTrace && (
         <div className="turn-transcript">
           <button
             type="button"
@@ -393,24 +372,18 @@ export function AgentMessage({
             onClick={() => setExpanded((v) => !v)}
             aria-expanded={expanded}
           >
-            <span className={`turn-chevron${expanded ? ' open' : ''}`}>▸</span>
-            <span className="turn-summary-text">{summaryBits.join(', ')}</span>
-            <span className="turn-summary-icons" aria-hidden>
-              <span title="Tools">›_</span>
-              <span title="Transcript">☰</span>
-              <span title="Attachments">⧉</span>
+            <span className="turn-summary-text">{traceLabel}</span>
+            <span className={`turn-chevron${expanded ? ' open' : ''}`} aria-hidden>
+              {expanded ? '∨' : '>'}
             </span>
           </button>
-
           {expanded && (
-            <div className="turn-details">
-              {renderParts(grouped.top, 'top')}
-            </div>
+            <div className="turn-details">{renderParts(grouped.top, 'top')}</div>
           )}
         </div>
       )}
 
-      {answer && !hideAnswer && (!hasTranscript || !expanded) && (
+      {answer && !hideAnswer && (
         <div className="msg-body">
           <MarkdownMessage
             text={answer}
@@ -422,18 +395,25 @@ export function AgentMessage({
         </div>
       )}
 
-      {!answer && streaming && !hasTranscript && (
-        <div className="msg-body waiting-inline">
-          <span className="thinking-indicator-label">Thinking</span>
-          <span className="thinking-indicator-dots" aria-hidden>
-            <span />
-            <span />
-            <span />
-          </span>
+      {activityLine && (
+        <div className="msg-activity-line">
+          <span>{activityLine.text}</span>
+          {activityLine.additions > 0 && (
+            <span className="msg-activity-add">+{activityLine.additions}</span>
+          )}
+          {activityLine.deletions > 0 && (
+            <span className="msg-activity-del">−{activityLine.deletions}</span>
+          )}
         </div>
       )}
 
-      {(durationLabel ||
+      {streaming && !showTrace && (
+        <div className="msg-body waiting-inline">
+          <span className="thinking-indicator-label">Thinking</span>
+        </div>
+      )}
+
+      {((!showTrace && durationLabel) ||
         usage ||
         chips.length > 0 ||
         paneContents.length > 0 ||
@@ -441,7 +421,7 @@ export function AgentMessage({
         onForkWorkspace) && (
         <div className="msg-footer">
           <div className="msg-footer-left">
-            {durationLabel && (
+            {!showTrace && durationLabel && (
               <span className={`msg-age${startedAt != null ? ' live' : ''}`}>{durationLabel}</span>
             )}
             {usage && (
@@ -531,8 +511,7 @@ export function AgentMessage({
                   key={t.id}
                   type="button"
                   className={`tool-chip${t.status === 'error' ? ' error' : ''}${t.status === 'running' ? ' running' : ''}${diffTool?.id === t.id ? ' active' : ''}`}
-                  title={hasCodeDiff(t) ? 'Show diff' : 'Show tool input & result'}
-                  onClick={(e) => openDiff(t, e.currentTarget)}
+                  onClick={(e) => openInspector(t, e.currentTarget)}
                 >
                   {t.status === 'running' ? (
                     <ActivityMark tone="active" size="sm" className="tool-chip-activity" />
@@ -565,10 +544,10 @@ export function AgentMessage({
       {diffTool && (
         <FloatingMenu
           open
-          onClose={() => setDiffTool(null)}
+          onClose={closeInspector}
           anchorRef={diffAnchorRef}
           align="right"
-          placement="auto"
+          placement="up"
           minWidth={480}
           maxMenuHeight={Math.min(420, Math.round(window.innerHeight * 0.55))}
           className="tool-diff-floating"
@@ -576,7 +555,7 @@ export function AgentMessage({
           <ToolDiffPopover
             tool={diffTool}
             threadId={threadId}
-            onClose={() => setDiffTool(null)}
+            onClose={closeInspector}
           />
         </FloatingMenu>
       )}

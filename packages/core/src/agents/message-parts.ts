@@ -143,8 +143,85 @@ function toolLabel(tool: ToolPart): string {
   return tool.description || toolDescription(tool.name, tool.input) || tool.name;
 }
 
+function fileBasename(path: string): string {
+  const parts = path.replace(/\/$/, '').split(/[/\\]/);
+  return parts[parts.length - 1] || path;
+}
+
+function classifyTool(name: string): 'edit' | 'read' | 'search' | 'shell' | 'other' {
+  const compact = name.replace(/^mcp__[^_]+__/, '').replace(/[_-]/g, '');
+  if (/bash|shell|terminal|^zsh$|^sh$/i.test(compact)) return 'shell';
+  if (/grep|glob|search|ripgrep|findfiles|semsearch/i.test(compact)) return 'search';
+  if (/^(read|cat)$/i.test(compact) || /^read/i.test(compact)) return 'read';
+  if (/edit|write|apply|strreplace|multiedit|updatefile|createfile/i.test(compact)) {
+    return 'edit';
+  }
+  return 'other';
+}
+
 /**
- * One-line snapshot of a live turn for the chat ticker and MCP wait_for_turn.
+ * Cursor-style footer for a finished (or in-flight) turn: “Edited foo.ts, 1 search, ran 2 commands”.
+ */
+export function toolActivityLine(parts: MessagePart[]): {
+  text: string;
+  additions: number;
+  deletions: number;
+} | null {
+  const tools = parts.filter((p): p is ToolPart => {
+    if (p.type !== 'tool' || p.parentId) return false;
+    if (isPollWrapperToolName(p.name)) return false;
+    if (/present_plan$/i.test(p.name ?? '')) return false;
+    if (/ask_user|AskUserQuestion/i.test(p.name ?? '')) return false;
+    return true;
+  });
+  if (tools.length === 0) return null;
+
+  const edited: { name: string; running: boolean }[] = [];
+  let reads = 0;
+  let searches = 0;
+  let shells = 0;
+  let others = 0;
+  let additions = 0;
+  let deletions = 0;
+  for (const tool of tools) {
+    const kind = classifyTool(tool.name);
+    if (kind === 'edit') {
+      const path = tool.filePath ?? toolFilePath(tool.input);
+      edited.push({
+        name: path ? fileBasename(path) : tool.name,
+        running: tool.status === 'running',
+      });
+    } else if (kind === 'read') reads += 1;
+    else if (kind === 'search') searches += 1;
+    else if (kind === 'shell') shells += 1;
+    else others += 1;
+    if (typeof tool.additions === 'number') additions += tool.additions;
+    if (typeof tool.deletions === 'number') deletions += tool.deletions;
+  }
+
+  const bits: string[] = [];
+  const editing = edited.filter((e) => e.running);
+  const editedDone = edited.filter((e) => !e.running);
+  if (editing.length === 1) bits.push(`Editing ${editing[0]!.name}`);
+  else if (editing.length > 1) bits.push(`Editing ${editing.length} files`);
+  if (editedDone.length === 1) bits.push(`${editing.length ? 'edited' : 'Edited'} ${editedDone[0]!.name}`);
+  else if (editedDone.length > 1) {
+    bits.push(`${editing.length ? 'edited' : 'Edited'} ${editedDone.length} files`);
+  }
+  if (reads === 1) bits.push('explored 1 file');
+  else if (reads > 1) bits.push(`explored ${reads} files`);
+  if (searches === 1) bits.push('1 search');
+  else if (searches > 1) bits.push(`${searches} searches`);
+  if (shells === 1) bits.push('ran 1 command');
+  else if (shells > 1) bits.push(`ran ${shells} commands`);
+  if (others === 1) bits.push('1 tool');
+  else if (others > 1) bits.push(`${others} tools`);
+  if (bits.length === 0) return null;
+  return { text: bits.join(', '), additions, deletions };
+}
+
+/**
+ * One-line snapshot of a live turn for MCP wait_for_turn.
  * Prefers running subagents and nested tools over TaskOutput poll wrappers.
  */
 export function liveActivitySummary(

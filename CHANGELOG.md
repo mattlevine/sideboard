@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.115] - 2026-08-22
+## [0.1.115] - 2026-08-23
+
+### Changed
+
+- Chat turns follow Cursor’s layout: thinking is a collapsed “Thought briefly” line, the reply stays visible, and tools summarize in a muted footer (`Edited …, 1 search`) instead of a live activity ticker. Click a tool row or chip to open the inspector.
 
 ### Fixed
 

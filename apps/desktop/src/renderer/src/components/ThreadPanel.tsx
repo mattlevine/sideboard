@@ -61,7 +61,6 @@ import {
   useAgentModels,
   useCursorModels,
 } from './CursorModelMenu';
-import { ActivityMark } from './ActivityMark';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import {
   applyAutocomplete,
@@ -1823,74 +1822,54 @@ export function ThreadPanel({
             </div>
           )}
           {showStreaming && (
-            <>
-              <div
-                className={`msg agent streaming${liveOutput || liveParts.length ? '' : ' waiting'}`}
-              >
-                {liveOutput || liveParts.length || turnStartedAt ? (
-                  <AgentMessage
-                    text={liveOutput}
-                    parts={liveParts}
-                    streaming
-                    startedAt={turnStartedAt}
-                    threadId={thread.id}
-                    worktreePath={thread.worktreePath}
-                    knownFilePaths={filePaths}
-                    onOpenFile={onSelectFile}
-                    onOpenThread={onOpenThreadLink}
-                    onOpenArtifact={openRightPane}
-                    activeArtifactId={rightPane?.id}
-                    artifactIdPrefix="live"
-                    hideAnswer={showPlanCard && liveHasPresentPlan}
-                    onFork={() =>
-                      void forkToTab(Math.max(0, thread.messages.length - 1))
-                    }
-                    onForkWorkspace={
-                      canForkWorkspace
-                        ? () =>
-                            requestForkWorkspace(
-                              Math.max(0, thread.messages.length - 1),
-                            )
-                        : undefined
-                    }
-                  />
-                ) : (
-                  <ThinkingIndicator
-                    queued={thread.status === 'queued'}
-                    showMark={false}
-                  />
-                )}
-                {showPlanQuestions &&
-                  pendingPlanQuestions &&
-                  liveParts.some(
-                    (p) =>
-                      p.type === 'tool' && p.id === pendingPlanQuestions.id,
-                  ) && (
-                    <div className="plan-questions-chat-brief">
-                      <MarkdownMessage
-                        text={formatPlanQuestionsForChat(
-                          pendingPlanQuestions.questions,
-                        )}
-                      />
-                    </div>
-                  )}
-              </div>
-              <div
-                className="msg-stream-activity"
-                aria-live="polite"
-                aria-label="Generating"
-              >
-                <ActivityMark
-                  tone={thread.status === 'queued' ? 'queued' : 'active'}
-                  size="sm"
+            <div
+              className={`msg agent streaming${liveOutput || liveParts.length ? '' : ' waiting'}`}
+            >
+              {liveOutput || liveParts.length || turnStartedAt ? (
+                <AgentMessage
+                  text={liveOutput}
+                  parts={liveParts}
+                  streaming
+                  startedAt={turnStartedAt}
+                  threadId={thread.id}
+                  worktreePath={thread.worktreePath}
+                  knownFilePaths={filePaths}
+                  onOpenFile={onSelectFile}
+                  onOpenThread={onOpenThreadLink}
+                  onOpenArtifact={openRightPane}
+                  activeArtifactId={rightPane?.id}
+                  artifactIdPrefix="live"
+                  hideAnswer={showPlanCard && liveHasPresentPlan}
+                  onFork={() =>
+                    void forkToTab(Math.max(0, thread.messages.length - 1))
+                  }
+                  onForkWorkspace={
+                    canForkWorkspace
+                      ? () =>
+                          requestForkWorkspace(
+                            Math.max(0, thread.messages.length - 1),
+                          )
+                      : undefined
+                  }
                 />
-                <span className="thinking-indicator-dots" aria-hidden>
-                  <span />
-                  <span />
-                  <span />
-                </span>
-              </div>
-            </>
+              ) : (
+                <ThinkingIndicator queued={thread.status === 'queued'} />
+              )}
+              {showPlanQuestions &&
+                pendingPlanQuestions &&
+                liveParts.some(
+                  (p) =>
+                    p.type === 'tool' && p.id === pendingPlanQuestions.id,
+                ) && (
+                  <div className="plan-questions-chat-brief">
+                    <MarkdownMessage
+                      text={formatPlanQuestionsForChat(
+                        pendingPlanQuestions.questions,
+                      )}
+                    />
+                  </div>
+                )}
+            </div>
           )}
           {showPlanCard && presentedPlan && (
             <div className="msg agent plan-at-end">

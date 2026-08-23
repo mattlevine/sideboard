@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAgentEvent,
   liveActivitySummary,
+  toolActivityLine,
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
   toolDescription,
@@ -291,6 +292,64 @@ describe('liveActivitySummary', () => {
 
   it('says queued when nothing has started', () => {
     expect(liveActivitySummary([], { queued: true })).toBe('Queued — waiting for a slot');
+  });
+});
+
+describe('toolActivityLine', () => {
+  it('summarizes edits, searches, and shell like Cursor’s footer', () => {
+    expect(
+      toolActivityLine([
+        {
+          type: 'tool',
+          id: 'e1',
+          name: 'Edit',
+          status: 'done',
+          filePath: 'CHANGELOG.md',
+        },
+        { type: 'tool', id: 'g1', name: 'Grep', status: 'done' },
+        { type: 'tool', id: 'r1', name: 'Read', status: 'done' },
+        { type: 'tool', id: 'r2', name: 'Read', status: 'done' },
+        { type: 'tool', id: 'b1', name: 'Bash', status: 'done' },
+      ]),
+    ).toEqual({
+      text: 'Edited CHANGELOG.md, explored 2 files, 1 search, ran 1 command',
+      additions: 0,
+      deletions: 0,
+    });
+  });
+
+  it('includes added/removed line counts', () => {
+    expect(
+      toolActivityLine([
+        {
+          type: 'tool',
+          id: 'e1',
+          name: 'Edit',
+          status: 'running',
+          filePath: 'AgentMessage.tsx',
+          additions: 59,
+          deletions: 12,
+        },
+      ]),
+    ).toEqual({
+      text: 'Editing AgentMessage.tsx',
+      additions: 59,
+      deletions: 12,
+    });
+  });
+  it('ignores nested and plan/ask tools', () => {
+    expect(
+      toolActivityLine([
+        { type: 'tool', id: 'p1', name: 'present_plan', status: 'done' },
+        {
+          type: 'tool',
+          id: 'n1',
+          name: 'Read',
+          status: 'done',
+          parentId: 'agent1',
+        },
+      ]),
+    ).toBeNull();
   });
 });
 

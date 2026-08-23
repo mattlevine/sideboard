@@ -25,10 +25,10 @@
   --mono:
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --font-size: 13px;
-  --font-size-chat: 17px;
+  --font-size-chat: 18px;
   --font-size-ui: 13px;
-  --font-size-meta: 12px;
-  --font-size-tiny: 11px;
+  --font-size-meta: 14px;
+  --font-size-tiny: 12px;
   --line-height: 1.45;
   --line-height-chat: 1.6;
   --letter-tight: -0.011em;
@@ -2668,13 +2668,13 @@ body.resizing-panels webview {
 .turn-summary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   align-self: flex-start;
   background: transparent;
   border: none;
   padding: 0;
   color: var(--muted);
-  font-size: var(--font-size-meta);
+  font-size: var(--font-size-chat);
   font-weight: 400;
   letter-spacing: var(--letter-tight);
   cursor: pointer;
@@ -2686,13 +2686,11 @@ body.resizing-panels webview {
 
 .turn-chevron {
   display: inline-block;
-  width: 12px;
-  font-size: 10px;
-  transition: transform 0.12s ease;
-}
-
-.turn-chevron.open {
-  transform: rotate(90deg);
+  width: 1em;
+  font-size: 0.85em;
+  line-height: 1;
+  opacity: 0.75;
+  font-weight: 500;
 }
 
 .turn-summary-text {
@@ -2712,6 +2710,8 @@ body.resizing-panels webview {
   flex-direction: column;
   gap: 10px;
   padding: 2px 0 4px;
+  font-size: var(--font-size-chat);
+  line-height: var(--line-height-chat);
 }
 
 .turn-subagent {
@@ -2741,7 +2741,7 @@ body.resizing-panels webview {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: inherit;
   color: var(--muted);
 }
 
@@ -2749,7 +2749,7 @@ body.resizing-panels webview {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: inherit;
   color: var(--text);
   margin-bottom: 4px;
 }
@@ -2759,14 +2759,11 @@ body.resizing-panels webview {
 }
 
 .turn-thinking-pill {
-  display: inline-block;
+  display: block;
   max-width: 100%;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: #2a2a2c;
-  color: #b0b0b0;
-  font-size: 12px;
-  line-height: 1.4;
+  color: var(--muted);
+  font-size: inherit;
+  line-height: var(--line-height-chat);
 }
 
 .turn-tool {
@@ -2774,8 +2771,21 @@ body.resizing-panels webview {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12px;
+  width: 100%;
+  padding: 4px 0;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: inherit;
   color: var(--text);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.turn-tool:hover .turn-tool-pill,
+.turn-tool.active .turn-tool-pill {
+  border-color: var(--accent-dim);
 }
 
 .turn-tool-desc {
@@ -2785,13 +2795,13 @@ body.resizing-panels webview {
 .turn-tool-pill {
   display: inline-block;
   max-width: min(100%, 520px);
-  padding: 3px 8px;
+  padding: 6px 10px;
   border-radius: 6px;
   background: #1e1e1e;
   border: 1px solid var(--border);
   color: #d4d4d4;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.9em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2833,6 +2843,25 @@ body.resizing-panels webview {
   align-items: center;
   gap: 8px;
   color: var(--muted);
+}
+
+.msg-activity-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: var(--font-size-chat);
+  line-height: var(--line-height-chat);
+}
+
+.msg-activity-add {
+  color: #3dd68c;
+}
+
+.msg-activity-del {
+  color: #f87171;
 }
 
 .msg-stream-activity {
@@ -3049,10 +3078,10 @@ body.resizing-panels webview {
 @keyframes thinking-pill-pulse {
   0%,
   100% {
-    background: #2a2a2c;
+    opacity: 0.7;
   }
   50% {
-    background: #323234;
+    opacity: 1;
   }
 }
 

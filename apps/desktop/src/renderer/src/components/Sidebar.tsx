@@ -905,8 +905,8 @@ export function Sidebar({
               <button
                 type="button"
                 className="workspace-name-btn"
-                title="Orchestration — coordinate work across registered workspaces"
-                onClick={onShowBoard}
+                title="New orchestration chat"
+                onClick={() => onNew(undefined, 'orchestration')}
               >
                 <span className="workspace-glyph" aria-hidden />
                 <span className="workspace-name">Orchestration</span>
