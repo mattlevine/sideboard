@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.114] - 2026-08-22
+
+### Fixed
+
+- Claude Code headless turns can poll background Agent/Task children: auto-approve `TaskOutput` / `TaskStop` / `EnterWorktree`, keep `system/task_*` as live progress instead of stealing `--resume`, and wait 2h (not 10m) for those children. Codex and OpenCode no longer treat nested/child start events as the parent session. `wait_for_turn` says when a child is still queued on the concurrency cap.
+- Chat shows a live activity line under a streaming turn (current subagent / tool / wait), including Claude background Agent polls (`task_notification`) and queued-but-not-started children.
+
 ## [0.1.112] - 2026-08-22
 
 ### Fixed

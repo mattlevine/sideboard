@@ -55,6 +55,12 @@ export function createAgentStreamCoalescer(
         return;
       }
       if (!event.data) return;
+      // Status pulses (Claude task_notification) must not glue onto token deltas.
+      if (event.type === 'thinking' && event.replace) {
+        flush();
+        emit(event);
+        return;
+      }
       if (pending && pending.type === event.type && parentKey(pending) === parentKey(event)) {
         pending.data += event.data;
       } else {

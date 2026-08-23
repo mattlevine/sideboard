@@ -36,7 +36,7 @@ describe('summarizeTurnLive', () => {
 
   it('says thinking when there are no tools yet', () => {
     const live = summarizeTurnLive([{ type: 'thinking', text: 'plan the review' }]);
-    expect(live.summary).toBe('Thinking…');
+    expect(live.summary).toMatch(/plan the review/);
     expect(live.excerpt).toMatch(/plan the review/);
   });
 });

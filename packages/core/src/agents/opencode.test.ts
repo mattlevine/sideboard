@@ -120,6 +120,19 @@ describe('opencodeAdapter.parseEvent', () => {
     ).toEqual({ type: 'session_id', data: 'ses_123' });
   });
 
+  it('does not steal --session from nested task step_start', () => {
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'step_start',
+          sessionID: 'ses_child',
+          childSessionID: 'ses_child',
+          part: { type: 'step-start' },
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it('does not let sessionID short-circuit text or tools', () => {
     expect(
       opencodeAdapter.parseEvent(

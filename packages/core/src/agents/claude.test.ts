@@ -109,7 +109,12 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('WebSearch');
     expect(allowed).toContain('Task');
     expect(allowed).toContain('Agent');
+    expect(allowed).toContain('TaskOutput');
+    expect(allowed).toContain('TaskStop');
+    expect(allowed).toContain('EnterWorktree');
+    expect(allowed).toContain('Skill');
     expect(cmd.env?.CLAUDE_CODE_FORWARD_SUBAGENT_TEXT).toBe('1');
+    expect(cmd.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe('7200000');
   });
 
   it('passes --chrome and auto-approves Chrome MCP tools when enabled', async () => {
@@ -424,6 +429,86 @@ describe('claudeAdapter.parseEvent', () => {
         }),
       ),
     ).toEqual({ type: 'thinking', data: 'scan', parentId: 'toolu_task' });
+  });
+
+  it('does not steal --resume from nested Agent system/init', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sess-child',
+          parent_tool_use_id: 'toolu_task',
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('does not treat task_started / task_notification as session_id', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'task_started',
+          session_id: 'sess-parent',
+          tool_use_id: 'toolu_task',
+          task_id: 'task_1',
+          task_type: 'Agent',
+          description: 'scan auth',
+        }),
+      ),
+    ).toEqual({
+      type: 'tool_use',
+      id: 'toolu_task',
+      name: 'Agent',
+      input: { description: 'scan auth', task_id: 'task_1' },
+    });
+
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'task_notification',
+          session_id: 'sess-parent',
+          tool_use_id: 'toolu_task',
+          status: 'running',
+          tool_uses: 4,
+          duration_ms: 12_000,
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'toolu_task',
+        name: 'Agent',
+        input: {
+          live_status: 'running',
+          live_tool_uses: 4,
+          live_duration_ms: 12_000,
+        },
+      },
+      {
+        type: 'thinking',
+        data: 'running · 4 tools · 12s',
+        parentId: 'toolu_task',
+        replace: true,
+      },
+    ]);
+  });
+
+  it('maps api_retry to thinking so long polls still show activity', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'api_retry',
+          session_id: 'sess-parent',
+          attempt: 2,
+          max_retries: 5,
+          retry_delay_ms: 800,
+        }),
+      ),
+    ).toEqual({ type: 'thinking', data: 'API retry 2/5 (wait 800ms)' });
   });
 
   it('extracts per-request usage from assistant message.usage', () => {

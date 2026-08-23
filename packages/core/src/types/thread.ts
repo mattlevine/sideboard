@@ -439,7 +439,13 @@ export type AgentEvent =
   | { type: 'stdout'; data: string; parentId?: string }
   | { type: 'stderr'; data: string }
   | { type: 'session_id'; data: string }
-  | { type: 'thinking'; data: string; parentId?: string }
+  | {
+      type: 'thinking';
+      data: string;
+      parentId?: string;
+      /** Replace the last thinking part with this parent (status pulses, not token deltas). */
+      replace?: boolean;
+    }
   | {
       type: 'tool_use';
       id: string;

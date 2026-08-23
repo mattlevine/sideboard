@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { isSubagentToolName, messagePartParentId } from '@sideboard/message-parts';
+import { isSubagentToolName, liveActivitySummary, messagePartParentId } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
   isFilesPane,
@@ -102,8 +102,19 @@ function finalText(text: string, parts: MessagePart[] | undefined): string {
   return stripBrightsyNdjsonNoise(texts[texts.length - 1]!.text.trim() || text);
 }
 
-function toolChips(parts: MessagePart[]): ToolPart[] {
+function toolChips(parts: MessagePart[], streaming = false): ToolPart[] {
   const tools = parts.filter((p): p is ToolPart => p.type === 'tool');
+  if (streaming) {
+    const running = tools.filter((t) => t.status === 'running');
+    if (running.length) {
+      const seen = new Set<string>();
+      return running.filter((t) => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      }).slice(-4);
+    }
+  }
   const edits = tools.filter(
     (t) =>
       Boolean(t.filePath) ||
@@ -117,6 +128,24 @@ function toolChips(parts: MessagePart[]): ToolPart[] {
     seen.add(key);
     return true;
   });
+}
+
+function nestedInsight(kids: MessagePart[], live: boolean): string | null {
+  for (let i = kids.length - 1; i >= 0; i--) {
+    const p = kids[i];
+    if (p.type === 'tool' && p.status === 'running') return p.description || p.name;
+    if (p.type === 'thinking' && p.text.trim()) return thinkingPreview(p.text, live);
+    if (p.type === 'text' && p.text.trim()) return thinkingPreview(p.text, live);
+  }
+  return null;
+}
+
+function toolRowDetail(part: ToolPart, kids: MessagePart[], streaming: boolean): string | undefined {
+  if (streaming && isSubagentToolName(part.name) && part.status === 'running') {
+    const nested = nestedInsight(kids, true);
+    if (nested) return nested;
+  }
+  return part.detail;
 }
 
 function thinkingPreview(text: string, live: boolean): string {
@@ -210,7 +239,7 @@ export function AgentMessage({
   const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
   const hasTranscript = toolCount > 0 || thinkingCount > 0;
   const answer = finalText(text, safeParts);
-  const chips = useMemo(() => toolChips(safeParts), [safeParts]);
+  const chips = useMemo(() => toolChips(safeParts, Boolean(streaming)), [safeParts, streaming]);
   const idPrefix = artifactIdPrefix ?? (streaming ? 'live' : 'msg');
   const paneContents = useMemo(
     () => extractRightPaneContents(answer || text, safeParts, idPrefix),
@@ -220,12 +249,16 @@ export function AgentMessage({
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
 
   const summaryBits: string[] = [];
-  if (subagentCount > 0) {
-    summaryBits.push(`${subagentCount} subagent${subagentCount === 1 ? '' : 's'}`);
+  if (streaming) {
+    summaryBits.push(liveActivitySummary(safeParts));
+  } else {
+    if (subagentCount > 0) {
+      summaryBits.push(`${subagentCount} subagent${subagentCount === 1 ? '' : 's'}`);
+    }
+    if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
+    if (messageCount > 0) summaryBits.push(`${messageCount} message${messageCount === 1 ? '' : 's'}`);
+    else if (thinkingCount > 0) summaryBits.push(`${thinkingCount} thinking`);
   }
-  if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
-  if (messageCount > 0) summaryBits.push(`${messageCount} message${messageCount === 1 ? '' : 's'}`);
-  else if (thinkingCount > 0) summaryBits.push(`${thinkingCount} thinking`);
 
   async function copyAnswer() {
     try {
@@ -266,11 +299,12 @@ export function AgentMessage({
     );
   }
 
-  function renderToolRow(part: ToolPart, key: string) {
+  function renderToolRow(part: ToolPart, key: string, kids: MessagePart[] = []) {
     if (/present_plan$/i.test(part.name ?? '')) return null;
     if (/ask_user|AskUserQuestion/i.test(part.name ?? '')) return null;
     const clickable = hasCodeDiff(part);
     const isRunning = part.status === 'running';
+    const detail = toolRowDetail(part, kids, Boolean(streaming));
     return (
       <div key={key} className={`turn-tool${isRunning ? ' running' : ''}`}>
         {isRunning ? (
@@ -281,16 +315,16 @@ export function AgentMessage({
           </span>
         )}
         <span className="turn-tool-desc">{part.description ?? part.name}</span>
-        {part.detail && (
+        {detail && (
           <button
             type="button"
             className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}
-            title={clickable ? 'Show diff' : part.detail}
+            title={clickable ? 'Show diff' : detail}
             onClick={(e) => {
               if (clickable) openDiff(part, e.currentTarget);
             }}
           >
-            {part.detail}
+            {detail}
           </button>
         )}
       </div>
@@ -303,7 +337,7 @@ export function AgentMessage({
       if (part.type === 'thinking') return renderThinking(part, key);
       if (part.type === 'tool') {
         const kids = grouped.children.get(part.id) ?? [];
-        const row = renderToolRow(part, `${key}-row`);
+        const row = renderToolRow(part, `${key}-row`, kids);
         if (!row) return null;
         const showNested = kids.length > 0 || isSubagentToolName(part.name);
         if (!showNested) return row;
@@ -319,7 +353,11 @@ export function AgentMessage({
                 : streaming && part.status === 'running'
                   ? (
                       <div className="turn-subagent-waiting">
-                        <span className="thinking-indicator-label">Working</span>
+                        <span className="thinking-indicator-label">
+                          {part.description && part.description !== part.name
+                            ? part.description
+                            : 'Working'}
+                        </span>
                         <span className="thinking-indicator-dots" aria-hidden>
                           <span />
                           <span />

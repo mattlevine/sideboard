@@ -421,10 +421,10 @@ export const codexAdapter: AgentAdapter = {
         (typeof obj.thread_id === 'string' && obj.thread_id) ||
         (typeof (obj as { session?: { id?: string } }).session?.id === 'string' &&
           (obj as { session: { id: string } }).session.id);
+      // Only the parent thread marker. `*.started` (item.started, agent.started)
+      // often carries a collab child thread_id — treating those as session_id
+      // steals resume the same way Claude nested system/init did.
       if (sid && (type === 'thread.started' || type === 'session' || !type)) {
-        return { type: 'session_id', data: sid };
-      }
-      if (sid && type.endsWith('.started')) {
         return { type: 'session_id', data: sid };
       }
 

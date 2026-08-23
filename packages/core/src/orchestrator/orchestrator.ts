@@ -1696,13 +1696,17 @@ export class Orchestrator {
     const text = (lastAgent?.text ?? '').trim() || (thread.status === 'error' ? lastError ?? '' : '');
     const stillRunning = thread.status === 'running' || thread.status === 'queued';
     const live = stillRunning ? readTurnLive(thread.id) : null;
+    const queuedHint =
+      thread.status === 'queued' && !live?.summary
+        ? 'Queued — waiting for a concurrency slot'
+        : null;
     return {
       text,
       status: thread.status,
       sessionId: thread.sessionId,
       lastError,
       stillRunning,
-      progress: live?.summary ?? null,
+      progress: live?.summary ?? queuedHint,
       lastActivityAt: live?.updatedAt ?? null,
     };
   }

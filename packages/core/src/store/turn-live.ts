@@ -6,7 +6,7 @@ import {
   readFileSync,
 } from 'node:fs';
 import type { AgentEvent, MessagePart } from '../types/thread.js';
-import { applyAgentEvent, toolDescription } from '../agents/message-parts.js';
+import { applyAgentEvent, isPollWrapperToolName, liveActivitySummary, toolDescription } from '../agents/message-parts.js';
 import { threadLivePath } from './paths.js';
 
 export interface TurnLiveProgress {
@@ -45,28 +45,22 @@ export function summarizeTurnLive(parts: MessagePart[]): TurnLiveProgress {
     (p): p is Extract<MessagePart, { type: 'tool' }> => p.type === 'tool',
   );
   const lastTool = tools[tools.length - 1];
-  const lastToolLabel = lastTool
-    ? lastTool.description ||
-      toolDescription(lastTool.name, lastTool.input) ||
-      lastTool.name
+  const interesting =
+    [...tools]
+      .reverse()
+      .find((t) => !isPollWrapperToolName(t.name)) ?? lastTool;
+  const lastToolLabel = interesting
+    ? interesting.description ||
+      toolDescription(interesting.name, interesting.input) ||
+      interesting.name
     : undefined;
-  const running = lastTool?.status === 'running';
   const thinking = lastText(parts, 'thinking');
   const text = lastText(parts, 'text');
   const excerptRaw = thinking || text;
   const excerpt =
     excerptRaw.length > 280 ? `${excerptRaw.slice(-280)}` : excerptRaw || undefined;
 
-  let summary = 'Working…';
-  if (lastToolLabel) {
-    const verb = running ? lastToolLabel : `Finished ${lastToolLabel}`;
-    summary =
-      tools.length > 1 ? `${verb} (${tools.length} tools)` : verb;
-  } else if (thinking) {
-    summary = 'Thinking…';
-  } else if (text) {
-    summary = 'Writing reply…';
-  }
+  const summary = liveActivitySummary(parts);
 
   return {
     updatedAt: new Date().toISOString(),

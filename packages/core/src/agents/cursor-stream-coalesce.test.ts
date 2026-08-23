@@ -56,6 +56,38 @@ describe('createAgentStreamCoalescer', () => {
     ]);
   });
 
+  it('emits replace thinking immediately without concatenating pulses', () => {
+    vi.useFakeTimers();
+    const out: AgentEvent[] = [];
+    const c = createAgentStreamCoalescer((e) => out.push(e), { intervalMs: 32 });
+    c.push({
+      type: 'thinking',
+      data: 'running · 2 tools · 5s',
+      parentId: 'task1',
+      replace: true,
+    });
+    c.push({
+      type: 'thinking',
+      data: 'running · 4 tools · 12s',
+      parentId: 'task1',
+      replace: true,
+    });
+    expect(out).toEqual([
+      {
+        type: 'thinking',
+        data: 'running · 2 tools · 5s',
+        parentId: 'task1',
+        replace: true,
+      },
+      {
+        type: 'thinking',
+        data: 'running · 4 tools · 12s',
+        parentId: 'task1',
+        replace: true,
+      },
+    ]);
+  });
+
   it('flush() emits leftover text immediately', () => {
     vi.useFakeTimers();
     const out: AgentEvent[] = [];

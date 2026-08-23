@@ -19,7 +19,7 @@ describe('Orchestrator.getTurnResult', () => {
   });
 
   function seed(opts: {
-    status: 'idle' | 'error' | 'running';
+    status: 'idle' | 'error' | 'running' | 'queued';
     lastError?: string | null;
     agentText?: string;
   }) {
@@ -84,5 +84,13 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.stillRunning).toBe(true);
     expect(result.progress).toBe('Read foo.ts (3 tools)');
     expect(result.lastActivityAt).toBe('2026-08-20T21:00:00.000Z');
+  });
+
+  it('explains queued threads that have not started yet', () => {
+    const thread = seed({ status: 'queued' });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.status).toBe('queued');
+    expect(result.progress).toBe('Queued — waiting for a concurrency slot');
   });
 });

@@ -60,9 +60,9 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
     if (/connectedAgentRequest/i.test(name)) {
       return str(input?.agent_id) ? `Ask connected agent` : 'Ask connected agent';
     }
-    if (desc && kind) return `${kind}: ${desc}`;
-    if (desc) return desc;
-    return 'Subagent';
+    if (desc && kind) return `${kind}: ${desc}${subagentLiveSuffix(input)}`;
+    if (desc) return `${desc}${subagentLiveSuffix(input)}`;
+    return `Subagent${subagentLiveSuffix(input)}`;
   }
   if (/^(create|update)_artifact$/i.test(name.replace(/^mcp__[^_]+__/, ''))) {
     return str(input?.title) ? `Artifact ${str(input?.title)}` : 'Artifact';
@@ -87,13 +87,114 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   }
   if (/grep/i.test(name)) return 'Search files';
   if (/glob/i.test(name)) return 'Find files';
+  const compact = n.replace(/[_-]/g, '');
+  if (/^taskoutput$/i.test(compact)) {
+    return str(input.task_id) ? `Wait for ${str(input.task_id)}` : 'Wait for background task';
+  }
+  if (/^taskstop$/i.test(compact)) {
+    return str(input.task_id) ? `Stop ${str(input.task_id)}` : 'Stop background task';
+  }
+  if (/^monitor$/i.test(compact)) {
+    const command = str(input.command);
+    return command
+      ? `Watch ${command.length > 48 ? `${command.slice(0, 45)}…` : command}`
+      : 'Watch command';
+  }
   return n;
+}
+
+function subagentLiveSuffix(input?: Record<string, unknown>): string {
+  if (!input) return '';
+  const bits: string[] = [];
+  const status = str(input.live_status);
+  if (status && !/^runn(ing)?$|^working$/i.test(status)) bits.push(status);
+  if (typeof input.live_tool_uses === 'number') bits.push(`${input.live_tool_uses} tools`);
+  if (typeof input.live_duration_ms === 'number') {
+    bits.push(`${Math.max(0, Math.round(Number(input.live_duration_ms) / 1000))}s`);
+  }
+  const last = str(input.live_last_tool);
+  if (last) bits.push(last);
+  return bits.length ? ` · ${bits.join(' · ')}` : '';
 }
 
 export function isSubagentToolName(name: string | undefined): boolean {
   const n = (name ?? '').trim();
   if (/^(task|agent|spawn_agent)$/i.test(n)) return true;
   return /connectedAgentRequest/i.test(n);
+}
+
+/** Bash/Agent poll wrappers — not the interesting work the user wants to see. */
+export function isPollWrapperToolName(name: string | undefined): boolean {
+  const n = (name ?? '').replace(/[_-]/g, '');
+  return /^(taskoutput|taskstop|sleep)$/i.test(n);
+}
+
+type ToolPart = Extract<MessagePart, { type: 'tool' }>;
+
+function lastTextPart(parts: MessagePart[], type: 'thinking' | 'text'): string {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (p.type === type && p.text.trim()) return p.text.trim();
+  }
+  return '';
+}
+
+function toolLabel(tool: ToolPart): string {
+  return tool.description || toolDescription(tool.name, tool.input) || tool.name;
+}
+
+/**
+ * One-line snapshot of a live turn for the chat ticker and MCP wait_for_turn.
+ * Prefers running subagents and nested tools over TaskOutput poll wrappers.
+ */
+export function liveActivitySummary(
+  parts: MessagePart[],
+  opts?: { queued?: boolean },
+): string {
+  if (opts?.queued && parts.length === 0) {
+    return 'Queued — waiting for a slot';
+  }
+  const tools = parts.filter((p): p is ToolPart => p.type === 'tool');
+  const runningSubs = tools.filter(
+    (t) => t.status === 'running' && !t.parentId && isSubagentToolName(t.name),
+  );
+  const runningNested = [...tools]
+    .reverse()
+    .find((t) => t.status === 'running' && t.parentId && !isPollWrapperToolName(t.name));
+  const runningTop = [...tools]
+    .reverse()
+    .find(
+      (t) =>
+        t.status === 'running' &&
+        !t.parentId &&
+        !isPollWrapperToolName(t.name) &&
+        !isSubagentToolName(t.name),
+    );
+  const runningPoll = [...tools]
+    .reverse()
+    .find((t) => t.status === 'running' && isPollWrapperToolName(t.name));
+  const thinking = lastTextPart(parts, 'thinking');
+  const text = lastTextPart(parts, 'text');
+
+  if (runningSubs.length > 0) {
+    const heads = runningSubs.map(toolLabel);
+    const head =
+      runningSubs.length === 1
+        ? heads[0]!
+        : `${runningSubs.length} subagents · ${heads.slice(0, 2).join(' · ')}`;
+    if (runningNested) return `${head} · ${toolLabel(runningNested)}`;
+    return head;
+  }
+  if (runningTop) return toolLabel(runningTop);
+  if (runningPoll) return toolLabel(runningPoll);
+  if (thinking) return thinking.length > 96 ? `…${thinking.slice(-96)}` : thinking;
+  if (text) return 'Writing reply…';
+  const last = [...tools].reverse().find((t) => !isPollWrapperToolName(t.name)) ?? tools.at(-1);
+  if (last) {
+    const label = toolLabel(last);
+    return last.status === 'running' ? label : `Finished ${label}`;
+  }
+  return 'Working…';
 }
 
 export function messagePartParentId(part: MessagePart): string | undefined {
@@ -206,6 +307,25 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
     const data = event.data;
     if (!data) return parts;
     const next = [...parts];
+    if (event.replace) {
+      for (let i = next.length - 1; i >= 0; i--) {
+        const prev = next[i];
+        if (prev?.type === 'thinking' && sameParentId(prev.parentId, event.parentId)) {
+          next[i] = {
+            type: 'thinking',
+            text: data,
+            ...(event.parentId ? { parentId: event.parentId } : {}),
+          };
+          return next;
+        }
+      }
+      next.push({
+        type: 'thinking',
+        text: data,
+        ...(event.parentId ? { parentId: event.parentId } : {}),
+      });
+      return next;
+    }
     const last = next[next.length - 1];
     if (last?.type === 'thinking' && sameParentId(last.parentId, event.parentId)) {
       next[next.length - 1] = {
@@ -230,15 +350,18 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
     if (existing >= 0) {
       const prev = parts[existing] as Extract<MessagePart, { type: 'tool' }>;
       const next = [...parts];
-      const mergedInput =
-        input && Object.keys(input).length > 0 ? input : (prev.input ?? input);
+      const mergedInput = {
+        ...(prev.input ?? {}),
+        ...(input ?? {}),
+      };
+      const mergedRecord = Object.keys(mergedInput).length > 0 ? mergedInput : undefined;
       next[existing] = {
         ...prev,
         name: event.name || prev.name,
-        input: mergedInput,
-        description: toolDescription(event.name || prev.name, mergedInput),
-        detail: toolDetail(event.name || prev.name, mergedInput) ?? prev.detail,
-        filePath: toolFilePath(mergedInput) ?? prev.filePath,
+        input: mergedRecord,
+        description: toolDescription(event.name || prev.name, mergedRecord),
+        detail: toolDetail(event.name || prev.name, mergedRecord) ?? prev.detail,
+        filePath: toolFilePath(mergedRecord) ?? prev.filePath,
         additions: diff.additions ?? prev.additions,
         deletions: diff.deletions ?? prev.deletions,
         parentId: event.parentId ?? prev.parentId,

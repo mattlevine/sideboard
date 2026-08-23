@@ -237,6 +237,18 @@ describe('codexAdapter.parseEvent', () => {
     expect(event).toEqual({ type: 'session_id', data: 'thread-123' });
   });
 
+  it('does not steal session_id from item.started collab children', () => {
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.started',
+          thread_id: 'thread-child',
+          item: { id: 'item_unknown', type: 'unknown_collab', status: 'in_progress' },
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it('maps turn.failed to stderr with nested error message', () => {
     const event = codexAdapter.parseEvent(
       JSON.stringify({

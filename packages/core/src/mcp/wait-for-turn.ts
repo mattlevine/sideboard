@@ -13,3 +13,10 @@ export function mcpWaitForTurnTimeoutMs(requested?: number): number {
 
 export const MCP_WAIT_STILL_RUNNING_HINT =
   'Child is still working. Call wait_for_turn again. Do not send a check-in prompt or assume a hang while progress is updating.';
+
+export const MCP_WAIT_QUEUED_HINT =
+  'Child is queued waiting for a concurrency slot — it has not started yet. Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume it failed to start.';
+
+export function mcpWaitStillRunningHint(status: string): string {
+  return status === 'queued' ? MCP_WAIT_QUEUED_HINT : MCP_WAIT_STILL_RUNNING_HINT;
+}

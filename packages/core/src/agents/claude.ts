@@ -26,6 +26,10 @@ import { permissionMode } from './types.js';
  * Non-interactive `-p` turns have no TTY dialog, so anything not listed here
  * (with default `acceptEdits` autonomy) is denied. Include web tools so agents
  * can search/fetch without requiring Full autonomy / bypassPermissions.
+ *
+ * Background Agent/Task polls (`run_in_background`) need TaskOutput / TaskStop
+ * or the parent cannot wait and those children look lost. EnterWorktree is how
+ * `isolation: "worktree"` agents actually start. Skill is process guides.
  */
 const BASE_ALLOWED_TOOLS = [
   'Edit',
@@ -39,7 +43,19 @@ const BASE_ALLOWED_TOOLS = [
   // Subagents (Claude Code v2.1.63 renamed Task → Agent; allow both).
   'Task',
   'Agent',
+  'TaskOutput',
+  'TaskStop',
+  'EnterWorktree',
+  'ExitWorktree',
+  'Skill',
 ];
+
+/**
+ * `claude -p` waits this long for background Agent/Task before abandoning them.
+ * Claude Code’s default is 10 minutes — too short for a coding subagent, so
+ * Sideboard raises it unless the user already set the env.
+ */
+export const CLAUDE_PRINT_BG_WAIT_CEILING_MS = 7_200_000;
 
 /**
  * When Settings → Agents → Claude → Chrome is on, Sideboard passes `--chrome`
@@ -205,6 +221,102 @@ function claudeParentToolUseId(obj: Record<string, unknown>): string | undefined
   return undefined;
 }
 
+function claudeString(obj: Record<string, unknown>, key: string): string | undefined {
+  const v = obj[key];
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+/**
+ * Background Agent/Task progress lives on `system/task_*` (and API retries on
+ * `system/api_retry`). Every Claude system event also carries session_id — if
+ * we treat that as the parent session, those events vanish and a nested
+ * `system/init` steals `--resume` for the next turn.
+ */
+function eventsFromClaudeSystem(obj: Record<string, unknown>): AgentEvent | AgentEvent[] | null {
+  const subtype = claudeString(obj, 'subtype') ?? '';
+  const parentId = claudeParentToolUseId(obj);
+
+  if (subtype === 'init') {
+    if (parentId) return null;
+    const sid = claudeString(obj, 'session_id');
+    return sid ? { type: 'session_id', data: sid } : null;
+  }
+
+  if (subtype === 'task_started') {
+    const id =
+      claudeString(obj, 'tool_use_id') ?? claudeString(obj, 'task_id');
+    if (!id) return null;
+    const description = claudeString(obj, 'description');
+    const taskType = claudeString(obj, 'task_type');
+    const prompt = claudeString(obj, 'prompt');
+    return withEventParentId(
+      {
+        type: 'tool_use',
+        id,
+        name: taskType || 'Agent',
+        input: {
+          ...(description ? { description } : {}),
+          ...(prompt ? { prompt } : {}),
+          ...(claudeString(obj, 'task_id') ? { task_id: claudeString(obj, 'task_id') } : {}),
+        },
+      },
+      parentId,
+    );
+  }
+
+  if (subtype === 'task_notification') {
+    const id =
+      claudeString(obj, 'tool_use_id') ?? claudeString(obj, 'task_id') ?? parentId;
+    if (!id) return null;
+    const status = claudeString(obj, 'status') ?? 'working';
+    const tools = typeof obj.tool_uses === 'number' ? obj.tool_uses : undefined;
+    const durationMs = typeof obj.duration_ms === 'number' ? obj.duration_ms : undefined;
+    const lastTool =
+      claudeString(obj, 'last_tool') ??
+      claudeString(obj, 'current_tool') ??
+      claudeString(obj, 'tool');
+    const snapshot = [
+      status,
+      tools != null ? `${tools} tools` : null,
+      durationMs != null ? `${Math.round(durationMs / 1000)}s` : null,
+      lastTool,
+    ]
+      .filter((bit): bit is string => Boolean(bit))
+      .join(' · ');
+    return [
+      {
+        type: 'tool_use',
+        id,
+        name: claudeString(obj, 'task_type') || 'Agent',
+        input: {
+          live_status: status,
+          ...(tools != null ? { live_tool_uses: tools } : {}),
+          ...(durationMs != null ? { live_duration_ms: durationMs } : {}),
+          ...(lastTool ? { live_last_tool: lastTool } : {}),
+        },
+      },
+      withEventParentId(
+        { type: 'thinking', data: snapshot, replace: true },
+        id,
+      ),
+    ];
+  }
+
+  if (subtype === 'api_retry') {
+    const attempt = obj.attempt;
+    const max = obj.max_retries;
+    const delay = obj.retry_delay_ms;
+    return {
+      type: 'thinking',
+      data: `API retry ${attempt ?? '?'}/${max ?? '?'}${
+        typeof delay === 'number' ? ` (wait ${delay}ms)` : ''
+      }`,
+    };
+  }
+
+  return null;
+}
+
 export const claudeAdapter: AgentAdapter = {
   kind: 'claude',
 
@@ -353,7 +465,14 @@ export const claudeAdapter: AgentAdapter = {
       cwd: thread.worktreePath,
       stdin: useStdin ? `${promptText}\n` : undefined,
       // Nested Task/Agent thinking+text in stream-json (Claude Code 2.1.211+).
-      env: { CLAUDE_CODE_FORWARD_SUBAGENT_TEXT: '1' },
+      // Raise the -p background-agent wait so long TaskOutput polls are not
+      // abandoned at Claude Code’s 10-minute default.
+      env: {
+        CLAUDE_CODE_FORWARD_SUBAGENT_TEXT: '1',
+        CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:
+          process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS ??
+          String(CLAUDE_PRINT_BG_WAIT_CEILING_MS),
+      },
     };
   },
 
@@ -364,15 +483,11 @@ export const claudeAdapter: AgentAdapter = {
       const obj = JSON.parse(trimmed) as Record<string, unknown>;
 
       // Nearly every Claude stream-json event includes session_id — only treat
-      // init (and explicit system session markers) as session events. Returning
-      // early on any session_id drops assistant/result text.
-      if (obj.type === 'system' && obj.subtype === 'init') {
-        const sid = (obj as { session_id?: string }).session_id;
-        if (typeof sid === 'string') return { type: 'session_id', data: sid };
-        return null;
-      }
-      if (obj.type === 'system' && typeof (obj as { session_id?: string }).session_id === 'string') {
-        return { type: 'session_id', data: (obj as { session_id: string }).session_id };
+      // top-level system/init as a session event. Returning early on any
+      // session_id drops assistant/result text, task_started / task_notification
+      // (background Agent polls), and nested inits that would steal --resume.
+      if (obj.type === 'system') {
+        return eventsFromClaudeSystem(obj);
       }
 
       if (obj.type === 'assistant' || obj.type === 'user') {

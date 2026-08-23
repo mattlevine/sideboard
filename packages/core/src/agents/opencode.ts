@@ -258,11 +258,21 @@ export const opencodeAdapter: AgentAdapter = {
         (typeof obj.sessionID === 'string' && obj.sessionID) ||
         (typeof obj.sessionId === 'string' && obj.sessionId) ||
         (typeof obj.session_id === 'string' && obj.session_id);
+      const childSid =
+        str(obj.childSessionID) ??
+        str(obj.childSessionId) ??
+        str(obj.parentID) ??
+        str(obj.parentId);
 
       // Nearly every OpenCode JSONL event includes sessionID — only treat
-      // step_start / bare session markers as session events. Returning early
-      // on any sessionID drops text, tools, and usage (same trap as Claude).
-      if (sid && (!obj.type || obj.type === 'step_start' || obj.type === 'session')) {
+      // parent step_start / bare session markers as session events. Returning
+      // early on any sessionID drops text, tools, and usage (same trap as
+      // Claude). Child task sessions must not steal --session resume.
+      if (
+        sid &&
+        !childSid &&
+        (!obj.type || obj.type === 'step_start' || obj.type === 'session')
+      ) {
         return { type: 'session_id', data: sid };
       }
 

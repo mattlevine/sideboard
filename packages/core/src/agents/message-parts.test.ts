@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAgentEvent,
+  liveActivitySummary,
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
   toolDescription,
@@ -97,6 +98,60 @@ describe('applyAgentEvent', () => {
     });
   });
 
+  it('merges live subagent status onto an existing Agent tool without dropping the prompt', () => {
+    let parts = applyAgentEvent([], {
+      type: 'tool_use',
+      id: 'agent1',
+      name: 'Agent',
+      input: { description: 'scan auth', prompt: 'find login' },
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'tool_use',
+      id: 'agent1',
+      name: 'Agent',
+      input: { live_status: 'running', live_tool_uses: 4, live_duration_ms: 12_000 },
+    });
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      description: 'scan auth · 4 tools · 12s',
+      input: {
+        description: 'scan auth',
+        prompt: 'find login',
+        live_status: 'running',
+        live_tool_uses: 4,
+        live_duration_ms: 12_000,
+      },
+    });
+  });
+
+  it('replaces status-pulse thinking instead of concatenating it', () => {
+    let parts = applyAgentEvent([], {
+      type: 'tool_use',
+      id: 'agent1',
+      name: 'Agent',
+      input: { description: 'scan auth' },
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'thinking',
+      data: 'running · 2 tools · 5s',
+      parentId: 'agent1',
+      replace: true,
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'thinking',
+      data: 'running · 4 tools · 12s',
+      parentId: 'agent1',
+      replace: true,
+    });
+    expect(parts.filter((p) => p.type === 'thinking')).toHaveLength(1);
+    expect(parts[1]).toMatchObject({
+      type: 'thinking',
+      text: 'running · 4 tools · 12s',
+      parentId: 'agent1',
+    });
+  });
+
   it('does not treat MCP JSON payloads as git diff stats', () => {
     let parts = applyAgentEvent([], {
       type: 'tool_use',
@@ -178,6 +233,64 @@ describe('toolDetail', () => {
         subagent_type: 'Explore',
       }),
     ).toBe('Explore: Explore auth');
+    expect(
+      toolDescription('Agent', {
+        description: 'scan auth',
+        live_status: 'running',
+        live_tool_uses: 4,
+        live_duration_ms: 12_000,
+      }),
+    ).toBe('scan auth · 4 tools · 12s');
+    expect(toolDescription('TaskOutput', { task_id: 'task_1' })).toBe('Wait for task_1');
+  });
+});
+
+describe('liveActivitySummary', () => {
+  it('prefers a running subagent over a TaskOutput poll', () => {
+    const summary = liveActivitySummary([
+      {
+        type: 'tool',
+        id: 'agent1',
+        name: 'Agent',
+        description: 'scan auth · 4 tools · 12s',
+        status: 'running',
+      },
+      {
+        type: 'tool',
+        id: 'wait1',
+        name: 'TaskOutput',
+        description: 'Wait for task_1',
+        status: 'running',
+      },
+    ]);
+    expect(summary).toMatch(/scan auth/);
+    expect(summary).not.toMatch(/Wait for/);
+  });
+
+  it('includes the nested tool currently running inside a subagent', () => {
+    expect(
+      liveActivitySummary([
+        {
+          type: 'tool',
+          id: 'agent1',
+          name: 'Agent',
+          description: 'scan auth',
+          status: 'running',
+        },
+        {
+          type: 'tool',
+          id: 'r1',
+          name: 'Read',
+          description: 'Read auth.ts',
+          status: 'running',
+          parentId: 'agent1',
+        },
+      ]),
+    ).toBe('scan auth · Read auth.ts');
+  });
+
+  it('says queued when nothing has started', () => {
+    expect(liveActivitySummary([], { queued: true })).toBe('Queued — waiting for a slot');
   });
 });
 
