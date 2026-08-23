@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.115] - 2026-08-22
+
+### Fixed
+
+- Chat no longer repeats live activity as a second status line under a streaming turn (or in the turn header). The bubble keeps the previous mark + dots; MCP `wait_for_turn` still gets the richer snapshot.
+
 ## [0.1.114] - 2026-08-22
 
 ### Fixed

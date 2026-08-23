@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { isSubagentToolName, liveActivitySummary, messagePartParentId } from '@sideboard/message-parts';
+import { isSubagentToolName, messagePartParentId } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
   isFilesPane,
@@ -249,16 +249,12 @@ export function AgentMessage({
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
 
   const summaryBits: string[] = [];
-  if (streaming) {
-    summaryBits.push(liveActivitySummary(safeParts));
-  } else {
-    if (subagentCount > 0) {
-      summaryBits.push(`${subagentCount} subagent${subagentCount === 1 ? '' : 's'}`);
-    }
-    if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
-    if (messageCount > 0) summaryBits.push(`${messageCount} message${messageCount === 1 ? '' : 's'}`);
-    else if (thinkingCount > 0) summaryBits.push(`${thinkingCount} thinking`);
+  if (subagentCount > 0) {
+    summaryBits.push(`${subagentCount} subagent${subagentCount === 1 ? '' : 's'}`);
   }
+  if (toolCount > 0) summaryBits.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
+  if (messageCount > 0) summaryBits.push(`${messageCount} message${messageCount === 1 ? '' : 's'}`);
+  else if (thinkingCount > 0) summaryBits.push(`${thinkingCount} thinking`);
 
   async function copyAnswer() {
     try {

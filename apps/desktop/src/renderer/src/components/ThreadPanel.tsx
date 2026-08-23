@@ -15,7 +15,6 @@ import type {
   ThreadAttachment,
 } from '@sideboard-ai/core';
 import { extractPendingPlanQuestions, formatPlanQuestionsForChat } from '@sideboard/plan-ask-user';
-import { liveActivitySummary } from '@sideboard/message-parts';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
@@ -727,12 +726,7 @@ export function ThreadPanel({
   const showStreaming =
     Boolean(liveOutput) ||
     liveParts.length > 0 ||
-    thread.status === 'running' ||
-    thread.status === 'queued';
-
-  const streamActivity = liveActivitySummary(liveParts, {
-    queued: thread.status === 'queued',
-  });
+    thread.status === 'running';
 
   const liveHasPresentPlan = liveParts.some(
     (p) => p.type === 'tool' && /present_plan$/i.test(p.name ?? ''),
@@ -1884,13 +1878,12 @@ export function ThreadPanel({
               <div
                 className="msg-stream-activity"
                 aria-live="polite"
-                aria-label={streamActivity}
+                aria-label="Generating"
               >
                 <ActivityMark
                   tone={thread.status === 'queued' ? 'queued' : 'active'}
                   size="sm"
                 />
-                <span className="msg-stream-activity-text">{streamActivity}</span>
                 <span className="thinking-indicator-dots" aria-hidden>
                   <span />
                   <span />
