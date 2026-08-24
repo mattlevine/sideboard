@@ -196,7 +196,7 @@ describe('applyAgentEvent', () => {
       id: 'orphan',
       content: '{"ok":true}',
     });
-    expect(parts).toEqual([
+    expect(parts).toMatchObject([
       {
         type: 'tool',
         id: 'orphan',
@@ -206,6 +206,12 @@ describe('applyAgentEvent', () => {
         result: '{"ok":true}',
       },
     ]);
+    expect(parts[0]).toEqual(
+      expect.objectContaining({
+        startedAt: expect.any(Number),
+        updatedAt: expect.any(Number),
+      }),
+    );
   });
 
   it('partial tool_result tails output without finishing the tool', () => {

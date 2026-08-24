@@ -15,6 +15,7 @@ import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ActivityMark } from './ActivityMark';
 import { ToolDiffPopover } from './ToolDiffPopover';
+import { isHiddenChatTool, phaseDurationMs, splitTurnPhases } from '../lib/turn-phases';
 
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
 
@@ -103,7 +104,23 @@ function finalText(text: string, parts: MessagePart[] | undefined): string {
     (p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text' && !p.parentId,
   );
   if (texts.length === 0) return stripBrightsyNdjsonNoise(text);
-  return stripBrightsyNdjsonNoise(texts[texts.length - 1]!.text.trim() || text);
+  return stripBrightsyNdjsonNoise(texts.map((p) => p.text).join('\n\n').trim() || text);
+}
+
+function phaseHeader(
+  kind: 'thinking' | 'work',
+  durationMs: number | null,
+  live: boolean,
+): { wave: string } | { text: string } {
+  if (kind === 'thinking') {
+    if (live) return { wave: 'Thinking' };
+    if (durationMs == null) return { text: 'Thought' };
+    if (durationMs < 8000) return { text: 'Thought briefly' };
+    return { text: `Thought for ${formatDuration(durationMs)}` };
+  }
+  if (live) return { wave: 'Working' };
+  if (durationMs == null) return { text: 'Worked' };
+  return { text: `Worked for ${formatDuration(durationMs)}` };
 }
 
 function toolChips(parts: MessagePart[], streaming = false): ToolPart[] {
@@ -306,13 +323,15 @@ export function AgentMessage({
   onForkWorkspace,
   hideAnswer = false,
 }: Props) {
-  const [expanded, setExpanded] = useState(() => Boolean(streaming));
+  const [openPhases, setOpenPhases] = useState<Set<number>>(
+    () => (streaming ? new Set([0]) : new Set()),
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [diffTool, setDiffTool] = useState<ToolPart | null>(null);
   const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const diffAnchorRef = useRef<HTMLElement | null>(null);
-  const userToggledTrace = useRef(false);
+  const userToggledPhases = useRef(new Set<number>());
   const windowTokens = usage
     ? resolveContextWindow(agent ?? 'claude', model, contextTokens(usage))
     : 0;
@@ -323,24 +342,30 @@ export function AgentMessage({
 
   const safeParts = parts ?? [];
   const longRunningShells = useLongRunningShellIds(safeParts);
-  const grouped = groupTranscript(safeParts);
-  const thinkingCount = safeParts.filter((p) => p.type === 'thinking').length;
-  const usedTools = safeParts.some(
-    (p) =>
-      p.type === 'tool' &&
-      !p.parentId &&
-      !/present_plan$/i.test(p.name ?? '') &&
-      !/ask_user|AskUserQuestion/i.test(p.name ?? ''),
-  );
-  const showTrace = usedTools || thinkingCount > 0;
+  const grouped = useMemo(() => groupTranscript(safeParts), [safeParts]);
+  const phases = useMemo(() => splitTurnPhases(grouped.top), [grouped]);
+  const lastPhase = phases[phases.length - 1];
+  const livePhaseIndex =
+    streaming && lastPhase && (lastPhase.kind === 'thinking' || lastPhase.kind === 'work')
+      ? phases.length - 1
+      : -1;
   useEffect(() => {
-    if (streaming) {
-      if (!userToggledTrace.current) setExpanded(true);
+    if (!streaming) {
+      userToggledPhases.current = new Set();
+      setOpenPhases(new Set());
       return;
     }
-    userToggledTrace.current = false;
-    setExpanded(false);
-  }, [streaming]);
+    setOpenPhases((prev) => {
+      const next = new Set<number>();
+      for (const i of prev) {
+        if (userToggledPhases.current.has(i)) next.add(i);
+      }
+      if (livePhaseIndex >= 0 && !userToggledPhases.current.has(livePhaseIndex)) {
+        next.add(livePhaseIndex);
+      }
+      return next;
+    });
+  }, [streaming, livePhaseIndex]);
   const answer = finalText(text, safeParts);
   const chips = useMemo(() => toolChips(safeParts, Boolean(streaming)), [safeParts, streaming]);
   const activityLine = useMemo(() => toolActivityLine(safeParts), [safeParts]);
@@ -351,17 +376,18 @@ export function AgentMessage({
   );
   const durationLabel = useLiveDuration(startedAt, durationMs);
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
-  const briefThought =
-    !durationLabel || (/^\d+s$/.test(durationLabel) && Number(durationLabel.slice(0, -1)) < 8);
-  const traceLabel = usedTools
-    ? durationLabel
-      ? `Worked for ${durationLabel}`
-      : 'Worked'
-    : briefThought
-      ? 'Thought briefly'
-      : durationLabel
-        ? `Thought ${durationLabel}`
-        : 'Thought';
+  const collapsibleCount = phases.filter((p) => p.kind !== 'text').length;
+  const hasTextPhase = phases.some((p) => p.kind === 'text');
+
+  function togglePhase(index: number) {
+    userToggledPhases.current.add(index);
+    setOpenPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   async function copyAnswer() {
     try {
@@ -390,8 +416,7 @@ export function AgentMessage({
   }
 
   function renderToolRow(part: ToolPart, key: string, kids: MessagePart[] = []) {
-    if (/present_plan$/i.test(part.name ?? '')) return null;
-    if (/ask_user|AskUserQuestion/i.test(part.name ?? '')) return null;
+    if (isHiddenChatTool(part.name)) return null;
     const clickable = hasCodeDiff(part);
     const isRunning = part.status === 'running';
     const detail = toolRowDetail(part, kids, Boolean(streaming));
@@ -467,44 +492,65 @@ export function AgentMessage({
 
   return (
     <div className={`agent-msg${streaming ? ' streaming' : ''}`}>
-      {showTrace && (
-        <div className="turn-transcript">
-          <button
-            type="button"
-            className={`turn-summary${streaming ? ' live' : ''}${expanded ? ' open' : ''}`}
-            onClick={() => {
-              userToggledTrace.current = true;
-              setExpanded((v) => !v);
-            }}
-            aria-expanded={expanded}
-          >
-            <span className="turn-summary-text">
-              {streaming ? (
-                <StreamingVerb verb={usedTools ? 'Working' : 'Thinking'} />
-              ) : (
-                traceLabel
-              )}
-            </span>
-            <span className={`turn-chevron${expanded ? ' open' : ''}`} aria-hidden>
-              <svg viewBox="0 0 12 12" width="10" height="10">
-                <path
-                  d="M4.25 2.4 8.5 6 4.25 9.6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </button>
-          {expanded && (
-            <div className="turn-details">{renderParts(grouped.top, 'top')}</div>
-          )}
-        </div>
-      )}
+      {phases.map((phase, i) => {
+        if (phase.kind === 'text') {
+          if (hideAnswer) return null;
+          return (
+            <div key={`text-${i}`} className="msg-body">
+              <MarkdownMessage
+                text={phase.text}
+                knownFilePaths={knownFilePaths}
+                onFileReferenceClick={threadId ? openFileReference : undefined}
+                onThreadLinkClick={onOpenThread}
+                isStreaming={Boolean(streaming && i === phases.length - 1)}
+              />
+            </div>
+          );
+        }
+        const live = Boolean(streaming && i === livePhaseIndex);
+        const open = openPhases.has(i);
+        const fromParts = phaseDurationMs(phase.parts, { live });
+        const header = phaseHeader(
+          phase.kind,
+          fromParts ?? (!live && collapsibleCount === 1 ? durationMs ?? null : null),
+          live,
+        );
+        return (
+          <div key={`${phase.kind}-${i}`} className="turn-transcript">
+            <button
+              type="button"
+              className={`turn-summary${live ? ' live' : ''}${open ? ' open' : ''}`}
+              onClick={() => togglePhase(i)}
+              aria-expanded={open}
+            >
+              <span className="turn-summary-text">
+                {'wave' in header ? <StreamingVerb verb={header.wave} /> : header.text}
+              </span>
+              <span className={`turn-chevron${open ? ' open' : ''}`} aria-hidden>
+                <svg viewBox="0 0 12 12" width="10" height="10">
+                  <path
+                    d="M4.25 2.4 8.5 6 4.25 9.6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </button>
+            {open && (
+              <div className="turn-details">
+                {phase.kind === 'thinking'
+                  ? phase.parts.map((part, j) => renderThinking(part, `think-${i}-${j}`))
+                  : renderParts(phase.parts, `work-${i}`)}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
-      {answer && !hideAnswer && (
+      {!hasTextPhase && answer && !hideAnswer && (
         <div className="msg-body">
           <MarkdownMessage
             text={answer}
@@ -528,7 +574,7 @@ export function AgentMessage({
         </div>
       )}
 
-      {streaming && !showTrace && (
+      {streaming && phases.length === 0 && !answer && (
         <div className="msg-body waiting-inline">
           <span className="thinking-indicator-label">
             <StreamingVerb verb="Thinking" />

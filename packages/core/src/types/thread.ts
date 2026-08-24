@@ -17,8 +17,8 @@ export type Autonomy = 'default' | 'full';
 
 /** Structured agent turn content (thinking / tools / text). */
 export type MessagePart =
-  | { type: 'text'; text: string; parentId?: string }
-  | { type: 'thinking'; text: string; parentId?: string }
+  | { type: 'text'; text: string; parentId?: string; startedAt?: number; updatedAt?: number }
+  | { type: 'thinking'; text: string; parentId?: string; startedAt?: number; updatedAt?: number }
   | {
       type: 'tool';
       id: string;
@@ -38,6 +38,8 @@ export type MessagePart =
        * subagent stream). Omitted on top-level parts.
        */
       parentId?: string;
+      startedAt?: number;
+      updatedAt?: number;
     };
 
 /** Token usage for a single agent turn, aggregated across the turn's API calls. */

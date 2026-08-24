@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.119] - 2026-08-24
+
+### Changed
+
+- Chat turns interleave thought, mid-turn text, tool work, and the outcome in chronological order, instead of collapsing all thinking and tools into one block above a single reply.
+
 ## [0.1.118] - 2026-08-23
 
 ### Fixed

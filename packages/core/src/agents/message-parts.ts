@@ -362,6 +362,13 @@ function parseDiffStat(result: string | undefined): {
 }
 
 /** Apply a structured agent event onto an accumulated parts list. */
+function withPartTimes<T extends MessagePart>(next: T, prev?: MessagePart | null): T {
+  const now = Date.now();
+  const startedAt =
+    prev && typeof prev.startedAt === 'number' ? prev.startedAt : now;
+  return { ...next, startedAt, updatedAt: now };
+}
+
 export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): MessagePart[] {
   if (event.type === 'stdout') {
     const data = event.data;
@@ -369,17 +376,22 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
     const next = [...parts];
     const last = next[next.length - 1];
     if (last?.type === 'text' && sameParentId(last.parentId, event.parentId)) {
-      next[next.length - 1] = {
-        type: 'text',
-        text: last.text + data,
-        ...(event.parentId ? { parentId: event.parentId } : {}),
-      };
+      next[next.length - 1] = withPartTimes(
+        {
+          type: 'text',
+          text: last.text + data,
+          ...(event.parentId ? { parentId: event.parentId } : {}),
+        },
+        last,
+      );
     } else {
-      next.push({
-        type: 'text',
-        text: data,
-        ...(event.parentId ? { parentId: event.parentId } : {}),
-      });
+      next.push(
+        withPartTimes({
+          type: 'text',
+          text: data,
+          ...(event.parentId ? { parentId: event.parentId } : {}),
+        }),
+      );
     }
     return next;
   }
@@ -392,34 +404,44 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       for (let i = next.length - 1; i >= 0; i--) {
         const prev = next[i];
         if (prev?.type === 'thinking' && sameParentId(prev.parentId, event.parentId)) {
-          next[i] = {
-            type: 'thinking',
-            text: data,
-            ...(event.parentId ? { parentId: event.parentId } : {}),
-          };
+          next[i] = withPartTimes(
+            {
+              type: 'thinking',
+              text: data,
+              ...(event.parentId ? { parentId: event.parentId } : {}),
+            },
+            prev,
+          );
           return next;
         }
       }
-      next.push({
-        type: 'thinking',
-        text: data,
-        ...(event.parentId ? { parentId: event.parentId } : {}),
-      });
+      next.push(
+        withPartTimes({
+          type: 'thinking',
+          text: data,
+          ...(event.parentId ? { parentId: event.parentId } : {}),
+        }),
+      );
       return next;
     }
     const last = next[next.length - 1];
     if (last?.type === 'thinking' && sameParentId(last.parentId, event.parentId)) {
-      next[next.length - 1] = {
-        type: 'thinking',
-        text: last.text + data,
-        ...(event.parentId ? { parentId: event.parentId } : {}),
-      };
+      next[next.length - 1] = withPartTimes(
+        {
+          type: 'thinking',
+          text: last.text + data,
+          ...(event.parentId ? { parentId: event.parentId } : {}),
+        },
+        last,
+      );
     } else {
-      next.push({
-        type: 'thinking',
-        text: data,
-        ...(event.parentId ? { parentId: event.parentId } : {}),
-      });
+      next.push(
+        withPartTimes({
+          type: 'thinking',
+          text: data,
+          ...(event.parentId ? { parentId: event.parentId } : {}),
+        }),
+      );
     }
     return next;
   }
@@ -436,22 +458,25 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         ...(input ?? {}),
       };
       const mergedRecord = Object.keys(mergedInput).length > 0 ? mergedInput : undefined;
-      next[existing] = {
-        ...prev,
-        name: event.name || prev.name,
-        input: mergedRecord,
-        description: toolDescription(event.name || prev.name, mergedRecord),
-        detail: toolDetail(event.name || prev.name, mergedRecord) ?? prev.detail,
-        filePath: toolFilePath(mergedRecord) ?? prev.filePath,
-        additions: diff.additions ?? prev.additions,
-        deletions: diff.deletions ?? prev.deletions,
-        parentId: event.parentId ?? prev.parentId,
-      };
+      next[existing] = withPartTimes(
+        {
+          ...prev,
+          name: event.name || prev.name,
+          input: mergedRecord,
+          description: toolDescription(event.name || prev.name, mergedRecord),
+          detail: toolDetail(event.name || prev.name, mergedRecord) ?? prev.detail,
+          filePath: toolFilePath(mergedRecord) ?? prev.filePath,
+          additions: diff.additions ?? prev.additions,
+          deletions: diff.deletions ?? prev.deletions,
+          parentId: event.parentId ?? prev.parentId,
+        },
+        prev,
+      );
       return next;
     }
     return [
       ...parts,
-      {
+      withPartTimes({
         type: 'tool',
         id: event.id,
         name: event.name,
@@ -462,7 +487,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         filePath: toolFilePath(input),
         ...(event.parentId ? { parentId: event.parentId } : {}),
         ...diff,
-      },
+      }),
     ];
   }
 
@@ -473,7 +498,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       if (existing < 0) {
         return [
           ...parts,
-          {
+          withPartTimes({
             type: 'tool' as const,
             id: event.id,
             name: 'tool',
@@ -481,23 +506,26 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
             status: event.isError ? ('error' as const) : ('running' as const),
             result: event.content,
             ...(event.parentId ? { parentId: event.parentId } : {}),
-          },
+          }),
         ];
       }
       return parts.map((p, i) => {
         if (i !== existing || p.type !== 'tool') return p;
         if (p.status === 'done' || p.status === 'error') return p;
-        return {
-          ...p,
-          result: event.content ?? p.result,
-        };
+        return withPartTimes(
+          {
+            ...p,
+            result: event.content ?? p.result,
+          },
+          p,
+        );
       });
     }
     if (existing < 0) {
       // Orphan result (e.g. Cursor completed without a prior running event).
       return [
         ...parts,
-        {
+        withPartTimes({
           type: 'tool' as const,
           id: event.id,
           name: 'tool',
@@ -507,18 +535,21 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
           ...(event.parentId ? { parentId: event.parentId } : {}),
           ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
           ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
-        },
+        }),
       ];
     }
     return parts.map((p, i) => {
       if (i !== existing || p.type !== 'tool') return p;
-      return {
-        ...p,
-        status: event.isError ? ('error' as const) : ('done' as const),
-        result: event.content,
-        ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
-        ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
-      };
+      return withPartTimes(
+        {
+          ...p,
+          status: event.isError ? ('error' as const) : ('done' as const),
+          result: event.content,
+          ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
+          ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
+        },
+        p,
+      );
     });
   }
 
