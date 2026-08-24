@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.121] - 2026-08-24
+
+### Fixed
+
+- Orchestrator `slack_post` replies start a follow-up turn on the posting chat. They stay information only (not commands, and they do not interrupt an in-flight turn the way Slack Listen inbound does).
+
 ## [0.1.120] - 2026-08-24
 
 ### Fixed

@@ -205,6 +205,7 @@ export {
   isSlackExternalReplyPrompt,
   pendingSlackExternalReplies,
   formatSlackRepliesForTurn,
+  formatSlackReplyContinuePrompt,
 } from './slack/outbound-watch.js';
 export type {
   SlackReplyBadge,

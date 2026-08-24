@@ -141,9 +141,17 @@ describe('slack outbound reply badges', () => {
     expect(again[0]?.preview).toBe('one more thing');
   });
 
-  it('relays another person\'s reply into the posting chat as information, without starting a turn', async () => {
-    const { recordSlackOutboundWatch, refreshSlackReplyBadges, isSlackExternalReplyPrompt } =
-      await load();
+  it('relays another person\'s reply into the posting chat and queues a follow-up turn', async () => {
+    const {
+      recordSlackOutboundWatch,
+      refreshSlackReplyBadges,
+      isSlackExternalReplyPrompt,
+      setSlackOutboundContinueHandler,
+    } = await load();
+    const continued: Array<{ threadId: string; prompt: string }> = [];
+    setSlackOutboundContinueHandler(async (threadId, prompt) => {
+      continued.push({ threadId, prompt });
+    });
     const { createEmptyThread, writeThread, readThread } = await import(
       '../store/thread-store.js'
     );
@@ -190,6 +198,11 @@ describe('slack outbound reply badges', () => {
     expect(after.messages[0]?.text).toContain('looks good');
     expect(after.messages[0]?.text).toContain('not a command');
     expect(isSlackExternalReplyPrompt(after.messages[0]!.text)).toBe(true);
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.threadId).toBe(thread.id);
+    expect(continued[0]?.prompt).toContain('A Slack reply from Alice');
+    expect(continued[0]?.prompt).toContain('not a command');
+    expect(continued[0]?.prompt).toContain('waiting on this person');
 
     const again = await refreshSlackReplyBadges({
       force: true,
@@ -203,10 +216,13 @@ describe('slack outbound reply badges', () => {
     });
     expect(again).toHaveLength(1);
     expect(readThread(thread.id)?.messages).toHaveLength(1);
+    expect(continued).toHaveLength(1);
   });
 
   it('forwards a FYI to the owner\'s Slack thread without treating the reply as inbound', async () => {
-    const { recordSlackOutboundWatch, refreshSlackReplyBadges } = await load();
+    const { recordSlackOutboundWatch, refreshSlackReplyBadges, setSlackOutboundContinueHandler } =
+      await load();
+    setSlackOutboundContinueHandler(async () => {});
     const { createEmptyThread, writeThread } = await import('../store/thread-store.js');
     const { setSlackReplyTarget } = await import('./reply-target.js');
     const thread = createEmptyThread({
@@ -380,5 +396,28 @@ describe('pending Slack replies for the next turn', () => {
         { role: 'user', text: 'never mind' },
       ]),
     ).toEqual([]);
+  });
+
+  it('formats a follow-up prompt that is information, not a Slack Listen command', async () => {
+    const { formatSlackReplyContinuePrompt, isSlackExternalReplyPrompt } = await import(
+      './outbound-watch.js'
+    );
+    const prompt = formatSlackReplyContinuePrompt({
+      userName: 'Sean',
+      kind: 'dm',
+      toLabel: '@sean',
+      count: 1,
+    });
+    expect(prompt).toContain('A Slack reply from Sean (DM)');
+    expect(prompt).toContain('not a command');
+    expect(isSlackExternalReplyPrompt(prompt)).toBe(false);
+    expect(
+      formatSlackReplyContinuePrompt({
+        userName: 'Sean',
+        kind: 'channel',
+        toLabel: '#eng',
+        count: 2,
+      }),
+    ).toContain('2 Slack replies from Sean (#eng)');
   });
 });

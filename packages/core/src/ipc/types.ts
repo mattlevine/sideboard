@@ -196,7 +196,7 @@ export interface IpcApi {
   onCaffeinateHoldChanged(
     listener: (state: CaffeinateHoldState & { appCaffeinated: boolean }) => void,
   ): () => void;
-  /** Unread Slack replies to messages this Mac posted (relayed as info; does not start a turn). */
+  /** Unread Slack replies to messages this Mac posted (relayed as info; queues a follow-up turn, not a Listen interrupt). */
   getSlackReplyBadges(): Promise<SlackReplyBadge[]>;
   /** Open the Slack thread in the browser/app and clear that user's badge. */
   openSlackReply(badgeId: string): Promise<SlackReplyBadge[]>;
