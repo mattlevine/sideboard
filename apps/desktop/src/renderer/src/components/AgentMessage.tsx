@@ -107,20 +107,27 @@ function finalText(text: string, parts: MessagePart[] | undefined): string {
   return stripBrightsyNdjsonNoise(texts.map((p) => p.text).join('\n\n').trim() || text);
 }
 
-function phaseHeader(
-  kind: 'thinking' | 'work',
-  durationMs: number | null,
+function thoughtLabel(durationMs: number | null): string {
+  if (durationMs == null) return 'Thought';
+  if (durationMs < 8000) return 'Thought briefly';
+  return `Thought for ${formatDuration(durationMs)}`;
+}
+
+function workLabel(durationMs: number | null): string {
+  if (durationMs == null) return 'Worked';
+  return `Worked for ${formatDuration(durationMs)}`;
+}
+
+function traceHeader(
+  parts: Extract<MessagePart, { type: 'thinking' | 'tool' }>[],
   live: boolean,
+  fallbackMs: number | null,
 ): { wave: string } | { text: string } {
-  if (kind === 'thinking') {
-    if (live) return { wave: 'Thinking' };
-    if (durationMs == null) return { text: 'Thought' };
-    if (durationMs < 8000) return { text: 'Thought briefly' };
-    return { text: `Thought for ${formatDuration(durationMs)}` };
-  }
-  if (live) return { wave: 'Working' };
-  if (durationMs == null) return { text: 'Worked' };
-  return { text: `Worked for ${formatDuration(durationMs)}` };
+  const hasWork = parts.some((p) => p.type === 'tool');
+  if (live) return { wave: hasWork ? 'Working' : 'Thinking' };
+  const spanMs = phaseDurationMs(parts) ?? fallbackMs;
+  if (hasWork) return { text: workLabel(spanMs) };
+  return { text: thoughtLabel(spanMs) };
 }
 
 function toolChips(parts: MessagePart[], streaming = false): ToolPart[] {
@@ -346,9 +353,7 @@ export function AgentMessage({
   const phases = useMemo(() => splitTurnPhases(grouped.top), [grouped]);
   const lastPhase = phases[phases.length - 1];
   const livePhaseIndex =
-    streaming && lastPhase && (lastPhase.kind === 'thinking' || lastPhase.kind === 'work')
-      ? phases.length - 1
-      : -1;
+    streaming && lastPhase && lastPhase.kind === 'trace' ? phases.length - 1 : -1;
   useEffect(() => {
     if (!streaming) {
       userToggledPhases.current = new Set();
@@ -376,7 +381,12 @@ export function AgentMessage({
   );
   const durationLabel = useLiveDuration(startedAt, durationMs);
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
-  const collapsibleCount = phases.filter((p) => p.kind !== 'text').length;
+  const lastTraceIndex = (() => {
+    for (let i = phases.length - 1; i >= 0; i--) {
+      if (phases[i]?.kind === 'trace') return i;
+    }
+    return -1;
+  })();
   const hasTextPhase = phases.some((p) => p.kind === 'text');
 
   function togglePhase(index: number) {
@@ -509,11 +519,10 @@ export function AgentMessage({
         }
         const live = Boolean(streaming && i === livePhaseIndex);
         const open = openPhases.has(i);
-        const fromParts = phaseDurationMs(phase.parts, { live });
-        const header = phaseHeader(
-          phase.kind,
-          fromParts ?? (!live && collapsibleCount === 1 ? durationMs ?? null : null),
+        const header = traceHeader(
+          phase.parts,
           live,
+          !live && i === lastTraceIndex ? durationMs ?? null : null,
         );
         return (
           <div key={`${phase.kind}-${i}`} className="turn-transcript">
@@ -540,11 +549,7 @@ export function AgentMessage({
               </span>
             </button>
             {open && (
-              <div className="turn-details">
-                {phase.kind === 'thinking'
-                  ? phase.parts.map((part, j) => renderThinking(part, `think-${i}-${j}`))
-                  : renderParts(phase.parts, `work-${i}`)}
-              </div>
+              <div className="turn-details">{renderParts(phase.parts, `trace-${i}`)}</div>
             )}
           </div>
         );

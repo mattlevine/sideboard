@@ -12,9 +12,9 @@ describe('splitTurnPhases', () => {
       { type: 'text', text: 'Done — the handler now returns 200.' },
     ];
     expect(splitTurnPhases(parts).map((p) => p.kind)).toEqual([
-      'thinking',
+      'trace',
       'text',
-      'work',
+      'trace',
       'text',
     ]);
     const texts = splitTurnPhases(parts).filter((p) => p.kind === 'text');
@@ -24,13 +24,22 @@ describe('splitTurnPhases', () => {
     );
   });
 
-  it('keeps thought then work then the outcome when there is no mid-turn text', () => {
+  it('groups thinking and tools when there is no agent text between them', () => {
     const parts: MessagePart[] = [
       { type: 'thinking', text: 'plan the edit' },
       { type: 'tool', id: 't1', name: 'Read', status: 'done', description: 'Read foo.ts' },
+      { type: 'thinking', text: 'apply the patch' },
+      { type: 'tool', id: 't2', name: 'Edit', status: 'done', description: 'Edit foo.ts' },
       { type: 'text', text: 'Done — the handler now returns 200.' },
     ];
-    expect(splitTurnPhases(parts).map((p) => p.kind)).toEqual(['thinking', 'work', 'text']);
+    const phases = splitTurnPhases(parts);
+    expect(phases.map((p) => p.kind)).toEqual(['trace', 'text']);
+    expect(phases[0]?.kind === 'trace' && phases[0].parts.map((p) => p.type)).toEqual([
+      'thinking',
+      'tool',
+      'thinking',
+      'tool',
+    ]);
   });
 
   it('skips present_plan / ask_user tools so they do not become a work block', () => {
@@ -44,7 +53,7 @@ describe('splitTurnPhases', () => {
       },
       { type: 'text', text: 'Here is the plan.' },
     ];
-    expect(splitTurnPhases(parts).map((p) => p.kind)).toEqual(['thinking', 'text']);
+    expect(splitTurnPhases(parts).map((p) => p.kind)).toEqual(['trace', 'text']);
   });
 });
 

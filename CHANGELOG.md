@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.120] - 2026-08-24
+
+### Fixed
+
+- Chat groups thinking and tool work that happen with no agent text between them into one timed “Worked” block, instead of a stack of empty Thought / Worked headers.
+
 ## [0.1.119] - 2026-08-24
 
 ### Changed

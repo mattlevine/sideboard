@@ -3,11 +3,11 @@ import type { MessagePart } from '@sideboard-ai/core';
 type ThinkingPart = Extract<MessagePart, { type: 'thinking' }>;
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
 type TextPart = Extract<MessagePart, { type: 'text' }>;
+export type TracePart = ThinkingPart | ToolPart;
 
 export type TurnPhase =
-  | { kind: 'thinking'; parts: ThinkingPart[] }
-  | { kind: 'text'; text: string; parts: TextPart[] }
-  | { kind: 'work'; parts: ToolPart[] };
+  | { kind: 'trace'; parts: TracePart[] }
+  | { kind: 'text'; text: string; parts: TextPart[] };
 
 export function isHiddenChatTool(name: string | undefined): boolean {
   const n = name ?? '';
@@ -24,30 +24,29 @@ function classify(part: MessagePart): 'thinking' | 'text' | 'work' | 'skip' {
   return 'skip';
 }
 
-/** Group consecutive top-level parts into thought → text → work → text… */
+/**
+ * Group top-level parts into visible text vs a silent trace.
+ * Thinking and tools with no agent text between them stay one block so
+ * think → tool → think → tool does not become a stack of empty headers.
+ */
 export function splitTurnPhases(topParts: MessagePart[]): TurnPhase[] {
   const phases: TurnPhase[] = [];
   for (const part of topParts) {
     const kind = classify(part);
     if (kind === 'skip') continue;
     const last = phases[phases.length - 1];
-    if (kind === 'thinking' && part.type === 'thinking') {
-      if (last?.kind === 'thinking') last.parts.push(part);
-      else phases.push({ kind: 'thinking', parts: [part] });
-      continue;
-    }
-    if (kind === 'work' && part.type === 'tool') {
-      if (last?.kind === 'work') last.parts.push(part);
-      else phases.push({ kind: 'work', parts: [part] });
-      continue;
-    }
-    if (part.type === 'text') {
+    if (kind === 'text' && part.type === 'text') {
       if (last?.kind === 'text') {
         last.text += part.text;
         last.parts.push(part);
       } else {
         phases.push({ kind: 'text', text: part.text, parts: [part] });
       }
+      continue;
+    }
+    if (part.type === 'thinking' || part.type === 'tool') {
+      if (last?.kind === 'trace') last.parts.push(part);
+      else phases.push({ kind: 'trace', parts: [part] });
     }
   }
   return phases.filter((p) => p.kind !== 'text' || p.text.trim());
