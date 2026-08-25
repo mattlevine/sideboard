@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.125] - 2026-08-25
+
+### Removed
+
+- Sidebar Slack reply badges and all badge plumbing (`SlackReplyBadge`, IPC, unread state). Replies still poll in the main process and land in the posting chat with a follow-up turn.
+
 ## [0.1.124] - 2026-08-25
 
 ### Fixed

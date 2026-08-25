@@ -52,7 +52,6 @@ import type {
   ScheduledTask,
   UpdateScheduledTaskPatch,
 } from '../store/schedules.js';
-import type { SlackReplyBadge } from '../slack/outbound-watch.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesResult } from '../integrations/issues.js';
 
@@ -196,10 +195,6 @@ export interface IpcApi {
   onCaffeinateHoldChanged(
     listener: (state: CaffeinateHoldState & { appCaffeinated: boolean }) => void,
   ): () => void;
-  /** Unread Slack replies to messages this Mac posted (relayed as info; queues a follow-up turn, not a Listen interrupt). */
-  getSlackReplyBadges(): Promise<SlackReplyBadge[]>;
-  /** Open the Slack thread in the browser/app and clear that user's badge. */
-  openSlackReply(badgeId: string): Promise<SlackReplyBadge[]>;
   /**
    * Unified issues for Create-from / Link issue (Linear API or GitHub Issues,
    * based on Account preference with Linear→GitHub fallback).

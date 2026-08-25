@@ -4,7 +4,6 @@ import type {
   MessagePart,
   OrchestratorEvent,
   OrchestratorRuntime,
-  SlackReplyBadge,
   Thread,
   TokenUsage,
   Workspace,
@@ -125,7 +124,6 @@ export function App() {
     version: string;
   } | null>(null);
   const [teamToasts, setTeamToasts] = useState<TeamToastItem[]>([]);
-  const [slackReplies, setSlackReplies] = useState<SlackReplyBadge[]>([]);
   const [prefill, setPrefill] = useState<string | undefined>();
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
@@ -667,25 +665,6 @@ export function App() {
     markWorktreeSeen(key, activity);
   }, [view, selectedId, threads, archived]);
 
-  useEffect(() => {
-    const api = window.sideboard.getSlackReplyBadges;
-    if (!api) return;
-    let cancelled = false;
-    const tick = () => {
-      void api()
-        .then((list) => {
-          if (!cancelled) setSlackReplies(list);
-        })
-        .catch(() => undefined);
-    };
-    tick();
-    const id = window.setInterval(tick, 15_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, []);
-
   function onSelect(id: string, multi: boolean) {
     setView('thread');
     setSelectedId(id);
@@ -947,14 +926,6 @@ export function App() {
             onRemoveWorkspace={removeWorkspaceAndRefresh}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
-            slackReplies={slackReplies}
-            onOpenSlackReply={(id) => {
-              const api = window.sideboard.openSlackReply;
-              if (!api) return;
-              void api(id)
-                .then(setSlackReplies)
-                .catch(() => undefined);
-            }}
           />
           <PanelResizeHandle
             edge="right"

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-describe('slack outbound reply badges', () => {
+describe('slack outbound reply watches', () => {
   const prev = process.env.SIDEBOARD_APP_DATA;
   const prevVault = process.env.SIDEBOARD_SECRET_VAULT;
 
@@ -62,16 +62,14 @@ describe('slack outbound reply badges', () => {
   }
 
   it('builds an archive permalink from channel + ts', async () => {
-    const { slackArchiveUrl, initialsFromName } = await load();
+    const { slackArchiveUrl } = await load();
     expect(slackArchiveUrl('C123', '1712345678.123456')).toBe(
       'https://slack.com/archives/C123/p1712345678123456',
     );
-    expect(initialsFromName('Alice Chen')).toBe('AC');
-    expect(initialsFromName('bob')).toBe('BO');
   });
 
   it('does not watch a notify sent to the owner', async () => {
-    const { recordSlackOutboundWatch, listSlackReplyBadges } = await load();
+    const { recordSlackOutboundWatch, listSlackOutboundWatches } = await load();
     expect(
       recordSlackOutboundWatch({
         teamId: 'T1',
@@ -83,7 +81,7 @@ describe('slack outbound reply badges', () => {
         ownerUserId: 'Ume',
       }),
     ).toBeNull();
-    expect(listSlackReplyBadges()).toEqual([]);
+    expect(listSlackOutboundWatches()).toEqual([]);
   });
 
   it('polls bot↔user DMs with the bot token (user token cannot see them)', async () => {
@@ -112,7 +110,7 @@ describe('slack outbound reply badges', () => {
     });
 
     const tokensUsed: string[] = [];
-    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+    const mockFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const auth = String((init?.headers as Record<string, string>)?.Authorization ?? '');
       tokensUsed.push(auth.replace(/^Bearer\s+/i, ''));
       const method = url.replace(/^.*\/api\//, '');
@@ -156,23 +154,20 @@ describe('slack outbound reply badges', () => {
       throw new Error(`unexpected ${method}`);
     });
 
-    const badges = await watch.refreshSlackReplyBadges({
+    await watch.pollSlackOutboundWatches({
       force: true,
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl: mockFetch as unknown as typeof fetch,
     });
     expect(tokensUsed.every((t) => t.startsWith('xoxb-'))).toBe(true);
-    expect(badges).toHaveLength(1);
-    expect(badges[0]?.preview).toBe('Thanks!');
+    const stored = watch.listSlackOutboundWatches();
+    expect(stored[0]?.replies).toEqual([
+      expect.objectContaining({ userName: 'Alice', text: 'Thanks!' }),
+    ]);
   });
 
-  it('badges when another user replies in a DM, then dismisses until a later reply', async () => {
-    const {
-      recordSlackOutboundWatch,
-      refreshSlackReplyBadges,
-      dismissSlackReplyBadge,
-      listSlackReplyBadges,
-      resetSlackOutboundWatchStateForTests,
-    } = await load();
+  it('records replies from another user in a DM', async () => {
+    const { recordSlackOutboundWatch, pollSlackOutboundWatches, listSlackOutboundWatches } =
+      await load();
 
     recordSlackOutboundWatch({
       teamId: 'T1',
@@ -183,9 +178,8 @@ describe('slack outbound reply badges', () => {
       toLabel: '@alice',
       ownerUserId: 'Ume',
     });
-    expect(listSlackReplyBadges()).toEqual([]);
 
-    const badges = await refreshSlackReplyBadges({
+    await pollSlackOutboundWatches({
       force: true,
       fetchImpl: fetchImpl(
         [],
@@ -196,17 +190,12 @@ describe('slack outbound reply badges', () => {
         ],
       ) as unknown as typeof fetch,
     });
-    expect(badges).toHaveLength(1);
-    expect(badges[0]?.userName).toBe('Alice');
-    expect(badges[0]?.initials).toBe('AL');
-    expect(badges[0]?.permalink).toContain('slack.com');
-    expect(badges[0]?.id).toBe('T1:Ualice');
+    const stored = listSlackOutboundWatches();
+    expect(stored[0]?.replies).toEqual([
+      expect.objectContaining({ userName: 'Alice', text: 'looks good' }),
+    ]);
 
-    const afterDismiss = dismissSlackReplyBadge('T1:Ualice');
-    expect(afterDismiss).toEqual([]);
-
-    resetSlackOutboundWatchStateForTests();
-    const again = await refreshSlackReplyBadges({
+    await pollSlackOutboundWatches({
       force: true,
       fetchImpl: fetchImpl(
         [],
@@ -216,14 +205,16 @@ describe('slack outbound reply badges', () => {
         ],
       ) as unknown as typeof fetch,
     });
-    expect(again).toHaveLength(1);
-    expect(again[0]?.preview).toBe('one more thing');
+    expect(listSlackOutboundWatches()[0]?.replies).toEqual([
+      expect.objectContaining({ text: 'looks good' }),
+      expect.objectContaining({ text: 'one more thing' }),
+    ]);
   });
 
   it('relays another person\'s reply into the posting chat and queues a follow-up turn', async () => {
     const {
       recordSlackOutboundWatch,
-      refreshSlackReplyBadges,
+      pollSlackOutboundWatches,
       isSlackExternalReplyPrompt,
       setSlackOutboundContinueHandler,
     } = await load();
@@ -257,7 +248,7 @@ describe('slack outbound reply badges', () => {
       sourceThreadId: thread.id,
     });
 
-    const badges = await refreshSlackReplyBadges({
+    await pollSlackOutboundWatches({
       force: true,
       fetchImpl: fetchImpl(
         [],
@@ -267,7 +258,6 @@ describe('slack outbound reply badges', () => {
         ],
       ) as unknown as typeof fetch,
     });
-    expect(badges).toHaveLength(1);
 
     const after = readThread(thread.id)!;
     expect(after.status).toBe('idle');
@@ -283,7 +273,7 @@ describe('slack outbound reply badges', () => {
     expect(continued[0]?.prompt).toContain('not a command');
     expect(continued[0]?.prompt).toContain('waiting on this person');
 
-    const again = await refreshSlackReplyBadges({
+    await pollSlackOutboundWatches({
       force: true,
       fetchImpl: fetchImpl(
         [],
@@ -293,13 +283,12 @@ describe('slack outbound reply badges', () => {
         ],
       ) as unknown as typeof fetch,
     });
-    expect(again).toHaveLength(1);
     expect(readThread(thread.id)?.messages).toHaveLength(1);
     expect(continued).toHaveLength(1);
   });
 
   it('forwards a FYI to the owner\'s Slack thread without treating the reply as inbound', async () => {
-    const { recordSlackOutboundWatch, refreshSlackReplyBadges, setSlackOutboundContinueHandler } =
+    const { recordSlackOutboundWatch, pollSlackOutboundWatches, setSlackOutboundContinueHandler } =
       await load();
     setSlackOutboundContinueHandler(async () => {});
     const { createEmptyThread, writeThread } = await import('../store/thread-store.js');
@@ -345,7 +334,7 @@ describe('slack outbound reply badges', () => {
       return baseFetch(url);
     });
 
-    await refreshSlackReplyBadges({
+    await pollSlackOutboundWatches({
       force: true,
       fetchImpl: wrapped as unknown as typeof globalThis.fetch,
     });
@@ -358,7 +347,8 @@ describe('slack outbound reply badges', () => {
   });
 
   it('skips bot messages and owner messages in a channel thread', async () => {
-    const { recordSlackOutboundWatch, refreshSlackReplyBadges } = await load();
+    const { recordSlackOutboundWatch, pollSlackOutboundWatches, listSlackOutboundWatches } =
+      await load();
     recordSlackOutboundWatch({
       teamId: 'T1',
       channelId: 'Ceng',
@@ -367,7 +357,7 @@ describe('slack outbound reply badges', () => {
       toLabel: '#eng',
       ownerUserId: 'Ume',
     });
-    const badges = await refreshSlackReplyBadges({
+    await pollSlackOutboundWatches({
       force: true,
       fetchImpl: fetchImpl(
         [
@@ -379,69 +369,7 @@ describe('slack outbound reply badges', () => {
         [],
       ) as unknown as typeof fetch,
     });
-    expect(badges).toEqual([]);
-  });
-
-  it('collapses two unread watches from the same user into one badge', async () => {
-    const { recordSlackOutboundWatch, refreshSlackReplyBadges } = await load();
-    recordSlackOutboundWatch({
-      teamId: 'T1',
-      channelId: 'Ddm',
-      ts: '30.0',
-      kind: 'dm',
-      toUserId: 'Ualice',
-      toLabel: '@alice',
-      ownerUserId: 'Ume',
-    });
-    recordSlackOutboundWatch({
-      teamId: 'T1',
-      channelId: 'Ddm',
-      ts: '31.0',
-      kind: 'dm',
-      toUserId: 'Ualice',
-      toLabel: '@alice',
-      ownerUserId: 'Ume',
-    });
-    const badges = await refreshSlackReplyBadges({
-      force: true,
-      fetchImpl: vi.fn(async (url: string, init?: RequestInit) => {
-        const method = url.replace(/^.*\/api\//, '');
-        const body = String(init?.body ?? '');
-        if (method === 'conversations.replies') {
-          return { json: async () => ({ ok: true, messages: [] }) };
-        }
-        if (method === 'conversations.history') {
-          const oldest = new URLSearchParams(body).get('oldest');
-          const ts = oldest === '30.0' ? '30.5' : '31.5';
-          return {
-            json: async () => ({
-              ok: true,
-              messages: [{ ts, user: 'Ualice', text: `reply to ${oldest}` }],
-            }),
-          };
-        }
-        if (method === 'chat.getPermalink') {
-          const ts = new URLSearchParams(body).get('message_ts') ?? '1';
-          return {
-            json: async () => ({
-              ok: true,
-              permalink: `https://acme.slack.com/archives/Ddm/p${ts.replace('.', '')}`,
-            }),
-          };
-        }
-        if (method === 'users.info') {
-          return {
-            json: async () => ({
-              ok: true,
-              user: { name: 'alice', profile: { display_name: 'Alice' } },
-            }),
-          };
-        }
-        throw new Error(`unexpected ${method}`);
-      }) as unknown as typeof fetch,
-    });
-    expect(badges).toHaveLength(1);
-    expect(badges[0]?.userId).toBe('Ualice');
+    expect(listSlackOutboundWatches()[0]?.replies ?? []).toEqual([]);
   });
 });
 

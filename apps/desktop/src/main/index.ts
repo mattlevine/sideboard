@@ -89,9 +89,7 @@ import {
   slackAppLevelToken,
   slackRelayUrl,
   hasBakedSlackOAuth,
-  refreshSlackReplyBadges,
-  dismissSlackReplyBadge,
-  permalinkForSlackReplyBadge,
+  pollSlackOutboundWatches,
   getDefaultAgent,
   ensureSlackDeviceIdentity,
   loadAppSettings,
@@ -1006,22 +1004,6 @@ function registerIpc(): void {
     setSlackListen(opts),
   );
   ipcMain.handle('getCaffeinateHold', () => caffeinateUiState());
-  ipcMain.handle('getSlackReplyBadges', () => refreshSlackReplyBadges());
-  ipcMain.handle('openSlackReply', async (_e, badgeId: string) => {
-    const id = typeof badgeId === 'string' ? badgeId : '';
-    const url = permalinkForSlackReplyBadge(id);
-    if (url) {
-      try {
-        const parsed = new URL(url);
-        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-          await shell.openExternal(parsed.href);
-        }
-      } catch {
-        /* ignore invalid permalink */
-      }
-    }
-    return dismissSlackReplyBadge(id);
-  });
   ipcMain.handle('listIssues', async (_e, path: string) =>
     listIssues(await resolveRepoRoot(path)),
   );
@@ -1621,6 +1603,12 @@ app.whenReady().then(async () => {
   setupSchedulesWatcher();
   setupCaffeinateHoldWatcher();
   setupUpdater();
+  // Poll slack_post reply watches in main (inject into posting chat).
+  const pollSlackOutbound = () => {
+    void pollSlackOutboundWatches().catch(() => undefined);
+  };
+  pollSlackOutbound();
+  setInterval(pollSlackOutbound, 12_000);
   setupApplicationMenu(() => mainWindow);
   try {
     const root = await resolveRepoRoot(process.cwd());

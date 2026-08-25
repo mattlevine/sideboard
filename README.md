@@ -378,7 +378,7 @@ sideboard slack listen         # same listen path as the desktop
 
 Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_users` / `slack_search` / `slack_read` / `slack_post` / `slack_replies` once a workspace is connected (optional `github_url` for a PR or permalink).
 
-If someone replies in Slack to a message Sideboard posted, that reply is copied into the orchestration chat as information (not a command) and the posting chat gets a follow-up turn. A per-user badge also appears next to the Sideboard wordmark; click it to open that thread in Slack. If you were talking to the orchestrator from Slack, Sideboard FYIs you there too.
+If someone replies in Slack to a message Sideboard posted, that reply is copied into the orchestration chat as information (not a command) and the posting chat gets a follow-up turn. If you were talking to the orchestrator from Slack, Sideboard FYIs you there too.
 
 More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 

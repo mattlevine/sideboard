@@ -36,27 +36,10 @@ export interface SlackOutboundWatch {
   sourceThreadId?: string;
   postedAt: string;
   lastSeenTs: string;
-  unread: boolean;
-  replyUserId?: string;
-  replyUserName?: string;
-  replyTs?: string;
-  replyPreview?: string;
   permalink?: string;
   /** Reply timestamps already copied into the source thread (not commands). */
   injectedReplyTs?: string[];
   replies?: SlackOutboundReply[];
-}
-
-export interface SlackReplyBadge {
-  id: string;
-  userId: string;
-  userName: string;
-  initials: string;
-  hue: number;
-  permalink: string;
-  label: string;
-  preview?: string;
-  repliedAt: string;
 }
 
 type Store = { watches?: SlackOutboundWatch[] };
@@ -80,31 +63,8 @@ function watchId(teamId: string, channelId: string, ts: string): string {
   return `${teamId}:${channelId}:${ts}`;
 }
 
-function badgeId(teamId: string, userId: string): string {
-  return `${teamId}:${userId}`;
-}
-
 export function slackArchiveUrl(channelId: string, ts: string): string {
   return `https://slack.com/archives/${channelId}/p${ts.replace('.', '')}`;
-}
-
-export function initialsFromName(name: string): string {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) {
-    const w = parts[0]!;
-    return (w.slice(0, 2) || '?').toUpperCase();
-  }
-  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase();
-}
-
-export function hueFromId(id: string): number {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return h % 360;
 }
 
 function tsNewer(a: string, b: string): boolean {
@@ -341,7 +301,6 @@ export function recordSlackOutboundWatch(input: {
     sourceThreadId: input.sourceThreadId?.trim() || undefined,
     postedAt: new Date().toISOString(),
     lastSeenTs: ts,
-    unread: false,
     permalink: slackArchiveUrl(channelId, ts),
     injectedReplyTs: [],
     replies: [],
@@ -462,58 +421,13 @@ async function fetchMessages(
   return out;
 }
 
-export function listSlackReplyBadges(): SlackReplyBadge[] {
-  const unread = readStore().filter((w) => w.unread && w.replyUserId && w.permalink);
-  const byUser = new Map<string, SlackOutboundWatch>();
-  for (const w of unread) {
-    const id = badgeId(w.teamId, w.replyUserId!);
-    const prev = byUser.get(id);
-    if (!prev || tsNewer(w.replyTs || '', prev.replyTs || '')) {
-      byUser.set(id, w);
-    }
-  }
-  return [...byUser.entries()]
-    .map(([id, w]) => {
-      const userName = w.replyUserName || w.toLabel || 'Slack';
-      return {
-        id,
-        userId: w.replyUserId!,
-        userName,
-        initials: initialsFromName(userName),
-        hue: hueFromId(w.replyUserId!),
-        permalink: w.permalink || slackArchiveUrl(w.channelId, w.replyTs || w.ts),
-        label: w.toLabel,
-        preview: w.replyPreview,
-        repliedAt: w.replyTs || w.postedAt,
-      };
-    })
-    .sort((a, b) => b.repliedAt.localeCompare(a.repliedAt));
-}
-
-export function dismissSlackReplyBadge(badgeKey: string): SlackReplyBadge[] {
-  const key = badgeKey.trim();
-  const watches = readStore().map((w) => {
-    if (!w.unread || !w.replyUserId) return w;
-    if (badgeId(w.teamId, w.replyUserId) !== key) return w;
-    return { ...w, unread: false };
-  });
-  writeStore(watches);
-  return listSlackReplyBadges();
-}
-
-export function permalinkForSlackReplyBadge(badgeKey: string): string | null {
-  return listSlackReplyBadges().find((b) => b.id === badgeKey)?.permalink ?? null;
-}
-
-export async function refreshSlackReplyBadges(opts?: {
+export async function pollSlackOutboundWatches(opts?: {
   fetchImpl?: typeof fetch;
   force?: boolean;
   now?: number;
-}): Promise<SlackReplyBadge[]> {
+}): Promise<void> {
   const now = opts?.now ?? Date.now();
-  if (!opts?.force && now - lastPollMs < POLL_INTERVAL_MS) {
-    return listSlackReplyBadges();
-  }
+  if (!opts?.force && now - lastPollMs < POLL_INTERVAL_MS) return;
   lastPollMs = now;
 
   const existing = readStore();
@@ -541,9 +455,7 @@ export async function refreshSlackReplyBadges(opts?: {
     const injected = new Set(watch.injectedReplyTs ?? []);
     const collected = [...(watch.replies ?? [])];
     let lastSeenTs = watch.lastSeenTs;
-    let latestUser: string | undefined;
     let latestName: string | undefined;
-    let latestText = '';
     let latestPermalink = watch.permalink;
     let newlyInjected = 0;
 
@@ -570,9 +482,7 @@ export async function refreshSlackReplyBadges(opts?: {
         text: msg.text ?? '',
       };
       if (!collected.some((r) => r.ts === ts)) collected.push(reply);
-      latestUser = user;
       latestName = replyUserName;
-      latestText = reply.text;
       latestPermalink = permalink;
 
       if (injected.has(ts)) {
@@ -606,11 +516,6 @@ export async function refreshSlackReplyBadges(opts?: {
     watches[i] = {
       ...watch,
       lastSeenTs,
-      unread: true,
-      replyUserId: latestUser,
-      replyUserName: latestName,
-      replyTs: lastSeenTs,
-      replyPreview: latestText.slice(0, 140),
       permalink: latestPermalink,
       injectedReplyTs: [...injected],
       replies: collected.slice(-MAX_REPLIES_PER_WATCH),
@@ -619,7 +524,6 @@ export async function refreshSlackReplyBadges(opts?: {
   }
 
   if (changed) writeStore(watches);
-  return listSlackReplyBadges();
 }
 
 /** Tests: clear in-memory poll throttle / name cache. */

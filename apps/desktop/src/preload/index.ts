@@ -66,8 +66,6 @@ const api: IpcApi = {
       ipcRenderer.removeListener('caffeinate-hold:changed', handler);
     };
   },
-  getSlackReplyBadges: () => ipcRenderer.invoke('getSlackReplyBadges'),
-  openSlackReply: (badgeId) => ipcRenderer.invoke('openSlackReply', badgeId),
   listIssues: (repoPath) => ipcRenderer.invoke('listIssues', repoPath),
   listBranches: (repoPath, opts) => ipcRenderer.invoke('listBranches', repoPath, opts),
   listPrs: (repoPath) => ipcRenderer.invoke('listPrs', repoPath),

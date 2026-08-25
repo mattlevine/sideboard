@@ -196,10 +196,7 @@ export type { SlackRelayClientOptions } from './slack/relay-client.js';
 export {
   recordSlackOutboundWatch,
   listSlackOutboundWatches,
-  listSlackReplyBadges,
-  dismissSlackReplyBadge,
-  refreshSlackReplyBadges,
-  permalinkForSlackReplyBadge,
+  pollSlackOutboundWatches,
   slackArchiveUrl,
   formatSlackExternalReplyPrompt,
   isSlackExternalReplyPrompt,
@@ -208,7 +205,6 @@ export {
   formatSlackReplyContinuePrompt,
 } from './slack/outbound-watch.js';
 export type {
-  SlackReplyBadge,
   SlackOutboundWatch,
   SlackOutboundReply,
 } from './slack/outbound-watch.js';

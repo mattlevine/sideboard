@@ -9,7 +9,7 @@ import { appendGithubLink } from '../slack/github-link.js';
 import {
   listSlackOutboundWatches,
   recordSlackOutboundWatch,
-  refreshSlackReplyBadges,
+  pollSlackOutboundWatches,
 } from '../slack/outbound-watch.js';
 import {
   listSlackWorkspaces,
@@ -294,7 +294,7 @@ export function registerSlackTools(server: McpServer): void {
     },
     async ({ team_id }) => {
       try {
-        await refreshSlackReplyBadges({ force: true });
+        await pollSlackOutboundWatches({ force: true });
         const team = team_id?.trim();
         const watches = listSlackOutboundWatches().filter(
           (w) => !team || w.teamId === team,

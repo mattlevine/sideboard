@@ -1707,48 +1707,6 @@ body.resizing-panels webview {
   color: var(--text);
 }
 
-.slack-reply-badges {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.slack-reply-badge {
-  position: relative;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: none;
-  padding: 0;
-  flex-shrink: 0;
-  cursor: pointer;
-  font-size: 8px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  color: #fff;
-  background: hsl(var(--slack-badge-hue, 210) 42% 42%);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 70%, transparent);
-}
-
-.slack-reply-badge::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #2bac76;
-  box-shadow: 0 0 0 1.5px var(--bg);
-}
-
-.slack-reply-badge:hover {
-  filter: brightness(1.12);
-}
-
 .brand-mark {
   display: inline-flex;
   align-items: center;

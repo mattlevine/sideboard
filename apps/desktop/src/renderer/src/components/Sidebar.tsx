@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
   normalizeWorktreePath,
   threadDisplayLabel,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
-import type { SlackReplyBadge, Thread } from '@sideboard-ai/core';
+import type { Thread } from '@sideboard-ai/core';
 import {
   GLOBAL_WORKSPACE_ID,
   threadDisplayTitle,
@@ -53,9 +53,6 @@ interface Props {
   onRemoveWorkspace?: (repoPath: string) => void | Promise<void>;
   onToggleSidebar: () => void;
   onOpenSettings?: () => void;
-  /** Other people who replied to a Slack message this Mac posted. */
-  slackReplies?: SlackReplyBadge[];
-  onOpenSlackReply?: (badgeId: string) => void;
 }
 
 function repoName(repoPath: string): string {
@@ -625,8 +622,6 @@ export function Sidebar({
   onRemoveWorkspace,
   onToggleSidebar,
   onOpenSettings,
-  slackReplies = [],
-  onOpenSlackReply,
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -702,24 +697,6 @@ export function Sidebar({
           <BrandMark size="sm" />
           <span className="brand-name">Sideboard</span>
           {caffeinateHold?.appCaffeinated ? <CaffeinateBadge /> : null}
-          {slackReplies.length > 0 && (
-            <div className="slack-reply-badges" role="list" aria-label="Slack replies">
-              {slackReplies.map((badge) => (
-                <button
-                  key={badge.id}
-                  type="button"
-                  role="listitem"
-                  className="slack-reply-badge"
-                  style={{ '--slack-badge-hue': String(badge.hue) } as CSSProperties}
-                  title={`${badge.userName} replied in Slack — open thread`}
-                  aria-label={`${badge.userName} replied in Slack. Open thread.`}
-                  onClick={() => onOpenSlackReply?.(badge.id)}
-                >
-                  {badge.initials}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         <nav className="sidebar-nav">
           <button
