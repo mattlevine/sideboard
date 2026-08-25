@@ -126,6 +126,12 @@ describe('coordinator-prompt', () => {
     expect(text.length).toBeLessThan(900);
   });
 
+  it('fleet playbook tells coordinators how to read child spend', () => {
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('costUsd');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_thread.*usage/s);
+    expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_turn_result.*usage/s);
+  });
+
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
     const prev = process.env.SIDEBOARD_APP_DATA;
     const root = mkdtempSync(join(tmpdir(), 'sb-global-cwd-'));

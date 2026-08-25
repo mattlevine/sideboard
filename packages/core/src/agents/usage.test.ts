@@ -4,6 +4,7 @@ import {
   contextTokens,
   fromInclusiveInputUsage,
   requestOccupancy,
+  sumUsageList,
 } from './usage.js';
 
 describe('fromInclusiveInputUsage', () => {
@@ -25,6 +26,26 @@ describe('fromInclusiveInputUsage', () => {
     expect(
       fromInclusiveInputUsage({ inputTokens: 100, outputTokens: 10 }),
     ).toEqual({ inputTokens: 100, outputTokens: 10 });
+  });
+});
+
+describe('sumUsageList', () => {
+  it('sums billed tokens and cost across turns', () => {
+    expect(
+      sumUsageList([
+        { inputTokens: 100, outputTokens: 10, costUsd: 0.01, lastRequestTokens: 50 },
+        { inputTokens: 200, outputTokens: 20, costUsd: 0.02 },
+        { inputTokens: 50, outputTokens: 5 },
+      ]),
+    ).toEqual({
+      inputTokens: 350,
+      outputTokens: 35,
+      costUsd: 0.03,
+    });
+  });
+
+  it('returns null when nothing has usage', () => {
+    expect(sumUsageList([undefined, null])).toBeNull();
   });
 });
 

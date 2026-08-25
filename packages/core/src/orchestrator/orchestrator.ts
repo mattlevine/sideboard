@@ -59,7 +59,9 @@ import type {
   Thread,
   ThreadAttachment,
   ThreadOptionsPatch,
+  TokenUsage,
 } from '../types/thread.js';
+import { sumUsageList } from '../agents/usage.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import {
   appendMessage,
@@ -1693,6 +1695,20 @@ export class Orchestrator {
     });
   }
 
+  getThreadUsage(threadRef: string): {
+    /** Billed totals across all agent turns (includes costUsd when providers reported it). */
+    usage: TokenUsage | null;
+    /** Usage for the most recent agent turn only. */
+    lastTurnUsage: TokenUsage | null;
+  } {
+    const thread = this.requireThread(threadRef);
+    const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+    return {
+      usage: sumUsageList(thread.messages.map((m) => m.usage)),
+      lastTurnUsage: lastAgent?.usage ?? null,
+    };
+  }
+
   getTurnResult(threadRef: string): {
     text: string;
     status: string;
@@ -1701,6 +1717,8 @@ export class Orchestrator {
     stillRunning: boolean;
     progress: string | null;
     lastActivityAt: string | null;
+    /** Token + cost for the last finished agent turn, when reported. */
+    usage: TokenUsage | null;
   } {
     const thread = this.requireThread(threadRef);
     const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
@@ -1720,6 +1738,7 @@ export class Orchestrator {
       stillRunning,
       progress: live?.summary ?? queuedHint,
       lastActivityAt: live?.updatedAt ?? null,
+      usage: lastAgent?.usage ?? null,
     };
   }
 

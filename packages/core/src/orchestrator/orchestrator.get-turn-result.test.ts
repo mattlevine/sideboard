@@ -93,4 +93,46 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.status).toBe('queued');
     expect(result.progress).toBe('Queued — waiting for a concurrency slot');
   });
+
+  it('includes last-turn usage and costUsd when present', () => {
+    const worktreePath = join(dataDir, 'wt-usage');
+    mkdirSync(worktreePath, { recursive: true });
+    const thread = createEmptyThread({
+      title: 'Spend',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/spend',
+      worktreePath,
+      repoPath: join(dataDir, 'repo'),
+      agent: 'claude',
+      status: 'idle',
+    });
+    thread.messages.push(
+      {
+        role: 'agent',
+        text: 'first',
+        ts: new Date().toISOString(),
+        usage: { inputTokens: 10, outputTokens: 2, costUsd: 0.01 },
+      },
+      {
+        role: 'agent',
+        text: 'second',
+        ts: new Date().toISOString(),
+        usage: { inputTokens: 100, outputTokens: 20, costUsd: 0.04 },
+      },
+    );
+    writeThread(thread);
+
+    const orch = new Orchestrator();
+    const turn = orch.getTurnResult(thread.id);
+    expect(turn.usage).toEqual({ inputTokens: 100, outputTokens: 20, costUsd: 0.04 });
+
+    const spend = orch.getThreadUsage(thread.id);
+    expect(spend.lastTurnUsage).toEqual({ inputTokens: 100, outputTokens: 20, costUsd: 0.04 });
+    expect(spend.usage).toEqual({
+      inputTokens: 110,
+      outputTokens: 22,
+      costUsd: 0.05,
+    });
+  });
 });
