@@ -1352,7 +1352,7 @@ export function cowboyModeEnabled(
   return Boolean(settings.advanced.cowboyMode);
 }
 
-/** Settings → Advanced → Show cost (default off). */
+/** Settings → Advanced → Show cost (when available) (default off). */
 export function showCostEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {

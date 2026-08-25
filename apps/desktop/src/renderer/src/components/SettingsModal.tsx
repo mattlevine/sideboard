@@ -1898,11 +1898,11 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-toggle-row">
                     <div>
-                      <div className="settings-section-title">Show cost</div>
+                      <div className="settings-section-title">Show cost (when available)</div>
                       <p className="settings-hint">
                         Show provider-reported USD on message chips, the thread Σ total, and
-                        worktree hover spend. Off by default. Tokens still show either way;
-                        Codex never reports USD.
+                        worktree hover spend when the agent CLI reports it. Off by default.
+                        Tokens still show either way; Codex never reports USD.
                       </p>
                     </div>
                     <button

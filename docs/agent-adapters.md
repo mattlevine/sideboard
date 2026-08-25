@@ -51,7 +51,7 @@ Reference implementations:
 - Chat-only agents (no local file edits) are fine — document that limitation like Brightsy.
 - Use `permissionMode()` from `types.ts` when the agent supports plan / autonomy modes.
 - Map usage to Claude-shaped `TokenUsage` (`inputTokens` uncached; cache extra). OpenAI-shaped CLIs (Codex, Brightsy) use `fromInclusiveInputUsage` — do not add cache or reasoning on top of inclusive totals.
-- When the agent CLI reports a USD figure (e.g. Claude `modelUsage.*.costUSD` / snake_case aliases — not session-cumulative `total_cost_usd` after `--resume` — OpenCode `step_finish` `cost`, Brightsy `usage.cost`), set `TokenUsage.costUsd`. Codex `exec --json` does not include USD on `turn.completed`. Cursor stream usage is tokens-only; after `run.wait()` the runner best-effort calls `agent.getUsage()` and folds turn-scoped USD from new-run costs or an agent-level cents delta (`UsageCost` is float cents, eventually consistent).
+- When the agent CLI reports turn-scoped USD (`modelUsage.*.costUSD` on Claude — not session-cumulative `total_cost_usd` after `--resume` — `cost` on OpenCode steps / Brightsy usage), set `TokenUsage.costUsd`. Codex `turn.completed` is tokens-only on the JSONL stream Sideboard reads. Cursor stream `usage` messages are tokens-only; after each turn the runner best-effort calls `agent.getUsage()` when the billing API is available for the account.
 - Nested Task / Agent / `spawn_agent` streams should set `parentId` so the board can nest them under the parent tool. Nested stdout is not the parent answer.
 
 ## Out of scope for a first PR

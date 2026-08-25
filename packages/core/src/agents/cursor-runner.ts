@@ -28,7 +28,7 @@ import {
   cursorCostOnlyUsageEvent,
   cursorDeltaToEvents,
   cursorSdkMessageToEvents,
-  turnCostUsdFromCursorUsage,
+  fetchCursorTurnCostUsd,
   type CursorAgentUsageSnapshot,
   type CursorTurnRequest,
 } from './cursor-events.js';
@@ -258,14 +258,14 @@ async function main(): Promise<number> {
       activity.at = Date.now();
     };
 
-    // Baseline for turn-scoped cost (agent.getUsage is session-cumulative).
     let usageBefore: CursorAgentUsageSnapshot | null = null;
     try {
       usageBefore = (await agent.getUsage()) as CursorAgentUsageSnapshot;
     } catch {
-      /* best-effort — cost stays absent if getUsage fails */
+      /* best-effort — new-run cost may still appear without a before snapshot */
     }
 
+    let lastUsageRunId: string | undefined;
     const run = await sendPrompt(agent, {
       onDelta: ({ update }) => {
         bump();
@@ -291,6 +291,10 @@ async function main(): Promise<number> {
         activity,
       )) {
         bump();
+        const sdkMsg = msg as { type?: string; run_id?: string };
+        if (sdkMsg.type === 'usage' && typeof sdkMsg.run_id === 'string' && sdkMsg.run_id.trim()) {
+          lastUsageRunId = sdkMsg.run_id.trim();
+        }
         for (const event of cursorSdkMessageToEvents(msg as never)) {
           stream.push(event);
         }
@@ -318,17 +322,13 @@ async function main(): Promise<number> {
       // User stop / abort — not a failure for lastError.
       if (result.status === 'cancelled') return 0;
 
-      // Billed USD is not on the stream — pull getUsage (eventually consistent).
+      // Billed USD is not on the stream — pull getUsage when the account supports it.
       try {
-        let usageAfter = (await agent.getUsage()) as CursorAgentUsageSnapshot;
-        let costUsd = turnCostUsdFromCursorUsage(usageBefore, usageAfter);
-        if (costUsd == null) {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 400);
-          });
-          usageAfter = (await agent.getUsage()) as CursorAgentUsageSnapshot;
-          costUsd = turnCostUsdFromCursorUsage(usageBefore, usageAfter);
-        }
+        const costUsd = await fetchCursorTurnCostUsd(
+          (opts) => agent.getUsage(opts) as Promise<CursorAgentUsageSnapshot>,
+          usageBefore,
+          { runId: lastUsageRunId },
+        );
         if (costUsd != null) {
           emit(cursorCostOnlyUsageEvent(costUsd));
         }

@@ -86,6 +86,85 @@ describe('slack outbound reply badges', () => {
     expect(listSlackReplyBadges()).toEqual([]);
   });
 
+  it('polls bot↔user DMs with the bot token (user token cannot see them)', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-slack-watch-'));
+    process.env.SIDEBOARD_SECRET_VAULT = 'plain';
+    const watch = await import('./outbound-watch.js');
+    watch.resetSlackOutboundWatchStateForTests();
+    const workspaces = await import('./workspaces.js');
+    workspaces.upsertSlackWorkspace({
+      team_id: 'T1',
+      team_name: 'Acme',
+      user_id: 'Ume',
+      bot_token: 'xoxb-bot',
+      user_token: 'xoxp-user',
+      connected_at: '2026-01-01T00:00:00.000Z',
+    });
+
+    watch.recordSlackOutboundWatch({
+      teamId: 'T1',
+      channelId: 'Ddm',
+      ts: '10.0',
+      kind: 'dm',
+      toUserId: 'Ualice',
+      toLabel: '@alice',
+      ownerUserId: 'Ume',
+    });
+
+    const tokensUsed: string[] = [];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      const auth = String((init?.headers as Record<string, string>)?.Authorization ?? '');
+      tokensUsed.push(auth.replace(/^Bearer\s+/i, ''));
+      const method = url.replace(/^.*\/api\//, '');
+      const token = auth.includes('xoxb-') ? 'bot' : 'user';
+      if (method === 'conversations.history') {
+        if (token === 'user') {
+          return { json: async () => ({ ok: false, error: 'channel_not_found' }) };
+        }
+        return {
+          json: async () => ({
+            ok: true,
+            messages: [
+              { ts: '10.0', bot_id: 'Bbot', text: 'original' },
+              { ts: '12.0', user: 'Ualice', text: 'Thanks!' },
+            ],
+          }),
+        };
+      }
+      if (method === 'conversations.replies') {
+        if (token === 'user') {
+          return { json: async () => ({ ok: false, error: 'channel_not_found' }) };
+        }
+        return { json: async () => ({ ok: true, messages: [{ ts: '10.0', bot_id: 'Bbot' }] }) };
+      }
+      if (method === 'chat.getPermalink') {
+        return {
+          json: async () => ({
+            ok: true,
+            permalink: 'https://acme.slack.com/archives/Ddm/p120',
+          }),
+        };
+      }
+      if (method === 'users.info') {
+        return {
+          json: async () => ({
+            ok: true,
+            user: { id: 'Ualice', name: 'alice', profile: { display_name: 'Alice' } },
+          }),
+        };
+      }
+      throw new Error(`unexpected ${method}`);
+    });
+
+    const badges = await watch.refreshSlackReplyBadges({
+      force: true,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(tokensUsed.every((t) => t.startsWith('xoxb-'))).toBe(true);
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.preview).toBe('Thanks!');
+  });
+
   it('badges when another user replies in a DM, then dismisses until a later reply', async () => {
     const {
       recordSlackOutboundWatch,

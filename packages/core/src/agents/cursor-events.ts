@@ -49,6 +49,7 @@ export type CursorSdkStreamMessage = {
     cacheReadTokens?: number;
     cacheWriteTokens?: number;
   };
+  run_id?: string;
 };
 
 function usageFromCursor(usage: CursorSdkStreamMessage['usage']): TokenUsage | null {
@@ -133,6 +134,70 @@ export function turnCostUsdFromCursorUsage(
   const delta = afterCents - beforeCents;
   if (!(delta >= 0) || !Number.isFinite(delta)) return undefined;
   return delta / 100;
+}
+
+/** Turn cost for one `getUsage().runs[]` entry (usage UUID on local agents). */
+export function costUsdFromRunSnapshot(
+  usage: CursorAgentUsageSnapshot | null | undefined,
+  runId: string,
+): number | undefined {
+  if (!usage?.runs?.length || !runId.trim()) return undefined;
+  const row = usage.runs.find((r) => r.runId === runId);
+  const cents = preferredCursorCostCents(row?.cost);
+  return cents != null ? cents / 100 : undefined;
+}
+
+/**
+ * Local `getUsage({ runId })` rejects client `run-<uuid>` stream labels — only
+ * pass usage UUIDs from `getUsage().runs[].runId`.
+ */
+export function cursorGetUsageRunId(runId: string | undefined | null): string | undefined {
+  const id = runId?.trim();
+  if (!id || id.startsWith('run-')) return undefined;
+  return id;
+}
+
+const CURSOR_COST_POLL_MS = [0, 400, 800, 1600, 3200] as const;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Poll `agent.getUsage()` until turn-scoped USD appears or retries exhaust.
+ * Cursor billing is eventually consistent — a single post-wait read often misses cost.
+ */
+export async function fetchCursorTurnCostUsd(
+  getUsage: (opts?: { runId?: string }) => Promise<CursorAgentUsageSnapshot>,
+  usageBefore: CursorAgentUsageSnapshot | null,
+  opts?: { runId?: string },
+): Promise<number | undefined> {
+  const lookupRunId = cursorGetUsageRunId(opts?.runId);
+  for (const delay of CURSOR_COST_POLL_MS) {
+    if (delay > 0) await sleep(delay);
+    try {
+      if (lookupRunId) {
+        const scoped = await getUsage({ runId: lookupRunId });
+        const direct = costUsdFromRunSnapshot(scoped, lookupRunId);
+        if (direct != null) return direct;
+      }
+      const after = await getUsage();
+      const delta = turnCostUsdFromCursorUsage(usageBefore, after);
+      if (delta != null) return delta;
+    } catch (err) {
+      if (isCursorUsageUnavailableError(err)) return undefined;
+      /* billing may still be landing — retry */
+    }
+  }
+  return undefined;
+}
+
+/** Cursor `agent.getUsage()` is not enabled for every API key / plan. */
+export function isCursorUsageUnavailableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /feature_unavailable|feature unavailable|not available for your account/i.test(msg);
 }
 
 /** Cost-only turn usage event for the Cursor runner → spawn fold. */

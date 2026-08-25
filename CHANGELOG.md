@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.124] - 2026-08-25
+
+### Fixed
+
+- `slack_post` reply watching polls with the bot token so bot↔user DM replies are visible (`channel_not_found` on the user token).
+- **Settings → Advanced → Show cost (when available)** only displays provider-reported USD (no Cursor token estimates). Cursor turns still poll `agent.getUsage()` when the billing API is available for the account.
+
 ## [0.1.123] - 2026-08-24
 
 ### Changed

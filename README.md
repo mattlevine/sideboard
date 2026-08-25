@@ -185,7 +185,7 @@ A worktree chat is **repo + worktree + CMS** in one view:
 
 Agents open structure tabs via MCP (or you reopen them from message chips). Tabs stick per chat until you close them.
 
-Token counts always show on message chips, the thread Σ total, and worktree hover spend. **Settings → Advanced → Show cost** (off by default) also shows provider-reported USD when the agent CLI reports it (Claude, Cursor, OpenCode, Brightsy). Codex streams tokens only — no USD.
+Token counts always show on message chips, the thread Σ total, and worktree hover spend. **Settings → Advanced → Show cost (when available)** (off by default) also shows provider-reported USD when the agent CLI reports it (Claude, Cursor, OpenCode, Brightsy). Codex streams tokens only — no USD.
 
 ### Schema → form (not “a CMS product”)
 

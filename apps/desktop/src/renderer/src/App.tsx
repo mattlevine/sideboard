@@ -252,7 +252,7 @@ export function App() {
   const [settingsInitialNav, setSettingsInitialNav] = useState<
     'account' | 'agents' | 'environment' | 'schedules' | 'advanced' | 'history'
   >('account');
-  /** Settings → Advanced → Show cost (default off). */
+  /** Settings → Advanced → Show cost (when available) (default off). */
   const [showCost, setShowCost] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),

@@ -526,7 +526,9 @@ export async function refreshSlackReplyBadges(opts?: {
     if (!ws) continue;
     let token: string;
     try {
-      token = slackTokenFor(ws, 'read');
+      // Watches are for bot `chat.postMessage` (slack_post). Bot↔user DMs are
+      // invisible to the user token (`channel_not_found`); prefer write/bot.
+      token = slackTokenFor(ws, 'write');
     } catch {
       continue;
     }

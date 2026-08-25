@@ -6,6 +6,10 @@ import { cursorAdapter } from './cursor.js';
 import {
   cursorDeltaToEvents,
   cursorSdkMessageToEvents,
+  costUsdFromRunSnapshot,
+  cursorGetUsageRunId,
+  fetchCursorTurnCostUsd,
+  isCursorUsageUnavailableError,
   parseCursorRunnerLine,
   preferredCursorCostCents,
   turnCostUsdFromCursorUsage,
@@ -398,5 +402,67 @@ describe('turnCostUsdFromCursorUsage', () => {
         runs: [],
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('costUsdFromRunSnapshot', () => {
+  it('reads cost from a matching run entry', () => {
+    expect(
+      costUsdFromRunSnapshot(
+        {
+          runs: [{ runId: 'usage-1', cost: { rawCostCents: 7 } }],
+        },
+        'usage-1',
+      ),
+    ).toBe(0.07);
+  });
+});
+
+describe('cursorGetUsageRunId', () => {
+  it('drops local stream run labels', () => {
+    expect(cursorGetUsageRunId('run-abc')).toBeUndefined();
+    expect(cursorGetUsageRunId('usage-uuid')).toBe('usage-uuid');
+  });
+});
+
+describe('fetchCursorTurnCostUsd', () => {
+  it('polls until cost appears', async () => {
+    let calls = 0;
+    const result = await fetchCursorTurnCostUsd(
+      async () => {
+        calls += 1;
+        if (calls < 3) return { runs: [{ runId: 'usage-1' }] };
+        return {
+          runs: [{ runId: 'usage-1', cost: { chargedCents: 4 } }],
+        };
+      },
+      { runs: [] },
+      { runId: 'usage-1' },
+    );
+    expect(result).toBe(0.04);
+    expect(calls).toBeGreaterThanOrEqual(3);
+  });
+
+  it('stops polling when billing API is unavailable', async () => {
+    let calls = 0;
+    const result = await fetchCursorTurnCostUsd(
+      async () => {
+        calls += 1;
+        throw new Error('[feature_unavailable] This feature is not available for your account');
+      },
+      { runs: [] },
+    );
+    expect(result).toBeUndefined();
+    expect(calls).toBe(1);
+  });
+});
+
+describe('isCursorUsageUnavailableError', () => {
+  it('detects feature_unavailable', () => {
+    expect(
+      isCursorUsageUnavailableError(
+        new Error('[feature_unavailable] This feature is not available for your account'),
+      ),
+    ).toBe(true);
   });
 });
