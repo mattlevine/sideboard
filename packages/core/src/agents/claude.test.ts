@@ -374,10 +374,7 @@ describe('claudeAdapter.parseEvent', () => {
       scope: 'turn',
     });
   });
-<<<<<<< HEAD
-=======
 
->>>>>>> bf09d504743beee284b481ac02b9079b455e2e6a
   it('ignores rate_limit and other non-text events', () => {
     const event = claudeAdapter.parseEvent(
       JSON.stringify({
