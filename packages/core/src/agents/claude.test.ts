@@ -336,6 +336,45 @@ describe('claudeAdapter.parseEvent', () => {
     });
   });
 
+  it('extracts total_cost_usd from the final result event when modelUsage is absent', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        session_id: 'sess-123',
+        total_cost_usd: 0.042,
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    );
+    expect(event).toEqual({
+      type: 'usage',
+      data: { inputTokens: 10, outputTokens: 5, costUsd: 0.042 },
+      scope: 'turn',
+    });
+  });
+
+  it('prefers modelUsage costUSD over cumulative total_cost_usd', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        session_id: 'sess-123',
+        // Session-cumulative after --resume — must not become this turn's costUsd.
+        total_cost_usd: 0.1,
+        usage: { input_tokens: 10, output_tokens: 5 },
+        modelUsage: {
+          'claude-sonnet-4': { inputTokens: 8, outputTokens: 4, costUSD: 0.012 },
+          'claude-haiku-4': { inputTokens: 2, outputTokens: 1, costUSD: 0.003 },
+        },
+      }),
+    );
+    expect(event).toEqual({
+      type: 'usage',
+      data: { inputTokens: 10, outputTokens: 5, costUsd: 0.015 },
+      scope: 'turn',
+    });
+  });
+
   it('ignores rate_limit and other non-text events', () => {
     const event = claudeAdapter.parseEvent(
       JSON.stringify({

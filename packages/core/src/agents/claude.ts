@@ -113,6 +113,34 @@ function usageFromClaude(usage: ClaudeUsage | undefined): TokenUsage | null {
   };
 }
 
+/**
+ * Turn-scoped USD for a Claude `result` event.
+ * Prefer summing `modelUsage.*.costUSD` (this call). Do not use
+ * `total_cost_usd` when modelUsage is present — after `--resume` that field is
+ * session-cumulative and would overcount when Sideboard sums message costs.
+ */
+function costUsdFromClaudeResult(obj: Record<string, unknown>): number | undefined {
+  const modelUsage = obj.modelUsage;
+  if (modelUsage && typeof modelUsage === 'object') {
+    let sum = 0;
+    let any = false;
+    for (const entry of Object.values(modelUsage as Record<string, unknown>)) {
+      if (!entry || typeof entry !== 'object') continue;
+      const cost = (entry as { costUSD?: unknown }).costUSD;
+      if (cost != null && Number.isFinite(Number(cost))) {
+        sum += Number(cost);
+        any = true;
+      }
+    }
+    if (any) return sum;
+  }
+  const totalCost = obj.total_cost_usd;
+  if (totalCost != null && Number.isFinite(Number(totalCost))) {
+    return Number(totalCost);
+  }
+  return undefined;
+}
+
 /** Pull a human-readable error out of a Claude stream-json `result` event. */
 export function claudeResultErrorDetail(obj: Record<string, unknown>): string | null {
   const isError =
@@ -577,7 +605,11 @@ export const claudeAdapter: AgentAdapter = {
           if (typeof text === 'string' && text) events.push({ type: 'stdout', data: text });
         }
         const usage = usageFromClaude((obj as { usage?: ClaudeUsage }).usage);
-        if (usage) events.push({ type: 'usage', data: usage, scope: 'turn' });
+        if (usage) {
+          const costUsd = costUsdFromClaudeResult(obj);
+          if (costUsd != null) usage.costUsd = costUsd;
+          events.push({ type: 'usage', data: usage, scope: 'turn' });
+        }
         if (events.length === 0) return null;
         return events.length === 1 ? events[0]! : events;
       }

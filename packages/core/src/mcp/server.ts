@@ -149,7 +149,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_thread',
-    'Get a compact thread summary by id/ref. While running, includes progress (last tool/thinking) and lastActivityAt.',
+    'Get a compact thread summary by id/ref. While running, includes progress (last tool/thinking) and lastActivityAt. Includes usage (thread billed token + costUsd totals when providers reported cost) and lastTurnUsage.',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
@@ -160,6 +160,7 @@ export async function startMcpServer(): Promise<void> {
         t.status === 'running' || t.status === 'queued'
           ? readTurnLive(t.id)
           : null;
+      const spend = orch.getThreadUsage(t.id);
       const summary = {
         id: t.id,
         title: t.title,
@@ -180,6 +181,8 @@ export async function startMcpServer(): Promise<void> {
           live?.summary ??
           (t.status === 'queued' ? 'Queued — waiting for a concurrency slot' : null),
         lastActivityAt: live?.updatedAt ?? null,
+        usage: spend.usage,
+        lastTurnUsage: spend.lastTurnUsage,
       };
       return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
     },
@@ -631,7 +634,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume a hang. On status error, lastError/text is the failure.',
+    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume a hang. On status error, lastError/text is the failure. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -663,7 +666,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_turn_result',
-    'Assistant message when the turn finished, or live progress while stillRunning. Not the full transcript.',
+    'Assistant message when the turn finished, or live progress while stillRunning. Not the full transcript. Includes usage for the last agent turn (tokens + costUsd when reported).',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);

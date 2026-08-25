@@ -31,15 +31,21 @@ type BrightsyUsage = {
   prompt_tokens?: number;
   completion_tokens?: number;
   prompt_tokens_details?: { cached_tokens?: number };
+  cost?: number;
 };
 
 function usageFromBrightsy(usage: BrightsyUsage | undefined): TokenUsage | null {
   if (!usage) return null;
-  return fromInclusiveInputUsage({
+  const mapped = fromInclusiveInputUsage({
     inputTokens: Number(usage.prompt_tokens ?? 0),
     outputTokens: Number(usage.completion_tokens ?? 0),
     cachedInputTokens: Number(usage.prompt_tokens_details?.cached_tokens ?? 0),
   });
+  if (!mapped) return null;
+  if (usage.cost != null && Number.isFinite(Number(usage.cost))) {
+    mapped.costUsd = Number(usage.cost);
+  }
+  return mapped;
 }
 
 /**

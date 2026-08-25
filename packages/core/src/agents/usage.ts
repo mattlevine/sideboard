@@ -40,7 +40,34 @@ export function mergeUsage(a: TokenUsage | null, b: TokenUsage): TokenUsage {
     outputTokens: (a?.outputTokens ?? 0) + b.outputTokens,
     cacheReadTokens: sumOptional(a?.cacheReadTokens, b.cacheReadTokens),
     cacheWriteTokens: sumOptional(a?.cacheWriteTokens, b.cacheWriteTokens),
+    costUsd: sumOptional(a?.costUsd, b.costUsd),
     lastRequestTokens: b.lastRequestTokens ?? a?.lastRequestTokens,
+  };
+}
+
+/**
+ * Sum billed usage across turns (thread total). Omits `lastRequestTokens`
+ * (that field is per-request occupancy, not additive).
+ */
+export function sumUsageList(list: (TokenUsage | undefined | null)[]): TokenUsage | null {
+  let acc: TokenUsage | null = null;
+  for (const u of list) {
+    if (!u) continue;
+    acc = mergeUsage(acc, {
+      inputTokens: u.inputTokens,
+      outputTokens: u.outputTokens,
+      cacheReadTokens: u.cacheReadTokens,
+      cacheWriteTokens: u.cacheWriteTokens,
+      costUsd: u.costUsd,
+    });
+  }
+  if (!acc) return null;
+  return {
+    inputTokens: acc.inputTokens,
+    outputTokens: acc.outputTokens,
+    ...(acc.cacheReadTokens != null ? { cacheReadTokens: acc.cacheReadTokens } : {}),
+    ...(acc.cacheWriteTokens != null ? { cacheWriteTokens: acc.cacheWriteTokens } : {}),
+    ...(acc.costUsd != null ? { costUsd: acc.costUsd } : {}),
   };
 }
 
@@ -59,6 +86,7 @@ export function applyTurnUsage(
   if (scope === 'turn') {
     return {
       ...incoming,
+      costUsd: incoming.costUsd ?? current?.costUsd,
       lastRequestTokens: current?.lastRequestTokens ?? requestOccupancy(incoming),
     };
   }

@@ -4,6 +4,7 @@ import {
   contextTokens,
   fromInclusiveInputUsage,
   requestOccupancy,
+  sumUsageList,
 } from './usage.js';
 
 describe('fromInclusiveInputUsage', () => {
@@ -25,6 +26,26 @@ describe('fromInclusiveInputUsage', () => {
     expect(
       fromInclusiveInputUsage({ inputTokens: 100, outputTokens: 10 }),
     ).toEqual({ inputTokens: 100, outputTokens: 10 });
+  });
+});
+
+describe('sumUsageList', () => {
+  it('sums billed tokens and cost across turns', () => {
+    expect(
+      sumUsageList([
+        { inputTokens: 100, outputTokens: 10, costUsd: 0.01, lastRequestTokens: 50 },
+        { inputTokens: 200, outputTokens: 20, costUsd: 0.02 },
+        { inputTokens: 50, outputTokens: 5 },
+      ]),
+    ).toEqual({
+      inputTokens: 350,
+      outputTokens: 35,
+      costUsd: 0.03,
+    });
+  });
+
+  it('returns null when nothing has usage', () => {
+    expect(sumUsageList([undefined, null])).toBeNull();
   });
 });
 
@@ -74,5 +95,51 @@ describe('applyTurnUsage', () => {
     );
     expect(only.lastRequestTokens).toBe(1_320);
     expect(requestOccupancy(only)).toBe(1_320);
+  });
+
+  it('sums costUsd across request-scoped steps', () => {
+    const afterFirst = applyTurnUsage(
+      null,
+      { inputTokens: 100, outputTokens: 10, costUsd: 0.001 },
+      'request',
+    );
+    const afterSecond = applyTurnUsage(
+      afterFirst,
+      { inputTokens: 50, outputTokens: 5, costUsd: 0.002 },
+      'request',
+    );
+    expect(afterSecond.costUsd).toBeCloseTo(0.003);
+  });
+
+  it('prefers turn-scoped costUsd over the running request sum', () => {
+    const stepped = applyTurnUsage(
+      applyTurnUsage(
+        null,
+        { inputTokens: 100, outputTokens: 10, costUsd: 0.001 },
+        'request',
+      ),
+      { inputTokens: 50, outputTokens: 5, costUsd: 0.002 },
+      'request',
+    );
+    const withTotal = applyTurnUsage(
+      stepped,
+      { inputTokens: 150, outputTokens: 15, costUsd: 0.004 },
+      'turn',
+    );
+    expect(withTotal.costUsd).toBe(0.004);
+  });
+
+  it('keeps request sum when turn total has no costUsd', () => {
+    const stepped = applyTurnUsage(
+      null,
+      { inputTokens: 100, outputTokens: 10, costUsd: 0.001 },
+      'request',
+    );
+    const withTotal = applyTurnUsage(
+      stepped,
+      { inputTokens: 100, outputTokens: 10 },
+      'turn',
+    );
+    expect(withTotal.costUsd).toBe(0.001);
   });
 });

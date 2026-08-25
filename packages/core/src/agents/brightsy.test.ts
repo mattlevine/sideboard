@@ -152,12 +152,13 @@ describe('brightsyAdapter.parseEvent', () => {
           prompt_tokens: 19618,
           prompt_tokens_details: { cached_tokens: 100 },
           completion_tokens: 29,
+          cost: 0.0042,
         },
       }),
     );
     expect(event).toEqual({
       type: 'usage',
-      data: { inputTokens: 19518, outputTokens: 29, cacheReadTokens: 100 },
+      data: { inputTokens: 19518, outputTokens: 29, cacheReadTokens: 100, costUsd: 0.0042 },
     });
   });
 
