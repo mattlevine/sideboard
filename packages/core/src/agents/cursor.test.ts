@@ -7,6 +7,8 @@ import {
   cursorDeltaToEvents,
   cursorSdkMessageToEvents,
   parseCursorRunnerLine,
+  preferredCursorCostCents,
+  turnCostUsdFromCursorUsage,
 } from './cursor-events.js';
 import type { Thread } from '../types/thread.js';
 
@@ -351,5 +353,50 @@ describe('parseCursorRunnerLine', () => {
 
   it('falls back to stdout for non-JSON', () => {
     expect(parseCursorRunnerLine('plain')).toEqual({ type: 'stdout', data: 'plain' });
+  });
+});
+
+describe('turnCostUsdFromCursorUsage', () => {
+  it('prefers charged cents over raw', () => {
+    expect(
+      preferredCursorCostCents({ chargedCents: 1.5, rawCostCents: 9 }),
+    ).toBe(1.5);
+    expect(preferredCursorCostCents({ chargedCents: 0, rawCostCents: 4.2 })).toBe(4.2);
+  });
+
+  it('sums cost on newly appeared runs', () => {
+    expect(
+      turnCostUsdFromCursorUsage(
+        {
+          cost: { chargedCents: 10 },
+          runs: [{ runId: 'a', cost: { chargedCents: 10 } }],
+        },
+        {
+          cost: { chargedCents: 13 },
+          runs: [
+            { runId: 'a', cost: { chargedCents: 10 } },
+            { runId: 'b', cost: { rawCostCents: 3 } },
+          ],
+        },
+      ),
+    ).toBe(0.03);
+  });
+
+  it('falls back to agent-level cents delta when runs lack cost', () => {
+    expect(
+      turnCostUsdFromCursorUsage(
+        { cost: { chargedCents: 10 }, runs: [{ runId: 'a' }] },
+        { cost: { chargedCents: 15.5 }, runs: [{ runId: 'a' }, { runId: 'b' }] },
+      ),
+    ).toBeCloseTo(0.055);
+  });
+
+  it('does not assign session-total cost without a before snapshot', () => {
+    expect(
+      turnCostUsdFromCursorUsage(null, {
+        cost: { chargedCents: 42 },
+        runs: [],
+      }),
+    ).toBeUndefined();
   });
 });

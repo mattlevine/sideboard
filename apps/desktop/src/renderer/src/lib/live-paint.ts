@@ -1,5 +1,6 @@
-import type { AgentEvent, MessagePart } from '@sideboard-ai/core';
+import type { AgentEvent, MessagePart, TokenUsage } from '@sideboard-ai/core';
 import { applyAgentEvent } from '@sideboard/message-parts';
+import { applyTurnUsage } from '@sideboard/usage';
 
 export type LivePaintOp =
   | { kind: 'output'; threadId: string; event: AgentEvent }
@@ -10,6 +11,7 @@ export type LivePaintState = {
   output: Record<string, string>;
   parts: Record<string, MessagePart[]>;
   startedAt: Record<string, number>;
+  usage: Record<string, TokenUsage | null>;
 };
 
 /** Raw CLI JSON dumps should not accumulate in the board preview string. */
@@ -31,12 +33,13 @@ export function foldLivePaintOps(
   ops: LivePaintOp[],
   now: number,
 ): LivePaintState {
-  let { output, parts, startedAt } = state;
+  let { output, parts, startedAt, usage } = state;
   for (const op of ops) {
     if (op.kind === 'started') {
       output = { ...output, [op.threadId]: '' };
       parts = { ...parts, [op.threadId]: [] };
       startedAt = { ...startedAt, [op.threadId]: now };
+      usage = { ...usage, [op.threadId]: null };
       continue;
     }
     if (op.kind === 'clear') {
@@ -44,6 +47,8 @@ export function foldLivePaintOps(
       parts = { ...parts, [op.threadId]: [] };
       startedAt = { ...startedAt };
       delete startedAt[op.threadId];
+      usage = { ...usage };
+      delete usage[op.threadId];
       continue;
     }
     const ev = op.event;
@@ -64,6 +69,16 @@ export function foldLivePaintOps(
         [op.threadId]: applyAgentEvent(parts[op.threadId] ?? [], ev),
       };
     }
+    if (ev.type === 'usage') {
+      usage = {
+        ...usage,
+        [op.threadId]: applyTurnUsage(
+          usage[op.threadId] ?? null,
+          ev.data,
+          ev.scope ?? 'request',
+        ),
+      };
+    }
   }
-  return { output, parts, startedAt };
+  return { output, parts, startedAt, usage };
 }

@@ -26,8 +26,15 @@ export { cursorAdapter } from './cursor.js';
 export {
   cursorSdkMessageToEvents,
   parseCursorRunnerLine,
+  preferredCursorCostCents,
+  turnCostUsdFromCursorUsage,
 } from './cursor-events.js';
-export type { CursorSdkStreamMessage, CursorTurnRequest } from './cursor-events.js';
+export type {
+  CursorSdkStreamMessage,
+  CursorTurnRequest,
+  CursorAgentUsageSnapshot,
+  CursorUsageCost,
+} from './cursor-events.js';
 export {
   isCursorAutoModel,
   listCursorModels,

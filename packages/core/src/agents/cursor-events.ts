@@ -66,6 +66,84 @@ function usageFromCursor(usage: CursorSdkStreamMessage['usage']): TokenUsage | n
   };
 }
 
+/** Cursor SDK `UsageCost` — dollar amounts in float cents. */
+export type CursorUsageCost = {
+  chargedCents?: number;
+  rawCostCents?: number;
+};
+
+export type CursorRunUsageSnapshot = {
+  runId: string;
+  cost?: CursorUsageCost;
+};
+
+/** Subset of `agent.getUsage()` used for turn-scoped cost. */
+export type CursorAgentUsageSnapshot = {
+  cost?: CursorUsageCost;
+  runs?: CursorRunUsageSnapshot[];
+};
+
+/**
+ * Prefer actually charged cents; fall back to raw model cost (plan / BYOK /
+ * credit-grant turns often report chargedCents=0).
+ */
+export function preferredCursorCostCents(
+  cost?: CursorUsageCost | null,
+): number | undefined {
+  if (!cost) return undefined;
+  const charged = Number(cost.chargedCents);
+  const raw = Number(cost.rawCostCents);
+  if (Number.isFinite(charged) && charged > 0) return charged;
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  if (Number.isFinite(charged)) return charged;
+  if (Number.isFinite(raw)) return raw;
+  return undefined;
+}
+
+/**
+ * Turn-scoped USD from before/after `agent.getUsage()` snapshots.
+ * Prefers cost on newly appeared runs; else agent-level cents delta when a
+ * before snapshot exists. Returns undefined when cost is not reported yet
+ * (eventually consistent) or when there is no safe turn baseline.
+ */
+export function turnCostUsdFromCursorUsage(
+  before: CursorAgentUsageSnapshot | null | undefined,
+  after: CursorAgentUsageSnapshot | null | undefined,
+): number | undefined {
+  if (!after) return undefined;
+  const beforeIds = new Set((before?.runs ?? []).map((r) => r.runId));
+  const newRuns = (after.runs ?? []).filter((r) => !beforeIds.has(r.runId));
+  let sum = 0;
+  let any = false;
+  for (const r of newRuns) {
+    const c = preferredCursorCostCents(r.cost);
+    if (c != null) {
+      sum += c;
+      any = true;
+    }
+  }
+  if (any) return sum / 100;
+
+  // Without a before snapshot, agent.cost is session-cumulative — do not assign
+  // the whole agent total to this turn.
+  if (before == null) return undefined;
+  const afterCents = preferredCursorCostCents(after.cost);
+  if (afterCents == null) return undefined;
+  const beforeCents = preferredCursorCostCents(before.cost) ?? 0;
+  const delta = afterCents - beforeCents;
+  if (!(delta >= 0) || !Number.isFinite(delta)) return undefined;
+  return delta / 100;
+}
+
+/** Cost-only turn usage event for the Cursor runner → spawn fold. */
+export function cursorCostOnlyUsageEvent(costUsd: number): AgentEvent {
+  return {
+    type: 'usage',
+    data: { inputTokens: 0, outputTokens: 0, costUsd },
+    scope: 'turn',
+  };
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;

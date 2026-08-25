@@ -24,7 +24,14 @@ import {
   withCursorLocalHangGuards,
 } from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
-import { cursorDeltaToEvents, cursorSdkMessageToEvents, type CursorTurnRequest } from './cursor-events.js';
+import {
+  cursorCostOnlyUsageEvent,
+  cursorDeltaToEvents,
+  cursorSdkMessageToEvents,
+  turnCostUsdFromCursorUsage,
+  type CursorAgentUsageSnapshot,
+  type CursorTurnRequest,
+} from './cursor-events.js';
 import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 
 // Electron-as-Node already started this process. Drop inherited ELECTRON_*/
@@ -250,6 +257,15 @@ async function main(): Promise<number> {
     const bump = (): void => {
       activity.at = Date.now();
     };
+
+    // Baseline for turn-scoped cost (agent.getUsage is session-cumulative).
+    let usageBefore: CursorAgentUsageSnapshot | null = null;
+    try {
+      usageBefore = (await agent.getUsage()) as CursorAgentUsageSnapshot;
+    } catch {
+      /* best-effort — cost stays absent if getUsage fails */
+    }
+
     const run = await sendPrompt(agent, {
       onDelta: ({ update }) => {
         bump();
@@ -301,6 +317,24 @@ async function main(): Promise<number> {
       }
       // User stop / abort — not a failure for lastError.
       if (result.status === 'cancelled') return 0;
+
+      // Billed USD is not on the stream — pull getUsage (eventually consistent).
+      try {
+        let usageAfter = (await agent.getUsage()) as CursorAgentUsageSnapshot;
+        let costUsd = turnCostUsdFromCursorUsage(usageBefore, usageAfter);
+        if (costUsd == null) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 400);
+          });
+          usageAfter = (await agent.getUsage()) as CursorAgentUsageSnapshot;
+          costUsd = turnCostUsdFromCursorUsage(usageBefore, usageAfter);
+        }
+        if (costUsd != null) {
+          emit(cursorCostOnlyUsageEvent(costUsd));
+        }
+      } catch {
+        /* best-effort */
+      }
       return 0;
     } finally {
       stream.flush();

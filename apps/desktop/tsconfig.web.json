@@ -16,6 +16,7 @@
     "types": ["vite/client"],
     "paths": {
       "@sideboard/message-parts": ["../../packages/core/src/agents/message-parts.ts"],
+      "@sideboard/usage": ["../../packages/core/src/agents/usage.ts"],
       "@sideboard/worktree-labels": ["../../packages/core/src/git/worktree-labels.ts"],
       "@sideboard/brightsy-targets": ["../../packages/core/src/agents/brightsy-targets.ts"],
       "@sideboard/gh-errors": ["../../packages/core/src/git/gh-errors.ts"],
