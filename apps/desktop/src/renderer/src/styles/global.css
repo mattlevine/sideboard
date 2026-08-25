@@ -4125,6 +4125,12 @@ button.worktree-hover-card-title:hover {
   opacity: 0.85;
 }
 
+.worktree-hover-card-usage {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
 .composer-attachments {
   display: flex;
   flex-wrap: wrap;

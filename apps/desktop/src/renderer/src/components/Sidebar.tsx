@@ -18,6 +18,13 @@ import {
   unreadWorktreeKey,
 } from '../lib/unread-worktrees';
 import { useCaffeinateHold } from '../lib/caffeinate-tab';
+import {
+  formatCostUsd,
+  formatTokenCount,
+  sumUsage,
+  totalTokens,
+  usageTooltip,
+} from '../lib/tokens';
 import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { SidebarToggle } from './SidebarToggle';
@@ -171,10 +178,25 @@ function previewSnippet(thread: Thread): string {
   return '';
 }
 
+/** Billed totals across every open chat tab on this worktree (or orchestration group). */
+function groupSpendLabel(threads: Thread[]): { label: string; tooltip: string } | null {
+  const usage = sumUsage(threads.flatMap((t) => t.messages.map((m) => m.usage)));
+  if (!usage) return null;
+  const toks = formatTokenCount(totalTokens(usage));
+  const cost = usage.costUsd != null ? ` · ${formatCostUsd(usage.costUsd)}` : '';
+  const chatNote =
+    threads.length > 1 ? ` across ${threads.length} open chats` : '';
+  return {
+    label: `${toks} tok${cost}`,
+    tooltip: `Open chats${chatNote} — ${usageTooltip(usage)}`,
+  };
+}
+
 function WorktreeArchiveCard({
   open,
   anchorRef,
   thread,
+  group,
   label,
   onArchive,
   onKeepOpen,
@@ -182,6 +204,7 @@ function WorktreeArchiveCard({
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   thread: Thread;
+  group: Thread[];
   label: string;
   onArchive: () => void;
   onKeepOpen: (v: boolean) => void;
@@ -195,6 +218,7 @@ function WorktreeArchiveCard({
       ? String(prMeta.number)
       : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
+  const spend = groupSpendLabel(group);
   const ok =
     thread.status === 'idle' ||
     thread.status === 'stopped' ||
@@ -301,6 +325,11 @@ function WorktreeArchiveCard({
               ) : null}
             </button>
           ) : null}
+          {spend ? (
+            <span className="worktree-hover-card-usage" title={spend.tooltip}>
+              {spend.label}
+            </span>
+          ) : null}
           <span className="worktree-hover-card-age">
             {relativeTime(thread.updatedAt)}
           </span>
@@ -315,6 +344,7 @@ function WorktreeEditCard({
   open,
   anchorRef,
   thread,
+  group,
   label,
   dirty,
   loaded,
@@ -326,6 +356,7 @@ function WorktreeEditCard({
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   thread: Thread;
+  group: Thread[];
   label: string;
   dirty: boolean;
   loaded: boolean;
@@ -344,6 +375,7 @@ function WorktreeEditCard({
       ? String(prMeta.number)
       : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
+  const spend = groupSpendLabel(group);
   const ok =
     thread.status === 'idle' ||
     thread.status === 'stopped' ||
@@ -518,6 +550,11 @@ function WorktreeEditCard({
           </button>
         )}
         <div className="worktree-hover-card-meta">
+          {spend ? (
+            <span className="worktree-hover-card-usage" title={spend.tooltip}>
+              {spend.label}
+            </span>
+          ) : null}
           <span className="worktree-hover-card-age">
             {relativeTime(thread.updatedAt)}
           </span>
@@ -731,6 +768,7 @@ function WorktreeSidebarRow({
             open={archiveHover}
             anchorRef={archiveBtnRef}
             thread={primary}
+            group={group}
             label={worktreeLabel}
             onArchive={requestArchive}
             onKeepOpen={setArchiveCardOpen}
@@ -742,6 +780,7 @@ function WorktreeSidebarRow({
           open={gitCardOpen}
           anchorRef={rowRef}
           thread={primary}
+          group={group}
           label={worktreeLabel}
           dirty={dirty}
           loaded={loaded}
