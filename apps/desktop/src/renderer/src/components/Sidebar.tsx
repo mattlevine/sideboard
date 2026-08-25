@@ -195,155 +195,6 @@ function groupSpendLabel(
   };
 }
 
-function WorktreeArchiveCard({
-  open,
-  anchorRef,
-  thread,
-  group,
-  label,
-  onArchive,
-  onKeepOpen,
-}: {
-  open: boolean;
-  anchorRef: RefObject<HTMLElement | null>;
-  thread: Thread;
-  group: Thread[];
-  label: string;
-  onArchive: () => void;
-  onKeepOpen: (v: boolean) => void;
-}) {
-  const showCost = useShowCost();
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const [prMeta, setPrMeta] = useState<HoverPrMeta | null>(null);
-  const slug = worktreeSlug(thread);
-  const prUrl = prMeta?.url ?? thread.prUrl ?? null;
-  const prNum =
-    prMeta?.number != null
-      ? String(prMeta.number)
-      : prNumberFromUrl(prUrl ?? thread.prUrl);
-  const preview = previewSnippet(thread);
-  const spend = groupSpendLabel(group, showCost);
-  const ok =
-    thread.status === 'idle' ||
-    thread.status === 'stopped' ||
-    thread.status === 'archived';
-
-  useEffect(() => {
-    if (!open || !anchorRef.current) {
-      setPos(null);
-      return;
-    }
-    const rect = anchorRef.current.getBoundingClientRect();
-    const width = 320;
-    let left = rect.right + 10;
-    if (left + width > window.innerWidth - 12) {
-      left = Math.max(12, rect.left - width - 10);
-    }
-    let top = rect.top - 8;
-    if (top + 180 > window.innerHeight - 12) {
-      top = Math.max(12, window.innerHeight - 192);
-    }
-    setPos({ top, left });
-  }, [open, anchorRef, thread.id]);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const meta = await window.sideboard.getPrMeta(thread.id);
-        if (cancelled) return;
-        if (!meta) {
-          setPrMeta(null);
-          return;
-        }
-        setPrMeta(hoverPrFromIpc(meta));
-      } catch {
-        if (!cancelled) setPrMeta(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, thread.id, thread.prUrl]);
-
-  if (!open || !pos) return null;
-
-  const pillOpts = hoverPillOpts(prMeta);
-  const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
-  const prStatusMod = prMeta ? prPillModifier(pillOpts) : '';
-
-  return createPortal(
-    <div
-      className="worktree-hover-card"
-      style={{ top: pos.top, left: pos.left }}
-      role="dialog"
-      aria-label={`Archive ${label}`}
-      onMouseEnter={() => onKeepOpen(true)}
-      onMouseLeave={() => onKeepOpen(false)}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="worktree-hover-card-top">
-        <span className="worktree-hover-card-slug">{slug}</span>
-        <span
-          className={`worktree-hover-card-status${ok ? ' ok' : ''}`}
-          title={thread.status}
-          aria-label={thread.status}
-        >
-          {ok ? '✓' : '●'}
-        </span>
-      </div>
-      <div className="worktree-hover-card-title" title={label}>
-        {label}
-      </div>
-      {preview ? (
-        <p className="worktree-hover-card-preview">{preview}</p>
-      ) : null}
-      <div className="worktree-hover-card-footer">
-        <button
-          type="button"
-          className="worktree-hover-card-btn"
-          onClick={onArchive}
-        >
-          <span aria-hidden>▤</span>
-          Archive
-        </button>
-        <div className="worktree-hover-card-meta">
-          {prMeta && prNum ? (
-            <button
-              type="button"
-              className={`worktree-hover-card-btn${prStatusMod ? ` ${prStatusMod}` : ''}`}
-              title={
-                prStatusLabel
-                  ? `${prNum ? `#${prNum}` : 'PR'} · ${prStatusLabel}`
-                  : (prUrl ?? undefined)
-              }
-              onClick={() => {
-                if (prUrl) void window.sideboard.openExternal(prUrl);
-              }}
-            >
-              <span aria-hidden>⎇</span>
-              #{prNum} ↗
-              {prStatusLabel ? (
-                <span className="worktree-hover-card-btn-status">{prStatusLabel}</span>
-              ) : null}
-            </button>
-          ) : null}
-          {spend ? (
-            <span className="worktree-hover-card-usage" title={spend.tooltip}>
-              {spend.label}
-            </span>
-          ) : null}
-          <span className="worktree-hover-card-age">
-            {relativeTime(thread.updatedAt)}
-          </span>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 function WorktreeEditCard({
   open,
   anchorRef,
@@ -594,15 +445,10 @@ function WorktreeSidebarRow({
   showArchive?: boolean;
   onRequestArchive: (chats: Thread[]) => void;
 }) {
-  const [rowHover, setRowHover] = useState(false);
   const [gitCardOpen, setGitCardOpenState] = useState(false);
   const [stat, setStat] = useState<WorktreeDiffStat | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [archiveHover, setArchiveHover] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
-  const rowHoverRef = useRef(false);
-  const archiveBtnRef = useRef<HTMLButtonElement>(null);
-  const archiveCloseTimer = useRef<number | null>(null);
   const gitCloseTimer = useRef<number | null>(null);
   const fetchGen = useRef(0);
 
@@ -613,27 +459,9 @@ function WorktreeSidebarRow({
     }
   }
 
-  function setArchiveCardOpen(next: boolean) {
-    clearTimer(archiveCloseTimer);
-    if (next) {
-      clearTimer(gitCloseTimer);
-      setGitCardOpenState(false);
-      setArchiveHover(true);
-      return;
-    }
-    archiveCloseTimer.current = window.setTimeout(() => {
-      setArchiveHover(false);
-      archiveCloseTimer.current = null;
-      // Leaving the archive control back onto the row restores the git card.
-      if (rowHoverRef.current) setGitCardOpen(true);
-    }, 120);
-  }
-
   function setGitCardOpen(next: boolean) {
     clearTimer(gitCloseTimer);
     if (next) {
-      clearTimer(archiveCloseTimer);
-      setArchiveHover(false);
       setGitCardOpenState(true);
       return;
     }
@@ -645,7 +473,6 @@ function WorktreeSidebarRow({
 
   useEffect(() => {
     return () => {
-      clearTimer(archiveCloseTimer);
       clearTimer(gitCloseTimer);
     };
   }, []);
@@ -685,7 +512,6 @@ function WorktreeSidebarRow({
   const dirty = loaded && Boolean(stat?.dirty);
 
   function requestArchive() {
-    setArchiveHover(false);
     void window.sideboard
       .listWorktreeChats(primary.id)
       .then(onRequestArchive)
@@ -698,15 +524,10 @@ function WorktreeSidebarRow({
       className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
       aria-busy={archiving}
       onMouseEnter={() => {
-        rowHoverRef.current = true;
-        setRowHover(true);
-        if (!archiveHover) setGitCardOpen(true);
+        setGitCardOpen(true);
       }}
       onMouseLeave={() => {
-        rowHoverRef.current = false;
-        setRowHover(false);
         setGitCardOpen(false);
-        setArchiveCardOpen(false);
       }}
       onClick={(e) => {
         if (archiving) return;
@@ -757,27 +578,13 @@ function WorktreeSidebarRow({
         >
           <button
             type="button"
-            ref={archiveBtnRef}
-            className={`icon-btn worktree-remove-btn${archiveHover ? ' is-hot' : ''}`}
+            className="icon-btn worktree-remove-btn"
             aria-label={`Archive ${worktreeLabel}`}
-            aria-expanded={archiveHover}
-            onMouseEnter={() => setArchiveCardOpen(true)}
-            onMouseLeave={() => setArchiveCardOpen(false)}
-            onFocus={() => setArchiveCardOpen(true)}
-            onBlur={() => setArchiveCardOpen(false)}
+            title="Archive"
             onClick={requestArchive}
           >
             ▤
           </button>
-          <WorktreeArchiveCard
-            open={archiveHover}
-            anchorRef={archiveBtnRef}
-            thread={primary}
-            group={group}
-            label={worktreeLabel}
-            onArchive={requestArchive}
-            onKeepOpen={setArchiveCardOpen}
-          />
         </div>
       ) : null}
       {!archiving ? (

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.122] - 2026-08-24
+
+### Added
+
+- **Settings → Advanced → Show cost** (off by default): provider-reported USD on message chips, the thread Σ total, and worktree hover spend. Tokens still show either way; Codex never reports USD.
+- Cursor turns fold turn-scoped USD from `agent.getUsage()` after `run.wait()` when the stream is tokens-only.
+
+### Fixed
+
+- Sidebar archive control is the ▤ button only — no hover preview card.
+
 ## [0.1.121] - 2026-08-24
 
 ### Fixed
