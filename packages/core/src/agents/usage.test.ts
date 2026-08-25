@@ -142,4 +142,40 @@ describe('applyTurnUsage', () => {
     );
     expect(withTotal.costUsd).toBe(0.001);
   });
+
+  it('folds cost-only turn updates without wiping tokens or lastRequestTokens', () => {
+    const stepped = applyTurnUsage(
+      null,
+      { inputTokens: 100, outputTokens: 10, cacheReadTokens: 50 },
+      'request',
+    );
+    const withCost = applyTurnUsage(
+      stepped,
+      { inputTokens: 0, outputTokens: 0, costUsd: 0.042 },
+      'turn',
+    );
+    expect(withCost).toEqual({
+      inputTokens: 100,
+      outputTokens: 10,
+      cacheReadTokens: 50,
+      cacheWriteTokens: undefined,
+      costUsd: 0.042,
+      lastRequestTokens: 150,
+    });
+  });
+
+  it('does not zero lastRequestTokens on a cost-only request-scoped event', () => {
+    const stepped = applyTurnUsage(
+      null,
+      { inputTokens: 80, outputTokens: 5 },
+      'request',
+    );
+    const withCost = applyTurnUsage(
+      stepped,
+      { inputTokens: 0, outputTokens: 0, costUsd: 0.01 },
+      'request',
+    );
+    expect(withCost.lastRequestTokens).toBe(80);
+    expect(withCost.costUsd).toBe(0.01);
+  });
 });

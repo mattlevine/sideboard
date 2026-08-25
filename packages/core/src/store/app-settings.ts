@@ -201,6 +201,11 @@ export interface AdvancedAppSettings {
    */
   cowboyMode?: boolean;
   /**
+   * Show provider-reported USD cost on message chips, thread Σ, and sidebar
+   * hover spend. Default off — turn on in Settings → Advanced.
+   */
+  showCost?: boolean;
+  /**
    * When a linked PR becomes MERGED, archive the worktree’s chats.
    * Conductor: auto-archive on merge (opt-in; default off).
    */
@@ -509,6 +514,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.cowboyMode === 'boolean') {
     out.cowboyMode = source.cowboyMode;
+  }
+  if (typeof source.showCost === 'boolean') {
+    out.showCost = source.showCost;
   }
   if (typeof source.autoArchiveOnMerge === 'boolean') {
     out.autoArchiveOnMerge = source.autoArchiveOnMerge;
@@ -1250,6 +1258,9 @@ export function updateAdvancedSettings(
   if (typeof patch.cowboyMode === 'boolean') {
     advanced.cowboyMode = patch.cowboyMode;
   }
+  if (typeof patch.showCost === 'boolean') {
+    advanced.showCost = patch.showCost;
+  }
   if (typeof patch.autoArchiveOnMerge === 'boolean') {
     advanced.autoArchiveOnMerge = patch.autoArchiveOnMerge;
   }
@@ -1339,6 +1350,13 @@ export function cowboyModeEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.cowboyMode);
+}
+
+/** Settings → Advanced → Show cost (default off). */
+export function showCostEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.showCost);
 }
 
 /** Conductor-style opt-in — default off. */

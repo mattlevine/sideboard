@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextTokens, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
+import { contextFillRatio, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -105,9 +105,20 @@ describe('sumUsage cost', () => {
 });
 
 describe('usageTooltip cost', () => {
-  it('includes cost when present', () => {
-    expect(usageTooltip({ inputTokens: 10, outputTokens: 5, costUsd: 0.0042 })).toContain(
-      'Cost $0.0042',
-    );
+  it('includes cost only when showCost is true', () => {
+    const u = { inputTokens: 10, outputTokens: 5, costUsd: 0.0042 };
+    expect(usageTooltip(u)).not.toContain('Cost');
+    expect(usageTooltip(u, { showCost: true })).toContain('Cost $0.0042');
+  });
+});
+
+describe('formatCostSuffix', () => {
+  it('is empty when showCost is off', () => {
+    expect(formatCostSuffix(0.01, false)).toBe('');
+    expect(formatCostSuffix(null, true)).toBe('');
+  });
+
+  it('formats when showCost is on', () => {
+    expect(formatCostSuffix(0.01, true)).toBe(' · $0.01');
   });
 });

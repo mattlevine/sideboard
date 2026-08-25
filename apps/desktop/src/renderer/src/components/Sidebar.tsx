@@ -19,12 +19,13 @@ import {
 } from '../lib/unread-worktrees';
 import { useCaffeinateHold } from '../lib/caffeinate-tab';
 import {
-  formatCostUsd,
+  formatCostSuffix,
   formatTokenCount,
   sumUsage,
   totalTokens,
   usageTooltip,
 } from '../lib/tokens';
+import { useShowCost } from '../lib/show-cost';
 import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { SidebarToggle } from './SidebarToggle';
@@ -179,16 +180,18 @@ function previewSnippet(thread: Thread): string {
 }
 
 /** Billed totals across every open chat tab on this worktree (or orchestration group). */
-function groupSpendLabel(threads: Thread[]): { label: string; tooltip: string } | null {
+function groupSpendLabel(
+  threads: Thread[],
+  showCost: boolean,
+): { label: string; tooltip: string } | null {
   const usage = sumUsage(threads.flatMap((t) => t.messages.map((m) => m.usage)));
   if (!usage) return null;
   const toks = formatTokenCount(totalTokens(usage));
-  const cost = usage.costUsd != null ? ` · ${formatCostUsd(usage.costUsd)}` : '';
   const chatNote =
     threads.length > 1 ? ` across ${threads.length} open chats` : '';
   return {
-    label: `${toks} tok${cost}`,
-    tooltip: `Open chats${chatNote} — ${usageTooltip(usage)}`,
+    label: `${toks} tok${formatCostSuffix(usage.costUsd, showCost)}`,
+    tooltip: `Open chats${chatNote} — ${usageTooltip(usage, { showCost })}`,
   };
 }
 
@@ -209,6 +212,7 @@ function WorktreeArchiveCard({
   onArchive: () => void;
   onKeepOpen: (v: boolean) => void;
 }) {
+  const showCost = useShowCost();
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [prMeta, setPrMeta] = useState<HoverPrMeta | null>(null);
   const slug = worktreeSlug(thread);
@@ -218,7 +222,7 @@ function WorktreeArchiveCard({
       ? String(prMeta.number)
       : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
-  const spend = groupSpendLabel(group);
+  const spend = groupSpendLabel(group, showCost);
   const ok =
     thread.status === 'idle' ||
     thread.status === 'stopped' ||
@@ -365,6 +369,7 @@ function WorktreeEditCard({
   onOpen: () => void;
   onKeepOpen: (v: boolean) => void;
 }) {
+  const showCost = useShowCost();
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
   const [prMeta, setPrMeta] = useState<HoverPrMeta | null>(null);
@@ -375,7 +380,7 @@ function WorktreeEditCard({
       ? String(prMeta.number)
       : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
-  const spend = groupSpendLabel(group);
+  const spend = groupSpendLabel(group, showCost);
   const ok =
     thread.status === 'idle' ||
     thread.status === 'stopped' ||

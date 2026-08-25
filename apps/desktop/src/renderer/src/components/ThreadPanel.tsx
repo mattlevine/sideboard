@@ -13,6 +13,7 @@ import type {
   ThinkingEffort,
   Thread,
   ThreadAttachment,
+  TokenUsage,
 } from '@sideboard-ai/core';
 import { extractPendingPlanQuestions, formatPlanQuestionsForChat } from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
@@ -40,7 +41,8 @@ import {
   setRightPaneSuppressed,
   type RightPaneSession,
 } from '../lib/right-pane-memory';
-import { formatTokenCount, formatCostUsd, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { useShowCost } from '../lib/show-cost';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
@@ -114,6 +116,8 @@ interface Props {
   worktreeChats: Thread[];
   liveOutput: string;
   liveParts?: MessagePart[];
+  /** In-progress turn usage (tokens + costUsd) from live stream events. */
+  liveUsage?: TokenUsage | null;
   turnStartedAt?: number;
   onRefresh: () => void;
   onSelectChat: (id: string, created?: Thread) => void;
@@ -214,6 +218,7 @@ export function ThreadPanel({
   worktreeChats,
   liveOutput,
   liveParts = EMPTY_LIVE_PARTS,
+  liveUsage = null,
   turnStartedAt,
   onRefresh,
   onSelectChat,
@@ -245,6 +250,7 @@ export function ThreadPanel({
   leftSidebarToggle,
   rightSidebarToggle,
 }: Props) {
+  const showCost = useShowCost();
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [setupRunning, setSetupRunning] = useState(false);
@@ -1132,17 +1138,20 @@ export function ThreadPanel({
     }
     onRefresh();
   }
-  const threadUsage = useMemo(
-    () => sumUsage(thread.messages.map((m) => m.usage)),
-    [thread.messages],
-  );
+  const threadUsage = useMemo(() => {
+    const fromMessages = sumUsage(thread.messages.map((m) => m.usage));
+    // Live turn is not persisted yet — fold it into the tab Σ while streaming.
+    if (!liveUsage) return fromMessages;
+    return sumUsage([fromMessages ?? undefined, liveUsage]);
+  }, [thread.messages, liveUsage]);
   const latestContextUsage = useMemo(() => {
+    if (liveUsage) return liveUsage;
     for (let i = thread.messages.length - 1; i >= 0; i--) {
       const m = thread.messages[i];
       if (m?.role === 'agent' && m.usage) return m.usage;
     }
     return null;
-  }, [thread.messages]);
+  }, [thread.messages, liveUsage]);
   const contextWindow = resolveContextWindow(
     thread.agent,
     thread.model,
@@ -1406,12 +1415,15 @@ export function ThreadPanel({
         }
         usageTotalLabel={
           threadUsage
-            ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${
-                threadUsage.costUsd != null ? ` · ${formatCostUsd(threadUsage.costUsd)}` : ''
-              }`
+            ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${formatCostSuffix(
+                threadUsage.costUsd,
+                showCost,
+              )}`
             : null
         }
-        usageTotalTooltip={threadUsage ? `Thread total — ${usageTooltip(threadUsage)}` : undefined}
+        usageTotalTooltip={
+          threadUsage ? `Thread total — ${usageTooltip(threadUsage, { showCost })}` : undefined
+        }
         contextRatio={contextRatio}
         contextTooltip={
           latestContextUsage
@@ -1841,6 +1853,9 @@ export function ThreadPanel({
                   parts={liveParts}
                   streaming
                   startedAt={turnStartedAt}
+                  usage={liveUsage ?? undefined}
+                  agent={thread.agent}
+                  model={thread.model}
                   threadId={thread.id}
                   worktreePath={thread.worktreePath}
                   knownFilePaths={filePaths}

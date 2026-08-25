@@ -62,6 +62,15 @@ export function formatCostUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** ` · $X` when showCost is on and costUsd is present; otherwise empty. */
+export function formatCostSuffix(
+  costUsd: number | undefined | null,
+  showCost: boolean,
+): string {
+  if (!showCost || costUsd == null) return '';
+  return ` · ${formatCostUsd(costUsd)}`;
+}
+
 /** Compact display: 950 -> "950", 1200 -> "1.2k", 1_500_000 -> "1.5M". */
 export function formatTokenCount(n: number): string {
   if (n < 1000) return String(n);
@@ -73,7 +82,10 @@ export function formatTokenCount(n: number): string {
   return `${m.toFixed(m >= 100 ? 0 : 1).replace(/\.0$/, '')}M`;
 }
 
-export function usageTooltip(u: TokenUsage): string {
+export function usageTooltip(
+  u: TokenUsage,
+  opts?: { showCost?: boolean },
+): string {
   const billed = totalTokens(u);
   const context = contextTokens(u);
   const bits = [
@@ -84,7 +96,7 @@ export function usageTooltip(u: TokenUsage): string {
   ];
   if (u.cacheReadTokens) bits.push(`Cache read: ${u.cacheReadTokens.toLocaleString()}`);
   if (u.cacheWriteTokens) bits.push(`Cache write: ${u.cacheWriteTokens.toLocaleString()}`);
-  if (u.costUsd != null) bits.push(`Cost ${formatCostUsd(u.costUsd)}`);
+  if (opts?.showCost && u.costUsd != null) bits.push(`Cost ${formatCostUsd(u.costUsd)}`);
   return bits.join(' · ');
 }
 

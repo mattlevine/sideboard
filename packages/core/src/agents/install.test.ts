@@ -108,34 +108,44 @@ describe('agent install helpers', () => {
   });
 
   it('opens Terminal for login with absolute codex path + PATH export', async () => {
-    runMock.mockImplementation(async (file: string, args: string[]) => {
-      if (file === 'which' && args[0] === 'codex') {
-        return { stdout: '/opt/homebrew/bin/codex\n', stderr: '', exitCode: 0 };
-      }
-      return { stdout: '', stderr: '', exitCode: 0 };
-    });
-    const { loginAgent } = await import('./install.js');
-    const result = await loginAgent('codex');
-    expect(result.ok).toBe(true);
-    expect(result.openedTerminal).toBe(true);
-    expect(result.command).toContain('/opt/homebrew/bin/codex login');
-    expect(result.command).toMatch(/^export PATH=/);
-    expect(runMock).toHaveBeenCalledWith(
-      'osascript',
-      expect.arrayContaining([
-        '-e',
-        expect.stringContaining('/opt/homebrew/bin/codex login'),
-      ]),
-      expect.objectContaining({ reject: false }),
-    );
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    try {
+      runMock.mockImplementation(async (file: string, args: string[]) => {
+        if (file === 'which' && args[0] === 'codex') {
+          return { stdout: '/opt/homebrew/bin/codex\n', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+      const { loginAgent } = await import('./install.js');
+      const result = await loginAgent('codex');
+      expect(result.ok).toBe(true);
+      expect(result.openedTerminal).toBe(true);
+      expect(result.command).toContain('/opt/homebrew/bin/codex login');
+      expect(result.command).toMatch(/^export PATH=/);
+      expect(runMock).toHaveBeenCalledWith(
+        'osascript',
+        expect.arrayContaining([
+          '-e',
+          expect.stringContaining('/opt/homebrew/bin/codex login'),
+        ]),
+        expect.objectContaining({ reject: false }),
+      );
+    } finally {
+      platform.mockRestore();
+    }
   });
 
   it('rewrites login to a custom executable path override', async () => {
-    exeOverrides.codex = '/Users/me/.local/bin/codex';
-    runMock.mockImplementation(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
-    const { resolveLoginCommand, loginAgent } = await import('./install.js');
-    expect(resolveLoginCommand('codex')).toBe('/Users/me/.local/bin/codex login');
-    const result = await loginAgent('codex');
-    expect(result.command).toContain('/Users/me/.local/bin/codex login');
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    try {
+      exeOverrides.codex = '/Users/me/.local/bin/codex';
+      runMock.mockImplementation(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
+      const { resolveLoginCommand, loginAgent } = await import('./install.js');
+      expect(resolveLoginCommand('codex')).toBe('/Users/me/.local/bin/codex login');
+      const result = await loginAgent('codex');
+      expect(result.command).toContain('/Users/me/.local/bin/codex login');
+    } finally {
+      platform.mockRestore();
+    }
   });
 });

@@ -78,12 +78,26 @@ export type UsageScope = 'request' | 'turn';
  * Request-scoped events are one API call (sum for billing; last occupancy for the meter).
  * Turn-scoped events replace billed totals (Claude/Codex result) without wiping last-request size.
  */
+function hasBilledTokens(u: TokenUsage): boolean {
+  return Boolean(
+    u.inputTokens ||
+      u.outputTokens ||
+      u.cacheReadTokens ||
+      u.cacheWriteTokens,
+  );
+}
+
 export function applyTurnUsage(
   current: TokenUsage | null,
   incoming: TokenUsage,
   scope: UsageScope = 'request',
 ): TokenUsage {
   if (scope === 'turn') {
+    // Cost-only turn updates (e.g. Cursor getUsage after stream tokens) must not
+    // wipe billed tokens or last-request occupancy.
+    if (!hasBilledTokens(incoming) && current && incoming.costUsd != null) {
+      return { ...current, costUsd: incoming.costUsd };
+    }
     return {
       ...incoming,
       costUsd: incoming.costUsd ?? current?.costUsd,
@@ -91,7 +105,11 @@ export function applyTurnUsage(
     };
   }
   const merged = mergeUsage(current, incoming);
-  return { ...merged, lastRequestTokens: requestOccupancy(incoming) };
+  const occ = requestOccupancy(incoming);
+  return {
+    ...merged,
+    lastRequestTokens: occ > 0 ? occ : (current?.lastRequestTokens ?? occ),
+  };
 }
 
 /** Total tokens processed for a turn (input + output + cache reads/writes). */

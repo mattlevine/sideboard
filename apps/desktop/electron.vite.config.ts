@@ -40,6 +40,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/agents/message-parts.ts',
         ),
+        '@sideboard/usage': resolve(
+          __dirname,
+          '../../packages/core/src/agents/usage.ts',
+        ),
         '@sideboard/worktree-labels': resolve(
           __dirname,
           '../../packages/core/src/git/worktree-labels.ts',

@@ -120,13 +120,15 @@ function usageFromClaude(usage: ClaudeUsage | undefined): TokenUsage | null {
  * session-cumulative and would overcount when Sideboard sums message costs.
  */
 function costUsdFromClaudeResult(obj: Record<string, unknown>): number | undefined {
-  const modelUsage = obj.modelUsage;
+  // CLI has used camelCase (modelUsage / costUSD) and snake_case in some builds.
+  const modelUsage = obj.modelUsage ?? obj.model_usage;
   if (modelUsage && typeof modelUsage === 'object') {
     let sum = 0;
     let any = false;
     for (const entry of Object.values(modelUsage as Record<string, unknown>)) {
       if (!entry || typeof entry !== 'object') continue;
-      const cost = (entry as { costUSD?: unknown }).costUSD;
+      const row = entry as { costUSD?: unknown; cost_usd?: unknown };
+      const cost = row.costUSD ?? row.cost_usd;
       if (cost != null && Number.isFinite(Number(cost))) {
         sum += Number(cost);
         any = true;
@@ -134,7 +136,7 @@ function costUsdFromClaudeResult(obj: Record<string, unknown>): number | undefin
     }
     if (any) return sum;
   }
-  const totalCost = obj.total_cost_usd;
+  const totalCost = obj.total_cost_usd ?? obj.totalCostUsd;
   if (totalCost != null && Number.isFinite(Number(totalCost))) {
     return Number(totalCost);
   }

@@ -6,10 +6,12 @@ import type {
   OrchestratorRuntime,
   SlackReplyBadge,
   Thread,
+  TokenUsage,
   Workspace,
 } from '@sideboard-ai/core';
 import { lookupSoccerTeam } from '@sideboard/teams';
 import { foldLivePaintOps, type LivePaintOp } from './lib/live-paint';
+import { ShowCostProvider } from './lib/show-cost';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateModal } from './components/CreateModal';
@@ -112,6 +114,9 @@ export function App() {
   const [paneProgress, setPaneProgress] = useState<PaneProgress | null>(null);
   const [liveByThread, setLiveByThread] = useState<Record<string, string>>({});
   const [livePartsByThread, setLivePartsByThread] = useState<Record<string, MessagePart[]>>({});
+  const [liveUsageByThread, setLiveUsageByThread] = useState<
+    Record<string, TokenUsage | null>
+  >({});
   const [turnStartedAtByThread, setTurnStartedAtByThread] = useState<Record<string, number>>({});
   const [runtime, setRuntime] = useState<OrchestratorRuntime | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -247,6 +252,8 @@ export function App() {
   const [settingsInitialNav, setSettingsInitialNav] = useState<
     'account' | 'agents' | 'environment' | 'schedules' | 'advanced' | 'history'
   >('account');
+  /** Settings → Advanced → Show cost (default off). */
+  const [showCost, setShowCost] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -316,6 +323,12 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    void window.sideboard.getAppSettings().then((s) => {
+      setShowCost(Boolean(s.advanced?.showCost));
+    });
+  }, []);
+
   const notifySoccerNickname = useCallback((title: string | null | undefined) => {
     if (!title?.trim()) return;
     const team = lookupSoccerTeam(title);
@@ -373,6 +386,7 @@ export function App() {
         output: {} as Record<string, string>,
         parts: {} as Record<string, MessagePart[]>,
         startedAt: {} as Record<string, number>,
+        usage: {} as Record<string, TokenUsage | null>,
       },
     };
     let liveRaf = 0;
@@ -385,6 +399,7 @@ export function App() {
       liveSnapshot.current = next;
       setLiveByThread(next.output);
       setLivePartsByThread(next.parts);
+      setLiveUsageByThread(next.usage);
       setTurnStartedAtByThread(next.startedAt);
     };
     const queueLive = (op: LivePaintOp) => {
@@ -904,6 +919,7 @@ export function App() {
   } as CSSProperties;
 
   return (
+    <ShowCostProvider showCost={showCost}>
     <div className={appClass} style={appStyle}>
       {leftSidebarOpen && (
         <div className="sidebar-slot">
@@ -992,6 +1008,7 @@ export function App() {
               worktreeChats,
               liveOutput: liveByThread[selected.id] ?? '',
               liveParts: livePartsByThread[selected.id] ?? EMPTY_LIVE_PARTS,
+              liveUsage: liveUsageByThread[selected.id] ?? null,
               turnStartedAt: turnStartedAtByThread[selected.id],
               onRefresh: () => void refresh(),
               onSelectChat: (id: string, created?: Thread) => {
@@ -1032,6 +1049,7 @@ export function App() {
               worktreeChats={worktreeChats}
               liveOutput={liveByThread[selected.id] ?? ''}
               liveParts={livePartsByThread[selected.id] ?? EMPTY_LIVE_PARTS}
+              liveUsage={liveUsageByThread[selected.id] ?? null}
               turnStartedAt={turnStartedAtByThread[selected.id]}
               onRefresh={() => void refresh()}
               onSelectChild={(id) => {
@@ -1253,6 +1271,9 @@ export function App() {
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
+          onSettingsChange={(s) => {
+            setShowCost(Boolean(s.advanced?.showCost));
+          }}
           onClose={() => {
             setSettingsOpen(false);
             setSettingsInitialNav('account');
@@ -1311,5 +1332,6 @@ export function App() {
         onDismiss={dismissTeamToast}
       />
     </div>
+    </ShowCostProvider>
   );
 }
