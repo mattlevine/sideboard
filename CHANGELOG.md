@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.123] - 2026-08-24
+
+### Changed
+
+- Desktop GitHub release of the 0.1.122 Show cost + sidebar archive control work (fresh Mac DMG / zip).
+
 ## [0.1.122] - 2026-08-24
 
 ### Added
