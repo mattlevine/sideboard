@@ -145,6 +145,8 @@ interface Props {
   archived?: Thread[];
   onRestoreArchived?: (id: string) => void;
   onOpenArchived?: (id: string) => void;
+  /** Fired when settings are loaded or saved (so the board can react to Advanced toggles). */
+  onSettingsChange?: (settings: PublicAppSettings) => void;
 }
 
 const CLAUDE_CHROME_DOCS = 'https://code.claude.com/docs/en/chrome';
@@ -222,6 +224,7 @@ export function SettingsModal({
   archived = [],
   onRestoreArchived,
   onOpenArchived,
+  onSettingsChange,
 }: Props) {
   const [nav, setNav] = useState<NavId>(initialNav);
   const [agentPanel, setAgentPanel] = useState<AgentPanel | null>(null);
@@ -486,8 +489,10 @@ export function SettingsModal({
   }
 
   function applySettings(next: PublicAppSettings) {
-    setSettings(normalizeSettings(next));
+    const normalized = normalizeSettings(next);
+    setSettings(normalized);
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 3));
+    onSettingsChange?.(normalized);
   }
 
   async function saveIntegrationsPatch(patch: {
@@ -1882,6 +1887,33 @@ export function SettingsModal({
                       onClick={() =>
                         void saveAdvancedPatch({
                           cowboyMode: !advanced.cowboyMode,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">Show cost</div>
+                      <p className="settings-hint">
+                        Show provider-reported USD on message chips, the thread Σ total, and
+                        worktree hover spend. Off by default. Tokens still show either way;
+                        Codex never reports USD.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.showCost ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.showCost)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          showCost: !advanced.showCost,
                         })
                       }
                     >

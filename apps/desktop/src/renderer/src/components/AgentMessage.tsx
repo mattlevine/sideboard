@@ -7,7 +7,8 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, formatCostUsd, contextTokens, usageTooltip, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, contextTokens, usageTooltip, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
+import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
 import type { FilePathLink } from '../lib/file-path-link';
 import { FileReferenceModal } from './FileReferenceModal';
@@ -330,6 +331,7 @@ export function AgentMessage({
   onForkWorkspace,
   hideAnswer = false,
 }: Props) {
+  const showCost = useShowCost();
   const [openPhases, setOpenPhases] = useState<Set<number>>(
     () => (streaming ? new Set([0]) : new Set()),
   );
@@ -599,14 +601,14 @@ export function AgentMessage({
               <span className={`msg-age${startedAt != null ? ' live' : ''}`}>{durationLabel}</span>
             )}
             {usage && (
-              <span className="msg-usage" title={usageTooltip(usage)}>
+              <span className="msg-usage" title={usageTooltip(usage, { showCost })}>
                 <ContextMeter
                   ratio={contextFillRatio(usage, windowTokens)}
                   title={contextMeterTooltip(usage, windowTokens)}
                   size={12}
                 />
                 {formatTokenCount(contextTokens(usage))} tok
-                {usage.costUsd != null ? ` · ${formatCostUsd(usage.costUsd)}` : ''}
+                {formatCostSuffix(usage.costUsd, showCost)}
               </span>
             )}
             <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>

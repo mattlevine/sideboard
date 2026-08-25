@@ -41,7 +41,8 @@ import {
   setRightPaneSuppressed,
   type RightPaneSession,
 } from '../lib/right-pane-memory';
-import { formatTokenCount, formatCostUsd, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { useShowCost } from '../lib/show-cost';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
@@ -249,6 +250,7 @@ export function ThreadPanel({
   leftSidebarToggle,
   rightSidebarToggle,
 }: Props) {
+  const showCost = useShowCost();
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [setupRunning, setSetupRunning] = useState(false);
@@ -1413,12 +1415,15 @@ export function ThreadPanel({
         }
         usageTotalLabel={
           threadUsage
-            ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${
-                threadUsage.costUsd != null ? ` · ${formatCostUsd(threadUsage.costUsd)}` : ''
-              }`
+            ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${formatCostSuffix(
+                threadUsage.costUsd,
+                showCost,
+              )}`
             : null
         }
-        usageTotalTooltip={threadUsage ? `Thread total — ${usageTooltip(threadUsage)}` : undefined}
+        usageTotalTooltip={
+          threadUsage ? `Thread total — ${usageTooltip(threadUsage, { showCost })}` : undefined
+        }
         contextRatio={contextRatio}
         contextTooltip={
           latestContextUsage

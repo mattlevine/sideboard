@@ -11,6 +11,7 @@ import type {
 } from '@sideboard-ai/core';
 import { lookupSoccerTeam } from '@sideboard/teams';
 import { foldLivePaintOps, type LivePaintOp } from './lib/live-paint';
+import { ShowCostProvider } from './lib/show-cost';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateModal } from './components/CreateModal';
@@ -251,6 +252,8 @@ export function App() {
   const [settingsInitialNav, setSettingsInitialNav] = useState<
     'account' | 'agents' | 'environment' | 'schedules' | 'advanced' | 'history'
   >('account');
+  /** Settings → Advanced → Show cost (default off). */
+  const [showCost, setShowCost] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -318,6 +321,12 @@ export function App() {
     } catch {
       setWorkspaces([]);
     }
+  }, []);
+
+  useEffect(() => {
+    void window.sideboard.getAppSettings().then((s) => {
+      setShowCost(Boolean(s.advanced?.showCost));
+    });
   }, []);
 
   const notifySoccerNickname = useCallback((title: string | null | undefined) => {
@@ -910,6 +919,7 @@ export function App() {
   } as CSSProperties;
 
   return (
+    <ShowCostProvider showCost={showCost}>
     <div className={appClass} style={appStyle}>
       {leftSidebarOpen && (
         <div className="sidebar-slot">
@@ -1261,6 +1271,9 @@ export function App() {
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
+          onSettingsChange={(s) => {
+            setShowCost(Boolean(s.advanced?.showCost));
+          }}
           onClose={() => {
             setSettingsOpen(false);
             setSettingsInitialNav('account');
@@ -1319,5 +1332,6 @@ export function App() {
         onDismiss={dismissTeamToast}
       />
     </div>
+    </ShowCostProvider>
   );
 }

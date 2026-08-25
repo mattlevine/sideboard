@@ -301,6 +301,7 @@ describe('app settings', () => {
     expect(mod.caffeinateWhileSchedulesEnabled()).toBe(false);
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.cowboyModeEnabled()).toBe(false);
+    expect(mod.showCostEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
     expect(mod.maxConcurrentAgents()).toBe(3);
 
@@ -312,6 +313,7 @@ describe('app settings', () => {
       caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       cowboyMode: true,
+      showCost: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
     });
@@ -323,6 +325,7 @@ describe('app settings', () => {
       caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       cowboyMode: true,
+      showCost: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
     });
@@ -331,6 +334,7 @@ describe('app settings', () => {
     expect(mod.caffeinateWhileSchedulesEnabled()).toBe(true);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(true);
     expect(mod.cowboyModeEnabled()).toBe(true);
+    expect(mod.showCostEnabled()).toBe(true);
     expect(mod.maxConcurrentAgents()).toBe(8);
   });
 
