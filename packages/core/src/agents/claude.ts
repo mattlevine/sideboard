@@ -577,7 +577,13 @@ export const claudeAdapter: AgentAdapter = {
           if (typeof text === 'string' && text) events.push({ type: 'stdout', data: text });
         }
         const usage = usageFromClaude((obj as { usage?: ClaudeUsage }).usage);
-        if (usage) events.push({ type: 'usage', data: usage, scope: 'turn' });
+        if (usage) {
+          const totalCost = (obj as { total_cost_usd?: unknown }).total_cost_usd;
+          if (totalCost != null && Number.isFinite(Number(totalCost))) {
+            usage.costUsd = Number(totalCost);
+          }
+          events.push({ type: 'usage', data: usage, scope: 'turn' });
+        }
         if (events.length === 0) return null;
         return events.length === 1 ? events[0]! : events;
       }

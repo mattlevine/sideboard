@@ -40,6 +40,7 @@ export function mergeUsage(a: TokenUsage | null, b: TokenUsage): TokenUsage {
     outputTokens: (a?.outputTokens ?? 0) + b.outputTokens,
     cacheReadTokens: sumOptional(a?.cacheReadTokens, b.cacheReadTokens),
     cacheWriteTokens: sumOptional(a?.cacheWriteTokens, b.cacheWriteTokens),
+    costUsd: sumOptional(a?.costUsd, b.costUsd),
     lastRequestTokens: b.lastRequestTokens ?? a?.lastRequestTokens,
   };
 }
@@ -59,6 +60,7 @@ export function applyTurnUsage(
   if (scope === 'turn') {
     return {
       ...incoming,
+      costUsd: incoming.costUsd ?? current?.costUsd,
       lastRequestTokens: current?.lastRequestTokens ?? requestOccupancy(incoming),
     };
   }

@@ -40,7 +40,7 @@ import {
   setRightPaneSuppressed,
   type RightPaneSession,
 } from '../lib/right-pane-memory';
-import { formatTokenCount, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostUsd, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
@@ -1404,7 +1404,13 @@ export function ThreadPanel({
         statusBadge={
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
-        usageTotalLabel={threadUsage ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok` : null}
+        usageTotalLabel={
+          threadUsage
+            ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${
+                threadUsage.costUsd != null ? ` · ${formatCostUsd(threadUsage.costUsd)}` : ''
+              }`
+            : null
+        }
         usageTotalTooltip={threadUsage ? `Thread total — ${usageTooltip(threadUsage)}` : undefined}
         contextRatio={contextRatio}
         contextTooltip={

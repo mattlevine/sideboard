@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextTokens, formatTokenCount, resolveContextWindow, totalTokens, usageTooltip } from './tokens';
+import { contextFillRatio, contextTokens, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -66,5 +66,48 @@ describe('message chip vs billed total', () => {
     expect(formatTokenCount(totalTokens(usage))).toBe('175k');
     expect(usageTooltip(usage)).toContain('Context ~94,000');
     expect(usageTooltip(usage)).toContain('Billed 174,800');
+  });
+});
+
+describe('formatCostUsd', () => {
+  it('shows four decimals below one cent', () => {
+    expect(formatCostUsd(0.0012)).toBe('$0.0012');
+    expect(formatCostUsd(0.001)).toBe('$0.001');
+  });
+
+  it('shows two decimals at or above one cent', () => {
+    expect(formatCostUsd(0.01)).toBe('$0.01');
+    expect(formatCostUsd(1.234)).toBe('$1.23');
+  });
+});
+
+describe('sumUsage cost', () => {
+  it('sums costUsd across messages', () => {
+    expect(
+      sumUsage([
+        { inputTokens: 10, outputTokens: 5, costUsd: 0.01 },
+        { inputTokens: 20, outputTokens: 10, costUsd: 0.02 },
+        { inputTokens: 5, outputTokens: 1 },
+      ]),
+    ).toEqual({
+      inputTokens: 35,
+      outputTokens: 16,
+      costUsd: 0.03,
+    });
+  });
+
+  it('omits costUsd when no message has it', () => {
+    expect(sumUsage([{ inputTokens: 10, outputTokens: 5 }])).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+    });
+  });
+});
+
+describe('usageTooltip cost', () => {
+  it('includes cost when present', () => {
+    expect(usageTooltip({ inputTokens: 10, outputTokens: 5, costUsd: 0.0042 })).toContain(
+      'Cost $0.0042',
+    );
   });
 });

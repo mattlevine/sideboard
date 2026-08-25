@@ -438,11 +438,16 @@ export const opencodeAdapter: AgentAdapter = {
       // Usage is reported incrementally per agentic step; spawn sums billed
       // totals and keeps the last step for the context meter.
       if (obj.type === 'step_finish' || obj.type === 'step-finish') {
-        const part = (obj as { part?: { tokens?: OpencodeTokens } }).part;
+        const part = (obj as { part?: { tokens?: OpencodeTokens; cost?: unknown } }).part;
         const usage = usageFromOpencode(
           part?.tokens ?? (obj as { tokens?: OpencodeTokens }).tokens,
         );
-        return usage ? { type: 'usage', data: usage, scope: 'request' } : null;
+        if (!usage) return null;
+        const cost = part?.cost ?? (obj as { cost?: unknown }).cost;
+        if (cost != null && Number.isFinite(Number(cost))) {
+          usage.costUsd = Number(cost);
+        }
+        return { type: 'usage', data: usage, scope: 'request' };
       }
       // Avoid dumping unknown JSON into the chat transcript / lastError path.
       return null;

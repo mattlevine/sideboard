@@ -55,6 +55,8 @@ export interface TokenUsage {
    * (input + cache). Distinct from billed totals, which sum every tool round.
    */
   lastRequestTokens?: number;
+  /** Provider-reported USD cost for this turn, when the agent CLI supplies it. */
+  costUsd?: number;
 }
 
 export interface ThreadMessage {

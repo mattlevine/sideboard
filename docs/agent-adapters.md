@@ -51,6 +51,7 @@ Reference implementations:
 - Chat-only agents (no local file edits) are fine — document that limitation like Brightsy.
 - Use `permissionMode()` from `types.ts` when the agent supports plan / autonomy modes.
 - Map usage to Claude-shaped `TokenUsage` (`inputTokens` uncached; cache extra). OpenAI-shaped CLIs (Codex, Brightsy) use `fromInclusiveInputUsage` — do not add cache or reasoning on top of inclusive totals.
+- When the agent CLI reports a USD figure (e.g. Claude `total_cost_usd`, OpenCode `step_finish` `cost`), set `TokenUsage.costUsd`.
 - Nested Task / Agent / `spawn_agent` streams should set `parentId` so the board can nest them under the parent tool. Nested stdout is not the parent answer.
 
 ## Out of scope for a first PR

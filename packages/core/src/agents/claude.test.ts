@@ -336,6 +336,23 @@ describe('claudeAdapter.parseEvent', () => {
     });
   });
 
+  it('extracts total_cost_usd from the final result event', () => {
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        session_id: 'sess-123',
+        total_cost_usd: 0.042,
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    );
+    expect(event).toEqual({
+      type: 'usage',
+      data: { inputTokens: 10, outputTokens: 5, costUsd: 0.042 },
+      scope: 'turn',
+    });
+  });
+
   it('ignores rate_limit and other non-text events', () => {
     const event = claudeAdapter.parseEvent(
       JSON.stringify({
