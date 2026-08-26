@@ -24,7 +24,7 @@ const WAIT_SLICE_MS = 45_000;
 const WAIT_POLL_MS = 2_000;
 const WAIT_UNTIL_DONE_MS = 90 * 60 * 1000;
 const WAIT_STILL_RUNNING_HINT =
-  'Job is still running. present_artifact the ui HTML (same artifact_id as the job id) so the human sees work happening, then call wait again. Do not ask the user to check status, and do not start a second job with the same id.';
+  'Job is still running. present_artifact type=log with the same artifact_id and content=delta (new lines only). Then call wait again. Do not resend HTML or the full log. Do not ask the user to check status, and do not start a second job with the same id.';
 
 function repoRootFrom(cwd = process.cwd()) {
   return cwd;
@@ -51,6 +51,7 @@ function jobPaths(root, id) {
     exit: path.join(dir, 'exit'),
     meta: path.join(dir, 'meta.json'),
     ui: path.join(dir, 'ui.html'),
+    cursor: path.join(dir, 'cursor'),
   };
 }
 
@@ -130,10 +131,26 @@ function collectStream(logFile, maxLines = 160) {
   return {
     lineCount: all.length,
     lines,
+    useful,
     commands: all.filter((l) => l.startsWith('$ ')).map((l) => l.slice(2)),
     lastLine: (all[all.length - 1] || '').trim(),
     phase: inferPhase(all),
   };
+}
+
+function takeDelta(useful, cursorFile) {
+  const cursor = cursorFile ? readIntFile(cursorFile) ?? 0 : 0;
+  const start = Math.min(Math.max(0, cursor), useful.length);
+  return {
+    delta: useful.slice(start).join('\n'),
+    nextCursor: useful.length,
+  };
+}
+
+function writeCursor(cursorFile, n) {
+  if (!cursorFile) return;
+  fs.mkdirSync(path.dirname(cursorFile), { recursive: true });
+  fs.writeFileSync(cursorFile, `${n}\n`);
 }
 
 function lineClass(line) {
@@ -242,7 +259,7 @@ function logHasPattern(file, pattern) {
   return fs.readFileSync(file, 'utf8').includes(pattern);
 }
 
-function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, ui }) {
+function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, ui, cursorFile }) {
   const pid = readIntFile(pidFile);
   const running = pid != null && isAlive(pid);
   const exitCode = exitFile ? readIntFile(exitFile) : null;
@@ -265,6 +282,7 @@ function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, u
     phase: stream.phase,
     lineCount: stream.lineCount,
     stream,
+    cursorFile,
   };
 }
 
@@ -286,20 +304,36 @@ function snapshotJob(root, id) {
     exitFile: p.exit,
     startedAt: readStartedAt(p.meta),
     ui: p.ui,
+    cursorFile: p.cursor,
   });
 }
 
 function printWaitResult(snap) {
+  const useful = Array.isArray(snap.stream?.useful) ? snap.stream.useful : [];
+  const cursorFile =
+    snap.cursorFile ||
+    (snap.log ? path.join(path.dirname(snap.log), 'present.cursor') : null);
+  const { delta, nextCursor } = takeDelta(useful, cursorFile);
+  writeCursor(cursorFile, nextCursor);
+  const status = snap.ok
+    ? 'ok'
+    : snap.failed
+      ? 'failed'
+      : snap.stillRunning
+        ? 'running'
+        : 'idle';
   const payload = {
     stillRunning: Boolean(snap.stillRunning),
     ok: Boolean(snap.ok),
     failed: Boolean(snap.failed && !snap.stillRunning && !snap.ok),
+    status,
     pid: snap.pid,
     exitCode: snap.exitCode ?? undefined,
     phase: snap.phase,
     lineCount: snap.lineCount,
     log: snap.log,
     ui: snap.ui,
+    delta,
     progress: snap.progress,
     hint: snap.stillRunning ? WAIT_STILL_RUNNING_HINT : undefined,
   };
@@ -362,6 +396,7 @@ function startJob(root, id, command, opts = {}) {
     p.meta,
     `${JSON.stringify({ id, command, cwd, startedAt: new Date().toISOString() }, null, 2)}\n`,
   );
+  writeCursor(p.cursor, 0);
   const snap = snapshotJob(root, id);
   writeJobUi(snap, { id, title: opts.title || id, out: p.ui });
   return {
@@ -370,7 +405,7 @@ function startJob(root, id, command, opts = {}) {
     log: p.log,
     ui: p.ui,
     id,
-    hint: 'present_artifact the ui HTML now (artifact_id = job id) so the human sees work happening. Then loop wait.',
+    hint: 'present_artifact type=log now (artifact_id = job id, status=running). Then loop wait and append content=delta only.',
   };
 }
 
@@ -457,6 +492,7 @@ async function main(argv = process.argv) {
           pidFile: path.resolve(parsed.pidFile),
           logFile: path.resolve(parsed.logFile),
           okPattern: parsed.okPattern,
+          cursorFile: path.join(path.dirname(path.resolve(parsed.logFile)), 'present.cursor'),
         });
     } else if (parsed.id) {
       getSnap = () => snapshotJob(root, parsed.id);
@@ -511,6 +547,7 @@ module.exports = {
   renderJobHtml,
   writeJobUi,
   formatElapsed,
+  takeDelta,
 };
 
 if (require.main === module) {

@@ -12,6 +12,7 @@ const {
   inferPhase,
   escapeHtml,
   renderJobHtml,
+  takeDelta,
 } = require('./detached-job.js');
 
 describe('sanitizeId', () => {
@@ -128,6 +129,17 @@ describe('stream ui', () => {
     assert.match(html, /Published/);
     assert.match(html, /&lt;hi&gt;/);
     assert.doesNotMatch(html, /<hi>/);
+  });
+
+  it('takeDelta returns only lines after the cursor', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-'));
+    const cursorFile = path.join(dir, 'cursor');
+    fs.writeFileSync(cursorFile, '1\n');
+    const first = takeDelta(['a', 'b', 'c'], cursorFile);
+    assert.equal(first.delta, 'b\nc');
+    assert.equal(first.nextCursor, 3);
+    const again = takeDelta(['a', 'b', 'c'], cursorFile);
+    assert.equal(again.delta, 'b\nc');
   });
 
   it('marks a running job as working with the latest line', () => {

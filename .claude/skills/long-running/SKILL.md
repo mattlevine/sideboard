@@ -37,13 +37,23 @@ Wait JSON:
 - `ok: true` → exit 0 → continue the rest of the task (README, commit, deploy next step).
 - `failed: true` → exit 1 → read `progress`, fix, start **once**.
 
-## Sideboard UI (the work is the artifact)
+## Sideboard UI (append-only log)
 
-The side column **is** the live view. `start` / `wait` collect stdout/stderr into the log and write `.sideboard/detached-jobs/<id>/ui.html`. After **start** and after **every wait slice**, `present_artifact` that HTML (`type=html`, `artifact_id` = job id) so the pane shows work happening. Same id **updates** the same pane. Do **not** dump the log in chat. Do **not** also fence that HTML.
+The side column **is** the live view. Use `present_artifact` **`type=log`** with a stable `artifact_id` (the job id). Each call **appends** — send only `delta` from wait JSON, not the full log and not HTML.
 
-```bash
-node scripts/detached-job.js ui <id> --title "<short title>"
 ```
+present_artifact
+  title: <short title>
+  type: log
+  artifact_id: <id>
+  content: <wait.delta>          # new lines only; empty is ok
+  status: running | ok | failed  # from wait.status
+  phase: <wait.phase>
+```
+
+After **start**, present once (`status=running`, empty or first lines). After **every wait**, present the same id with `content=delta`. Do **not** dump the log in chat. Do **not** also fence HTML.
+
+`detached-job.js ui` still writes a snapshot HTML file for debugging. Prefer `type=log`.
 
 If you started via `release-mac-detached.js` (legacy pid/log):
 
@@ -60,9 +70,9 @@ node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern 
 ## Agent loop
 
 1. `start` once. If JSON says `already-running`, do not start again.
-2. Immediately `present_artifact` `ui.html` — the human should see **working** in the side column, not a “check back later” message.
-3. Loop `wait` (use `--timeout-ms 15000` for a livelier pane). After each slice, refresh the **same** artifact from `ui.html`.
-4. On `ok`, present once more (pill flips to done) and finish the task. On `failed`, fix from the log.
+2. Immediately `present_artifact` `type=log` (same `artifact_id`, `status=running`) — the human should see **working** in the side column, not a “check back later” message.
+3. Loop `wait` (use `--timeout-ms 15000` for a livelier pane). After each slice, `present_artifact` the **same** id with `content=delta` only.
+4. On `ok`, present once more (`status=ok`, last `delta`) and finish the task. On `failed`, fix from the log.
 
 Never tell the user “say status when it’s done.” You wait.
 

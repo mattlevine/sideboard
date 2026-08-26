@@ -163,7 +163,8 @@ export function formatArtifactDirective(): string {
     '```html',
     '<!DOCTYPE html><html><head><title>Demo</title></head><body><h1>Hi</h1></body></html>',
     '```',
-    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown), and content — not both a fence and this tool for the same body.',
+    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown|react|log), and content — not both a fence and this tool for the same body.',
+    '   type=log is append-only: same `artifact_id`, `content` = new lines only (plus optional status/phase). Do not resend the full log or wrap it in HTML.',
     'CMS / JSON Schema forms & tables (Brightsy or any schema+schemaUi source):',
     '3) Call Sideboard MCP `present_schema` when the user needs to filter, edit, publish, or persist rows — including after you already showed a markdown table, if they then ask for an editable table. If they only need to read the data, a markdown table is enough. When you do call it, pass title, mode (table|form), and either:',
     '   - datasource=brightsy + resource_id (record type UUID) after fetching types via Brightsy MCP, or',
@@ -183,7 +184,7 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. ask_user only for a real multiple-choice (not hellos or “what next?”) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos or “what next?”) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
 }
 
 export interface AgentInstructionFile {

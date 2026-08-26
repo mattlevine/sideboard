@@ -3,7 +3,9 @@ import {
   extractArtifacts,
   extractFenceArtifacts,
   extractToolArtifacts,
+  joinLogChunks,
   latestArtifact,
+  mergeAppendableArtifact,
 } from './artifacts';
 import type { MessagePart } from '@sideboard-ai/core';
 
@@ -172,6 +174,99 @@ describe('extractToolArtifacts', () => {
     expect(arts[0]!.id).toBe('tool-n1');
     expect(arts[0]!.title).toBe('Nested');
     expect(arts[0]!.content).toBe(html);
+  });
+});
+
+describe('log artifacts', () => {
+  it('appends later chunks with the same artifact_id', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't1',
+        name: 'mcp__sideboard__present_artifact',
+        status: 'done',
+        input: {
+          artifact_id: 'mac-release',
+          type: 'log',
+          title: 'Mac pack',
+          content: '[1/2] Building',
+          status: 'running',
+          phase: 'Building',
+        },
+      },
+      {
+        type: 'tool',
+        id: 't2',
+        name: 'mcp__sideboard__present_artifact',
+        status: 'done',
+        input: {
+          artifact_id: 'mac-release',
+          type: 'log',
+          title: 'Mac pack',
+          content: '[2/2] Signing',
+          status: 'running',
+          phase: 'Signing',
+        },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(2);
+    const merged = latestArtifact('', parts);
+    expect(merged?.kind).toBe('log');
+    expect(merged?.content).toBe('[1/2] Building\n[2/2] Signing');
+    expect(merged?.phase).toBe('Signing');
+    expect(merged?.status).toBe('running');
+  });
+
+  it('accepts a short log chunk (under the html minimum)', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't1',
+        name: 'present_artifact',
+        status: 'done',
+        input: {
+          artifact_id: 'job',
+          type: 'log',
+          title: 'Job',
+          content: 'ok',
+          status: 'ok',
+        },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.content).toBe('ok');
+    expect(arts[0]!.status).toBe('ok');
+  });
+
+  it('does not duplicate when the next chunk is already the suffix', () => {
+    expect(joinLogChunks('a\nb', 'b')).toBe('a\nb');
+    const prev = {
+      id: 'tool-j',
+      title: 'Job',
+      kind: 'log' as const,
+      language: 'log',
+      content: 'a\nb',
+      source: 'tool' as const,
+      status: 'running' as const,
+    };
+    const next = { ...prev, content: 'b', phase: 'Done', status: 'ok' as const };
+    expect(mergeAppendableArtifact(prev, next).content).toBe('a\nb');
+    expect(mergeAppendableArtifact(prev, next).status).toBe('ok');
+  });
+
+  it('replace mode overwrites the buffer', () => {
+    const prev = {
+      id: 'tool-j',
+      title: 'Job',
+      kind: 'log' as const,
+      language: 'log',
+      content: 'old',
+      source: 'tool' as const,
+    };
+    const next = { ...prev, content: 'new', mode: 'replace' as const };
+    expect(mergeAppendableArtifact(prev, next).content).toBe('new');
   });
 });
 

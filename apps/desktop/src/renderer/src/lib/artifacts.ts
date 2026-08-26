@@ -1,6 +1,7 @@
 import type { MessagePart } from '@sideboard-ai/core';
 
-export type ArtifactKind = 'html' | 'markdown' | 'svg' | 'react' | 'code';
+export type ArtifactKind = 'html' | 'markdown' | 'svg' | 'react' | 'code' | 'log';
+export type ArtifactLogStatus = 'running' | 'ok' | 'failed' | 'idle';
 
 export interface ChatArtifact {
   id: string;
@@ -10,6 +11,12 @@ export interface ChatArtifact {
   language: string;
   content: string;
   source: 'fence' | 'tool';
+  /** Log artifacts: working / done / failed (header pill). */
+  status?: ArtifactLogStatus;
+  /** Log artifacts: short phase label (Signing, Notarizing, …). */
+  phase?: string;
+  /** Log artifacts: replace the buffer instead of appending. */
+  mode?: 'append' | 'replace';
 }
 
 const FENCE_RE = /```([a-zA-Z0-9_+-]*)[^\n]*\n([\s\S]*?)(?:```|$)/g;
@@ -95,6 +102,7 @@ function kindForLanguage(language: string, content: string): ArtifactKind | null
     }
     return null;
   }
+  if (lang === 'log') return 'log';
   if (HTML_LANGS.has(lang)) return 'html';
   if (SVG_LANGS.has(lang)) return 'svg';
   if (MD_LANGS.has(lang)) return 'markdown';
@@ -111,7 +119,75 @@ function languageLabel(kind: ArtifactKind, language: string): string {
   if (kind === 'html') return 'html';
   if (kind === 'svg') return 'svg';
   if (kind === 'markdown') return 'markdown';
+  if (kind === 'log') return 'log';
   return 'code';
+}
+
+export function parseLogStatus(value: unknown): ArtifactLogStatus | undefined {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (s === 'running' || s === 'working') return 'running';
+  if (s === 'ok' || s === 'done') return 'ok';
+  if (s === 'failed' || s === 'error') return 'failed';
+  if (s === 'idle') return 'idle';
+  return undefined;
+}
+
+export function joinLogChunks(prev: string, next: string): string {
+  if (!next) return prev;
+  if (!prev) return next;
+  const trimmed = next.replace(/^\n+/, '');
+  if (!trimmed) return prev;
+  if (prev.endsWith(trimmed) || prev.endsWith(next)) return prev;
+  const head = prev.endsWith('\n') ? prev : `${prev}\n`;
+  return `${head}${trimmed}`;
+}
+
+/** Same-id log tools: append (default) or replace. Other kinds pass through. */
+export function coalesceLogArtifacts(arts: ChatArtifact[]): ChatArtifact[] {
+  const out: ChatArtifact[] = [];
+  const logIndex = new Map<string, number>();
+  for (const a of arts) {
+    if (a.kind !== 'log') {
+      out.push(a);
+      continue;
+    }
+    const idx = logIndex.get(a.id);
+    if (idx == null) {
+      logIndex.set(a.id, out.length);
+      out.push(a);
+      continue;
+    }
+    out[idx] = mergeAppendableArtifact(out[idx]!, a);
+  }
+  return out;
+}
+
+/** Merge a later log chunk into the pane already on screen. */
+export function mergeAppendableArtifact(prev: ChatArtifact, next: ChatArtifact): ChatArtifact {
+  if (prev.kind !== 'log' || next.kind !== 'log' || prev.id !== next.id) return next;
+  if (next.mode === 'replace') return next;
+  if (!next.content) {
+    return {
+      ...prev,
+      title: next.title || prev.title,
+      status: next.status ?? prev.status,
+      phase: next.phase ?? prev.phase,
+    };
+  }
+  if (next.content === prev.content || next.content.startsWith(prev.content)) {
+    return {
+      ...prev,
+      ...next,
+      content: next.content,
+    };
+  }
+  return {
+    ...prev,
+    title: next.title || prev.title,
+    status: next.status ?? prev.status,
+    phase: next.phase ?? prev.phase,
+    content: joinLogChunks(prev.content, next.content),
+  };
 }
 
 /** Extract fenced artifacts from markdown agent text. */
@@ -152,7 +228,9 @@ export function extractFenceArtifacts(
             ? 'Document'
             : kind === 'react'
               ? 'React artifact'
-              : `${lang} artifact`,
+              : kind === 'log'
+                ? 'Log'
+                : `${lang} artifact`,
     );
     out.push({
       id: `${idPrefix}-${index}`,
@@ -184,6 +262,7 @@ function contentFromUnknown(value: unknown): string | undefined {
 
 function kindFromArtifactType(type: string | undefined, content: string): ArtifactKind {
   const t = (type ?? '').toLowerCase();
+  if (t === 'log' || t === 'stream' || t === 'console') return 'log';
   if (t.includes('svg')) return 'svg';
   if (t.includes('markdown') || t === 'md') return 'markdown';
   if (t.includes('react') || t.includes('jsx') || t.includes('tsx')) return 'react';
@@ -280,25 +359,27 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
       asRecord(resultRec?.plan) ??
       resultRec;
 
-    const content =
+    const type = str(wrapped?.type) ?? str(input?.type);
+    const rawContent =
       contentFromUnknown(wrapped?.content) ??
       contentFromUnknown(input?.content) ??
       contentFromUnknown(wrapped) ??
       contentFromUnknown(input);
-
-    if (!content || content.trim().length < MIN_FENCE_CHARS) continue;
+    const kind = kindFromArtifactType(type, rawContent ?? '');
+    const content = rawContent ?? '';
+    if (kind !== 'log' && (!content || content.trim().length < MIN_FENCE_CHARS)) continue;
 
     const artifactId =
       str(wrapped?.artifact_id) ??
       str(input?.artifact_id) ??
       str(wrapped?.id) ??
       part.id;
-    const type = str(wrapped?.type) ?? str(input?.type);
-    const kind = kindFromArtifactType(type, content);
     const title =
       str(wrapped?.title) ??
       str(input?.title) ??
-      titleFromContent(kind, content, 'Artifact');
+      titleFromContent(kind, content, kind === 'log' ? 'Log' : 'Artifact');
+    const modeRaw = str(wrapped?.mode) ?? str(input?.mode);
+    const mode = modeRaw === 'replace' ? 'replace' : modeRaw === 'append' ? 'append' : undefined;
 
     out.push({
       id: `tool-${artifactId}`,
@@ -307,6 +388,9 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
       language: languageLabel(kind, type ?? ''),
       content,
       source: 'tool',
+      status: parseLogStatus(wrapped?.status) ?? parseLogStatus(input?.status),
+      phase: str(wrapped?.phase) ?? str(input?.phase),
+      mode,
     });
   }
   return out;
@@ -328,7 +412,7 @@ export function extractArtifacts(
   // Prefer tool artifacts; append fence ones that aren't already covered by tool content.
   const toolContents = new Set(fromTools.map((a) => a.content.trim()));
   const fences = fromFences.filter((a) => !toolContents.has(a.content.trim()));
-  return [...fromTools, ...fences];
+  return coalesceLogArtifacts([...fromTools, ...fences]);
 }
 
 /**

@@ -29,6 +29,7 @@ import {
 } from './schema/RightColumnPane';
 import type { FilePickerRequest } from './schema/FileManagerColumn';
 import {
+  isDocumentPane,
   isFilesPane,
   isSchemaPane,
   latestRightPaneContent,
@@ -45,6 +46,7 @@ import {
   setRightPaneSuppressed,
   type RightPaneSession,
 } from '../lib/right-pane-memory';
+import { mergeAppendableArtifact } from '../lib/artifacts';
 import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { AgentMessage } from './AgentMessage';
@@ -1212,10 +1214,15 @@ export function ThreadPanel({
     );
     if (matchIdx >= 0) {
       const matchedId = tabs[matchIdx]!.id;
+      const prev = tabs[matchIdx]!;
+      const merged =
+        isDocumentPane(prev) && isDocumentPane(next)
+          ? mergeAppendableArtifact(prev, next)
+          : next;
       const cleaned = tabs
         .filter((t) => t.id === matchedId || !sameRightPane(t, next))
-        .map((t) => (t.id === matchedId ? next : t));
-      return { tabs: cleaned, activeId: next.id };
+        .map((t) => (t.id === matchedId ? merged : t));
+      return { tabs: cleaned, activeId: merged.id };
     }
     return { tabs: [...tabs, next], activeId: next.id };
   }
