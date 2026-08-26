@@ -3,12 +3,17 @@ import type { Thread } from '@sideboard-ai/core';
 import {
   backlogIssues,
   boardIssueKey,
+  boardPrKey,
   classifyThreadColumn,
   dedupeBoardIssues,
+  dedupeBoardPrs,
   issueNeedsWorkspacePick,
   pickDefaultRepoPath,
+  reviewPrs,
   threadMatchesIssue,
+  threadMatchesPr,
   type BoardIssue,
+  type BoardPr,
 } from './home-board';
 
 function thread(
@@ -202,5 +207,82 @@ describe('dedupeBoardIssues / workspace pick', () => {
     ).toBe(
       boardIssueKey(issue({ identifier: 'ENG-1', title: 'A', provider: 'linear', repoPath: '/b' })),
     );
+  });
+});
+
+function pr(partial: Partial<BoardPr> & Pick<BoardPr, 'number' | 'title'>): BoardPr {
+  return {
+    number: partial.number,
+    title: partial.title,
+    headRefName: partial.headRefName ?? `head-${partial.number}`,
+    url: partial.url ?? `https://github.com/acme/app/pull/${partial.number}`,
+    isCrossRepository: partial.isCrossRepository ?? false,
+    repoPath: partial.repoPath ?? '/repo',
+  };
+}
+
+describe('threadMatchesPr / reviewPrs', () => {
+  it('matches PR sourceRef, prUrl, and head branch', () => {
+    expect(
+      threadMatchesPr(
+        thread({ id: '1', sourceType: 'pr', sourceRef: '9', title: 'Ship' }),
+        pr({ number: 9, title: 'Ship' }),
+      ),
+    ).toBe(true);
+    expect(
+      threadMatchesPr(
+        thread({
+          id: '2',
+          sourceType: 'ticket',
+          sourceRef: 'ENG-1',
+          title: 'Ship',
+          prUrl: 'https://github.com/acme/app/pull/9/',
+        }),
+        pr({ number: 9, title: 'Ship' }),
+      ),
+    ).toBe(true);
+    expect(
+      threadMatchesPr(
+        thread({
+          id: '3',
+          sourceType: 'branch',
+          sourceRef: 'feat/login',
+          branchName: 'thread/foo',
+          title: 'Login',
+        }),
+        pr({ number: 4, title: 'Login', headRefName: 'feat/login' }),
+      ),
+    ).toBe(true);
+    expect(
+      threadMatchesPr(
+        thread({ id: '4', sourceType: 'branch', sourceRef: 'main', title: 'Other' }),
+        pr({ number: 9, title: 'Ship' }),
+      ),
+    ).toBe(false);
+  });
+
+  it('shows open PRs without a live thread in Review', () => {
+    const prs = [
+      pr({ number: 1, title: 'Mine' }),
+      pr({ number: 2, title: 'Review me' }),
+    ];
+    const threads = [
+      thread({ id: 'live', sourceType: 'pr', sourceRef: '1', title: 'Mine' }),
+      thread({
+        id: 'old',
+        sourceType: 'pr',
+        sourceRef: '2',
+        title: 'Review me',
+        status: 'archived',
+      }),
+    ];
+    expect(reviewPrs(prs, threads).map((p) => p.number)).toEqual([2]);
+  });
+
+  it('dedupes the same PR url across workspaces', () => {
+    const a = pr({ number: 8, title: 'Same', repoPath: '/a' });
+    const b = { ...a, repoPath: '/b' };
+    expect(dedupeBoardPrs([a, b])).toHaveLength(1);
+    expect(boardPrKey(a)).toBe(boardPrKey(b));
   });
 });

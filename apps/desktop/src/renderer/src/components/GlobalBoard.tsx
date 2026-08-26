@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { IssueInfo, OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
+import type { IssueInfo, OrchestratorRuntime, PrInfo, Thread, Workspace } from '@sideboard-ai/core';
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
 import {
   BOARD_COLUMN_DEFS,
   backlogIssues,
   boardIssueKey,
+  boardPrKey,
   classifyThreadColumn,
   dedupeBoardIssues,
+  dedupeBoardPrs,
   issueNeedsWorkspacePick,
   issueSourceLabel,
   pickDefaultRepoPath,
+  reviewPrs,
   type BoardColumnId,
   type BoardIssue,
+  type BoardPr,
 } from '../lib/home-board';
 import { FleetActivityBar } from './FleetActivityBar';
 import { MarkdownMessage } from './MarkdownMessage';
@@ -27,6 +31,7 @@ interface Props {
   onNewGlobalChat: () => void;
   onRefresh: () => void;
   onStartIssue?: (issue: IssueInfo, repoPath: string) => Promise<void>;
+  onStartPr?: (pr: PrInfo, repoPath: string) => Promise<void>;
   /** Left-edge open control when the left sidebar is closed. */
   leftSidebarToggle?: ReactNode;
 }
@@ -74,12 +79,16 @@ export function GlobalBoard({
   onNewGlobalChat,
   onRefresh,
   onStartIssue,
+  onStartPr,
   leftSidebarToggle,
 }: Props) {
   const [issues, setIssues] = useState<BoardIssue[]>([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issuesError, setIssuesError] = useState<string | null>(null);
   const [issueSource, setIssueSource] = useState<string>('github');
+  const [prs, setPrs] = useState<BoardPr[]>([]);
+  const [prsLoading, setPrsLoading] = useState(false);
+  const [prsError, setPrsError] = useState<string | null>(null);
   const [issueRefresh, setIssueRefresh] = useState(0);
   const [doneOpen, setDoneOpen] = useState(false);
   const [startingId, setStartingId] = useState<string | null>(null);
@@ -98,11 +107,16 @@ export function GlobalBoard({
       setIssues([]);
       setIssuesLoading(false);
       setIssuesError(null);
+      setPrs([]);
+      setPrsLoading(false);
+      setPrsError(null);
       return;
     }
 
     setIssuesLoading(true);
     setIssuesError(null);
+    setPrsLoading(true);
+    setPrsError(null);
 
     void (async () => {
       try {
@@ -160,6 +174,33 @@ export function GlobalBoard({
       }
     })();
 
+    void (async () => {
+      try {
+        const settled = await Promise.allSettled(
+          paths.map(async (path) => {
+            const list = await window.sideboard.listPrs(path);
+            return list.map((pr) => ({ ...pr, repoPath: path }));
+          }),
+        );
+        if (cancelled) return;
+        const collected: BoardPr[] = [];
+        for (const item of settled) {
+          if (item.status === 'fulfilled') collected.push(...item.value);
+        }
+        const rejected = settled.find((s) => s.status === 'rejected');
+        if (rejected && rejected.status === 'rejected' && collected.length === 0) {
+          throw rejected.reason;
+        }
+        setPrs(dedupeBoardPrs(collected));
+      } catch (err) {
+        if (cancelled) return;
+        setPrsError(err instanceof Error ? err.message : String(err));
+        setPrs([]);
+      } finally {
+        if (!cancelled) setPrsLoading(false);
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -191,6 +232,11 @@ export function GlobalBoard({
     [boardIssues, liveThreads],
   );
 
+  const inboxPrs = useMemo(
+    () => reviewPrs(prs, liveThreads),
+    [prs, liveThreads],
+  );
+
   const byColumn = useMemo(() => {
     const map: Record<Exclude<BoardColumnId, 'backlog'>, Thread[]> = {
       queued: [],
@@ -210,8 +256,11 @@ export function GlobalBoard({
 
   const hasBoardContent =
     issuesLoading ||
+    prsLoading ||
     Boolean(issuesError) ||
+    Boolean(prsError) ||
     backlog.length > 0 ||
+    inboxPrs.length > 0 ||
     liveThreads.length > 0 ||
     doneThreads.length > 0;
 
@@ -252,6 +301,31 @@ export function GlobalBoard({
     }
   }
 
+  async function handleStartPr(pr: BoardPr) {
+    const key = boardPrKey(pr);
+    if (!pr.repoPath) {
+      setStartError((prev) => ({ ...prev, [key]: 'Add a workspace first' }));
+      return;
+    }
+    if (!onStartPr) return;
+    setStartingId(key);
+    setStartError((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    try {
+      await onStartPr(pr, pr.repoPath);
+    } catch (err) {
+      setStartError((prev) => ({
+        ...prev,
+        [key]: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setStartingId((id) => (id === key ? null : id));
+    }
+  }
+
   return (
     <section className="panel board">
       {leftSidebarToggle && (
@@ -277,9 +351,9 @@ export function GlobalBoard({
         <>
           <FleetActivityBar runtime={runtime} compact />
           <p className="board-lede">
-            Tickets from the connected tracker land in Backlog. Start opens a worktree;
-            the card then follows agent and PR status. New chat still steers the Global
-            orchestrator.
+            Tickets land in Backlog. Open PRs without a Sideboard thread land in Review
+            (morning inbox). Start opens a worktree; the card then follows agent and PR
+            status. New chat still steers the Global orchestrator.
           </p>
           <div className="board-body board-kanban-wrap">
             <div className="board-kanban">
@@ -330,7 +404,9 @@ export function GlobalBoard({
                 }
 
                 const cards = byColumn[col.id];
+                const reviewCount = col.id === 'review' ? cards.length + inboxPrs.length : cards.length;
                 const collapsed = col.id === 'done' && !doneOpen;
+                const showPrInbox = col.id === 'review' && !collapsed;
                 return (
                   <section
                     key={col.id}
@@ -338,7 +414,7 @@ export function GlobalBoard({
                   >
                     <header className="board-column-header">
                       <h3>{col.title}</h3>
-                      <span className="thread-meta">{cards.length}</span>
+                      <span className="thread-meta">{reviewCount}</span>
                       {col.id === 'done' && (
                         <button
                           type="button"
@@ -354,18 +430,44 @@ export function GlobalBoard({
                         <div className="board-column-empty">
                           {cards.length === 0 ? 'None archived' : 'Collapsed'}
                         </div>
-                      ) : cards.length === 0 ? (
-                        <div className="board-column-empty">None</div>
                       ) : (
-                        cards.map((t) => (
-                          <ThreadCard
-                            key={t.id}
-                            thread={t}
-                            live={liveByThread[t.id]}
-                            onOpenThread={onOpenThread}
-                            onRefresh={onRefresh}
-                          />
-                        ))
+                        <>
+                          {showPrInbox && prsLoading && (
+                            <div className="board-column-empty">Loading PRs…</div>
+                          )}
+                          {showPrInbox && prsError && !prsLoading && (
+                            <div className="board-column-empty">{prsError}</div>
+                          )}
+                          {showPrInbox &&
+                            inboxPrs.map((pr) => {
+                              const key = boardPrKey(pr);
+                              return (
+                                <PrCard
+                                  key={key}
+                                  pr={pr}
+                                  workspaces={workspaces}
+                                  starting={startingId === key}
+                                  error={startError[key]}
+                                  onStart={() => void handleStartPr(pr)}
+                                />
+                              );
+                            })}
+                          {cards.map((t) => (
+                            <ThreadCard
+                              key={t.id}
+                              thread={t}
+                              live={liveByThread[t.id]}
+                              onOpenThread={onOpenThread}
+                              onRefresh={onRefresh}
+                            />
+                          ))}
+                          {!prsLoading &&
+                            !prsError &&
+                            cards.length === 0 &&
+                            (!showPrInbox || inboxPrs.length === 0) && (
+                              <div className="board-column-empty">None</div>
+                            )}
+                        </>
                       )}
                     </div>
                   </section>
@@ -384,7 +486,7 @@ export function GlobalBoard({
             <p>
               Chats that steer worktree agents across your registered workspaces. Slack DMs
               and @mentions land on the Global orchestrator. Connected tickets appear in
-              Backlog once a workspace is registered.
+              Backlog, and open PRs appear in Review, once a workspace is registered.
             </p>
             <div className="chat-empty-action">
               <button type="button" className="primary" onClick={onNewGlobalChat}>
@@ -454,6 +556,50 @@ function IssueCard({
         <button type="button" disabled={!canStart} onClick={onStart}>
           {starting ? 'Starting…' : 'Start'}
         </button>
+      </div>
+    </article>
+  );
+}
+
+function PrCard({
+  pr,
+  workspaces,
+  starting,
+  error,
+  onStart,
+}: {
+  pr: BoardPr;
+  workspaces: Workspace[];
+  starting: boolean;
+  error?: string;
+  onStart: () => void;
+}) {
+  const canStart = Boolean(pr.repoPath) && !starting;
+  return (
+    <article className="board-card board-card-pr">
+      <div className="board-card-top">
+        <span className="picker-logo tiny github" title="GitHub" />
+        <span className="board-card-id">#{pr.number}</span>
+      </div>
+      <div className="board-card-title">{pr.title}</div>
+      <div className="thread-meta">
+        {pr.headRefName}
+        {pr.repoPath ? ` · ${workspaceName(pr.repoPath, workspaces)}` : ''}
+        {pr.isCrossRepository ? ' · fork' : ''}
+      </div>
+      {error && <div className="board-card-error">{error}</div>}
+      <div className="board-row-actions">
+        <button type="button" disabled={!canStart} onClick={onStart}>
+          {starting ? 'Starting…' : 'Start'}
+        </button>
+        {pr.url ? (
+          <button
+            type="button"
+            onClick={() => void window.sideboard.openExternal(pr.url)}
+          >
+            Open PR
+          </button>
+        ) : null}
       </div>
     </article>
   );

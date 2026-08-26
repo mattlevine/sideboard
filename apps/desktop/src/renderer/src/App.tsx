@@ -5,6 +5,7 @@ import type {
   MessagePart,
   OrchestratorEvent,
   OrchestratorRuntime,
+  PrInfo,
   Thread,
   TokenUsage,
   Workspace,
@@ -373,6 +374,25 @@ export function App() {
               .join('\n'),
           },
         ],
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const startPrThread = useCallback(
+    async (pr: PrInfo, repo: string) => {
+      setRepoPath(repo);
+      void window.sideboard.setRepoPath(repo).catch(() => undefined);
+      const defaults = await loadThreadDefaults();
+      await window.sideboard.createThread({
+        sourceType: 'pr',
+        sourceRef: String(pr.number),
+        repoPath: repo,
+        title: pr.title,
+        agent: defaults.agent,
+        model: defaults.model,
+        effort: defaults.effort,
       });
       await refresh();
     },
@@ -988,6 +1008,7 @@ export function App() {
           onNewGlobalChat={() => openCreate(undefined, 'orchestration')}
           onRefresh={() => void refresh()}
           onStartIssue={startIssueThread}
+          onStartPr={startPrThread}
           leftSidebarToggle={
             !leftSidebarOpen ? (
               <SidebarToggle side="left" open={false} onClick={toggleLeftSidebar} />
