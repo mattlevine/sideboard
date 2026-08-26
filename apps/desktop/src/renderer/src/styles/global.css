@@ -9310,6 +9310,7 @@ body:has(.update-banner) .team-toast-stack {
 
 .board-row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -9472,11 +9473,15 @@ body:has(.update-banner) .team-toast-stack {
 
 .board-card-top .board-open {
   flex: 1;
+  min-width: 0;
+}
+
+.board-archive-row {
+  min-width: 0;
 }
 
 .board-archive-worktree {
-  flex-shrink: 0;
-  align-self: flex-start;
+  width: 100%;
 }
 
 .board-card-id {

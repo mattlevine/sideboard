@@ -447,7 +447,9 @@ function WorktreeCard({
                   .join(' · ')}
           </div>
         </div>
-        {canArchive && (
+      </div>
+      {canArchive && (
+        <div className="board-archive-row" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             className="board-archive-worktree"
@@ -460,8 +462,8 @@ function WorktreeCard({
           >
             {archiving ? 'Archiving…' : 'Archive worktree'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       <div className={`board-card-chats${group.length > 3 ? ' is-scrollable' : ''}`}>
         {group.map((chat) => (
           <ChatCard

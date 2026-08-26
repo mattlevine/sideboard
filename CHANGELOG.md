@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.128] - 2026-08-26
+
+### Fixed
+
+- Home Merged **Archive worktree** sits under the worktree name (full-width, no extra card), not beside the title and not on a nested chat.
+
 ## [0.1.127] - 2026-08-26
 
 ### Added
