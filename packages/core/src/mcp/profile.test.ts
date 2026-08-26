@@ -34,6 +34,7 @@ describe('sideboardMcpProfile', () => {
       'present_files',
     ]);
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_threads');
+    expect(WORKTREE_MCP_TOOLS).not.toContain('list_board');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_teams');
   });
 });

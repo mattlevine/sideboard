@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import {
@@ -25,6 +26,20 @@ import { registerLinearTools } from './linear-tools.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
+import { loadHomeBoardInputs } from '../board/load-home-board.js';
+import {
+  BOARD_COLUMN_DEFS,
+  assembleHomeBoard,
+  findBoardIssue,
+  findBoardPr,
+  HOME_BOARD_AGENT_HINT,
+  threadMatchesIssue,
+  threadMatchesPr,
+  type BoardColumnId,
+  type BoardKindFilter,
+} from '../board/home-board.js';
+import type { AgentKind, ThreadAttachment } from '../types/thread.js';
+import type { ThinkingEffort } from '../types/thinking-effort.js';
 
 const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
@@ -46,6 +61,129 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       },
     );
   });
+}
+
+type ResolveNewThreadOptions = (overrides: {
+  agent?: AgentKind;
+  model?: string | null;
+}) => {
+  agent: AgentKind;
+  model: string | null;
+  effort: ThinkingEffort;
+  fast: boolean;
+};
+
+type CreateOrchThreadArgs = {
+  sourceType: 'branch' | 'pr' | 'ticket';
+  sourceRef: string;
+  repoPath: string;
+  title?: string;
+  agent?: AgentKind;
+  model?: string | null;
+  cowboy?: boolean;
+  parentThreadId?: string;
+  attachments?: ThreadAttachment[];
+};
+
+async function createOrchChildThread(
+  orch: ReturnType<typeof getOrchestrator>,
+  args: CreateOrchThreadArgs,
+  resolveNewThreadOptions: ResolveNewThreadOptions,
+): Promise<
+  | { ok: true; text: string }
+  | { ok: false; text: string }
+> {
+  const envParentId = process.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || '';
+  let parentId = args.parentThreadId?.trim() || '';
+  let parent = parentId ? orch.getThread(parentId) : null;
+  let parentCorrectedFrom: string | undefined;
+
+  if (envParentId) {
+    const envParent = orch.getThread(envParentId);
+    if (envParent) {
+      if (parentId && parentId !== envParentId) parentCorrectedFrom = parentId;
+      else if (!parentId) parentCorrectedFrom = undefined;
+      parentId = envParentId;
+      parent = envParent;
+    }
+  }
+  if (parentId && !parent) {
+    parentCorrectedFrom = parentId;
+    parentId = '';
+    parent = null;
+  }
+  if (parentId) {
+    const children = orch
+      .getThreads(false)
+      .filter((t) => t.parentThreadId === parentId);
+    if (children.length >= MAX_ORCH_THREADS) {
+      return {
+        ok: false,
+        text: `Thread-creation cap (${MAX_ORCH_THREADS}) reached for this orchestration session`,
+      };
+    }
+  }
+  let agentArg = args.agent;
+  let agentCoercedFrom: string | undefined;
+  const resolvedProbe = resolveNewThreadOptions({ agent: agentArg }).agent;
+  if (resolvedProbe === 'codex') {
+    agentCoercedFrom = agentArg ?? 'codex';
+    const accountAgent = resolveNewThreadOptions({}).agent;
+    agentArg = accountAgent !== 'codex' ? accountAgent : 'cursor';
+  }
+  const opts = resolveNewThreadOptions({
+    agent: agentArg,
+    model: args.model,
+  });
+  try {
+    const thread = await withTimeout(
+      orch.createThread({
+        sourceType: args.sourceType,
+        sourceRef: args.sourceRef,
+        agent: opts.agent,
+        model: opts.model,
+        effort: opts.effort,
+        fast: opts.fast,
+        repoPath: args.repoPath,
+        title: args.title,
+        parentThreadId: parentId || null,
+        cowboy: args.cowboy || undefined,
+        attachments: args.attachments,
+      }),
+      CREATE_THREAD_TIMEOUT_MS,
+      'create_thread',
+    );
+    const parentNote = parentCorrectedFrom
+      ? parentId
+        ? `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; nested under ${parentId}`
+        : `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; created without parent`
+      : undefined;
+    return {
+      ok: true,
+      text: JSON.stringify({
+        id: thread.id,
+        title: thread.title,
+        branchName: thread.branchName,
+        worktreePath: thread.worktreePath,
+        agent: thread.agent,
+        model: thread.model,
+        status: thread.status,
+        cowboy: Boolean(thread.cowboy),
+        link: `sideboard://thread/${thread.id}`,
+        parentThreadId: thread.parentThreadId,
+        ...(agentCoercedFrom
+          ? {
+              agentCoercedFrom,
+              note: `Avoid nested Codex under a Codex orchestrator — used Account default agent=${thread.agent}`,
+            }
+          : {}),
+        ...(parentCorrectedFrom ? { parentCorrectedFrom, parentNote } : {}),
+      }),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, text: `create_thread failed: ${message}` };
+  }
 }
 
 /**
@@ -103,7 +241,7 @@ export async function startMcpServer(): Promise<void> {
   if (!worktreeProfile) {
   server.tool(
     'list_workspaces',
-    'List registered Sideboard workspaces (repos). Each line is name, path, and github:owner/repo when resolvable — use path as repoPath for list_branches/list_prs/list_issues/create_thread.',
+    'List registered Sideboard workspaces (repos). Each line is name, path, and github:owner/repo when resolvable — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread.',
     {},
     async () => {
       const workspaces = orch.listWorkspaces();
@@ -143,6 +281,71 @@ export async function startMcpServer(): Promise<void> {
       });
       return {
         content: [{ type: 'text', text: lines.join('\n') || '(no threads)' }],
+      };
+    },
+  );
+
+  server.tool(
+    'list_board',
+    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Tickets without a live thread, unmatched open PRs, and worktree chats. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Filters: query, repoPath, kind (all|tickets|prs|threads), column, limit (default 40). Start a card with start_board_card or create_thread.',
+    {
+      query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
+      repoPath: z
+        .string()
+        .optional()
+        .describe('Limit to one workspace path from list_workspaces'),
+      kind: z
+        .enum(['all', 'tickets', 'prs', 'threads'])
+        .optional()
+        .describe('Card kind filter (default all)'),
+      column: z
+        .enum(['backlog', 'queued', 'running', 'needs_you', 'review', 'done'])
+        .optional()
+        .describe('Return cards for this column only (totals still include the rest)'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Max cards per column (default 40). hidden counts the remainder.'),
+    },
+    async ({ query, repoPath, kind, column, limit }) => {
+      const workspaces = orch.listWorkspaces();
+      const loaded = await loadHomeBoardInputs(workspaces);
+      const all = orch.getThreads(true);
+      const names = new Map(workspaces.map((w) => [w.path, w.name]));
+      const snap = assembleHomeBoard({
+        issues: loaded.issues,
+        prs: loaded.prs,
+        threads: all.filter((t) => t.status !== 'archived'),
+        archivedThreads: all.filter((t) => t.status === 'archived'),
+        query,
+        repoPath,
+        kind: (kind ?? 'all') as BoardKindFilter,
+        column: column as BoardColumnId | undefined,
+        limit,
+        workspaceName: (path) => names.get(path) ?? '',
+      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                columns: snap.columns,
+                hidden: snap.hidden,
+                totals: snap.totals,
+                columnDefs: BOARD_COLUMN_DEFS,
+                issueSource: loaded.issueSource,
+                issueErrors: loaded.issueErrors,
+                prErrors: loaded.prErrors,
+                hint: HOME_BOARD_AGENT_HINT,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
       };
     },
   );
@@ -479,124 +682,128 @@ export async function startMcpServer(): Promise<void> {
         ),
     },
     async (args) => {
-      const envParentId = process.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || '';
-      let parentId = args.parentThreadId?.trim() || '';
-      let parent = parentId ? orch.getThread(parentId) : null;
-      let parentCorrectedFrom: string | undefined;
+      const result = await createOrchChildThread(orch, args, resolveNewThreadOptions);
+      return {
+        content: [{ type: 'text', text: result.text }],
+        ...(result.ok ? {} : { isError: true }),
+      };
+    },
+  );
 
-      // When MCP was spawned from an orchestration turn, ALWAYS bind children to
-      // that chat — agents (esp. Codex) invent/reuse stale parentThreadIds.
-      // Never fall back to "newest live orch" — that steals children into a
-      // different store/chat the user may never see (dev vs shared app-data).
-      if (envParentId) {
-        const envParent = orch.getThread(envParentId);
-        if (envParent) {
-          if (parentId && parentId !== envParentId) parentCorrectedFrom = parentId;
-          else if (!parentId) parentCorrectedFrom = undefined;
-          parentId = envParentId;
-          parent = envParent;
-        }
-      }
-      if (parentId && !parent) {
-        parentCorrectedFrom = parentId;
-        parentId = '';
-        parent = null;
-      }
-      if (parentId) {
-        // Cap active children only — archived/deleted tabs must not block new creates.
-        const children = orch
-          .getThreads(false)
-          .filter((t) => t.parentThreadId === parentId);
-        if (children.length >= MAX_ORCH_THREADS) {
+  server.tool(
+    'start_board_card',
+    'Start a Home Kanban card the same way as desktop Start: ticket → worktree (sourceType=ticket) or unmatched open PR (sourceType=pr). Pass ref from list_board (ENG-12, #44, or PR number) and repoPath from list_workspaces. If a live thread already matches, returns that thread instead of creating another. Then send_to_thread. create_thread also works if you already have sourceType/sourceRef.',
+    {
+      kind: z.enum(['ticket', 'pr']),
+      ref: z
+        .string()
+        .describe('Ticket identifier (ENG-12, #44) or PR number (44 / #44) from list_board'),
+      repoPath: z.string().describe('Workspace path from list_workspaces / list_board'),
+      title: z.string().optional(),
+    },
+    async ({ kind, ref, repoPath, title }) => {
+      const root = await resolveRepoRoot(repoPath);
+      const workspaces = orch.listWorkspaces();
+      const loaded = await loadHomeBoardInputs(workspaces);
+      const live = orch.getThreads(false);
+
+      if (kind === 'ticket') {
+        const issue = findBoardIssue(loaded.issues, ref, root);
+        const ident = issue?.identifier ?? ref.trim();
+        const existing = live.find((t) =>
+          threadMatchesIssue(t, {
+            identifier: ident,
+            title: title?.trim() || issue?.title || '',
+          }),
+        );
+        if (existing) {
           return {
             content: [
               {
                 type: 'text',
-                text: `Thread-creation cap (${MAX_ORCH_THREADS}) reached for this orchestration session`,
+                text: JSON.stringify({
+                  alreadyStarted: true,
+                  id: existing.id,
+                  title: existing.title,
+                  status: existing.status,
+                  link: `sideboard://thread/${existing.id}`,
+                }),
               },
             ],
-            isError: true,
           };
         }
-      }
-      // Nested Codex-under-Codex (orchestrator create_thread agent=codex) can
-      // deadlock on ~/.codex locks. Prefer a non-Codex worktree agent instead.
-      let agentArg = args.agent;
-      let agentCoercedFrom: string | undefined;
-      const resolvedProbe = resolveNewThreadOptions({ agent: agentArg }).agent;
-      // Coerce whenever the child would be Codex — even if parentThreadId was
-      // omitted/wrong — so nested Codex cannot pin the MCP stdio server.
-      if (resolvedProbe === 'codex') {
-        agentCoercedFrom = agentArg ?? 'codex';
-        const accountAgent = resolveNewThreadOptions({}).agent;
-        agentArg = accountAgent !== 'codex' ? accountAgent : 'cursor';
-      }
-      const opts = resolveNewThreadOptions({
-        agent: agentArg,
-        model: args.model,
-      });
-      try {
-        const thread = await withTimeout(
-          orch.createThread({
-            sourceType: args.sourceType,
-            sourceRef: args.sourceRef,
-            agent: opts.agent,
-            model: opts.model,
-            effort: opts.effort,
-            fast: opts.fast,
-            repoPath: args.repoPath,
-            title: args.title,
-            parentThreadId: parentId || null,
-            cowboy: args.cowboy || undefined,
-          }),
-          CREATE_THREAD_TIMEOUT_MS,
-          'create_thread',
-        );
-        const parentNote = parentCorrectedFrom
-          ? parentId
-            ? `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; nested under ${parentId}`
-            : `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; created without parent`
+        const attachments: ThreadAttachment[] | undefined = issue
+          ? [
+              {
+                id: randomUUID(),
+                name: issue.identifier,
+                kind: 'issue',
+                content: [
+                  `Linked issue: ${issue.identifier} — ${issue.title}`,
+                  issue.url ? `URL: ${issue.url}` : null,
+                ]
+                  .filter(Boolean)
+                  .join('\n'),
+              },
+            ]
           : undefined;
+        const result = await createOrchChildThread(
+          orch,
+          {
+            sourceType: 'ticket',
+            sourceRef: ident,
+            repoPath: root,
+            title: title?.trim() || issue?.title,
+            attachments,
+          },
+          resolveNewThreadOptions,
+        );
+        return {
+          content: [{ type: 'text', text: result.text }],
+          ...(result.ok ? {} : { isError: true }),
+        };
+      }
+
+      const pr = findBoardPr(loaded.prs, ref, root);
+      const number = pr ? String(pr.number) : ref.trim().replace(/^#/, '');
+      const existing = live.find((t) =>
+        threadMatchesPr(t, {
+          number: pr?.number ?? Number(number),
+          title: title?.trim() || pr?.title || '',
+          url: pr?.url ?? '',
+          headRefName: pr?.headRefName ?? '',
+        }),
+      );
+      if (existing) {
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
-                id: thread.id,
-                title: thread.title,
-                branchName: thread.branchName,
-                worktreePath: thread.worktreePath,
-                agent: thread.agent,
-                model: thread.model,
-                status: thread.status,
-                cowboy: Boolean(thread.cowboy),
-                link: `sideboard://thread/${thread.id}`,
-                parentThreadId: thread.parentThreadId,
-                ...(agentCoercedFrom
-                  ? {
-                      agentCoercedFrom,
-                      note: `Avoid nested Codex under a Codex orchestrator — used Account default agent=${thread.agent}`,
-                    }
-                  : {}),
-                ...(parentCorrectedFrom
-                  ? { parentCorrectedFrom, parentNote }
-                  : {}),
+                alreadyStarted: true,
+                id: existing.id,
+                title: existing.title,
+                status: existing.status,
+                link: `sideboard://thread/${existing.id}`,
               }),
             },
           ],
         };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `create_thread failed: ${message}`,
-            },
-          ],
-          isError: true,
-        };
       }
+      const result = await createOrchChildThread(
+        orch,
+        {
+          sourceType: 'pr',
+          sourceRef: number,
+          repoPath: root,
+          title: title?.trim() || pr?.title,
+        },
+        resolveNewThreadOptions,
+      );
+      return {
+        content: [{ type: 'text', text: result.text }],
+        ...(result.ok ? {} : { isError: true }),
+      };
     },
   );
 

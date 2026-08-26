@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Orchestration MCP `list_board` / `start_board_card` — same Home Kanban as desktop (tickets, unmatched PRs, thread columns). Worktree MCP profile stays UI-only.
+
 ## [0.1.125] - 2026-08-25
 
 ### Removed

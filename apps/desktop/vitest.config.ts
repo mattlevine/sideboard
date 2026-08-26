@@ -23,6 +23,7 @@ export default defineConfig({
       '@sideboard/agent-git-actions': core('git/agent-git-actions.ts'),
       '@sideboard/review-request-template': core('review/review-request-template.ts'),
       '@sideboard/issue-source-labels': core('store/issue-source-labels.ts'),
+      '@sideboard/home-board': core('board/home-board.ts'),
     },
   },
 });

@@ -124,7 +124,7 @@ export function buildQuotaHandoffAttachment(
     '',
     `## Instructions`,
     `- Continue fleet orchestration from this handoff.`,
-    `- Prefer Sideboard MCP (list_threads, get_thread, send_to_thread, …) for live status.`,
+    `- Prefer Sideboard MCP (list_board, list_threads, get_thread, send_to_thread, …) for live status.`,
     `- Leave model Auto unless there is a specific reason to pin one.`,
     `- Do not wait on the limited ${from.agent} account; keep going on ${fallbackAgent}.`,
   ].join('\n');
@@ -140,11 +140,11 @@ export function buildQuotaHandoffAttachment(
 export const QUOTA_CONTINUE_PROMPT = (fromAgent: AgentKind, fallback: AgentKind) =>
   [
     `${fromAgent} hit a session/usage limit. Continue this orchestration on ${fallback} using the attached handoff.`,
-    'Call list_threads for live fleet status, then proceed with the goal. Leave model Auto unless needed.',
+    'Call list_board or list_threads for live fleet status, then proceed with the goal. Leave model Auto unless needed.',
   ].join(' ');
 
 export const QUOTA_RESUME_PROMPT =
-  'Session/usage limit window should have reset. Continue the orchestration from where you left off. Use list_threads for fleet status.';
+  'Session/usage limit window should have reset. Continue the orchestration from where you left off. Use list_board or list_threads for fleet status.';
 
 /** Create a sibling orchestration chat on the fallback agent with a compact handoff. */
 export function createQuotaFailoverChat(

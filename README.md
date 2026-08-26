@@ -290,7 +290,7 @@ Add to `~/.config/opencode/opencode.jsonc` (or a project `opencode.jsonc`) under
 
 Once connected, agents get tools to:
 
-- **Discover** — `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
+- **Discover** — `list_board` (Home Kanban), `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
 - **Linear tickets** — `linear_list_teams`, `linear_get_issue`, `linear_create_issue`, `linear_update_issue`, `linear_comment` (Account OAuth; reconnect if you connected before write access)
 - **Workspaces** — `add_workspace` / `remove_workspace`
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids). `wait_for_turn` returns within ~45s with `stillRunning` + live `progress` while the child is still working — call it again; do not assume a hang. `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
