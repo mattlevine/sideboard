@@ -98,7 +98,7 @@ pnpm release patch mac       # desktop GitHub Release only
 pnpm release patch all never # dry-run / local artifacts
 ```
 
-Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node apps/desktop/scripts/release-mac-detached.js`. Check with `--status`. Details: [`.claude/skills/release/SKILL.md`](.claude/skills/release/SKILL.md).
+Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run` and loop `node scripts/detached-job.js wait mac-release`. Same wait tool for any long job: [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md).
 
 After `npm i -g @sideboard-ai/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 

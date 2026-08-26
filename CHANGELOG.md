@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Worktree agents detach Mac pack/notarize (`release-mac-detached.js`) so a new chat turn does not SIGTERM a 15–40 minute `pnpm release`.
+- Worktree agents detach **any** long job and wait in 45s slices (`scripts/detached-job.js` start / wait) so a new chat turn does not SIGTERM the process and the human does not have to poll. Mac pack/notarize uses the same tool.
 
 ## [0.1.128] - 2026-08-26
 

@@ -10,40 +10,39 @@ description: >-
 
 Shared version lives in four `package.json` files (root, `apps/desktop`, `packages/cli`, `packages/core`). Desktop GitHub Releases are signed/notarized on this Mac. npm is often a **separate** publish.
 
+Long pack/notarize uses the general wait tool — [`.claude/skills/long-running/SKILL.md`](../long-running/SKILL.md) (`/long-running`). Do not ask the human to poll.
+
 ## Worktree agents: long pack / notarize
 
-A Sideboard or Cursor **worktree turn** SIGTERMs the agent shell (and its process group) when the user sends another message, asks “status?”, or the turn is interrupted. That is why `pnpm release patch mac` and a foreground `electron-builder` die after a few minutes — or after five seconds.
+A worktree turn SIGTERMs a foreground `pnpm release`. Detach, then **wait** (45s slices) until the pack finishes.
 
-`block_until_ms: 0` / backgrounding **inside the agent Shell tool is not enough**. The child stays in the turn’s process group and still gets SIGTERM.
-
-**Do this instead:**
-
-1. Merge `origin/main` into this branch. Copy `apps/desktop/.env` from the main checkout if this worktree is missing it (gitignored — do not commit, do not print it).
+1. Merge `origin/main`. Copy `apps/desktop/.env` from the main checkout if missing (gitignored — do not commit or print it).
 2. Write `CHANGELOG.md` `[Unreleased]`. Commit so the tree is clean except version files.
-3. Bump versions **only** (no pack):
+3. Bump versions **only** (skip if `package.json` is already the new version):
 
    ```bash
    node apps/desktop/scripts/release.js patch mac bump-only
    ```
 
-   If `package.json` is **already** at the new version from an interrupted release, skip this. Do **not** bump again.
-4. Start the pack **detached** (exits in ~1s; job survives this turn):
+4. Start the pack **once**:
 
    ```bash
-   node apps/desktop/scripts/release-mac-detached.js
+   node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run
    ```
 
-   Then **end the turn**. Tell the user the pid and that “status?” should check the log — not start a second pack.
-5. On **status?** (or any new message while it may still be running):
+   Or: `node apps/desktop/scripts/release-mac-detached.js` (writes `apps/desktop/release/release.pid`).
+5. **Wait yourself** — loop until `stillRunning` is false. Do not end the turn and ask the user to check.
 
    ```bash
-   node apps/desktop/scripts/release-mac-detached.js --status
+   node scripts/detached-job.js wait mac-release
+   # or, if you used release-mac-detached.js start:
+   node apps/desktop/scripts/release-mac-detached.js --wait
    ```
 
-   Read the pid + last log lines. If `(running)`, report that and **stop**. Do not wait in the foreground. Do not spawn another pack.
-6. When the log contains `RELEASE_BUILD_OK` and the pid is not running: GitHub Release + DMG are published. Then README + changelog + commit + push (below). If the log shows an error and the pid is dead, fix and run the detached script **once**.
+   Same contract as `wait_for_turn`: returns within ~45s with progress. Call wait again while `stillRunning`. `--until-done` only if this turn will not be interrupted.
+6. On `ok`: GitHub Release + DMG are published. README + changelog + commit + push (below). On `failed`: fix from the log and start **once**.
 
-Human at a real terminal (no turn SIGTERM): `pnpm release patch mac` is still fine.
+Human at a real terminal: `pnpm release patch mac` is still fine.
 
 ## Desktop-only (“create electron release, I’ll publish npms”)
 
@@ -56,8 +55,8 @@ Human at a real terminal (no turn SIGTERM): `pnpm release patch mac` is still fi
 
    That bumps all four package versions, builds Apple Silicon dmg+zip, notarizes, publishes to GitHub Releases (`electron-updater` `latest-mac.yml`), then commits the version files and tags `vX.Y.Z`.
 
-   **Worktree agents:** use [Worktree agents: long pack / notarize](#worktree-agents-long-pack--notarize) instead of this one foreground command.
-3. Do **not** run the bump script again after versions already moved (it would skip to the next patch). Continue with `node apps/desktop/scripts/release-mac-detached.js` (agents) or `node scripts/stage-*.js` + `electron-builder --mac --publish always` from `apps/desktop` (humans).
+   **Worktree agents:** use [Worktree agents](#worktree-agents-long-pack--notarize) + `/long-running`.
+3. Do **not** bump again after versions already moved. Continue with `detached-job.js start mac-release` / `release-mac-detached.js`.
 
 ## `@cursor/sdk` in a Sideboard worktree
 
@@ -98,7 +97,7 @@ pnpm release          # patch
 pnpm release minor
 ```
 
-Worktree agents still detach the Mac pack (`release-mac-detached.js`) after `bump-only`; do not run the combined foreground `pnpm release` from a chat turn.
+Worktree agents still detach the Mac pack after `bump-only`; do not run the combined foreground `pnpm release` from a chat turn.
 
 ## Do not
 
@@ -106,4 +105,4 @@ Worktree agents still detach the Mac pack (`release-mac-detached.js`) after `bum
 - Push to `upstream` or merge locally into the main checkout.
 - Commit `apps/desktop/.env` or `apps/desktop/release/`.
 - Force-push `main` / `master`.
-- Foreground pack/notarize in a worktree agent turn, or restart a pack because the user asked “status?”.
+- Foreground pack/notarize in a worktree agent turn, restart a pack because the user asked “status?”, or ask the human to poll a long job.

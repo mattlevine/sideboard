@@ -9,12 +9,17 @@
  *
  * Usage (repo root or apps/desktop):
  *   node apps/desktop/scripts/release-mac-detached.js
+ *   node apps/desktop/scripts/release-mac-detached.js --wait
+ *   node apps/desktop/scripts/release-mac-detached.js --wait --until-done
  *   node apps/desktop/scripts/release-mac-detached.js --status
  *
  * Log/pid live under apps/desktop/release/ (gitignored).
  */
 
 'use strict';
+
+const WAIT_SLICE_MS = 45_000;
+const WAIT_UNTIL_DONE_MS = 90 * 60 * 1000;
 
 const fs = require('fs');
 const path = require('path');
@@ -84,17 +89,56 @@ function logEndedOk() {
   return fs.readFileSync(logPath, 'utf8').includes('RELEASE_BUILD_OK');
 }
 
-function printStatus() {
+function snapshot() {
   const pid = readPid();
   const running = pid != null && isAlive(pid);
   const ok = logEndedOk();
-  console.log(`pid: ${pid ?? '(none)'} ${running ? '(running)' : '(not running)'}`);
-  console.log(`log: ${logPath}`);
-  console.log(`ok: ${ok ? 'yes' : 'no'}`);
+  const failed = !running && !ok && (pid != null || fs.existsSync(logPath));
+  return {
+    pid,
+    running,
+    ok,
+    failed,
+    stillRunning: running,
+    progress: tailLog(12),
+    log: logPath,
+  };
+}
+
+function printStatus() {
+  const snap = snapshot();
+  console.log(`pid: ${snap.pid ?? '(none)'} ${snap.running ? '(running)' : '(not running)'}`);
+  console.log(`log: ${snap.log}`);
+  console.log(`ok: ${snap.ok ? 'yes' : 'no'}`);
   console.log('--- last log ---');
-  console.log(tailLog());
-  if (running) process.exit(0);
-  if (ok) process.exit(0);
+  console.log(snap.progress);
+  if (snap.running || snap.ok) process.exit(0);
+  process.exit(1);
+}
+
+async function waitForPack(timeoutMs) {
+  const detached = require(path.join(repoRoot, 'scripts/detached-job.js'));
+  const snap = await detached.waitSnapshot(
+    () =>
+      detached.snapshotFromPaths({
+        pidFile: pidPath,
+        logFile: logPath,
+        okPattern: 'RELEASE_BUILD_OK',
+      }),
+    timeoutMs,
+  );
+  const payload = {
+    stillRunning: Boolean(snap.stillRunning),
+    ok: Boolean(snap.ok),
+    failed: Boolean(snap.failed && !snap.stillRunning && !snap.ok),
+    pid: snap.pid,
+    log: snap.log,
+    progress: snap.progress,
+    hint: snap.stillRunning ? detached.WAIT_STILL_RUNNING_HINT : undefined,
+  };
+  console.log(JSON.stringify(payload, null, 2));
+  if (snap.ok && !snap.running) process.exit(0);
+  if (snap.stillRunning) process.exit(2);
   process.exit(1);
 }
 
@@ -156,15 +200,28 @@ function startDetached() {
   fs.writeFileSync(pidPath, `${child.pid}\n`);
   console.log(`Detached Mac pack pid=${child.pid}`);
   console.log(`Log: ${logPath}`);
-  console.log('End this turn. On "status?", run: node apps/desktop/scripts/release-mac-detached.js --status');
+  console.log('Call --wait next (loop while stillRunning). Do not ask the user to poll.');
   console.log('Do not start another pack while this pid is alive.');
 }
 
-const arg = process.argv[2] || '';
-if (arg === '--status' || arg === 'status') {
+const args = process.argv.slice(2);
+const argSet = new Set(args);
+if (argSet.has('--status') || argSet.has('status')) {
   printStatus();
-} else if (arg === '--run') {
+} else if (argSet.has('--run')) {
   runPack();
+} else if (argSet.has('--wait') || argSet.has('wait')) {
+  const untilDone = argSet.has('--until-done') || argSet.has('until-done');
+  let timeoutMs = untilDone ? WAIT_UNTIL_DONE_MS : WAIT_SLICE_MS;
+  const timeoutIdx = args.findIndex((a) => a === '--timeout-ms');
+  if (timeoutIdx >= 0 && args[timeoutIdx + 1]) {
+    const n = Number.parseInt(args[timeoutIdx + 1], 10);
+    if (Number.isFinite(n) && n >= 1000) timeoutMs = n;
+  }
+  waitForPack(timeoutMs).catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
 } else {
   startDetached();
 }
