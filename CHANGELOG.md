@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Linear `listIssues` no longer fails with `Query too complex`. The assigned-issues query dropped nested `team.states` and capped `labels` so it stays under Linear’s 10k/query cap.
+- Create-from Linear defaults to **Assigned to me** (same as Conductor). **This cycle** remains as an optional tighter filter.
+
 ## [0.1.128] - 2026-08-26
 
 ### Fixed
