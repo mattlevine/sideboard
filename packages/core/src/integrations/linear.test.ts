@@ -6,6 +6,8 @@ import {
   createLinearIssue,
   commentLinearIssue,
   getLinearIssue,
+  linearCycleIsActive,
+  listLinearAssignedIssues,
   listLinearTeams,
   resolveLinearState,
   resolveLinearTeam,
@@ -57,6 +59,40 @@ describe('resolveLinearTeam / resolveLinearState', () => {
     expect(resolveLinearState(TEAM, 'In Progress').id).toBe('state-doing');
     expect(resolveLinearState(TEAM, 'started').id).toBe('state-doing');
     expect(resolveLinearState(TEAM, 'state-done').name).toBe('Done');
+  });
+});
+
+describe('linearCycleIsActive', () => {
+  it('is true between startsAt and endsAt when not completed', () => {
+    const now = Date.parse('2026-08-26T12:00:00.000Z');
+    expect(
+      linearCycleIsActive(
+        {
+          startsAt: '2026-08-24T00:00:00.000Z',
+          endsAt: '2026-08-31T00:00:00.000Z',
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      linearCycleIsActive(
+        {
+          startsAt: '2026-08-24T00:00:00.000Z',
+          endsAt: '2026-08-31T00:00:00.000Z',
+          completedAt: '2026-08-25T00:00:00.000Z',
+        },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      linearCycleIsActive(
+        {
+          startsAt: '2026-09-01T00:00:00.000Z',
+          endsAt: '2026-09-08T00:00:00.000Z',
+        },
+        now,
+      ),
+    ).toBe(false);
   });
 });
 
@@ -202,6 +238,37 @@ describe('Linear GraphQL writes', () => {
     const issue = await getLinearIssue('ENG-9');
     expect(issue.identifier).toBe('ENG-9');
     expect(issue.team?.key).toBe('ENG');
+  });
+
+  it('lists assigned issues with the active cycle mapped', async () => {
+    await withAuth();
+    mockGraphql(() => ({
+      viewer: {
+        id: 'user-1',
+        name: 'Matt',
+        assignedIssues: {
+          nodes: [
+            issueNode({
+              cycle: {
+                id: 'c1',
+                name: 'Week 34',
+                number: 34,
+                startsAt: '2020-01-01T00:00:00.000Z',
+                endsAt: '2099-01-01T00:00:00.000Z',
+              },
+            }),
+          ],
+        },
+      },
+    }));
+    const listed = await listLinearAssignedIssues();
+    expect(listed.viewer.name).toBe('Matt');
+    expect(listed.issues[0]).toMatchObject({
+      identifier: 'ENG-9',
+      assignee: 'Matt',
+      teamKey: 'ENG',
+      cycle: { name: 'Week 34', number: 34, isActive: true },
+    });
   });
 
   it('rewrites GraphQL permission errors', async () => {

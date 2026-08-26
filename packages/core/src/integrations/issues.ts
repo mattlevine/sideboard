@@ -7,7 +7,7 @@ import {
   type IssueSource,
 } from '../store/app-settings.js';
 import type { IssueInfo } from '../types/thread.js';
-import { listLinearIssuesDirect } from './linear.js';
+import { listLinearAssignedIssues } from './linear.js';
 
 export type { IssueSource };
 
@@ -17,6 +17,8 @@ export interface ListIssuesResult {
   preferredSource: IssueSource;
   linearConnected: boolean;
   issues: IssueInfo[];
+  /** Linear viewer name or GitHub login — used for “assigned to me”. */
+  viewer?: { login?: string; name?: string };
 }
 
 /**
@@ -33,7 +35,7 @@ export async function listGitHubIssues(
     'issue',
     'list',
     '--json',
-    'number,title,url,labels',
+    'number,title,url,labels,assignees',
     '--limit',
     String(limit),
     '--state',
@@ -57,12 +59,17 @@ export async function listGitHubIssues(
       title?: string;
       url?: string;
       labels?: Array<{ name?: string } | string>;
+      assignees?: Array<{ login?: string } | string>;
     };
     const number = Number(item.number);
     const identifier = Number.isFinite(number) ? `#${number}` : String(item.title ?? '');
     const labels = (item.labels ?? []).map((l) =>
       typeof l === 'string' ? l : String(l?.name ?? ''),
     ).filter(Boolean);
+    const assignees = (item.assignees ?? [])
+      .map((a) => (typeof a === 'string' ? a : String(a?.login ?? '')))
+      .map((login) => login.trim())
+      .filter(Boolean);
     return {
       id: Number.isFinite(number) ? `gh-${number}` : identifier,
       identifier,
@@ -70,8 +77,18 @@ export async function listGitHubIssues(
       url: String(item.url ?? ''),
       labels,
       provider: 'github' as const,
+      assignee: assignees[0],
+      assignees,
     };
   });
+}
+
+async function githubViewerLogin(repoPath: string): Promise<string> {
+  const { stdout, exitCode } = await gh(['api', 'user', '--jq', '.login'], repoPath, {
+    reject: false,
+  });
+  if (exitCode !== 0) return '';
+  return stdout.trim();
 }
 
 /**
@@ -87,10 +104,28 @@ export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
   const source = resolveEffectiveIssueSource(settings);
 
   if (source === 'linear') {
-    const issues = await listLinearIssuesDirect();
-    return { source, preferredSource, linearConnected, issues };
+    const listed = await listLinearAssignedIssues();
+    return {
+      source,
+      preferredSource,
+      linearConnected,
+      issues: listed.issues,
+      viewer: {
+        login: listed.viewer.name,
+        name: listed.viewer.name,
+      },
+    };
   }
 
-  const issues = await listGitHubIssues(repoPath);
-  return { source, preferredSource, linearConnected, issues };
+  const [issues, login] = await Promise.all([
+    listGitHubIssues(repoPath),
+    githubViewerLogin(repoPath),
+  ]);
+  return {
+    source,
+    preferredSource,
+    linearConnected,
+    issues,
+    viewer: login ? { login } : undefined,
+  };
 }

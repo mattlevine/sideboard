@@ -14,6 +14,7 @@ export type HomeBoardInputs = {
   issues: BoardIssue[];
   prs: BoardPr[];
   issueSource: string;
+  viewerLogin?: string;
   issueErrors: string[];
   prErrors: string[];
 };
@@ -35,6 +36,7 @@ export async function loadHomeBoardInputs(
       issues: [],
       prs: [],
       issueSource: 'github',
+      viewerLogin: undefined,
       issueErrors: [],
       prErrors: [],
     };
@@ -43,11 +45,13 @@ export async function loadHomeBoardInputs(
   const issueErrors: string[] = [];
   const prErrors: string[] = [];
   let issueSource = 'github';
+  let viewerLogin: string | undefined;
   let issues: BoardIssue[] = [];
 
   try {
     const first = await listIssues(paths[0]!);
     issueSource = first.source;
+    viewerLogin = first.viewer?.login || first.viewer?.name || undefined;
     if (first.source === 'linear') {
       const repoPath = paths[0] ?? '';
       issues = first.issues.map((issue) => ({
@@ -110,5 +114,5 @@ export async function loadHomeBoardInputs(
     prs = [];
   }
 
-  return { issues, prs, issueSource, issueErrors, prErrors };
+  return { issues, prs, issueSource, viewerLogin, issueErrors, prErrors };
 }

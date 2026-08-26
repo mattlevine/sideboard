@@ -33,10 +33,12 @@ import {
   findBoardIssue,
   findBoardPr,
   HOME_BOARD_AGENT_HINT,
+  defaultTicketScope,
   threadMatchesIssue,
   threadMatchesPr,
   type BoardColumnId,
   type BoardKindFilter,
+  type TicketScope,
 } from '../board/home-board.js';
 import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
@@ -287,7 +289,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Tickets without a live thread, unmatched open PRs, and worktree chats. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Filters: query, repoPath, kind (all|tickets|prs|threads), column, limit (default 40). Start a card with start_board_card or create_thread.',
+    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Tickets without a live thread, unmatched open PRs, and worktree chats. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Linear Backlog defaults to tickets assigned to you in the active cycle. Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit (default 40). Start a card with start_board_card or create_thread.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -298,6 +300,12 @@ export async function startMcpServer(): Promise<void> {
         .enum(['all', 'tickets', 'prs', 'threads'])
         .optional()
         .describe('Card kind filter (default all)'),
+      ticketScope: z
+        .enum(['cycle', 'assigned', 'all'])
+        .optional()
+        .describe(
+          'Backlog tickets: cycle = your current Linear cycle (default when Linear is connected); assigned = assigned to you (any cycle / GitHub @me); all = every open GitHub issue, or every Linear issue assigned to you',
+        ),
       column: z
         .enum(['backlog', 'queued', 'running', 'needs_you', 'review', 'done'])
         .optional()
@@ -309,11 +317,12 @@ export async function startMcpServer(): Promise<void> {
         .optional()
         .describe('Max cards per column (default 40). hidden counts the remainder.'),
     },
-    async ({ query, repoPath, kind, column, limit }) => {
+    async ({ query, repoPath, kind, ticketScope, column, limit }) => {
       const workspaces = orch.listWorkspaces();
       const loaded = await loadHomeBoardInputs(workspaces);
       const all = orch.getThreads(true);
       const names = new Map(workspaces.map((w) => [w.path, w.name]));
+      const scope = (ticketScope ?? defaultTicketScope(loaded.issueSource)) as TicketScope;
       const snap = assembleHomeBoard({
         issues: loaded.issues,
         prs: loaded.prs,
@@ -322,6 +331,8 @@ export async function startMcpServer(): Promise<void> {
         query,
         repoPath,
         kind: (kind ?? 'all') as BoardKindFilter,
+        ticketScope: scope,
+        viewerLogin: loaded.viewerLogin,
         column: column as BoardColumnId | undefined,
         limit,
         workspaceName: (path) => names.get(path) ?? '',
@@ -337,6 +348,8 @@ export async function startMcpServer(): Promise<void> {
                 totals: snap.totals,
                 columnDefs: BOARD_COLUMN_DEFS,
                 issueSource: loaded.issueSource,
+                ticketScope: scope,
+                viewer: loaded.viewerLogin,
                 issueErrors: loaded.issueErrors,
                 prErrors: loaded.prErrors,
                 hint: HOME_BOARD_AGENT_HINT,
@@ -1496,7 +1509,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List issues from Sideboard Account connections (Linear API or GitHub Issues; Linear→GitHub fallback when Linear is not connected). Pass repoPath from list_workspaces — GitHub Issues are scoped to that repo. Then create_thread with sourceType=ticket.',
+    'List issues from Sideboard Account connections (Linear API or GitHub Issues; Linear→GitHub fallback when Linear is not connected). Linear returns issues assigned to you (includes cycle). Pass repoPath from list_workspaces — GitHub Issues are scoped to that repo. Prefer list_board for Home columns + current-cycle filter. Then create_thread with sourceType=ticket.',
     { repoPath: z.string() },
     async ({ repoPath }) => {
       const root = await resolveRepoRoot(repoPath);

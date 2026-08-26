@@ -15,11 +15,14 @@ const ISSUE_FIELDS = `
   assignee { id name }
   team { id key name states { nodes { id name type } } }
   labels { nodes { name } }
+  cycle { id name number startsAt endsAt completedAt }
 `;
 
 const ASSIGNED_ISSUES_QUERY = `
 query SideboardAssignedIssues($first: Int!) {
   viewer {
+    id
+    name
     assignedIssues(
       first: $first
       orderBy: updatedAt
@@ -94,6 +97,14 @@ type LinearIssueNode = {
     states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> };
   } | null;
   labels?: { nodes?: Array<{ name?: string }> };
+  cycle?: {
+    id?: string;
+    name?: string;
+    number?: number;
+    startsAt?: string;
+    endsAt?: string;
+    completedAt?: string | null;
+  } | null;
 };
 
 export interface LinearWorkflowState {
@@ -120,6 +131,7 @@ export interface LinearIssue {
   assignee?: { id: string; name: string };
   team?: { id: string; key: string; name: string; states: LinearWorkflowState[] };
   labels: string[];
+  cycle?: { name: string; number?: number; isActive: boolean } | null;
 }
 
 export interface LinearComment {
@@ -200,6 +212,39 @@ function mapState(
   };
 }
 
+export function linearCycleIsActive(
+  cycle:
+    | {
+        startsAt?: string;
+        endsAt?: string;
+        completedAt?: string | null;
+      }
+    | null
+    | undefined,
+  now = Date.now(),
+): boolean {
+  if (!cycle) return false;
+  if (cycle.completedAt) return false;
+  const start = cycle.startsAt ? Date.parse(cycle.startsAt) : Number.NaN;
+  const end = cycle.endsAt ? Date.parse(cycle.endsAt) : Number.NaN;
+  if (Number.isFinite(start) && now < start) return false;
+  if (Number.isFinite(end) && now > end) return false;
+  return true;
+}
+
+function mapCycle(
+  node: LinearIssueNode['cycle'],
+): LinearIssue['cycle'] {
+  if (!node?.name && node?.number == null) return null;
+  const name = String(node.name ?? (node.number != null ? `Cycle ${node.number}` : '')).trim();
+  if (!name) return null;
+  return {
+    name,
+    number: typeof node.number === 'number' ? node.number : undefined,
+    isActive: linearCycleIsActive(node),
+  };
+}
+
 function mapIssue(node: LinearIssueNode): LinearIssue {
   const team = node.team;
   return {
@@ -226,6 +271,7 @@ function mapIssue(node: LinearIssueNode): LinearIssue {
     labels: (node.labels?.nodes ?? [])
       .map((l) => l.name)
       .filter((n): n is string => Boolean(n)),
+    cycle: mapCycle(node.cycle),
   };
 }
 
@@ -237,6 +283,10 @@ function toIssueInfo(issue: LinearIssue): IssueInfo {
     url: issue.url,
     labels: issue.labels,
     provider: 'linear',
+    assignee: issue.assignee?.name,
+    assignees: issue.assignee?.name ? [issue.assignee.name] : undefined,
+    cycle: issue.cycle ?? null,
+    teamKey: issue.team?.key || undefined,
   };
 }
 
@@ -297,18 +347,41 @@ function normalizePriority(priority: number | undefined): number | undefined {
   return priority;
 }
 
+export type LinearAssignedIssuesResult = {
+  viewer: { id: string; name: string };
+  issues: IssueInfo[];
+};
+
 /**
  * List open issues assigned to the authenticated Linear user via GraphQL.
  * Uses Sideboard-stored OAuth token or API key (Account → Linear), not agent MCP.
  */
+export async function listLinearAssignedIssues(
+  opts?: { limit?: number; apiKey?: string | null },
+): Promise<LinearAssignedIssuesResult> {
+  const first = Math.max(1, Math.min(250, opts?.limit ?? 200));
+  const json = await linearGraphql<{
+    viewer?: {
+      id?: string;
+      name?: string;
+      assignedIssues?: { nodes?: LinearIssueNode[] };
+    };
+  }>(ASSIGNED_ISSUES_QUERY, { first }, opts);
+  return {
+    viewer: {
+      id: String(json.viewer?.id ?? ''),
+      name: String(json.viewer?.name ?? ''),
+    },
+    issues: (json.viewer?.assignedIssues?.nodes ?? []).map((node) =>
+      toIssueInfo(mapIssue(node)),
+    ),
+  };
+}
+
 export async function listLinearIssuesDirect(
   opts?: { limit?: number; apiKey?: string | null },
 ): Promise<IssueInfo[]> {
-  const first = Math.max(1, Math.min(250, opts?.limit ?? 200));
-  const json = await linearGraphql<{
-    viewer?: { assignedIssues?: { nodes?: LinearIssueNode[] } };
-  }>(ASSIGNED_ISSUES_QUERY, { first }, opts);
-  return (json.viewer?.assignedIssues?.nodes ?? []).map((node) => toIssueInfo(mapIssue(node)));
+  return (await listLinearAssignedIssues(opts)).issues;
 }
 
 export async function listLinearTeams(

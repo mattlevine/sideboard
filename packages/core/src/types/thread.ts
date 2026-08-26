@@ -360,6 +360,12 @@ export interface PrStack {
   blockedReason: string | null;
 }
 
+export interface IssueCycleInfo {
+  name: string;
+  number?: number;
+  isActive: boolean;
+}
+
 export interface IssueInfo {
   id: string;
   identifier: string;
@@ -368,6 +374,14 @@ export interface IssueInfo {
   labels: string[];
   /** When set, which tracker produced this issue. */
   provider?: 'linear' | 'github' | 'abletime';
+  /** Display name / login of the primary assignee. */
+  assignee?: string;
+  /** Logins or display names (GitHub assignees; Linear is usually one). */
+  assignees?: string[];
+  /** Linear cycle (sprint). Absent on GitHub / unscheduled issues. */
+  cycle?: IssueCycleInfo | null;
+  /** Linear team key (e.g. ENG). */
+  teamKey?: string;
 }
 
 export interface DiffFile {

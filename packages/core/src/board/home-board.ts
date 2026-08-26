@@ -211,6 +211,46 @@ export const BOARD_PAGE_SIZE = 40;
 
 export type BoardKindFilter = 'all' | 'tickets' | 'prs' | 'threads';
 
+/** Who / which sprint the Backlog ticket list includes. */
+export type TicketScope = 'cycle' | 'assigned' | 'all';
+
+export function defaultTicketScope(issueSource: string): TicketScope {
+  return issueSource === 'linear' ? 'cycle' : 'all';
+}
+
+export function issueAssignedToViewer(
+  issue: Pick<IssueInfo, 'assignees' | 'assignee'>,
+  viewerLogin = '',
+): boolean {
+  const me = viewerLogin.trim().toLowerCase();
+  if (!me) return false;
+  const names = [
+    ...(issue.assignees ?? []),
+    issue.assignee ?? '',
+  ]
+    .map((n) => n.trim().toLowerCase())
+    .filter(Boolean);
+  return names.includes(me);
+}
+
+/** Linear list is already assigned-to-you; GitHub “assigned” needs viewer login. */
+export function issueInTicketScope(
+  issue: Pick<IssueInfo, 'provider' | 'assignees' | 'assignee' | 'cycle'>,
+  scope: TicketScope,
+  viewerLogin = '',
+): boolean {
+  if (scope === 'all') return true;
+  if (scope === 'cycle') {
+    if (issue.provider === 'linear' || issue.cycle) {
+      return Boolean(issue.cycle?.isActive);
+    }
+    return issueAssignedToViewer(issue, viewerLogin);
+  }
+  if (issue.provider === 'linear') return true;
+  if (!viewerLogin.trim()) return true;
+  return issueAssignedToViewer(issue, viewerLogin);
+}
+
 export function tokenizeQuery(query: string): string[] {
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
@@ -222,7 +262,18 @@ export function haystackMatches(haystack: string, tokens: string[]): boolean {
 }
 
 export function issueSearchText(
-  issue: Pick<BoardIssue, 'identifier' | 'title' | 'labels' | 'provider' | 'repoPath'>,
+  issue: Pick<
+    BoardIssue,
+    | 'identifier'
+    | 'title'
+    | 'labels'
+    | 'provider'
+    | 'repoPath'
+    | 'assignee'
+    | 'assignees'
+    | 'cycle'
+    | 'teamKey'
+  >,
   workspaceName = '',
 ): string {
   return [
@@ -230,6 +281,10 @@ export function issueSearchText(
     issue.title,
     issue.labels.join(' '),
     issue.provider ?? '',
+    issue.assignee ?? '',
+    (issue.assignees ?? []).join(' '),
+    issue.cycle?.name ?? '',
+    issue.teamKey ?? '',
     workspaceName,
     issue.repoPath,
   ].join(' ');
@@ -303,6 +358,9 @@ export type HomeBoardTicketCard = {
   provider?: string;
   repoPath: string;
   url: string;
+  assignee?: string;
+  cycle?: string;
+  teamKey?: string;
 };
 
 export type HomeBoardPrCard = {
@@ -403,6 +461,9 @@ function toTicketCard(issue: BoardIssue): HomeBoardTicketCard {
     provider: issue.provider,
     repoPath: issue.repoPath,
     url: issue.url,
+    assignee: issue.assignee,
+    cycle: issue.cycle?.name,
+    teamKey: issue.teamKey,
   };
 }
 
@@ -444,6 +505,8 @@ export function assembleHomeBoard(input: {
   kind?: BoardKindFilter;
   column?: BoardColumnId;
   limit?: number;
+  ticketScope?: TicketScope;
+  viewerLogin?: string;
   workspaceName?: (path: string) => string;
 }): HomeBoardSnapshot {
   const tokens = tokenizeQuery(input.query ?? '');
@@ -451,6 +514,10 @@ export function assembleHomeBoard(input: {
   const kind = input.kind ?? 'all';
   const limit = Math.max(1, input.limit ?? BOARD_PAGE_SIZE);
   const wsName = input.workspaceName ?? (() => '');
+  const ticketScope = input.ticketScope ?? 'all';
+  const scopedIssues = input.issues.filter((issue) =>
+    issueInTicketScope(issue, ticketScope, input.viewerLogin),
+  );
   const byUpdated = (a: Thread, b: Thread) => b.updatedAt.localeCompare(a.updatedAt);
   const live = input.threads.filter((t) => t.status !== 'archived').sort(byUpdated);
   const archived = (
@@ -460,7 +527,7 @@ export function assembleHomeBoard(input: {
   const tickets =
     kind === 'prs' || kind === 'threads'
       ? []
-      : backlogIssues(input.issues, live).filter(
+      : backlogIssues(scopedIssues, live).filter(
           (issue) =>
             inWorkspace(issue.repoPath, repo) &&
             haystackMatches(issueSearchText(issue, wsName(issue.repoPath)), tokens),
@@ -541,7 +608,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Start a Backlog ticket: start_board_card kind=ticket ref=<identifier> repoPath=… (or create_thread sourceType=ticket). Start an unmatched Review PR: start_board_card kind=pr ref=<number> repoPath=…. Then send_to_thread. Columns follow agent/PR state — do not invent status.';
+  'Start a Backlog ticket: start_board_card kind=ticket ref=<identifier> repoPath=… (or create_thread sourceType=ticket). Start an unmatched Review PR: start_board_card kind=pr ref=<number> repoPath=…. Then send_to_thread. Columns follow agent/PR state — do not invent status. Linear Backlog defaults to your current cycle (ticketScope=cycle); pass ticketScope=assigned for all tickets assigned to you, or all for every open GitHub issue.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

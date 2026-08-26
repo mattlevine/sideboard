@@ -10,9 +10,11 @@ import {
   compactPreview,
   dedupeBoardIssues,
   dedupeBoardPrs,
+  defaultTicketScope,
   findBoardIssue,
   findBoardPr,
   haystackMatches,
+  issueInTicketScope,
   issueNeedsWorkspacePick,
   issueSearchText,
   pickDefaultRepoPath,
@@ -74,6 +76,7 @@ function issue(partial: Partial<BoardIssue> & Pick<BoardIssue, 'identifier' | 't
     provider: partial.provider,
     repoPath: partial.repoPath ?? '/repo',
     needsWorkspacePick: partial.needsWorkspacePick ?? false,
+    ...partial,
   };
 }
 
@@ -431,6 +434,87 @@ describe('assembleHomeBoard', () => {
     expect(col.columns.running).toHaveLength(1);
     expect(col.columns.backlog).toHaveLength(0);
     expect(col.totals.backlog).toBe(3);
+  });
+
+  it('defaults Linear Backlog to the active cycle', () => {
+    expect(defaultTicketScope('linear')).toBe('cycle');
+    expect(defaultTicketScope('github')).toBe('all');
+    expect(
+      issueInTicketScope(
+        issue({
+          identifier: 'ENG-1',
+          title: 'Now',
+          provider: 'linear',
+          cycle: { name: 'Week 34', number: 34, isActive: true },
+        }),
+        'cycle',
+      ),
+    ).toBe(true);
+    expect(
+      issueInTicketScope(
+        issue({
+          identifier: 'ENG-2',
+          title: 'Later',
+          provider: 'linear',
+          cycle: { name: 'Week 35', number: 35, isActive: false },
+        }),
+        'cycle',
+      ),
+    ).toBe(false);
+    expect(
+      issueInTicketScope(
+        issue({ identifier: 'ENG-2', title: 'Later', provider: 'linear' }),
+        'assigned',
+      ),
+    ).toBe(true);
+    expect(
+      issueInTicketScope(
+        issue({
+          identifier: '#9',
+          title: 'Mine',
+          provider: 'github',
+          assignees: ['octocat'],
+        }),
+        'assigned',
+        'octocat',
+      ),
+    ).toBe(true);
+    expect(
+      issueInTicketScope(
+        issue({
+          identifier: '#8',
+          title: 'Theirs',
+          provider: 'github',
+          assignees: ['other'],
+        }),
+        'assigned',
+        'octocat',
+      ),
+    ).toBe(false);
+
+    const snap = assembleHomeBoard({
+      issues: [
+        issue({
+          identifier: 'ENG-1',
+          title: 'Now',
+          provider: 'linear',
+          cycle: { name: 'Week 34', isActive: true },
+        }),
+        issue({
+          identifier: 'ENG-2',
+          title: 'Later',
+          provider: 'linear',
+          cycle: { name: 'Week 35', isActive: false },
+        }),
+      ],
+      prs: [],
+      threads: [],
+      ticketScope: 'cycle',
+    });
+    expect(snap.columns.backlog.map((c) => c.kind === 'ticket' && c.identifier)).toEqual([
+      'ENG-1',
+    ]);
+    expect(snap.columns.backlog[0]).toMatchObject({ cycle: 'Week 34' });
   });
 
   it('resolves Start refs to the matching ticket or PR', () => {

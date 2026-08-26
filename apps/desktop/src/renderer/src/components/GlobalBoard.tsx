@@ -9,10 +9,12 @@ import {
   boardPrKey,
   classifyThreadColumn,
   compactPreview,
+  defaultTicketScope,
   dedupeBoardIssues,
   dedupeBoardPrs,
   haystackMatches,
   inWorkspace,
+  issueInTicketScope,
   issueNeedsWorkspacePick,
   issueSearchText,
   issueSourceLabel,
@@ -27,7 +29,28 @@ import {
   type BoardIssue,
   type BoardKindFilter,
   type BoardPr,
+  type TicketScope,
 } from '../lib/home-board';
+
+const TICKET_SCOPE_KEY = 'sideboard.homeTicketScope';
+
+function readStoredTicketScope(): TicketScope | null {
+  try {
+    const raw = localStorage.getItem(TICKET_SCOPE_KEY);
+    if (raw === 'cycle' || raw === 'assigned' || raw === 'all') return raw;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function persistTicketScope(scope: TicketScope) {
+  try {
+    localStorage.setItem(TICKET_SCOPE_KEY, scope);
+  } catch {
+    // ignore
+  }
+}
 import { FleetActivityBar } from './FleetActivityBar';
 
 interface Props {
@@ -96,6 +119,10 @@ export function GlobalBoard({
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issuesError, setIssuesError] = useState<string | null>(null);
   const [issueSource, setIssueSource] = useState<string>('github');
+  const [viewerLogin, setViewerLogin] = useState('');
+  const [ticketScopeOverride, setTicketScopeOverride] = useState<TicketScope | null>(
+    readStoredTicketScope,
+  );
   const [prs, setPrs] = useState<BoardPr[]>([]);
   const [prsLoading, setPrsLoading] = useState(false);
   const [prsError, setPrsError] = useState<string | null>(null);
@@ -138,6 +165,7 @@ export function GlobalBoard({
         const first = await window.sideboard.listIssues(paths[0]!);
         if (cancelled) return;
         setIssueSource(first.source);
+        setViewerLogin(first.viewer?.login || first.viewer?.name || '');
 
         if (first.source === 'linear') {
           const repoPath = paths[0] ?? '';
@@ -221,6 +249,12 @@ export function GlobalBoard({
   }, [workspaceKey, issueRefresh]);
 
   const defaultRepo = pickDefaultRepoPath(workspaces, lastUsedRepoPath);
+  const ticketScope = ticketScopeOverride ?? defaultTicketScope(issueSource);
+
+  function chooseTicketScope(scope: TicketScope) {
+    setTicketScopeOverride(scope);
+    persistTicketScope(scope);
+  }
 
   const boardIssues = useMemo(() => {
     return issues.map((issue) => {
@@ -255,19 +289,20 @@ export function GlobalBoard({
 
   useEffect(() => {
     setShownByCol({});
-  }, [query, repoFilter, kindFilter]);
+  }, [query, repoFilter, kindFilter, ticketScope]);
 
   const filteredBacklog = useMemo(() => {
     if (kindFilter === 'prs' || kindFilter === 'threads') return [];
     return backlog.filter(
       (issue) =>
+        issueInTicketScope(issue, ticketScope, viewerLogin) &&
         inWorkspace(issue.repoPath, repoFilter) &&
         haystackMatches(
           issueSearchText(issue, workspaceName(issue.repoPath, workspaces)),
           queryTokens,
         ),
     );
-  }, [backlog, kindFilter, repoFilter, queryTokens, workspaces]);
+  }, [backlog, kindFilter, repoFilter, queryTokens, workspaces, ticketScope, viewerLogin]);
 
   const filteredPrs = useMemo(() => {
     if (kindFilter === 'tickets' || kindFilter === 'threads') return [];
@@ -438,8 +473,9 @@ export function GlobalBoard({
         <>
           <FleetActivityBar runtime={runtime} compact />
           <p className="board-lede">
-            Search and filter across tickets, PRs, and threads. Start opens a worktree;
-            the card then follows agent and PR status.
+            Search and filter across tickets, PRs, and threads. Linear Backlog
+            defaults to issues assigned to you in the current cycle. Start opens
+            a worktree; the card then follows agent and PR status.
           </p>
           <div className="board-toolbar">
             <input
@@ -479,6 +515,43 @@ export function GlobalBoard({
                 </button>
               ))}
             </div>
+            <div className="board-toolbar-kinds" role="group" aria-label="Ticket scope">
+              {issueSource === 'linear' ? (
+                <>
+                  <button
+                    type="button"
+                    className={ticketScope === 'cycle' ? 'primary' : ''}
+                    onClick={() => chooseTicketScope('cycle')}
+                  >
+                    This cycle
+                  </button>
+                  <button
+                    type="button"
+                    className={ticketScope === 'assigned' ? 'primary' : ''}
+                    onClick={() => chooseTicketScope('assigned')}
+                  >
+                    All assigned
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={ticketScope === 'all' ? 'primary' : ''}
+                    onClick={() => chooseTicketScope('all')}
+                  >
+                    All open
+                  </button>
+                  <button
+                    type="button"
+                    className={ticketScope === 'assigned' || ticketScope === 'cycle' ? 'primary' : ''}
+                    onClick={() => chooseTicketScope('assigned')}
+                  >
+                    Assigned to me
+                  </button>
+                </>
+              )}
+            </div>
           </div>
           <div className="board-body board-kanban-wrap">
             <div className="board-kanban">
@@ -504,7 +577,13 @@ export function GlobalBoard({
                           <div className="board-column-empty">
                             {query || repoFilter || kindFilter !== 'all'
                               ? 'No matching tickets'
-                              : `No ${issueSourceLabel(issueSource)} tickets`}
+                              : ticketScope === 'cycle' && issueSource === 'linear'
+                                ? backlog.length > 0
+                                  ? `No tickets in your current cycle (${backlog.length} assigned overall)`
+                                  : 'No tickets in your current cycle'
+                                : ticketScope === 'assigned'
+                                  ? 'No tickets assigned to you'
+                                  : `No ${issueSourceLabel(issueSource)} tickets`}
                           </div>
                         )}
                         {page.visible.map((issue) => {
@@ -686,6 +765,11 @@ function IssueCard({
         <span className="board-card-id">{issue.identifier}</span>
       </div>
       <div className="board-card-title">{issue.title}</div>
+      {(issue.cycle?.name || issue.assignee) && (
+        <div className="thread-meta">
+          {[issue.cycle?.name, issue.assignee].filter(Boolean).join(' · ')}
+        </div>
+      )}
       {issue.labels.length > 0 && (
         <div className="board-card-labels">
           {issue.labels.slice(0, 8).map((label) => (
