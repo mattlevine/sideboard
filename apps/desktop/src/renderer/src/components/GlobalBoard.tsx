@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
 import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
-import { closeChatTabMessage } from '../lib/close-chat-tab';
+import { archiveWorktreeMessage } from '../lib/close-chat-tab';
 import {
   BOARD_COLUMN_DEFS,
   BOARD_PAGE_SIZE,
@@ -17,15 +17,24 @@ import {
   worktreeBoardStatus,
   type BoardColumnId,
 } from '../lib/home-board';
+import {
+  isWorktreeUnread,
+  latestAgentResponseAt,
+  unreadWorktreeKey,
+} from '../lib/unread-worktrees';
 import { FleetActivityBar } from './FleetActivityBar';
+import { ThreadStatusIcon } from './ThreadStatusIcon';
 
 interface Props {
   threads: Thread[];
   workspaces?: Workspace[];
   runtime: OrchestratorRuntime | null;
   liveByThread: Record<string, string>;
+  /** Last-opened chat — wrapper click reopens that tab when it belongs to the card. */
+  selectedId?: string | null;
   onOpenThread: (id: string) => void;
   onAddToBoard: () => void;
+  onNewOrchestration: () => void;
   onRefresh: () => void;
   onArchive: (
     ids: string[],
@@ -73,8 +82,10 @@ export function GlobalBoard({
   workspaces = [],
   runtime,
   liveByThread,
+  selectedId = null,
   onOpenThread,
   onAddToBoard,
+  onNewOrchestration,
   onRefresh,
   onArchive,
   archivingIds = new Set(),
@@ -98,14 +109,17 @@ export function GlobalBoard({
   );
 
   const byColumn = useMemo(() => {
-    const map: Record<'needs_you' | 'review' | 'done', Thread[][]> = {
-      needs_you: [],
+    const map: Record<'new' | 'draft' | 'review' | 'done', Thread[][]> = {
+      new: [],
+      draft: [],
       review: [],
       done: [],
     };
     for (const group of worktrees) {
       const col = classifyWorktreeColumn(group);
-      if (col === 'needs_you' || col === 'review' || col === 'done') map[col].push(group);
+      if (col === 'new' || col === 'draft' || col === 'review' || col === 'done') {
+        map[col].push(group);
+      }
     }
     return map;
   }, [worktrees]);
@@ -162,6 +176,13 @@ export function GlobalBoard({
           </button>
           <button
             type="button"
+            onClick={onNewOrchestration}
+            title="Start a new orchestration chat"
+          >
+            New orchestration
+          </button>
+          <button
+            type="button"
             onClick={onAddToBoard}
             title="Create a worktree from a ticket, PR, or branch"
           >
@@ -197,6 +218,7 @@ export function GlobalBoard({
                             group={group}
                             liveByThread={liveByThread}
                             workspaces={workspaces}
+                            selectedId={selectedId}
                             archiving={group.some((t) => archivingIds.has(t.id))}
                             canArchive={col.id === 'done'}
                             onOpenThread={onOpenThread}
@@ -233,7 +255,7 @@ export function GlobalBoard({
               <span className="chat-empty-cube" />
             </div>
             <h3>No worktrees yet</h3>
-            <p>Add a ticket, PR, or branch to create a worktree. Home shows one card per checkout (chats nested inside): In Process → Review → Merged. Archive sends the worktree to Settings → History.</p>
+            <p>Add a ticket, PR, or branch to create a worktree. Home shows one card per checkout (chats nested inside): New → Draft → Review → Merged. Archive sends the worktree to Settings → History.</p>
             <div className="chat-empty-action">
               <button type="button" className="primary" onClick={onAddToBoard}>
                 Add to Board
@@ -256,15 +278,14 @@ export function GlobalBoard({
           >
             <div className="create-modal-content">
               <h3 id="archive-board-title" className="merge-modal-title">
-                {archiveConfirm.removesWorktree
-                  ? 'Archive worktree?'
-                  : archiveConfirm.cowboy
-                    ? 'Archive cowboy chat?'
-                    : 'Archive chat?'}
+                {archiveConfirm.cowboy && !archiveConfirm.removesWorktree
+                  ? 'Archive cowboy worktree?'
+                  : 'Archive worktree?'}
               </h3>
               <p className="confirm-dialog-message">
-                {closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount, {
+                {archiveWorktreeMessage(archiveConfirm.title, archiveConfirm.chatCount, {
                   removesWorktree: archiveConfirm.removesWorktree,
+                  cowboy: archiveConfirm.cowboy,
                 })}
               </p>
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
@@ -284,7 +305,7 @@ export function GlobalBoard({
                     });
                   }}
                 >
-                  Archive
+                  Archive worktree
                 </button>
               </div>
             </div>
@@ -309,6 +330,7 @@ function WorktreeCard({
   group,
   liveByThread,
   workspaces,
+  selectedId,
   archiving,
   canArchive,
   onOpenThread,
@@ -318,54 +340,129 @@ function WorktreeCard({
   group: Thread[];
   liveByThread: Record<string, string>;
   workspaces: Workspace[];
+  selectedId: string | null;
   archiving: boolean;
   canArchive: boolean;
   onOpenThread: (id: string) => void;
   onRefresh: () => void;
   onArchive: () => void;
 }) {
-  const t = group[0]!;
+  const newest = group[0]!;
+  const primary = group.find((t) => t.id === selectedId) ?? newest;
   const status = worktreeBoardStatus(group);
-  const repo = workspaceName(t.repoPath, workspaces);
+  const repo = workspaceName(newest.repoPath, workspaces);
+  const label = worktreeDisplayLabelForGroup(group);
+  const unread = isWorktreeUnread(
+    unreadWorktreeKey(primary),
+    latestAgentResponseAt(group),
+    { active: false },
+  );
+  const [stat, setStat] = useState<{
+    additions: number;
+    deletions: number;
+    dirty: boolean;
+  } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const fetchGen = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const gen = ++fetchGen.current;
+      try {
+        const diff = await window.sideboard.getDiff(primary.id, {
+          scope: 'uncommitted',
+          includePatches: false,
+        });
+        if (cancelled || gen !== fetchGen.current) return;
+        const s = diff.scopeStats?.uncommitted;
+        setStat({
+          additions: s?.additions ?? 0,
+          deletions: s?.deletions ?? 0,
+          dirty: Boolean(diff.dirty) || (s != null && (s.additions > 0 || s.deletions > 0)),
+        });
+        setLoaded(true);
+      } catch {
+        if (cancelled || gen !== fetchGen.current) return;
+        setStat({ additions: 0, deletions: 0, dirty: false });
+        setLoaded(true);
+      }
+    };
+    void load();
+    const interval = window.setInterval(() => void load(), 12_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [primary.id, primary.status, primary.worktreePath]);
+
+  const dirty = loaded && Boolean(stat?.dirty);
+
+  function openWorktree() {
+    if (!archiving) onOpenThread(primary.id);
+  }
+
   return (
     <article
       className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}`}
       aria-busy={archiving}
+      onClick={openWorktree}
     >
       <div className="board-card-top">
-        <span className={`dot ${status}`} title={status} />
-        <div className="board-open">
-          <div className="thread-title">{worktreeDisplayLabelForGroup(group)}</div>
+        {archiving ? (
+          <span className="thread-archive-spinner" aria-hidden />
+        ) : (
+          <ThreadStatusIcon
+            status={status}
+            dirty={dirty}
+            dirtyLoaded={loaded}
+            additions={stat?.additions ?? 0}
+            deletions={stat?.deletions ?? 0}
+            unread={unread}
+          />
+        )}
+        <div
+          className="board-open"
+          role="button"
+          tabIndex={archiving ? -1 : 0}
+          aria-label={`Open ${label}`}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openWorktree();
+            }
+          }}
+        >
+          <div className="thread-title">{label}</div>
           <div className="thread-meta">
             {archiving
               ? 'Archiving…'
               : [
                   group.length > 1 ? `${group.length} chats` : '1 chat',
-                  worktreeSourceLabel(t),
+                  worktreeSourceLabel(newest),
                   repo || null,
-                  relativeTime(t.updatedAt),
+                  relativeTime(newest.updatedAt),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
           </div>
         </div>
-      </div>
-      {canArchive && (
-        <div className="board-row-actions">
+        {canArchive && (
           <button
             type="button"
+            className="board-archive-worktree"
             disabled={archiving}
-            title="Archive this worktree (moves to Settings → History)"
+            title="Archive this worktree — all chats move to Settings → History"
             onClick={(e) => {
               e.stopPropagation();
               onArchive();
             }}
           >
-            {archiving ? 'Archiving…' : 'Archive'}
+            {archiving ? 'Archiving…' : 'Archive worktree'}
           </button>
-        </div>
-      )}
-      <div className="board-card-chats">
+        )}
+      </div>
+      <div className={`board-card-chats${group.length > 3 ? ' is-scrollable' : ''}`}>
         {group.map((chat) => (
           <ChatCard
             key={chat.id}

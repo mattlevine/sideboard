@@ -25,12 +25,14 @@ export type BoardColumnId =
   | 'backlog'
   | 'queued'
   | 'running'
-  | 'needs_you'
+  | 'new'
+  | 'draft'
   | 'review'
   | 'done';
 
 export const BOARD_COLUMN_DEFS: { id: BoardColumnId; title: string }[] = [
-  { id: 'needs_you', title: 'In Process' },
+  { id: 'new', title: 'New' },
+  { id: 'draft', title: 'Draft' },
   { id: 'review', title: 'Review' },
   { id: 'done', title: 'Merged' },
 ];
@@ -124,15 +126,17 @@ export function isMergedPrState(
 /**
  * Derived Home column. Path is PR state — not archive or live agent activity.
  * Archived chats leave the board (Settings → History). Queued/running stay on
- * the card (status dot) and the fleet bar.
- * Priority: merged PR → open PR → everything else.
+ * the card (status icon) and the fleet bar.
+ * Priority: merged PR → open (ready-for-review) PR → draft PR → no PR.
  */
 export function classifyThreadColumn(
-  thread: Pick<Thread, 'prUrl' | 'prState'>,
+  thread: Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft'>,
 ): BoardColumnId {
   if (isMergedPrState(thread.prUrl, thread.prState)) return 'done';
-  if (isOpenPrState(thread.prUrl, thread.prState)) return 'review';
-  return 'needs_you';
+  if (isOpenPrState(thread.prUrl, thread.prState)) {
+    return thread.prIsDraft ? 'draft' : 'review';
+  }
+  return 'new';
 }
 
 /**
@@ -154,13 +158,18 @@ export function groupHomeBoardWorktrees<T extends Pick<Thread, 'worktreePath' | 
     .sort((a, b) => (b[0]?.updatedAt ?? '').localeCompare(a[0]?.updatedAt ?? ''));
 }
 
-/** Column for a worktree: any sibling merged PR → Merged, else any open PR → Review. */
+/** Column for a worktree: merged → Merged, open non-draft → Review, draft → Draft. */
 export function classifyWorktreeColumn(
-  group: Array<Pick<Thread, 'prUrl' | 'prState'>>,
+  group: Array<Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft'>>,
 ): BoardColumnId {
   if (group.some((t) => isMergedPrState(t.prUrl, t.prState))) return 'done';
-  if (group.some((t) => isOpenPrState(t.prUrl, t.prState))) return 'review';
-  return 'needs_you';
+  if (group.some((t) => isOpenPrState(t.prUrl, t.prState) && !t.prIsDraft)) {
+    return 'review';
+  }
+  if (group.some((t) => isOpenPrState(t.prUrl, t.prState) && t.prIsDraft)) {
+    return 'draft';
+  }
+  return 'new';
 }
 
 /** Activity dot for a worktree: running / queued beat idle sibling tabs. */
@@ -769,7 +778,8 @@ function emptyColumns(): Record<BoardColumnId, HomeBoardCard[]> {
     backlog: [],
     queued: [],
     running: [],
-    needs_you: [],
+    new: [],
+    draft: [],
     review: [],
     done: [],
   };
@@ -780,7 +790,8 @@ function emptyHidden(): Record<BoardColumnId, number> {
     backlog: 0,
     queued: 0,
     running: 0,
-    needs_you: 0,
+    new: 0,
+    draft: 0,
     review: 0,
     done: 0,
   };
@@ -879,7 +890,8 @@ export function assembleHomeBoard(input: {
     backlog: 0,
     queued: 0,
     running: 0,
-    needs_you: 0,
+    new: 0,
+    draft: 0,
     review: 0,
     done: 0,
     tickets: 0,
@@ -891,7 +903,8 @@ export function assembleHomeBoard(input: {
   const byCol: Record<Exclude<BoardColumnId, 'backlog'>, Thread[][]> = {
     queued: [],
     running: [],
-    needs_you: [],
+    new: [],
+    draft: [],
     review: [],
     done: [],
   };
@@ -932,7 +945,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs share a card). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to merge: In Process (no open PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs nest as inner cards). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

@@ -4,7 +4,9 @@ import {
   formatPlanQuestionAnswers,
   formatPlanQuestionsForChat,
   isAskUserToolName,
+  latestPendingPlanQuestions,
   parsePlanQuestionsInput,
+  planQuestionsSignature,
 } from './ask-user.js';
 
 describe('parsePlanQuestionsInput', () => {
@@ -54,6 +56,9 @@ describe('extractPendingPlanQuestions', () => {
       },
     ]);
     expect(pending?.id).toBe('q1');
+    expect(pending?.signature).toBe(
+      planQuestionsSignature(pending!.questions),
+    );
     expect(pending?.questions[0]!.options).toHaveLength(2);
   });
 
@@ -61,6 +66,59 @@ describe('extractPendingPlanQuestions', () => {
     expect(isAskUserToolName('mcp__sideboard__ask_user')).toBe(true);
     expect(isAskUserToolName('ask_user')).toBe(true);
     expect(isAskUserToolName('Bash')).toBe(false);
+  });
+});
+
+const askPart = {
+  type: 'tool',
+  id: 'q1',
+  name: 'ask_user',
+  input: {
+    questions: [
+      {
+        question: 'Which column set?',
+        options: [{ label: 'Four' }, { label: 'Five' }],
+      },
+    ],
+  },
+  status: 'done',
+};
+
+describe('latestPendingPlanQuestions', () => {
+  it('is pending on the agent turn that asked', () => {
+    const pending = latestPendingPlanQuestions({
+      messages: [{ role: 'agent', parts: [askPart] }],
+    });
+    expect(pending?.questions[0]!.question).toContain('column');
+  });
+
+  it('clears after a user reply in the transcript', () => {
+    expect(
+      latestPendingPlanQuestions({
+        messages: [
+          { role: 'agent', parts: [askPart] },
+          { role: 'user' },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  it('clears when a composer send is in flight', () => {
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'agent', parts: [askPart] }],
+        liveParts: [askPart],
+        userReplied: true,
+      }),
+    ).toBeNull();
+  });
+
+  it('prefers live parts on the current turn', () => {
+    const pending = latestPendingPlanQuestions({
+      messages: [{ role: 'user' }],
+      liveParts: [askPart],
+    });
+    expect(pending?.id).toBe('q1');
   });
 });
 

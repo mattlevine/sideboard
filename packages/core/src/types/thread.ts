@@ -131,6 +131,11 @@ export interface Thread {
    */
   prState: string | null;
   /**
+   * Cached GitHub draft flag from the last `getPrMeta`. Open + draft → Home
+   * Draft column; open + not draft → Review. Omitted/false when unknown.
+   */
+  prIsDraft?: boolean;
+  /**
    * When true, skip auto-archive if the PR is already MERGED (set on restore
    * so unarchiving a merged workspace does not immediately re-archive).
    * Cleared when `prState` becomes a non-merged open state again.
@@ -241,6 +246,10 @@ export interface PrInfo {
   isCrossRepository: boolean;
   /** Present when listed via `gh pr list --json author`. */
   author?: { login: string } | null;
+  /** Present when `gh pr view --json isDraft` is requested. */
+  isDraft?: boolean;
+  /** Present when `gh pr view --json state` is requested. */
+  state?: string;
 }
 
 /** One CI check from `gh pr checks --json`, or a synthetic merge/review gate. */

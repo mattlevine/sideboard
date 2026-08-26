@@ -315,7 +315,7 @@ describe('app settings', () => {
     expect(mod.cowboyModeEnabled()).toBe(false);
     expect(mod.showCostEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
-    expect(mod.maxConcurrentAgents()).toBe(3);
+    expect(mod.maxConcurrentAgents()).toBe(5);
 
     const saved = mod.updateAdvancedSettings({
       autoRenameBranch: false,

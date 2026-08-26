@@ -291,7 +291,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of worktrees (In Process, Review, Merged) — one card per checkout; sibling chat tabs share a card. Same cards as desktop Home. Path to merge: no open PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
+    'Home Kanban of worktrees (New, Draft, Review, Merged) — one card per checkout; sibling chat tabs nest as inner cards. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -303,9 +303,11 @@ export async function startMcpServer(): Promise<void> {
         .optional()
         .describe('Filter by worktree source (default all)'),
       column: z
-        .enum(['needs_you', 'review', 'done'])
+        .enum(['new', 'draft', 'review', 'done', 'needs_you'])
         .optional()
-        .describe('Return cards for this column only (totals still include the rest)'),
+        .describe(
+          'Return cards for this column only (totals still include the rest). needs_you is a legacy alias for new.',
+        ),
       limit: z
         .number()
         .int()
@@ -322,7 +324,7 @@ export async function startMcpServer(): Promise<void> {
         query,
         repoPath,
         kind: (kind ?? 'all') as BoardKindFilter,
-        column: column as BoardColumnId | undefined,
+        column: (column === 'needs_you' ? 'new' : column) as BoardColumnId | undefined,
         limit,
         workspaceName: (path) => names.get(path) ?? '',
       });

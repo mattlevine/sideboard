@@ -951,6 +951,7 @@ export function App() {
           workspaces={workspaces}
           runtime={runtime}
           liveByThread={liveByThread}
+          selectedId={selectedId}
           onOpenThread={(id) => {
             setSelectedId(id);
             setView('thread');
@@ -960,6 +961,7 @@ export function App() {
           onAddToBoard={() =>
             openCreate(repoPath || undefined, 'quick', { stayOnBoard: true })
           }
+          onNewOrchestration={() => openCreate(undefined, 'orchestration')}
           onArchive={(ids, meta) => archiveThreadsAndRefresh(ids, meta)}
           archivingIds={archivingIds}
           leftSidebarToggle={

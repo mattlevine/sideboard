@@ -31,7 +31,7 @@ export function FleetActivityBar({ runtime, meta, compact = false }: Props) {
       <Stat label="Queued" value={runtime?.queued ?? 0} tone="warn" />
       <Stat label="Idle" value={runtime?.idle ?? 0} tone="ok" />
       <Stat label="Error" value={runtime?.error ?? 0} tone="err" />
-      <Stat label="Cap" value={runtime?.maxConcurrent ?? 3} />
+      <Stat label="Cap" value={runtime?.maxConcurrent ?? 5} />
       {meta ? <span className="thread-meta board-stats-meta">{meta}</span> : null}
     </div>
   );
