@@ -207,3 +207,91 @@ export function dedupeBoardPrs(prs: BoardPr[]): BoardPr[] {
   }
   return out.sort((a, b) => b.number - a.number);
 }
+
+export const BOARD_PAGE_SIZE = 40;
+
+export type BoardKindFilter = 'all' | 'tickets' | 'prs' | 'threads';
+
+export function tokenizeQuery(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+export function haystackMatches(haystack: string, tokens: string[]): boolean {
+  if (tokens.length === 0) return true;
+  const h = haystack.toLowerCase();
+  return tokens.every((token) => h.includes(token));
+}
+
+export function issueSearchText(
+  issue: Pick<BoardIssue, 'identifier' | 'title' | 'labels' | 'provider' | 'repoPath'>,
+  workspaceName = '',
+): string {
+  return [
+    issue.identifier,
+    issue.title,
+    issue.labels.join(' '),
+    issue.provider ?? '',
+    workspaceName,
+    issue.repoPath,
+  ].join(' ');
+}
+
+export function prAuthorLogin(pr: Pick<PrInfo, 'author'>): string {
+  return pr.author?.login?.trim() ?? '';
+}
+
+export function prSearchText(
+  pr: Pick<BoardPr, 'number' | 'title' | 'headRefName' | 'url' | 'repoPath' | 'author'>,
+  workspaceName = '',
+  author = '',
+): string {
+  return [
+    `#${pr.number}`,
+    String(pr.number),
+    pr.title,
+    pr.headRefName,
+    pr.url,
+    author || prAuthorLogin(pr),
+    workspaceName,
+    pr.repoPath,
+  ].join(' ');
+}
+
+export function threadSearchText(
+  thread: Pick<Thread, 'title' | 'sourceRef' | 'sourceType' | 'agent' | 'status' | 'repoPath' | 'branchName' | 'prUrl'>,
+  workspaceName = '',
+): string {
+  return [
+    thread.title,
+    thread.sourceRef,
+    thread.sourceType,
+    thread.agent,
+    thread.status,
+    thread.branchName,
+    thread.prUrl ?? '',
+    workspaceName,
+    thread.repoPath,
+  ].join(' ');
+}
+
+export function inWorkspace(
+  repoPath: string,
+  filterRepoPath: string,
+): boolean {
+  if (!filterRepoPath) return true;
+  return repoPath === filterRepoPath;
+}
+
+export function visiblePage<T>(items: T[], shown: number): { visible: T[]; hidden: number } {
+  const n = Math.max(0, shown);
+  return {
+    visible: items.slice(0, n),
+    hidden: Math.max(0, items.length - n),
+  };
+}
+
+export function compactPreview(text: string, max = 140): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (flat.length <= max) return flat;
+  return `${flat.slice(0, Math.max(1, max - 1))}…`;
+}

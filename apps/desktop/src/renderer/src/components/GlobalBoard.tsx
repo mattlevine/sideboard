@@ -3,22 +3,32 @@ import type { IssueInfo, OrchestratorRuntime, PrInfo, Thread, Workspace } from '
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
 import {
   BOARD_COLUMN_DEFS,
+  BOARD_PAGE_SIZE,
   backlogIssues,
   boardIssueKey,
   boardPrKey,
   classifyThreadColumn,
+  compactPreview,
   dedupeBoardIssues,
   dedupeBoardPrs,
+  haystackMatches,
+  inWorkspace,
   issueNeedsWorkspacePick,
+  issueSearchText,
   issueSourceLabel,
   pickDefaultRepoPath,
+  prAuthorLogin,
+  prSearchText,
   reviewPrs,
+  threadSearchText,
+  tokenizeQuery,
+  visiblePage,
   type BoardColumnId,
   type BoardIssue,
+  type BoardKindFilter,
   type BoardPr,
 } from '../lib/home-board';
 import { FleetActivityBar } from './FleetActivityBar';
-import { MarkdownMessage } from './MarkdownMessage';
 
 interface Props {
   threads: Thread[];
@@ -94,6 +104,10 @@ export function GlobalBoard({
   const [startingId, setStartingId] = useState<string | null>(null);
   const [startError, setStartError] = useState<Record<string, string>>({});
   const [pickedRepo, setPickedRepo] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState('');
+  const [repoFilter, setRepoFilter] = useState('');
+  const [kindFilter, setKindFilter] = useState<BoardKindFilter>('all');
+  const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
 
   const workspaceKey = useMemo(
     () => workspaces.map((w) => w.path).filter(Boolean).sort().join('\n'),
@@ -237,6 +251,36 @@ export function GlobalBoard({
     [prs, liveThreads],
   );
 
+  const queryTokens = useMemo(() => tokenizeQuery(query), [query]);
+
+  useEffect(() => {
+    setShownByCol({});
+  }, [query, repoFilter, kindFilter]);
+
+  const filteredBacklog = useMemo(() => {
+    if (kindFilter === 'prs' || kindFilter === 'threads') return [];
+    return backlog.filter(
+      (issue) =>
+        inWorkspace(issue.repoPath, repoFilter) &&
+        haystackMatches(
+          issueSearchText(issue, workspaceName(issue.repoPath, workspaces)),
+          queryTokens,
+        ),
+    );
+  }, [backlog, kindFilter, repoFilter, queryTokens, workspaces]);
+
+  const filteredPrs = useMemo(() => {
+    if (kindFilter === 'tickets' || kindFilter === 'threads') return [];
+    return inboxPrs.filter(
+      (pr) =>
+        inWorkspace(pr.repoPath, repoFilter) &&
+        haystackMatches(
+          prSearchText(pr, workspaceName(pr.repoPath, workspaces)),
+          queryTokens,
+        ),
+    );
+  }, [inboxPrs, kindFilter, repoFilter, queryTokens, workspaces]);
+
   const byColumn = useMemo(() => {
     const map: Record<Exclude<BoardColumnId, 'backlog'>, Thread[]> = {
       queued: [],
@@ -254,6 +298,33 @@ export function GlobalBoard({
     return map;
   }, [liveThreads, doneThreads]);
 
+  const filteredByColumn = useMemo(() => {
+    const map: Record<Exclude<BoardColumnId, 'backlog'>, Thread[]> = {
+      queued: [],
+      running: [],
+      needs_you: [],
+      review: [],
+      done: [],
+    };
+    if (kindFilter === 'tickets' || kindFilter === 'prs') return map;
+    for (const col of Object.keys(map) as Array<Exclude<BoardColumnId, 'backlog'>>) {
+      map[col] = byColumn[col].filter(
+        (t) =>
+          inWorkspace(t.repoPath, repoFilter) &&
+          haystackMatches(
+            threadSearchText(t, workspaceName(t.repoPath, workspaces)),
+            queryTokens,
+          ),
+      );
+    }
+    return map;
+  }, [byColumn, kindFilter, repoFilter, queryTokens, workspaces]);
+
+  const filteredThreadCount = useMemo(
+    () => Object.values(filteredByColumn).reduce((n, list) => n + list.length, 0),
+    [filteredByColumn],
+  );
+
   const hasBoardContent =
     issuesLoading ||
     prsLoading ||
@@ -267,6 +338,22 @@ export function GlobalBoard({
   function handleRefresh() {
     setIssueRefresh((n) => n + 1);
     onRefresh();
+  }
+
+  function shownFor(col: BoardColumnId): number {
+    return shownByCol[col] ?? BOARD_PAGE_SIZE;
+  }
+
+  function showMore(col: BoardColumnId) {
+    setShownByCol((prev) => ({
+      ...prev,
+      [col]: (prev[col] ?? BOARD_PAGE_SIZE) + BOARD_PAGE_SIZE,
+    }));
+  }
+
+  function countLabel(visible: number, total: number): string {
+    if (total <= visible) return String(total);
+    return `${visible} of ${total}`;
   }
 
   async function handleStart(issue: BoardIssue) {
@@ -338,7 +425,7 @@ export function GlobalBoard({
         <h2>Home</h2>
         <span className="thread-meta">
           {runtime
-            ? `${runtime.running}/${runtime.maxConcurrent} running · ${liveThreads.length} thread${liveThreads.length === 1 ? '' : 's'}`
+            ? `${runtime.running}/${runtime.maxConcurrent} running · ${filteredBacklog.length} tickets · ${filteredPrs.length} PRs · ${filteredThreadCount} thread${filteredThreadCount === 1 ? '' : 's'}`
             : '…'}
         </span>
         <div className="actions">
@@ -351,19 +438,60 @@ export function GlobalBoard({
         <>
           <FleetActivityBar runtime={runtime} compact />
           <p className="board-lede">
-            Tickets land in Backlog. Open PRs without a Sideboard thread land in Review
-            (morning inbox). Start opens a worktree; the card then follows agent and PR
-            status. New chat still steers the Global orchestrator.
+            Search and filter across tickets, PRs, and threads. Start opens a worktree;
+            the card then follows agent and PR status.
           </p>
+          <div className="board-toolbar">
+            <input
+              className="board-toolbar-search"
+              type="search"
+              placeholder="Search tickets, PRs, threads, labels, repos…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {workspaces.length > 1 && (
+              <select
+                className="board-toolbar-select"
+                value={repoFilter}
+                onChange={(e) => setRepoFilter(e.target.value)}
+                aria-label="Workspace"
+              >
+                <option value="">All workspaces</option>
+                {workspaces.map((w) => (
+                  <option key={w.path} value={w.path}>{w.name}</option>
+                ))}
+              </select>
+            )}
+            <div className="board-toolbar-kinds" role="group" aria-label="Card type">
+              {([
+                { id: 'all' as const, label: 'All' },
+                { id: 'tickets' as const, label: 'Tickets' },
+                { id: 'prs' as const, label: 'PRs' },
+                { id: 'threads' as const, label: 'Threads' },
+              ]).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={kindFilter === opt.id ? 'primary' : ''}
+                  onClick={() => setKindFilter(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="board-body board-kanban-wrap">
             <div className="board-kanban">
               {BOARD_COLUMN_DEFS.map((col) => {
                 if (col.id === 'backlog') {
+                  const page = visiblePage(filteredBacklog, shownFor('backlog'));
                   return (
                     <section key={col.id} className="board-column">
                       <header className="board-column-header">
                         <h3>{col.title}</h3>
-                        <span className="thread-meta">{backlog.length}</span>
+                        <span className="thread-meta">
+                          {countLabel(page.visible.length, filteredBacklog.length)}
+                        </span>
                       </header>
                       <div className="board-column-cards">
                         {issuesLoading && (
@@ -372,12 +500,14 @@ export function GlobalBoard({
                         {issuesError && !issuesLoading && (
                           <div className="board-column-empty">{issuesError}</div>
                         )}
-                        {!issuesLoading && !issuesError && backlog.length === 0 && (
+                        {!issuesLoading && !issuesError && filteredBacklog.length === 0 && (
                           <div className="board-column-empty">
-                            No {issueSourceLabel(issueSource)} tickets
+                            {query || repoFilter || kindFilter !== 'all'
+                              ? 'No matching tickets'
+                              : `No ${issueSourceLabel(issueSource)} tickets`}
                           </div>
                         )}
-                        {backlog.map((issue) => {
+                        {page.visible.map((issue) => {
                           const key = boardIssueKey(issue);
                           return (
                           <IssueCard
@@ -398,13 +528,29 @@ export function GlobalBoard({
                           />
                           );
                         })}
+                        {page.hidden > 0 && (
+                          <button
+                            type="button"
+                            className="board-column-more"
+                            onClick={() => showMore('backlog')}
+                          >
+                            Show {Math.min(BOARD_PAGE_SIZE, page.hidden)} more ({page.hidden} hidden)
+                          </button>
+                        )}
                       </div>
                     </section>
                   );
                 }
 
-                const cards = byColumn[col.id];
-                const reviewCount = col.id === 'review' ? cards.length + inboxPrs.length : cards.length;
+                const cards = filteredByColumn[col.id];
+                const reviewItems = col.id === 'review'
+                  ? [
+                      ...filteredPrs.map((pr) => ({ kind: 'pr' as const, pr })),
+                      ...cards.map((thread) => ({ kind: 'thread' as const, thread })),
+                    ]
+                  : cards.map((thread) => ({ kind: 'thread' as const, thread }));
+                const total = reviewItems.length;
+                const page = visiblePage(reviewItems, shownFor(col.id));
                 const collapsed = col.id === 'done' && !doneOpen;
                 const showPrInbox = col.id === 'review' && !collapsed;
                 return (
@@ -414,7 +560,7 @@ export function GlobalBoard({
                   >
                     <header className="board-column-header">
                       <h3>{col.title}</h3>
-                      <span className="thread-meta">{reviewCount}</span>
+                      <span className="thread-meta">{countLabel(collapsed ? 0 : page.visible.length, total)}</span>
                       {col.id === 'done' && (
                         <button
                           type="button"
@@ -428,7 +574,7 @@ export function GlobalBoard({
                     <div className="board-column-cards">
                       {collapsed ? (
                         <div className="board-column-empty">
-                          {cards.length === 0 ? 'None archived' : 'Collapsed'}
+                          {total === 0 ? 'None archived' : `${total} archived`}
                         </div>
                       ) : (
                         <>
@@ -438,34 +584,46 @@ export function GlobalBoard({
                           {showPrInbox && prsError && !prsLoading && (
                             <div className="board-column-empty">{prsError}</div>
                           )}
-                          {showPrInbox &&
-                            inboxPrs.map((pr) => {
-                              const key = boardPrKey(pr);
+                          {page.visible.map((item) => {
+                            if (item.kind === 'pr') {
+                              const key = boardPrKey(item.pr);
                               return (
                                 <PrCard
                                   key={key}
-                                  pr={pr}
+                                  pr={item.pr}
                                   workspaces={workspaces}
                                   starting={startingId === key}
                                   error={startError[key]}
-                                  onStart={() => void handleStartPr(pr)}
+                                  onStart={() => void handleStartPr(item.pr)}
                                 />
                               );
-                            })}
-                          {cards.map((t) => (
-                            <ThreadCard
-                              key={t.id}
-                              thread={t}
-                              live={liveByThread[t.id]}
-                              onOpenThread={onOpenThread}
-                              onRefresh={onRefresh}
-                            />
-                          ))}
+                            }
+                            return (
+                              <ThreadCard
+                                key={item.thread.id}
+                                thread={item.thread}
+                                live={liveByThread[item.thread.id]}
+                                workspaces={workspaces}
+                                onOpenThread={onOpenThread}
+                                onRefresh={onRefresh}
+                              />
+                            );
+                          })}
+                          {page.hidden > 0 && (
+                            <button
+                              type="button"
+                              className="board-column-more"
+                              onClick={() => showMore(col.id)}
+                            >
+                              Show {Math.min(BOARD_PAGE_SIZE, page.hidden)} more ({page.hidden} hidden)
+                            </button>
+                          )}
                           {!prsLoading &&
                             !prsError &&
-                            cards.length === 0 &&
-                            (!showPrInbox || inboxPrs.length === 0) && (
-                              <div className="board-column-empty">None</div>
+                            total === 0 && (
+                              <div className="board-column-empty">
+                                {query || repoFilter || kindFilter !== 'all' ? 'No matches' : 'None'}
+                              </div>
                             )}
                         </>
                       )}
@@ -530,12 +688,15 @@ function IssueCard({
       <div className="board-card-title">{issue.title}</div>
       {issue.labels.length > 0 && (
         <div className="board-card-labels">
-          {issue.labels.slice(0, 4).map((label) => (
+          {issue.labels.slice(0, 8).map((label) => (
             <span key={label} className="board-badge">{label}</span>
           ))}
+          {issue.labels.length > 8 && (
+            <span className="board-badge">+{issue.labels.length - 8}</span>
+          )}
         </div>
       )}
-      {issue.provider === 'github' && issue.repoPath && (
+      {issue.repoPath && (
         <div className="thread-meta">{workspaceName(issue.repoPath, workspaces)}</div>
       )}
       {issue.needsWorkspacePick && workspaces.length > 1 && (
@@ -583,6 +744,7 @@ function PrCard({
       </div>
       <div className="board-card-title">{pr.title}</div>
       <div className="thread-meta">
+        {prAuthorLogin(pr) ? `${prAuthorLogin(pr)} · ` : ''}
         {pr.headRefName}
         {pr.repoPath ? ` · ${workspaceName(pr.repoPath, workspaces)}` : ''}
         {pr.isCrossRepository ? ' · fork' : ''}
@@ -608,15 +770,19 @@ function PrCard({
 function ThreadCard({
   thread: t,
   live,
+  workspaces,
   onOpenThread,
   onRefresh,
 }: {
   thread: Thread;
   live: string | undefined;
+  workspaces: Workspace[];
   onOpenThread: (id: string) => void;
   onRefresh: () => void;
 }) {
-  const { text: previewText, markdown: previewIsMarkdown } = previewForThread(t, live);
+  const { text: previewText } = previewForThread(t, live);
+  const preview = previewText ? compactPreview(previewText) : '';
+  const repo = workspaceName(t.repoPath, workspaces);
   return (
     <article className="board-card board-card-thread">
       <div className="board-card-top">
@@ -637,23 +803,15 @@ function ThreadCard({
           <div className="thread-meta">
             {t.agent} · {t.status}
             {t.queue.length ? ` · q${t.queue.length}` : ''}
+            {t.sourceType === 'ticket' || t.sourceType === 'pr' ? ` · ${t.sourceType}:${t.sourceRef}` : ''}
+            {repo ? ` · ${repo}` : ''}
             {' · '}
             {relativeTime(t.updatedAt)}
           </div>
         </div>
       </div>
-      {previewText ? (
-        <div className="board-preview">
-          {previewIsMarkdown ? (
-            <MarkdownMessage
-              text={previewText}
-              className="md md-compact"
-              onThreadLinkClick={onOpenThread}
-            />
-          ) : (
-            previewText
-          )}
-        </div>
+      {preview ? (
+        <div className="board-preview board-preview-compact">{preview}</div>
       ) : null}
       <div className="board-row-actions">
         {(t.status === 'running' || t.status === 'queued') && (

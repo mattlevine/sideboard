@@ -9138,6 +9138,28 @@ body:has(.update-banner) .team-toast-stack {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  flex-wrap: wrap;
+}
+
+.board-toolbar-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.board-toolbar-select {
+  flex: 0 1 160px;
+  min-width: 120px;
+}
+
+.board-toolbar-kinds {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .board-body {
@@ -9312,13 +9334,13 @@ body:has(.update-banner) .team-toast-stack {
 }
 
 .board-column {
-  flex: 1 1 200px;
-  min-width: 200px;
-  max-width: 320px;
+  flex: 1 1 220px;
+  min-width: 220px;
+  max-width: 360px;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: min(100%, 72vh);
+  max-height: min(100%, 78vh);
   border: 1px solid var(--border);
   border-radius: 10px;
   background: color-mix(in srgb, var(--bg-elevated, var(--bg)) 72%, transparent);
@@ -9360,6 +9382,10 @@ body:has(.update-banner) .team-toast-stack {
   color: var(--muted);
   font-size: var(--font-size-meta);
   padding: 8px 2px 4px;
+}
+
+.board-column-more {
+  width: 100%;
 }
 
 .board-card {
@@ -9429,6 +9455,15 @@ body:has(.update-banner) .team-toast-stack {
 .board-card .board-preview {
   max-width: none;
   max-height: 8em;
+}
+
+.board-card .board-preview-compact {
+  max-height: 2.8em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .board-composer {

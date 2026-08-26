@@ -27,7 +27,7 @@ export async function listGitHubIssues(
   repoPath: string,
   opts?: { limit?: number },
 ): Promise<IssueInfo[]> {
-  const limit = Math.max(1, Math.min(100, opts?.limit ?? 50));
+  const limit = Math.max(1, Math.min(1000, opts?.limit ?? 200));
   const slug = await resolveGithubRepoSlug(repoPath);
   const args = [
     'issue',

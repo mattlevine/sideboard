@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import type { Thread } from '@sideboard-ai/core';
 import {
+  BOARD_PAGE_SIZE,
   backlogIssues,
   boardIssueKey,
   boardPrKey,
   classifyThreadColumn,
+  compactPreview,
   dedupeBoardIssues,
   dedupeBoardPrs,
+  haystackMatches,
   issueNeedsWorkspacePick,
+  issueSearchText,
   pickDefaultRepoPath,
+  prSearchText,
   reviewPrs,
   threadMatchesIssue,
   threadMatchesPr,
+  threadSearchText,
+  tokenizeQuery,
+  visiblePage,
   type BoardIssue,
   type BoardPr,
 } from './home-board';
@@ -284,5 +292,49 @@ describe('threadMatchesPr / reviewPrs', () => {
     const b = { ...a, repoPath: '/b' };
     expect(dedupeBoardPrs([a, b])).toHaveLength(1);
     expect(boardPrKey(a)).toBe(boardPrKey(b));
+  });
+});
+
+describe('board search and paging', () => {
+  it('matches every query token against a haystack', () => {
+    expect(tokenizeQuery('  Fix LOGIN  ')).toEqual(['fix', 'login']);
+    expect(haystackMatches('#12 Fix login github /repo', ['#12', 'login'])).toBe(true);
+    expect(haystackMatches('#12 Fix login', ['linear'])).toBe(false);
+  });
+
+  it('indexes issue, PR, and thread fields for search', () => {
+    expect(
+      haystackMatches(
+        issueSearchText(
+          issue({ identifier: 'ENG-9', title: 'Pay wall', labels: ['billing'], provider: 'linear', repoPath: '/app' }),
+          'app',
+        ),
+        ['eng-9', 'billing'],
+      ),
+    ).toBe(true);
+    expect(
+      haystackMatches(
+        prSearchText(pr({ number: 44, title: 'Review queue', headRefName: 'feat/queue' }), 'core'),
+        ['#44', 'queue'],
+      ),
+    ).toBe(true);
+    expect(
+      haystackMatches(
+        threadSearchText(
+          thread({ id: 't', title: 'Ship login', agent: 'cursor', sourceRef: 'ENG-9', repoPath: '/app' }),
+          'app',
+        ),
+        ['cursor', 'eng-9'],
+      ),
+    ).toBe(true);
+  });
+
+  it('pages long columns without dropping the remainder count', () => {
+    const items = Array.from({ length: 95 }, (_, i) => i);
+    expect(visiblePage(items, BOARD_PAGE_SIZE)).toEqual({
+      visible: items.slice(0, 40),
+      hidden: 55,
+    });
+    expect(compactPreview('one\n\ntwo   three', 8)).toBe('one two…');
   });
 });

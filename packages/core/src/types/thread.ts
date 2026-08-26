@@ -239,6 +239,8 @@ export interface PrInfo {
   headRefName: string;
   url: string;
   isCrossRepository: boolean;
+  /** Present when listed via `gh pr list --json author`. */
+  author?: { login: string } | null;
 }
 
 /** One CI check from `gh pr checks --json`, or a synthetic merge/review gate. */

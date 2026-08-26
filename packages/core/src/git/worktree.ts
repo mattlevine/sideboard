@@ -362,9 +362,9 @@ export async function listPrs(repoPath: string): Promise<PrInfo[]> {
     'pr',
     'list',
     '--json',
-    'number,title,headRefName,url,isCrossRepository',
+    'number,title,headRefName,url,isCrossRepository,author',
     '--limit',
-    '50',
+    '200',
   ];
   if (slug) args.push('--repo', slug);
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });

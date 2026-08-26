@@ -304,7 +304,7 @@ function normalizePriority(priority: number | undefined): number | undefined {
 export async function listLinearIssuesDirect(
   opts?: { limit?: number; apiKey?: string | null },
 ): Promise<IssueInfo[]> {
-  const first = Math.max(1, Math.min(100, opts?.limit ?? 50));
+  const first = Math.max(1, Math.min(250, opts?.limit ?? 200));
   const json = await linearGraphql<{
     viewer?: { assignedIssues?: { nodes?: LinearIssueNode[] } };
   }>(ASSIGNED_ISSUES_QUERY, { first }, opts);
