@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
-import {
-  issueSourceLabel,
-  type IssueInfo,
-  type IssueSource,
-  type Thread,
-  type ThreadAttachment,
-  type Workspace,
+import { issueSourceLabel } from '@sideboard/issue-source-labels';
+import type {
+  IssueInfo,
+  IssueSource,
+  Thread,
+  ThreadAttachment,
+  Workspace,
 } from '@sideboard-ai/core';
 
 interface IssuePickerProps {

@@ -85,20 +85,10 @@ export interface BrightsyHarnessSettings {
 /** Preferred issue tracker for Create-from / Link issue / Home Backlog. */
 export type IssueSource = 'linear' | 'github' | 'abletime';
 
-/** Short labels for pickers and Home cards. Treat providers as data, not a binary. */
-export const ISSUE_SOURCE_LABELS = {
-  github: 'GitHub',
-  linear: 'Linear',
-  abletime: 'AbleTime',
-} as const satisfies Record<IssueSource, string>;
-
-export function issueSourceLabel(source: string | null | undefined): string {
-  if (source && source in ISSUE_SOURCE_LABELS) {
-    return ISSUE_SOURCE_LABELS[source as IssueSource];
-  }
-  const trimmed = source?.trim();
-  return trimmed || 'Issues';
-}
+export {
+  ISSUE_SOURCE_LABELS,
+  issueSourceLabel,
+} from './issue-source-labels.js';
 
 /**
  * How Sideboard and worktree agents authenticate GitHub git operations.

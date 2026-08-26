@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  issueSourceLabel,
-  type BranchInfo,
-  type IssueInfo,
-  type IssueSource,
-  type PrInfo,
-} from '@sideboard-ai/core';
+import { issueSourceLabel } from '@sideboard/issue-source-labels';
+import type { BranchInfo, IssueInfo, IssueSource, PrInfo } from '@sideboard-ai/core';
 
 export type CreateFromTab = 'prs' | 'branches' | 'issues';
 

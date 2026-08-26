@@ -1,11 +1,6 @@
-import {
-  GLOBAL_WORKSPACE_ID,
-  issueSourceLabel,
-  type IssueInfo,
-  type PrInfo,
-  type Thread,
-  type Workspace,
-} from '@sideboard-ai/core';
+import { issueSourceLabel } from '@sideboard/issue-source-labels';
+import type { IssueInfo, PrInfo, Thread, Workspace } from '@sideboard-ai/core';
+import { GLOBAL_WORKSPACE_ID } from './global-workspace';
 
 export type BoardColumnId =
   | 'backlog'

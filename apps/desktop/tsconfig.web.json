@@ -27,6 +27,7 @@
       "@sideboard/plan-file": ["../../packages/core/src/plan/plan-present.ts"],
       "@sideboard/agent-git-actions": ["../../packages/core/src/git/agent-git-actions.ts"],
       "@sideboard/review-request-template": ["../../packages/core/src/review/review-request-template.ts"],
+      "@sideboard/issue-source-labels": ["../../packages/core/src/store/issue-source-labels.ts"],
       "@brightsy/ui-context": ["./node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx"]
     }
   },
