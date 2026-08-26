@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BranchInfo, IssueInfo, PrInfo } from '@sideboard-ai/core';
+import {
+  issueSourceLabel,
+  type BranchInfo,
+  type IssueInfo,
+  type IssueSource,
+  type PrInfo,
+} from '@sideboard-ai/core';
 
 export type CreateFromTab = 'prs' | 'branches' | 'issues';
 
@@ -36,8 +42,8 @@ export function CreateFromPicker({
   const [prs, setPrs] = useState<PrInfo[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [issues, setIssues] = useState<IssueInfo[]>([]);
-  const [issueSource, setIssueSource] = useState<'linear' | 'github'>('github');
-  const [preferredSource, setPreferredSource] = useState<'linear' | 'github'>('github');
+  const [issueSource, setIssueSource] = useState<IssueSource>('github');
+  const [preferredSource, setPreferredSource] = useState<IssueSource>('github');
   const [linearOk, setLinearOk] = useState(linearConnected);
 
   useEffect(() => {
@@ -119,9 +125,7 @@ export function CreateFromPicker({
       ? 'Search by title, number, or author'
       : tab === 'branches'
         ? 'Search by name'
-        : issueSource === 'github'
-          ? 'Search by title, number, or label'
-          : 'Search by issue number, title, or description';
+        : 'Search by title, identifier, or label';
 
   const showLinearSetup =
     tab === 'issues' && preferredSource === 'linear' && !linearOk;
@@ -307,7 +311,7 @@ export function CreateFromPicker({
             <div className="composer-picker-section">
               {filteredIssues.length === 0 ? (
                 <div className="composer-picker-empty">
-                  No {issueSource === 'github' ? 'GitHub' : 'Linear'} issues
+                  No {issueSourceLabel(issueSource)} issues
                 </div>
               ) : (
                 filteredIssues.slice(0, 50).map((issue) => (

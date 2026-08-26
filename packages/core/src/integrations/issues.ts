@@ -75,8 +75,10 @@ export async function listGitHubIssues(
 }
 
 /**
- * Unified issue list for Create-from / Link issue / MCP / CLI.
+ * Unified issue list for Create-from / Link issue / Home / MCP / CLI.
  * Uses Sideboard Account connections — not agent Linear MCP.
+ * Linear and GitHub only; AbleTime is typed but has no client yet
+ * (`resolveEffectiveIssueSource` falls back to GitHub).
  */
 export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
   const settings = loadAppSettings();

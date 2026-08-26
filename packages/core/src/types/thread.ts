@@ -365,7 +365,7 @@ export interface IssueInfo {
   url: string;
   labels: string[];
   /** When set, which tracker produced this issue. */
-  provider?: 'linear' | 'github';
+  provider?: 'linear' | 'github' | 'abletime';
 }
 
 export interface DiffFile {

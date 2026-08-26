@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
   DiffScope,
+  IssueInfo,
   MessagePart,
   OrchestratorEvent,
   OrchestratorRuntime,
@@ -41,6 +42,7 @@ import {
   threadHasVisibleFirstTurn,
   type CreatePaneProgress,
 } from './lib/pane-progress';
+import { loadThreadDefaults } from './lib/thread-defaults';
 
 const LEFT_SIDEBAR_DEFAULT = 280;
 const RIGHT_SIDEBAR_DEFAULT = 340;
@@ -344,6 +346,38 @@ export function App() {
   const upsertThread = useCallback((thread: Thread) => {
     setThreads((prev) => [...prev.filter((t) => t.id !== thread.id), thread]);
   }, []);
+
+  const startIssueThread = useCallback(
+    async (issue: IssueInfo, repo: string) => {
+      setRepoPath(repo);
+      void window.sideboard.setRepoPath(repo).catch(() => undefined);
+      const defaults = await loadThreadDefaults();
+      await window.sideboard.createThread({
+        sourceType: 'ticket',
+        sourceRef: issue.identifier,
+        repoPath: repo,
+        title: issue.title,
+        agent: defaults.agent,
+        model: defaults.model,
+        effort: defaults.effort,
+        attachments: [
+          {
+            id: crypto.randomUUID(),
+            name: issue.identifier,
+            kind: 'issue',
+            content: [
+              `Linked issue: ${issue.identifier} — ${issue.title}`,
+              issue.url ? `URL: ${issue.url}` : null,
+            ]
+              .filter(Boolean)
+              .join('\n'),
+          },
+        ],
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
   const selectCreatedThread = useCallback(
     (thread: Thread) => {
@@ -941,6 +975,9 @@ export function App() {
       {view === 'board' && (
         <GlobalBoard
           threads={threads}
+          archivedThreads={archived}
+          workspaces={workspaces}
+          lastUsedRepoPath={repoPath}
           runtime={runtime}
           liveByThread={liveByThread}
           onOpenThread={(id) => {
@@ -950,6 +987,7 @@ export function App() {
           }}
           onNewGlobalChat={() => openCreate(undefined, 'orchestration')}
           onRefresh={() => void refresh()}
+          onStartIssue={startIssueThread}
           leftSidebarToggle={
             !leftSidebarOpen ? (
               <SidebarToggle side="left" open={false} onClick={toggleLeftSidebar} />

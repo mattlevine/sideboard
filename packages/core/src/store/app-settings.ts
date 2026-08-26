@@ -82,8 +82,23 @@ export interface BrightsyHarnessSettings {
   injectWorktreeMcp?: boolean;
 }
 
-/** Preferred issue tracker for Create-from / Link issue. */
-export type IssueSource = 'linear' | 'github';
+/** Preferred issue tracker for Create-from / Link issue / Home Backlog. */
+export type IssueSource = 'linear' | 'github' | 'abletime';
+
+/** Short labels for pickers and Home cards. Treat providers as data, not a binary. */
+export const ISSUE_SOURCE_LABELS = {
+  github: 'GitHub',
+  linear: 'Linear',
+  abletime: 'AbleTime',
+} as const satisfies Record<IssueSource, string>;
+
+export function issueSourceLabel(source: string | null | undefined): string {
+  if (source && source in ISSUE_SOURCE_LABELS) {
+    return ISSUE_SOURCE_LABELS[source as IssueSource];
+  }
+  const trimmed = source?.trim();
+  return trimmed || 'Issues';
+}
 
 /**
  * How Sideboard and worktree agents authenticate GitHub git operations.
@@ -121,8 +136,8 @@ export interface IntegrationsSettings {
   /** Display name of the connected Linear workspace (non-secret). */
   linearOrganizationName?: string;
   /**
-   * Preferred issue source for Create-from / Link issue (default: GitHub).
-   * When `linear` but not connected, runtime falls back to GitHub Issues.
+   * Preferred issue source for Create-from / Link issue / Home (default: GitHub).
+   * When the preferred tracker is not connected, runtime falls back to GitHub Issues.
    */
   issueSource?: IssueSource;
   /** Slack app Client ID for browser OAuth (Account → Slack). */
@@ -381,7 +396,7 @@ function normalizeBrightsy(raw: unknown): BrightsyHarnessSettings {
   return out;
 }
 
-const ISSUE_SOURCES = new Set<IssueSource>(['linear', 'github']);
+const ISSUE_SOURCES = new Set<IssueSource>(['linear', 'github', 'abletime']);
 const GIT_AUTH_MODES = new Set<GithubGitAuthMode>(GITHUB_GIT_AUTH_MODES);
 
 function normalizeIntegrations(raw: unknown): IntegrationsSettings {
@@ -1127,15 +1142,28 @@ export function getGithubPat(
 }
 
 /**
+ * Whether this preferred source can list issues today.
+ * AbleTime is typed for Home/Create/Settings but has no client yet.
+ */
+export function isIssueSourceConnected(
+  source: IssueSource,
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  if (source === 'github') return true;
+  if (source === 'linear') return isLinearConnected(settings);
+  return false;
+}
+
+/**
  * Runtime issue source: honors preference, but falls back to GitHub when
- * Linear is preferred and not connected.
+ * the preferred tracker is not connected (Linear unconnected, AbleTime, …).
  */
 export function resolveEffectiveIssueSource(
   settings: AppSettings = loadAppSettings(),
 ): IssueSource {
   const preferred = getIssueSource(settings);
-  if (preferred === 'linear' && !isLinearConnected(settings)) return 'github';
-  return preferred;
+  if (isIssueSourceConnected(preferred, settings)) return preferred;
+  return 'github';
 }
 
 export function getLinearApiKey(

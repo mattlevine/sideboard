@@ -1202,8 +1202,8 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Issue source</div>
                   <p className="settings-hint">
-                    Prefer GitHub Issues or Linear in Create-from. If Linear is selected but not
-                    connected, GitHub Issues are used automatically.
+                    Prefer GitHub Issues or Linear in Create-from and Home. If the preferred
+                    tracker is not connected, GitHub Issues are used automatically.
                   </p>
                   <div className="row" style={{ marginTop: 10, gap: 8 }}>
                     {([
@@ -1211,7 +1211,8 @@ export function SettingsModal({
                       { id: 'linear' as const, label: 'Linear' },
                     ]).map((opt) => {
                       const preferred = settings.integrations.issueSource ?? 'github';
-                      const active = preferred === opt.id;
+                      const visible = preferred === 'abletime' ? 'github' : preferred;
+                      const active = visible === opt.id;
                       const linearOk = Boolean(settings.integrations.hasLinearApiKey);
                       const disabled = opt.id === 'linear' && !linearOk;
                       return (

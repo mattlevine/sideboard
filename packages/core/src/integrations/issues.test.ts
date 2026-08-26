@@ -56,6 +56,32 @@ describe('integrations / issues', () => {
     ]);
   });
 
+  it('falls back to github when AbleTime is preferred (not connected)', async () => {
+    const { settings, issues } = await load();
+    settings.updateIntegrationsSettings({ issueSource: 'abletime' });
+    expect(settings.getIssueSource()).toBe('abletime');
+    expect(settings.resolveEffectiveIssueSource()).toBe('github');
+
+    vi.spyOn(await import('../git/run.js'), 'gh').mockResolvedValue({
+      stdout: JSON.stringify([
+        {
+          number: 3,
+          title: 'AbleTime fallback',
+          url: 'https://github.com/acme/app/issues/3',
+          labels: [],
+        },
+      ]),
+      stderr: '',
+      exitCode: 0,
+    });
+
+    const result = await issues.listIssues('/tmp/repo');
+    expect(result.source).toBe('github');
+    expect(result.preferredSource).toBe('abletime');
+    expect(result.issues[0]?.identifier).toBe('#3');
+    expect(result.issues[0]?.provider).toBe('github');
+  });
+
   it('uses Linear when connected and preferred', async () => {
     const { settings, issues } = await load();
     settings.updateIntegrationsSettings({

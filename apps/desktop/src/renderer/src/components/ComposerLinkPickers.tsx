@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
-import type { IssueInfo, Thread, ThreadAttachment, Workspace } from '@sideboard-ai/core';
+import {
+  issueSourceLabel,
+  type IssueInfo,
+  type IssueSource,
+  type Thread,
+  type ThreadAttachment,
+  type Workspace,
+} from '@sideboard-ai/core';
 
 interface IssuePickerProps {
   open: boolean;
@@ -16,8 +23,8 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
   const [issues, setIssues] = useState<IssueInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<'linear' | 'github'>('github');
-  const [preferredSource, setPreferredSource] = useState<'linear' | 'github'>('github');
+  const [source, setSource] = useState<IssueSource>('github');
+  const [preferredSource, setPreferredSource] = useState<IssueSource>('github');
   const [linearConnected, setLinearConnected] = useState(false);
 
   useEffect(() => {
@@ -67,11 +74,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
         <input
           className="composer-picker-search"
           autoFocus
-          placeholder={
-            source === 'github'
-              ? 'Search by title, number, or label'
-              : 'Search by issue number, title, or description'
-          }
+          placeholder="Search by title, identifier, or label"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -112,7 +115,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
             {(error === 'empty' || !error) && (
               <div className="composer-picker-empty">
                 {issues.length === 0
-                  ? `No ${source === 'github' ? 'GitHub' : 'Linear'} issues`
+                  ? `No ${issueSourceLabel(source)} issues`
                   : 'No matching issues'}
               </div>
             )}
@@ -121,7 +124,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
         {!loading && filtered.length > 0 && (
           <div className="composer-picker-section">
             <div className="composer-picker-section-label">
-              {source === 'github' ? 'GitHub Issues' : 'Linear Issues'}
+              {issueSourceLabel(source)} issues
             </div>
             {filtered.slice(0, 40).map((issue) => (
               <button
