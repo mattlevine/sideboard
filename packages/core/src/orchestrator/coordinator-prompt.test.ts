@@ -116,6 +116,7 @@ describe('coordinator-prompt', () => {
     expect(text).toContain('YOUR orchestration thread id');
     expect(text).toContain('parentThreadId="abc-123"');
     expect(text).toContain('AGENTS.md');
+    expect(text).toContain('list_board');
     expect(text).toContain('list_threads');
     expect(text).toContain('sideboard://thread/');
     expect(text).toContain('Merge only if the user asked');
@@ -151,7 +152,9 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('parentThreadId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
       expect(claude).toBe(agents);
       expect(claude).toContain(COORDINATOR_TOOL_PLAYBOOK.slice(0, 80));
-      expect(claude).toContain('Typical flow (existing)');
+      expect(claude).toContain('list_board');
+      expect(claude).toContain('start_board_card');
+      expect(claude).toContain('Typical flow (Home board)');
       expect(claude).toContain('force_stop: true');
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('ask_git');

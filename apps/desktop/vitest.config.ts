@@ -22,6 +22,8 @@ export default defineConfig({
       '@sideboard/plan-file': core('plan/plan-present.ts'),
       '@sideboard/agent-git-actions': core('git/agent-git-actions.ts'),
       '@sideboard/review-request-template': core('review/review-request-template.ts'),
+      '@sideboard/issue-source-labels': core('store/issue-source-labels.ts'),
+      '@sideboard/home-board': core('board/home-board.ts'),
     },
   },
 });

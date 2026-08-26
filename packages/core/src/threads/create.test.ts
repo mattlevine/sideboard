@@ -39,6 +39,7 @@ vi.mock('../git/worktree.js', async (importOriginal) => {
   };
 });
 
+import { createEmptyThread, writeThread } from '../store/thread-store.js';
 import { createThread } from './create.js';
 
 describe('createThread cowboy', () => {
@@ -91,5 +92,97 @@ describe('createThread cowboy', () => {
       }),
     ).rejects.toThrow(/Switch that checkout to main/);
     expect(createThreadWorktree).not.toHaveBeenCalled();
+  });
+});
+
+describe('createThread reuses a live named branch', () => {
+  let dataDir: string;
+  let repo: string;
+
+  beforeEach(async () => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sideboard-reuse-data-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+    createThreadWorktree.mockReset();
+    createThreadWorktree.mockResolvedValue({
+      branchName: 'thread/new',
+      worktreePath: join(tmpdir(), 'sideboard-reuse-wt'),
+    });
+    repo = mkdtempSync(join(tmpdir(), 'sideboard-reuse-repo-'));
+    await execa('git', ['init', '-b', 'main'], { cwd: repo });
+    await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: repo });
+    await execa('git', ['config', 'user.name', 'Test'], { cwd: repo });
+    writeFileSync(join(repo, 'README.md'), 'hi\n');
+    await execa('git', ['add', 'README.md'], { cwd: repo });
+    await execa('git', ['commit', '-m', 'init'], { cwd: repo });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('returns the existing live thread for the same named branch', async () => {
+    const existing = createEmptyThread({
+      title: 'Already open',
+      sourceType: 'branch',
+      sourceRef: 'feat/login',
+      branchName: 'thread/limon',
+      worktreePath: join(repo, 'wt'),
+      repoPath: repo,
+      agent: 'claude',
+    });
+    writeThread(existing);
+    const again = await createThread({
+      sourceType: 'branch',
+      sourceRef: 'feat/login',
+      agent: 'claude',
+      repoPath: repo,
+    });
+    expect(again.id).toBe(existing.id);
+    expect(createThreadWorktree).not.toHaveBeenCalled();
+  });
+
+  it('still creates a new worktree from the default branch', async () => {
+    const existing = createEmptyThread({
+      title: 'From default',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/other',
+      worktreePath: join(repo, 'wt'),
+      repoPath: repo,
+      agent: 'claude',
+    });
+    writeThread(existing);
+    const next = await createThread({
+      sourceType: 'branch',
+      sourceRef: 'default',
+      agent: 'claude',
+      repoPath: repo,
+    });
+    expect(next.id).not.toBe(existing.id);
+    expect(createThreadWorktree).toHaveBeenCalled();
+  });
+
+  it('does not reuse when reuseExisting is false', async () => {
+    const existing = createEmptyThread({
+      title: 'Source',
+      sourceType: 'branch',
+      sourceRef: 'feat/login',
+      branchName: 'thread/limon',
+      worktreePath: join(repo, 'wt'),
+      repoPath: repo,
+      agent: 'claude',
+    });
+    writeThread(existing);
+    const next = await createThread({
+      sourceType: 'branch',
+      sourceRef: 'feat/login',
+      agent: 'claude',
+      repoPath: repo,
+      reuseExisting: false,
+    });
+    expect(next.id).not.toBe(existing.id);
+    expect(createThreadWorktree).toHaveBeenCalled();
   });
 });

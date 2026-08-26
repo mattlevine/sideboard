@@ -27,23 +27,30 @@ describe('integrations / issues', () => {
     settings.updateIntegrationsSettings({ issueSource: 'linear' });
     expect(settings.resolveEffectiveIssueSource()).toBe('github');
 
-    vi.spyOn(await import('../git/run.js'), 'gh').mockResolvedValue({
-      stdout: JSON.stringify([
-        {
-          number: 12,
-          title: 'Fix login',
-          url: 'https://github.com/acme/app/issues/12',
-          labels: [{ name: 'bug' }],
-        },
-      ]),
-      stderr: '',
-      exitCode: 0,
+    vi.spyOn(await import('../git/run.js'), 'gh').mockImplementation(async (args) => {
+      if (args[0] === 'api') {
+        return { stdout: 'octocat\n', stderr: '', exitCode: 0 };
+      }
+      return {
+        stdout: JSON.stringify([
+          {
+            number: 12,
+            title: 'Fix login',
+            url: 'https://github.com/acme/app/issues/12',
+            labels: [{ name: 'bug' }],
+            assignees: [{ login: 'octocat' }],
+          },
+        ]),
+        stderr: '',
+        exitCode: 0,
+      };
     });
 
     const result = await issues.listIssues('/tmp/repo');
     expect(result.source).toBe('github');
     expect(result.preferredSource).toBe('linear');
     expect(result.linearConnected).toBe(false);
+    expect(result.viewer?.login).toBe('octocat');
     expect(result.issues).toEqual([
       {
         id: 'gh-12',
@@ -52,8 +59,41 @@ describe('integrations / issues', () => {
         url: 'https://github.com/acme/app/issues/12',
         labels: ['bug'],
         provider: 'github',
+        assignee: 'octocat',
+        assignees: ['octocat'],
       },
     ]);
+  });
+
+  it('falls back to github when AbleTime is preferred (not connected)', async () => {
+    const { settings, issues } = await load();
+    settings.updateIntegrationsSettings({ issueSource: 'abletime' });
+    expect(settings.getIssueSource()).toBe('abletime');
+    expect(settings.resolveEffectiveIssueSource()).toBe('github');
+
+    vi.spyOn(await import('../git/run.js'), 'gh').mockImplementation(async (args) => {
+      if (args[0] === 'api') {
+        return { stdout: 'octocat\n', stderr: '', exitCode: 0 };
+      }
+      return {
+        stdout: JSON.stringify([
+          {
+            number: 3,
+            title: 'AbleTime fallback',
+            url: 'https://github.com/acme/app/issues/3',
+            labels: [],
+          },
+        ]),
+        stderr: '',
+        exitCode: 0,
+      };
+    });
+
+    const result = await issues.listIssues('/tmp/repo');
+    expect(result.source).toBe('github');
+    expect(result.preferredSource).toBe('abletime');
+    expect(result.issues[0]?.identifier).toBe('#3');
+    expect(result.issues[0]?.provider).toBe('github');
   });
 
   it('uses Linear when connected and preferred', async () => {

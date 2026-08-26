@@ -239,6 +239,8 @@ export interface PrInfo {
   headRefName: string;
   url: string;
   isCrossRepository: boolean;
+  /** Present when listed via `gh pr list --json author`. */
+  author?: { login: string } | null;
 }
 
 /** One CI check from `gh pr checks --json`, or a synthetic merge/review gate. */
@@ -358,6 +360,12 @@ export interface PrStack {
   blockedReason: string | null;
 }
 
+export interface IssueCycleInfo {
+  name: string;
+  number?: number;
+  isActive: boolean;
+}
+
 export interface IssueInfo {
   id: string;
   identifier: string;
@@ -365,7 +373,15 @@ export interface IssueInfo {
   url: string;
   labels: string[];
   /** When set, which tracker produced this issue. */
-  provider?: 'linear' | 'github';
+  provider?: 'linear' | 'github' | 'abletime';
+  /** Display name / login of the primary assignee. */
+  assignee?: string;
+  /** Logins or display names (GitHub assignees; Linear is usually one). */
+  assignees?: string[];
+  /** Linear cycle (sprint). Absent on GitHub / unscheduled issues. */
+  cycle?: IssueCycleInfo | null;
+  /** Linear team key (e.g. ENG). */
+  teamKey?: string;
 }
 
 export interface DiffFile {
@@ -558,6 +574,11 @@ export interface CreateThreadInput {
    * Pushes go to that branch; archive does not remove the folder.
    */
   cowboy?: boolean;
+  /**
+   * When false, always create a new worktree (fork_worktree, best-of-n).
+   * Default true: reuse a live ticket/PR/named-branch worktree instead of a second checkout.
+   */
+  reuseExisting?: boolean;
 }
 
 export interface AdoptInput {

@@ -84,6 +84,14 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/review/review-request-template.ts',
         ),
+        '@sideboard/issue-source-labels': resolve(
+          __dirname,
+          '../../packages/core/src/store/issue-source-labels.ts',
+        ),
+        '@sideboard/home-board': resolve(
+          __dirname,
+          '../../packages/core/src/board/home-board.ts',
+        ),
 
       },
     },

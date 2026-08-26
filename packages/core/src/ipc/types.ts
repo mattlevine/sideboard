@@ -38,6 +38,7 @@ import type {
   IssueSource,
 } from '../store/app-settings.js';
 import type { Workspace } from '../store/workspaces.js';
+import type { AddBoardPinInput, BoardPin, HomeBoardLoaded } from '../board/home-board.js';
 import type { BrightsyChatTargets } from '../agents/brightsy-targets.js';
 import type { AgentModelInfo, CursorModelInfo } from '../agents/model-info.js';
 import type {
@@ -200,6 +201,13 @@ export interface IpcApi {
    * based on Account preference with Linear→GitHub fallback).
    */
   listIssues(repoPath: string): Promise<ListIssuesResult>;
+  /**
+   * Home Kanban: pulled items plus a cached Linear/GitHub snapshot used to
+   * sync their metadata. Pass refresh to hit remotes again.
+   */
+  loadHomeBoard(opts?: { refresh?: boolean }): Promise<HomeBoardLoaded>;
+  addBoardItem(input: AddBoardPinInput): Promise<BoardPin>;
+  removeBoardItem(id: string): Promise<boolean>;
   listBranches(repoPath: string, opts?: { unmergedOnly?: boolean }): Promise<BranchInfo[]>;
   listPrs(repoPath: string): Promise<PrInfo[]>;
   /** @deprecated Prefer listIssues — agent Linear MCP. */

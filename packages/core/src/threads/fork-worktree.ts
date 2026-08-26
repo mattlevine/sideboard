@@ -57,6 +57,7 @@ export async function forkThreadWorktree(
       title: input.title?.trim() || undefined,
       parentThreadId: from.id,
       attachments: [attachment],
+      reuseExisting: false,
     },
     onSetupLine,
   );

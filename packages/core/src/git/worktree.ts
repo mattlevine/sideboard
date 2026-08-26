@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   BranchInfo,
@@ -79,7 +79,16 @@ export function slugify(input: string): string {
 
 export async function resolveRepoRoot(cwd: string): Promise<string> {
   const { stdout } = await git(['rev-parse', '--show-toplevel'], cwd);
-  return stdout.trim();
+  return canonicalizeRepoPath(stdout.trim());
+}
+
+/** Resolve /var vs /private/var (and similar) so live-worktree reuse can match. */
+export function canonicalizeRepoPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path.replace(/\/+$/, '');
+  }
 }
 
 /**
@@ -362,9 +371,9 @@ export async function listPrs(repoPath: string): Promise<PrInfo[]> {
     'pr',
     'list',
     '--json',
-    'number,title,headRefName,url,isCrossRepository',
+    'number,title,headRefName,url,isCrossRepository,author',
     '--limit',
-    '50',
+    '200',
   ];
   if (slug) args.push('--repo', slug);
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });

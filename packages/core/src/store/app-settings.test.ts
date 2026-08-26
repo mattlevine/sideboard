@@ -186,6 +186,18 @@ describe('app settings', () => {
     expect(mod.resolveEffectiveIssueSource()).toBe('github');
   });
 
+  it('persists AbleTime preference but falls back until connected', async () => {
+    const mod = await load();
+    const saved = mod.updateIntegrationsSettings({ issueSource: 'abletime' });
+    expect(saved.integrations.issueSource).toBe('abletime');
+    expect(mod.getIssueSource()).toBe('abletime');
+    expect(mod.isIssueSourceConnected('abletime')).toBe(false);
+    expect(mod.resolveEffectiveIssueSource()).toBe('github');
+    expect(mod.issueSourceLabel('abletime')).toBe('AbleTime');
+    expect(mod.issueSourceLabel('github')).toBe('GitHub');
+    expect(mod.issueSourceLabel('linear')).toBe('Linear');
+  });
+
   it('round-trips Slack Socket Mode app token and listen flag', async () => {
     const prevToken = process.env.SIDEBOARD_SLACK_APP_TOKEN;
     delete process.env.SIDEBOARD_SLACK_APP_TOKEN;

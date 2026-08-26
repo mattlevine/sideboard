@@ -532,7 +532,23 @@ export class Orchestrator {
   }
 
   async createThread(input: CreateThreadInput): Promise<Thread> {
+    const prior = new Set(
+      listThreads({ includeArchived: false }).map((t) => t.id),
+    );
     const thread = await createThread(input);
+    if (prior.has(thread.id)) {
+      if (input.prompt?.trim()) {
+        try {
+          await this.send(thread.id, input.prompt.trim());
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          updateThread(thread.id, {
+            lastError: `First prompt failed: ${message}`,
+          });
+        }
+      }
+      return thread;
+    }
     this.emit({ type: 'status_changed', threadId: thread.id, status: thread.status });
 
     // Return as soon as the worktree exists so the chat UI can open. Setup
@@ -1630,6 +1646,7 @@ export class Orchestrator {
           ? `${opts.title} (${agent})`
           : `best-of-n: ${opts.prompt.slice(0, 48)} (${agent})`,
         prompt: opts.prompt,
+        reuseExisting: false,
       });
       created.push(thread);
     }

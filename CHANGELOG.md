@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.126] - 2026-08-25
+
+### Added
+
+- Orchestration MCP `list_board` / `start_board_card` — same Home Kanban as desktop (tickets, unmatched PRs, thread columns). Worktree MCP profile stays UI-only.
+- Home / `list_board` ticket scope: Linear defaults to issues assigned to you in the current cycle; toggle All assigned. GitHub can filter Assigned to me.
+- Home / `list_board` cache tickets and PRs for 15 minutes. Refresh or `list_board refresh=true` pulls Linear/GitHub again; threads stay live.
+- Home / `list_board` show every worktree chat (sidebar Create, board Start, or orchestration `create_thread`). Orchestration chats stay in the sidebar.
+- Home is a Kanban of worktree chats. Sidebar Create and `create_thread` put a card on Home. Columns are the path to merge: In Process (no open PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running stay on the card. Orchestration chats stay in the sidebar. Removed MCP `add_to_board` (it was a second create).
+- Create (sidebar, `create_thread`, `start_board_card`) reuses a live worktree when the ticket, PR, or named branch is already checked out. Default-branch create still opens a new isolated worktree. `fork_worktree` / best-of-n still force a new checkout.
+- Home cards: Archive only on Merged (same confirm as the sidebar; last tab tears down the worktree). Archived chats live in Settings → History, not on Home.
+
+### Fixed
+
+- Chat and Create composers focus after a file drop. The chat input also focuses when a running or queued turn ends.
+
 ## [0.1.125] - 2026-08-25
 
 ### Removed

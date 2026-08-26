@@ -126,6 +126,8 @@ File: src/client/frontends/desktop/core/UserData.ts
 
 If a blocking issue is a missing or ambiguous repo rule that will recur, add one sentence to `.claude/skills/review/SKILL.md` (create the skill if it is missing — that is allowed and should be committed). Do not only patch this diff when the same miss will happen again. Do not write new skills under `.sideboard/skills/`. Do not use `.sideboard/review.md` for new notes.
 
+Desktop renderer: `import type` from `@sideboard-ai/core` is fine; runtime value imports from that barrel pull Node deps (`execa`) into Vite and break `electron-vite build` / the right-sidebar Run script. Use a `@sideboard/…` alias to a Node-free core file (see `electron.vite.config.ts`; e.g. `@sideboard/home-board`, `@sideboard/issue-source-labels`) or a local renderer helper. Do not import `store/global-workspace.ts` or `board/load-home-board.ts` into the renderer — those pull Node.
+
 ## Cost / usage fields
 
 Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` (or a delta) when summing.

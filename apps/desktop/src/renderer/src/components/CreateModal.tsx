@@ -47,6 +47,8 @@ interface Props {
   /** Workspaces already known from the board (threads / app state). */
   knownWorkspaces?: Workspace[];
   initialMode?: 'quick' | 'orchestration';
+  /** Open the issue / PR / branch picker immediately (Home Add to Board). */
+  initialPickerOpen?: boolean;
   onClose: () => void;
   onCreated: (
     thread: Thread,
@@ -136,6 +138,7 @@ export function CreateModal({
   initialRepoPath = null,
   knownWorkspaces = [],
   initialMode = 'quick',
+  initialPickerOpen = false,
   onClose,
   onCreated,
   onCreateStart,
@@ -156,7 +159,9 @@ export function CreateModal({
   const [attachments, setAttachments] = useState<ThreadAttachment[]>([]);
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [agentsLoaded, setAgentsLoaded] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(
+    () => initialPickerOpen && initialMode !== 'orchestration',
+  );
   const [repoMenuOpen, setRepoMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [selection, setSelection] = useState<CreateFromSelection | null>(null);
@@ -675,6 +680,7 @@ export function CreateModal({
             if (!preventComposerFileDrag(e)) return;
             setCreateDragOver(false);
             const snap = snapshotComposerDrop(e.dataTransfer);
+            requestAnimationFrame(() => textareaRef.current?.focus());
             void (async () => {
               const paths = absolutePathsFromFiles(snap.files);
               const files =

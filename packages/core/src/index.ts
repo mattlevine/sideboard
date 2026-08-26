@@ -99,6 +99,28 @@ export {
 } from './mcp/profile.js';
 export type { SideboardMcpProfile } from './mcp/profile.js';
 export type { IpcApi, CloudConnectStatus, SlackListenStatus } from './ipc/types.js';
+export {
+  loadHomeBoardInputs,
+  getHomeBoardInputs,
+  clearHomeBoardCache,
+} from './board/load-home-board.js';
+export {
+  addBoardPin,
+  removeBoardPin,
+  listBoardPins,
+  clearBoardPins,
+} from './board/board-pins.js';
+export {
+  HOME_BOARD_CACHE_TTL_MS,
+  isHomeBoardThread,
+  findLiveThreadForCreate,
+} from './board/home-board.js';
+export type {
+  AddBoardPinInput,
+  BoardPin,
+  HomeBoardLoaded,
+  HomeBoardRemoteData,
+} from './board/home-board.js';
 export { loadBrightsyConfig, brightsyConfigPath } from './brightsy/config.js';
 export {
   BrightsySideboardApi,
