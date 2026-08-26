@@ -1,14 +1,20 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
+import {
+  normalizeWorktreePath,
+  worktreeDisplayLabelForGroup,
+} from '@sideboard/worktree-labels';
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
 import { closeChatTabMessage } from '../lib/close-chat-tab';
 import {
   BOARD_COLUMN_DEFS,
   BOARD_PAGE_SIZE,
-  classifyThreadColumn,
+  classifyWorktreeColumn,
   compactPreview,
+  groupHomeBoardWorktrees,
   isHomeBoardThread,
   visiblePage,
+  worktreeBoardStatus,
   type BoardColumnId,
 } from '../lib/home-board';
 import { FleetActivityBar } from './FleetActivityBar';
@@ -76,35 +82,35 @@ export function GlobalBoard({
 }: Props) {
   const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
   const [archiveConfirm, setArchiveConfirm] = useState<{
-    threadId: string;
+    threadIds: string[];
     title: string;
     chatCount: number;
     removesWorktree: boolean;
     cowboy: boolean;
   } | null>(null);
 
-  const liveThreads = useMemo(
+  const worktrees = useMemo(
     () =>
-      threads
-        .filter((t) => t.status !== 'archived' && isHomeBoardThread(t))
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+      groupHomeBoardWorktrees(
+        threads.filter((t) => t.status !== 'archived' && isHomeBoardThread(t)),
+      ),
     [threads],
   );
 
   const byColumn = useMemo(() => {
-    const map: Record<'needs_you' | 'review' | 'done', Thread[]> = {
+    const map: Record<'needs_you' | 'review' | 'done', Thread[][]> = {
       needs_you: [],
       review: [],
       done: [],
     };
-    for (const t of liveThreads) {
-      const col = classifyThreadColumn(t);
-      if (col === 'needs_you' || col === 'review' || col === 'done') map[col].push(t);
+    for (const group of worktrees) {
+      const col = classifyWorktreeColumn(group);
+      if (col === 'needs_you' || col === 'review' || col === 'done') map[col].push(group);
     }
     return map;
-  }, [liveThreads]);
+  }, [worktrees]);
 
-  const worktreeCount = liveThreads.length;
+  const worktreeCount = worktrees.length;
   const hasBoardContent = worktreeCount > 0;
 
   function shownFor(col: BoardColumnId): number {
@@ -123,22 +129,16 @@ export function GlobalBoard({
     return `${visible} of ${total}`;
   }
 
-  function requestArchive(thread: Thread) {
-    const title = threadDisplayTitle(thread);
-    void window.sideboard
-      .listWorktreeChats(thread.id)
-      .then((chats) => {
-        setArchiveConfirm({
-          threadId: thread.id,
-          title,
-          chatCount: chats.length,
-          removesWorktree: chats.length <= 1 && !thread.cowboy,
-          cowboy: Boolean(thread.cowboy),
-        });
-      })
-      .catch((err: unknown) => {
-        window.alert(err instanceof Error ? err.message : String(err));
-      });
+  function requestArchive(group: Thread[]) {
+    const primary = group[0];
+    if (!primary) return;
+    setArchiveConfirm({
+      threadIds: group.map((t) => t.id),
+      title: worktreeDisplayLabelForGroup(group),
+      chatCount: group.length,
+      removesWorktree: !primary.cowboy,
+      cowboy: Boolean(primary.cowboy),
+    });
   }
 
   return (
@@ -189,19 +189,22 @@ export function GlobalBoard({
                       <span className="thread-meta">{countLabel(page.visible.length, total)}</span>
                     </header>
                     <div className="board-column-cards">
-                      {page.visible.map((thread) => (
-                        <ThreadCard
-                          key={thread.id}
-                          thread={thread}
-                          live={liveByThread[thread.id]}
-                          workspaces={workspaces}
-                          archiving={archivingIds.has(thread.id)}
-                          canArchive={col.id === 'done'}
-                          onOpenThread={onOpenThread}
-                          onRefresh={onRefresh}
-                          onArchive={() => requestArchive(thread)}
-                        />
-                      ))}
+                      {page.visible.map((group) => {
+                        const primary = group[0]!;
+                        return (
+                          <WorktreeCard
+                            key={normalizeWorktreePath(primary.worktreePath)}
+                            group={group}
+                            liveByThread={liveByThread}
+                            workspaces={workspaces}
+                            archiving={group.some((t) => archivingIds.has(t.id))}
+                            canArchive={col.id === 'done'}
+                            onOpenThread={onOpenThread}
+                            onRefresh={onRefresh}
+                            onArchive={() => requestArchive(group)}
+                          />
+                        );
+                      })}
                       {page.hidden > 0 && (
                         <button
                           type="button"
@@ -230,7 +233,7 @@ export function GlobalBoard({
               <span className="chat-empty-cube" />
             </div>
             <h3>No worktrees yet</h3>
-            <p>Add a ticket, PR, or branch to create a worktree. Home shows In Process → Review → Merged. Archive sends a card to Settings → History.</p>
+            <p>Add a ticket, PR, or branch to create a worktree. Home shows one card per checkout (chats nested inside): In Process → Review → Merged. Archive sends the worktree to Settings → History.</p>
             <div className="chat-empty-action">
               <button type="button" className="primary" onClick={onAddToBoard}>
                 Add to Board
@@ -272,10 +275,10 @@ export function GlobalBoard({
                   type="button"
                   className="primary"
                   onClick={() => {
-                    const { threadId, title, removesWorktree } = archiveConfirm;
+                    const { threadIds, title, removesWorktree } = archiveConfirm;
                     setArchiveConfirm(null);
                     void Promise.resolve(
-                      onArchive([threadId], { title, removesWorktree }),
+                      onArchive(threadIds, { title, removesWorktree }),
                     ).catch((err: unknown) => {
                       window.alert(err instanceof Error ? err.message : String(err));
                     });
@@ -292,9 +295,19 @@ export function GlobalBoard({
   );
 }
 
-function ThreadCard({
-  thread: t,
-  live,
+function worktreeSourceLabel(t: Thread): string | null {
+  if (t.sourceType === 'ticket' || t.sourceType === 'pr') {
+    return `${t.sourceType}:${t.sourceRef}`;
+  }
+  if (t.sourceType === 'adopt') return 'adopt';
+  if (t.cowboy) return 'cowboy';
+  if (t.sourceType === 'branch' && t.branchName) return t.branchName;
+  return null;
+}
+
+function WorktreeCard({
+  group,
+  liveByThread,
   workspaces,
   archiving,
   canArchive,
@@ -302,8 +315,8 @@ function ThreadCard({
   onRefresh,
   onArchive,
 }: {
-  thread: Thread;
-  live: string | undefined;
+  group: Thread[];
+  liveByThread: Record<string, string>;
   workspaces: Workspace[];
   archiving: boolean;
   canArchive: boolean;
@@ -311,23 +324,92 @@ function ThreadCard({
   onRefresh: () => void;
   onArchive: () => void;
 }) {
-  const { text: previewText } = previewForThread(t, live);
-  const preview = previewText ? compactPreview(previewText) : '';
+  const t = group[0]!;
+  const status = worktreeBoardStatus(group);
   const repo = workspaceName(t.repoPath, workspaces);
-  const canStop = t.status === 'running' || t.status === 'queued';
-  const showActions = canStop || canArchive;
   return (
     <article
-      className={`board-card board-card-thread${archiving ? ' is-archiving' : ''}`}
+      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}`}
+      aria-busy={archiving}
+    >
+      <div className="board-card-top">
+        <span className={`dot ${status}`} title={status} />
+        <div className="board-open">
+          <div className="thread-title">{worktreeDisplayLabelForGroup(group)}</div>
+          <div className="thread-meta">
+            {archiving
+              ? 'Archiving…'
+              : [
+                  group.length > 1 ? `${group.length} chats` : '1 chat',
+                  worktreeSourceLabel(t),
+                  repo || null,
+                  relativeTime(t.updatedAt),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+          </div>
+        </div>
+      </div>
+      {canArchive && (
+        <div className="board-row-actions">
+          <button
+            type="button"
+            disabled={archiving}
+            title="Archive this worktree (moves to Settings → History)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchive();
+            }}
+          >
+            {archiving ? 'Archiving…' : 'Archive'}
+          </button>
+        </div>
+      )}
+      <div className="board-card-chats">
+        {group.map((chat) => (
+          <ChatCard
+            key={chat.id}
+            thread={chat}
+            live={liveByThread[chat.id]}
+            archiving={archiving}
+            onOpenThread={onOpenThread}
+            onRefresh={onRefresh}
+          />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function ChatCard({
+  thread: t,
+  live,
+  archiving,
+  onOpenThread,
+  onRefresh,
+}: {
+  thread: Thread;
+  live: string | undefined;
+  archiving: boolean;
+  onOpenThread: (id: string) => void;
+  onRefresh: () => void;
+}) {
+  const { text: previewText } = previewForThread(t, live);
+  const preview = previewText ? compactPreview(previewText) : '';
+  const canStop = t.status === 'running' || t.status === 'queued';
+  return (
+    <div
+      className="board-card board-card-chat"
       role="button"
       tabIndex={0}
-      aria-busy={archiving}
-      onClick={() => {
+      onClick={(e) => {
+        e.stopPropagation();
         if (!archiving) onOpenThread(t.id);
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
+          e.stopPropagation();
           if (!archiving) onOpenThread(t.id);
         }
       }}
@@ -337,60 +419,33 @@ function ThreadCard({
         <div className="board-open">
           <div className="thread-title">{threadDisplayTitle(t)}</div>
           <div className="thread-meta">
-            {archiving
-              ? 'Archiving…'
-              : [
-                  t.agent,
-                  t.status,
-                  t.queue.length ? `q${t.queue.length}` : null,
-                  t.sourceType === 'ticket' || t.sourceType === 'pr'
-                    ? `${t.sourceType}:${t.sourceRef}`
-                    : t.sourceType === 'adopt'
-                      ? 'adopt'
-                      : t.cowboy
-                        ? 'cowboy'
-                        : t.sourceType === 'branch' && t.branchName
-                          ? t.branchName
-                          : null,
-                  repo || null,
-                  relativeTime(t.updatedAt),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+            {[
+              t.agent,
+              t.status,
+              t.queue.length ? `q${t.queue.length}` : null,
+              relativeTime(t.updatedAt),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </div>
         </div>
       </div>
       {preview ? (
         <div className="board-preview board-preview-compact">{preview}</div>
       ) : null}
-      {showActions && (
+      {canStop && (
         <div className="board-row-actions">
-          {canStop && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void window.sideboard.stopThread(t.id).then(onRefresh);
-              }}
-            >
-              Stop
-            </button>
-          )}
-          {canArchive && (
-            <button
-              type="button"
-              disabled={archiving}
-              title="Archive this worktree (moves to Settings → History)"
-              onClick={(e) => {
-                e.stopPropagation();
-                onArchive();
-              }}
-            >
-              {archiving ? 'Archiving…' : 'Archive'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              void window.sideboard.stopThread(t.id).then(onRefresh);
+            }}
+          >
+            Stop
+          </button>
         </div>
       )}
-    </article>
+    </div>
   );
 }

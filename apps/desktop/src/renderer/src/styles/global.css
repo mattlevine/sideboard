@@ -9399,9 +9399,38 @@ body:has(.update-banner) .team-toast-stack {
   outline-offset: 2px;
 }
 
-.board-card-thread.is-archiving {
+.board-card-thread.is-archiving,
+.board-card-worktree.is-archiving {
   cursor: default;
   opacity: 0.72;
+}
+
+.board-card-worktree {
+  cursor: default;
+  padding-bottom: 10px;
+}
+
+.board-card-chats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.board-card-chat {
+  padding: 8px 10px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-elevated, var(--bg)) 78%, var(--bg));
+  cursor: pointer;
+}
+
+.board-card-chat:hover {
+  border-color: color-mix(in srgb, var(--border) 35%, var(--text));
+}
+
+.board-card-chat:focus-visible {
+  outline: 2px solid var(--accent, var(--text));
+  outline-offset: 2px;
 }
 
 .board-card-top {

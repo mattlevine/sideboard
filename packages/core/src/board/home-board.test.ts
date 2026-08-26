@@ -8,6 +8,8 @@ import {
   boardIssueKey,
   boardPrKey,
   classifyThreadColumn,
+  classifyWorktreeColumn,
+  groupHomeBoardWorktrees,
   isHomeBoardThread,
   compactPreview,
   dedupeBoardIssues,
@@ -42,7 +44,7 @@ function thread(
     sourceType: partial.sourceType ?? 'branch',
     sourceRef: partial.sourceRef ?? 'main',
     branchName: partial.branchName ?? 'feature',
-    worktreePath: partial.worktreePath ?? '/wt',
+    worktreePath: partial.worktreePath ?? `/wt/${partial.id}`,
     repoPath: partial.repoPath ?? '/repo',
     agent: partial.agent ?? 'claude',
     model: partial.model ?? null,
@@ -192,6 +194,39 @@ describe('classifyThreadColumn', () => {
         }),
       ),
     ).toBe('done');
+  });
+});
+
+describe('groupHomeBoardWorktrees', () => {
+  it('collapses sibling chats on the same checkout', () => {
+    const groups = groupHomeBoardWorktrees([
+      thread({
+        id: 'old',
+        worktreePath: '/wt/login',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+      }),
+      thread({
+        id: 'new',
+        worktreePath: '/wt/login/',
+        updatedAt: '2026-08-03T00:00:00.000Z',
+      }),
+      thread({
+        id: 'other',
+        worktreePath: '/wt/other',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      }),
+    ]);
+    expect(groups.map((g) => g.map((t) => t.id))).toEqual([['new', 'old'], ['other']]);
+    expect(
+      classifyWorktreeColumn([
+        thread({ id: 'chat' }),
+        thread({
+          id: 'pr',
+          prUrl: 'https://github.com/acme/app/pull/1',
+          prState: 'OPEN',
+        }),
+      ]),
+    ).toBe('review');
   });
 });
 
@@ -546,7 +581,54 @@ describe('assembleHomeBoard', () => {
     expect(backlogPins(synced, []).map((p) => p.ref)).toEqual(['ENG-1']);
   });
 
-  it('puts every worktree thread on the board, including sidebar and agent creates', () => {
+  it('emits one card per worktree when several chats share a checkout', () => {
+    const snap = assembleHomeBoard({
+      threads: [
+        thread({
+          id: 'a',
+          worktreePath: '/wt/login',
+          title: 'Tab A',
+          updatedAt: '2026-08-02T00:00:00.000Z',
+        }),
+        thread({
+          id: 'b',
+          worktreePath: '/wt/login',
+          title: 'Tab B',
+          updatedAt: '2026-08-03T00:00:00.000Z',
+        }),
+        thread({
+          id: 'c',
+          worktreePath: '/wt/other',
+          title: 'Other',
+        }),
+        thread({
+          id: 'review-tab',
+          worktreePath: '/wt/pr',
+          title: 'Review tab',
+          prUrl: 'https://github.com/acme/app/pull/1',
+          prState: 'OPEN',
+        }),
+        thread({
+          id: 'review-chat',
+          worktreePath: '/wt/pr',
+          title: 'Plain chat',
+        }),
+      ],
+    });
+    expect(snap.totals.threads).toBe(3);
+    expect(snap.columns.needs_you.map((c) => c.kind === 'thread' && c.id).sort()).toEqual(
+      ['b', 'c'],
+    );
+    expect(snap.columns.review).toHaveLength(1);
+    expect(snap.columns.review[0] && snap.columns.review[0].kind === 'thread' && snap.columns.review[0].id).toBe(
+      'review-tab',
+    );
+    expect(snap.columns.review[0] && snap.columns.review[0].kind === 'thread' && snap.columns.review[0].chatCount).toBe(
+      2,
+    );
+  });
+
+  it('puts every worktree on the board, including sidebar and agent creates', () => {
     const snap = assembleHomeBoard({
       issues: [],
       prs: [],

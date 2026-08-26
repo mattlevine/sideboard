@@ -32,7 +32,7 @@ function thread(
     sourceType: partial.sourceType ?? 'branch',
     sourceRef: partial.sourceRef ?? 'main',
     branchName: partial.branchName ?? 'feature',
-    worktreePath: partial.worktreePath ?? '/wt',
+    worktreePath: partial.worktreePath ?? `/wt/${partial.id}`,
     repoPath: partial.repoPath ?? '/repo',
     agent: partial.agent ?? 'claude',
     model: partial.model ?? null,

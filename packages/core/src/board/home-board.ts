@@ -1,12 +1,17 @@
+import {
+  normalizeWorktreePath,
+  worktreeDisplayLabelForGroup,
+} from '../git/worktree-labels.js';
 import type { IssueInfo, PrInfo, Thread } from '../types/thread.js';
 
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
 const GLOBAL_WORKSPACE_ID = '__global__';
 
 /**
- * Home Kanban work item — every worktree chat, however it was created
+ * Home Kanban work item — every worktree checkout, however it was created
  * (sidebar Create, MCP create_thread, adopt,
- * cowboy). Orchestration / Global chats stay in the sidebar, not the board.
+ * cowboy). Sibling chat tabs share one card. Orchestration / Global chats
+ * stay in the sidebar, not the board.
  */
 export function isHomeBoardThread(
   thread: Pick<Thread, 'sourceType' | 'repoPath'>,
@@ -128,6 +133,43 @@ export function classifyThreadColumn(
   if (isMergedPrState(thread.prUrl, thread.prState)) return 'done';
   if (isOpenPrState(thread.prUrl, thread.prState)) return 'review';
   return 'needs_you';
+}
+
+/**
+ * Live Home threads grouped by checkout. Each group is newest-updated first.
+ * One card per group — extra chat tabs do not get their own column slot.
+ */
+export function groupHomeBoardWorktrees<T extends Pick<Thread, 'worktreePath' | 'updatedAt'>>(
+  threads: T[],
+): T[][] {
+  const map = new Map<string, T[]>();
+  for (const t of threads) {
+    const key = normalizeWorktreePath(t.worktreePath);
+    const list = map.get(key) ?? [];
+    list.push(t);
+    map.set(key, list);
+  }
+  return [...map.values()]
+    .map((list) => list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+    .sort((a, b) => (b[0]?.updatedAt ?? '').localeCompare(a[0]?.updatedAt ?? ''));
+}
+
+/** Column for a worktree: any sibling merged PR → Merged, else any open PR → Review. */
+export function classifyWorktreeColumn(
+  group: Array<Pick<Thread, 'prUrl' | 'prState'>>,
+): BoardColumnId {
+  if (group.some((t) => isMergedPrState(t.prUrl, t.prState))) return 'done';
+  if (group.some((t) => isOpenPrState(t.prUrl, t.prState))) return 'review';
+  return 'needs_you';
+}
+
+/** Activity dot for a worktree: running / queued beat idle sibling tabs. */
+export function worktreeBoardStatus(group: Array<Pick<Thread, 'status'>>): Thread['status'] {
+  const order: Thread['status'][] = ['running', 'queued', 'error', 'broken'];
+  for (const status of order) {
+    if (group.some((t) => t.status === status)) return status;
+  }
+  return group[0]?.status ?? 'idle';
 }
 
 function normalizeIssueKey(value: string): string {
@@ -701,6 +743,8 @@ export type HomeBoardThreadCard = {
   repoPath: string;
   prUrl: string | null;
   link: string;
+  /** Live chat tabs on this checkout. Omitted when 1. */
+  chatCount?: number;
 };
 
 export type HomeBoardCard =
@@ -774,18 +818,21 @@ export function findBoardPr(
   return matches[0];
 }
 
-function toThreadCard(thread: Thread): HomeBoardThreadCard {
+function toThreadCard(group: Thread[]): HomeBoardThreadCard {
+  const thread = group[0]!;
+  const withPr = group.find((t) => t.prUrl?.trim()) ?? thread;
   return {
     kind: 'thread',
     id: thread.id,
-    title: thread.title,
-    status: thread.status,
+    title: worktreeDisplayLabelForGroup(group),
+    status: worktreeBoardStatus(group),
     agent: thread.agent,
     sourceType: thread.sourceType,
     sourceRef: thread.sourceRef,
     repoPath: thread.repoPath,
-    prUrl: thread.prUrl,
+    prUrl: withPr.prUrl,
     link: `sideboard://thread/${thread.id}`,
+    ...(group.length > 1 ? { chatCount: group.length } : {}),
   };
 }
 
@@ -841,27 +888,28 @@ export function assembleHomeBoard(input: {
     threads: 0,
   };
 
-  const byCol: Record<Exclude<BoardColumnId, 'backlog'>, Thread[]> = {
+  const byCol: Record<Exclude<BoardColumnId, 'backlog'>, Thread[][]> = {
     queued: [],
     running: [],
     needs_you: [],
     review: [],
     done: [],
   };
-  for (const t of live) {
-    if (!threadMatchesKind(t, kind)) continue;
-    const col = classifyThreadColumn(t);
+  for (const group of groupHomeBoardWorktrees(live)) {
+    if (!group.some((t) => threadMatchesKind(t, kind))) continue;
+    const col = classifyWorktreeColumn(group);
     if (col === 'backlog') continue;
-    if (!inWorkspace(t.repoPath, repo)) continue;
-    if (!haystackMatches(threadSearchText(t, wsName(t.repoPath)), tokens)) continue;
-    byCol[col].push(t);
+    const primary = group[0]!;
+    if (!inWorkspace(primary.repoPath, repo)) continue;
+    const hay = group.map((t) => threadSearchText(t, wsName(t.repoPath))).join(' ');
+    if (!haystackMatches(hay, tokens)) continue;
+    byCol[col].push(group);
   }
 
-  totals.tickets = [...Object.values(byCol)].flat().filter((t) => t.sourceType === 'ticket').length;
-  totals.prs = [...Object.values(byCol)].flat().filter((t) => t.sourceType === 'pr').length;
-  totals.branches = [...Object.values(byCol)]
-    .flat()
-    .filter((t) => t.sourceType === 'branch' || t.sourceType === 'adopt').length;
+  const flat = [...Object.values(byCol)].flatMap((groups) => groups.map((g) => g[0]!));
+  totals.tickets = flat.filter((t) => t.sourceType === 'ticket').length;
+  totals.prs = flat.filter((t) => t.sourceType === 'pr').length;
+  totals.branches = flat.filter((t) => t.sourceType === 'branch' || t.sourceType === 'adopt').length;
   totals.threads = Object.values(byCol).reduce((n, list) => n + list.length, 0);
 
   for (const col of Object.keys(byCol) as Array<Exclude<BoardColumnId, 'backlog'>>) {
@@ -884,7 +932,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of worktree chats (sidebar Create or create_thread). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to merge: In Process (no open PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs share a card). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to merge: In Process (no open PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(
