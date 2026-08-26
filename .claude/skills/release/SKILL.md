@@ -69,12 +69,16 @@ pnpm does not hoist `@cursor/sdk` to the worktree root (only `packages/core` dep
 
 5. Move `[Unreleased]` notes into `## [X.Y.Z] - YYYY-MM-DD`.
 6. Commit those docs (`Release vX.Y.Z` / finish the README link). Note in the message that npm is a separate publish when that is true.
-7. Push the branch and the tag:
+7. Push the branch, then **retarget** the version tag onto this Release commit. electron-builder’s GitHub publisher creates `vX.Y.Z` on `origin/main` (default branch) even when the pack ran from a worktree. A plain `git push origin vX.Y.Z` is rejected. Do **not** leave the tag on main — that is the same miss as 0.1.129 / 0.1.130.
 
    ```bash
    git push -u origin HEAD
-   git push origin vX.Y.Z
+   git tag -a "vX.Y.Z" -m "Sideboard vX.Y.Z" -f
+   git push origin "refs/tags/vX.Y.Z" --force
+   gh release edit "vX.Y.Z" --target "$(git rev-parse HEAD)"
    ```
+
+   Force-push **only** that version tag. Never force-push `main` / `master`.
 
 8. Open or update the thread PR against **origin** (not `upstream`). If the existing PR is already merged, open a new one — do not stack more commits onto a merged PR and call it done. Merge only when asked.
 
