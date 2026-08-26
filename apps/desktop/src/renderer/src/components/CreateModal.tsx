@@ -680,6 +680,7 @@ export function CreateModal({
             if (!preventComposerFileDrag(e)) return;
             setCreateDragOver(false);
             const snap = snapshotComposerDrop(e.dataTransfer);
+            requestAnimationFrame(() => textareaRef.current?.focus());
             void (async () => {
               const paths = absolutePathsFromFiles(snap.files);
               const files =

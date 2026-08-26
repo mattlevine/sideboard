@@ -552,6 +552,19 @@ export function ThreadPanel({
     return () => window.cancelAnimationFrame(frame);
   }, [thread.id]);
 
+  const agentActive = thread.status === 'running' || thread.status === 'queued';
+  const wasAgentActiveRef = useRef(agentActive);
+  useEffect(() => {
+    const wasActive = wasAgentActiveRef.current;
+    wasAgentActiveRef.current = agentActive;
+    if (!wasActive || agentActive) return;
+    setComposerFocused(true);
+    const frame = window.requestAnimationFrame(() => {
+      textareaRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [agentActive]);
+
   // Reset stick-to-bottom when switching chats (show latest for the newly opened thread).
   useEffect(() => {
     stickToBottomRef.current = true;
@@ -833,7 +846,6 @@ export function ThreadPanel({
     });
   }
 
-  const agentActive = thread.status === 'running' || thread.status === 'queued';
   const [pendingAttachments, setPendingAttachments] = useState<ThreadAttachment[]>(
     [],
   );
@@ -2095,6 +2107,10 @@ export function ThreadPanel({
             setComposerDragOver(false);
             // Snapshot before DataTransfer is cleared after this handler returns.
             const snap = snapshotComposerDrop(e.dataTransfer);
+            setComposerFocused(true);
+            requestAnimationFrame(() => {
+              textareaRef.current?.focus({ preventScroll: true });
+            });
             void attachDroppedSnapshot(snap);
           }}
         >
