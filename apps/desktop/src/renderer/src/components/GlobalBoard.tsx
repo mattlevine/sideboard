@@ -60,6 +60,7 @@ interface Props {
   runtime: OrchestratorRuntime | null;
   liveByThread: Record<string, string>;
   onOpenThread: (id: string) => void;
+  onAddToBoard: () => void;
   onNewGlobalChat: () => void;
   onRefresh: () => void;
   onStartIssue?: (issue: IssueInfo, repoPath: string) => Promise<void>;
@@ -108,6 +109,7 @@ export function GlobalBoard({
   runtime,
   liveByThread,
   onOpenThread,
+  onAddToBoard,
   onNewGlobalChat,
   onRefresh,
   onStartIssue,
@@ -441,7 +443,13 @@ export function GlobalBoard({
           >
             Refresh
           </button>
-          <button type="button" onClick={onNewGlobalChat}>New chat</button>
+          <button
+            type="button"
+            onClick={onAddToBoard}
+            title="Add a ticket or PR to the board"
+          >
+            Add to Board
+          </button>
         </div>
       </div>
 

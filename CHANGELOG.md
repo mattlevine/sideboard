@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Home / `list_board` ticket scope: Linear defaults to issues assigned to you in the current cycle; toggle All assigned. GitHub can filter Assigned to me.
 - Home / `list_board` cache tickets and PRs for 15 minutes. Refresh or `list_board refresh=true` pulls Linear/GitHub again; threads stay live.
 - Home / `list_board` show every worktree chat (sidebar Create, board Start, or orchestration `create_thread`). Orchestration chats stay in the sidebar.
+- Home header **Add to Board** opens Create with the issue/PR picker and stays on the Kanban. **New chat** (orchestration) remains on the empty state and sidebar.
 
 ## [0.1.125] - 2026-08-25
 

@@ -92,6 +92,9 @@ function writeSidebarWidth(key: string, width: number) {
 interface CreateState {
   repoPath: string | null;
   mode: 'quick' | 'orchestration';
+  /** Home “Add to Board”: open the issue/PR picker and stay on the Kanban. */
+  openPicker?: boolean;
+  stayOnBoard?: boolean;
 }
 
 /** Non-blocking status in the chat empty pane (create + archive teardown). */
@@ -930,10 +933,14 @@ export function App() {
     setMultiSelected(new Set([match.id]));
   }
 
-  function openCreate(forRepo?: string, mode: CreateState['mode'] = 'quick') {
+  function openCreate(
+    forRepo?: string,
+    mode: CreateState['mode'] = 'quick',
+    extras?: Pick<CreateState, 'openPicker' | 'stayOnBoard'>,
+  ) {
     const repo =
       forRepo && forRepo !== GLOBAL_WORKSPACE_ID ? forRepo : null;
-    setCreateState({ repoPath: repo, mode });
+    setCreateState({ repoPath: repo, mode, ...extras });
   }
 
   /** Orchestration chats have no worktree — Changes/Files/Terminal sidebar is N/A. */
@@ -1007,6 +1014,12 @@ export function App() {
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
+          onAddToBoard={() =>
+            openCreate(repoPath || undefined, 'quick', {
+              openPicker: true,
+              stayOnBoard: true,
+            })
+          }
           onNewGlobalChat={() => openCreate(undefined, 'orchestration')}
           onRefresh={() => void refresh()}
           onStartIssue={startIssueThread}
@@ -1227,6 +1240,7 @@ export function App() {
           initialRepoPath={createState.repoPath}
           knownWorkspaces={knownWorkspaces}
           initialMode={createState.mode}
+          initialPickerOpen={createState.openPicker}
           onClose={() => setCreateState(null)}
           onWorkspacesChanged={() => {
             void refreshWorkspaces();
@@ -1237,6 +1251,7 @@ export function App() {
             setSettingsInitialNav('account');
           }}
           onCreateStart={(info) => {
+            if (createState.stayOnBoard) return;
             setPaneProgress(info);
             setSelectedId(null);
             setView('thread');
@@ -1251,6 +1266,11 @@ export function App() {
             upsertThread(thread);
             notifySoccerNickname(thread.title);
             void refresh();
+            if (createState.stayOnBoard) {
+              setPaneProgress(null);
+              if (!opts?.stayOpen) setCreateState(null);
+              return;
+            }
             if (opts?.stayOpen) {
               setPaneProgress(null);
               return;
