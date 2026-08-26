@@ -447,30 +447,18 @@ function WorktreeCard({
                   .join(' · ')}
           </div>
         </div>
-        {canArchive && (
-          <button
-            type="button"
-            className="board-archive-worktree"
-            disabled={archiving}
-            title="Archive this worktree — all chats move to Settings → History"
-            onClick={(e) => {
-              e.stopPropagation();
-              onArchive();
-            }}
-          >
-            {archiving ? 'Archiving…' : 'Archive worktree'}
-          </button>
-        )}
       </div>
       <div className={`board-card-chats${group.length > 3 ? ' is-scrollable' : ''}`}>
-        {group.map((chat) => (
+        {group.map((chat, i) => (
           <ChatCard
             key={chat.id}
             thread={chat}
             live={liveByThread[chat.id]}
             archiving={archiving}
+            canArchive={canArchive && i === 0}
             onOpenThread={onOpenThread}
             onRefresh={onRefresh}
+            onArchive={onArchive}
           />
         ))}
       </div>
@@ -482,14 +470,18 @@ function ChatCard({
   thread: t,
   live,
   archiving,
+  canArchive = false,
   onOpenThread,
   onRefresh,
+  onArchive,
 }: {
   thread: Thread;
   live: string | undefined;
   archiving: boolean;
+  canArchive?: boolean;
   onOpenThread: (id: string) => void;
   onRefresh: () => void;
+  onArchive?: () => void;
 }) {
   const { text: previewText } = previewForThread(t, live);
   const preview = previewText ? compactPreview(previewText) : '';
@@ -530,17 +522,33 @@ function ChatCard({
       {preview ? (
         <div className="board-preview board-preview-compact">{preview}</div>
       ) : null}
-      {canStop && (
+      {(canStop || canArchive) && (
         <div className="board-row-actions">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              void window.sideboard.stopThread(t.id).then(onRefresh);
-            }}
-          >
-            Stop
-          </button>
+          {canStop && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void window.sideboard.stopThread(t.id).then(onRefresh);
+              }}
+            >
+              Stop
+            </button>
+          )}
+          {canArchive && (
+            <button
+              type="button"
+              className="board-archive-worktree"
+              disabled={archiving}
+              title="Archive this worktree — all chats move to Settings → History"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive?.();
+              }}
+            >
+              {archiving ? 'Archiving…' : 'Archive worktree'}
+            </button>
+          )}
         </div>
       )}
     </div>
