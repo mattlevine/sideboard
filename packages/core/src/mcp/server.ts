@@ -26,7 +26,7 @@ import { registerLinearTools } from './linear-tools.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
-import { loadHomeBoardInputs } from '../board/load-home-board.js';
+import { getHomeBoardInputs } from '../board/load-home-board.js';
 import {
   BOARD_COLUMN_DEFS,
   assembleHomeBoard,
@@ -289,7 +289,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Tickets without a live thread, unmatched open PRs, and worktree chats. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Linear Backlog defaults to tickets assigned to you in the active cycle. Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit (default 40). Start a card with start_board_card or create_thread.',
+    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Tickets/PRs are a 15-minute snapshot — pass refresh=true to pull Linear/GitHub again (same as desktop Refresh). Threads stay live. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Linear Backlog defaults to tickets assigned to you in the active cycle. Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit (default 40), refresh. Start a card with start_board_card or create_thread.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -316,10 +316,16 @@ export async function startMcpServer(): Promise<void> {
         .positive()
         .optional()
         .describe('Max cards per column (default 40). hidden counts the remainder.'),
+      refresh: z
+        .boolean()
+        .optional()
+        .describe(
+          'Pull latest tickets and PRs from Linear/GitHub. Default false — reuse the snapshot (up to 15m). Same as the Home Refresh button.',
+        ),
     },
-    async ({ query, repoPath, kind, ticketScope, column, limit }) => {
+    async ({ query, repoPath, kind, ticketScope, column, limit, refresh }) => {
       const workspaces = orch.listWorkspaces();
-      const loaded = await loadHomeBoardInputs(workspaces);
+      const loaded = await getHomeBoardInputs(workspaces, { refresh });
       const all = orch.getThreads(true);
       const names = new Map(workspaces.map((w) => [w.path, w.name]));
       const scope = (ticketScope ?? defaultTicketScope(loaded.issueSource)) as TicketScope;
@@ -352,6 +358,8 @@ export async function startMcpServer(): Promise<void> {
                 viewer: loaded.viewerLogin,
                 issueErrors: loaded.issueErrors,
                 prErrors: loaded.prErrors,
+                fetchedAt: new Date(loaded.fetchedAt).toISOString(),
+                fromCache: loaded.fromCache,
                 hint: HOME_BOARD_AGENT_HINT,
               },
               null,
@@ -717,7 +725,7 @@ export async function startMcpServer(): Promise<void> {
     async ({ kind, ref, repoPath, title }) => {
       const root = await resolveRepoRoot(repoPath);
       const workspaces = orch.listWorkspaces();
-      const loaded = await loadHomeBoardInputs(workspaces);
+      const loaded = await getHomeBoardInputs(workspaces);
       const live = orch.getThreads(false);
 
       if (kind === 'ticket') {

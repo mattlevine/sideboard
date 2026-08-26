@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Orchestration MCP `list_board` / `start_board_card` — same Home Kanban as desktop (tickets, unmatched PRs, thread columns). Worktree MCP profile stays UI-only.
 - Home / `list_board` ticket scope: Linear defaults to issues assigned to you in the current cycle; toggle All assigned. GitHub can filter Assigned to me.
+- Home / `list_board` cache tickets and PRs for 15 minutes. Refresh or `list_board refresh=true` pulls Linear/GitHub again; threads stay live.
 
 ## [0.1.125] - 2026-08-25
 

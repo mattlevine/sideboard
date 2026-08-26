@@ -75,6 +75,7 @@ import {
   listPrs,
   listLinearIssues,
   listIssues,
+  getHomeBoardInputs,
   getGitHubStatus,
   listSlackWorkspaces,
   connectSlackToken,
@@ -1006,6 +1007,9 @@ function registerIpc(): void {
   ipcMain.handle('getCaffeinateHold', () => caffeinateUiState());
   ipcMain.handle('listIssues', async (_e, path: string) =>
     listIssues(await resolveRepoRoot(path)),
+  );
+  ipcMain.handle('loadHomeBoard', async (_e, opts?: { refresh?: boolean }) =>
+    getHomeBoardInputs(orch.listWorkspaces(), { refresh: opts?.refresh }),
   );
   ipcMain.handle('getCloudConnectStatus', () => readCloudConnectStatus());
   ipcMain.handle(

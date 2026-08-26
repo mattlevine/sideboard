@@ -4,18 +4,16 @@ import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-works
 import {
   BOARD_COLUMN_DEFS,
   BOARD_PAGE_SIZE,
+  HOME_BOARD_CACHE_TTL_MS,
   backlogIssues,
   boardIssueKey,
   boardPrKey,
   classifyThreadColumn,
   compactPreview,
   defaultTicketScope,
-  dedupeBoardIssues,
-  dedupeBoardPrs,
   haystackMatches,
   inWorkspace,
   issueInTicketScope,
-  issueNeedsWorkspacePick,
   issueSearchText,
   issueSourceLabel,
   pickDefaultRepoPath,
@@ -69,8 +67,8 @@ interface Props {
   leftSidebarToggle?: ReactNode;
 }
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
+function relativeTime(iso: string, now = Date.now()): string {
+  const ms = now - new Date(iso).getTime();
   const mins = Math.floor(ms / 60_000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -126,7 +124,9 @@ export function GlobalBoard({
   const [prs, setPrs] = useState<BoardPr[]>([]);
   const [prsLoading, setPrsLoading] = useState(false);
   const [prsError, setPrsError] = useState<string | null>(null);
-  const [issueRefresh, setIssueRefresh] = useState(0);
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
+  const [remoteReq, setRemoteReq] = useState({ n: 0, refresh: false });
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [doneOpen, setDoneOpen] = useState(false);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [startError, setStartError] = useState<Record<string, string>>({});
@@ -151,9 +151,11 @@ export function GlobalBoard({
       setPrs([]);
       setPrsLoading(false);
       setPrsError(null);
+      setFetchedAt(null);
       return;
     }
 
+    const refresh = remoteReq.refresh;
     setIssuesLoading(true);
     setIssuesError(null);
     setPrsLoading(true);
@@ -161,92 +163,50 @@ export function GlobalBoard({
 
     void (async () => {
       try {
-        const collected: BoardIssue[] = [];
-        const first = await window.sideboard.listIssues(paths[0]!);
+        const loaded = await window.sideboard.loadHomeBoard({ refresh });
         if (cancelled) return;
-        setIssueSource(first.source);
-        setViewerLogin(first.viewer?.login || first.viewer?.name || '');
-
-        if (first.source === 'linear') {
-          const repoPath = paths[0] ?? '';
-          for (const issue of first.issues) {
-            collected.push({
-              ...issue,
-              repoPath,
-              needsWorkspacePick: issueNeedsWorkspacePick(
-                issue.provider ?? first.source,
-                paths.length,
-              ),
-            });
-          }
-        } else {
-          const settled = await Promise.allSettled(
-            paths.map(async (path) => {
-              const result =
-                path === paths[0]
-                  ? first
-                  : await window.sideboard.listIssues(path);
-              return result.issues.map((issue) => ({
-                ...issue,
-                repoPath: path,
-                needsWorkspacePick: issueNeedsWorkspacePick(
-                  issue.provider ?? result.source,
-                  1,
-                ),
-              }));
-            }),
-          );
-          if (cancelled) return;
-          for (const item of settled) {
-            if (item.status === 'fulfilled') collected.push(...item.value);
-          }
-          const rejected = settled.find((s) => s.status === 'rejected');
-          if (rejected && rejected.status === 'rejected' && collected.length === 0) {
-            throw rejected.reason;
-          }
-        }
-
-        if (!cancelled) setIssues(dedupeBoardIssues(collected));
+        setIssueSource(loaded.issueSource);
+        setViewerLogin(loaded.viewerLogin || '');
+        setIssues(loaded.issues);
+        setPrs(loaded.prs);
+        setIssuesError(loaded.issueErrors[0] ?? null);
+        setPrsError(loaded.prErrors[0] ?? null);
+        setFetchedAt(loaded.fetchedAt);
       } catch (err) {
         if (cancelled) return;
-        setIssuesError(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        setIssuesError(message);
+        setPrsError(message);
         setIssues([]);
-      } finally {
-        if (!cancelled) setIssuesLoading(false);
-      }
-    })();
-
-    void (async () => {
-      try {
-        const settled = await Promise.allSettled(
-          paths.map(async (path) => {
-            const list = await window.sideboard.listPrs(path);
-            return list.map((pr) => ({ ...pr, repoPath: path }));
-          }),
-        );
-        if (cancelled) return;
-        const collected: BoardPr[] = [];
-        for (const item of settled) {
-          if (item.status === 'fulfilled') collected.push(...item.value);
-        }
-        const rejected = settled.find((s) => s.status === 'rejected');
-        if (rejected && rejected.status === 'rejected' && collected.length === 0) {
-          throw rejected.reason;
-        }
-        setPrs(dedupeBoardPrs(collected));
-      } catch (err) {
-        if (cancelled) return;
-        setPrsError(err instanceof Error ? err.message : String(err));
         setPrs([]);
+        setFetchedAt(null);
       } finally {
-        if (!cancelled) setPrsLoading(false);
+        if (!cancelled) {
+          setIssuesLoading(false);
+          setPrsLoading(false);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [workspaceKey, issueRefresh]);
+  }, [workspaceKey, remoteReq]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!fetchedAt) return;
+    const remaining = HOME_BOARD_CACHE_TTL_MS - (Date.now() - fetchedAt);
+    const wait = Math.max(remaining, 5_000);
+    const id = window.setTimeout(() => {
+      setRemoteReq((prev) => ({ n: prev.n + 1, refresh: false }));
+    }, wait);
+    return () => window.clearTimeout(id);
+  }, [fetchedAt, workspaceKey]);
 
   const defaultRepo = pickDefaultRepoPath(workspaces, lastUsedRepoPath);
   const ticketScope = ticketScopeOverride ?? defaultTicketScope(issueSource);
@@ -371,7 +331,7 @@ export function GlobalBoard({
     doneThreads.length > 0;
 
   function handleRefresh() {
-    setIssueRefresh((n) => n + 1);
+    setRemoteReq((prev) => ({ n: prev.n + 1, refresh: true }));
     onRefresh();
   }
 
@@ -462,9 +422,18 @@ export function GlobalBoard({
           {runtime
             ? `${runtime.running}/${runtime.maxConcurrent} running · ${filteredBacklog.length} tickets · ${filteredPrs.length} PRs · ${filteredThreadCount} thread${filteredThreadCount === 1 ? '' : 's'}`
             : '…'}
+          {fetchedAt
+            ? ` · updated ${relativeTime(new Date(fetchedAt).toISOString(), nowTick)}`
+            : ''}
         </span>
         <div className="actions">
-          <button type="button" onClick={handleRefresh}>Refresh</button>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={issuesLoading || prsLoading}
+          >
+            Refresh
+          </button>
           <button type="button" onClick={onNewGlobalChat}>New chat</button>
         </div>
       </div>
@@ -473,9 +442,11 @@ export function GlobalBoard({
         <>
           <FleetActivityBar runtime={runtime} compact />
           <p className="board-lede">
-            Search and filter across tickets, PRs, and threads. Linear Backlog
-            defaults to issues assigned to you in the current cycle. Start opens
-            a worktree; the card then follows agent and PR status.
+            Search and filter across tickets, PRs, and threads. Tickets and PRs
+            are a snapshot — Refresh (or 15 minutes) pulls Linear/GitHub again.
+            Threads stay live. Linear Backlog defaults to issues assigned to you
+            in the current cycle. Start opens a worktree; the card then follows
+            agent and PR status.
           </p>
           <div className="board-toolbar">
             <input

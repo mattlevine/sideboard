@@ -32,6 +32,24 @@ export type BoardPr = PrInfo & {
   repoPath: string;
 };
 
+/** How long Home / list_board reuse Linear + GitHub results before a refresh. */
+export const HOME_BOARD_CACHE_TTL_MS = 15 * 60 * 1000;
+
+/** Remote ticket + PR snapshot (no threads — those stay live). */
+export type HomeBoardRemoteData = {
+  issues: BoardIssue[];
+  prs: BoardPr[];
+  issueSource: string;
+  viewerLogin?: string;
+  issueErrors: string[];
+  prErrors: string[];
+};
+
+export type HomeBoardLoaded = HomeBoardRemoteData & {
+  fetchedAt: number;
+  fromCache: boolean;
+};
+
 export function isOpenPrState(
   prUrl: string | null | undefined,
   prState: string | null | undefined,
@@ -608,7 +626,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Start a Backlog ticket: start_board_card kind=ticket ref=<identifier> repoPath=… (or create_thread sourceType=ticket). Start an unmatched Review PR: start_board_card kind=pr ref=<number> repoPath=…. Then send_to_thread. Columns follow agent/PR state — do not invent status. Linear Backlog defaults to your current cycle (ticketScope=cycle); pass ticketScope=assigned for all tickets assigned to you, or all for every open GitHub issue.';
+  'Tickets/PRs are a snapshot (up to 15m). Pass refresh=true on list_board to pull Linear/GitHub again — same as desktop Refresh. Start a Backlog ticket: start_board_card kind=ticket ref=<identifier> repoPath=… (or create_thread sourceType=ticket). Start an unmatched Review PR: start_board_card kind=pr ref=<number> repoPath=…. Then send_to_thread. Columns follow agent/PR state — do not invent status. Linear Backlog defaults to your current cycle (ticketScope=cycle); pass ticketScope=assigned for all tickets assigned to you, or all for every open GitHub issue.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(
