@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Worktree agents detach **any** long job and wait in 45s slices (`scripts/detached-job.js` start / wait) so a new chat turn does not SIGTERM the process and the human does not have to poll. Each wait refreshes a Sideboard stream panel (`detached-job.js ui` → `present_artifact`) from the collected log. Mac pack/notarize uses the same tool.
+- Worktree agents detach **any** long job and wait in slices (`scripts/detached-job.js` start / wait) so a new chat turn does not SIGTERM the process. The Sideboard artifact **is** the live view: each wait rewrites `ui.html` and `present_artifact` updates the same pane so the human sees work happening. Mac pack/notarize uses the same tool.
 
 ## [0.1.128] - 2026-08-26
 

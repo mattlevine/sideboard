@@ -24,7 +24,7 @@ const WAIT_SLICE_MS = 45_000;
 const WAIT_POLL_MS = 2_000;
 const WAIT_UNTIL_DONE_MS = 90 * 60 * 1000;
 const WAIT_STILL_RUNNING_HINT =
-  'Job is still running. Call wait again. Do not ask the user to check status, and do not start a second job with the same id.';
+  'Job is still running. present_artifact the ui HTML (same artifact_id as the job id) so the human sees work happening, then call wait again. Do not ask the user to check status, and do not start a second job with the same id.';
 
 function repoRootFrom(cwd = process.cwd()) {
   return cwd;
@@ -50,6 +50,7 @@ function jobPaths(root, id) {
     log: path.join(dir, 'log'),
     exit: path.join(dir, 'exit'),
     meta: path.join(dir, 'meta.json'),
+    ui: path.join(dir, 'ui.html'),
   };
 }
 
@@ -142,20 +143,45 @@ function lineClass(line) {
   return '';
 }
 
+function formatElapsed(startedAt) {
+  if (!startedAt) return '';
+  const ms = Date.now() - new Date(startedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+}
+
+function writeJobUi(snap, opts = {}) {
+  const html = renderJobHtml(snap, opts);
+  if (opts.out) {
+    fs.mkdirSync(path.dirname(path.resolve(opts.out)), { recursive: true });
+    fs.writeFileSync(opts.out, html);
+  }
+  return html;
+}
+
 function renderJobHtml(snap, opts = {}) {
   const id = opts.id || 'job';
   const title = opts.title || id;
   const stream = snap.stream || collectStream(snap.log, opts.maxLines || 160);
   const status = snap.ok ? 'ok' : snap.failed ? 'failed' : snap.stillRunning || snap.running ? 'running' : 'idle';
-  const statusLabel = status === 'ok' ? 'done' : status;
-  const logHtml = (stream.lines.length ? stream.lines : ['(no log yet)'])
-    .map((line) => {
-      const cls = lineClass(line);
+  const statusLabel = status === 'ok' ? 'done' : status === 'running' ? 'working' : status;
+  const rows = stream.lines.length ? stream.lines : ['(no log yet)'];
+  const logHtml = rows
+    .map((line, i) => {
+      const cls = [lineClass(line), i === rows.length - 1 ? 'last' : ''].filter(Boolean).join(' ');
       const body = escapeHtml(line || ' ');
       return cls ? `<span class="${cls}">${body}</span>` : body;
     })
     .join('\n');
   const commands = stream.commands.slice(-8).map((c) => `<li>${escapeHtml(c)}</li>`).join('');
+  const elapsed = formatElapsed(snap.startedAt);
+  const nowLine = stream.lastLine || stream.phase || '';
+  const nowBlock =
+    status === 'running'
+      ? `<div class="now"><span class="dot"></span> ${escapeHtml(nowLine || 'Working…')}</div>`
+      : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -172,18 +198,25 @@ function renderJobHtml(snap, opts = {}) {
   .pill { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
     padding: 2px 8px; border-radius: 999px; }
   .pill.ok { background: #16351f; color: #6ee7a8; }
-  .pill.running { background: #1d2a44; color: #93c5fd; }
+  .pill.running { background: #1d2a44; color: #93c5fd; animation: pulse 1.2s ease-in-out infinite; }
   .pill.failed { background: #3b1717; color: #fca5a5; }
   .pill.idle { background: #2a2f3a; color: #9aa3b2; }
+  @keyframes pulse { 50% { opacity: 0.45; } }
   .meta { color: #9aa3b2; font-size: 12px; }
   .phase { margin-top: 6px; color: #c4b5fd; font-size: 13px; }
+  .now { margin-top: 8px; display: flex; align-items: center; gap: 8px; color: #e8eaed;
+    font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; animation: pulse 1.2s ease-in-out infinite; }
   .cmds { margin: 0; padding: 10px 16px 0 32px; color: #9aa3b2; font-size: 12px; }
   .cmds li { margin: 2px 0; }
   pre { margin: 0; padding: 14px 16px 24px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    white-space: pre-wrap; word-break: break-word; color: #d1d5db; height: calc(100vh - 88px); overflow: auto; }
+    white-space: pre-wrap; word-break: break-word; color: #d1d5db; height: calc(100vh - 120px); overflow: auto; }
   .cmd { color: #7dd3fc; }
   .ok { color: #6ee7a8; }
   .err { color: #fca5a5; }
+  .last { background: #1a2333; box-shadow: inset 3px 0 0 #60a5fa; }
+  .last::after { content: '${status === 'running' ? '▍' : ''}'; color: #93c5fd; animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
 </style>
 </head>
 <body>
@@ -191,9 +224,10 @@ function renderJobHtml(snap, opts = {}) {
   <div class="row">
     <h1>${escapeHtml(title)}</h1>
     <span class="pill ${status}">${escapeHtml(statusLabel)}</span>
-    <span class="meta">pid ${snap.pid ?? '—'} · ${stream.lineCount} lines</span>
+    <span class="meta">pid ${snap.pid ?? '—'} · ${stream.lineCount} lines${elapsed ? ` · ${elapsed}` : ''}</span>
   </div>
   <div class="phase">${escapeHtml(stream.phase || '')}</div>
+  ${nowBlock}
 </header>
 ${commands ? `<ol class="cmds">${commands}</ol>` : ''}
 <pre id="log">${logHtml}</pre>
@@ -208,7 +242,7 @@ function logHasPattern(file, pattern) {
   return fs.readFileSync(file, 'utf8').includes(pattern);
 }
 
-function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern }) {
+function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, ui }) {
   const pid = readIntFile(pidFile);
   const running = pid != null && isAlive(pid);
   const exitCode = exitFile ? readIntFile(exitFile) : null;
@@ -225,11 +259,23 @@ function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern }) {
     failed,
     exitCode,
     log: logFile,
+    ui,
+    startedAt: startedAt || undefined,
     progress: tailFile(logFile, 12),
     phase: stream.phase,
     lineCount: stream.lineCount,
     stream,
   };
+}
+
+function readStartedAt(metaFile) {
+  if (!metaFile || !fs.existsSync(metaFile)) return undefined;
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+    return typeof meta.startedAt === 'string' ? meta.startedAt : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function snapshotJob(root, id) {
@@ -238,6 +284,8 @@ function snapshotJob(root, id) {
     pidFile: p.pid,
     logFile: p.log,
     exitFile: p.exit,
+    startedAt: readStartedAt(p.meta),
+    ui: p.ui,
   });
 }
 
@@ -251,6 +299,7 @@ function printWaitResult(snap) {
     phase: snap.phase,
     lineCount: snap.lineCount,
     log: snap.log,
+    ui: snap.ui,
     progress: snap.progress,
     hint: snap.stillRunning ? WAIT_STILL_RUNNING_HINT : undefined,
   };
@@ -313,7 +362,16 @@ function startJob(root, id, command, opts = {}) {
     p.meta,
     `${JSON.stringify({ id, command, cwd, startedAt: new Date().toISOString() }, null, 2)}\n`,
   );
-  return { started: true, pid: child.pid, log: p.log, id };
+  const snap = snapshotJob(root, id);
+  writeJobUi(snap, { id, title: opts.title || id, out: p.ui });
+  return {
+    started: true,
+    pid: child.pid,
+    log: p.log,
+    ui: p.ui,
+    id,
+    hint: 'present_artifact the ui HTML now (artifact_id = job id) so the human sees work happening. Then loop wait.',
+  };
 }
 
 function runWrap(jobDir, cwd, command) {
@@ -387,8 +445,8 @@ async function main(argv = process.argv) {
       console.error('Usage: node scripts/detached-job.js start <id> -- <command>...');
       process.exit(1);
     }
-    const result = startJob(root, parsed.id, parsed.command);
-    console.log(JSON.stringify({ ...result, hint: 'Call wait next. Loop while stillRunning. Do not ask the user to poll.' }, null, 2));
+    const result = startJob(root, parsed.id, parsed.command, { title: parsed.title });
+    console.log(JSON.stringify(result, null, 2));
     process.exit(result.started || result.reason === 'already-running' ? 0 : 1);
   }
   if (parsed.cmd === 'status' || parsed.cmd === 'wait' || parsed.cmd === 'ui') {
@@ -406,25 +464,25 @@ async function main(argv = process.argv) {
       console.error('Usage: node scripts/detached-job.js wait <id>  OR  --pid-file FILE --log-file FILE');
       process.exit(1);
     }
+    const uiOpts = {
+      id: parsed.id || 'job',
+      title: parsed.title || parsed.id || 'Detached job',
+    };
     if (parsed.cmd === 'ui') {
       const snap = getSnap();
-      const html = renderJobHtml(snap, {
-        id: parsed.id || 'job',
-        title: parsed.title || parsed.id || 'Detached job',
-      });
-      if (parsed.out) {
-        fs.mkdirSync(path.dirname(path.resolve(parsed.out)), { recursive: true });
-        fs.writeFileSync(parsed.out, html);
-      } else {
-        process.stdout.write(html);
-      }
+      const out = parsed.out || snap.ui;
+      const html = writeJobUi(snap, { ...uiOpts, out });
+      if (!parsed.out && !snap.ui) process.stdout.write(html);
       process.exit(0);
     }
     if (parsed.cmd === 'status') {
-      const code = printWaitResult(getSnap());
+      const snap = getSnap();
+      writeJobUi(snap, { ...uiOpts, out: parsed.out || snap.ui });
+      const code = printWaitResult(snap);
       process.exit(code === 2 ? 0 : code);
     }
     const snap = await waitSnapshot(getSnap, parsed.timeoutMs);
+    writeJobUi(snap, { ...uiOpts, out: parsed.out || snap.ui });
     process.exit(printWaitResult(snap));
   }
   console.error(`Usage:
@@ -451,6 +509,8 @@ module.exports = {
   inferPhase,
   escapeHtml,
   renderJobHtml,
+  writeJobUi,
+  formatElapsed,
 };
 
 if (require.main === module) {

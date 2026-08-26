@@ -37,15 +37,13 @@ Wait JSON:
 - `ok: true` → exit 0 → continue the rest of the task (README, commit, deploy next step).
 - `failed: true` → exit 1 → read `progress`, fix, start **once**.
 
-## Sideboard UI (stream)
+## Sideboard UI (the work is the artifact)
 
-The job already collects stdout/stderr into its log. After **start** and after every **wait** slice, render that stream in the side column — do not dump the log in chat.
+The side column **is** the live view. `start` / `wait` collect stdout/stderr into the log and write `.sideboard/detached-jobs/<id>/ui.html`. After **start** and after **every wait slice**, `present_artifact` that HTML (`type=html`, `artifact_id` = job id) so the pane shows work happening. Same id **updates** the same pane. Do **not** dump the log in chat. Do **not** also fence that HTML.
 
 ```bash
 node scripts/detached-job.js ui <id> --title "<short title>"
 ```
-
-Then Sideboard MCP `present_artifact` with `type=html`, `title` matching the job, and a stable `artifact_id` (the job id) so each wait **updates** the same pane. Do **not** also fence that HTML in chat.
 
 If you started via `release-mac-detached.js` (legacy pid/log):
 
@@ -62,9 +60,9 @@ node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern 
 ## Agent loop
 
 1. `start` once. If JSON says `already-running`, do not start again.
-2. `ui` + `present_artifact` so the human sees the live stream.
-3. Loop `wait` until `stillRunning` is false (same as `wait_for_turn`). After each slice, refresh the same artifact from `ui`.
-4. On `ok`, finish the task. On `failed`, fix from the log.
+2. Immediately `present_artifact` `ui.html` — the human should see **working** in the side column, not a “check back later” message.
+3. Loop `wait` (use `--timeout-ms 15000` for a livelier pane). After each slice, refresh the **same** artifact from `ui.html`.
+4. On `ok`, present once more (pill flips to done) and finish the task. On `failed`, fix from the log.
 
 Never tell the user “say status when it’s done.” You wait.
 

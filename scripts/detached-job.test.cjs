@@ -129,4 +129,29 @@ describe('stream ui', () => {
     assert.match(html, /&lt;hi&gt;/);
     assert.doesNotMatch(html, /<hi>/);
   });
+
+  it('marks a running job as working with the latest line', () => {
+    const html = renderJobHtml(
+      {
+        ok: false,
+        failed: false,
+        running: true,
+        stillRunning: true,
+        pid: 42,
+        startedAt: new Date().toISOString(),
+        stream: {
+          lineCount: 1,
+          lines: ['Signing Sideboard.app'],
+          commands: [],
+          lastLine: 'Signing Sideboard.app',
+          phase: 'Signing',
+        },
+      },
+      { id: 'mac-release', title: 'Mac pack' },
+    );
+    assert.match(html, /class="pill running"/);
+    assert.match(html, />working</);
+    assert.match(html, /Signing Sideboard\.app/);
+    assert.match(html, /class="dot"/);
+  });
 });
