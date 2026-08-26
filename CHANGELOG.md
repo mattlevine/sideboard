@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.127] - 2026-08-26
+
 ### Changed
 
-- Home / `list_board` show one card per worktree. Sibling chat tabs nest as inner cards (title, preview, Stop). Archive stays on the worktree.
+- Home / `list_board` show one card per worktree. Sibling chat tabs nest as inner cards (title, preview, Stop). More than three chats scroll inside the worktree card. Archive stays on the worktree.
 
 ## [0.1.126] - 2026-08-25
 
