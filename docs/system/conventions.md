@@ -12,6 +12,12 @@ pnpm --filter @sideboard-ai/desktop dev
 
 `pnpm typecheck` has known debt (Thread test fixtures, electron-vite typings). CI treats typecheck as soft. Prefer green **build + test**.
 
+## Desktop pack in a Sideboard worktree
+
+A Sideboard `thread/*` worktree (this repo checked out by Sideboard, not the main folder) does **not** hoist `@cursor/sdk` to the repo-root `node_modules`. pnpm leaves it under `packages/core/node_modules/@cursor/sdk` only.
+
+`apps/desktop/scripts/stage-cursor-runtime.js` must resolve `@cursor/sdk` / `execa` / `smol-toml` from `packages/core/package.json`. Resolving from the root `package.json` throws `Cannot find module '@cursor/sdk'` on every `pnpm release` / `dist` in a worktree. The main checkout can hide this if a leftover hoist exists at the root. `stage-sideboard-mcp.js` already uses core's `package.json` — keep cursor-runtime the same. Do not “fix” it by installing `@cursor/sdk` on the root package.
+
 ## Code
 
 - TypeScript, ESM in core/cli (`"type": "module"`). Desktop main is CJS (electron-vite).
@@ -29,4 +35,4 @@ pnpm --filter @sideboard-ai/desktop dev
 
 - Focused PRs. Include tests when changing adapters, MCP, or git land paths.
 - Do not commit or push unless the user asked.
-- Release: `pnpm release` (see README). npm publish uses `--no-git-checks`; desktop GitHub Releases are signed/notarized from `apps/desktop` (**Apple Silicon / arm64 only**). Marketing site + Slack relay: [deploy.md](deploy.md).
+- Release: follow [`.claude/skills/release/SKILL.md`](../../.claude/skills/release/SKILL.md) (`pnpm release` in the README). npm publish uses `--no-git-checks`; desktop GitHub Releases are signed/notarized from `apps/desktop` (**Apple Silicon / arm64 only**). Marketing site + Slack relay: [deploy.md](deploy.md).

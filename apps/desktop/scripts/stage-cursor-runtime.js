@@ -14,6 +14,10 @@
  *
  * MCP stdio lives in a separate extraResources tree (`sideboard-mcp`), not
  * this Cursor runner copy.
+ *
+ * Resolve deps from packages/core/package.json, not the repo root. A Sideboard
+ * thread worktree does not hoist @cursor/sdk to root node_modules — only core
+ * depends on it — so createRequire(root package.json) throws every pack.
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -30,7 +34,7 @@ const desktopRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(desktopRoot, '../..');
 const dest = path.join(desktopRoot, 'build', 'cursor-runtime');
 const destNm = path.join(dest, 'node_modules');
-const repoPkg = path.join(repoRoot, 'package.json');
+const corePkg = path.join(repoRoot, 'packages/core/package.json');
 const platformSdk = `@cursor/sdk-${process.platform}-${process.arch}`;
 
 function assertIsolatedRunnerLoads() {
@@ -73,7 +77,7 @@ fs.writeFileSync(
 
 const packageCount = copyProductionDeps({
   destNm,
-  fromFile: repoPkg,
+  fromFile: corePkg,
   names: ['@cursor/sdk', 'execa', 'smol-toml'],
   platformSdk,
 });

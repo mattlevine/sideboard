@@ -128,6 +128,8 @@ If a blocking issue is a missing or ambiguous repo rule that will recur, add one
 
 Desktop renderer: `import type` from `@sideboard-ai/core` is fine; runtime value imports from that barrel pull Node deps (`execa`) into Vite and break `electron-vite build` / the right-sidebar Run script. Use a `@sideboard/…` alias to a Node-free core file (see `electron.vite.config.ts`; e.g. `@sideboard/home-board`, `@sideboard/issue-source-labels`) or a local renderer helper. Do not import `store/global-workspace.ts` or `board/load-home-board.ts` into the renderer — those pull Node.
 
+Desktop pack: `stage-cursor-runtime.js` must resolve `@cursor/sdk` from `packages/core/package.json`. A Sideboard worktree does not hoist that package to the repo root — `createRequire(root package.json)` fails every `pnpm release` / `dist` there. Do not revert `fromFile` to the root package.
+
 ## Cost / usage fields
 
 Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` (or a delta) when summing.
