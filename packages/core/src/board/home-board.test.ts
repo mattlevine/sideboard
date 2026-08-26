@@ -8,6 +8,8 @@ import {
   boardIssueKey,
   boardPrKey,
   classifyThreadColumn,
+  classifyWorktreeColumn,
+  groupHomeBoardWorktrees,
   isHomeBoardThread,
   compactPreview,
   dedupeBoardIssues,
@@ -42,7 +44,7 @@ function thread(
     sourceType: partial.sourceType ?? 'branch',
     sourceRef: partial.sourceRef ?? 'main',
     branchName: partial.branchName ?? 'feature',
-    worktreePath: partial.worktreePath ?? '/wt',
+    worktreePath: partial.worktreePath ?? `/wt/${partial.id}`,
     repoPath: partial.repoPath ?? '/repo',
     agent: partial.agent ?? 'claude',
     model: partial.model ?? null,
@@ -128,16 +130,16 @@ describe('isHomeBoardThread', () => {
 
 describe('classifyThreadColumn', () => {
   it('maps merged and open PR into path-to-merge columns', () => {
-    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'b', status: 'broken' }))).toBe('needs_you');
+    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'b', status: 'broken' }))).toBe('new');
     expect(
       classifyThreadColumn(
         thread({ id: 'ie', status: 'idle', lastError: 'provider 429' }),
       ),
-    ).toBe('needs_you');
+    ).toBe('new');
     expect(
       classifyThreadColumn(
         thread({
@@ -192,6 +194,63 @@ describe('classifyThreadColumn', () => {
         }),
       ),
     ).toBe('done');
+  });
+
+  it('puts an open draft PR in Draft', () => {
+    expect(
+      classifyThreadColumn(
+        thread({
+          id: 'draft',
+          prUrl: 'https://github.com/acme/app/pull/6',
+          prState: 'OPEN',
+          prIsDraft: true,
+        }),
+      ),
+    ).toBe('draft');
+    expect(
+      classifyWorktreeColumn([
+        thread({ id: 'chat' }),
+        thread({
+          id: 'pr',
+          prUrl: 'https://github.com/acme/app/pull/6',
+          prState: 'OPEN',
+          prIsDraft: true,
+        }),
+      ]),
+    ).toBe('draft');
+  });
+});
+
+describe('groupHomeBoardWorktrees', () => {
+  it('collapses sibling chats on the same checkout', () => {
+    const groups = groupHomeBoardWorktrees([
+      thread({
+        id: 'old',
+        worktreePath: '/wt/login',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+      }),
+      thread({
+        id: 'new',
+        worktreePath: '/wt/login/',
+        updatedAt: '2026-08-03T00:00:00.000Z',
+      }),
+      thread({
+        id: 'other',
+        worktreePath: '/wt/other',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      }),
+    ]);
+    expect(groups.map((g) => g.map((t) => t.id))).toEqual([['new', 'old'], ['other']]);
+    expect(
+      classifyWorktreeColumn([
+        thread({ id: 'chat' }),
+        thread({
+          id: 'pr',
+          prUrl: 'https://github.com/acme/app/pull/1',
+          prState: 'OPEN',
+        }),
+      ]),
+    ).toBe('review');
   });
 });
 
@@ -455,13 +514,13 @@ describe('assembleHomeBoard', () => {
       ],
     });
     expect(snap.columns.backlog).toHaveLength(0);
-    expect(snap.columns.needs_you).toHaveLength(1);
+    expect(snap.columns.new).toHaveLength(1);
     expect(snap.columns.review).toHaveLength(1);
     expect(snap.columns.done).toHaveLength(1);
     expect(snap.columns.done[0] && snap.columns.done[0].kind === 'thread' && snap.columns.done[0].id).toBe('merged');
     expect(snap.totals).toMatchObject({
       backlog: 0,
-      needs_you: 1,
+      new: 1,
       review: 1,
       done: 1,
       tickets: 1,
@@ -489,7 +548,7 @@ describe('assembleHomeBoard', () => {
       query: 'pay',
     });
     expect(queried.columns.backlog).toHaveLength(0);
-    expect(queried.columns.needs_you).toHaveLength(1);
+    expect(queried.columns.new).toHaveLength(1);
     expect(queried.columns.done).toHaveLength(1);
 
     const ticketsOnly = assembleHomeBoard({
@@ -497,7 +556,7 @@ describe('assembleHomeBoard', () => {
       kind: 'tickets',
     });
     expect(ticketsOnly.totals.prs).toBe(0);
-    expect(ticketsOnly.columns.needs_you).toHaveLength(1);
+    expect(ticketsOnly.columns.new).toHaveLength(1);
     expect(ticketsOnly.columns.review).toHaveLength(0);
 
     const paged = assembleHomeBoard({
@@ -506,15 +565,15 @@ describe('assembleHomeBoard', () => {
       ),
       limit: 10,
     });
-    expect(paged.columns.needs_you).toHaveLength(10);
-    expect(paged.hidden.needs_you).toBe(35);
-    expect(paged.totals.needs_you).toBe(45);
+    expect(paged.columns.new).toHaveLength(10);
+    expect(paged.hidden.new).toBe(35);
+    expect(paged.totals.new).toBe(45);
 
     const col = assembleHomeBoard({
       threads,
-      column: 'needs_you',
+      column: 'new',
     });
-    expect(col.columns.needs_you).toHaveLength(2);
+    expect(col.columns.new).toHaveLength(2);
     expect(col.columns.done).toHaveLength(0);
     expect(col.totals.done).toBe(1);
   });
@@ -546,7 +605,54 @@ describe('assembleHomeBoard', () => {
     expect(backlogPins(synced, []).map((p) => p.ref)).toEqual(['ENG-1']);
   });
 
-  it('puts every worktree thread on the board, including sidebar and agent creates', () => {
+  it('emits one card per worktree when several chats share a checkout', () => {
+    const snap = assembleHomeBoard({
+      threads: [
+        thread({
+          id: 'a',
+          worktreePath: '/wt/login',
+          title: 'Tab A',
+          updatedAt: '2026-08-02T00:00:00.000Z',
+        }),
+        thread({
+          id: 'b',
+          worktreePath: '/wt/login',
+          title: 'Tab B',
+          updatedAt: '2026-08-03T00:00:00.000Z',
+        }),
+        thread({
+          id: 'c',
+          worktreePath: '/wt/other',
+          title: 'Other',
+        }),
+        thread({
+          id: 'review-tab',
+          worktreePath: '/wt/pr',
+          title: 'Review tab',
+          prUrl: 'https://github.com/acme/app/pull/1',
+          prState: 'OPEN',
+        }),
+        thread({
+          id: 'review-chat',
+          worktreePath: '/wt/pr',
+          title: 'Plain chat',
+        }),
+      ],
+    });
+    expect(snap.totals.threads).toBe(3);
+    expect(snap.columns.new.map((c) => c.kind === 'thread' && c.id).sort()).toEqual(
+      ['b', 'c'],
+    );
+    expect(snap.columns.review).toHaveLength(1);
+    expect(snap.columns.review[0] && snap.columns.review[0].kind === 'thread' && snap.columns.review[0].id).toBe(
+      'review-tab',
+    );
+    expect(snap.columns.review[0] && snap.columns.review[0].kind === 'thread' && snap.columns.review[0].chatCount).toBe(
+      2,
+    );
+  });
+
+  it('puts every worktree on the board, including sidebar and agent creates', () => {
     const snap = assembleHomeBoard({
       issues: [],
       prs: [],
@@ -588,13 +694,13 @@ describe('assembleHomeBoard', () => {
         }),
       ],
     });
-    expect(snap.columns.needs_you.map((c) => c.kind === 'thread' && c.id).sort()).toEqual(
+    expect(snap.columns.new.map((c) => c.kind === 'thread' && c.id).sort()).toEqual(
       ['adopted', 'agent', 'cowboy', 'sidebar'],
     );
     expect(snap.columns.review).toHaveLength(0);
     expect(snap.totals.threads).toBe(4);
     expect(
-      snap.columns.needs_you.some((c) => c.kind === 'thread' && c.id === 'orch'),
+      snap.columns.new.some((c) => c.kind === 'thread' && c.id === 'orch'),
     ).toBe(false);
   });
 

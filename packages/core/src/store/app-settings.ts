@@ -215,7 +215,7 @@ export interface AdvancedAppSettings {
    * Conductor: auto-archive on merge (opt-in; default off).
    */
   autoArchiveOnMerge?: boolean;
-  /** Max concurrent agent turns across the orchestrator (default 3). */
+  /** Max concurrent agent turns across the orchestrator (default 5). */
   maxConcurrent?: number;
   /**
    * Max Sideboard worktrees kept machine-wide before orphan cleanup
@@ -1415,7 +1415,7 @@ export function maxConcurrentAgents(
   if (typeof n === 'number' && Number.isFinite(n)) {
     return Math.max(1, Math.min(32, Math.floor(n)));
   }
-  return 3;
+  return 5;
 }
 
 /** Binary name or absolute path used to spawn Claude Code. */

@@ -21,9 +21,24 @@ export interface PlanQuestion {
 export interface PendingPlanQuestions {
   /** Tool call / presentation id (dismiss + dedupe). */
   id: string;
+  /**
+   * Stable identity of the question set (labels + prompts). Survives live →
+   * persist tool-id changes so the UI does not remount after an answer.
+   */
+  signature: string;
   questions: PlanQuestion[];
   /** Source tool name for debugging. */
   source: string;
+}
+
+/** Content key for dismiss / draft reset — not the ephemeral tool call id. */
+export function planQuestionsSignature(questions: PlanQuestion[]): string {
+  return questions
+    .map((q) => {
+      const opts = q.options.map((o) => o.label).join('\u001f');
+      return `${q.question}\u001e${opts}`;
+    })
+    .join('\u001d');
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -132,10 +147,33 @@ export function extractPendingPlanQuestions(
     if (!questions.length) continue;
     return {
       id: p.id || `ask-${i}`,
+      signature: planQuestionsSignature(questions),
       questions,
       source: p.name || 'ask_user',
     };
   }
+  return null;
+}
+
+/**
+ * Questions still waiting on the user. After they reply (composer picker or
+ * a normal chat message — persisted or in-flight), this is null so the panel
+ * does not remount from the previous agent turn.
+ */
+export function latestPendingPlanQuestions(input: {
+  messages: Array<{ role: string; parts?: ToolPartLike[] }>;
+  liveParts?: ToolPartLike[] | null;
+  /** Optimistic user send not yet in `messages`. */
+  userReplied?: boolean;
+}): PendingPlanQuestions | null {
+  if (input.userReplied) return null;
+
+  const fromLive = extractPendingPlanQuestions(input.liveParts);
+  if (fromLive) return fromLive;
+
+  const last = input.messages[input.messages.length - 1];
+  if (last?.role === 'user') return null;
+  if (last?.role === 'agent') return extractPendingPlanQuestions(last.parts);
   return null;
 }
 

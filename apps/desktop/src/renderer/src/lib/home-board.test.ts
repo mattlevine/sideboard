@@ -32,7 +32,7 @@ function thread(
     sourceType: partial.sourceType ?? 'branch',
     sourceRef: partial.sourceRef ?? 'main',
     branchName: partial.branchName ?? 'feature',
-    worktreePath: partial.worktreePath ?? '/wt',
+    worktreePath: partial.worktreePath ?? `/wt/${partial.id}`,
     repoPath: partial.repoPath ?? '/repo',
     agent: partial.agent ?? 'claude',
     model: partial.model ?? null,
@@ -76,16 +76,16 @@ function issue(partial: Partial<BoardIssue> & Pick<BoardIssue, 'identifier' | 't
 
 describe('classifyThreadColumn', () => {
   it('maps merged and open PR into path-to-merge columns', () => {
-    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('needs_you');
-    expect(classifyThreadColumn(thread({ id: 'b', status: 'broken' }))).toBe('needs_you');
+    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('new');
+    expect(classifyThreadColumn(thread({ id: 'b', status: 'broken' }))).toBe('new');
     expect(
       classifyThreadColumn(
         thread({ id: 'ie', status: 'idle', lastError: 'provider 429' }),
       ),
-    ).toBe('needs_you');
+    ).toBe('new');
     expect(
       classifyThreadColumn(
         thread({
@@ -140,6 +140,19 @@ describe('classifyThreadColumn', () => {
         }),
       ),
     ).toBe('done');
+  });
+
+  it('puts an open draft PR in Draft', () => {
+    expect(
+      classifyThreadColumn(
+        thread({
+          id: 'draft',
+          prUrl: 'https://github.com/acme/app/pull/6',
+          prState: 'OPEN',
+          prIsDraft: true,
+        }),
+      ),
+    ).toBe('draft');
   });
 });
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.127] - 2026-08-26
+
+### Added
+
+- Home **New orchestration** starts a Global orchestration chat (same as the sidebar Orchestration +).
+
+### Changed
+
+- Home / `list_board` show one card per worktree. Sibling chat tabs nest as inner cards (title, preview, Stop). More than three chats scroll inside the worktree card. Archive stays on the worktree.
+- Default **Max concurrent agents** is 5 (was 3).
+- Home / `list_board` columns are **New → Draft → Review → Merged** (no PR, draft PR, open PR, landed). Archive stays on Merged.
+- Home Merged **Archive worktree** archives the checkout (every chat tab), not a single inner card.
+- Home Kanban worktree cards use the same status icons as the left sidebar; nested chats keep status dots. Clicking the worktree wrapper opens that checkout.
+
+### Fixed
+
+- Sidebar multi-select ring uses the row border (not an outside outline) so the left/right edges are not clipped.
+- Plan `ask_user` questions stay put after you answer in the picker or the normal composer — they no longer remount when the tool id is persisted.
+- Desktop pack in a Sideboard worktree finds `@cursor/sdk` (stage from `packages/core`, not the repo root).
+
 ## [0.1.126] - 2026-08-25
 
 ### Added

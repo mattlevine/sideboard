@@ -114,6 +114,9 @@ export {
   HOME_BOARD_CACHE_TTL_MS,
   isHomeBoardThread,
   findLiveThreadForCreate,
+  groupHomeBoardWorktrees,
+  classifyWorktreeColumn,
+  worktreeBoardStatus,
 } from './board/home-board.js';
 export type {
   AddBoardPinInput,

@@ -15,7 +15,11 @@ import type {
   ThreadAttachment,
   TokenUsage,
 } from '@sideboard-ai/core';
-import { extractPendingPlanQuestions, formatPlanQuestionsForChat } from '@sideboard/plan-ask-user';
+import {
+  extractPendingPlanQuestions,
+  formatPlanQuestionsForChat,
+  latestPendingPlanQuestions,
+} from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
@@ -328,20 +332,19 @@ export function ThreadPanel({
   const plusBtnRef = useRef<HTMLButtonElement>(null);
   const openBtnRef = useRef<HTMLButtonElement>(null);
 
-  const pendingPlanQuestions = useMemo(() => {
-    const fromLive = extractPendingPlanQuestions(liveParts);
-    if (fromLive) return fromLive;
-    for (let i = thread.messages.length - 1; i >= 0; i--) {
-      const m = thread.messages[i]!;
-      if (m.role !== 'agent') continue;
-      return extractPendingPlanQuestions(m.parts);
-    }
-    return null;
-  }, [liveParts, thread.messages]);
+  const pendingPlanQuestions = useMemo(
+    () =>
+      latestPendingPlanQuestions({
+        messages: thread.messages,
+        liveParts,
+        userReplied: Boolean(pendingUser),
+      }),
+    [liveParts, thread.messages, pendingUser],
+  );
 
   const showPlanQuestions =
     Boolean(pendingPlanQuestions) &&
-    pendingPlanQuestions!.id !== dismissedPlanQuestionsId;
+    pendingPlanQuestions!.signature !== dismissedPlanQuestionsId;
 
   const planAwaitingApproval = useMemo(
     () =>
@@ -851,6 +854,9 @@ export function ThreadPanel({
   );
 
   function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
+    if (pendingPlanQuestions) {
+      setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
+    }
     setPendingUser(text);
     setPendingInTranscript(!turnBusy && thread.queue.length === 0);
     setPendingAttachments(attachments);
@@ -1800,12 +1806,12 @@ export function ThreadPanel({
                     />
                     {showPlanQuestions &&
                       pendingPlanQuestions &&
-                      m.parts?.some(
-                        (p) =>
-                          p.type === 'tool' &&
-                          p.id === pendingPlanQuestions.id,
-                      ) && (
-                        <div className="plan-questions-chat-brief">
+                      extractPendingPlanQuestions(m.parts)?.signature ===
+                        pendingPlanQuestions.signature && (
+                        <div
+                          className="plan-questions-chat-brief"
+                          key={pendingPlanQuestions.signature}
+                        >
                           <MarkdownMessage
                             text={formatPlanQuestionsForChat(
                               pendingPlanQuestions.questions,
@@ -1914,11 +1920,12 @@ export function ThreadPanel({
               )}
               {showPlanQuestions &&
                 pendingPlanQuestions &&
-                liveParts.some(
-                  (p) =>
-                    p.type === 'tool' && p.id === pendingPlanQuestions.id,
-                ) && (
-                  <div className="plan-questions-chat-brief">
+                extractPendingPlanQuestions(liveParts)?.signature ===
+                  pendingPlanQuestions.signature && (
+                  <div
+                    className="plan-questions-chat-brief"
+                    key={pendingPlanQuestions.signature}
+                  >
                     <MarkdownMessage
                       text={formatPlanQuestionsForChat(
                         pendingPlanQuestions.questions,
@@ -2132,9 +2139,9 @@ export function ThreadPanel({
             <PlanQuestionsPanel
               pending={pendingPlanQuestions}
               busy={busy}
-              onDismiss={() => setDismissedPlanQuestionsId(pendingPlanQuestions.id)}
+              onDismiss={() => setDismissedPlanQuestionsId(pendingPlanQuestions.signature)}
               onSubmit={(message) => {
-                setDismissedPlanQuestionsId(pendingPlanQuestions.id);
+                setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
                 void (async () => {
                   setBusy(true);
                   beginPendingSend(message);

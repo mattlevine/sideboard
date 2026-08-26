@@ -13,3 +13,23 @@ export function closeChatTabMessage(
   }
   return `Close "${label}"? This chat will be moved to Settings → History.`;
 }
+
+/** Confirm copy when archiving a whole checkout (Home Merged). */
+export function archiveWorktreeMessage(
+  title: string,
+  chatCount: number,
+  opts?: { removesWorktree?: boolean; cowboy?: boolean },
+): string {
+  const label = title.trim() || 'Untitled';
+  const keepFolder = opts?.cowboy || opts?.removesWorktree === false;
+  if (keepFolder) {
+    if (chatCount > 1) {
+      return `Archive "${label}"? All ${chatCount} chats will move to Settings → History. The project folder stays.`;
+    }
+    return `Archive "${label}"? This chat will move to Settings → History. The project folder stays.`;
+  }
+  if (chatCount > 1) {
+    return `Archive "${label}"? All ${chatCount} chats on this worktree will move to Settings → History, and the worktree will be removed.`;
+  }
+  return `Archive "${label}"? This worktree will be removed. The chat moves to Settings → History.`;
+}

@@ -233,7 +233,7 @@ export function SettingsModal({
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [maxConcurrentDraft, setMaxConcurrentDraft] = useState('3');
+  const [maxConcurrentDraft, setMaxConcurrentDraft] = useState('5');
   const [draftKey, setDraftKey] = useState('');
   const [draftValue, setDraftValue] = useState('');
   const [editingEnvKey, setEditingEnvKey] = useState<string | null>(null);
@@ -271,7 +271,7 @@ export function SettingsModal({
     ]);
     const next = normalizeSettings(s);
     setSettings(next);
-    setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 3));
+    setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 5));
     setStatuses(agents);
     setBrightsySession(session);
     setGithubStatus(gh);
@@ -491,7 +491,7 @@ export function SettingsModal({
   function applySettings(next: PublicAppSettings) {
     const normalized = normalizeSettings(next);
     setSettings(normalized);
-    setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 3));
+    setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 5));
     onSettingsChange?.(normalized);
   }
 
@@ -2053,7 +2053,7 @@ export function SettingsModal({
                       disabled={
                         busy ||
                         !maxConcurrentDraft.trim() ||
-                        Number(maxConcurrentDraft) === (advanced.maxConcurrent ?? 3)
+                        Number(maxConcurrentDraft) === (advanced.maxConcurrent ?? 5)
                       }
                       onClick={() => {
                         const n = Number(maxConcurrentDraft);

@@ -54,7 +54,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Sideboard MCP (fleet control — prefer these for status and orchestration):',
   'Discover:',
   '- list_workspaces — registered repos (path + github slug when known)',
-  '- list_board — Home Kanban of worktree chats (In Process / Review / Merged). Path to merge: no open PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind, column, limit.',
+  '- list_board — Home Kanban of worktrees (New / Draft / Review / Merged; one card per checkout). Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind, column, limit.',
   '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces (issues: Linear API or GitHub Issues)',
   '- linear_list_teams / linear_get_issue / linear_create_issue / linear_update_issue / linear_comment — Linear Account connection; call linear_list_teams for team key and workflow states; pass ENG-123 or uuid. If mutations fail with a scope error, Disconnect and Connect Linear in Account settings.',
   '- list_teams / slack_list_channels / slack_list_users / slack_search / slack_read / slack_post / slack_replies — Slack workspaces from Account settings; pass team_id from list_teams',
@@ -129,7 +129,7 @@ export function coordinatorTurnReminder(opts: {
     `- YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
-    '- Status: list_board (worktree Kanban: In Process → Review → Merged) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
+    '- Status: list_board (worktree Kanban: New → Draft → Review → Merged) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
   ]
     .filter(Boolean)
     .join('\n');

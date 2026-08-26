@@ -45,6 +45,7 @@ export function normalizeThread(raw: Thread): Thread {
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
     prTitle: raw.prTitle ?? null,
     prState: raw.prState ?? null,
+    prIsDraft: Boolean(raw.prIsDraft),
     skipAutoArchiveOnMerge: Boolean(raw.skipAutoArchiveOnMerge),
     cowboy: Boolean(raw.cowboy),
     stackId: raw.stackId ?? null,
@@ -70,6 +71,7 @@ export function createEmptyThread(
     | 'prUrl'
     | 'prTitle'
     | 'prState'
+    | 'prIsDraft'
     | 'skipAutoArchiveOnMerge'
     | 'stackId'
     | 'stackLayer'
@@ -103,6 +105,7 @@ export function createEmptyThread(
         | 'prUrl'
         | 'prTitle'
         | 'prState'
+        | 'prIsDraft'
         | 'skipAutoArchiveOnMerge'
         | 'cowboy'
         | 'stackId'
@@ -130,6 +133,7 @@ export function createEmptyThread(
     prUrl: partial.prUrl ?? null,
     prTitle: partial.prTitle ?? null,
     prState: partial.prState ?? null,
+    prIsDraft: Boolean(partial.prIsDraft),
     skipAutoArchiveOnMerge: partial.skipAutoArchiveOnMerge ?? false,
     cowboy: Boolean(partial.cowboy),
     stackId: partial.stackId ?? null,

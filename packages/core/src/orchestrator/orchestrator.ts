@@ -243,7 +243,7 @@ export class Orchestrator {
   private runningCount = 0;
 
   constructor(opts?: { maxConcurrent?: number }) {
-    this.maxConcurrent = opts?.maxConcurrent ?? 3;
+    this.maxConcurrent = opts?.maxConcurrent ?? 5;
   }
 
   on(listener: (event: OrchestratorEvent) => void): () => void {
@@ -1958,6 +1958,9 @@ export class Orchestrator {
     if (meta.url && meta.url !== thread.prUrl) patch.prUrl = meta.url;
     if (meta.title && meta.title !== thread.prTitle) patch.prTitle = meta.title;
     if (nextState && nextState !== prevState) patch.prState = nextState;
+    const nextDraft =
+      Boolean(meta.isDraft) && nextState !== 'MERGED' && nextState !== 'CLOSED';
+    if (nextDraft !== Boolean(thread.prIsDraft)) patch.prIsDraft = nextDraft;
     if (
       thread.skipAutoArchiveOnMerge &&
       nextState &&
@@ -1992,7 +1995,7 @@ export class Orchestrator {
     // Mark siblings merged first so restore later sees prState=MERGED.
     const siblings = threadsSharingWorktree(latest.worktreePath);
     for (const t of siblings) {
-      const sibPatch: Partial<Thread> = { prState: 'MERGED' };
+      const sibPatch: Partial<Thread> = { prState: 'MERGED', prIsDraft: false };
       if (meta.url && meta.url !== t.prUrl) sibPatch.prUrl = meta.url;
       if (meta.title && meta.title !== t.prTitle) sibPatch.prTitle = meta.title;
       if (Object.keys(sibPatch).length > 0) updateThread(t.id, sibPatch);
@@ -2209,10 +2212,15 @@ export class Orchestrator {
       web: action === 'create-web',
     });
     if (!url) return;
-    const patch: Partial<Thread> = { prUrl: url, prTitle: meta.title };
+    const patch: Partial<Thread> = {
+      prUrl: url,
+      prTitle: meta.title,
+      prIsDraft: action === 'create-draft',
+    };
     try {
       const fetched = await fetchPrMeta(cwd, url);
       if (fetched?.title) patch.prTitle = fetched.title;
+      if (fetched) patch.prIsDraft = Boolean(fetched.isDraft);
     } catch {
       // URL alone is enough
     }

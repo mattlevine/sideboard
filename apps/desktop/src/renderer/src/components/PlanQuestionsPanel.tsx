@@ -46,7 +46,7 @@ export function PlanQuestionsPanel({
   useEffect(() => {
     setDrafts(questions.map(() => emptyDraft()));
     setPage(0);
-  }, [pending.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pending.signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const qi = Math.min(page, Math.max(0, questions.length - 1));
   const question = questions[qi]!;
@@ -192,7 +192,7 @@ export function PlanQuestionsPanel({
         </button>
       </div>
 
-      <div className="plan-question-card" key={`${pending.id}-${qi}`}>
+      <div className="plan-question-card" key={`${pending.signature}-${qi}`}>
         <div className="plan-question-text">{question.question}</div>
         <div
           className="plan-question-options"

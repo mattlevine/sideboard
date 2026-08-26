@@ -2063,7 +2063,9 @@ body.resizing-panels webview {
 }
 
 .thread-item.selected {
-  outline: 1px solid var(--accent-dim);
+  /* Use the reserved 1px border — outline paints outside the box and is
+     clipped by .sidebar-projects overflow-x: hidden. */
+  border-color: var(--accent-dim);
 }
 
 .dot {
@@ -3780,6 +3782,8 @@ body.resizing-panels webview {
   position: relative;
   min-width: 0;
   max-width: 100%;
+  padding: 0 6px;
+  box-sizing: border-box;
 }
 
 .sidebar-tool-menu {
@@ -9399,9 +9403,64 @@ body:has(.update-banner) .team-toast-stack {
   outline-offset: 2px;
 }
 
-.board-card-thread.is-archiving {
+.board-card-thread.is-archiving,
+.board-card-worktree.is-archiving {
   cursor: default;
   opacity: 0.72;
+}
+
+.board-card-worktree {
+  cursor: pointer;
+  padding-bottom: 10px;
+}
+
+.board-card-worktree:hover {
+  border-color: color-mix(in srgb, var(--border) 35%, var(--text));
+}
+
+.board-card-worktree .board-open:focus-visible {
+  outline: 2px solid var(--accent, var(--text));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.board-card-top .thread-status-icon,
+.board-card-top .thread-archive-spinner {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.board-card-chats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+  min-height: 0;
+}
+
+.board-card-chats.is-scrollable {
+  overflow-y: auto;
+  /* ~3 compact chat cards (title + meta + 2-line preview) + gaps */
+  max-height: 22rem;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.board-card-chat {
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-elevated, var(--bg)) 78%, var(--bg));
+  cursor: pointer;
+}
+
+.board-card-chat:hover {
+  border-color: color-mix(in srgb, var(--border) 35%, var(--text));
+}
+
+.board-card-chat:focus-visible {
+  outline: 2px solid var(--accent, var(--text));
+  outline-offset: 2px;
 }
 
 .board-card-top {
@@ -9413,6 +9472,11 @@ body:has(.update-banner) .team-toast-stack {
 
 .board-card-top .board-open {
   flex: 1;
+}
+
+.board-archive-worktree {
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .board-card-id {
