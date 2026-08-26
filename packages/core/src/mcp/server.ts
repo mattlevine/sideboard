@@ -289,7 +289,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Tickets/PRs are a 15-minute snapshot — pass refresh=true to pull Linear/GitHub again (same as desktop Refresh). Threads stay live. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Linear Backlog defaults to tickets assigned to you in the active cycle. Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit (default 40), refresh. Start a card with start_board_card or create_thread.',
+    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Every worktree chat is on the board (sidebar Create, Start, or create_thread) — orchestration chats are not. Tickets/PRs are a 15-minute snapshot — pass refresh=true to pull Linear/GitHub again (same as desktop Refresh). Threads stay live. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Linear Backlog defaults to tickets assigned to you in the active cycle. Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit (default 40), refresh. Start a card with start_board_card or create_thread.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z

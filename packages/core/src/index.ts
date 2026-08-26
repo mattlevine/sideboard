@@ -106,6 +106,7 @@ export {
 } from './board/load-home-board.js';
 export {
   HOME_BOARD_CACHE_TTL_MS,
+  isHomeBoardThread,
 } from './board/home-board.js';
 export type { HomeBoardLoaded, HomeBoardRemoteData } from './board/home-board.js';
 export { loadBrightsyConfig, brightsyConfigPath } from './brightsy/config.js';

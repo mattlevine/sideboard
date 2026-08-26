@@ -13,6 +13,7 @@ import {
   defaultTicketScope,
   haystackMatches,
   inWorkspace,
+  isHomeBoardThread,
   issueInTicketScope,
   issueSearchText,
   issueSourceLabel,
@@ -227,11 +228,17 @@ export function GlobalBoard({
   }, [issues, pickedRepo, defaultRepo]);
 
   const liveThreads = useMemo(
-    () => [...threads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    () =>
+      threads
+        .filter(isHomeBoardThread)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [threads],
   );
   const doneThreads = useMemo(
-    () => [...archivedThreads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    () =>
+      archivedThreads
+        .filter(isHomeBoardThread)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [archivedThreads],
   );
 
@@ -442,11 +449,12 @@ export function GlobalBoard({
         <>
           <FleetActivityBar runtime={runtime} compact />
           <p className="board-lede">
-            Search and filter across tickets, PRs, and threads. Tickets and PRs
-            are a snapshot — Refresh (or 15 minutes) pulls Linear/GitHub again.
-            Threads stay live. Linear Backlog defaults to issues assigned to you
-            in the current cycle. Start opens a worktree; the card then follows
-            agent and PR status.
+            Search and filter across tickets, PRs, and worktree chats. Every
+            worktree appears here — Start, sidebar Create, or an orchestration
+            agent. Tickets and PRs are a snapshot — Refresh (or 15 minutes)
+            pulls Linear/GitHub again. Threads stay live. Linear Backlog
+            defaults to issues assigned to you in the current cycle. Start
+            opens a worktree; the card then follows agent and PR status.
           </p>
           <div className="board-toolbar">
             <input
@@ -858,7 +866,15 @@ function ThreadCard({
           <div className="thread-meta">
             {t.agent} · {t.status}
             {t.queue.length ? ` · q${t.queue.length}` : ''}
-            {t.sourceType === 'ticket' || t.sourceType === 'pr' ? ` · ${t.sourceType}:${t.sourceRef}` : ''}
+            {t.sourceType === 'ticket' || t.sourceType === 'pr'
+              ? ` · ${t.sourceType}:${t.sourceRef}`
+              : t.sourceType === 'adopt'
+                ? ' · adopt'
+                : t.cowboy
+                  ? ' · cowboy'
+                  : t.sourceType === 'branch' && t.branchName
+                    ? ` · ${t.branchName}`
+                    : ''}
             {repo ? ` · ${repo}` : ''}
             {' · '}
             {relativeTime(t.updatedAt)}

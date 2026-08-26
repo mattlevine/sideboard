@@ -353,7 +353,7 @@ export function App() {
       setRepoPath(repo);
       void window.sideboard.setRepoPath(repo).catch(() => undefined);
       const defaults = await loadThreadDefaults();
-      await window.sideboard.createThread({
+      const thread = await window.sideboard.createThread({
         sourceType: 'ticket',
         sourceRef: issue.identifier,
         repoPath: repo,
@@ -375,9 +375,10 @@ export function App() {
           },
         ],
       });
+      upsertThread(thread);
       await refresh();
     },
-    [refresh],
+    [refresh, upsertThread],
   );
 
   const startPrThread = useCallback(
@@ -385,7 +386,7 @@ export function App() {
       setRepoPath(repo);
       void window.sideboard.setRepoPath(repo).catch(() => undefined);
       const defaults = await loadThreadDefaults();
-      await window.sideboard.createThread({
+      const thread = await window.sideboard.createThread({
         sourceType: 'pr',
         sourceRef: String(pr.number),
         repoPath: repo,
@@ -394,9 +395,10 @@ export function App() {
         model: defaults.model,
         effort: defaults.effort,
       });
+      upsertThread(thread);
       await refresh();
     },
-    [refresh],
+    [refresh, upsertThread],
   );
 
   const selectCreatedThread = useCallback(

@@ -54,7 +54,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Sideboard MCP (fleet control — prefer these for status and orchestration):',
   'Discover:',
   '- list_workspaces — registered repos (path + github slug when known)',
-  '- list_board — Home Kanban (Backlog / Queued / Running / Needs you / Review / Done). Same cards as desktop Home. Tickets/PRs are a 15-minute snapshot; pass refresh=true to pull Linear/GitHub (same as Home Refresh). Linear Backlog defaults to your current cycle (assigned to you this sprint). Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit, refresh. Prefer this for ticket-to-worktree status.',
+  '- list_board — Home Kanban (Backlog / Queued / Running / Needs you / Review / Done). Same cards as desktop Home. Every worktree chat is on the board (sidebar Create, Start, or create_thread); orchestration chats are not. Tickets/PRs are a 15-minute snapshot; pass refresh=true to pull Linear/GitHub (same as Home Refresh). Linear Backlog defaults to your current cycle (assigned to you this sprint). Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit, refresh. Prefer this for ticket-to-worktree status.',
   '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces (issues: Linear API or GitHub Issues)',
   '- linear_list_teams / linear_get_issue / linear_create_issue / linear_update_issue / linear_comment — Linear Account connection; call linear_list_teams for team key and workflow states; pass ENG-123 or uuid. If mutations fail with a scope error, Disconnect and Connect Linear in Account settings.',
   '- list_teams / slack_list_channels / slack_list_users / slack_search / slack_read / slack_post / slack_replies — Slack workspaces from Account settings; pass team_id from list_teams',
@@ -129,7 +129,7 @@ export function coordinatorTurnReminder(opts: {
     `- YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
-    '- Status: list_board (Home snapshot; refresh=true for latest tickets/PRs) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
+    '- Status: list_board (Home snapshot of every worktree chat; refresh=true for latest tickets/PRs) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
   ]
     .filter(Boolean)
     .join('\n');

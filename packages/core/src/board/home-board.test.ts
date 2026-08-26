@@ -7,6 +7,7 @@ import {
   boardIssueKey,
   boardPrKey,
   classifyThreadColumn,
+  isHomeBoardThread,
   compactPreview,
   dedupeBoardIssues,
   dedupeBoardPrs,
@@ -79,6 +80,35 @@ function issue(partial: Partial<BoardIssue> & Pick<BoardIssue, 'identifier' | 't
     ...partial,
   };
 }
+
+describe('isHomeBoardThread', () => {
+  it('includes every worktree chat and excludes orchestration', () => {
+    expect(isHomeBoardThread(thread({ id: 'b', sourceType: 'branch' }))).toBe(true);
+    expect(isHomeBoardThread(thread({ id: 't', sourceType: 'ticket' }))).toBe(true);
+    expect(isHomeBoardThread(thread({ id: 'p', sourceType: 'pr' }))).toBe(true);
+    expect(isHomeBoardThread(thread({ id: 'a', sourceType: 'adopt' }))).toBe(true);
+    expect(
+      isHomeBoardThread(thread({ id: 'c', sourceType: 'branch', cowboy: true })),
+    ).toBe(true);
+    expect(
+      isHomeBoardThread(
+        thread({
+          id: 'o',
+          sourceType: 'orchestration',
+          repoPath: '__global__',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isHomeBoardThread(
+        thread({ id: 'legacy', sourceType: 'orchestration', repoPath: '/repo' }),
+      ),
+    ).toBe(false);
+    expect(
+      isHomeBoardThread(thread({ id: 'g', sourceType: 'branch', repoPath: '__global__' })),
+    ).toBe(false);
+  });
+});
 
 describe('classifyThreadColumn', () => {
   it('maps agent and PR state into locked columns', () => {
@@ -515,6 +545,63 @@ describe('assembleHomeBoard', () => {
       'ENG-1',
     ]);
     expect(snap.columns.backlog[0]).toMatchObject({ cycle: 'Week 34' });
+  });
+
+  it('puts every worktree thread on the board, including sidebar and agent creates', () => {
+    const snap = assembleHomeBoard({
+      issues: [],
+      prs: [],
+      threads: [
+        thread({
+          id: 'sidebar',
+          sourceType: 'branch',
+          sourceRef: 'main',
+          title: 'From sidebar',
+          status: 'idle',
+        }),
+        thread({
+          id: 'agent',
+          sourceType: 'ticket',
+          sourceRef: 'ENG-9',
+          title: 'From agent',
+          parentThreadId: 'orch-1',
+          status: 'queued',
+        }),
+        thread({
+          id: 'adopted',
+          sourceType: 'adopt',
+          title: 'Adopted wt',
+          status: 'running',
+        }),
+        thread({
+          id: 'cowboy',
+          sourceType: 'branch',
+          cowboy: true,
+          title: 'On default branch',
+          status: 'idle',
+        }),
+        thread({
+          id: 'orch',
+          sourceType: 'orchestration',
+          repoPath: '__global__',
+          title: 'Coordinator',
+          status: 'running',
+        }),
+      ],
+    });
+    expect(snap.columns.needs_you.map((c) => c.kind === 'thread' && c.id).sort()).toEqual(
+      ['cowboy', 'sidebar'],
+    );
+    expect(snap.columns.queued.map((c) => c.kind === 'thread' && c.id)).toEqual(['agent']);
+    expect(snap.columns.running.map((c) => c.kind === 'thread' && c.id)).toEqual([
+      'adopted',
+    ]);
+    expect(snap.totals.threads).toBe(4);
+    expect(
+      [...snap.columns.queued, ...snap.columns.running, ...snap.columns.needs_you].some(
+        (c) => c.kind === 'thread' && c.id === 'orch',
+      ),
+    ).toBe(false);
   });
 
   it('resolves Start refs to the matching ticket or PR', () => {

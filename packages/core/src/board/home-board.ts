@@ -3,6 +3,19 @@ import type { IssueInfo, PrInfo, Thread } from '../types/thread.js';
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
 const GLOBAL_WORKSPACE_ID = '__global__';
 
+/**
+ * Home Kanban work item — every worktree chat, however it was created
+ * (sidebar Create, board Start, MCP create_thread / start_board_card, adopt,
+ * cowboy). Orchestration / Global chats stay in the sidebar, not the board.
+ */
+export function isHomeBoardThread(
+  thread: Pick<Thread, 'sourceType' | 'repoPath'>,
+): boolean {
+  if (thread.sourceType === 'orchestration') return false;
+  if (thread.repoPath === GLOBAL_WORKSPACE_ID) return false;
+  return true;
+}
+
 export type BoardColumnId =
   | 'backlog'
   | 'queued'
@@ -93,9 +106,9 @@ export function threadMatchesIssue(
   const identRaw = issue.identifier.trim().toLowerCase();
   const identKey = normalizeIssueKey(issue.identifier);
   const title = issue.title.trim().toLowerCase();
-  const refRaw = thread.sourceRef.trim().toLowerCase();
-  const refKey = normalizeIssueKey(thread.sourceRef);
-  const threadTitle = thread.title.trim().toLowerCase();
+  const refRaw = (thread.sourceRef ?? '').trim().toLowerCase();
+  const refKey = normalizeIssueKey(thread.sourceRef ?? '');
+  const threadTitle = (thread.title ?? '').trim().toLowerCase();
 
   if (thread.sourceType === 'ticket' && identKey && refKey === identKey) return true;
   if (identRaw && (refRaw === identRaw || threadTitle.includes(identRaw))) return true;
@@ -180,14 +193,14 @@ export function threadMatchesPr(
   pr: Pick<PrInfo, 'number' | 'title' | 'url' | 'headRefName'>,
 ): boolean {
   const num = String(pr.number);
-  if (thread.sourceType === 'pr' && normalizeIssueKey(thread.sourceRef) === num) {
+  if (thread.sourceType === 'pr' && normalizeIssueKey(thread.sourceRef ?? '') === num) {
     return true;
   }
   if (thread.prUrl && pr.url && urlsMatch(thread.prUrl, pr.url)) return true;
   const head = pr.headRefName.trim().toLowerCase();
   if (!head) return false;
-  const branch = thread.branchName.trim().toLowerCase();
-  const ref = thread.sourceRef
+  const branch = (thread.branchName ?? '').trim().toLowerCase();
+  const ref = (thread.sourceRef ?? '')
     .trim()
     .replace(/^refs\/heads\//, '')
     .replace(/^origin\//, '')
@@ -537,10 +550,14 @@ export function assembleHomeBoard(input: {
     issueInTicketScope(issue, ticketScope, input.viewerLogin),
   );
   const byUpdated = (a: Thread, b: Thread) => b.updatedAt.localeCompare(a.updatedAt);
-  const live = input.threads.filter((t) => t.status !== 'archived').sort(byUpdated);
+  const live = input.threads
+    .filter((t) => t.status !== 'archived' && isHomeBoardThread(t))
+    .sort(byUpdated);
   const archived = (
     input.archivedThreads ?? input.threads.filter((t) => t.status === 'archived')
-  ).sort(byUpdated);
+  )
+    .filter(isHomeBoardThread)
+    .sort(byUpdated);
 
   const tickets =
     kind === 'prs' || kind === 'threads'
@@ -626,7 +643,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Tickets/PRs are a snapshot (up to 15m). Pass refresh=true on list_board to pull Linear/GitHub again — same as desktop Refresh. Start a Backlog ticket: start_board_card kind=ticket ref=<identifier> repoPath=… (or create_thread sourceType=ticket). Start an unmatched Review PR: start_board_card kind=pr ref=<number> repoPath=…. Then send_to_thread. Columns follow agent/PR state — do not invent status. Linear Backlog defaults to your current cycle (ticketScope=cycle); pass ticketScope=assigned for all tickets assigned to you, or all for every open GitHub issue.';
+  'Every worktree chat is on this board (sidebar Create, Start, or create_thread) — orchestration chats are not. Tickets/PRs are a snapshot (up to 15m). Pass refresh=true on list_board to pull Linear/GitHub again — same as desktop Refresh. Start a Backlog ticket: start_board_card kind=ticket ref=<identifier> repoPath=… (or create_thread sourceType=ticket). Start an unmatched Review PR: start_board_card kind=pr ref=<number> repoPath=…. Then send_to_thread. Columns follow agent/PR state — do not invent status. Linear Backlog defaults to your current cycle (ticketScope=cycle); pass ticketScope=assigned for all tickets assigned to you, or all for every open GitHub issue.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(
