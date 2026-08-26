@@ -234,15 +234,20 @@ describe('Linear GraphQL writes', () => {
 
   it('gets an issue by identifier', async () => {
     await withAuth();
-    mockGraphql(() => ({ issue: issueNode() }));
+    const fetchMock = mockGraphql(() => ({ issue: issueNode() }));
     const issue = await getLinearIssue('ENG-9');
     expect(issue.identifier).toBe('ENG-9');
     expect(issue.team?.key).toBe('ENG');
+    const query = String(
+      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}')).query ?? '',
+    );
+    expect(query).toMatch(/states\s*\(\s*first:\s*50\s*\)/);
+    expect(query).toContain('description');
   });
 
   it('lists assigned issues with the active cycle mapped', async () => {
     await withAuth();
-    mockGraphql(() => ({
+    const fetchMock = mockGraphql(() => ({
       viewer: {
         id: 'user-1',
         name: 'Matt',
@@ -269,6 +274,13 @@ describe('Linear GraphQL writes', () => {
       teamKey: 'ENG',
       cycle: { name: 'Week 34', number: 34, isActive: true },
     });
+    const query = String(
+      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}')).query ?? '',
+    );
+    expect(query).toContain('SideboardAssignedIssues');
+    expect(query).toMatch(/labels\s*\(\s*first:\s*10\s*\)/);
+    expect(query).not.toMatch(/states\s*(\(|\{)/);
+    expect(query).not.toContain('description');
   });
 
   it('rewrites GraphQL permission errors', async () => {
