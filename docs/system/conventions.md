@@ -35,4 +35,4 @@ A Sideboard `thread/*` worktree (this repo checked out by Sideboard, not the mai
 
 - Focused PRs. Include tests when changing adapters, MCP, or git land paths.
 - Do not commit or push unless the user asked.
-- Release: follow [`.claude/skills/release/SKILL.md`](../../.claude/skills/release/SKILL.md) (`pnpm release` in the README). npm publish uses `--no-git-checks`; desktop GitHub Releases are signed/notarized from `apps/desktop` (**Apple Silicon / arm64 only**). Marketing site + Slack relay: [deploy.md](deploy.md).
+- Release: follow [`.claude/skills/release/SKILL.md`](../../.claude/skills/release/SKILL.md) (`pnpm release` in the README). Worktree agents must not foreground pack/notarize — use `node apps/desktop/scripts/release-mac-detached.js` and `--status` on follow-up turns. npm publish uses `--no-git-checks`; desktop GitHub Releases are signed/notarized from `apps/desktop` (**Apple Silicon / arm64 only**). Marketing site + Slack relay: [deploy.md](deploy.md).

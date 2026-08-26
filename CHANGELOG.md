@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Linear `listIssues` no longer fails with `Query too complex`. The assigned-issues query dropped nested `team.states` and capped `labels` so it stays under Linear’s 10k/query cap.
 - Create-from Linear defaults to **Assigned to me** (same as Conductor). **This cycle** remains as an optional tighter filter.
 
+### Changed
+
+- Worktree agents detach Mac pack/notarize (`release-mac-detached.js`) so a new chat turn does not SIGTERM a 15–40 minute `pnpm release`.
+
 ## [0.1.128] - 2026-08-26
 
 ### Fixed
