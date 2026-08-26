@@ -60,7 +60,7 @@ export function CreateFromPicker({
   const [issueSource, setIssueSource] = useState<IssueSource>('github');
   const [preferredSource, setPreferredSource] = useState<IssueSource>('github');
   const [linearOk, setLinearOk] = useState(linearConnected);
-  const [ticketScope, setTicketScope] = useState<TicketScope>('cycle');
+  const [ticketScope, setTicketScope] = useState<TicketScope>('assigned');
   const [viewerLogin, setViewerLogin] = useState('');
 
   useEffect(() => {
@@ -352,17 +352,17 @@ export function CreateFromPicker({
                 <>
                   <button
                     type="button"
+                    className={ticketScope === 'assigned' ? 'active' : ''}
+                    onClick={() => setTicketScope('assigned')}
+                  >
+                    Assigned to me
+                  </button>
+                  <button
+                    type="button"
                     className={ticketScope === 'cycle' ? 'active' : ''}
                     onClick={() => setTicketScope('cycle')}
                   >
                     This cycle
-                  </button>
-                  <button
-                    type="button"
-                    className={ticketScope === 'assigned' ? 'active' : ''}
-                    onClick={() => setTicketScope('assigned')}
-                  >
-                    All assigned
                   </button>
                 </>
               ) : (

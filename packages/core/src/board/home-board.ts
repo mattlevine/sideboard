@@ -548,11 +548,12 @@ export const BOARD_PAGE_SIZE = 40;
 
 export type BoardKindFilter = 'all' | 'tickets' | 'prs' | 'branches' | 'threads';
 
-/** Who / which sprint the Backlog ticket list includes. */
+/** Who / which sprint the Create-from ticket list includes. */
 export type TicketScope = 'cycle' | 'assigned' | 'all';
 
+/** Linear is already assigned-to-you (same as Conductor). GitHub defaults to all open. */
 export function defaultTicketScope(issueSource: string): TicketScope {
-  return issueSource === 'linear' ? 'cycle' : 'all';
+  return issueSource === 'linear' ? 'assigned' : 'all';
 }
 
 export function issueAssignedToViewer(
