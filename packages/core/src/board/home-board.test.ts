@@ -4,6 +4,7 @@ import {
   BOARD_PAGE_SIZE,
   assembleHomeBoard,
   backlogIssues,
+  backlogPins,
   boardIssueKey,
   boardPrKey,
   classifyThreadColumn,
@@ -21,12 +22,14 @@ import {
   pickDefaultRepoPath,
   prSearchText,
   reviewPrs,
+  syncBoardPins,
   threadMatchesIssue,
   threadMatchesPr,
   threadSearchText,
   tokenizeQuery,
   visiblePage,
   type BoardIssue,
+  type BoardPin,
   type BoardPr,
 } from './home-board.js';
 
@@ -63,6 +66,18 @@ function thread(
     messages: partial.messages ?? [],
     attachments: partial.attachments ?? [],
     lastError: partial.lastError,
+    ...partial,
+  };
+}
+
+function pin(
+  partial: Partial<BoardPin> & Pick<BoardPin, 'id' | 'kind' | 'ref'>,
+): BoardPin {
+  return {
+    repoPath: '/repo',
+    addedAt: '2026-08-01T00:00:00.000Z',
+    title: partial.title ?? partial.ref,
+    needsWorkspacePick: false,
     ...partial,
   };
 }
@@ -376,14 +391,13 @@ describe('board search and paging', () => {
 });
 
 describe('assembleHomeBoard', () => {
-  it('places unmatched tickets in Backlog and unmatched PRs in Review', () => {
+  it('puts pulled items without a worktree in Backlog', () => {
     const snap = assembleHomeBoard({
-      issues: [
-        issue({ identifier: 'ENG-1', title: 'Login', provider: 'linear' }),
-        issue({ identifier: 'ENG-2', title: 'Taken', provider: 'linear' }),
-      ],
-      prs: [
-        pr({ number: 9, title: 'Open review', url: 'https://github.com/acme/app/pull/9' }),
+      pins: [
+        pin({ id: 't1', kind: 'ticket', ref: 'ENG-1', title: 'Login', provider: 'linear' }),
+        pin({ id: 't2', kind: 'ticket', ref: 'ENG-2', title: 'Taken', provider: 'linear' }),
+        pin({ id: 'p1', kind: 'pr', ref: '9', title: 'Open review' }),
+        pin({ id: 'b1', kind: 'branch', ref: 'feat/x', title: 'feat/x' }),
       ],
       threads: [
         thread({
@@ -395,37 +409,40 @@ describe('assembleHomeBoard', () => {
         }),
       ],
     });
-    expect(snap.columns.backlog.map((c) => c.kind === 'ticket' && c.identifier)).toEqual([
-      'ENG-1',
-    ]);
+    expect(
+      snap.columns.backlog.filter((c) => c.kind === 'ticket').map((c) => c.identifier),
+    ).toEqual(['ENG-1']);
+    expect(snap.columns.backlog.some((c) => c.kind === 'pr' && c.number === 9)).toBe(true);
+    expect(snap.columns.backlog.some((c) => c.kind === 'branch' && c.ref === 'feat/x')).toBe(
+      true,
+    );
     expect(snap.columns.running).toHaveLength(1);
-    expect(snap.columns.running[0]).toMatchObject({
-      kind: 'thread',
-      id: 'live',
-      link: 'sideboard://thread/live',
-    });
-    expect(snap.columns.review.map((c) => c.kind === 'pr' && c.number)).toEqual([9]);
+    expect(snap.columns.review).toHaveLength(0);
     expect(snap.totals).toMatchObject({
-      backlog: 1,
+      backlog: 3,
       running: 1,
-      review: 1,
       tickets: 1,
       prs: 1,
+      branches: 1,
       threads: 1,
     });
   });
 
   it('filters by query, kind, column, and page limit', () => {
-    const issues = Array.from({ length: 3 }, (_, i) =>
-      issue({ identifier: `ENG-${i + 1}`, title: i === 0 ? 'Pay wall' : `Other ${i}` }),
+    const pins = Array.from({ length: 3 }, (_, i) =>
+      pin({
+        id: `p${i}`,
+        kind: 'ticket',
+        ref: `ENG-${i + 1}`,
+        title: i === 0 ? 'Pay wall' : `Other ${i}`,
+      }),
     );
     const threads = [
       thread({ id: 'run', title: 'Pay worker', status: 'running' }),
       thread({ id: 'done', title: 'Old pay', status: 'archived' }),
     ];
     const queried = assembleHomeBoard({
-      issues,
-      prs: [],
+      pins,
       threads,
       query: 'pay',
     });
@@ -434,8 +451,7 @@ describe('assembleHomeBoard', () => {
     expect(queried.columns.done).toHaveLength(1);
 
     const ticketsOnly = assembleHomeBoard({
-      issues,
-      prs: [pr({ number: 3, title: 'PR' })],
+      pins: [...pins, pin({ id: 'pr', kind: 'pr', ref: '3', title: 'PR' })],
       threads,
       kind: 'tickets',
     });
@@ -444,10 +460,9 @@ describe('assembleHomeBoard', () => {
     expect(ticketsOnly.columns.review).toHaveLength(0);
 
     const paged = assembleHomeBoard({
-      issues: Array.from({ length: 45 }, (_, i) =>
-        issue({ identifier: `T-${i}`, title: `Card ${i}` }),
+      pins: Array.from({ length: 45 }, (_, i) =>
+        pin({ id: `t${i}`, kind: 'ticket', ref: `T-${i}`, title: `Card ${i}` }),
       ),
-      prs: [],
       threads: [],
       limit: 10,
     });
@@ -456,8 +471,7 @@ describe('assembleHomeBoard', () => {
     expect(paged.totals.backlog).toBe(45);
 
     const col = assembleHomeBoard({
-      issues,
-      prs: [],
+      pins,
       threads,
       column: 'running',
     });
@@ -466,85 +480,31 @@ describe('assembleHomeBoard', () => {
     expect(col.totals.backlog).toBe(3);
   });
 
-  it('defaults Linear Backlog to the active cycle', () => {
+  it('keeps picker cycle helpers and syncs pin metadata from remotes', () => {
     expect(defaultTicketScope('linear')).toBe('cycle');
-    expect(defaultTicketScope('github')).toBe('all');
-    expect(
-      issueInTicketScope(
-        issue({
-          identifier: 'ENG-1',
-          title: 'Now',
-          provider: 'linear',
-          cycle: { name: 'Week 34', number: 34, isActive: true },
-        }),
-        'cycle',
-      ),
-    ).toBe(true);
-    expect(
-      issueInTicketScope(
-        issue({
-          identifier: 'ENG-2',
-          title: 'Later',
-          provider: 'linear',
-          cycle: { name: 'Week 35', number: 35, isActive: false },
-        }),
-        'cycle',
-      ),
-    ).toBe(false);
-    expect(
-      issueInTicketScope(
-        issue({ identifier: 'ENG-2', title: 'Later', provider: 'linear' }),
-        'assigned',
-      ),
-    ).toBe(true);
-    expect(
-      issueInTicketScope(
-        issue({
-          identifier: '#9',
-          title: 'Mine',
-          provider: 'github',
-          assignees: ['octocat'],
-        }),
-        'assigned',
-        'octocat',
-      ),
-    ).toBe(true);
-    expect(
-      issueInTicketScope(
-        issue({
-          identifier: '#8',
-          title: 'Theirs',
-          provider: 'github',
-          assignees: ['other'],
-        }),
-        'assigned',
-        'octocat',
-      ),
-    ).toBe(false);
-
-    const snap = assembleHomeBoard({
-      issues: [
+    expect(issueInTicketScope(
+      issue({
+        identifier: 'ENG-1',
+        title: 'Now',
+        provider: 'linear',
+        cycle: { name: 'Week 34', number: 34, isActive: true },
+      }),
+      'cycle',
+    )).toBe(true);
+    const synced = syncBoardPins(
+      [pin({ id: 't1', kind: 'ticket', ref: 'ENG-1', title: 'Old', provider: 'linear' })],
+      [
         issue({
           identifier: 'ENG-1',
           title: 'Now',
           provider: 'linear',
           cycle: { name: 'Week 34', isActive: true },
         }),
-        issue({
-          identifier: 'ENG-2',
-          title: 'Later',
-          provider: 'linear',
-          cycle: { name: 'Week 35', isActive: false },
-        }),
       ],
-      prs: [],
-      threads: [],
-      ticketScope: 'cycle',
-    });
-    expect(snap.columns.backlog.map((c) => c.kind === 'ticket' && c.identifier)).toEqual([
-      'ENG-1',
-    ]);
-    expect(snap.columns.backlog[0]).toMatchObject({ cycle: 'Week 34' });
+      [],
+    );
+    expect(synced[0]).toMatchObject({ title: 'Now', cycle: 'Week 34', remoteState: 'open' });
+    expect(backlogPins(synced, []).map((p) => p.ref)).toEqual(['ENG-1']);
   });
 
   it('puts every worktree thread on the board, including sidebar and agent creates', () => {

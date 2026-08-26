@@ -76,6 +76,9 @@ import {
   listLinearIssues,
   listIssues,
   getHomeBoardInputs,
+  addBoardPin,
+  removeBoardPin,
+  type AddBoardPinInput,
   getGitHubStatus,
   listSlackWorkspaces,
   connectSlackToken,
@@ -1011,6 +1014,8 @@ function registerIpc(): void {
   ipcMain.handle('loadHomeBoard', async (_e, opts?: { refresh?: boolean }) =>
     getHomeBoardInputs(orch.listWorkspaces(), { refresh: opts?.refresh }),
   );
+  ipcMain.handle('addBoardItem', (_e, input: AddBoardPinInput) => addBoardPin(input));
+  ipcMain.handle('removeBoardItem', (_e, id: string) => removeBoardPin(id));
   ipcMain.handle('getCloudConnectStatus', () => readCloudConnectStatus());
   ipcMain.handle(
     'setCloudConnect',

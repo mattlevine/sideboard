@@ -27,18 +27,19 @@ import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
 import { getHomeBoardInputs } from '../board/load-home-board.js';
+import { addBoardPin, removeBoardPin } from '../board/board-pins.js';
 import {
   BOARD_COLUMN_DEFS,
   assembleHomeBoard,
   findBoardIssue,
+  findBoardPin,
   findBoardPr,
   HOME_BOARD_AGENT_HINT,
-  defaultTicketScope,
   threadMatchesIssue,
+  threadMatchesPin,
   threadMatchesPr,
   type BoardColumnId,
   type BoardKindFilter,
-  type TicketScope,
 } from '../board/home-board.js';
 import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
@@ -289,7 +290,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban (same columns as desktop: Backlog, Queued, Running, Needs you, Review, Done). Every worktree chat is on the board (sidebar Create, Start, or create_thread) — orchestration chats are not. Tickets/PRs are a 15-minute snapshot — pass refresh=true to pull Linear/GitHub again (same as desktop Refresh). Threads stay live. Prefer this for "what\'s on the board?" / ticket-to-worktree status. Linear Backlog defaults to tickets assigned to you in the active cycle. Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit (default 40), refresh. Start a card with start_board_card or create_thread.',
+    'Home Kanban (Backlog, Queued, Running, Needs you, Review, Done). Backlog is what you pulled (add_to_board: ticket, PR, or branch) — not every remote issue. Start a pull with start_board_card. Worktrees also appear. refresh=true syncs Linear/GitHub metadata on pulled items. Filters: query, repoPath, kind, column, limit (default 40), refresh.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -297,15 +298,9 @@ export async function startMcpServer(): Promise<void> {
         .optional()
         .describe('Limit to one workspace path from list_workspaces'),
       kind: z
-        .enum(['all', 'tickets', 'prs', 'threads'])
+        .enum(['all', 'tickets', 'prs', 'branches', 'threads'])
         .optional()
         .describe('Card kind filter (default all)'),
-      ticketScope: z
-        .enum(['cycle', 'assigned', 'all'])
-        .optional()
-        .describe(
-          'Backlog tickets: cycle = your current Linear cycle (default when Linear is connected); assigned = assigned to you (any cycle / GitHub @me); all = every open GitHub issue, or every Linear issue assigned to you',
-        ),
       column: z
         .enum(['backlog', 'queued', 'running', 'needs_you', 'review', 'done'])
         .optional()
@@ -320,25 +315,21 @@ export async function startMcpServer(): Promise<void> {
         .boolean()
         .optional()
         .describe(
-          'Pull latest tickets and PRs from Linear/GitHub. Default false — reuse the snapshot (up to 15m). Same as the Home Refresh button.',
+          'Sync Linear/GitHub metadata on pulled items. Default false — reuse the snapshot (up to 15m). Same as the Home Refresh button.',
         ),
     },
-    async ({ query, repoPath, kind, ticketScope, column, limit, refresh }) => {
+    async ({ query, repoPath, kind, column, limit, refresh }) => {
       const workspaces = orch.listWorkspaces();
       const loaded = await getHomeBoardInputs(workspaces, { refresh });
       const all = orch.getThreads(true);
       const names = new Map(workspaces.map((w) => [w.path, w.name]));
-      const scope = (ticketScope ?? defaultTicketScope(loaded.issueSource)) as TicketScope;
       const snap = assembleHomeBoard({
-        issues: loaded.issues,
-        prs: loaded.prs,
+        pins: loaded.pins,
         threads: all.filter((t) => t.status !== 'archived'),
         archivedThreads: all.filter((t) => t.status === 'archived'),
         query,
         repoPath,
         kind: (kind ?? 'all') as BoardKindFilter,
-        ticketScope: scope,
-        viewerLogin: loaded.viewerLogin,
         column: column as BoardColumnId | undefined,
         limit,
         workspaceName: (path) => names.get(path) ?? '',
@@ -354,7 +345,6 @@ export async function startMcpServer(): Promise<void> {
                 totals: snap.totals,
                 columnDefs: BOARD_COLUMN_DEFS,
                 issueSource: loaded.issueSource,
-                ticketScope: scope,
                 viewer: loaded.viewerLogin,
                 issueErrors: loaded.issueErrors,
                 prErrors: loaded.prErrors,
@@ -367,6 +357,70 @@ export async function startMcpServer(): Promise<void> {
             ),
           },
         ],
+      };
+    },
+  );
+
+  server.tool(
+    'add_to_board',
+    'Pull a ticket, PR, or branch onto the Home Kanban Backlog (same as desktop Add to Board). Does not create a worktree — use start_board_card after. Pass repoPath from list_workspaces. Duplicate pulls update the existing card.',
+    {
+      kind: z.enum(['ticket', 'pr', 'branch']),
+      ref: z.string().describe('Ticket identifier (ENG-12), PR number (44), or branch name'),
+      repoPath: z.string().describe('Workspace path from list_workspaces'),
+      title: z.string().optional(),
+    },
+    async ({ kind, ref, repoPath, title }) => {
+      const root = await resolveRepoRoot(repoPath);
+      const workspaces = orch.listWorkspaces();
+      const loaded = await getHomeBoardInputs(workspaces);
+      let pinTitle = title?.trim();
+      let url: string | undefined;
+      let provider: string | undefined;
+      let headRefName: string | undefined;
+      if (kind === 'ticket') {
+        const issue = findBoardIssue(loaded.issues, ref, root);
+        pinTitle = pinTitle || issue?.title;
+        url = issue?.url;
+        provider = issue?.provider;
+      } else if (kind === 'pr') {
+        const pr = findBoardPr(loaded.prs, ref, root);
+        pinTitle = pinTitle || pr?.title;
+        url = pr?.url;
+        headRefName = pr?.headRefName;
+      }
+      const pin = addBoardPin({
+        kind,
+        ref,
+        repoPath: root,
+        title: pinTitle,
+        url,
+        provider,
+        headRefName,
+        workspaceCount: workspaces.length,
+      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ added: true, pin, hint: HOME_BOARD_AGENT_HINT }, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'remove_board_item',
+    'Remove a pulled Home card that has not been started. Pass id from list_board Backlog.',
+    {
+      id: z.string().describe('Board pin id from list_board'),
+    },
+    async ({ id }) => {
+      const ok = removeBoardPin(id);
+      return {
+        content: [{ type: 'text', text: ok ? `Removed ${id}` : `Not on the board: ${id}` }],
+        ...(ok ? {} : { isError: true }),
       };
     },
   );
@@ -713,12 +767,12 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'start_board_card',
-    'Start a Home Kanban card the same way as desktop Start: ticket → worktree (sourceType=ticket) or unmatched open PR (sourceType=pr). Pass ref from list_board (ENG-12, #44, or PR number) and repoPath from list_workspaces. If a live thread already matches, returns that thread instead of creating another. Then send_to_thread. create_thread also works if you already have sourceType/sourceRef.',
+    'Start a pulled Home card (or any ticket/PR/branch ref): creates a worktree. Same as desktop Start. Prefer add_to_board first. If a live thread already matches, returns that thread. Then send_to_thread.',
     {
-      kind: z.enum(['ticket', 'pr']),
+      kind: z.enum(['ticket', 'pr', 'branch']),
       ref: z
         .string()
-        .describe('Ticket identifier (ENG-12, #44) or PR number (44 / #44) from list_board'),
+        .describe('Ticket identifier (ENG-12), PR number (44), or branch name from list_board'),
       repoPath: z.string().describe('Workspace path from list_workspaces / list_board'),
       title: z.string().optional(),
     },
@@ -727,6 +781,52 @@ export async function startMcpServer(): Promise<void> {
       const workspaces = orch.listWorkspaces();
       const loaded = await getHomeBoardInputs(workspaces);
       const live = orch.getThreads(false);
+      const pin = findBoardPin(loaded.pins, kind, ref, root);
+
+      if (kind === 'branch') {
+        const sourceRef = pin?.ref === 'default' ? 'default' : (pin?.ref ?? ref.trim());
+        const existing = live.find((t) =>
+          threadMatchesPin(t, {
+            id: pin?.id ?? 'tmp',
+            kind: 'branch',
+            ref: sourceRef,
+            repoPath: root,
+            addedAt: pin?.addedAt ?? '',
+            title: title?.trim() || pin?.title || sourceRef,
+            needsWorkspacePick: false,
+          }),
+        );
+        if (existing) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  alreadyStarted: true,
+                  id: existing.id,
+                  title: existing.title,
+                  status: existing.status,
+                  link: `sideboard://thread/${existing.id}`,
+                }),
+              },
+            ],
+          };
+        }
+        const result = await createOrchChildThread(
+          orch,
+          {
+            sourceType: 'branch',
+            sourceRef,
+            repoPath: root,
+            title: title?.trim() || pin?.title || (sourceRef === 'default' ? undefined : sourceRef),
+          },
+          resolveNewThreadOptions,
+        );
+        return {
+          content: [{ type: 'text', text: result.text }],
+          ...(result.ok ? {} : { isError: true }),
+        };
+      }
 
       if (kind === 'ticket') {
         const issue = findBoardIssue(loaded.issues, ref, root);

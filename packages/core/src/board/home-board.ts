@@ -40,9 +40,47 @@ export type BoardIssue = IssueInfo & {
   needsWorkspacePick: boolean;
 };
 
-/** Open PR with no live Sideboard thread — lands in Review. */
+/** Open PR listed from a workspace (picker + metadata sync). */
 export type BoardPr = PrInfo & {
   repoPath: string;
+};
+
+export type BoardPinKind = 'ticket' | 'pr' | 'branch';
+
+/** User-pulled Home card. Remote fields refresh from Linear/GitHub; membership is local. */
+export type BoardPin = {
+  id: string;
+  kind: BoardPinKind;
+  ref: string;
+  repoPath: string;
+  addedAt: string;
+  title: string;
+  url?: string;
+  labels?: string[];
+  provider?: string;
+  assignee?: string;
+  cycle?: string;
+  teamKey?: string;
+  headRefName?: string;
+  author?: string;
+  remoteState?: string;
+  needsWorkspacePick: boolean;
+};
+
+export type AddBoardPinInput = {
+  kind: BoardPinKind;
+  ref: string;
+  repoPath: string;
+  title?: string;
+  url?: string;
+  labels?: string[];
+  provider?: string;
+  assignee?: string;
+  cycle?: string;
+  teamKey?: string;
+  headRefName?: string;
+  author?: string;
+  workspaceCount?: number;
 };
 
 /** How long Home / list_board reuse Linear + GitHub results before a refresh. */
@@ -61,6 +99,7 @@ export type HomeBoardRemoteData = {
 export type HomeBoardLoaded = HomeBoardRemoteData & {
   fetchedAt: number;
   fromCache: boolean;
+  pins: BoardPin[];
 };
 
 export function isOpenPrState(
@@ -226,6 +265,144 @@ export function reviewPrs(
   return prs.filter((pr) => !prHasLiveThread(pr, threads));
 }
 
+function normalizeBranchRef(value: string): string {
+  return value
+    .trim()
+    .replace(/^refs\/heads\//, '')
+    .replace(/^origin\//, '')
+    .toLowerCase();
+}
+
+export function threadMatchesBranch(
+  thread: Pick<Thread, 'sourceType' | 'sourceRef' | 'branchName' | 'repoPath'>,
+  pin: Pick<BoardPin, 'ref' | 'repoPath'>,
+): boolean {
+  if (pin.repoPath && thread.repoPath && pin.repoPath !== thread.repoPath) return false;
+  const head = normalizeBranchRef(pin.ref === 'default' ? '' : pin.ref);
+  if (!head) {
+    return thread.sourceType === 'branch' && pin.repoPath === thread.repoPath;
+  }
+  const branch = normalizeBranchRef(thread.branchName ?? '');
+  const ref = normalizeBranchRef(thread.sourceRef ?? '');
+  return branch === head || ref === head;
+}
+
+export function threadMatchesPin(
+  thread: Pick<
+    Thread,
+    'status' | 'sourceType' | 'sourceRef' | 'title' | 'prUrl' | 'branchName' | 'repoPath'
+  >,
+  pin: BoardPin,
+): boolean {
+  if (pin.kind === 'ticket') {
+    return threadMatchesIssue(thread, { identifier: pin.ref, title: pin.title });
+  }
+  if (pin.kind === 'pr') {
+    const number = Number(normalizeIssueKey(pin.ref));
+    return threadMatchesPr(thread, {
+      number: Number.isFinite(number) ? number : -1,
+      title: pin.title,
+      url: pin.url ?? '',
+      headRefName: pin.headRefName ?? '',
+    });
+  }
+  return threadMatchesBranch(thread, pin);
+}
+
+export function pinHasLiveThread(
+  pin: BoardPin,
+  threads: Pick<
+    Thread,
+    'status' | 'sourceType' | 'sourceRef' | 'title' | 'prUrl' | 'branchName' | 'repoPath'
+  >[],
+): boolean {
+  return threads.some((t) => t.status !== 'archived' && threadMatchesPin(t, pin));
+}
+
+export function backlogPins(
+  pins: BoardPin[],
+  threads: Pick<
+    Thread,
+    'status' | 'sourceType' | 'sourceRef' | 'title' | 'prUrl' | 'branchName' | 'repoPath'
+  >[],
+): BoardPin[] {
+  return pins.filter((pin) => !pinHasLiveThread(pin, threads));
+}
+
+export function boardPinIdentity(
+  pin: Pick<BoardPin, 'kind' | 'ref' | 'repoPath' | 'provider'>,
+): string {
+  const ref = normalizeIssueKey(pin.ref);
+  if (pin.kind === 'ticket' && (pin.provider === 'linear' || !pin.repoPath)) {
+    return `ticket:account:${ref}`;
+  }
+  return `${pin.kind}:${pin.repoPath}:${ref}`;
+}
+
+export function boardPinKey(pin: Pick<BoardPin, 'id'>): string {
+  return pin.id;
+}
+
+export function findBoardPin(
+  pins: BoardPin[],
+  kind: BoardPinKind,
+  ref: string,
+  repoPath = '',
+): BoardPin | undefined {
+  const key = normalizeIssueKey(ref);
+  const matches = pins.filter(
+    (pin) => pin.kind === kind && normalizeIssueKey(pin.ref) === key,
+  );
+  if (repoPath) {
+    const scoped = matches.filter((pin) => pin.repoPath === repoPath);
+    if (scoped[0]) return scoped[0];
+  }
+  return matches[0];
+}
+
+/** Overlay Linear/GitHub fields onto pulled cards. Missing remotes stay on the board. */
+export function syncBoardPins(
+  pins: BoardPin[],
+  issues: BoardIssue[],
+  prs: BoardPr[],
+): BoardPin[] {
+  return pins.map((pin) => {
+    if (pin.kind === 'ticket') {
+      const issue = findBoardIssue(issues, pin.ref, pin.repoPath);
+      if (!issue) {
+        return { ...pin, remoteState: pin.remoteState || 'stale' };
+      }
+      return {
+        ...pin,
+        title: issue.title || pin.title,
+        url: issue.url || pin.url,
+        labels: issue.labels,
+        provider: issue.provider ?? pin.provider,
+        assignee: issue.assignee ?? pin.assignee,
+        cycle: issue.cycle?.name ?? pin.cycle,
+        teamKey: issue.teamKey ?? pin.teamKey,
+        remoteState: 'open',
+        needsWorkspacePick: issue.needsWorkspacePick,
+      };
+    }
+    if (pin.kind === 'pr') {
+      const pr = findBoardPr(prs, pin.ref, pin.repoPath);
+      if (!pr) {
+        return { ...pin, remoteState: pin.remoteState === 'open' ? 'stale' : pin.remoteState || 'stale' };
+      }
+      return {
+        ...pin,
+        title: pr.title || pin.title,
+        url: pr.url || pin.url,
+        headRefName: pr.headRefName || pin.headRefName,
+        author: prAuthorLogin(pr) || pin.author,
+        remoteState: 'open',
+      };
+    }
+    return pin;
+  });
+}
+
 export function dedupeBoardPrs(prs: BoardPr[]): BoardPr[] {
   const seen = new Set<string>();
   const out: BoardPr[] = [];
@@ -240,7 +417,7 @@ export function dedupeBoardPrs(prs: BoardPr[]): BoardPr[] {
 
 export const BOARD_PAGE_SIZE = 40;
 
-export type BoardKindFilter = 'all' | 'tickets' | 'prs' | 'threads';
+export type BoardKindFilter = 'all' | 'tickets' | 'prs' | 'branches' | 'threads';
 
 /** Who / which sprint the Backlog ticket list includes. */
 export type TicketScope = 'cycle' | 'assigned' | 'all';
@@ -342,6 +519,24 @@ export function prSearchText(
   ].join(' ');
 }
 
+export function pinSearchText(pin: BoardPin, workspaceName = ''): string {
+  return [
+    pin.kind,
+    pin.ref,
+    pin.title,
+    (pin.labels ?? []).join(' '),
+    pin.provider ?? '',
+    pin.assignee ?? '',
+    pin.cycle ?? '',
+    pin.teamKey ?? '',
+    pin.headRefName ?? '',
+    pin.author ?? '',
+    pin.remoteState ?? '',
+    workspaceName,
+    pin.repoPath,
+  ].join(' ');
+}
+
 export function threadSearchText(
   thread: Pick<Thread, 'title' | 'sourceRef' | 'sourceType' | 'agent' | 'status' | 'repoPath' | 'branchName' | 'prUrl'>,
   workspaceName = '',
@@ -383,6 +578,7 @@ export function compactPreview(text: string, max = 140): string {
 
 export type HomeBoardTicketCard = {
   kind: 'ticket';
+  id?: string;
   identifier: string;
   title: string;
   labels: string[];
@@ -392,16 +588,28 @@ export type HomeBoardTicketCard = {
   assignee?: string;
   cycle?: string;
   teamKey?: string;
+  remoteState?: string;
+  needsWorkspacePick?: boolean;
 };
 
 export type HomeBoardPrCard = {
   kind: 'pr';
+  id?: string;
   number: number;
   title: string;
   headRefName: string;
   repoPath: string;
   url: string;
   author: string;
+  remoteState?: string;
+};
+
+export type HomeBoardBranchCard = {
+  kind: 'branch';
+  id: string;
+  ref: string;
+  title: string;
+  repoPath: string;
 };
 
 export type HomeBoardThreadCard = {
@@ -417,7 +625,11 @@ export type HomeBoardThreadCard = {
   link: string;
 };
 
-export type HomeBoardCard = HomeBoardTicketCard | HomeBoardPrCard | HomeBoardThreadCard;
+export type HomeBoardCard =
+  | HomeBoardTicketCard
+  | HomeBoardPrCard
+  | HomeBoardBranchCard
+  | HomeBoardThreadCard;
 
 export type HomeBoardSnapshot = {
   columns: Record<BoardColumnId, HomeBoardCard[]>;
@@ -425,6 +637,7 @@ export type HomeBoardSnapshot = {
   totals: Record<BoardColumnId, number> & {
     tickets: number;
     prs: number;
+    branches: number;
     threads: number;
   };
 };
@@ -483,30 +696,46 @@ export function findBoardPr(
   return matches[0];
 }
 
-function toTicketCard(issue: BoardIssue): HomeBoardTicketCard {
+function toTicketCard(pin: BoardPin): HomeBoardTicketCard {
   return {
     kind: 'ticket',
-    identifier: issue.identifier,
-    title: issue.title,
-    labels: issue.labels,
-    provider: issue.provider,
-    repoPath: issue.repoPath,
-    url: issue.url,
-    assignee: issue.assignee,
-    cycle: issue.cycle?.name,
-    teamKey: issue.teamKey,
+    id: pin.id,
+    identifier: pin.ref,
+    title: pin.title,
+    labels: pin.labels ?? [],
+    provider: pin.provider,
+    repoPath: pin.repoPath,
+    url: pin.url ?? '',
+    assignee: pin.assignee,
+    cycle: pin.cycle,
+    teamKey: pin.teamKey,
+    remoteState: pin.remoteState,
+    needsWorkspacePick: pin.needsWorkspacePick,
   };
 }
 
-function toPrCard(pr: BoardPr): HomeBoardPrCard {
+function toPrCard(pin: BoardPin): HomeBoardPrCard {
+  const number = Number(normalizeIssueKey(pin.ref));
   return {
     kind: 'pr',
-    number: pr.number,
-    title: pr.title,
-    headRefName: pr.headRefName,
-    repoPath: pr.repoPath,
-    url: pr.url,
-    author: prAuthorLogin(pr),
+    id: pin.id,
+    number: Number.isFinite(number) ? number : 0,
+    title: pin.title,
+    headRefName: pin.headRefName ?? '',
+    repoPath: pin.repoPath,
+    url: pin.url ?? '',
+    author: pin.author ?? '',
+    remoteState: pin.remoteState,
+  };
+}
+
+function toBranchCard(pin: BoardPin): HomeBoardBranchCard {
+  return {
+    kind: 'branch',
+    id: pin.id,
+    ref: pin.ref,
+    title: pin.title || pin.ref,
+    repoPath: pin.repoPath,
   };
 }
 
@@ -525,10 +754,18 @@ function toThreadCard(thread: Thread): HomeBoardThreadCard {
   };
 }
 
+function pinToBacklogCard(pin: BoardPin): HomeBoardCard {
+  if (pin.kind === 'ticket') return toTicketCard(pin);
+  if (pin.kind === 'pr') return toPrCard(pin);
+  return toBranchCard(pin);
+}
+
 /** Same columns and filters as the desktop Home Kanban — for MCP + UI. */
 export function assembleHomeBoard(input: {
-  issues: BoardIssue[];
-  prs: BoardPr[];
+  pins?: BoardPin[];
+  /** @deprecated Pull list is `pins`. Kept so older callers still typecheck. */
+  issues?: BoardIssue[];
+  prs?: BoardPr[];
   threads: Thread[];
   archivedThreads?: Thread[];
   query?: string;
@@ -536,8 +773,6 @@ export function assembleHomeBoard(input: {
   kind?: BoardKindFilter;
   column?: BoardColumnId;
   limit?: number;
-  ticketScope?: TicketScope;
-  viewerLogin?: string;
   workspaceName?: (path: string) => string;
 }): HomeBoardSnapshot {
   const tokens = tokenizeQuery(input.query ?? '');
@@ -545,10 +780,6 @@ export function assembleHomeBoard(input: {
   const kind = input.kind ?? 'all';
   const limit = Math.max(1, input.limit ?? BOARD_PAGE_SIZE);
   const wsName = input.workspaceName ?? (() => '');
-  const ticketScope = input.ticketScope ?? 'all';
-  const scopedIssues = input.issues.filter((issue) =>
-    issueInTicketScope(issue, ticketScope, input.viewerLogin),
-  );
   const byUpdated = (a: Thread, b: Thread) => b.updatedAt.localeCompare(a.updatedAt);
   const live = input.threads
     .filter((t) => t.status !== 'archived' && isHomeBoardThread(t))
@@ -559,21 +790,22 @@ export function assembleHomeBoard(input: {
     .filter(isHomeBoardThread)
     .sort(byUpdated);
 
-  const tickets =
-    kind === 'prs' || kind === 'threads'
+  const showPinKind = (pinKind: BoardPinKind) => {
+    if (kind === 'all') return true;
+    if (kind === 'tickets') return pinKind === 'ticket';
+    if (kind === 'prs') return pinKind === 'pr';
+    if (kind === 'branches') return pinKind === 'branch';
+    return false;
+  };
+
+  const readyPins =
+    kind === 'threads'
       ? []
-      : backlogIssues(scopedIssues, live).filter(
-          (issue) =>
-            inWorkspace(issue.repoPath, repo) &&
-            haystackMatches(issueSearchText(issue, wsName(issue.repoPath)), tokens),
-        );
-  const prs =
-    kind === 'tickets' || kind === 'threads'
-      ? []
-      : reviewPrs(input.prs, live).filter(
-          (pr) =>
-            inWorkspace(pr.repoPath, repo) &&
-            haystackMatches(prSearchText(pr, wsName(pr.repoPath)), tokens),
+      : backlogPins(input.pins ?? [], live).filter(
+          (pin) =>
+            showPinKind(pin.kind) &&
+            inWorkspace(pin.repoPath, repo) &&
+            haystackMatches(pinSearchText(pin, wsName(pin.repoPath)), tokens),
         );
 
   const columns = emptyColumns();
@@ -585,12 +817,13 @@ export function assembleHomeBoard(input: {
     needs_you: 0,
     review: 0,
     done: 0,
-    tickets: tickets.length,
-    prs: prs.length,
+    tickets: readyPins.filter((p) => p.kind === 'ticket').length,
+    prs: readyPins.filter((p) => p.kind === 'pr').length,
+    branches: readyPins.filter((p) => p.kind === 'branch').length,
     threads: 0,
   };
 
-  const backlogCards = tickets.map(toTicketCard);
+  const backlogCards = readyPins.map(pinToBacklogCard);
   totals.backlog = backlogCards.length;
   const backlogPage = visiblePage(backlogCards, limit);
   columns.backlog = backlogPage.visible;
@@ -603,7 +836,7 @@ export function assembleHomeBoard(input: {
     review: [],
     done: [],
   };
-  if (kind !== 'tickets' && kind !== 'prs') {
+  if (kind !== 'tickets' && kind !== 'prs' && kind !== 'branches') {
     for (const t of live) {
       const col = classifyThreadColumn(t);
       if (col === 'backlog' || col === 'done') continue;
@@ -621,10 +854,7 @@ export function assembleHomeBoard(input: {
   totals.threads = Object.values(byCol).reduce((n, list) => n + list.length, 0);
 
   for (const col of Object.keys(byCol) as Array<Exclude<BoardColumnId, 'backlog'>>) {
-    const cards: HomeBoardCard[] =
-      col === 'review'
-        ? [...prs.map(toPrCard), ...byCol.review.map(toThreadCard)]
-        : byCol[col].map(toThreadCard);
+    const cards: HomeBoardCard[] = byCol[col].map(toThreadCard);
     totals[col] = cards.length;
     const page = visiblePage(cards, limit);
     columns[col] = page.visible;
@@ -643,7 +873,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Every worktree chat is on this board (sidebar Create, Start, or create_thread) — orchestration chats are not. Tickets/PRs are a snapshot (up to 15m). Pass refresh=true on list_board to pull Linear/GitHub again — same as desktop Refresh. Start a Backlog ticket: start_board_card kind=ticket ref=<identifier> repoPath=… (or create_thread sourceType=ticket). Start an unmatched Review PR: start_board_card kind=pr ref=<number> repoPath=…. Then send_to_thread. Columns follow agent/PR state — do not invent status. Linear Backlog defaults to your current cycle (ticketScope=cycle); pass ticketScope=assigned for all tickets assigned to you, or all for every open GitHub issue.';
+  'Home is a pull list: add_to_board (ticket | pr | branch) then start_board_card to create a worktree. Unstarted pulls sit in Backlog. Worktrees (sidebar, Start, create_thread) stay on the board; orchestration chats do not. Refresh / list_board refresh=true syncs Linear/GitHub metadata for pulled items only. Columns follow agent/PR state — do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

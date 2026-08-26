@@ -384,6 +384,26 @@ export function App() {
     [refresh, upsertThread],
   );
 
+  const startBranchThread = useCallback(
+    async (ref: string, repo: string, title?: string) => {
+      setRepoPath(repo);
+      void window.sideboard.setRepoPath(repo).catch(() => undefined);
+      const defaults = await loadThreadDefaults();
+      const thread = await window.sideboard.createThread({
+        sourceType: 'branch',
+        sourceRef: ref || 'default',
+        repoPath: repo,
+        title,
+        agent: defaults.agent,
+        model: defaults.model,
+        effort: defaults.effort,
+      });
+      upsertThread(thread);
+      await refresh();
+    },
+    [refresh, upsertThread],
+  );
+
   const startPrThread = useCallback(
     async (pr: PrInfo, repo: string) => {
       setRepoPath(repo);
@@ -1014,16 +1034,14 @@ export function App() {
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
-          onAddToBoard={() =>
-            openCreate(repoPath || undefined, 'quick', {
-              openPicker: true,
-              stayOnBoard: true,
-            })
-          }
-          onNewGlobalChat={() => openCreate(undefined, 'orchestration')}
           onRefresh={() => void refresh()}
           onStartIssue={startIssueThread}
           onStartPr={startPrThread}
+          onStartBranch={startBranchThread}
+          onOpenAccount={() => {
+            setSettingsOpen(true);
+            setSettingsInitialNav('account');
+          }}
           leftSidebarToggle={
             !leftSidebarOpen ? (
               <SidebarToggle side="left" open={false} onClick={toggleLeftSidebar} />

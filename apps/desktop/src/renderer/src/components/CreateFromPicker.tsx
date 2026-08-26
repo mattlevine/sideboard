@@ -1,13 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { issueSourceLabel } from '@sideboard/issue-source-labels';
 import type { BranchInfo, IssueInfo, IssueSource, PrInfo } from '@sideboard-ai/core';
+import { defaultTicketScope, issueInTicketScope, type TicketScope } from '../lib/home-board';
 
 export type CreateFromTab = 'prs' | 'branches' | 'issues';
 
 export type CreateFromSelection =
   | { kind: 'branch'; ref: string; title?: string }
-  | { kind: 'pr'; ref: string; title: string }
-  | { kind: 'ticket'; ref: string; title: string; url?: string };
+  | { kind: 'pr'; ref: string; title: string; url?: string; headRefName?: string; author?: string }
+  | {
+      kind: 'ticket';
+      ref: string;
+      title: string;
+      url?: string;
+      labels?: string[];
+      provider?: string;
+      assignee?: string;
+      cycle?: string;
+    };
 
 interface Props {
   open: boolean;
@@ -40,6 +50,8 @@ export function CreateFromPicker({
   const [issueSource, setIssueSource] = useState<IssueSource>('github');
   const [preferredSource, setPreferredSource] = useState<IssueSource>('github');
   const [linearOk, setLinearOk] = useState(linearConnected);
+  const [ticketScope, setTicketScope] = useState<TicketScope>('cycle');
+  const [viewerLogin, setViewerLogin] = useState('');
 
   useEffect(() => {
     if (!open || !repoPath) return;
@@ -69,6 +81,8 @@ export function CreateFromPicker({
             setIssueSource(result.source);
             setPreferredSource(result.preferredSource);
             setLinearOk(result.linearConnected);
+            setViewerLogin(result.viewer?.login || result.viewer?.name || '');
+            setTicketScope(defaultTicketScope(result.source));
           }
         }
       } catch (err) {
@@ -103,15 +117,20 @@ export function CreateFromPicker({
     return branches.filter((b) => b.name.toLowerCase().includes(q));
   }, [branches, q]);
 
+  const scopedIssues = useMemo(
+    () => issues.filter((i) => issueInTicketScope(i, ticketScope, viewerLogin)),
+    [issues, ticketScope, viewerLogin],
+  );
+
   const filteredIssues = useMemo(() => {
-    if (!q) return issues;
-    return issues.filter(
+    if (!q) return scopedIssues;
+    return scopedIssues.filter(
       (i) =>
         i.identifier.toLowerCase().includes(q) ||
         i.title.toLowerCase().includes(q) ||
         i.labels.some((l) => l.toLowerCase().includes(q)),
     );
-  }, [issues, q]);
+  }, [scopedIssues, q]);
 
   if (!open) return null;
 
@@ -210,6 +229,9 @@ export function CreateFromPicker({
                       kind: 'pr',
                       ref: String(p.number),
                       title: p.title,
+                      url: p.url,
+                      headRefName: p.headRefName,
+                      author: p.author?.login,
                     });
                     onClose();
                   }}
@@ -277,6 +299,43 @@ export function CreateFromPicker({
 
         {!loading && !error && tab === 'issues' && (
           <>
+            <div className="create-from-tabs" role="group" aria-label="Issue scope">
+              {issueSource === 'linear' ? (
+                <>
+                  <button
+                    type="button"
+                    className={ticketScope === 'cycle' ? 'active' : ''}
+                    onClick={() => setTicketScope('cycle')}
+                  >
+                    This cycle
+                  </button>
+                  <button
+                    type="button"
+                    className={ticketScope === 'assigned' ? 'active' : ''}
+                    onClick={() => setTicketScope('assigned')}
+                  >
+                    All assigned
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={ticketScope === 'all' ? 'active' : ''}
+                    onClick={() => setTicketScope('all')}
+                  >
+                    All open
+                  </button>
+                  <button
+                    type="button"
+                    className={ticketScope === 'assigned' || ticketScope === 'cycle' ? 'active' : ''}
+                    onClick={() => setTicketScope('assigned')}
+                  >
+                    Assigned to me
+                  </button>
+                </>
+              )}
+            </div>
             {showLinearSetup && (
               <div className="composer-picker-section">
                 <div className="composer-picker-section-label">Setup</div>
@@ -320,6 +379,10 @@ export function CreateFromPicker({
                         ref: issue.identifier,
                         title: issue.title,
                         url: issue.url,
+                        labels: issue.labels,
+                        provider: issue.provider,
+                        assignee: issue.assignee,
+                        cycle: issue.cycle?.name,
                       });
                       onClose();
                     }}

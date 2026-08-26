@@ -105,10 +105,21 @@ export {
   clearHomeBoardCache,
 } from './board/load-home-board.js';
 export {
+  addBoardPin,
+  removeBoardPin,
+  listBoardPins,
+  clearBoardPins,
+} from './board/board-pins.js';
+export {
   HOME_BOARD_CACHE_TTL_MS,
   isHomeBoardThread,
 } from './board/home-board.js';
-export type { HomeBoardLoaded, HomeBoardRemoteData } from './board/home-board.js';
+export type {
+  AddBoardPinInput,
+  BoardPin,
+  HomeBoardLoaded,
+  HomeBoardRemoteData,
+} from './board/home-board.js';
 export { loadBrightsyConfig, brightsyConfigPath } from './brightsy/config.js';
 export {
   BrightsySideboardApi,

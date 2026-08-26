@@ -54,7 +54,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Sideboard MCP (fleet control — prefer these for status and orchestration):',
   'Discover:',
   '- list_workspaces — registered repos (path + github slug when known)',
-  '- list_board — Home Kanban (Backlog / Queued / Running / Needs you / Review / Done). Same cards as desktop Home. Every worktree chat is on the board (sidebar Create, Start, or create_thread); orchestration chats are not. Tickets/PRs are a 15-minute snapshot; pass refresh=true to pull Linear/GitHub (same as Home Refresh). Linear Backlog defaults to your current cycle (assigned to you this sprint). Filters: query, repoPath, kind, ticketScope (cycle|assigned|all), column, limit, refresh. Prefer this for ticket-to-worktree status.',
+  '- list_board — Home Kanban. Backlog is pulled tickets/PRs/branches (add_to_board), not every remote issue. start_board_card creates a worktree. Worktrees stay on the board. refresh=true syncs remote metadata. Filters: query, repoPath, kind, column, limit, refresh.',
   '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces (issues: Linear API or GitHub Issues)',
   '- linear_list_teams / linear_get_issue / linear_create_issue / linear_update_issue / linear_comment — Linear Account connection; call linear_list_teams for team key and workflow states; pass ENG-123 or uuid. If mutations fail with a scope error, Disconnect and Connect Linear in Account settings.',
   '- list_teams / slack_list_channels / slack_list_users / slack_search / slack_read / slack_post / slack_replies — Slack workspaces from Account settings; pass team_id from list_teams',
@@ -68,7 +68,9 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
   'Worktree threads (chats):',
-  '- start_board_card — Start a Backlog ticket or unmatched Review PR (same as Home Start). Pass kind + ref + repoPath from list_board. Then send_to_thread.',
+  '- add_to_board — Pull a ticket, PR, or branch onto Home Backlog (no worktree yet)',
+  '- start_board_card — Start a pulled card (ticket | pr | branch) into a worktree. Then send_to_thread.',
+  '- remove_board_item — Remove an unstarted pull (id from list_board)',
   '- create_thread — create a worktree + chat from branch | pr | ticket; pass repoPath + parentThreadId; omit agent and model to use Sideboard Account defaults (Settings → Default agent, model & effort). If the repo has a setup script, Sideboard runs it in the background (does not block send_to_thread). If you are Codex, do not set agent=codex (nested Codex deadlocks)',
   '- fork_worktree — fork a worktree chat into a NEW git worktree + chat (transcript attached); optional agent; leave model unset (Auto) unless you have a reason. Not for orchestration chats.',
   '- fork_chat — fork a worktree chat (same worktree tab) OR a Global orchestration chat (new orchestration tab); optional agent; leave model unset (Auto) unless you have a reason. Remote coordinators: use this to continue another orchestration chat on a different agent after session limits.',
@@ -129,7 +131,7 @@ export function coordinatorTurnReminder(opts: {
     `- YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
-    '- Status: list_board (Home snapshot of every worktree chat; refresh=true for latest tickets/PRs) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
+    '- Status: list_board (pulled items + worktrees; add_to_board then start_board_card; refresh=true syncs remotes) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
   ]
     .filter(Boolean)
     .join('\n');

@@ -3,11 +3,13 @@ import { join } from 'node:path';
 import { listPrs } from '../git/worktree.js';
 import { listIssues } from '../integrations/issues.js';
 import { appDataDir } from '../store/paths.js';
+import { listBoardPins, replaceBoardPins } from './board-pins.js';
 import {
   HOME_BOARD_CACHE_TTL_MS,
   dedupeBoardIssues,
   dedupeBoardPrs,
   issueNeedsWorkspacePick,
+  syncBoardPins,
   type BoardIssue,
   type BoardPr,
   type HomeBoardLoaded,
@@ -58,7 +60,8 @@ function emptyInputs(): HomeBoardInputs {
 }
 
 function asLoaded(entry: DiskCache, fromCache: boolean): HomeBoardLoaded {
-  return { ...entry.inputs, fetchedAt: entry.fetchedAt, fromCache };
+  const pins = syncBoardPins(listBoardPins(), entry.inputs.issues, entry.inputs.prs);
+  return { ...entry.inputs, fetchedAt: entry.fetchedAt, fromCache, pins };
 }
 
 function cacheStillFresh(entry: DiskCache, key: string, now: number): boolean {
@@ -222,7 +225,12 @@ export async function getHomeBoardInputs(
   const key = homeBoardWorkspaceKey(workspaces);
   const now = opts?.now ?? Date.now();
   if (!key) {
-    return { ...emptyInputs(), fetchedAt: now, fromCache: false };
+    return {
+      ...emptyInputs(),
+      fetchedAt: now,
+      fromCache: false,
+      pins: listBoardPins(),
+    };
   }
 
   if (!opts?.refresh) {
@@ -246,7 +254,9 @@ export async function getHomeBoardInputs(
   const promise = (async (): Promise<HomeBoardLoaded> => {
     const inputs = await loadHomeBoardInputs(workspaces);
     const fetchedAt = opts?.now ?? Date.now();
-    const loaded: HomeBoardLoaded = { ...inputs, fetchedAt, fromCache: false };
+    const pins = syncBoardPins(listBoardPins(), inputs.issues, inputs.prs);
+    replaceBoardPins(pins);
+    const loaded: HomeBoardLoaded = { ...inputs, fetchedAt, fromCache: false, pins };
     if (shouldCacheHomeBoardInputs(inputs)) {
       const entry: DiskCache = {
         version: CACHE_VERSION,
