@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Home Merged **Archive worktree** sits on the first nested chat card so it no longer covers the worktree name.
+- Home Merged **Archive worktree** is its own card under the worktree name, not in the title row and not on a nested chat.
 
 ## [0.1.127] - 2026-08-26
 

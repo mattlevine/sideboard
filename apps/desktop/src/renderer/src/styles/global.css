@@ -9476,8 +9476,17 @@ body:has(.update-banner) .team-toast-stack {
   min-width: 0;
 }
 
+.board-card-archive {
+  padding: 8px 10px;
+  cursor: default;
+}
+
+.board-card-archive:hover {
+  border-color: var(--border);
+}
+
 .board-archive-worktree {
-  flex-shrink: 0;
+  width: 100%;
 }
 
 .board-card-id {
