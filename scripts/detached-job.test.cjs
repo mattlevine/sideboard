@@ -9,6 +9,9 @@ const {
   sanitizeId,
   snapshotFromPaths,
   waitSnapshot,
+  inferPhase,
+  escapeHtml,
+  renderJobHtml,
 } = require('./detached-job.js');
 
 describe('sanitizeId', () => {
@@ -64,5 +67,66 @@ describe('snapshotFromPaths', () => {
     );
     assert.equal(snap.ok, true);
     assert.equal(snap.stillRunning, false);
+  });
+});
+
+describe('stream ui', () => {
+  it('escapes html in the log', () => {
+    assert.equal(escapeHtml('<script>'), '&lt;script&gt;');
+  });
+
+  it('infers phase from the newest marker', () => {
+    assert.equal(inferPhase(['$ build', '  • signing']), 'Signing');
+    assert.equal(inferPhase(['  • signing', 'RELEASE_BUILD_OK']), 'Published');
+  });
+
+  it('drops vite asset-size noise from the stream', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-'));
+    const pidFile = path.join(dir, 'pid');
+    const logFile = path.join(dir, 'log');
+    fs.writeFileSync(pidFile, '1\n');
+    fs.writeFileSync(
+      logFile,
+      [
+        '$ pnpm exec electron-vite build',
+        '../../out/renderer/assets/index-qD1B-zen.js                         11,013.23 kB',
+        'ESM dist/index.js                       217.30 KB',
+        '✓ built in 19.20s',
+        '$ pnpm exec electron-builder --mac',
+        '  • notarization successful',
+        'RELEASE_BUILD_OK',
+        '',
+      ].join('\n'),
+    );
+    const snap = snapshotFromPaths({ pidFile, logFile, okPattern: 'RELEASE_BUILD_OK' });
+    assert.equal(snap.phase, 'Published');
+    assert.equal(snap.stream.lines.some((l) => l.includes('11,013.23 kB')), false);
+    assert.equal(snap.stream.lines.some((l) => l.includes('notarization successful')), true);
+  });
+
+  it('renders a panel with collected lines', () => {
+    const html = renderJobHtml(
+      {
+        ok: true,
+        failed: false,
+        running: false,
+        stillRunning: false,
+        pid: 9,
+        log: '/tmp/log',
+        stream: {
+          lineCount: 2,
+          lines: ['$ echo <hi>', 'RELEASE_BUILD_OK'],
+          commands: ['echo <hi>'],
+          lastLine: 'RELEASE_BUILD_OK',
+          phase: 'Published',
+        },
+      },
+      { id: 'mac-release', title: 'Mac pack' },
+    );
+    assert.match(html, /Mac pack/);
+    assert.match(html, /class="pill ok"/);
+    assert.match(html, /Published/);
+    assert.match(html, /&lt;hi&gt;/);
+    assert.doesNotMatch(html, /<hi>/);
   });
 });

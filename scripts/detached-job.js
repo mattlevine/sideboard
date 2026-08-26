@@ -8,6 +8,7 @@
  *   node scripts/detached-job.js wait <id>
  *   node scripts/detached-job.js wait <id> --until-done
  *   node scripts/detached-job.js status <id>
+ *   node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]
  *   node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
  *
  * Job state: .sideboard/detached-jobs/<id>/ (gitignored).
@@ -74,6 +75,134 @@ function tailFile(file, maxLines = 12) {
   return lines.slice(-maxLines).join('\n');
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function readLogLines(file) {
+  if (!file || !fs.existsSync(file)) return [];
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
+function inferPhase(lines) {
+  const text = lines.join('\n');
+  if (/RELEASE_BUILD_OK\b/.test(text)) return 'Published';
+  const markers = [
+    [/notarization successful/i, 'Notarized'],
+    [/notariz/i, 'Notarizing'],
+    [/\b(publishing|uploading|creating GitHub release)\b/i, 'Publishing'],
+    [/\bsigning\b/i, 'Signing'],
+    [/\b(building\s+target|packaging)\b/i, 'Packaging'],
+    [/stage-/i, 'Staging'],
+    [/electron-vite|✓ built in/i, 'Renderer'],
+    [/tsup|@sideboard-ai\/(core|cli)/i, 'Building packages'],
+  ];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    for (const [re, label] of markers) {
+      if (re.test(lines[i])) return label;
+    }
+  }
+  const lastCmd = [...lines].reverse().find((l) => l.startsWith('$ '));
+  if (lastCmd) return lastCmd.slice(2).trim().slice(0, 72);
+  const last = (lines[lines.length - 1] || '').trim();
+  return last.slice(0, 72) || 'Running';
+}
+
+function isNoiseLine(line) {
+  return (
+    /\.(?:js|css|map|ttf|html)\s+[\d,.]+\s+kB\s*$/i.test(line) ||
+    /^(ESM|CJS|DTS)\s+dist\/.+\s+[\d,.]+\s+(KB|B)$/i.test(line)
+  );
+}
+
+function collectStream(logFile, maxLines = 160) {
+  const all = readLogLines(logFile);
+  const useful = all.filter((line) => !isNoiseLine(line));
+  const source = useful.length > 0 && useful.length < all.length ? useful : all;
+  const lines = source.slice(-maxLines);
+  return {
+    lineCount: all.length,
+    lines,
+    commands: all.filter((l) => l.startsWith('$ ')).map((l) => l.slice(2)),
+    lastLine: (all[all.length - 1] || '').trim(),
+    phase: inferPhase(all),
+  };
+}
+
+function lineClass(line) {
+  if (line.startsWith('$ ')) return 'cmd';
+  if (/RELEASE_BUILD_OK|\b✓\b|notarization successful/i.test(line)) return 'ok';
+  if (/\b(ERR_|error|failed|fatal)\b/i.test(line)) return 'err';
+  return '';
+}
+
+function renderJobHtml(snap, opts = {}) {
+  const id = opts.id || 'job';
+  const title = opts.title || id;
+  const stream = snap.stream || collectStream(snap.log, opts.maxLines || 160);
+  const status = snap.ok ? 'ok' : snap.failed ? 'failed' : snap.stillRunning || snap.running ? 'running' : 'idle';
+  const statusLabel = status === 'ok' ? 'done' : status;
+  const logHtml = (stream.lines.length ? stream.lines : ['(no log yet)'])
+    .map((line) => {
+      const cls = lineClass(line);
+      const body = escapeHtml(line || ' ');
+      return cls ? `<span class="${cls}">${body}</span>` : body;
+    })
+    .join('\n');
+  const commands = stream.commands.slice(-8).map((c) => `<li>${escapeHtml(c)}</li>`).join('');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 ui-sans-serif, system-ui, sans-serif; background: #0f1115; color: #e8eaed; }
+  header { padding: 14px 16px 12px; border-bottom: 1px solid #2a2f3a; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .pill { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 999px; }
+  .pill.ok { background: #16351f; color: #6ee7a8; }
+  .pill.running { background: #1d2a44; color: #93c5fd; }
+  .pill.failed { background: #3b1717; color: #fca5a5; }
+  .pill.idle { background: #2a2f3a; color: #9aa3b2; }
+  .meta { color: #9aa3b2; font-size: 12px; }
+  .phase { margin-top: 6px; color: #c4b5fd; font-size: 13px; }
+  .cmds { margin: 0; padding: 10px 16px 0 32px; color: #9aa3b2; font-size: 12px; }
+  .cmds li { margin: 2px 0; }
+  pre { margin: 0; padding: 14px 16px 24px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap; word-break: break-word; color: #d1d5db; height: calc(100vh - 88px); overflow: auto; }
+  .cmd { color: #7dd3fc; }
+  .ok { color: #6ee7a8; }
+  .err { color: #fca5a5; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>${escapeHtml(title)}</h1>
+    <span class="pill ${status}">${escapeHtml(statusLabel)}</span>
+    <span class="meta">pid ${snap.pid ?? '—'} · ${stream.lineCount} lines</span>
+  </div>
+  <div class="phase">${escapeHtml(stream.phase || '')}</div>
+</header>
+${commands ? `<ol class="cmds">${commands}</ol>` : ''}
+<pre id="log">${logHtml}</pre>
+<script>const el=document.getElementById('log'); el.scrollTop=el.scrollHeight;</script>
+</body>
+</html>
+`;
+}
+
 function logHasPattern(file, pattern) {
   if (!pattern || !fs.existsSync(file)) return false;
   return fs.readFileSync(file, 'utf8').includes(pattern);
@@ -87,6 +216,7 @@ function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern }) {
   const okFromPattern = okPattern ? logHasPattern(logFile, okPattern) && !running : false;
   const ok = !running && (okFromExit || okFromPattern);
   const failed = !running && !ok && (pid != null || (logFile && fs.existsSync(logFile)));
+  const stream = collectStream(logFile, 160);
   return {
     pid,
     running,
@@ -96,6 +226,9 @@ function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern }) {
     exitCode,
     log: logFile,
     progress: tailFile(logFile, 12),
+    phase: stream.phase,
+    lineCount: stream.lineCount,
+    stream,
   };
 }
 
@@ -115,6 +248,8 @@ function printWaitResult(snap) {
     failed: Boolean(snap.failed && !snap.stillRunning && !snap.ok),
     pid: snap.pid,
     exitCode: snap.exitCode ?? undefined,
+    phase: snap.phase,
+    lineCount: snap.lineCount,
     log: snap.log,
     progress: snap.progress,
     hint: snap.stillRunning ? WAIT_STILL_RUNNING_HINT : undefined,
@@ -218,6 +353,8 @@ function parseArgs(argv) {
   const pidIdx = args.indexOf('--pid-file');
   const logIdx = args.indexOf('--log-file');
   const okIdx = args.indexOf('--ok-pattern');
+  const titleIdx = args.indexOf('--title');
+  const outIdx = args.indexOf('--out');
   const dash = args.indexOf('--');
   const cmd = args[0];
   const id = args[1] && !args[1].startsWith('-') ? args[1] : null;
@@ -229,6 +366,8 @@ function parseArgs(argv) {
     pidFile: pidIdx >= 0 ? args[pidIdx + 1] : null,
     logFile: logIdx >= 0 ? args[logIdx + 1] : null,
     okPattern: okIdx >= 0 ? args[okIdx + 1] : null,
+    title: titleIdx >= 0 ? args[titleIdx + 1] : null,
+    out: outIdx >= 0 ? args[outIdx + 1] : null,
     command: dash >= 0 ? args.slice(dash + 1) : [],
   };
 }
@@ -252,7 +391,7 @@ async function main(argv = process.argv) {
     console.log(JSON.stringify({ ...result, hint: 'Call wait next. Loop while stillRunning. Do not ask the user to poll.' }, null, 2));
     process.exit(result.started || result.reason === 'already-running' ? 0 : 1);
   }
-  if (parsed.cmd === 'status' || parsed.cmd === 'wait') {
+  if (parsed.cmd === 'status' || parsed.cmd === 'wait' || parsed.cmd === 'ui') {
     let getSnap;
     if (parsed.pidFile && parsed.logFile) {
       getSnap = () =>
@@ -267,6 +406,20 @@ async function main(argv = process.argv) {
       console.error('Usage: node scripts/detached-job.js wait <id>  OR  --pid-file FILE --log-file FILE');
       process.exit(1);
     }
+    if (parsed.cmd === 'ui') {
+      const snap = getSnap();
+      const html = renderJobHtml(snap, {
+        id: parsed.id || 'job',
+        title: parsed.title || parsed.id || 'Detached job',
+      });
+      if (parsed.out) {
+        fs.mkdirSync(path.dirname(path.resolve(parsed.out)), { recursive: true });
+        fs.writeFileSync(parsed.out, html);
+      } else {
+        process.stdout.write(html);
+      }
+      process.exit(0);
+    }
     if (parsed.cmd === 'status') {
       const code = printWaitResult(getSnap());
       process.exit(code === 2 ? 0 : code);
@@ -278,7 +431,8 @@ async function main(argv = process.argv) {
   node scripts/detached-job.js start <id> -- <command>...
   node scripts/detached-job.js wait <id>
   node scripts/detached-job.js wait <id> --until-done
-  node scripts/detached-job.js status <id>`);
+  node scripts/detached-job.js status <id>
+  node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]`);
   process.exit(1);
 }
 
@@ -293,6 +447,10 @@ module.exports = {
   startJob,
   waitSnapshot,
   parseArgs,
+  collectStream,
+  inferPhase,
+  escapeHtml,
+  renderJobHtml,
 };
 
 if (require.main === module) {

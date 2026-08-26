@@ -26,15 +26,32 @@ node scripts/detached-job.js wait <id>
 node scripts/detached-job.js wait <id> --until-done
 
 node scripts/detached-job.js status <id>
+node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]
 ```
 
 `<id>` is kebab-case (`mac-release`, `core-test`, `fly-deploy`). State is `.sideboard/detached-jobs/<id>/` (gitignored).
 
 Wait JSON:
 
-- `stillRunning: true` → exit 2 → **call wait again**. Progress is in `progress`. Do not start a second job. Do not ping the user.
+- `stillRunning: true` → exit 2 → **call wait again**. Progress is in `progress` / `phase`. Do not start a second job. Do not ping the user.
 - `ok: true` → exit 0 → continue the rest of the task (README, commit, deploy next step).
 - `failed: true` → exit 1 → read `progress`, fix, start **once**.
+
+## Sideboard UI (stream)
+
+The job already collects stdout/stderr into its log. After **start** and after every **wait** slice, render that stream in the side column — do not dump the log in chat.
+
+```bash
+node scripts/detached-job.js ui <id> --title "<short title>"
+```
+
+Then Sideboard MCP `present_artifact` with `type=html`, `title` matching the job, and a stable `artifact_id` (the job id) so each wait **updates** the same pane. Do **not** also fence that HTML in chat.
+
+If you started via `release-mac-detached.js` (legacy pid/log):
+
+```bash
+node scripts/detached-job.js ui --pid-file apps/desktop/release/release.pid --log-file apps/desktop/release/release.log --ok-pattern RELEASE_BUILD_OK --title "Mac pack"
+```
 
 Ad-hoc pid/log (legacy or another tool’s files):
 
@@ -45,8 +62,9 @@ node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern 
 ## Agent loop
 
 1. `start` once. If JSON says `already-running`, do not start again.
-2. Loop `wait` until `stillRunning` is false (same as `wait_for_turn`).
-3. On `ok`, finish the task. On `failed`, fix from the log.
+2. `ui` + `present_artifact` so the human sees the live stream.
+3. Loop `wait` until `stillRunning` is false (same as `wait_for_turn`). After each slice, refresh the same artifact from `ui`.
+4. On `ok`, finish the task. On `failed`, fix from the log.
 
 Never tell the user “say status when it’s done.” You wait.
 
