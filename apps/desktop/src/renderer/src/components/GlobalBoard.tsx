@@ -456,14 +456,6 @@ export function GlobalBoard({
       {hasBoardContent ? (
         <>
           <FleetActivityBar runtime={runtime} compact />
-          <p className="board-lede">
-            Search and filter across tickets, PRs, and worktree chats. Every
-            worktree appears here — Start, sidebar Create, or an orchestration
-            agent. Tickets and PRs are a snapshot — Refresh (or 15 minutes)
-            pulls Linear/GitHub again. Threads stay live. Linear Backlog
-            defaults to issues assigned to you in the current cycle. Start
-            opens a worktree; the card then follows agent and PR status.
-          </p>
           <div className="board-toolbar">
             <input
               className="board-toolbar-search"
