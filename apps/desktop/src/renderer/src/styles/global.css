@@ -9356,10 +9356,6 @@ body:has(.update-banner) .team-toast-stack {
   letter-spacing: var(--letter-tight);
 }
 
-.board-column-toggle {
-  margin-left: auto;
-}
-
 .board-column-cards {
   display: flex;
   flex-direction: column;
@@ -9401,6 +9397,11 @@ body:has(.update-banner) .team-toast-stack {
 .board-card-thread:focus-visible {
   outline: 2px solid var(--accent, var(--text));
   outline-offset: 2px;
+}
+
+.board-card-thread.is-archiving {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .board-card-top {

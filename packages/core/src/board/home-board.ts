@@ -27,7 +27,7 @@ export type BoardColumnId =
 export const BOARD_COLUMN_DEFS: { id: BoardColumnId; title: string }[] = [
   { id: 'needs_you', title: 'In Process' },
   { id: 'review', title: 'Review' },
-  { id: 'done', title: 'Done' },
+  { id: 'done', title: 'Merged' },
 ];
 
 /** Issue card on Home — `repoPath` is where Start will create the worktree. */
@@ -108,15 +108,24 @@ export function isOpenPrState(
   return state !== 'MERGED' && state !== 'CLOSED';
 }
 
+export function isMergedPrState(
+  prUrl: string | null | undefined,
+  prState: string | null | undefined,
+): boolean {
+  if (!prUrl?.trim()) return false;
+  return (prState ?? '').trim().toUpperCase() === 'MERGED';
+}
+
 /**
- * Derived Home column. Path to done is PR / archive — not live agent activity.
- * Queued and running stay on the card (status dot) and the fleet bar.
- * Priority: archived → open PR → everything else.
+ * Derived Home column. Path is PR state — not archive or live agent activity.
+ * Archived chats leave the board (Settings → History). Queued/running stay on
+ * the card (status dot) and the fleet bar.
+ * Priority: merged PR → open PR → everything else.
  */
 export function classifyThreadColumn(
-  thread: Pick<Thread, 'status' | 'prUrl' | 'prState'>,
+  thread: Pick<Thread, 'prUrl' | 'prState'>,
 ): BoardColumnId {
-  if (thread.status === 'archived') return 'done';
+  if (isMergedPrState(thread.prUrl, thread.prState)) return 'done';
   if (isOpenPrState(thread.prUrl, thread.prState)) return 'review';
   return 'needs_you';
 }
@@ -797,6 +806,7 @@ export function assembleHomeBoard(input: {
   issues?: BoardIssue[];
   prs?: BoardPr[];
   threads: Thread[];
+  /** @deprecated Archived chats are History, not a Home column. Ignored. */
   archivedThreads?: Thread[];
   query?: string;
   repoPath?: string;
@@ -813,11 +823,6 @@ export function assembleHomeBoard(input: {
   const byUpdated = (a: Thread, b: Thread) => b.updatedAt.localeCompare(a.updatedAt);
   const live = input.threads
     .filter((t) => t.status !== 'archived' && isHomeBoardThread(t))
-    .sort(byUpdated);
-  const archived = (
-    input.archivedThreads ?? input.threads.filter((t) => t.status === 'archived')
-  )
-    .filter(isHomeBoardThread)
     .sort(byUpdated);
 
   const columns = emptyColumns();
@@ -845,16 +850,10 @@ export function assembleHomeBoard(input: {
   for (const t of live) {
     if (!threadMatchesKind(t, kind)) continue;
     const col = classifyThreadColumn(t);
-    if (col === 'backlog' || col === 'done') continue;
+    if (col === 'backlog') continue;
     if (!inWorkspace(t.repoPath, repo)) continue;
     if (!haystackMatches(threadSearchText(t, wsName(t.repoPath)), tokens)) continue;
     byCol[col].push(t);
-  }
-  for (const t of archived) {
-    if (!threadMatchesKind(t, kind)) continue;
-    if (!inWorkspace(t.repoPath, repo)) continue;
-    if (!haystackMatches(threadSearchText(t, wsName(t.repoPath)), tokens)) continue;
-    byCol.done.push(t);
   }
 
   totals.tickets = [...Object.values(byCol)].flat().filter((t) => t.sourceType === 'ticket').length;
@@ -884,7 +883,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of worktree chats (sidebar Create or create_thread). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to done: In Process (no open PR) → Review (open PR) → Done (archived). Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of worktree chats (sidebar Create or create_thread). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to merge: In Process (no open PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

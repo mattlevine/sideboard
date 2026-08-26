@@ -75,8 +75,8 @@ function issue(partial: Partial<BoardIssue> & Pick<BoardIssue, 'identifier' | 't
 }
 
 describe('classifyThreadColumn', () => {
-  it('maps archive and open PR into path-to-done columns', () => {
-    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('done');
+  it('maps merged and open PR into path-to-merge columns', () => {
+    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('needs_you');
@@ -99,13 +99,13 @@ describe('classifyThreadColumn', () => {
     expect(
       classifyThreadColumn(
         thread({
-          id: 'closed',
+          id: 'merged',
           status: 'idle',
           prUrl: 'https://github.com/acme/app/pull/2',
           prState: 'MERGED',
         }),
       ),
-    ).toBe('needs_you');
+    ).toBe('done');
   });
 
   it('keeps an open PR in Review even while running or errored', () => {
@@ -130,6 +130,16 @@ describe('classifyThreadColumn', () => {
         }),
       ),
     ).toBe('review');
+    expect(
+      classifyThreadColumn(
+        thread({
+          id: 'run-merged',
+          status: 'running',
+          prUrl: 'https://github.com/acme/app/pull/5',
+          prState: 'MERGED',
+        }),
+      ),
+    ).toBe('done');
   });
 });
 

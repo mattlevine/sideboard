@@ -291,7 +291,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of worktree chats (In Process, Review, Done). Same cards as desktop Home. Path to done: no open PR → open PR → archived. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
+    'Home Kanban of worktree chats (In Process, Review, Merged). Same cards as desktop Home. Path to merge: no open PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -319,7 +319,6 @@ export async function startMcpServer(): Promise<void> {
       const names = new Map(workspaces.map((w) => [w.path, w.name]));
       const snap = assembleHomeBoard({
         threads: all.filter((t) => t.status !== 'archived'),
-        archivedThreads: all.filter((t) => t.status === 'archived'),
         query,
         repoPath,
         kind: (kind ?? 'all') as BoardKindFilter,

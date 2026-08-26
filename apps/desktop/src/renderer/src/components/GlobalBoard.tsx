@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
+import { closeChatTabMessage } from '../lib/close-chat-tab';
 import {
   BOARD_COLUMN_DEFS,
   BOARD_PAGE_SIZE,
@@ -14,13 +15,17 @@ import { FleetActivityBar } from './FleetActivityBar';
 
 interface Props {
   threads: Thread[];
-  archivedThreads?: Thread[];
   workspaces?: Workspace[];
   runtime: OrchestratorRuntime | null;
   liveByThread: Record<string, string>;
   onOpenThread: (id: string) => void;
   onAddToBoard: () => void;
   onRefresh: () => void;
+  onArchive: (
+    ids: string[],
+    meta?: { title?: string; removesWorktree?: boolean },
+  ) => void | Promise<void>;
+  archivingIds?: Set<string>;
   /** Left-edge open control when the left sidebar is closed. */
   leftSidebarToggle?: ReactNode;
 }
@@ -59,31 +64,31 @@ function workspaceName(path: string, workspaces: Workspace[]): string {
 
 export function GlobalBoard({
   threads,
-  archivedThreads = [],
   workspaces = [],
   runtime,
   liveByThread,
   onOpenThread,
   onAddToBoard,
   onRefresh,
+  onArchive,
+  archivingIds = new Set(),
   leftSidebarToggle,
 }: Props) {
-  const [doneOpen, setDoneOpen] = useState(false);
   const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
+  const [archiveConfirm, setArchiveConfirm] = useState<{
+    threadId: string;
+    title: string;
+    chatCount: number;
+    removesWorktree: boolean;
+    cowboy: boolean;
+  } | null>(null);
 
   const liveThreads = useMemo(
     () =>
       threads
-        .filter(isHomeBoardThread)
+        .filter((t) => t.status !== 'archived' && isHomeBoardThread(t))
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [threads],
-  );
-  const doneThreads = useMemo(
-    () =>
-      archivedThreads
-        .filter(isHomeBoardThread)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-    [archivedThreads],
   );
 
   const byColumn = useMemo(() => {
@@ -94,13 +99,12 @@ export function GlobalBoard({
     };
     for (const t of liveThreads) {
       const col = classifyThreadColumn(t);
-      if (col === 'needs_you' || col === 'review') map[col].push(t);
+      if (col === 'needs_you' || col === 'review' || col === 'done') map[col].push(t);
     }
-    map.done = doneThreads;
     return map;
-  }, [liveThreads, doneThreads]);
+  }, [liveThreads]);
 
-  const worktreeCount = liveThreads.length + doneThreads.length;
+  const worktreeCount = liveThreads.length;
   const hasBoardContent = worktreeCount > 0;
 
   function shownFor(col: BoardColumnId): number {
@@ -117,6 +121,24 @@ export function GlobalBoard({
   function countLabel(visible: number, total: number): string {
     if (total <= visible) return String(total);
     return `${visible} of ${total}`;
+  }
+
+  function requestArchive(thread: Thread) {
+    const title = threadDisplayTitle(thread);
+    void window.sideboard
+      .listWorktreeChats(thread.id)
+      .then((chats) => {
+        setArchiveConfirm({
+          threadId: thread.id,
+          title,
+          chatCount: chats.length,
+          removesWorktree: chats.length <= 1 && !thread.cowboy,
+          cowboy: Boolean(thread.cowboy),
+        });
+      })
+      .catch((err: unknown) => {
+        window.alert(err instanceof Error ? err.message : String(err));
+      });
   }
 
   return (
@@ -157,7 +179,6 @@ export function GlobalBoard({
                 const cards = byColumn[col.id as keyof typeof byColumn] ?? [];
                 const total = cards.length;
                 const page = visiblePage(cards, shownFor(col.id));
-                const collapsed = col.id === 'done' && !doneOpen;
                 return (
                   <section
                     key={col.id}
@@ -165,49 +186,35 @@ export function GlobalBoard({
                   >
                     <header className="board-column-header">
                       <h3>{col.title}</h3>
-                      <span className="thread-meta">{countLabel(collapsed ? 0 : page.visible.length, total)}</span>
-                      {col.id === 'done' && (
-                        <button
-                          type="button"
-                          className="board-column-toggle"
-                          onClick={() => setDoneOpen((v) => !v)}
-                        >
-                          {doneOpen ? 'Hide' : 'Show'}
-                        </button>
-                      )}
+                      <span className="thread-meta">{countLabel(page.visible.length, total)}</span>
                     </header>
                     <div className="board-column-cards">
-                      {collapsed ? (
+                      {page.visible.map((thread) => (
+                        <ThreadCard
+                          key={thread.id}
+                          thread={thread}
+                          live={liveByThread[thread.id]}
+                          workspaces={workspaces}
+                          archiving={archivingIds.has(thread.id)}
+                          canArchive={col.id === 'done'}
+                          onOpenThread={onOpenThread}
+                          onRefresh={onRefresh}
+                          onArchive={() => requestArchive(thread)}
+                        />
+                      ))}
+                      {page.hidden > 0 && (
+                        <button
+                          type="button"
+                          className="board-column-more"
+                          onClick={() => showMore(col.id)}
+                        >
+                          Show {Math.min(BOARD_PAGE_SIZE, page.hidden)} more ({page.hidden} hidden)
+                        </button>
+                      )}
+                      {total === 0 && (
                         <div className="board-column-empty">
-                          {total === 0 ? 'None archived' : `${total} archived`}
+                          None
                         </div>
-                      ) : (
-                        <>
-                          {page.visible.map((thread) => (
-                            <ThreadCard
-                              key={thread.id}
-                              thread={thread}
-                              live={liveByThread[thread.id]}
-                              workspaces={workspaces}
-                              onOpenThread={onOpenThread}
-                              onRefresh={onRefresh}
-                            />
-                          ))}
-                          {page.hidden > 0 && (
-                            <button
-                              type="button"
-                              className="board-column-more"
-                              onClick={() => showMore(col.id)}
-                            >
-                              Show {Math.min(BOARD_PAGE_SIZE, page.hidden)} more ({page.hidden} hidden)
-                            </button>
-                          )}
-                          {total === 0 && (
-                            <div className="board-column-empty">
-                              None
-                            </div>
-                          )}
-                        </>
                       )}
                     </div>
                   </section>
@@ -223,11 +230,60 @@ export function GlobalBoard({
               <span className="chat-empty-cube" />
             </div>
             <h3>No worktrees yet</h3>
-            <p>Add a ticket, PR, or branch to create a worktree. Home shows where each one is on the path to done.</p>
+            <p>Add a ticket, PR, or branch to create a worktree. Home shows In Process → Review → Merged. Archive sends a card to Settings → History.</p>
             <div className="chat-empty-action">
               <button type="button" className="primary" onClick={onAddToBoard}>
                 Add to Board
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {archiveConfirm && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setArchiveConfirm(null)}
+        >
+          <div
+            className="modal create-modal merge-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="archive-board-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="create-modal-content">
+              <h3 id="archive-board-title" className="merge-modal-title">
+                {archiveConfirm.removesWorktree
+                  ? 'Archive worktree?'
+                  : archiveConfirm.cowboy
+                    ? 'Archive cowboy chat?'
+                    : 'Archive chat?'}
+              </h3>
+              <p className="confirm-dialog-message">
+                {closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount, {
+                  removesWorktree: archiveConfirm.removesWorktree,
+                })}
+              </p>
+              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
+                <button type="button" onClick={() => setArchiveConfirm(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    const { threadId, title, removesWorktree } = archiveConfirm;
+                    setArchiveConfirm(null);
+                    void Promise.resolve(
+                      onArchive([threadId], { title, removesWorktree }),
+                    ).catch((err: unknown) => {
+                      window.alert(err instanceof Error ? err.message : String(err));
+                    });
+                  }}
+                >
+                  Archive
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -240,29 +296,39 @@ function ThreadCard({
   thread: t,
   live,
   workspaces,
+  archiving,
+  canArchive,
   onOpenThread,
   onRefresh,
+  onArchive,
 }: {
   thread: Thread;
   live: string | undefined;
   workspaces: Workspace[];
+  archiving: boolean;
+  canArchive: boolean;
   onOpenThread: (id: string) => void;
   onRefresh: () => void;
+  onArchive: () => void;
 }) {
   const { text: previewText } = previewForThread(t, live);
   const preview = previewText ? compactPreview(previewText) : '';
   const repo = workspaceName(t.repoPath, workspaces);
   const canStop = t.status === 'running' || t.status === 'queued';
+  const showActions = canStop || canArchive;
   return (
     <article
-      className="board-card board-card-thread"
+      className={`board-card board-card-thread${archiving ? ' is-archiving' : ''}`}
       role="button"
       tabIndex={0}
-      onClick={() => onOpenThread(t.id)}
+      aria-busy={archiving}
+      onClick={() => {
+        if (!archiving) onOpenThread(t.id);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onOpenThread(t.id);
+          if (!archiving) onOpenThread(t.id);
         }
       }}
     >
@@ -271,37 +337,58 @@ function ThreadCard({
         <div className="board-open">
           <div className="thread-title">{threadDisplayTitle(t)}</div>
           <div className="thread-meta">
-            {t.agent} · {t.status}
-            {t.queue.length ? ` · q${t.queue.length}` : ''}
-            {t.sourceType === 'ticket' || t.sourceType === 'pr'
-              ? ` · ${t.sourceType}:${t.sourceRef}`
-              : t.sourceType === 'adopt'
-                ? ' · adopt'
-                : t.cowboy
-                  ? ' · cowboy'
-                  : t.sourceType === 'branch' && t.branchName
-                    ? ` · ${t.branchName}`
-                    : ''}
-            {repo ? ` · ${repo}` : ''}
-            {' · '}
-            {relativeTime(t.updatedAt)}
+            {archiving
+              ? 'Archiving…'
+              : [
+                  t.agent,
+                  t.status,
+                  t.queue.length ? `q${t.queue.length}` : null,
+                  t.sourceType === 'ticket' || t.sourceType === 'pr'
+                    ? `${t.sourceType}:${t.sourceRef}`
+                    : t.sourceType === 'adopt'
+                      ? 'adopt'
+                      : t.cowboy
+                        ? 'cowboy'
+                        : t.sourceType === 'branch' && t.branchName
+                          ? t.branchName
+                          : null,
+                  repo || null,
+                  relativeTime(t.updatedAt),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
           </div>
         </div>
       </div>
       {preview ? (
         <div className="board-preview board-preview-compact">{preview}</div>
       ) : null}
-      {canStop && (
+      {showActions && (
         <div className="board-row-actions">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              void window.sideboard.stopThread(t.id).then(onRefresh);
-            }}
-          >
-            Stop
-          </button>
+          {canStop && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void window.sideboard.stopThread(t.id).then(onRefresh);
+              }}
+            >
+              Stop
+            </button>
+          )}
+          {canArchive && (
+            <button
+              type="button"
+              disabled={archiving}
+              title="Archive this worktree (moves to Settings → History)"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+            >
+              {archiving ? 'Archiving…' : 'Archive'}
+            </button>
+          )}
         </div>
       )}
     </article>

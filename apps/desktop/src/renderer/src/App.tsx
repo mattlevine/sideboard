@@ -948,7 +948,6 @@ export function App() {
       {view === 'board' && (
         <GlobalBoard
           threads={threads}
-          archivedThreads={archived}
           workspaces={workspaces}
           runtime={runtime}
           liveByThread={liveByThread}
@@ -961,6 +960,8 @@ export function App() {
           onAddToBoard={() =>
             openCreate(repoPath || undefined, 'quick', { stayOnBoard: true })
           }
+          onArchive={(ids, meta) => archiveThreadsAndRefresh(ids, meta)}
+          archivingIds={archivingIds}
           leftSidebarToggle={
             !leftSidebarOpen ? (
               <SidebarToggle side="left" open={false} onClick={toggleLeftSidebar} />

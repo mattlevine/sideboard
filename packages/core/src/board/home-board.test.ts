@@ -127,8 +127,8 @@ describe('isHomeBoardThread', () => {
 });
 
 describe('classifyThreadColumn', () => {
-  it('maps archive and open PR into path-to-done columns', () => {
-    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('done');
+  it('maps merged and open PR into path-to-merge columns', () => {
+    expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('needs_you');
@@ -151,13 +151,13 @@ describe('classifyThreadColumn', () => {
     expect(
       classifyThreadColumn(
         thread({
-          id: 'closed',
+          id: 'merged',
           status: 'idle',
           prUrl: 'https://github.com/acme/app/pull/2',
           prState: 'MERGED',
         }),
       ),
-    ).toBe('needs_you');
+    ).toBe('done');
   });
 
   it('keeps an open PR in Review even while running or errored', () => {
@@ -182,6 +182,16 @@ describe('classifyThreadColumn', () => {
         }),
       ),
     ).toBe('review');
+    expect(
+      classifyThreadColumn(
+        thread({
+          id: 'run-merged',
+          status: 'running',
+          prUrl: 'https://github.com/acme/app/pull/5',
+          prState: 'MERGED',
+        }),
+      ),
+    ).toBe('done');
   });
 });
 
@@ -424,26 +434,55 @@ describe('assembleHomeBoard', () => {
           prState: 'OPEN',
           status: 'idle',
         }),
+        thread({
+          id: 'merged',
+          sourceType: 'pr',
+          sourceRef: '10',
+          title: 'Landed',
+          prUrl: 'https://github.com/acme/app/pull/10',
+          prState: 'MERGED',
+          status: 'idle',
+        }),
+        thread({
+          id: 'history',
+          sourceType: 'pr',
+          sourceRef: '11',
+          title: 'Old merge',
+          prUrl: 'https://github.com/acme/app/pull/11',
+          prState: 'MERGED',
+          status: 'archived',
+        }),
       ],
     });
     expect(snap.columns.backlog).toHaveLength(0);
     expect(snap.columns.needs_you).toHaveLength(1);
     expect(snap.columns.review).toHaveLength(1);
+    expect(snap.columns.done).toHaveLength(1);
+    expect(snap.columns.done[0] && snap.columns.done[0].kind === 'thread' && snap.columns.done[0].id).toBe('merged');
     expect(snap.totals).toMatchObject({
       backlog: 0,
       needs_you: 1,
       review: 1,
+      done: 1,
       tickets: 1,
-      prs: 1,
-      threads: 2,
+      prs: 2,
+      threads: 3,
     });
   });
 
   it('filters by query, kind, column, and page limit', () => {
     const threads = [
       thread({ id: 'run', title: 'Pay worker', status: 'running', sourceType: 'ticket' }),
-      thread({ id: 'done', title: 'Old pay', status: 'archived', sourceType: 'branch' }),
+      thread({
+        id: 'done',
+        title: 'Old pay',
+        status: 'idle',
+        sourceType: 'branch',
+        prUrl: 'https://github.com/acme/app/pull/8',
+        prState: 'MERGED',
+      }),
       thread({ id: 'other', title: 'Other', status: 'queued', sourceType: 'pr' }),
+      thread({ id: 'history', title: 'Archived pay', status: 'archived', sourceType: 'branch' }),
     ];
     const queried = assembleHomeBoard({
       threads,
