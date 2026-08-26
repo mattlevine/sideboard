@@ -304,7 +304,7 @@ export function GlobalBoard({
             title: item.title,
             url: item.url ?? '',
             labels: item.labels ?? [],
-            provider: item.provider as IssueInfo['provider'],
+            provider: item.provider,
             assignee: item.assignee,
           },
           repo,

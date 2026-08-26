@@ -57,7 +57,7 @@ export type BoardPin = {
   title: string;
   url?: string;
   labels?: string[];
-  provider?: string;
+  provider?: IssueInfo['provider'];
   assignee?: string;
   cycle?: string;
   teamKey?: string;
@@ -74,7 +74,7 @@ export type AddBoardPinInput = {
   title?: string;
   url?: string;
   labels?: string[];
-  provider?: string;
+  provider?: IssueInfo['provider'];
   assignee?: string;
   cycle?: string;
   teamKey?: string;

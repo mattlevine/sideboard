@@ -14,7 +14,7 @@ export type CreateFromSelection =
       title: string;
       url?: string;
       labels?: string[];
-      provider?: string;
+      provider?: IssueInfo['provider'];
       assignee?: string;
       cycle?: string;
     };

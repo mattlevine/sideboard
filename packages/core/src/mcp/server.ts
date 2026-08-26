@@ -41,7 +41,7 @@ import {
   type BoardColumnId,
   type BoardKindFilter,
 } from '../board/home-board.js';
-import type { AgentKind, ThreadAttachment } from '../types/thread.js';
+import type { AgentKind, IssueInfo, ThreadAttachment } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 
 const MAX_ORCH_THREADS = 5;
@@ -376,7 +376,7 @@ export async function startMcpServer(): Promise<void> {
       const loaded = await getHomeBoardInputs(workspaces);
       let pinTitle = title?.trim();
       let url: string | undefined;
-      let provider: string | undefined;
+      let provider: IssueInfo['provider'] | undefined;
       let headRefName: string | undefined;
       if (kind === 'ticket') {
         const issue = findBoardIssue(loaded.issues, ref, root);
