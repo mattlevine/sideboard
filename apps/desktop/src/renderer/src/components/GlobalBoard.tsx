@@ -449,10 +449,7 @@ function WorktreeCard({
         </div>
       </div>
       {canArchive && (
-        <div
-          className="board-card board-card-archive"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="board-archive-row" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             className="board-archive-worktree"
