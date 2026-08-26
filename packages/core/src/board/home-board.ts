@@ -300,7 +300,20 @@ export function isDefaultBranchCreateRef(ref: string): boolean {
  * Live worktree already covering this create (ticket, PR, or named branch).
  * Default-branch / "new worktree" creates return undefined so each one stays isolated.
  */
-export function findLiveThreadForCreate(
+export function findLiveThreadForCreate<
+  T extends Pick<
+    Thread,
+    | 'id'
+    | 'status'
+    | 'sourceType'
+    | 'sourceRef'
+    | 'title'
+    | 'prUrl'
+    | 'branchName'
+    | 'repoPath'
+    | 'cowboy'
+  >,
+>(
   input: {
     sourceType: Exclude<Thread['sourceType'], 'orchestration'>;
     sourceRef: string;
@@ -308,20 +321,8 @@ export function findLiveThreadForCreate(
     title?: string;
     cowboy?: boolean;
   },
-  threads: Array<
-    Pick<
-      Thread,
-      | 'status'
-      | 'sourceType'
-      | 'sourceRef'
-      | 'title'
-      | 'prUrl'
-      | 'branchName'
-      | 'repoPath'
-      | 'cowboy'
-    >
-  >,
-): (typeof threads)[number] | undefined {
+  threads: T[],
+): T | undefined {
   const live = threads.filter(
     (t) => t.status !== 'archived' && sameRepoPath(t.repoPath, input.repoPath),
   );
