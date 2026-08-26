@@ -8,6 +8,7 @@ import {
   listBranches,
   listPrs,
   resolveGithubRepoSlug,
+  canonicalizeRepoPath,
   resolveRepoRoot,
 } from '../git/worktree.js';
 import { listIssues } from '../integrations/issues.js';
@@ -27,7 +28,6 @@ import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
 import { getHomeBoardInputs } from '../board/load-home-board.js';
-import { addBoardPin, removeBoardPin } from '../board/board-pins.js';
 import {
   BOARD_COLUMN_DEFS,
   assembleHomeBoard,
@@ -35,13 +35,11 @@ import {
   findBoardPin,
   findBoardPr,
   HOME_BOARD_AGENT_HINT,
-  threadMatchesIssue,
-  threadMatchesPin,
-  threadMatchesPr,
+  findLiveThreadForCreate,
   type BoardColumnId,
   type BoardKindFilter,
 } from '../board/home-board.js';
-import type { AgentKind, IssueInfo, ThreadAttachment } from '../types/thread.js';
+import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 
 const MAX_ORCH_THREADS = 5;
@@ -139,6 +137,7 @@ async function createOrchChildThread(
     model: args.model,
   });
   try {
+    const priorIds = new Set(orch.getThreads(false).map((t) => t.id));
     const thread = await withTimeout(
       orch.createThread({
         sourceType: args.sourceType,
@@ -156,6 +155,7 @@ async function createOrchChildThread(
       CREATE_THREAD_TIMEOUT_MS,
       'create_thread',
     );
+    const alreadyStarted = priorIds.has(thread.id);
     const parentNote = parentCorrectedFrom
       ? parentId
         ? `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; nested under ${parentId}`
@@ -174,6 +174,7 @@ async function createOrchChildThread(
         cowboy: Boolean(thread.cowboy),
         link: `sideboard://thread/${thread.id}`,
         parentThreadId: thread.parentThreadId,
+        ...(alreadyStarted ? { alreadyStarted: true } : {}),
         ...(agentCoercedFrom
           ? {
               agentCoercedFrom,
@@ -290,7 +291,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban (Backlog, Queued, Running, Needs you, Review, Done). Backlog is what you pulled (add_to_board: ticket, PR, or branch) — not every remote issue. Start a pull with start_board_card. Worktrees also appear. refresh=true syncs Linear/GitHub metadata on pulled items. Filters: query, repoPath, kind, column, limit (default 40), refresh.',
+    'Home Kanban of worktree chats (In Process, Review, Done). Same cards as desktop Home. Path to done: no open PR → open PR → archived. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -300,9 +301,9 @@ export async function startMcpServer(): Promise<void> {
       kind: z
         .enum(['all', 'tickets', 'prs', 'branches', 'threads'])
         .optional()
-        .describe('Card kind filter (default all)'),
+        .describe('Filter by worktree source (default all)'),
       column: z
-        .enum(['backlog', 'queued', 'running', 'needs_you', 'review', 'done'])
+        .enum(['needs_you', 'review', 'done'])
         .optional()
         .describe('Return cards for this column only (totals still include the rest)'),
       limit: z
@@ -311,20 +312,12 @@ export async function startMcpServer(): Promise<void> {
         .positive()
         .optional()
         .describe('Max cards per column (default 40). hidden counts the remainder.'),
-      refresh: z
-        .boolean()
-        .optional()
-        .describe(
-          'Sync Linear/GitHub metadata on pulled items. Default false — reuse the snapshot (up to 15m). Same as the Home Refresh button.',
-        ),
     },
-    async ({ query, repoPath, kind, column, limit, refresh }) => {
+    async ({ query, repoPath, kind, column, limit }) => {
       const workspaces = orch.listWorkspaces();
-      const loaded = await getHomeBoardInputs(workspaces, { refresh });
       const all = orch.getThreads(true);
       const names = new Map(workspaces.map((w) => [w.path, w.name]));
       const snap = assembleHomeBoard({
-        pins: loaded.pins,
         threads: all.filter((t) => t.status !== 'archived'),
         archivedThreads: all.filter((t) => t.status === 'archived'),
         query,
@@ -344,12 +337,6 @@ export async function startMcpServer(): Promise<void> {
                 hidden: snap.hidden,
                 totals: snap.totals,
                 columnDefs: BOARD_COLUMN_DEFS,
-                issueSource: loaded.issueSource,
-                viewer: loaded.viewerLogin,
-                issueErrors: loaded.issueErrors,
-                prErrors: loaded.prErrors,
-                fetchedAt: new Date(loaded.fetchedAt).toISOString(),
-                fromCache: loaded.fromCache,
                 hint: HOME_BOARD_AGENT_HINT,
               },
               null,
@@ -357,70 +344,6 @@ export async function startMcpServer(): Promise<void> {
             ),
           },
         ],
-      };
-    },
-  );
-
-  server.tool(
-    'add_to_board',
-    'Pull a ticket, PR, or branch onto the Home Kanban Backlog (same as desktop Add to Board). Does not create a worktree — use start_board_card after. Pass repoPath from list_workspaces. Duplicate pulls update the existing card.',
-    {
-      kind: z.enum(['ticket', 'pr', 'branch']),
-      ref: z.string().describe('Ticket identifier (ENG-12), PR number (44), or branch name'),
-      repoPath: z.string().describe('Workspace path from list_workspaces'),
-      title: z.string().optional(),
-    },
-    async ({ kind, ref, repoPath, title }) => {
-      const root = await resolveRepoRoot(repoPath);
-      const workspaces = orch.listWorkspaces();
-      const loaded = await getHomeBoardInputs(workspaces);
-      let pinTitle = title?.trim();
-      let url: string | undefined;
-      let provider: IssueInfo['provider'] | undefined;
-      let headRefName: string | undefined;
-      if (kind === 'ticket') {
-        const issue = findBoardIssue(loaded.issues, ref, root);
-        pinTitle = pinTitle || issue?.title;
-        url = issue?.url;
-        provider = issue?.provider;
-      } else if (kind === 'pr') {
-        const pr = findBoardPr(loaded.prs, ref, root);
-        pinTitle = pinTitle || pr?.title;
-        url = pr?.url;
-        headRefName = pr?.headRefName;
-      }
-      const pin = addBoardPin({
-        kind,
-        ref,
-        repoPath: root,
-        title: pinTitle,
-        url,
-        provider,
-        headRefName,
-        workspaceCount: workspaces.length,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ added: true, pin, hint: HOME_BOARD_AGENT_HINT }, null, 2),
-          },
-        ],
-      };
-    },
-  );
-
-  server.tool(
-    'remove_board_item',
-    'Remove a pulled Home card that has not been started. Pass id from list_board Backlog.',
-    {
-      id: z.string().describe('Board pin id from list_board'),
-    },
-    async ({ id }) => {
-      const ok = removeBoardPin(id);
-      return {
-        content: [{ type: 'text', text: ok ? `Removed ${id}` : `Not on the board: ${id}` }],
-        ...(ok ? {} : { isError: true }),
       };
     },
   );
@@ -726,7 +649,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_thread',
-    `Create a new worktree thread (chat) from branch, pr, or ticket. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
+    `Create a worktree thread (chat) from branch, pr, or ticket. If a live worktree already matches that ticket, PR, or named branch, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -767,7 +690,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'start_board_card',
-    'Start a pulled Home card (or any ticket/PR/branch ref): creates a worktree. Same as desktop Start. Prefer add_to_board first. If a live thread already matches, returns that thread. Then send_to_thread.',
+    'Same as create_thread for a ticket, PR, or named branch (attaches issue text when Sideboard can resolve it). Reuses the live worktree if one already matches. Then send_to_thread.',
     {
       kind: z.enum(['ticket', 'pr', 'branch']),
       ref: z
@@ -778,40 +701,41 @@ export async function startMcpServer(): Promise<void> {
     },
     async ({ kind, ref, repoPath, title }) => {
       const root = await resolveRepoRoot(repoPath);
+      const existing = findLiveThreadForCreate(
+        {
+          sourceType: kind,
+          sourceRef: ref.trim(),
+          repoPath: canonicalizeRepoPath(root),
+          title: title?.trim(),
+        },
+        orch.getThreads(false).map((t) => ({
+          ...t,
+          repoPath: canonicalizeRepoPath(t.repoPath),
+        })),
+      );
+      if (existing) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                alreadyStarted: true,
+                id: existing.id,
+                title: existing.title,
+                status: existing.status,
+                link: `sideboard://thread/${existing.id}`,
+              }),
+            },
+          ],
+        };
+      }
+
       const workspaces = orch.listWorkspaces();
       const loaded = await getHomeBoardInputs(workspaces);
-      const live = orch.getThreads(false);
       const pin = findBoardPin(loaded.pins, kind, ref, root);
 
       if (kind === 'branch') {
         const sourceRef = pin?.ref === 'default' ? 'default' : (pin?.ref ?? ref.trim());
-        const existing = live.find((t) =>
-          threadMatchesPin(t, {
-            id: pin?.id ?? 'tmp',
-            kind: 'branch',
-            ref: sourceRef,
-            repoPath: root,
-            addedAt: pin?.addedAt ?? '',
-            title: title?.trim() || pin?.title || sourceRef,
-            needsWorkspacePick: false,
-          }),
-        );
-        if (existing) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  alreadyStarted: true,
-                  id: existing.id,
-                  title: existing.title,
-                  status: existing.status,
-                  link: `sideboard://thread/${existing.id}`,
-                }),
-              },
-            ],
-          };
-        }
         const result = await createOrchChildThread(
           orch,
           {
@@ -831,28 +755,6 @@ export async function startMcpServer(): Promise<void> {
       if (kind === 'ticket') {
         const issue = findBoardIssue(loaded.issues, ref, root);
         const ident = issue?.identifier ?? ref.trim();
-        const existing = live.find((t) =>
-          threadMatchesIssue(t, {
-            identifier: ident,
-            title: title?.trim() || issue?.title || '',
-          }),
-        );
-        if (existing) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  alreadyStarted: true,
-                  id: existing.id,
-                  title: existing.title,
-                  status: existing.status,
-                  link: `sideboard://thread/${existing.id}`,
-                }),
-              },
-            ],
-          };
-        }
         const attachments: ThreadAttachment[] | undefined = issue
           ? [
               {
@@ -887,30 +789,6 @@ export async function startMcpServer(): Promise<void> {
 
       const pr = findBoardPr(loaded.prs, ref, root);
       const number = pr ? String(pr.number) : ref.trim().replace(/^#/, '');
-      const existing = live.find((t) =>
-        threadMatchesPr(t, {
-          number: pr?.number ?? Number(number),
-          title: title?.trim() || pr?.title || '',
-          url: pr?.url ?? '',
-          headRefName: pr?.headRefName ?? '',
-        }),
-      );
-      if (existing) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                alreadyStarted: true,
-                id: existing.id,
-                title: existing.title,
-                status: existing.status,
-                link: `sideboard://thread/${existing.id}`,
-              }),
-            },
-          ],
-        };
-      }
       const result = await createOrchChildThread(
         orch,
         {

@@ -75,10 +75,10 @@ function issue(partial: Partial<BoardIssue> & Pick<BoardIssue, 'identifier' | 't
 }
 
 describe('classifyThreadColumn', () => {
-  it('maps agent and PR state into locked columns', () => {
+  it('maps archive and open PR into path-to-done columns', () => {
     expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('done');
-    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('queued');
-    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('running');
+    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('needs_you');
+    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'b', status: 'broken' }))).toBe('needs_you');
     expect(
@@ -108,7 +108,7 @@ describe('classifyThreadColumn', () => {
     ).toBe('needs_you');
   });
 
-  it('keeps errored threads with an open PR in Needs you', () => {
+  it('keeps an open PR in Review even while running or errored', () => {
     expect(
       classifyThreadColumn(
         thread({
@@ -119,7 +119,17 @@ describe('classifyThreadColumn', () => {
           prState: 'OPEN',
         }),
       ),
-    ).toBe('needs_you');
+    ).toBe('review');
+    expect(
+      classifyThreadColumn(
+        thread({
+          id: 'run-pr',
+          status: 'running',
+          prUrl: 'https://github.com/acme/app/pull/4',
+          prState: 'OPEN',
+        }),
+      ),
+    ).toBe('review');
   });
 });
 

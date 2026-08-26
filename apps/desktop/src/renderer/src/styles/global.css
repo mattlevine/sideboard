@@ -9383,11 +9383,24 @@ body:has(.update-banner) .team-toast-stack {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 12px;
+  padding: 10px 12px 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   min-width: 0;
+}
+
+.board-card-thread {
+  cursor: pointer;
+}
+
+.board-card-thread:hover {
+  border-color: color-mix(in srgb, var(--border) 35%, var(--text));
+}
+
+.board-card-thread:focus-visible {
+  outline: 2px solid var(--accent, var(--text));
+  outline-offset: 2px;
 }
 
 .board-card-top {
@@ -9449,7 +9462,7 @@ body:has(.update-banner) .team-toast-stack {
 }
 
 .board-card .board-preview-compact {
-  max-height: 2.8em;
+  max-height: 3.2em;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;

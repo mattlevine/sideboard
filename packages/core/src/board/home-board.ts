@@ -5,7 +5,7 @@ const GLOBAL_WORKSPACE_ID = '__global__';
 
 /**
  * Home Kanban work item — every worktree chat, however it was created
- * (sidebar Create, board Start, MCP create_thread / start_board_card, adopt,
+ * (sidebar Create, MCP create_thread, adopt,
  * cowboy). Orchestration / Global chats stay in the sidebar, not the board.
  */
 export function isHomeBoardThread(
@@ -25,10 +25,7 @@ export type BoardColumnId =
   | 'done';
 
 export const BOARD_COLUMN_DEFS: { id: BoardColumnId; title: string }[] = [
-  { id: 'backlog', title: 'Backlog' },
-  { id: 'queued', title: 'Queued' },
-  { id: 'running', title: 'Running' },
-  { id: 'needs_you', title: 'Needs you' },
+  { id: 'needs_you', title: 'In Process' },
   { id: 'review', title: 'Review' },
   { id: 'done', title: 'Done' },
 ];
@@ -112,23 +109,14 @@ export function isOpenPrState(
 }
 
 /**
- * Derived Home column. Agent/PR state is source of truth — no drag-to-status.
- * Priority: archived → queued → running → error → idle/stopped+lastError →
- * open PR → leftover live (human is next).
+ * Derived Home column. Path to done is PR / archive — not live agent activity.
+ * Queued and running stay on the card (status dot) and the fleet bar.
+ * Priority: archived → open PR → everything else.
  */
 export function classifyThreadColumn(
-  thread: Pick<Thread, 'status' | 'lastError' | 'prUrl' | 'prState'>,
+  thread: Pick<Thread, 'status' | 'prUrl' | 'prState'>,
 ): BoardColumnId {
   if (thread.status === 'archived') return 'done';
-  if (thread.status === 'queued') return 'queued';
-  if (thread.status === 'running') return 'running';
-  if (thread.status === 'error' || thread.status === 'broken') return 'needs_you';
-  if (
-    (thread.status === 'idle' || thread.status === 'stopped') &&
-    Boolean(thread.lastError?.trim())
-  ) {
-    return 'needs_you';
-  }
   if (isOpenPrState(thread.prUrl, thread.prState)) return 'review';
   return 'needs_you';
 }
@@ -285,6 +273,86 @@ export function threadMatchesBranch(
   const branch = normalizeBranchRef(thread.branchName ?? '');
   const ref = normalizeBranchRef(thread.sourceRef ?? '');
   return branch === head || ref === head;
+}
+
+function sameRepoPath(a: string, b: string): boolean {
+  return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+}
+
+const DEFAULTISH_BRANCH = /^(main|master|develop|development|trunk|default|head)$/;
+
+/** New isolated worktree from the repo default — never reuse an existing card. */
+export function isDefaultBranchCreateRef(ref: string): boolean {
+  const head = normalizeBranchRef(ref);
+  return !head || DEFAULTISH_BRANCH.test(head);
+}
+
+/**
+ * Live worktree already covering this create (ticket, PR, or named branch).
+ * Default-branch / "new worktree" creates return undefined so each one stays isolated.
+ */
+export function findLiveThreadForCreate(
+  input: {
+    sourceType: Exclude<Thread['sourceType'], 'orchestration'>;
+    sourceRef: string;
+    repoPath: string;
+    title?: string;
+    cowboy?: boolean;
+  },
+  threads: Array<
+    Pick<
+      Thread,
+      | 'status'
+      | 'sourceType'
+      | 'sourceRef'
+      | 'title'
+      | 'prUrl'
+      | 'branchName'
+      | 'repoPath'
+      | 'cowboy'
+    >
+  >,
+): (typeof threads)[number] | undefined {
+  const live = threads.filter(
+    (t) => t.status !== 'archived' && sameRepoPath(t.repoPath, input.repoPath),
+  );
+
+  if (input.cowboy) {
+    return live.find((t) => t.cowboy);
+  }
+
+  if (input.sourceType === 'ticket') {
+    return live.find((t) =>
+      threadMatchesIssue(t, {
+        identifier: input.sourceRef,
+        title: input.title ?? '',
+      }),
+    );
+  }
+
+  if (input.sourceType === 'pr') {
+    const number = Number(normalizeIssueKey(input.sourceRef));
+    return live.find((t) =>
+      threadMatchesPr(t, {
+        number: Number.isFinite(number) ? number : -1,
+        title: input.title ?? '',
+        url: '',
+        headRefName: '',
+      }),
+    );
+  }
+
+  if (input.sourceType === 'branch') {
+    if (isDefaultBranchCreateRef(input.sourceRef)) return undefined;
+    return live.find((t) =>
+      threadMatchesBranch(t, {
+        ref: input.sourceRef,
+        repoPath: input.repoPath,
+      }),
+    );
+  }
+
+  return undefined;
 }
 
 export function threadMatchesPin(
@@ -696,49 +764,6 @@ export function findBoardPr(
   return matches[0];
 }
 
-function toTicketCard(pin: BoardPin): HomeBoardTicketCard {
-  return {
-    kind: 'ticket',
-    id: pin.id,
-    identifier: pin.ref,
-    title: pin.title,
-    labels: pin.labels ?? [],
-    provider: pin.provider,
-    repoPath: pin.repoPath,
-    url: pin.url ?? '',
-    assignee: pin.assignee,
-    cycle: pin.cycle,
-    teamKey: pin.teamKey,
-    remoteState: pin.remoteState,
-    needsWorkspacePick: pin.needsWorkspacePick,
-  };
-}
-
-function toPrCard(pin: BoardPin): HomeBoardPrCard {
-  const number = Number(normalizeIssueKey(pin.ref));
-  return {
-    kind: 'pr',
-    id: pin.id,
-    number: Number.isFinite(number) ? number : 0,
-    title: pin.title,
-    headRefName: pin.headRefName ?? '',
-    repoPath: pin.repoPath,
-    url: pin.url ?? '',
-    author: pin.author ?? '',
-    remoteState: pin.remoteState,
-  };
-}
-
-function toBranchCard(pin: BoardPin): HomeBoardBranchCard {
-  return {
-    kind: 'branch',
-    id: pin.id,
-    ref: pin.ref,
-    title: pin.title || pin.ref,
-    repoPath: pin.repoPath,
-  };
-}
-
 function toThreadCard(thread: Thread): HomeBoardThreadCard {
   return {
     kind: 'thread',
@@ -754,16 +779,21 @@ function toThreadCard(thread: Thread): HomeBoardThreadCard {
   };
 }
 
-function pinToBacklogCard(pin: BoardPin): HomeBoardCard {
-  if (pin.kind === 'ticket') return toTicketCard(pin);
-  if (pin.kind === 'pr') return toPrCard(pin);
-  return toBranchCard(pin);
+function threadMatchesKind(
+  thread: Pick<Thread, 'sourceType'>,
+  kind: BoardKindFilter,
+): boolean {
+  if (kind === 'all' || kind === 'threads') return true;
+  if (kind === 'tickets') return thread.sourceType === 'ticket';
+  if (kind === 'prs') return thread.sourceType === 'pr';
+  if (kind === 'branches') return thread.sourceType === 'branch' || thread.sourceType === 'adopt';
+  return true;
 }
 
 /** Same columns and filters as the desktop Home Kanban — for MCP + UI. */
 export function assembleHomeBoard(input: {
   pins?: BoardPin[];
-  /** @deprecated Pull list is `pins`. Kept so older callers still typecheck. */
+  /** @deprecated Home is worktree threads only. Kept so older callers still typecheck. */
   issues?: BoardIssue[];
   prs?: BoardPr[];
   threads: Thread[];
@@ -790,24 +820,6 @@ export function assembleHomeBoard(input: {
     .filter(isHomeBoardThread)
     .sort(byUpdated);
 
-  const showPinKind = (pinKind: BoardPinKind) => {
-    if (kind === 'all') return true;
-    if (kind === 'tickets') return pinKind === 'ticket';
-    if (kind === 'prs') return pinKind === 'pr';
-    if (kind === 'branches') return pinKind === 'branch';
-    return false;
-  };
-
-  const readyPins =
-    kind === 'threads'
-      ? []
-      : backlogPins(input.pins ?? [], live).filter(
-          (pin) =>
-            showPinKind(pin.kind) &&
-            inWorkspace(pin.repoPath, repo) &&
-            haystackMatches(pinSearchText(pin, wsName(pin.repoPath)), tokens),
-        );
-
   const columns = emptyColumns();
   const hidden = emptyHidden();
   const totals = {
@@ -817,17 +829,11 @@ export function assembleHomeBoard(input: {
     needs_you: 0,
     review: 0,
     done: 0,
-    tickets: readyPins.filter((p) => p.kind === 'ticket').length,
-    prs: readyPins.filter((p) => p.kind === 'pr').length,
-    branches: readyPins.filter((p) => p.kind === 'branch').length,
+    tickets: 0,
+    prs: 0,
+    branches: 0,
     threads: 0,
   };
-
-  const backlogCards = readyPins.map(pinToBacklogCard);
-  totals.backlog = backlogCards.length;
-  const backlogPage = visiblePage(backlogCards, limit);
-  columns.backlog = backlogPage.visible;
-  hidden.backlog = backlogPage.hidden;
 
   const byCol: Record<Exclude<BoardColumnId, 'backlog'>, Thread[]> = {
     queued: [],
@@ -836,21 +842,26 @@ export function assembleHomeBoard(input: {
     review: [],
     done: [],
   };
-  if (kind !== 'tickets' && kind !== 'prs' && kind !== 'branches') {
-    for (const t of live) {
-      const col = classifyThreadColumn(t);
-      if (col === 'backlog' || col === 'done') continue;
-      if (!inWorkspace(t.repoPath, repo)) continue;
-      if (!haystackMatches(threadSearchText(t, wsName(t.repoPath)), tokens)) continue;
-      byCol[col].push(t);
-    }
-    for (const t of archived) {
-      if (!inWorkspace(t.repoPath, repo)) continue;
-      if (!haystackMatches(threadSearchText(t, wsName(t.repoPath)), tokens)) continue;
-      byCol.done.push(t);
-    }
+  for (const t of live) {
+    if (!threadMatchesKind(t, kind)) continue;
+    const col = classifyThreadColumn(t);
+    if (col === 'backlog' || col === 'done') continue;
+    if (!inWorkspace(t.repoPath, repo)) continue;
+    if (!haystackMatches(threadSearchText(t, wsName(t.repoPath)), tokens)) continue;
+    byCol[col].push(t);
+  }
+  for (const t of archived) {
+    if (!threadMatchesKind(t, kind)) continue;
+    if (!inWorkspace(t.repoPath, repo)) continue;
+    if (!haystackMatches(threadSearchText(t, wsName(t.repoPath)), tokens)) continue;
+    byCol.done.push(t);
   }
 
+  totals.tickets = [...Object.values(byCol)].flat().filter((t) => t.sourceType === 'ticket').length;
+  totals.prs = [...Object.values(byCol)].flat().filter((t) => t.sourceType === 'pr').length;
+  totals.branches = [...Object.values(byCol)]
+    .flat()
+    .filter((t) => t.sourceType === 'branch' || t.sourceType === 'adopt').length;
   totals.threads = Object.values(byCol).reduce((n, list) => n + list.length, 0);
 
   for (const col of Object.keys(byCol) as Array<Exclude<BoardColumnId, 'backlog'>>) {
@@ -862,7 +873,7 @@ export function assembleHomeBoard(input: {
   }
 
   if (input.column) {
-    for (const col of BOARD_COLUMN_DEFS.map((d) => d.id)) {
+    for (const col of Object.keys(columns) as BoardColumnId[]) {
       if (col === input.column) continue;
       columns[col] = [];
       hidden[col] = 0;
@@ -873,7 +884,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a pull list: add_to_board (ticket | pr | branch) then start_board_card to create a worktree. Unstarted pulls sit in Backlog. Worktrees (sidebar, Start, create_thread) stay on the board; orchestration chats do not. Refresh / list_board refresh=true syncs Linear/GitHub metadata for pulled items only. Columns follow agent/PR state — do not invent status.';
+  'Home is a Kanban of worktree chats (sidebar Create or create_thread). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to done: In Process (no open PR) → Review (open PR) → Done (archived). Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

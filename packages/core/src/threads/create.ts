@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { requireAgent } from '../detect/detect.js';
 import {
   allocateTeamSlug,
+  canonicalizeRepoPath,
   createThreadWorktree,
   currentBranch,
   fetchPrHead,
@@ -10,10 +11,12 @@ import {
   resolveDefaultBranch,
   resolveRepoRoot,
 } from '../git/worktree.js';
+import { findLiveThreadForCreate } from '../board/home-board.js';
 import { copyConfiguredFiles } from '../hook/conductor.js';
 import { resolveNewThreadOptions } from '../store/app-settings.js';
 import {
   createEmptyThread,
+  listThreads,
   readThread,
   writeThread,
 } from '../store/thread-store.js';
@@ -28,6 +31,28 @@ export async function createThread(
   input: CreateThreadInput,
   _onSetupLine?: (line: string) => void,
 ): Promise<Thread> {
+  const repoPath = await resolveRepoRoot(input.repoPath);
+  if (!existsSync(repoPath)) {
+    throw new Error(`Repo not found: ${repoPath}`);
+  }
+
+  if (input.reuseExisting !== false) {
+    const existing = findLiveThreadForCreate(
+      {
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        repoPath,
+        title: input.title,
+        cowboy: input.cowboy,
+      },
+      listThreads({ includeArchived: false }).map((t) => ({
+        ...t,
+        repoPath: canonicalizeRepoPath(t.repoPath),
+      })),
+    );
+    if (existing) return readThread(existing.id) ?? existing;
+  }
+
   // Tickets no longer require agent Linear MCP — Sideboard Account owns
   // Linear/GitHub issue connections (see integrations/).
   const resolved = resolveNewThreadOptions({
@@ -37,11 +62,6 @@ export async function createThread(
     fast: input.fast,
   });
   await requireAgent(resolved.agent);
-
-  const repoPath = await resolveRepoRoot(input.repoPath);
-  if (!existsSync(repoPath)) {
-    throw new Error(`Repo not found: ${repoPath}`);
-  }
 
   if (input.cowboy) {
     const { cowboyModeEnabled } = await import('../store/app-settings.js');

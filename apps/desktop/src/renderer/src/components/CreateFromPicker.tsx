@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { issueSourceLabel } from '@sideboard/issue-source-labels';
-import type { BranchInfo, IssueInfo, IssueSource, PrInfo } from '@sideboard-ai/core';
+import type { BranchInfo, IssueInfo, IssueSource, PrInfo, Workspace } from '@sideboard-ai/core';
 import { defaultTicketScope, issueInTicketScope, type TicketScope } from '../lib/home-board';
 
 export type CreateFromTab = 'prs' | 'branches' | 'issues';
@@ -24,6 +24,11 @@ interface Props {
   repoPath: string;
   linearConnected: boolean;
   hasSelection?: boolean;
+  workspaces?: Workspace[];
+  onRepoChange?: (path: string) => void;
+  onAddProject?: () => void;
+  banner?: string | null;
+  closeOnSelect?: boolean;
   onClose: () => void;
   onSelect: (selection: CreateFromSelection) => void;
   onClear?: () => void;
@@ -35,6 +40,11 @@ export function CreateFromPicker({
   repoPath,
   linearConnected,
   hasSelection = false,
+  workspaces,
+  onRepoChange,
+  onAddProject,
+  banner,
+  closeOnSelect = true,
   onClose,
   onSelect,
   onClear,
@@ -168,11 +178,43 @@ export function CreateFromPicker({
             if (e.key === 'Escape') onClose();
           }}
         />
-        {repoPath ? (
+        {workspaces && workspaces.length > 1 && onRepoChange ? (
+          <select
+            className="board-toolbar-select"
+            value={repoPath}
+            onChange={(e) => onRepoChange(e.target.value)}
+            aria-label="Workspace"
+          >
+            {workspaces.map((w) => (
+              <option key={w.path} value={w.path}>{w.name}</option>
+            ))}
+          </select>
+        ) : repoPath ? (
           <div className="composer-picker-section-label" title={repoPath}>
             {repoPath.split('/').filter(Boolean).pop() || repoPath}
           </div>
         ) : null}
+        {onAddProject ? (
+          <div className="composer-picker-section">
+            <button
+              type="button"
+              className="composer-picker-row"
+              onClick={onAddProject}
+            >
+              <span className="composer-picker-icons">
+                <span className="picker-folder" aria-hidden />
+              </span>
+              <span className="composer-picker-main">
+                <span className="composer-picker-title">Add project…</span>
+                <span className="composer-picker-sub">
+                  Register a repo, then pull a ticket, PR, or branch
+                </span>
+              </span>
+            </button>
+          </div>
+        ) : null}
+        {banner ? <div className="composer-picker-empty">{banner}</div> : null}
+        {repoPath ? (
         <div className="create-from-tabs">
           {([
             { id: 'prs' as const, label: 'PRs' },
@@ -189,9 +231,15 @@ export function CreateFromPicker({
             </button>
           ))}
         </div>
+        ) : null}
 
         {loading && <div className="composer-picker-empty">Loading…</div>}
         {error && !loading && <div className="composer-picker-empty">{error}</div>}
+        {!repoPath && !loading && (
+          <div className="composer-picker-empty">
+            {onAddProject ? 'Add a project to pull work from' : 'Add a workspace first'}
+          </div>
+        )}
 
         {!loading && hasSelection && onClear ? (
           <div className="composer-picker-section">
@@ -214,7 +262,7 @@ export function CreateFromPicker({
           </div>
         ) : null}
 
-        {!loading && !error && tab === 'prs' && (
+        {Boolean(repoPath) && !loading && !error && tab === 'prs' && (
           <div className="composer-picker-section">
             {filteredPrs.length === 0 ? (
               <div className="composer-picker-empty">No open PRs</div>
@@ -233,7 +281,7 @@ export function CreateFromPicker({
                       headRefName: p.headRefName,
                       author: p.author?.login,
                     });
-                    onClose();
+                    if (closeOnSelect) onClose();
                   }}
                 >
                   <span className="composer-picker-icons">
@@ -254,14 +302,14 @@ export function CreateFromPicker({
           </div>
         )}
 
-        {!loading && !error && tab === 'branches' && (
+        {Boolean(repoPath) && !loading && !error && tab === 'branches' && (
           <div className="composer-picker-section">
             <button
               type="button"
               className="composer-picker-row"
               onClick={() => {
                 onSelect({ kind: 'branch', ref: 'default', title: 'default branch' });
-                onClose();
+                if (closeOnSelect) onClose();
               }}
             >
               <span className="composer-picker-icons">⎇</span>
@@ -279,7 +327,7 @@ export function CreateFromPicker({
                 className="composer-picker-row"
                 onClick={() => {
                   onSelect({ kind: 'branch', ref: b.name });
-                  onClose();
+                  if (closeOnSelect) onClose();
                 }}
               >
                 <span className="composer-picker-icons">⎇</span>
@@ -297,7 +345,7 @@ export function CreateFromPicker({
           </div>
         )}
 
-        {!loading && !error && tab === 'issues' && (
+        {Boolean(repoPath) && !loading && !error && tab === 'issues' && (
           <>
             <div className="create-from-tabs" role="group" aria-label="Issue scope">
               {issueSource === 'linear' ? (
@@ -384,7 +432,7 @@ export function CreateFromPicker({
                         assignee: issue.assignee,
                         cycle: issue.cycle?.name,
                       });
-                      onClose();
+                      if (closeOnSelect) onClose();
                     }}
                   >
                     <span className="composer-picker-icons">

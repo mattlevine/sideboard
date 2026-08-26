@@ -574,6 +574,11 @@ export interface CreateThreadInput {
    * Pushes go to that branch; archive does not remove the folder.
    */
   cowboy?: boolean;
+  /**
+   * When false, always create a new worktree (fork_worktree, best-of-n).
+   * Default true: reuse a live ticket/PR/named-branch worktree instead of a second checkout.
+   */
+  reuseExisting?: boolean;
 }
 
 export interface AdoptInput {

@@ -113,6 +113,7 @@ export {
 export {
   HOME_BOARD_CACHE_TTL_MS,
   isHomeBoardThread,
+  findLiveThreadForCreate,
 } from './board/home-board.js';
 export type {
   AddBoardPinInput,

@@ -15,6 +15,7 @@ import {
   defaultTicketScope,
   findBoardIssue,
   findBoardPr,
+  findLiveThreadForCreate,
   haystackMatches,
   issueInTicketScope,
   issueNeedsWorkspacePick,
@@ -126,10 +127,10 @@ describe('isHomeBoardThread', () => {
 });
 
 describe('classifyThreadColumn', () => {
-  it('maps agent and PR state into locked columns', () => {
+  it('maps archive and open PR into path-to-done columns', () => {
     expect(classifyThreadColumn(thread({ id: 'a', status: 'archived' }))).toBe('done');
-    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('queued');
-    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('running');
+    expect(classifyThreadColumn(thread({ id: 'q', status: 'queued' }))).toBe('needs_you');
+    expect(classifyThreadColumn(thread({ id: 'r', status: 'running' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'e', status: 'error' }))).toBe('needs_you');
     expect(classifyThreadColumn(thread({ id: 'b', status: 'broken' }))).toBe('needs_you');
     expect(
@@ -159,7 +160,7 @@ describe('classifyThreadColumn', () => {
     ).toBe('needs_you');
   });
 
-  it('keeps errored threads with an open PR in Needs you', () => {
+  it('keeps an open PR in Review even while running or errored', () => {
     expect(
       classifyThreadColumn(
         thread({
@@ -170,7 +171,17 @@ describe('classifyThreadColumn', () => {
           prState: 'OPEN',
         }),
       ),
-    ).toBe('needs_you');
+    ).toBe('review');
+    expect(
+      classifyThreadColumn(
+        thread({
+          id: 'run-pr',
+          status: 'running',
+          prUrl: 'https://github.com/acme/app/pull/4',
+          prState: 'OPEN',
+        }),
+      ),
+    ).toBe('review');
   });
 });
 
@@ -391,13 +402,10 @@ describe('board search and paging', () => {
 });
 
 describe('assembleHomeBoard', () => {
-  it('puts pulled items without a worktree in Backlog', () => {
+  it('places worktree threads by agent and PR state', () => {
     const snap = assembleHomeBoard({
       pins: [
         pin({ id: 't1', kind: 'ticket', ref: 'ENG-1', title: 'Login', provider: 'linear' }),
-        pin({ id: 't2', kind: 'ticket', ref: 'ENG-2', title: 'Taken', provider: 'linear' }),
-        pin({ id: 'p1', kind: 'pr', ref: '9', title: 'Open review' }),
-        pin({ id: 'b1', kind: 'branch', ref: 'feat/x', title: 'feat/x' }),
       ],
       threads: [
         thread({
@@ -407,77 +415,69 @@ describe('assembleHomeBoard', () => {
           title: 'Taken',
           status: 'running',
         }),
+        thread({
+          id: 'review',
+          sourceType: 'pr',
+          sourceRef: '9',
+          title: 'Open review',
+          prUrl: 'https://github.com/acme/app/pull/9',
+          prState: 'OPEN',
+          status: 'idle',
+        }),
       ],
     });
-    expect(
-      snap.columns.backlog.filter((c) => c.kind === 'ticket').map((c) => c.identifier),
-    ).toEqual(['ENG-1']);
-    expect(snap.columns.backlog.some((c) => c.kind === 'pr' && c.number === 9)).toBe(true);
-    expect(snap.columns.backlog.some((c) => c.kind === 'branch' && c.ref === 'feat/x')).toBe(
-      true,
-    );
-    expect(snap.columns.running).toHaveLength(1);
-    expect(snap.columns.review).toHaveLength(0);
+    expect(snap.columns.backlog).toHaveLength(0);
+    expect(snap.columns.needs_you).toHaveLength(1);
+    expect(snap.columns.review).toHaveLength(1);
     expect(snap.totals).toMatchObject({
-      backlog: 3,
-      running: 1,
+      backlog: 0,
+      needs_you: 1,
+      review: 1,
       tickets: 1,
       prs: 1,
-      branches: 1,
-      threads: 1,
+      threads: 2,
     });
   });
 
   it('filters by query, kind, column, and page limit', () => {
-    const pins = Array.from({ length: 3 }, (_, i) =>
-      pin({
-        id: `p${i}`,
-        kind: 'ticket',
-        ref: `ENG-${i + 1}`,
-        title: i === 0 ? 'Pay wall' : `Other ${i}`,
-      }),
-    );
     const threads = [
-      thread({ id: 'run', title: 'Pay worker', status: 'running' }),
-      thread({ id: 'done', title: 'Old pay', status: 'archived' }),
+      thread({ id: 'run', title: 'Pay worker', status: 'running', sourceType: 'ticket' }),
+      thread({ id: 'done', title: 'Old pay', status: 'archived', sourceType: 'branch' }),
+      thread({ id: 'other', title: 'Other', status: 'queued', sourceType: 'pr' }),
     ];
     const queried = assembleHomeBoard({
-      pins,
       threads,
       query: 'pay',
     });
-    expect(queried.columns.backlog).toHaveLength(1);
-    expect(queried.columns.running).toHaveLength(1);
+    expect(queried.columns.backlog).toHaveLength(0);
+    expect(queried.columns.needs_you).toHaveLength(1);
     expect(queried.columns.done).toHaveLength(1);
 
     const ticketsOnly = assembleHomeBoard({
-      pins: [...pins, pin({ id: 'pr', kind: 'pr', ref: '3', title: 'PR' })],
       threads,
       kind: 'tickets',
     });
     expect(ticketsOnly.totals.prs).toBe(0);
-    expect(ticketsOnly.columns.running).toHaveLength(0);
+    expect(ticketsOnly.columns.needs_you).toHaveLength(1);
     expect(ticketsOnly.columns.review).toHaveLength(0);
 
     const paged = assembleHomeBoard({
-      pins: Array.from({ length: 45 }, (_, i) =>
-        pin({ id: `t${i}`, kind: 'ticket', ref: `T-${i}`, title: `Card ${i}` }),
+      threads: Array.from({ length: 45 }, (_, i) =>
+        thread({ id: `t${i}`, title: `Card ${i}`, status: 'running' }),
       ),
-      threads: [],
       limit: 10,
     });
-    expect(paged.columns.backlog).toHaveLength(10);
-    expect(paged.hidden.backlog).toBe(35);
-    expect(paged.totals.backlog).toBe(45);
+    expect(paged.columns.needs_you).toHaveLength(10);
+    expect(paged.hidden.needs_you).toBe(35);
+    expect(paged.totals.needs_you).toBe(45);
 
     const col = assembleHomeBoard({
-      pins,
       threads,
-      column: 'running',
+      column: 'needs_you',
     });
-    expect(col.columns.running).toHaveLength(1);
-    expect(col.columns.backlog).toHaveLength(0);
-    expect(col.totals.backlog).toBe(3);
+    expect(col.columns.needs_you).toHaveLength(2);
+    expect(col.columns.done).toHaveLength(0);
+    expect(col.totals.done).toBe(1);
   });
 
   it('keeps picker cycle helpers and syncs pin metadata from remotes', () => {
@@ -550,18 +550,96 @@ describe('assembleHomeBoard', () => {
       ],
     });
     expect(snap.columns.needs_you.map((c) => c.kind === 'thread' && c.id).sort()).toEqual(
-      ['cowboy', 'sidebar'],
+      ['adopted', 'agent', 'cowboy', 'sidebar'],
     );
-    expect(snap.columns.queued.map((c) => c.kind === 'thread' && c.id)).toEqual(['agent']);
-    expect(snap.columns.running.map((c) => c.kind === 'thread' && c.id)).toEqual([
-      'adopted',
-    ]);
+    expect(snap.columns.review).toHaveLength(0);
     expect(snap.totals.threads).toBe(4);
     expect(
-      [...snap.columns.queued, ...snap.columns.running, ...snap.columns.needs_you].some(
-        (c) => c.kind === 'thread' && c.id === 'orch',
-      ),
+      snap.columns.needs_you.some((c) => c.kind === 'thread' && c.id === 'orch'),
     ).toBe(false);
+  });
+
+  it('reuses a live ticket, PR, or named branch — not a default-branch create', () => {
+    const live = [
+      thread({
+        id: 'ticket',
+        sourceType: 'ticket',
+        sourceRef: 'ENG-4',
+        title: 'Ship',
+        repoPath: '/repo',
+      }),
+      thread({
+        id: 'pr',
+        sourceType: 'pr',
+        sourceRef: '9',
+        title: 'Fix',
+        repoPath: '/repo',
+      }),
+      thread({
+        id: 'named',
+        sourceType: 'branch',
+        sourceRef: 'feat/login',
+        branchName: 'thread/limon',
+        repoPath: '/repo',
+      }),
+      thread({
+        id: 'from-default',
+        sourceType: 'branch',
+        sourceRef: 'main',
+        branchName: 'thread/other',
+        repoPath: '/repo',
+      }),
+      thread({
+        id: 'cowboy',
+        sourceType: 'branch',
+        sourceRef: 'main',
+        branchName: 'main',
+        cowboy: true,
+        repoPath: '/repo',
+      }),
+    ];
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'ticket', sourceRef: 'ENG-4', repoPath: '/repo' },
+        live,
+      )?.id,
+    ).toBe('ticket');
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'pr', sourceRef: '9', repoPath: '/repo' },
+        live,
+      )?.id,
+    ).toBe('pr');
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'branch', sourceRef: 'feat/login', repoPath: '/repo' },
+        live,
+      )?.id,
+    ).toBe('named');
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'branch', sourceRef: 'default', repoPath: '/repo' },
+        live,
+      ),
+    ).toBeUndefined();
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'branch', sourceRef: 'main', repoPath: '/repo' },
+        live,
+      ),
+    ).toBeUndefined();
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'branch', sourceRef: 'default', repoPath: '/repo', cowboy: true },
+        live,
+      )?.id,
+    ).toBe('cowboy');
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'ticket', sourceRef: 'ENG-4', repoPath: '/other' },
+        live,
+      ),
+    ).toBeUndefined();
   });
 
   it('resolves Start refs to the matching ticket or PR', () => {
