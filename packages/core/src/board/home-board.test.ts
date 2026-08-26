@@ -579,7 +579,24 @@ describe('assembleHomeBoard', () => {
   });
 
   it('keeps picker cycle helpers and syncs pin metadata from remotes', () => {
-    expect(defaultTicketScope('linear')).toBe('cycle');
+    expect(defaultTicketScope('linear')).toBe('assigned');
+    expect(defaultTicketScope('github')).toBe('all');
+    expect(issueInTicketScope(
+      issue({
+        identifier: 'ENG-2',
+        title: 'Backlog',
+        provider: 'linear',
+      }),
+      'assigned',
+    )).toBe(true);
+    expect(issueInTicketScope(
+      issue({
+        identifier: 'ENG-2',
+        title: 'Backlog',
+        provider: 'linear',
+      }),
+      'cycle',
+    )).toBe(false);
     expect(issueInTicketScope(
       issue({
         identifier: 'ENG-1',

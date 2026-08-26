@@ -27,3 +27,5 @@ apps/desktop/dist/
 .conductor/settings.local.toml
 # Per-worktree dev app-data (thread store) — see apps/desktop/src/main/index.ts
 .sideboard/dev-app-data/
+# Detached long jobs (pid/log/exit) — see scripts/detached-job.js
+.sideboard/detached-jobs/

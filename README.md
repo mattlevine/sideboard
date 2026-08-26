@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.128/Sideboard-0.1.128-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.130/Sideboard-0.1.130-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -97,6 +97,8 @@ pnpm release patch npm       # CLI + MCP only (core ships `sideboard-mcp`)
 pnpm release patch mac       # desktop GitHub Release only
 pnpm release patch all never # dry-run / local artifacts
 ```
+
+Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run`, loop `wait`, and `present_artifact` `type=log` with `content=delta`. Same wait tool for any long job: [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md).
 
 After `npm i -g @sideboard-ai/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 
@@ -205,7 +207,7 @@ Same chrome for every backend:
 
 ### Artifacts & file manager
 
-- **`present_artifact`** — HTML / SVG / markdown in the same column (Claude-style docs, yours)
+- **`present_artifact`** — HTML / SVG / markdown / React, or **`type=log`** (append-only stream; same `artifact_id`, new lines only)
 - **`present_files`** — browse / upload / pick (`memory` demo, or optional Brightsy storage). Drag from Finder or from Sideboard’s worktree file list. Multiple Files tabs can sit beside multiple schema tabs.
 
 New datasources implement list/get/save (and optional publish). They do not fork the column UI.

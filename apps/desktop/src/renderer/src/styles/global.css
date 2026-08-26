@@ -461,6 +461,62 @@ body.resizing-panels webview {
   background: var(--bg);
 }
 
+.artifact-pane-log-pill {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.artifact-pane-log-pill.running {
+  background: #1d2a44;
+  color: #93c5fd;
+  animation: artifact-log-pulse 1.2s ease-in-out infinite;
+}
+.artifact-pane-log-pill.ok {
+  background: #16351f;
+  color: #6ee7a8;
+}
+.artifact-pane-log-pill.failed {
+  background: #3b1717;
+  color: #fca5a5;
+}
+.artifact-pane-log-pill.idle {
+  background: var(--bg-hover);
+  color: var(--muted);
+}
+@keyframes artifact-log-pulse {
+  50% { opacity: 0.45; }
+}
+
+.artifact-pane-log-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0f1115;
+}
+
+.artifact-pane-log-phase {
+  flex-shrink: 0;
+  padding: 8px 14px 0;
+  color: #c4b5fd;
+  font-size: 12px;
+}
+
+.artifact-pane-log {
+  flex: 1;
+  margin: 0;
+  padding: 12px 14px 20px;
+  overflow: auto;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #d1d5db;
+}
+
 .artifact-pane-frame {
   flex: 1;
   width: 100%;

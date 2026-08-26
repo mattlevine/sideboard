@@ -26,7 +26,14 @@ function kindBadge(kind: ChatArtifact['kind']): string {
   if (kind === 'svg') return 'SVG';
   if (kind === 'markdown') return 'MD';
   if (kind === 'react') return 'REACT';
+  if (kind === 'log') return 'LOG';
   return kind.toUpperCase();
+}
+
+function logStatusLabel(status: ChatArtifact['status']): string {
+  if (status === 'running') return 'working';
+  if (status === 'ok') return 'done';
+  return status ?? '';
 }
 
 const ARTIFACT_LANG_EXT: Record<string, string> = {
@@ -46,6 +53,8 @@ const ARTIFACT_LANG_EXT: Record<string, string> = {
   cjs: 'js',
   jsx: 'jsx',
   react: 'jsx',
+  log: 'log',
+  console: 'log',
   python: 'py',
   py: 'py',
   json: 'json',
@@ -89,7 +98,8 @@ export function ArtifactPane({
     artifact.kind === 'html' ||
     artifact.kind === 'svg' ||
     artifact.kind === 'markdown' ||
-    artifact.kind === 'react';
+    artifact.kind === 'react' ||
+    artifact.kind === 'log';
   const [mode, setMode] = useState<'code' | 'preview'>(canPreview ? 'preview' : 'code');
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
@@ -208,6 +218,14 @@ export function ArtifactPane({
   const effectiveMode = canPreview ? mode : 'code';
   const isHtmlPreview =
     artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'react';
+  const isLogPreview = artifact.kind === 'log';
+  const logPreRef = useRef<HTMLPreElement | null>(null);
+
+  useEffect(() => {
+    if (!isLogPreview) return;
+    const el = logPreRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [isLogPreview, artifact.content]);
   const codePath = useMemo(() => artifactCodePath(artifact), [artifact.kind, artifact.language]);
 
   // Let the preloader paint before mounting Monaco / markdown.
@@ -261,6 +279,11 @@ export function ArtifactPane({
       <div className="artifact-pane-header">
         <div className="artifact-pane-title-block">
           <span className="artifact-pane-kind">{kindBadge(artifact.kind)}</span>
+          {artifact.kind === 'log' && artifact.status ? (
+            <span className={`artifact-pane-log-pill ${artifact.status}`}>
+              {logStatusLabel(artifact.status)}
+            </span>
+          ) : null}
           <h3 className="artifact-pane-title" title={artifact.title}>
             {artifact.title}
           </h3>
@@ -293,7 +316,16 @@ export function ArtifactPane({
         </div>
       </div>
       <div className="artifact-pane-body">
-        {effectiveMode === 'preview' && artifact.kind === 'markdown' ? (
+        {effectiveMode === 'preview' && artifact.kind === 'log' ? (
+          <div className="artifact-pane-log-wrap">
+            {artifact.phase ? (
+              <div className="artifact-pane-log-phase">{artifact.phase}</div>
+            ) : null}
+            <pre ref={logPreRef} className="artifact-pane-log">
+              {artifact.content || '(no output yet)'}
+            </pre>
+          </div>
+        ) : effectiveMode === 'preview' && artifact.kind === 'markdown' ? (
           bodyReady ? (
             <div className="artifact-pane-md">
               <MarkdownMessage text={artifact.content} className="md" />

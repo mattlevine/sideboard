@@ -4,6 +4,23 @@ import { getLinearAuthToken, linearAuthorizationHeader } from './linear-oauth.js
 
 const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
 
+/**
+ * Linear scores each nested connection as `first` (default 50) × children.
+ * A 200-issue list that also pulls `team.states` exceeds the 10k/query cap
+ * (`Query too complex`). List only the fields Home / Create-from need;
+ * fetch workflow states on single-issue get/create/update.
+ */
+const LIST_ISSUE_FIELDS = `
+  id
+  identifier
+  title
+  url
+  assignee { id name }
+  team { id key }
+  labels(first: 10) { nodes { name } }
+  cycle { name number startsAt endsAt completedAt }
+`;
+
 const ISSUE_FIELDS = `
   id
   identifier
@@ -13,9 +30,9 @@ const ISSUE_FIELDS = `
   priority
   state { id name type }
   assignee { id name }
-  team { id key name states { nodes { id name type } } }
-  labels { nodes { name } }
-  cycle { id name number startsAt endsAt completedAt }
+  team { id key name states(first: 50) { nodes { id name type } } }
+  labels(first: 50) { nodes { name } }
+  cycle { name number startsAt endsAt completedAt }
 `;
 
 const ASSIGNED_ISSUES_QUERY = `
@@ -28,7 +45,7 @@ query SideboardAssignedIssues($first: Int!) {
       orderBy: updatedAt
       filter: { state: { type: { nin: ["completed", "canceled"] } } }
     ) {
-      nodes { ${ISSUE_FIELDS} }
+      nodes { ${LIST_ISSUE_FIELDS} }
     }
   }
 }
@@ -42,7 +59,7 @@ query SideboardTeams {
       id
       key
       name
-      states { nodes { id name type } }
+      states(first: 50) { nodes { id name type } }
     }
   }
 }

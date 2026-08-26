@@ -9,6 +9,7 @@
  *   pnpm release minor
  *   pnpm release patch npm          # CLI + MCP (core) only
  *   pnpm release patch mac          # desktop only
+ *   pnpm release patch mac bump-only  # versions only (worktree agents, then detach pack)
  *   pnpm release patch all never    # both, no publish
  *
  * Usage (from apps/desktop):
@@ -78,16 +79,20 @@ function parseArgs() {
   const bump = ['patch', 'minor', 'major'].includes(args[0]) ? args[0] : 'patch';
   let target = 'all';
   let publish = 'always';
+  let bumpOnly = false;
   for (const arg of args.slice(1)) {
     if (['mac', 'desktop', 'npm', 'all'].includes(arg)) {
       target = arg === 'desktop' ? 'mac' : arg;
     } else if (['always', 'never'].includes(arg)) {
       publish = arg;
+    } else if (arg === 'bump-only' || arg === '--bump-only') {
+      bumpOnly = true;
     }
   }
   return {
     bump,
     publish,
+    bumpOnly,
     doDesktop: target === 'all' || target === 'mac',
     doNpm: target === 'all' || target === 'npm',
     target,
@@ -152,22 +157,29 @@ function syncVersions(version) {
 }
 
 loadEnv();
-const { bump, publish, doDesktop, doNpm, target } = parseArgs();
+const { bump, publish, bumpOnly, doDesktop, doNpm, target } = parseArgs();
 const pkgBefore = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 const githubTarget = getGithubPublishTarget(pkgBefore);
 
-if (publish === 'always' && doDesktop && !process.env.GH_TOKEN) {
+if (!bumpOnly && publish === 'always' && doDesktop && !process.env.GH_TOKEN) {
   throw new Error(
     'GH_TOKEN is required to publish the desktop app. Set it in apps/desktop/.env, run `gh auth login`, or use: pnpm release patch never',
   );
 }
 
-if (doDesktop) printMacNotarizeSummary();
+if (!bumpOnly && doDesktop) printMacNotarizeSummary();
 
 const nextVersion = bumpSemver(pkgBefore.version, bump);
 console.log(`📦 Bumping version: ${pkgBefore.version} → ${nextVersion} (${bump})`);
 console.log(`🎯 Targets: ${target} (desktop=${doDesktop}, npm=${doNpm}), publish=${publish}`);
 syncVersions(nextVersion);
+
+if (bumpOnly) {
+  console.log(
+    `📝 bump-only: wrote ${nextVersion} to package.json files. Pack separately with node apps/desktop/scripts/release-mac-detached.js`,
+  );
+  process.exit(0);
+}
 
 if (doNpm) {
   const npmScript = path.join(repoRoot, 'scripts/publish-npm.js');

@@ -393,25 +393,34 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'present_artifact',
-    'Show an HTML, SVG, markdown, or React document in Sideboard’s Claude-style side column (desktop). Use instead of claude.ai’s artifact tool — pass the full document content. Do not also emit the same document as a chat html/markdown fence. Prefer type=html for interactive pages. For type=react, pass a single component module that `export default`s a component (JSX/TSX ok) — Sideboard bootstraps React/ReactDOM/Babel and renders it; only `react`/`react-dom` imports are available, no other npm packages.',
+    'Show a document or live log in Sideboard’s side column. For html/svg/markdown/react, pass the FULL document and do not also fence that same body in chat. For type=log, pass only NEW lines (same artifact_id appends). Prefer type=log for long-running job output — do not resend HTML. type=react is a single default-export component (JSX/TSX); only react/react-dom imports.',
     {
       title: z.string().describe('Short title shown in the artifact pane header'),
       type: z
-        .enum(['html', 'svg', 'markdown', 'react'])
+        .enum(['html', 'svg', 'markdown', 'react', 'log'])
         .describe(
-          'Artifact kind — html opens an iframe preview; react transpiles and renders a default-exported component in a sandboxed iframe',
+          'html/svg/markdown/react replace the pane. log appends content to the same artifact_id (new lines only).',
         ),
       content: z
         .string()
         .describe(
-          'Full document body (complete HTML page, SVG markup, markdown, or a React component module with a default export)',
+          'html/svg/markdown/react: full document. log: only the new lines since the last call (empty is ok for a status-only update).',
         ),
       artifact_id: z
         .string()
         .optional()
-        .describe('Stable id when updating the same artifact across turns'),
+        .describe('Stable id. Required for type=log so later calls append to the same pane.'),
+      status: z
+        .enum(['running', 'ok', 'failed', 'idle'])
+        .optional()
+        .describe('Log header pill: running (working), ok (done), failed, idle'),
+      phase: z.string().optional().describe('Log subtitle (Signing, Notarizing, …)'),
+      mode: z
+        .enum(['append', 'replace'])
+        .optional()
+        .describe('log only: append (default) or replace the buffer'),
     },
-    async ({ title, type, artifact_id }) => {
+    async ({ title, type, artifact_id, status, phase, mode }) => {
       const id =
         artifact_id?.trim() ||
         `artifact_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -422,8 +431,13 @@ export async function startMcpServer(): Promise<void> {
         artifact_id: id,
         title,
         type,
+        status,
+        phase,
+        mode: type === 'log' ? (mode ?? 'append') : undefined,
         message:
-          'Artifact accepted. Sideboard desktop opens it in the side column beside chat.',
+          type === 'log'
+            ? 'Log accepted. Same artifact_id appends; send only new lines next time.'
+            : 'Artifact accepted. Sideboard desktop opens it in the side column beside chat.',
       };
       return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
     },

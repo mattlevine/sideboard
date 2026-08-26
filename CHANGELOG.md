@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.130] - 2026-08-26
+
+### Fixed
+
+- Linear `listIssues` no longer fails with `Query too complex`. The assigned-issues query dropped nested `team.states` and capped `labels` so it stays under Linear’s 10k/query cap.
+- Create-from Linear defaults to **Assigned to me** (same as Conductor). **This cycle** remains as an optional tighter filter.
+
+### Changed
+
+- Worktree agents detach **any** long job and wait in slices (`scripts/detached-job.js` start / wait) so a new chat turn does not SIGTERM the process. `present_artifact` **`type=log`** appends new lines (`delta`) to the same pane — do not resend HTML. Mac pack/notarize uses the same tool.
+
 ## [0.1.128] - 2026-08-26
 
 ### Fixed

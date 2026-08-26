@@ -1,6 +1,6 @@
 {
   "name": "sideboard",
-  "version": "0.1.128",
+  "version": "0.1.130",
   "private": true,
   "description": "Agent-agnostic orchestration layer over git worktrees — your threads aren't trapped anywhere.",
   "license": "Apache-2.0",
@@ -19,6 +19,8 @@
     "release:npm": "pnpm --filter @sideboard-ai/desktop exec node scripts/release.js patch npm",
     "release:desktop": "pnpm --filter @sideboard-ai/desktop exec node scripts/release.js patch mac",
     "release:local": "pnpm --filter @sideboard-ai/desktop exec node scripts/release.js patch all never",
-    "publish:npm": "node scripts/publish-npm.js"
+    "publish:npm": "node scripts/publish-npm.js",
+    "job": "node scripts/detached-job.js",
+    "job:wait": "node scripts/detached-job.js wait"
   }
 }
