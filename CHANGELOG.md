@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.132] - 2026-08-26
+
 ### Added
 
 - Home and the left sidebar can sort worktrees by **Created** (default), **Name**, or **Recent activity**. Created keeps the list still while agents run.
