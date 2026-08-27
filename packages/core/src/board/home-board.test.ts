@@ -20,6 +20,7 @@ import {
   findBoardPr,
   findLiveThreadForCreate,
   haystackMatches,
+  isAccountWideIssueSource,
   issueInTicketScope,
   issueNeedsWorkspacePick,
   issueSearchText,
@@ -400,6 +401,9 @@ describe('dedupeBoardIssues / workspace pick', () => {
     expect(issueNeedsWorkspacePick('github', 3)).toBe(false);
     expect(issueNeedsWorkspacePick('linear', 3)).toBe(true);
     expect(issueNeedsWorkspacePick('abletime', 2)).toBe(true);
+    expect(isAccountWideIssueSource('linear')).toBe(true);
+    expect(isAccountWideIssueSource('abletime')).toBe(true);
+    expect(isAccountWideIssueSource('github')).toBe(false);
     expect(issueNeedsWorkspacePick('linear', 1)).toBe(false);
     expect(pickDefaultRepoPath([{ path: '/a' }, { path: '/b' }], '/b')).toBe('/b');
     expect(pickDefaultRepoPath([{ path: '/a' }, { path: '/b' }], '__global__')).toBe('/a');

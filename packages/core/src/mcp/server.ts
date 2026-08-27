@@ -23,6 +23,7 @@ import {
 } from './wait-for-turn.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { registerSlackTools } from './slack-tools.js';
+import { registerAbleTimeTools } from './abletime-tools.js';
 import { registerLinearTools } from './linear-tools.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
@@ -606,6 +607,7 @@ export async function startMcpServer(): Promise<void> {
   if (!worktreeProfile) {
   registerSlackTools(server);
   registerLinearTools(server);
+  registerAbleTimeTools(server);
   registerScheduleTools(server);
   const { getCaffeinateHold, setCaffeinateHold } = await import(
     '../store/caffeinate-hold.js'
@@ -1510,7 +1512,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List issues from Sideboard Account connections (Linear API or GitHub Issues; Linear→GitHub fallback when Linear is not connected). Linear returns issues assigned to you (includes cycle). Pass repoPath from list_workspaces — GitHub Issues are scoped to that repo. Prefer list_board for Home columns + current-cycle filter. Then create_thread with sourceType=ticket.',
+    'List issues from Sideboard Account connections (Linear, AbleTime MCP, or GitHub Issues; falls back to GitHub when the preferred tracker is not connected). Linear/AbleTime are account-wide; GitHub Issues are scoped to repoPath from list_workspaces. When AbleTime is the issue source and work has no ticket, call abletime_ensure_task (or create_thread from the default branch — Sideboard auto-creates a task to track against). Prefer list_board for Home columns. Then create_thread with sourceType=ticket.',
     { repoPath: z.string() },
     async ({ repoPath }) => {
       const root = await resolveRepoRoot(repoPath);

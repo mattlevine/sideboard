@@ -163,6 +163,8 @@ export interface IpcApi {
     slackDeviceLabel?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
+    abletimeAccessToken?: string | null;
+    abletimeHost?: string | null;
   }): Promise<PublicAppSettings>;
   updateDefaultsSettings(patch: {
     agent?: AgentKind | null;
@@ -187,6 +189,22 @@ export interface IpcApi {
   cancelLinearOAuth(): Promise<void>;
   /** Revoke Linear OAuth (best-effort) and clear stored Linear credentials. */
   disconnectLinear(): Promise<PublicAppSettings>;
+  /** Verify an AbleTime PAT via MCP orientation and store it. */
+  connectAbleTime(input: {
+    token: string;
+    host?: string | null;
+  }): Promise<PublicAppSettings>;
+  /** Clear the stored AbleTime personal access token. */
+  disconnectAbleTime(): Promise<PublicAppSettings>;
+  /**
+   * Find or create an AbleTime task to track work against
+   * (hosted MCP create_task / search_tasks).
+   */
+  ensureAbleTimeTask(input: {
+    title: string;
+    description?: string;
+    projectId?: string;
+  }): Promise<IssueInfo & { created: boolean }>;
   /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */
   getSlackListenStatus(): Promise<SlackListenStatus>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
@@ -197,8 +215,8 @@ export interface IpcApi {
     listener: (state: CaffeinateHoldState & { appCaffeinated: boolean }) => void,
   ): () => void;
   /**
-   * Unified issues for Create-from / Link issue (Linear API or GitHub Issues,
-   * based on Account preference with Linear→GitHub fallback).
+   * Unified issues for Create-from / Link issue (Linear, AbleTime MCP, or
+   * GitHub Issues, based on Account preference with GitHub fallback).
    */
   listIssues(repoPath: string): Promise<ListIssuesResult>;
   /**

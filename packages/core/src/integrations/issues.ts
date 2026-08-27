@@ -1,21 +1,24 @@
 import { resolveGithubRepoSlug } from '../git/worktree.js';
 import { gh } from '../git/run.js';
 import {
+  isAbleTimeConnected,
   isLinearConnected,
   loadAppSettings,
   resolveEffectiveIssueSource,
   type IssueSource,
 } from '../store/app-settings.js';
 import type { IssueInfo } from '../types/thread.js';
+import { listAbleTimeAssignedIssues } from './abletime.js';
 import { listLinearAssignedIssues } from './linear.js';
 
 export type { IssueSource };
 
 export interface ListIssuesResult {
   source: IssueSource;
-  /** Preference before fallback (useful for “Set up Linear” UI). */
+  /** Preference before fallback (useful for “Set up Linear / AbleTime” UI). */
   preferredSource: IssueSource;
   linearConnected: boolean;
+  abletimeConnected: boolean;
   issues: IssueInfo[];
   /** Linear viewer name or GitHub login — used for “assigned to me”. */
   viewer?: { login?: string; name?: string };
@@ -93,14 +96,14 @@ async function githubViewerLogin(repoPath: string): Promise<string> {
 
 /**
  * Unified issue list for Create-from / Link issue / Home / MCP / CLI.
- * Uses Sideboard Account connections — not agent Linear MCP.
- * Linear and GitHub only; AbleTime is typed but has no client yet
- * (`resolveEffectiveIssueSource` falls back to GitHub).
+ * Uses Sideboard Account connections — Linear GraphQL, AbleTime hosted MCP,
+ * or GitHub Issues via `gh`.
  */
 export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
   const settings = loadAppSettings();
   const preferredSource = settings.integrations.issueSource ?? 'github';
   const linearConnected = isLinearConnected(settings);
+  const abletimeConnected = isAbleTimeConnected(settings);
   const source = resolveEffectiveIssueSource(settings);
 
   if (source === 'linear') {
@@ -109,6 +112,22 @@ export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
       source,
       preferredSource,
       linearConnected,
+      abletimeConnected,
+      issues: listed.issues,
+      viewer: {
+        login: listed.viewer.name,
+        name: listed.viewer.name,
+      },
+    };
+  }
+
+  if (source === 'abletime') {
+    const listed = await listAbleTimeAssignedIssues();
+    return {
+      source,
+      preferredSource,
+      linearConnected,
+      abletimeConnected,
       issues: listed.issues,
       viewer: {
         login: listed.viewer.name,
@@ -125,6 +144,7 @@ export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
     source,
     preferredSource,
     linearConnected,
+    abletimeConnected,
     issues,
     viewer: login ? { login } : undefined,
   };

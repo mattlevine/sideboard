@@ -332,6 +332,11 @@ export function issueNeedsWorkspacePick(
   return provider !== 'github';
 }
 
+/** Account-wide trackers are fetched once, not per workspace. */
+export function isAccountWideIssueSource(source: string | undefined): boolean {
+  return source === 'linear' || source === 'abletime';
+}
+
 /** Stable card identity — GitHub numbers repeat across repos; Linear is account-wide. */
 export function boardIssueKey(
   issue: Pick<BoardIssue, 'id' | 'identifier' | 'repoPath' | 'provider'>,
@@ -627,7 +632,7 @@ export type BoardKindFilter = 'all' | 'tickets' | 'prs' | 'branches' | 'threads'
 /** Who / which sprint the Create-from ticket list includes. */
 export type TicketScope = 'cycle' | 'assigned' | 'all';
 
-/** Linear is already assigned-to-you (same as Conductor). GitHub defaults to all open. */
+/** Linear is already assigned-to-you (same as Conductor). GitHub / AbleTime default to all open. */
 export function defaultTicketScope(issueSource: string): TicketScope {
   return issueSource === 'linear' ? 'assigned' : 'all';
 }

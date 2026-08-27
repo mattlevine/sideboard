@@ -67,6 +67,7 @@ function emptyAppSettings(): PublicAppSettings {
       hasSlackClientSecret: false,
       hasSlackAppToken: false,
       hasGithubPat: false,
+      hasAbleTimeToken: false,
     },
     defaults: {},
     advanced: {},
@@ -93,6 +94,7 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
       hasSlackClientSecret: false,
       hasSlackAppToken: false,
       hasGithubPat: false,
+      hasAbleTimeToken: false,
       ...next.integrations,
     },
     defaults: next.defaults ?? {},
@@ -249,6 +251,10 @@ export function SettingsModal({
   const [slackDeviceLabelDraft, setSlackDeviceLabelDraft] = useState('');
   const [linearKeyDraft, setLinearKeyDraft] = useState('');
   const [showLinearKey, setShowLinearKey] = useState(false);
+  const [abletimeTokenDraft, setAbletimeTokenDraft] = useState('');
+  const [showAbletimeToken, setShowAbletimeToken] = useState(false);
+  const [abletimeHostDraft, setAbletimeHostDraft] = useState('');
+  const [abletimeBusy, setAbletimeBusy] = useState(false);
   const [githubPatDraft, setGithubPatDraft] = useState('');
   const [showGithubPat, setShowGithubPat] = useState(false);
   const [linearOauthBusy, setLinearOauthBusy] = useState(false);
@@ -278,6 +284,8 @@ export function SettingsModal({
     setSlackWorkspaces(slack);
     setSlackListen(slackIn);
     setLinearKeyDraft('');
+    setAbletimeTokenDraft('');
+    setAbletimeHostDraft(s.integrations.abletimeHost?.trim() || '');
     setSlackTokenDraft('');
     setSlackDeviceLabelDraft(
       s.integrations.slackDeviceLabel?.trim() ||
@@ -501,6 +509,8 @@ export function SettingsModal({
     slackDeviceLabel?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
+    abletimeAccessToken?: string | null;
+    abletimeHost?: string | null;
   }) {
     setBusy(true);
     setError(null);
@@ -508,6 +518,7 @@ export function SettingsModal({
       const next = await window.sideboard.updateIntegrationsSettings(patch);
       applySettings(next);
       setLinearKeyDraft('');
+      if ('abletimeAccessToken' in patch) setAbletimeTokenDraft('');
       if ('githubPat' in patch) setGithubPatDraft('');
       if ('slackDeviceLabel' in patch) {
         setSlackDeviceLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
@@ -1007,6 +1018,106 @@ export function SettingsModal({
                 </div>
 
                 <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">AbleTime</div>
+                  <p className="settings-hint">
+                    Connect AbleTime so Sideboard can list tasks and auto-create one
+                    to track against when you start work without a ticket. Uses
+                    AbleTime&apos;s hosted MCP (
+                    <code>POST /api/public/v2/mcp</code>
+                    ). Enable <strong>Agent access (MCP)</strong> in AbleTime, then
+                    paste a personal access token from Profile → API Access (
+                    <code>apt_…</code>
+                    ).
+                  </p>
+                  {settings.integrations.hasAbleTimeToken ? (
+                    <div className="settings-toggle-row" style={{ marginTop: 10 }}>
+                      <div>
+                        <p className="settings-status-text">
+                          <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
+                          {[
+                            'Connected',
+                            settings.integrations.abletimeViewerName,
+                            settings.integrations.abletimeHost,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      </div>
+                      <div className="row" style={{ gap: 8, margin: 0 }}>
+                        <button
+                          type="button"
+                          disabled={busy || abletimeBusy}
+                          onClick={() => {
+                            setBusy(true);
+                            setError(null);
+                            void window.sideboard
+                              .disconnectAbleTime()
+                              .then((next) => applySettings(next))
+                              .catch((err) =>
+                                setError(err instanceof Error ? err.message : String(err)),
+                              )
+                              .finally(() => setBusy(false));
+                          }}
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 10 }}>
+                      <div className="row" style={{ gap: 8 }}>
+                        <input
+                          type={showAbletimeToken ? 'text' : 'password'}
+                          value={abletimeTokenDraft}
+                          onChange={(e) => setAbletimeTokenDraft(e.target.value)}
+                          placeholder="apt_…"
+                          style={{ flex: 1 }}
+                          autoComplete="off"
+                        />
+                        <button
+                          type="button"
+                          className="settings-inline-btn"
+                          onClick={() => setShowAbletimeToken((v) => !v)}
+                        >
+                          {showAbletimeToken ? 'Hide' : 'Show'}
+                        </button>
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={busy || abletimeBusy || !abletimeTokenDraft.trim()}
+                          onClick={() => {
+                            setAbletimeBusy(true);
+                            setError(null);
+                            void window.sideboard
+                              .connectAbleTime({
+                                token: abletimeTokenDraft.trim(),
+                                host: abletimeHostDraft.trim() || null,
+                              })
+                              .then((next) => {
+                                applySettings(next);
+                                setAbletimeTokenDraft('');
+                              })
+                              .catch((err) =>
+                                setError(err instanceof Error ? err.message : String(err)),
+                              )
+                              .finally(() => setAbletimeBusy(false));
+                          }}
+                        >
+                          {abletimeBusy ? 'Checking…' : 'Connect'}
+                        </button>
+                      </div>
+                      <input
+                        value={abletimeHostDraft}
+                        onChange={(e) => setAbletimeHostDraft(e.target.value)}
+                        placeholder="https://track.abletime.com"
+                        style={{ marginTop: 8, width: '100%' }}
+                        autoComplete="off"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Slack workspaces</div>
                   <p className="settings-hint">
                     Click <strong>Add via browser</strong> to install the Sideboard Slack app into a
@@ -1202,19 +1313,24 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Issue source</div>
                   <p className="settings-hint">
-                    Prefer GitHub Issues or Linear in Create-from and Home. If the preferred
-                    tracker is not connected, GitHub Issues are used automatically.
+                    Prefer GitHub Issues, Linear, or AbleTime in Create-from and Home.
+                    If the preferred tracker is not connected, GitHub Issues are used
+                    automatically. When AbleTime is selected, new work without a ticket
+                    auto-creates a task to track against.
                   </p>
                   <div className="row" style={{ marginTop: 10, gap: 8 }}>
                     {([
                       { id: 'github' as const, label: 'GitHub Issues' },
                       { id: 'linear' as const, label: 'Linear' },
+                      { id: 'abletime' as const, label: 'AbleTime' },
                     ]).map((opt) => {
                       const preferred = settings.integrations.issueSource ?? 'github';
-                      const visible = preferred === 'abletime' ? 'github' : preferred;
-                      const active = visible === opt.id;
+                      const active = preferred === opt.id;
                       const linearOk = Boolean(settings.integrations.hasLinearApiKey);
-                      const disabled = opt.id === 'linear' && !linearOk;
+                      const abletimeOk = Boolean(settings.integrations.hasAbleTimeToken);
+                      const disabled =
+                        (opt.id === 'linear' && !linearOk) ||
+                        (opt.id === 'abletime' && !abletimeOk);
                       return (
                         <button
                           key={opt.id}
@@ -1223,7 +1339,9 @@ export function SettingsModal({
                           disabled={busy || disabled}
                           title={
                             disabled
-                              ? 'Connect Linear first'
+                              ? opt.id === 'abletime'
+                                ? 'Connect AbleTime first'
+                                : 'Connect Linear first'
                               : undefined
                           }
                           onClick={() =>
@@ -1232,6 +1350,7 @@ export function SettingsModal({
                         >
                           {opt.label}
                           {opt.id === 'linear' && !linearOk ? ' (not connected)' : ''}
+                          {opt.id === 'abletime' && !abletimeOk ? ' (not connected)' : ''}
                         </button>
                       );
                     })}

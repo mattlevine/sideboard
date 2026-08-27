@@ -10,6 +10,7 @@ export interface SettingsSecretVault {
   slackClientSecret?: string;
   slackAppToken?: string;
   githubPat?: string;
+  abletimeAccessToken?: string;
   environment?: Record<string, string>;
 }
 
@@ -49,6 +50,9 @@ function normalizeVault(raw: SettingsSecretVault): SettingsSecretVault {
   }
   if (typeof raw.githubPat === 'string' && raw.githubPat.trim()) {
     out.githubPat = raw.githubPat.trim();
+  }
+  if (typeof raw.abletimeAccessToken === 'string' && raw.abletimeAccessToken.trim()) {
+    out.abletimeAccessToken = raw.abletimeAccessToken.trim();
   }
   if (raw.environment && typeof raw.environment === 'object') {
     const environment: Record<string, string> = {};

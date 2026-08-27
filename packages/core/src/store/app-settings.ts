@@ -155,6 +155,15 @@ export interface IntegrationsSettings {
   githubGitAuthMode?: GithubGitAuthMode;
   /** Fine-grained or classic PAT when mode is `token` (vaulted). */
   githubPat?: string;
+  /**
+   * AbleTime personal access token (`apt_…`) for hosted MCP
+   * (`POST {host}/api/public/v2/mcp`). Vaulted.
+   */
+  abletimeAccessToken?: string;
+  /** AbleTime host (default https://track.abletime.com). */
+  abletimeHost?: string;
+  /** Display name of the connected AbleTime user (non-secret). */
+  abletimeViewerName?: string;
 }
 
 /**
@@ -267,6 +276,7 @@ export type PublicIntegrationsSettings = Omit<
   | 'slackClientSecret'
   | 'slackAppToken'
   | 'githubPat'
+  | 'abletimeAccessToken'
 > & {
   /** True when Linear is connected (OAuth or API key). */
   hasLinearApiKey: boolean;
@@ -275,6 +285,8 @@ export type PublicIntegrationsSettings = Omit<
   hasSlackAppToken: boolean;
   /** True when a GitHub PAT is stored (token mode). */
   hasGithubPat: boolean;
+  /** True when an AbleTime personal access token is stored. */
+  hasAbleTimeToken: boolean;
 };
 
 /** Settings payload for the desktop UI. Secret values are omitted. */
@@ -301,6 +313,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   const slackClientSecret = integrations.slackClientSecret;
   const slackAppToken = integrations.slackAppToken;
   const githubPat = integrations.githubPat;
+  const abletimeAccessToken = integrations.abletimeAccessToken;
   delete integrations.linearApiKey;
   delete integrations.linearAccessToken;
   delete integrations.linearRefreshToken;
@@ -308,6 +321,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   delete integrations.slackClientSecret;
   delete integrations.slackAppToken;
   delete integrations.githubPat;
+  delete integrations.abletimeAccessToken;
   return {
     ...settings,
     environment,
@@ -318,6 +332,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
       hasSlackClientSecret: Boolean(slackClientSecret?.trim()),
       hasSlackAppToken: Boolean(slackAppToken?.trim()),
       hasGithubPat: Boolean(githubPat?.trim()),
+      hasAbleTimeToken: Boolean(abletimeAccessToken?.trim()),
     },
   };
 }
@@ -465,6 +480,18 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (typeof source.githubPat === 'string') {
     const pat = source.githubPat.trim();
     if (pat) out.githubPat = pat;
+  }
+  if (typeof source.abletimeAccessToken === 'string') {
+    const token = source.abletimeAccessToken.trim();
+    if (token) out.abletimeAccessToken = token;
+  }
+  if (typeof source.abletimeHost === 'string') {
+    const host = source.abletimeHost.trim();
+    if (host) out.abletimeHost = host;
+  }
+  if (typeof source.abletimeViewerName === 'string') {
+    const name = source.abletimeViewerName.trim().slice(0, 120);
+    if (name) out.abletimeViewerName = name;
   }
   return out;
 }
@@ -652,6 +679,7 @@ function diskHoldsSecrets(disk: AppSettings): boolean {
       disk.integrations.slackClientSecret ||
       disk.integrations.slackAppToken ||
       disk.integrations.githubPat ||
+      disk.integrations.abletimeAccessToken ||
       Object.keys(disk.environment).length > 0,
   );
 }
@@ -681,6 +709,9 @@ function mergeVault(disk: AppSettings): AppSettings {
   if (vault.githubPat && !integrations.githubPat) {
     integrations.githubPat = vault.githubPat;
   }
+  if (vault.abletimeAccessToken && !integrations.abletimeAccessToken) {
+    integrations.abletimeAccessToken = vault.abletimeAccessToken;
+  }
   return { ...disk, environment, integrations };
 }
 
@@ -693,6 +724,7 @@ function persistSplit(settings: AppSettings): void {
   const slackClientSecret = integrations.slackClientSecret;
   const slackAppToken = integrations.slackAppToken;
   const githubPat = integrations.githubPat;
+  const abletimeAccessToken = integrations.abletimeAccessToken;
   delete integrations.linearApiKey;
   delete integrations.linearAccessToken;
   delete integrations.linearRefreshToken;
@@ -700,6 +732,7 @@ function persistSplit(settings: AppSettings): void {
   delete integrations.slackClientSecret;
   delete integrations.slackAppToken;
   delete integrations.githubPat;
+  delete integrations.abletimeAccessToken;
   writePrivateFile(
     appSettingsPath(),
     `${JSON.stringify({ ...settings, environment: {}, integrations }, null, 2)}\n`,
@@ -712,6 +745,7 @@ function persistSplit(settings: AppSettings): void {
     slackClientSecret,
     slackAppToken,
     githubPat,
+    abletimeAccessToken,
     environment: settings.environment,
   });
 }
@@ -844,6 +878,9 @@ export function updateIntegrationsSettings(
     slackDeviceLabel?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
+    abletimeAccessToken?: string | null;
+    abletimeHost?: string | null;
+    abletimeViewerName?: string | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -930,6 +967,28 @@ export function updateIntegrationsSettings(
       delete integrations.githubPat;
     } else {
       integrations.githubPat = patch.githubPat.trim();
+    }
+  }
+  if ('abletimeAccessToken' in patch) {
+    if (patch.abletimeAccessToken == null || patch.abletimeAccessToken.trim() === '') {
+      delete integrations.abletimeAccessToken;
+      delete integrations.abletimeViewerName;
+    } else {
+      integrations.abletimeAccessToken = patch.abletimeAccessToken.trim();
+    }
+  }
+  if ('abletimeHost' in patch) {
+    if (patch.abletimeHost == null || patch.abletimeHost.trim() === '') {
+      delete integrations.abletimeHost;
+    } else {
+      integrations.abletimeHost = patch.abletimeHost.trim();
+    }
+  }
+  if ('abletimeViewerName' in patch) {
+    if (patch.abletimeViewerName == null || patch.abletimeViewerName.trim() === '') {
+      delete integrations.abletimeViewerName;
+    } else {
+      integrations.abletimeViewerName = patch.abletimeViewerName.trim().slice(0, 120);
     }
   }
   return saveAppSettings({ ...current, integrations });
@@ -1109,6 +1168,53 @@ export function disconnectLinearConnection(): AppSettings {
   return saveAppSettings({ ...current, integrations });
 }
 
+/** True when Sideboard has an AbleTime personal access token stored. */
+export function isAbleTimeConnected(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.integrations.abletimeAccessToken?.trim());
+}
+
+export function getAbleTimeAccessToken(
+  settings: AppSettings = loadAppSettings(),
+): string | null {
+  const token = settings.integrations.abletimeAccessToken?.trim();
+  return token || null;
+}
+
+export function getAbleTimeHost(
+  settings: AppSettings = loadAppSettings(),
+): string {
+  return settings.integrations.abletimeHost?.trim() || 'https://track.abletime.com';
+}
+
+/** Persist AbleTime PAT after a successful MCP orientation. */
+export function saveAbleTimeConnection(input: {
+  accessToken: string;
+  host?: string | null;
+  viewerName?: string | null;
+}): AppSettings {
+  const current = loadAppSettings();
+  const integrations: IntegrationsSettings = { ...current.integrations };
+  integrations.abletimeAccessToken = input.accessToken.trim();
+  if (input.host?.trim()) {
+    integrations.abletimeHost = input.host.trim();
+  }
+  if (input.viewerName?.trim()) {
+    integrations.abletimeViewerName = input.viewerName.trim().slice(0, 120);
+  }
+  return saveAppSettings({ ...current, integrations });
+}
+
+/** Clear AbleTime PAT and viewer. Does not revoke remotely. */
+export function disconnectAbleTimeConnection(): AppSettings {
+  const current = loadAppSettings();
+  const integrations: IntegrationsSettings = { ...current.integrations };
+  delete integrations.abletimeAccessToken;
+  delete integrations.abletimeViewerName;
+  return saveAppSettings({ ...current, integrations });
+}
+
 /** Preferred issue source (default GitHub). */
 export function getIssueSource(
   settings: AppSettings = loadAppSettings(),
@@ -1133,7 +1239,6 @@ export function getGithubPat(
 
 /**
  * Whether this preferred source can list issues today.
- * AbleTime is typed for Home/Create/Settings but has no client yet.
  */
 export function isIssueSourceConnected(
   source: IssueSource,
@@ -1141,12 +1246,13 @@ export function isIssueSourceConnected(
 ): boolean {
   if (source === 'github') return true;
   if (source === 'linear') return isLinearConnected(settings);
+  if (source === 'abletime') return isAbleTimeConnected(settings);
   return false;
 }
 
 /**
  * Runtime issue source: honors preference, but falls back to GitHub when
- * the preferred tracker is not connected (Linear unconnected, AbleTime, …).
+ * the preferred tracker is not connected.
  */
 export function resolveEffectiveIssueSource(
   settings: AppSettings = loadAppSettings(),

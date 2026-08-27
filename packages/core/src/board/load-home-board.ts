@@ -8,6 +8,7 @@ import {
   HOME_BOARD_CACHE_TTL_MS,
   dedupeBoardIssues,
   dedupeBoardPrs,
+  isAccountWideIssueSource,
   issueNeedsWorkspacePick,
   syncBoardPins,
   type BoardIssue,
@@ -124,8 +125,8 @@ export function clearHomeBoardCache(): void {
 }
 
 /**
- * Same ticket + PR fetch as desktop Home: Linear once, GitHub per workspace,
- * PRs per workspace. Failures are collected so a partial board still returns.
+ * Same ticket + PR fetch as desktop Home: Linear/AbleTime once, GitHub per
+ * workspace, PRs per workspace. Failures are collected so a partial board still returns.
  */
 export async function loadHomeBoardInputs(
   workspaces: HomeBoardWorkspace[],
@@ -143,7 +144,7 @@ export async function loadHomeBoardInputs(
     const first = await listIssues(paths[0]!);
     issueSource = first.source;
     viewerLogin = first.viewer?.login || first.viewer?.name || undefined;
-    if (first.source === 'linear') {
+    if (isAccountWideIssueSource(first.source)) {
       const repoPath = paths[0] ?? '';
       issues = first.issues.map((issue) => ({
         ...issue,
@@ -214,7 +215,7 @@ export type GetHomeBoardInputsOptions = {
 };
 
 /**
- * Cached Home remote snapshot. Hits Linear/GitHub only on first load, after
+ * Cached Home remote snapshot. Hits Linear/AbleTime/GitHub only on first load, after
  * TTL (15m), when workspaces change, or when refresh is set. Memory and
  * app-data JSON are shared so desktop Home and the orchestration MCP agree.
  */

@@ -74,6 +74,36 @@ describe('loadHomeBoardInputs', () => {
     expect(result.prErrors).toEqual([]);
   });
 
+  it('lists AbleTime issues once like Linear', async () => {
+    listIssues.mockResolvedValue({
+      source: 'abletime',
+      preferredSource: 'abletime',
+      linearConnected: false,
+      abletimeConnected: true,
+      issues: [
+        {
+          id: 't1',
+          identifier: 'CRM-1',
+          title: 'Track this',
+          url: 'https://track.abletime.com/tasks/CRM-1',
+          labels: [],
+          provider: 'abletime',
+        },
+      ],
+    });
+    listPrs.mockResolvedValue([]);
+
+    const result = await loadHomeBoardInputs([
+      { path: '/a', name: 'a' },
+      { path: '/b', name: 'b' },
+    ]);
+
+    expect(listIssues).toHaveBeenCalledTimes(1);
+    expect(result.issueSource).toBe('abletime');
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]?.needsWorkspacePick).toBe(true);
+  });
+
   it('lists GitHub issues per workspace and keeps partial PR failures', async () => {
     listIssues.mockImplementation(async (path: string) => ({
       source: 'github',
