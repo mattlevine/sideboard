@@ -10,6 +10,7 @@ import {
   classifyThreadColumn,
   classifyWorktreeColumn,
   groupHomeBoardWorktrees,
+  DEFAULT_WORKTREE_SORT,
   isHomeBoardThread,
   compactPreview,
   dedupeBoardIssues,
@@ -222,25 +223,91 @@ describe('classifyThreadColumn', () => {
 });
 
 describe('groupHomeBoardWorktrees', () => {
-  it('collapses sibling chats on the same checkout', () => {
+  it('collapses sibling chats on the same checkout and keeps created order', () => {
     const groups = groupHomeBoardWorktrees([
       thread({
         id: 'old',
         worktreePath: '/wt/login',
-        updatedAt: '2026-08-01T00:00:00.000Z',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-03T00:00:00.000Z',
       }),
       thread({
         id: 'new',
         worktreePath: '/wt/login/',
-        updatedAt: '2026-08-03T00:00:00.000Z',
+        createdAt: '2026-08-02T00:00:00.000Z',
+        updatedAt: '2026-08-04T00:00:00.000Z',
       }),
       thread({
         id: 'other',
         worktreePath: '/wt/other',
+        createdAt: '2026-08-03T00:00:00.000Z',
         updatedAt: '2026-08-02T00:00:00.000Z',
       }),
     ]);
-    expect(groups.map((g) => g.map((t) => t.id))).toEqual([['new', 'old'], ['other']]);
+    // Newest worktree first; chats inside a checkout stay oldest-first.
+    expect(groups.map((g) => g.map((t) => t.id))).toEqual([['other'], ['old', 'new']]);
+    const afterRun = groupHomeBoardWorktrees([
+      thread({
+        id: 'old',
+        worktreePath: '/wt/login',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-10T00:00:00.000Z',
+      }),
+      thread({
+        id: 'new',
+        worktreePath: '/wt/login/',
+        createdAt: '2026-08-02T00:00:00.000Z',
+        updatedAt: '2026-08-11T00:00:00.000Z',
+      }),
+      thread({
+        id: 'other',
+        worktreePath: '/wt/other',
+        createdAt: '2026-08-03T00:00:00.000Z',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      }),
+    ]);
+    expect(afterRun.map((g) => g.map((t) => t.id))).toEqual([['other'], ['old', 'new']]);
+    expect(DEFAULT_WORKTREE_SORT).toBe('created');
+    expect(
+      groupHomeBoardWorktrees(
+        [
+          thread({
+            id: 'z',
+            title: 'Zebra',
+            worktreePath: '/wt/z',
+            userSetTitle: true,
+            createdAt: '2026-08-01T00:00:00.000Z',
+          }),
+          thread({
+            id: 'a',
+            title: 'Alpha',
+            worktreePath: '/wt/a',
+            userSetTitle: true,
+            createdAt: '2026-08-02T00:00:00.000Z',
+          }),
+        ],
+        'name',
+      ).map((g) => g[0]?.id),
+    ).toEqual(['a', 'z']);
+    expect(
+      groupHomeBoardWorktrees(
+        [
+          thread({
+            id: 'old',
+            worktreePath: '/wt/login',
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+          }),
+          thread({
+            id: 'hot',
+            worktreePath: '/wt/other',
+            createdAt: '2026-08-02T00:00:00.000Z',
+            updatedAt: '2026-08-09T00:00:00.000Z',
+          }),
+        ],
+        'activity',
+      ).map((g) => g[0]?.id),
+    ).toEqual(['hot', 'old']);
     expect(
       classifyWorktreeColumn([
         thread({ id: 'chat' }),
@@ -658,11 +725,11 @@ describe('assembleHomeBoard', () => {
     });
     expect(snap.totals.threads).toBe(3);
     expect(snap.columns.new.map((c) => c.kind === 'thread' && c.id).sort()).toEqual(
-      ['b', 'c'],
+      ['a', 'c'],
     );
     expect(snap.columns.review).toHaveLength(1);
     expect(snap.columns.review[0] && snap.columns.review[0].kind === 'thread' && snap.columns.review[0].id).toBe(
-      'review-tab',
+      'review-chat',
     );
     expect(snap.columns.review[0] && snap.columns.review[0].kind === 'thread' && snap.columns.review[0].chatCount).toBe(
       2,

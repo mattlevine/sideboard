@@ -139,12 +139,88 @@ export function classifyThreadColumn(
   return 'new';
 }
 
+/** How worktree rows/cards are ordered. Default `created` stays put while agents run. */
+export type WorktreeSortMode = 'created' | 'name' | 'activity';
+
+export const DEFAULT_WORKTREE_SORT: WorktreeSortMode = 'created';
+
+function groupCreatedAt<T extends Pick<Thread, 'createdAt'>>(group: T[]): string {
+  let min = group[0]?.createdAt ?? '';
+  for (const t of group) {
+    if (t.createdAt && t.createdAt < min) min = t.createdAt;
+  }
+  return min;
+}
+
+function groupUpdatedAt<T extends Pick<Thread, 'updatedAt'>>(group: T[]): string {
+  let max = group[0]?.updatedAt ?? '';
+  for (const t of group) {
+    if (t.updatedAt && t.updatedAt > max) max = t.updatedAt;
+  }
+  return max;
+}
+
+/** Sibling chats on one checkout — oldest tab first so the primary id stays stable. */
+export function sortThreadsInWorktree<T extends Pick<Thread, 'createdAt' | 'id'>>(
+  list: T[],
+): T[] {
+  return [...list].sort((a, b) => {
+    const created = a.createdAt.localeCompare(b.createdAt);
+    if (created !== 0) return created;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+export function compareWorktreeGroups<T extends Pick<Thread, 'createdAt' | 'updatedAt' | 'id'>>(
+  a: T[],
+  b: T[],
+  mode: WorktreeSortMode,
+  labelOf?: (group: T[]) => string,
+): number {
+  if (mode === 'name') {
+    const named = (labelOf?.(a) ?? a[0]?.id ?? '').localeCompare(
+      labelOf?.(b) ?? b[0]?.id ?? '',
+      undefined,
+      { sensitivity: 'base' },
+    );
+    if (named !== 0) return named;
+  } else if (mode === 'activity') {
+    const activity = groupUpdatedAt(b).localeCompare(groupUpdatedAt(a));
+    if (activity !== 0) return activity;
+  } else {
+    const created = groupCreatedAt(b).localeCompare(groupCreatedAt(a));
+    if (created !== 0) return created;
+  }
+  return (a[0]?.id ?? '').localeCompare(b[0]?.id ?? '');
+}
+
+function defaultWorktreeGroupLabel<
+  T extends Pick<Thread, 'branchName' | 'worktreePath' | 'createdAt' | 'title' | 'prTitle' | 'userSetTitle'>,
+>(group: T[]): string {
+  return worktreeDisplayLabelForGroup(group);
+}
+
 /**
- * Live Home threads grouped by checkout. Each group is newest-updated first.
+ * Live Home / sidebar threads grouped by checkout.
+ * Groups default to newest-created first so a running agent does not reshuffle the list.
  * One card per group — extra chat tabs do not get their own column slot.
  */
-export function groupHomeBoardWorktrees<T extends Pick<Thread, 'worktreePath' | 'updatedAt'>>(
+export function groupHomeBoardWorktrees<
+  T extends Pick<
+    Thread,
+    | 'worktreePath'
+    | 'updatedAt'
+    | 'createdAt'
+    | 'id'
+    | 'branchName'
+    | 'title'
+    | 'prTitle'
+    | 'userSetTitle'
+  >,
+>(
   threads: T[],
+  sort: WorktreeSortMode = DEFAULT_WORKTREE_SORT,
+  labelOf: (group: T[]) => string = defaultWorktreeGroupLabel,
 ): T[][] {
   const map = new Map<string, T[]>();
   for (const t of threads) {
@@ -154,8 +230,8 @@ export function groupHomeBoardWorktrees<T extends Pick<Thread, 'worktreePath' | 
     map.set(key, list);
   }
   return [...map.values()]
-    .map((list) => list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
-    .sort((a, b) => (b[0]?.updatedAt ?? '').localeCompare(a[0]?.updatedAt ?? ''));
+    .map((list) => sortThreadsInWorktree(list))
+    .sort((a, b) => compareWorktreeGroups(a, b, sort, labelOf));
 }
 
 /** Column for a worktree: merged → Merged, open non-draft → Review, draft → Draft. */
@@ -880,10 +956,7 @@ export function assembleHomeBoard(input: {
   const kind = input.kind ?? 'all';
   const limit = Math.max(1, input.limit ?? BOARD_PAGE_SIZE);
   const wsName = input.workspaceName ?? (() => '');
-  const byUpdated = (a: Thread, b: Thread) => b.updatedAt.localeCompare(a.updatedAt);
-  const live = input.threads
-    .filter((t) => t.status !== 'archived' && isHomeBoardThread(t))
-    .sort(byUpdated);
+  const live = input.threads.filter((t) => t.status !== 'archived' && isHomeBoardThread(t));
 
   const columns = emptyColumns();
   const hidden = emptyHidden();

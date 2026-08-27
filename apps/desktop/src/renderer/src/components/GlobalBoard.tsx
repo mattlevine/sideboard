@@ -11,12 +11,15 @@ import {
   BOARD_PAGE_SIZE,
   classifyWorktreeColumn,
   compactPreview,
+  DEFAULT_WORKTREE_SORT,
   groupHomeBoardWorktrees,
   isHomeBoardThread,
   visiblePage,
   worktreeBoardStatus,
   type BoardColumnId,
+  type WorktreeSortMode,
 } from '../lib/home-board';
+import { WorktreeSortSelect } from './WorktreeSortSelect';
 import {
   isWorktreeUnread,
   latestAgentResponseAt,
@@ -41,6 +44,8 @@ interface Props {
     meta?: { title?: string; removesWorktree?: boolean },
   ) => void | Promise<void>;
   archivingIds?: Set<string>;
+  worktreeSort?: WorktreeSortMode;
+  onWorktreeSortChange?: (mode: WorktreeSortMode) => void;
   /** Left-edge open control when the left sidebar is closed. */
   leftSidebarToggle?: ReactNode;
 }
@@ -89,6 +94,8 @@ export function GlobalBoard({
   onRefresh,
   onArchive,
   archivingIds = new Set(),
+  worktreeSort = DEFAULT_WORKTREE_SORT,
+  onWorktreeSortChange,
   leftSidebarToggle,
 }: Props) {
   const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
@@ -104,8 +111,9 @@ export function GlobalBoard({
     () =>
       groupHomeBoardWorktrees(
         threads.filter((t) => t.status !== 'archived' && isHomeBoardThread(t)),
+        worktreeSort,
       ),
-    [threads],
+    [threads, worktreeSort],
   );
 
   const byColumn = useMemo(() => {
@@ -164,13 +172,20 @@ export function GlobalBoard({
         </div>
       )}
       <div className="panel-header">
-        <h2>Home</h2>
+        <h2>Board</h2>
         <span className="thread-meta">
           {runtime
             ? `${runtime.running}/${runtime.maxConcurrent} running · ${worktreeCount} worktree${worktreeCount === 1 ? '' : 's'}`
             : '…'}
         </span>
         <div className="actions">
+          {onWorktreeSortChange ? (
+            <WorktreeSortSelect
+              value={worktreeSort}
+              onChange={onWorktreeSortChange}
+              className="worktree-sort board-sort"
+            />
+          ) : null}
           <button type="button" onClick={onRefresh}>
             Refresh
           </button>
@@ -347,10 +362,11 @@ function WorktreeCard({
   onRefresh: () => void;
   onArchive: () => void;
 }) {
-  const newest = group[0]!;
-  const primary = group.find((t) => t.id === selectedId) ?? newest;
+  const oldest = group[0]!;
+  const newest = [...group].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!;
+  const primary = group.find((t) => t.id === selectedId) ?? oldest;
   const status = worktreeBoardStatus(group);
-  const repo = workspaceName(newest.repoPath, workspaces);
+  const repo = workspaceName(oldest.repoPath, workspaces);
   const label = worktreeDisplayLabelForGroup(group);
   const unread = isWorktreeUnread(
     unreadWorktreeKey(primary),
