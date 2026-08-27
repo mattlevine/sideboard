@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.133] - 2026-08-26
+
+### Changed
+
+- Left sidebar sort is a sort icon next to the Projects filter, instead of a labeled dropdown above Orchestration.
+
 ## [0.1.132] - 2026-08-26
 
 ### Added

@@ -733,13 +733,6 @@ export function Sidebar({
       </div>
 
       <div className="thread-list">
-        {onWorktreeSortChange ? (
-          <WorktreeSortSelect
-            value={worktreeSort}
-            onChange={onWorktreeSortChange}
-            className="worktree-sort sidebar-sort"
-          />
-        ) : null}
         <div className="sidebar-projects">
         {(!q ||
           globalThreads.length > 0 ||
@@ -849,6 +842,13 @@ export function Sidebar({
             >
               <span className="filter-glyph" aria-hidden />
             </button>
+            {onWorktreeSortChange ? (
+              <WorktreeSortSelect
+                variant="icon"
+                value={worktreeSort}
+                onChange={onWorktreeSortChange}
+              />
+            ) : null}
             <button
               type="button"
               className="icon-btn"
