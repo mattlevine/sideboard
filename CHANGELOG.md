@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.131] - 2026-08-26
+
 ### Fixed
 
 - Queue: more than one follow-up can sit while a turn is running. **Send now** starts the next message immediately instead of waiting for unwind or a full refresh.
