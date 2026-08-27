@@ -54,6 +54,9 @@ const api: IpcApi = {
   startLinearOAuth: () => ipcRenderer.invoke('startLinearOAuth'),
   cancelLinearOAuth: () => ipcRenderer.invoke('cancelLinearOAuth'),
   disconnectLinear: () => ipcRenderer.invoke('disconnectLinear'),
+  connectAbleTime: (input) => ipcRenderer.invoke('connectAbleTime', input),
+  disconnectAbleTime: () => ipcRenderer.invoke('disconnectAbleTime'),
+  ensureAbleTimeTask: (input) => ipcRenderer.invoke('ensureAbleTimeTask', input),
   disconnectSlackWorkspace: (teamId) =>
     ipcRenderer.invoke('disconnectSlackWorkspace', teamId),
   getSlackListenStatus: () => ipcRenderer.invoke('getSlackListenStatus'),

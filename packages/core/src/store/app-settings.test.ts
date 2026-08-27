@@ -196,6 +196,17 @@ describe('app settings', () => {
     expect(mod.issueSourceLabel('abletime')).toBe('AbleTime');
     expect(mod.issueSourceLabel('github')).toBe('GitHub');
     expect(mod.issueSourceLabel('linear')).toBe('Linear');
+
+    const connected = mod.updateIntegrationsSettings({
+      abletimeAccessToken: 'apt_test',
+    });
+    expect(connected.integrations.abletimeAccessToken).toBe('apt_test');
+    expect(mod.isAbleTimeConnected()).toBe(true);
+    expect(mod.isIssueSourceConnected('abletime')).toBe(true);
+    expect(mod.resolveEffectiveIssueSource()).toBe('abletime');
+    expect(mod.toPublicAppSettings(mod.loadAppSettings()).integrations.hasAbleTimeToken).toBe(
+      true,
+    );
   });
 
   it('round-trips Slack Socket Mode app token and listen flag', async () => {

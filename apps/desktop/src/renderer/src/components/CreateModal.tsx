@@ -166,6 +166,7 @@ export function CreateModal({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [selection, setSelection] = useState<CreateFromSelection | null>(null);
   const [linearConnected, setLinearConnected] = useState(false);
+  const [abletimeConnected, setAbletimeConnected] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [goal, setGoal] = useState('');
   const [createMore, setCreateMore] = useState(false);
@@ -283,11 +284,15 @@ export function CreateModal({
       .getAppSettings()
       .then((s) => {
         setLinearConnected(Boolean(s.integrations?.hasLinearApiKey));
+        setAbletimeConnected(Boolean(s.integrations?.hasAbleTimeToken));
         const allowed = Boolean(s.advanced?.cowboyMode);
         setCowboyAllowed(allowed);
         setCowboy(false);
       })
-      .catch(() => setLinearConnected(false));
+      .catch(() => {
+        setLinearConnected(false);
+        setAbletimeConnected(false);
+      });
   }, [initialRepoPath]);
 
   useEffect(() => {
@@ -649,6 +654,7 @@ export function CreateModal({
               <span className="composer-picker-icons" aria-hidden>
                 <span className="picker-logo github tiny" />
                 {linearConnected ? <span className="picker-logo linear tiny" /> : null}
+                {abletimeConnected ? <span className="picker-logo abletime tiny" /> : null}
               </span>
               <span className="create-from-label">
                 {cowboy ? 'on main' : selectionLabel(selection)}

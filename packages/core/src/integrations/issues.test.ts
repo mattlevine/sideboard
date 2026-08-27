@@ -50,6 +50,7 @@ describe('integrations / issues', () => {
     expect(result.source).toBe('github');
     expect(result.preferredSource).toBe('linear');
     expect(result.linearConnected).toBe(false);
+    expect(result.abletimeConnected).toBe(false);
     expect(result.viewer?.login).toBe('octocat');
     expect(result.issues).toEqual([
       {
@@ -92,8 +93,45 @@ describe('integrations / issues', () => {
     const result = await issues.listIssues('/tmp/repo');
     expect(result.source).toBe('github');
     expect(result.preferredSource).toBe('abletime');
+    expect(result.abletimeConnected).toBe(false);
     expect(result.issues[0]?.identifier).toBe('#3');
     expect(result.issues[0]?.provider).toBe('github');
+  });
+
+  it('uses AbleTime when connected and preferred', async () => {
+    const { settings, issues } = await load();
+    settings.updateIntegrationsSettings({
+      abletimeAccessToken: 'apt_test',
+      issueSource: 'abletime',
+    });
+    expect(settings.resolveEffectiveIssueSource()).toBe('abletime');
+
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { params?: { name?: string } };
+      const name = body.params?.name;
+      const payload =
+        name === 'orientation'
+          ? { viewer: { name: 'Grant' }, projects: [] }
+          : { data: [{ id: 't1', reference: 'CRM-1', title: 'Track this', state: 'todo' }] };
+      return {
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () =>
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: { content: [{ type: 'text', text: JSON.stringify(payload) }] },
+          }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await issues.listIssues('/tmp/repo');
+    expect(result.source).toBe('abletime');
+    expect(result.abletimeConnected).toBe(true);
+    expect(result.issues[0]?.identifier).toBe('CRM-1');
+    expect(result.issues[0]?.provider).toBe('abletime');
+    expect(result.viewer?.name).toBe('Grant');
   });
 
   it('uses Linear when connected and preferred', async () => {

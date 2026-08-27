@@ -13,7 +13,11 @@ import {
 } from '../git/worktree.js';
 import { findLiveThreadForCreate } from '../board/home-board.js';
 import { copyConfiguredFiles } from '../hook/conductor.js';
-import { resolveNewThreadOptions } from '../store/app-settings.js';
+import {
+  getIssueSource,
+  isAbleTimeConnected,
+  resolveNewThreadOptions,
+} from '../store/app-settings.js';
 import {
   createEmptyThread,
   listThreads,
@@ -54,7 +58,7 @@ export async function createThread(
   }
 
   // Tickets no longer require agent Linear MCP — Sideboard Account owns
-  // Linear/GitHub issue connections (see integrations/).
+  // Linear/GitHub/AbleTime issue connections (see integrations/).
   const resolved = resolveNewThreadOptions({
     agent: input.agent,
     model: input.model,
@@ -113,12 +117,37 @@ export async function createThread(
     return readThread(thread.id) ?? thread;
   }
 
+  let sourceType = input.sourceType;
   let sourceRef = input.sourceRef;
+  let persistedSourceRef = input.sourceRef;
+  let attachments = input.attachments ?? [];
+  let title = input.title;
   let sourceIsFork = false;
+
+  if (
+    !input.cowboy &&
+    sourceType === 'branch' &&
+    (!sourceRef || sourceRef === 'HEAD' || sourceRef === 'default')
+  ) {
+    if (isAbleTimeConnected() && getIssueSource() === 'abletime') {
+      const { ensureAbleTimeTask, issueAttachmentForAbleTimeTask } = await import(
+        '../integrations/abletime.js'
+      );
+      const task = await ensureAbleTimeTask({
+        title: title?.trim() || 'Untitled work',
+        description: input.prompt?.trim() || undefined,
+      });
+      sourceType = 'ticket';
+      sourceRef = task.identifier;
+      persistedSourceRef = task.identifier;
+      title = title?.trim() || task.title;
+      attachments = [...attachments, issueAttachmentForAbleTimeTask(task)];
+    }
+  }
 
   let prUrl: string | null = null;
   let prTitle: string | null = null;
-  if (input.sourceType === 'pr') {
+  if (sourceType === 'pr') {
     const num = Number(input.sourceRef.replace(/^#/, ''));
     if (!Number.isFinite(num)) throw new Error(`Invalid PR number: ${input.sourceRef}`);
     const pr = await getPr(repoPath, num);
@@ -128,10 +157,10 @@ export async function createThread(
     const localFetchBranch = `sideboard-pr-${pr.number}`;
     await fetchPrHead(repoPath, pr.number, localFetchBranch);
     sourceRef = localFetchBranch;
-  } else if (input.sourceType === 'ticket') {
+  } else if (sourceType === 'ticket') {
     // Tickets always branch from the repo default (origin tip after fetch).
     sourceRef = await resolveDefaultBranch(repoPath);
-  } else if (input.sourceType === 'branch') {
+  } else if (sourceType === 'branch') {
     // Quick create / "default branch" → repo default (usually main).
     // createThreadWorktree then forks from origin/<default>, not a stale local tip.
     if (!sourceRef || sourceRef === 'HEAD' || sourceRef === 'default') {
@@ -145,7 +174,7 @@ export async function createThread(
         prTitle = existing.title;
       }
     }
-  } else if (input.sourceType === 'adopt') {
+  } else if (sourceType === 'adopt') {
     throw new Error('Use adoptThread() for adopt sources');
   }
 
@@ -160,14 +189,14 @@ export async function createThread(
 
   copyConfiguredFiles(repoPath, worktreePath);
 
-  const explicitTitle = input.title?.trim();
+  const explicitTitle = title?.trim();
   // Persist immediately so the UI sees the thread even if setup is slow/fails.
   // (Previously setup ran first — `pnpm install` could leave orphan branches.)
   const thread = createEmptyThread({
     title: explicitTitle || team.name,
     userSetTitle: Boolean(explicitTitle),
-    sourceType: input.sourceType,
-    sourceRef: input.sourceRef === 'default' ? sourceRef : input.sourceRef,
+    sourceType,
+    sourceRef: persistedSourceRef === 'default' ? sourceRef : persistedSourceRef,
     branchName,
     worktreePath,
     repoPath,
@@ -177,7 +206,7 @@ export async function createThread(
     effort: resolved.effort,
     fast: resolved.fast,
     planMode: Boolean(input.planMode),
-    attachments: input.attachments ?? [],
+    attachments,
     sourceIsFork,
     parentThreadId: input.parentThreadId ?? null,
     status: 'idle',

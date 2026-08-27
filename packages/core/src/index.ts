@@ -43,6 +43,8 @@ export type { AgentGitAction } from './git/agent-git-actions.js';
 export * from './integrations/github.js';
 export * from './integrations/linear.js';
 export * from './integrations/linear-oauth.js';
+export * from './integrations/abletime.js';
+export * from './integrations/abletime-mcp.js';
 export * from './integrations/issues.js';
 export { setHttpFetchImpl, formatFetchError, httpFetch } from './http/fetch.js';
 export * from './agents/index.js';

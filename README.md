@@ -292,8 +292,9 @@ Add to `~/.config/opencode/opencode.jsonc` (or a project `opencode.jsonc`) under
 
 Once connected, agents get tools to:
 
-- **Discover** — `list_board` (worktree Kanban: New → Draft → Review → Merged; `create_thread` adds a worktree), `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear or GitHub), `list_threads`
+- **Discover** — `list_board` (worktree Kanban: New → Draft → Review → Merged; `create_thread` adds a worktree), `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear, AbleTime MCP, or GitHub), `list_threads`
 - **Linear tickets** — `linear_list_teams`, `linear_get_issue`, `linear_create_issue`, `linear_update_issue`, `linear_comment` (Account OAuth; reconnect if you connected before write access)
+- **AbleTime tickets** — `abletime_orientation`, `abletime_list_projects`, `abletime_list_tasks`, `abletime_search_tasks`, `abletime_get_task`, `abletime_create_task`, `abletime_ensure_task` (Account personal access token → hosted MCP). When AbleTime is the preferred issue source, starting work without a ticket auto-creates one to track against.
 - **Workspaces** — `add_workspace` / `remove_workspace`
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids). `create_thread` reuses a live worktree for the same ticket, PR, or named branch (`alreadyStarted`); default-branch create still opens a new isolated worktree. `wait_for_turn` returns within ~45s with `stillRunning` + live `progress` while the child is still working — call it again; do not assume a hang. `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
@@ -312,6 +313,12 @@ Ready-for-review land (`confirm_land`) and `purge_thread` stay human-only. Coord
 OAuth requests `read,write`. Linear’s OAuth app page has no scopes checklist — Sideboard sets them in `LINEAR_OAUTH_SCOPES`. If you connected when Sideboard was read-only, **Disconnect and Connect via browser** so Linear re-consents.
 
 Desktop Connect uses Chromium networking so corporate VPNs/proxies that break Node `fetch` (`Error invoking remote method 'startLinearOAuth': fetch failed`) still reach `api.linear.app`. CLI `sideboard linear login` still uses Node fetch — set `HTTPS_PROXY` or connect off-VPN.
+
+## AbleTime
+
+**Settings → Account → AbleTime.** Enable **Agent access (MCP)** in AbleTime (Settings → Integrations → API Keys), then paste a personal access token from Profile → API Access (`apt_…`). Sideboard talks to AbleTime’s hosted MCP (`POST https://track.abletime.com/api/public/v2/mcp`) — list/search/create tasks, and **ensure** a task exists to track against.
+
+Set **Issue source** to AbleTime. Create-from / Home list AbleTime tasks. Starting a thread from the default branch (no ticket) auto-creates an AbleTime task and attaches it. Orchestration tools: `abletime_orientation`, `abletime_ensure_task`, `abletime_create_task`, and the list/search/get variants.
 
 ```bash
 sideboard linear login

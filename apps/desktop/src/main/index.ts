@@ -88,6 +88,10 @@ import {
   startLinearOAuth,
   isLinearOAuthCancelled,
   disconnectLinear,
+  disconnectAbleTimeConnection,
+  verifyAbleTimeConnection,
+  ensureAbleTimeTask,
+  toAbleTimeIssueInfo,
   runSlackListen,
   resolveSlackListenMode,
   slackAppLevelToken,
@@ -1000,6 +1004,26 @@ function registerIpc(): void {
     const saved = await disconnectLinear();
     return toPublicAppSettings(saved);
   });
+  ipcMain.handle(
+    'connectAbleTime',
+    async (_e, input: { token: string; host?: string | null }) => {
+      await verifyAbleTimeConnection(input);
+      return toPublicAppSettings(loadAppSettings());
+    },
+  );
+  ipcMain.handle('disconnectAbleTime', () =>
+    toPublicAppSettings(disconnectAbleTimeConnection()),
+  );
+  ipcMain.handle(
+    'ensureAbleTimeTask',
+    async (
+      _e,
+      input: { title: string; description?: string; projectId?: string },
+    ) => {
+      const task = await ensureAbleTimeTask(input);
+      return { ...toAbleTimeIssueInfo(task), created: task.created };
+    },
+  );
   ipcMain.handle('disconnectSlackWorkspace', (_e, teamId: string) => {
     const list = disconnectSlackWorkspace(teamId);
     syncSlackListenDaemon();

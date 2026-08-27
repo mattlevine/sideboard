@@ -60,6 +60,8 @@ export function CreateFromPicker({
   const [issueSource, setIssueSource] = useState<IssueSource>('github');
   const [preferredSource, setPreferredSource] = useState<IssueSource>('github');
   const [linearOk, setLinearOk] = useState(linearConnected);
+  const [abletimeOk, setAbletimeOk] = useState(false);
+  const [creatingTask, setCreatingTask] = useState(false);
   const [ticketScope, setTicketScope] = useState<TicketScope>('assigned');
   const [viewerLogin, setViewerLogin] = useState('');
 
@@ -91,6 +93,7 @@ export function CreateFromPicker({
             setIssueSource(result.source);
             setPreferredSource(result.preferredSource);
             setLinearOk(result.linearConnected);
+            setAbletimeOk(result.abletimeConnected);
             setViewerLogin(result.viewer?.login || result.viewer?.name || '');
             setTicketScope(defaultTicketScope(result.source));
           }
@@ -153,6 +156,10 @@ export function CreateFromPicker({
 
   const showLinearSetup =
     tab === 'issues' && preferredSource === 'linear' && !linearOk;
+  const showAbleTimeSetup =
+    tab === 'issues' && preferredSource === 'abletime' && !abletimeOk;
+  const showAbleTimeCreate =
+    tab === 'issues' && issueSource === 'abletime' && abletimeOk && !loading && !error;
 
   return (
     <div
@@ -406,6 +413,77 @@ export function CreateFromPicker({
                   </span>
                   <span className="composer-picker-hint">
                     Open <kbd>↵</kbd>
+                  </span>
+                </button>
+              </div>
+            )}
+            {showAbleTimeSetup && (
+              <div className="composer-picker-section">
+                <div className="composer-picker-section-label">Setup</div>
+                <button
+                  type="button"
+                  className="composer-picker-row"
+                  onClick={() => {
+                    onOpenAccount?.();
+                    onClose();
+                  }}
+                >
+                  <span className="composer-picker-icons">
+                    <span className="picker-logo abletime" aria-hidden />
+                  </span>
+                  <span className="composer-picker-main">
+                    <span className="composer-picker-title">Set up AbleTime</span>
+                    <span className="composer-picker-sub">
+                      Showing GitHub Issues until AbleTime is connected
+                    </span>
+                  </span>
+                  <span className="composer-picker-hint">
+                    Open <kbd>↵</kbd>
+                  </span>
+                </button>
+              </div>
+            )}
+            {showAbleTimeCreate && (
+              <div className="composer-picker-section">
+                <button
+                  type="button"
+                  className="composer-picker-row"
+                  disabled={creatingTask}
+                  onClick={() => {
+                    const title = query.trim() || 'Untitled work';
+                    setCreatingTask(true);
+                    void window.sideboard
+                      .ensureAbleTimeTask({ title })
+                      .then((task) => {
+                        onSelect({
+                          kind: 'ticket',
+                          ref: task.identifier,
+                          title: task.title,
+                          url: task.url,
+                          labels: task.labels,
+                          provider: 'abletime',
+                          assignee: task.assignee,
+                        });
+                        if (closeOnSelect) onClose();
+                      })
+                      .catch((err) => {
+                        setError(err instanceof Error ? err.message : String(err));
+                      })
+                      .finally(() => setCreatingTask(false));
+                  }}
+                >
+                  <span className="composer-picker-icons">
+                    <span className="picker-logo abletime" aria-hidden />
+                  </span>
+                  <span className="composer-picker-main">
+                    <span className="composer-picker-title">
+                      {creatingTask ? 'Creating AbleTime task…' : 'Create task to track against'}
+                    </span>
+                    <span className="composer-picker-sub">
+                      {query.trim()
+                        ? `Uses “${query.trim()}” as the title`
+                        : 'Creates a new AbleTime task if one does not already match'}
+                    </span>
                   </span>
                 </button>
               </div>

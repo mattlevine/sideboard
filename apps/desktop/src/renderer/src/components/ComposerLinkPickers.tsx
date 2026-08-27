@@ -26,6 +26,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
   const [source, setSource] = useState<IssueSource>('github');
   const [preferredSource, setPreferredSource] = useState<IssueSource>('github');
   const [linearConnected, setLinearConnected] = useState(false);
+  const [abletimeConnected, setAbletimeConnected] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -39,6 +40,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
         setSource(result.source);
         setPreferredSource(result.preferredSource);
         setLinearConnected(result.linearConnected);
+        setAbletimeConnected(result.abletimeConnected);
         if (result.issues.length === 0) setError('empty');
       })
       .catch((err) => {
@@ -62,6 +64,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
   if (!open) return null;
 
   const showLinearSetup = preferredSource === 'linear' && !linearConnected;
+  const showAbleTimeSetup = preferredSource === 'abletime' && !abletimeConnected;
 
   return (
     <div className="composer-picker-backdrop" onClick={onClose}>
@@ -107,7 +110,32 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
             </button>
           </div>
         )}
-        {!loading && filtered.length === 0 && !showLinearSetup && (
+        {!loading && showAbleTimeSetup && (
+          <div className="composer-picker-section">
+            <div className="composer-picker-section-label">Setup</div>
+            <button
+              type="button"
+              className="composer-picker-row"
+              onClick={() => {
+                void window.sideboard.openExternal('https://track.abletime.com/');
+              }}
+            >
+              <span className="composer-picker-icons">
+                <span className="picker-logo abletime" aria-hidden />
+              </span>
+              <span className="composer-picker-main">
+                <span className="composer-picker-title">Set up AbleTime</span>
+                <span className="composer-picker-sub">
+                  Paste a personal access token in Settings → Account
+                </span>
+              </span>
+              <span className="composer-picker-hint">
+                Open <kbd>↵</kbd>
+              </span>
+            </button>
+          </div>
+        )}
+        {!loading && filtered.length === 0 && !showLinearSetup && !showAbleTimeSetup && (
           <div className="composer-picker-section">
             {error && error !== 'empty' && (
               <div className="composer-picker-empty">{error}</div>
