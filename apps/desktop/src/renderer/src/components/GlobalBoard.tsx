@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
 import {
   normalizeWorktreePath,
@@ -25,6 +25,8 @@ import {
   latestAgentResponseAt,
   unreadWorktreeKey,
 } from '../lib/unread-worktrees';
+import { useLiveThread } from '../lib/live-paint-context';
+import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { FleetActivityBar } from './FleetActivityBar';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 
@@ -32,7 +34,6 @@ interface Props {
   threads: Thread[];
   workspaces?: Workspace[];
   runtime: OrchestratorRuntime | null;
-  liveByThread: Record<string, string>;
   /** Last-opened chat — wrapper click reopens that tab when it belongs to the card. */
   selectedId?: string | null;
   onOpenThread: (id: string) => void;
@@ -86,7 +87,6 @@ export function GlobalBoard({
   threads,
   workspaces = [],
   runtime,
-  liveByThread,
   selectedId = null,
   onOpenThread,
   onAddToBoard,
@@ -231,7 +231,6 @@ export function GlobalBoard({
                           <WorktreeCard
                             key={normalizeWorktreePath(primary.worktreePath)}
                             group={group}
-                            liveByThread={liveByThread}
                             workspaces={workspaces}
                             selectedId={selectedId}
                             archiving={group.some((t) => archivingIds.has(t.id))}
@@ -343,7 +342,6 @@ function worktreeSourceLabel(t: Thread): string | null {
 
 function WorktreeCard({
   group,
-  liveByThread,
   workspaces,
   selectedId,
   archiving,
@@ -353,7 +351,6 @@ function WorktreeCard({
   onArchive,
 }: {
   group: Thread[];
-  liveByThread: Record<string, string>;
   workspaces: Workspace[];
   selectedId: string | null;
   archiving: boolean;
@@ -373,44 +370,11 @@ function WorktreeCard({
     latestAgentResponseAt(group),
     { active: false },
   );
-  const [stat, setStat] = useState<{
-    additions: number;
-    deletions: number;
-    dirty: boolean;
-  } | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const fetchGen = useRef(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const gen = ++fetchGen.current;
-      try {
-        const diff = await window.sideboard.getDiff(primary.id, {
-          scope: 'uncommitted',
-          includePatches: false,
-        });
-        if (cancelled || gen !== fetchGen.current) return;
-        const s = diff.scopeStats?.uncommitted;
-        setStat({
-          additions: s?.additions ?? 0,
-          deletions: s?.deletions ?? 0,
-          dirty: Boolean(diff.dirty) || (s != null && (s.additions > 0 || s.deletions > 0)),
-        });
-        setLoaded(true);
-      } catch {
-        if (cancelled || gen !== fetchGen.current) return;
-        setStat({ additions: 0, deletions: 0, dirty: false });
-        setLoaded(true);
-      }
-    };
-    void load();
-    const interval = window.setInterval(() => void load(), 12_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [primary.id, primary.status, primary.worktreePath]);
+  const { stat, loaded } = useWorktreeDirtyStat(
+    primary.id,
+    primary.worktreePath,
+    primary.status,
+  );
 
   const dirty = loaded && Boolean(stat?.dirty);
 
@@ -485,7 +449,6 @@ function WorktreeCard({
           <ChatCard
             key={chat.id}
             thread={chat}
-            live={liveByThread[chat.id]}
             archiving={archiving}
             onOpenThread={onOpenThread}
             onRefresh={onRefresh}
@@ -498,18 +461,17 @@ function WorktreeCard({
 
 function ChatCard({
   thread: t,
-  live,
   archiving,
   onOpenThread,
   onRefresh,
 }: {
   thread: Thread;
-  live: string | undefined;
   archiving: boolean;
   onOpenThread: (id: string) => void;
   onRefresh: () => void;
 }) {
-  const { text: previewText } = previewForThread(t, live);
+  const live = useLiveThread(t.id);
+  const { text: previewText } = previewForThread(t, live.output || undefined);
   const preview = previewText ? compactPreview(previewText) : '';
   const canStop = t.status === 'running' || t.status === 'queued';
   return (

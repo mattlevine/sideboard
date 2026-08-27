@@ -119,6 +119,7 @@ import {
   getRepoSetupInfo,
   threadsDir,
   isThreadRecordFile,
+  invalidateThreadListCache,
   schedulesPath,
   listSchedules,
   createSchedule,
@@ -676,6 +677,7 @@ function setupStoreWatcher(): void {
   let notifyTimer: ReturnType<typeof setTimeout> | null = null;
   const flushNotify = () => {
     notifyTimer = null;
+    invalidateThreadListCache();
     mainWindow?.webContents.send('threads:changed');
     // MCP stdio (separate process) enqueues via send_to_thread; when that child
     // exits mid-wait, queues stay on disk. Adopt them into the desktop drain.

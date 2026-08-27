@@ -207,7 +207,7 @@ export function MarkdownMessage({
     <div className={className ?? 'md'}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        rehypePlugins={isStreaming ? [] : [rehypeHighlight]}
         urlTransform={markdownUrlTransform}
         components={components}
       >
