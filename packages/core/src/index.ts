@@ -158,7 +158,13 @@ export {
   connectBrightsyTeam,
   disconnectBrightsyTeam,
   brightsyMcpServerName,
+  ensureConnectedBrightsyTeamTokens,
 } from './brightsy/connected-teams.js';
+export {
+  brightsyAccessTokenNeedsRefresh,
+  ensureBrightsyLocalConfigFresh,
+  refreshBrightsyAccessToken,
+} from './brightsy/oauth.js';
 export {
   isBrightsyConnected,
   promptMentionsBrightsy,

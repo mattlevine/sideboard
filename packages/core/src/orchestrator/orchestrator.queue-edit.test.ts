@@ -134,6 +134,74 @@ describe('Orchestrator queued-message editing', () => {
     }
   });
 
+  it('prepends a crash-continue prompt so the agent can recover', async () => {
+    const thread = seedThread(['later']);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      maybeEnqueueCrashContinue: (
+        id: string,
+        opts: { detail: string; assistantText: string; partsCount: number },
+      ) => void;
+      crashContinued: Set<string>;
+    };
+    internal.maybeEnqueueCrashContinue(thread.id, {
+      detail: 'Cursor runner crashed in Node. Retry the turn.',
+      assistantText: '',
+      partsCount: 0,
+    });
+    const after = readThread(thread.id)!;
+    expect(after.queue[0]).toMatch(/Continue from where you left off/);
+    expect(after.queue[1]).toBe('later');
+    expect(internal.crashContinued.has(thread.id)).toBe(true);
+
+    internal.maybeEnqueueCrashContinue(thread.id, {
+      detail: 'Cursor runner crashed in Node. Retry the turn.',
+      assistantText: '',
+      partsCount: 0,
+    });
+    expect(readThread(thread.id)?.queue).toHaveLength(2);
+  });
+
+  it('does not auto-continue auth or quota failures', async () => {
+    const thread = seedThread([]);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      maybeEnqueueCrashContinue: (
+        id: string,
+        opts: { detail: string; assistantText: string; partsCount: number },
+      ) => void;
+    };
+    internal.maybeEnqueueCrashContinue(thread.id, {
+      detail: "You've hit your session limit · resets 7:10pm",
+      assistantText: '',
+      partsCount: 0,
+    });
+    expect(readThread(thread.id)?.queue).toEqual([]);
+  });
+
+  it('keeps status running when a follow-up is queued during an in-flight turn', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread([]);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    writeThread(live);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    internal.drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill: () => {},
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(thread.id, 'follow-up');
+    expect(updated.queue).toEqual(['follow-up']);
+    expect(updated.status).toBe('running');
+  });
+
   it('drains send() when this process is the desktop host', async () => {
     writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
     const thread = seedThread([]);

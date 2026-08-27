@@ -71,11 +71,19 @@ export const CLAUDE_CHROME_ALLOWED_TOOLS = [
 /** macOS ARG_MAX ~256KiB — keep `-p` prompt args under this (stdin for larger). */
 export const CLAUDE_PROMPT_ARG_MAX = 200_000;
 
+let mcpListCache: { at: number; servers: ReturnType<typeof parseMcpList> } | null =
+  null;
+
 async function loadMcpServers() {
   // `--json` is unsupported on current Claude CLI builds; always use text list.
+  if (mcpListCache && Date.now() - mcpListCache.at < 30_000) {
+    return mcpListCache.servers;
+  }
   const claude = resolveClaudeExecutable();
   const mcpText = await run(claude, ['mcp', 'list'], { reject: false });
-  return parseMcpList(`${mcpText.stdout}\n${mcpText.stderr}`);
+  const servers = parseMcpList(`${mcpText.stdout}\n${mcpText.stderr}`);
+  mcpListCache = { at: Date.now(), servers };
+  return servers;
 }
 
 type ContentBlock = {

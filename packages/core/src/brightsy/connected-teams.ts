@@ -10,6 +10,11 @@ import {
   saveBrightsyConfig,
   type BrightsyLocalConfig,
 } from './config.js';
+import {
+  brightsyAccessTokenNeedsRefresh,
+  ensureBrightsyLocalConfigFresh,
+  refreshBrightsyAccessToken,
+} from './oauth.js';
 
 import type { ConnectedBrightsyTeamInfo } from './accounts.js';
 
@@ -89,7 +94,6 @@ async function refreshTeamToken(
   team: ConnectedBrightsyTeam,
 ): Promise<ConnectedBrightsyTeam> {
   if (!team.refresh_token) return team;
-  const endpoint = (team.endpoint || 'https://brightsy.ai').replace(/\/$/, '');
   const cfg = (() => {
     try {
       return loadBrightsyConfig();
@@ -97,30 +101,17 @@ async function refreshTeamToken(
       return null;
     }
   })();
-  const clientId = cfg?.oauth_client_id || 'brightsy-cli';
-  const res = await fetch(`${endpoint}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: team.refresh_token,
-      client_id: clientId,
-    }),
+  const grant = await refreshBrightsyAccessToken({
+    endpoint: team.endpoint || 'https://brightsy.ai',
+    refreshToken: team.refresh_token,
+    clientId: cfg?.oauth_client_id,
   });
-  if (!res.ok) return team;
-  const data = (await res.json()) as {
-    access_token?: string;
-    refresh_token?: string;
-    expires_in?: number;
-  };
-  if (!data.access_token) return team;
+  if (!grant) return team;
   return {
     ...team,
-    access_token: data.access_token,
-    refresh_token: data.refresh_token || team.refresh_token,
-    expires_at: data.expires_in
-      ? Date.now() + data.expires_in * 1000
-      : team.expires_at,
+    access_token: grant.access_token,
+    refresh_token: grant.refresh_token || team.refresh_token,
+    expires_at: grant.expires_at ?? team.expires_at,
   };
 }
 
@@ -128,20 +119,24 @@ async function refreshTeamToken(
 export async function ensureConnectedBrightsyTeamTokens(): Promise<
   ConnectedBrightsyTeam[]
 > {
+  await ensureBrightsyLocalConfigFresh().catch(() => null);
   const teams = readStore();
   if (teams.length === 0) return [];
   const next: ConnectedBrightsyTeam[] = [];
   let changed = false;
   for (const team of teams) {
-    const expired =
-      typeof team.expires_at === 'number' &&
-      Date.now() >= team.expires_at - 60_000;
-    if (!expired) {
+    if (!team.refresh_token || !brightsyAccessTokenNeedsRefresh(team.expires_at)) {
       next.push(team);
       continue;
     }
     const refreshed = await refreshTeamToken(team);
-    if (refreshed.access_token !== team.access_token) changed = true;
+    if (
+      refreshed.access_token !== team.access_token ||
+      refreshed.refresh_token !== team.refresh_token ||
+      refreshed.expires_at !== team.expires_at
+    ) {
+      changed = true;
+    }
     next.push(refreshed);
   }
   if (changed) writeStore(next);

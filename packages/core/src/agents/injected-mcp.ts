@@ -175,6 +175,7 @@ function teamEnv(team: ConnectedBrightsyTeam): Record<string, string> {
   const endpoint = (team.endpoint || 'https://brightsy.ai').replace(/\/$/, '');
   return {
     BRIGHTSY_API_TOKEN: team.access_token,
+    ...(team.refresh_token ? { BRIGHTSY_REFRESH_TOKEN: team.refresh_token } : {}),
     BRIGHTSY_ACCOUNT_ID: team.id,
     BRIGHTSY_API_URL: endpoint,
   };

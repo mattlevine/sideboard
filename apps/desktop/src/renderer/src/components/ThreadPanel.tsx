@@ -96,7 +96,11 @@ import {
   readRightColumnWidth,
   writeRightColumnWidth,
 } from '../lib/panel-widths';
-import { splitTurnQueue } from '../lib/visible-follow-up-queue';
+import {
+  extraPendingFollowUps,
+  splitTurnQueue,
+  type PendingFollowUp,
+} from '../lib/visible-follow-up-queue';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -262,6 +266,7 @@ export function ThreadPanel({
   const [setupRunning, setSetupRunning] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [pendingInTranscript, setPendingInTranscript] = useState(false);
+  const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
   const [editingQueueIndex, setEditingQueueIndex] = useState<number | null>(null);
   const [queueEditText, setQueueEditText] = useState('');
   const [queueBusyIndex, setQueueBusyIndex] = useState<number | null>(null);
@@ -599,6 +604,7 @@ export function ThreadPanel({
     setDismissedPlanQuestionsId(null);
     setPendingUser(null);
     setPendingInTranscript(false);
+    setPendingFollowUps([]);
     setPendingAttachments([]);
   }, [thread.id]);
 
@@ -646,6 +652,16 @@ export function ThreadPanel({
       setQueueEditText('');
     }
   }, [thread.queue, editingQueueIndex]);
+
+  useEffect(() => {
+    setPendingFollowUps((prev) => {
+      if (prev.length === 0) return prev;
+      const landed = extraPendingFollowUps(thread.queue, prev);
+      return landed.length === prev.length && landed.every((p, i) => p.id === prev[i]?.id)
+        ? prev
+        : landed;
+    });
+  }, [thread.queue]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -836,7 +852,15 @@ export function ThreadPanel({
       ? pendingNotLanded
       : null;
 
-  const showQueueDock = followUpQueue.length > 0 || Boolean(pendingQueue);
+  const optimisticFollowUps = extraPendingFollowUps(
+    [
+      ...followUpQueue,
+      ...(pendingQueue ? [pendingQueue] : []),
+    ],
+    pendingFollowUps,
+  );
+  const showQueueDock =
+    followUpQueue.length > 0 || Boolean(pendingQueue) || optimisticFollowUps.length > 0;
 
   function pickAutocomplete(item: AutocompleteItem) {
     if (!acQuery) return;
@@ -859,8 +883,21 @@ export function ThreadPanel({
     if (pendingPlanQuestions) {
       setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
     }
+    const queueing =
+      turnBusy ||
+      thread.queue.length > 0 ||
+      followUpQueue.length > 0 ||
+      pendingFollowUps.length > 0;
+    if (queueing) {
+      setPendingFollowUps((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), text },
+      ]);
+      setPendingInTranscript(false);
+      return;
+    }
     setPendingUser(text);
-    setPendingInTranscript(!turnBusy && thread.queue.length === 0);
+    setPendingInTranscript(true);
     setPendingAttachments(attachments);
   }
 
@@ -872,22 +909,36 @@ export function ThreadPanel({
 
   async function send() {
     const text = prompt.trim();
-    if (!text || busy) return;
+    if (!text) return;
+    const queueing =
+      turnBusy ||
+      thread.queue.length > 0 ||
+      followUpQueue.length > 0 ||
+      pendingFollowUps.length > 0;
+    if (!queueing && busy) return;
     const snapshotAttachments = [...(thread.attachments ?? [])];
-    setBusy(true);
     beginPendingSend(text, snapshotAttachments);
     setPrompt('');
     setCursor(0);
     suppressArtifactAutoOpen.current = false;
+    if (!queueing) setBusy(true);
     try {
       await window.sideboard.sendToThread(thread.id, text);
-      onRefresh();
     } catch (err) {
-      clearPendingSend();
+      if (queueing) {
+        setPendingFollowUps((prev) => {
+          const idx = [...prev].reverse().findIndex((p) => p.text === text);
+          if (idx < 0) return prev;
+          const i = prev.length - 1 - idx;
+          return prev.filter((_, j) => j !== i);
+        });
+      } else {
+        clearPendingSend();
+      }
       setPrompt(text);
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(false);
+      if (!queueing) setBusy(false);
     }
   }
 
@@ -946,18 +997,18 @@ export function ThreadPanel({
     }
   }
 
-  async function sendQueuedNow(index: number) {
-    setQueueBusyIndex(index);
+  function sendQueuedNow(index: number) {
+    const text = thread.queue[index];
+    if (!text) return;
     // Promote reorders the queue — drop any open edit so we don't save against the wrong item.
     cancelEditQueued();
-    try {
-      await window.sideboard.sendQueuedMessageNow(thread.id, index);
-      onRefresh();
-    } catch (err) {
+    setPendingUser(text);
+    setPendingInTranscript(true);
+    void window.sideboard.sendQueuedMessageNow(thread.id, index).catch((err) => {
+      setPendingUser(null);
+      setPendingInTranscript(false);
       window.alert(err instanceof Error ? err.message : String(err));
-    } finally {
-      setQueueBusyIndex(null);
-    }
+    });
   }
 
   /** First press must count: pointerdown + preventDefault so composer blur
@@ -1975,6 +2026,13 @@ export function ThreadPanel({
             <div className="queued-messages-list">
               {followUpQueue.map((text, i) => {
                 const queueIndex = i + queueIndexOffset;
+                if (
+                  pendingInTranscript &&
+                  pendingUser === text &&
+                  i === followUpQueue.indexOf(pendingUser)
+                ) {
+                  return null;
+                }
                 return (
                 <div
                   key={`queued-${queueIndex}`}
@@ -2089,6 +2147,11 @@ export function ThreadPanel({
                   <div className="queued-msg-text">{pendingQueue}</div>
                 </div>
               )}
+              {optimisticFollowUps.map((item) => (
+                <div key={item.id} className="queued-msg pending">
+                  <div className="queued-msg-text">{item.text}</div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -2281,7 +2344,7 @@ export function ThreadPanel({
               <button
                 type="button"
                 className="send-btn"
-                disabled={busy || !prompt.trim()}
+                disabled={!prompt.trim() || (busy && !agentActive)}
                 title="Send"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -2427,7 +2490,7 @@ export function ThreadPanel({
                 <button
                   type="button"
                   className="send-btn"
-                  disabled={busy || !prompt.trim()}
+                  disabled={!prompt.trim() || (busy && !agentActive)}
                   title={agentActive ? 'Queue message' : 'Send'}
                   onClick={() => void send()}
                 >
