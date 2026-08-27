@@ -1916,8 +1916,14 @@ body.resizing-panels webview {
   font-size: 12px;
 }
 
-.sidebar-sort {
-  padding: 0 4px 8px;
+.worktree-sort-menu button {
+  justify-content: space-between;
+}
+
+.worktree-sort-check {
+  margin-left: auto;
+  opacity: 0.7;
+  font-size: 12px;
 }
 
 .section-label {
@@ -2045,6 +2051,10 @@ body.resizing-panels webview {
   gap: 2px;
 }
 
+.projects-actions .icon-btn {
+  margin-left: 0;
+}
+
 .sidebar-filter {
   padding: 4px 4px 8px;
 }
@@ -2059,11 +2069,36 @@ body.resizing-panels webview {
 }
 
 .filter-glyph,
-.folder-plus-glyph {
+.folder-plus-glyph,
+.sort-glyph {
   display: block;
   width: 14px;
   height: 14px;
   position: relative;
+}
+
+.sort-glyph {
+  opacity: 0.8;
+}
+
+.sort-glyph::before,
+.sort-glyph::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  transform: translateX(-50%);
+}
+
+.sort-glyph::before {
+  top: 1px;
+  border-bottom: 4px solid currentColor;
+}
+
+.sort-glyph::after {
+  bottom: 1px;
+  border-top: 4px solid currentColor;
 }
 
 .filter-glyph {
