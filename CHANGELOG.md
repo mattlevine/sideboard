@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- AbleTime as an issue source via hosted MCP (Settings, create-from, `list_issues`).
+
+### Fixed
+
+- Fan-out across several worktrees no longer freezes sidebar and board clicks. Live streams stay off the shell; transcript reloads and git-diff polls are coalesced.
+- Empty Home board no longer shows the kanban explainer.
+
 ## [0.1.133] - 2026-08-26
 
 ### Changed
