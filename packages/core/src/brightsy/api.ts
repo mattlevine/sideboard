@@ -4,6 +4,10 @@ import {
   saveBrightsyConfig,
   type BrightsyLocalConfig,
 } from './config.js';
+import {
+  brightsyAccessTokenNeedsRefresh,
+  refreshBrightsyAccessToken,
+} from './oauth.js';
 
 export interface SideboardCloudTask {
   id: string;
@@ -76,7 +80,7 @@ export class BrightsySideboardApi {
   }
 
   private async request<T>(path: string, init: FetchInit = {}): Promise<T> {
-    await this.refreshIfNeeded();
+    await this.ensureFreshAccessToken();
     const url = `${this.endpoint}${path}`;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.cfg.access_token}`,
@@ -103,37 +107,24 @@ export class BrightsySideboardApi {
     return (await res.json()) as T;
   }
 
-  private async refreshIfNeeded(): Promise<void> {
-    const expiresAt = this.cfg.expires_at ?? 0;
-    if (!this.cfg.refresh_token || Date.now() < expiresAt - 60_000) return;
-    const clientId = this.cfg.oauth_client_id || 'brightsy-cli';
-    const url = `${this.endpoint}/oauth/token`;
-    let res: Response;
-    try {
-      res = await this.fetchImpl(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: this.cfg.refresh_token,
-          client_id: clientId,
-        }),
-      });
-    } catch (err) {
-      throw new Error(formatBrightsyFetchError(err, url));
+  /** Refresh ~/.brightsy when the access token is stale or has no expiry. */
+  async ensureFreshAccessToken(): Promise<void> {
+    if (
+      !this.cfg.refresh_token ||
+      !brightsyAccessTokenNeedsRefresh(this.cfg.expires_at)
+    ) {
+      return;
     }
-    if (!res.ok) return;
-    const data = (await res.json()) as {
-      access_token?: string;
-      refresh_token?: string;
-      expires_in?: number;
-    };
-    if (!data.access_token) return;
-    this.cfg.access_token = data.access_token;
-    if (data.refresh_token) this.cfg.refresh_token = data.refresh_token;
-    if (data.expires_in) {
-      this.cfg.expires_at = Date.now() + data.expires_in * 1000;
-    }
+    const grant = await refreshBrightsyAccessToken({
+      endpoint: this.endpoint,
+      refreshToken: this.cfg.refresh_token,
+      clientId: this.cfg.oauth_client_id,
+      fetchImpl: this.fetchImpl,
+    });
+    if (!grant) return;
+    this.cfg.access_token = grant.access_token;
+    if (grant.refresh_token) this.cfg.refresh_token = grant.refresh_token;
+    if (grant.expires_at) this.cfg.expires_at = grant.expires_at;
     saveBrightsyConfig(this.cfg);
   }
 

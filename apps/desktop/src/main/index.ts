@@ -99,6 +99,8 @@ import {
   loadAppSettings,
   toPublicAppSettings,
   loadBrightsyConfig,
+  ensureBrightsyLocalConfigFresh,
+  ensureConnectedBrightsyTeamTokens,
   loginAgent,
   maxConcurrentAgents,
   resolveRepoRoot,
@@ -1096,6 +1098,8 @@ function registerIpc(): void {
   ipcMain.handle('getBrightsySession', () => getBrightsySession());
   ipcMain.handle('getBrightsyCmsAuth', async () => {
     try {
+      await ensureBrightsyLocalConfigFresh();
+      await ensureConnectedBrightsyTeamTokens();
       const cfg = loadBrightsyConfig();
       const session = await getBrightsySession();
       if (!session.connected || !cfg.access_token || !cfg.account_id) {

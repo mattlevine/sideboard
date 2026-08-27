@@ -429,10 +429,20 @@ export const opencodeAdapter: AgentAdapter = {
           (obj as { tool_use_id?: string; id?: string }).tool_use_id ??
           (obj as { id?: string }).id;
         if (!id) return null;
+        const flagged =
+          (obj as { isError?: boolean; is_error?: boolean }).isError === true ||
+          (obj as { is_error?: boolean }).is_error === true;
+        const errText = formatUnknownDetail((obj as { error?: unknown }).error);
         return {
           type: 'tool_result',
           id,
-          content: part?.output ?? part?.content ?? (obj as { output?: string; content?: string }).output ?? (obj as { content?: string }).content,
+          content:
+            part?.output ??
+            part?.content ??
+            (obj as { output?: string; content?: string }).output ??
+            (obj as { content?: string }).content ??
+            (errText || undefined),
+          isError: flagged || Boolean(errText),
         };
       }
       // Usage is reported incrementally per agentic step; spawn sums billed
