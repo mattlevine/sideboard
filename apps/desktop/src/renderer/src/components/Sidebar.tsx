@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  normalizeWorktreePath,
   threadDisplayLabel,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
+import {
+  DEFAULT_WORKTREE_SORT,
+  groupHomeBoardWorktrees,
+  worktreeBoardStatus,
+  type WorktreeSortMode,
+} from '@sideboard/home-board';
 import type { Thread } from '@sideboard-ai/core';
+import { WorktreeSortSelect } from './WorktreeSortSelect';
 import {
   GLOBAL_WORKSPACE_ID,
   threadDisplayTitle,
@@ -53,6 +59,8 @@ interface Props {
   onRemoveWorkspace?: (repoPath: string) => void | Promise<void>;
   onToggleSidebar: () => void;
   onOpenSettings?: () => void;
+  worktreeSort?: WorktreeSortMode;
+  onWorktreeSortChange?: (mode: WorktreeSortMode) => void;
 }
 
 function repoName(repoPath: string): string {
@@ -65,19 +73,6 @@ function isProjectPath(path: string): boolean {
   if (!path || path === GLOBAL_WORKSPACE_ID) return false;
   if (path === '/' || path === '.') return false;
   return true;
-}
-
-function groupByWorktree(threads: Thread[]): Thread[][] {
-  const map = new Map<string, Thread[]>();
-  for (const t of threads) {
-    const key = normalizeWorktreePath(t.worktreePath);
-    const list = map.get(key) ?? [];
-    list.push(t);
-    map.set(key, list);
-  }
-  return [...map.values()].map((list) =>
-    list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-  );
 }
 
 type WorktreeDiffStat = { additions: number; deletions: number; dirty: boolean };
@@ -535,7 +530,7 @@ function WorktreeSidebarRow({
         <span className="thread-archive-spinner" aria-hidden />
       ) : (
         <ThreadStatusIcon
-          status={primary.status}
+          status={worktreeBoardStatus(group)}
           dirty={dirty}
           dirtyLoaded={loaded}
           additions={stat?.additions ?? 0}
@@ -622,6 +617,8 @@ export function Sidebar({
   onRemoveWorkspace,
   onToggleSidebar,
   onOpenSettings,
+  worktreeSort = DEFAULT_WORKTREE_SORT,
+  onWorktreeSortChange,
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -650,7 +647,7 @@ export function Sidebar({
         const hay = `${t.title} ${t.agent} global orchestration`.toLowerCase();
         return hay.includes(q);
       })
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }, [threads, q]);
 
   const byRepo = useMemo(() => {
@@ -704,8 +701,21 @@ export function Sidebar({
             className={`sidebar-nav-btn${view === 'board' ? ' active' : ''}`}
             onClick={onShowBoard}
           >
-            <span className="nav-glyph home" aria-hidden />
-            Home
+            <span className="nav-glyph board" aria-hidden>
+              <span className="nav-glyph-col">
+                <i />
+                <i />
+              </span>
+              <span className="nav-glyph-col">
+                <i />
+              </span>
+              <span className="nav-glyph-col">
+                <i />
+                <i />
+                <i />
+              </span>
+            </span>
+            Board
           </button>
           <button type="button" className="sidebar-nav-btn" onClick={() => onNew(repoPath || undefined)}>
             <span className="nav-glyph plus" aria-hidden />
@@ -723,6 +733,13 @@ export function Sidebar({
       </div>
 
       <div className="thread-list">
+        {onWorktreeSortChange ? (
+          <WorktreeSortSelect
+            value={worktreeSort}
+            onChange={onWorktreeSortChange}
+            className="worktree-sort sidebar-sort"
+          />
+        ) : null}
         <div className="sidebar-projects">
         {(!q ||
           globalThreads.length > 0 ||
@@ -750,16 +767,13 @@ export function Sidebar({
             </div>
             {globalThreads.length === 0 ? (
               <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                No chats — open Home or use +
+                No chats — open Board or use +
               </div>
             ) : (
               (() => {
                 // One sidebar row (like a worktree); sibling chats live in the tab bar.
                 const primary =
-                  globalThreads.find((t) => t.id === selectedId) ??
-                  [...globalThreads].sort((a, b) =>
-                    b.updatedAt.localeCompare(a.updatedAt),
-                  )[0]!;
+                  globalThreads.find((t) => t.id === selectedId) ?? globalThreads[0]!;
                 const active =
                   view === 'thread' &&
                   globalThreads.some((t) => t.id === selectedId);
@@ -905,10 +919,9 @@ export function Sidebar({
                 No threads
               </div>
             )}
-            {groupByWorktree(repoThreads).map((group) => {
+            {groupHomeBoardWorktrees(repoThreads, worktreeSort).map((group) => {
               const primary =
-                group.find((t) => t.id === selectedId) ??
-                [...group].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!;
+                group.find((t) => t.id === selectedId) ?? group[0]!;
               const worktreeLabel = worktreeDisplayLabelForGroup(group);
               const active =
                 view === 'thread' && group.some((t) => t.id === selectedId);

@@ -8,6 +8,7 @@ import type {
   TokenUsage,
   Workspace,
 } from '@sideboard-ai/core';
+import type { WorktreeSortMode } from '@sideboard/home-board';
 import { lookupSoccerTeam } from '@sideboard/teams';
 import { foldLivePaintOps, type LivePaintOp } from './lib/live-paint';
 import { ShowCostProvider } from './lib/show-cost';
@@ -36,6 +37,7 @@ import {
   markWorktreeSeen,
   unreadWorktreeKey,
 } from './lib/unread-worktrees';
+import { readWorktreeSort, writeWorktreeSort } from './lib/worktree-sort';
 import {
   shouldHoldCreateOverlay,
   threadHasVisibleFirstTurn,
@@ -102,6 +104,7 @@ export function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [archived, setArchived] = useState<Thread[]>([]);
   const [view, setView] = useState<'board' | 'thread'>('board');
+  const [worktreeSort, setWorktreeSort] = useState<WorktreeSortMode>(readWorktreeSort);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
@@ -877,6 +880,11 @@ export function App() {
     setMultiSelected(new Set([match.id]));
   }
 
+  const onWorktreeSortChange = useCallback((mode: WorktreeSortMode) => {
+    setWorktreeSort(mode);
+    writeWorktreeSort(mode);
+  }, []);
+
   function openCreate(
     forRepo?: string,
     mode: CreateState['mode'] = 'quick',
@@ -931,6 +939,8 @@ export function App() {
             onArchive={(ids, meta) => archiveThreadsAndRefresh(ids, meta)}
             archivingIds={archivingIds}
             onRemoveWorkspace={removeWorkspaceAndRefresh}
+            worktreeSort={worktreeSort}
+            onWorktreeSortChange={onWorktreeSortChange}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -957,6 +967,8 @@ export function App() {
             setView('thread');
             setMultiSelected(new Set([id]));
           }}
+          worktreeSort={worktreeSort}
+          onWorktreeSortChange={onWorktreeSortChange}
           onRefresh={() => void refresh()}
           onAddToBoard={() =>
             openCreate(repoPath || undefined, 'quick', { stayOnBoard: true })
@@ -1101,7 +1113,6 @@ export function App() {
                 openFilePath={openFilePath}
                 changesPath={changesPath}
                 onOpenFile={openFile}
-                onOpenUrl={openPreviewUrl}
                 onFileChanges={onFileChanges}
                 onSelectChat={(id, created) => {
                   if (created) {

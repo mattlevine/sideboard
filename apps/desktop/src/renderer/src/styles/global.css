@@ -1892,6 +1892,34 @@ body.resizing-panels webview {
   overflow-y: auto;
 }
 
+.worktree-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.worktree-sort-label {
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.worktree-sort-select {
+  min-width: 0;
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.sidebar-sort {
+  padding: 0 4px 8px;
+}
+
 .section-label {
   color: var(--muted);
   font-size: 11px;
@@ -1934,24 +1962,31 @@ body.resizing-panels webview {
   position: relative;
 }
 
-.nav-glyph.home {
+.nav-glyph.board {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1px;
+  padding: 1.5px 1.5px 0;
   border: 1.5px solid currentColor;
-  border-radius: 2px 2px 0 0;
-  border-bottom: none;
-  height: 10px;
-  margin-top: 3px;
+  border-radius: 2px;
 }
 
-.nav-glyph.home::before {
-  content: '';
-  position: absolute;
-  left: -3px;
-  top: -5px;
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-bottom: 6px solid currentColor;
+.nav-glyph.board .nav-glyph-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-glyph.board .nav-glyph-col i {
+  display: block;
+  height: 2px;
+  font-style: normal;
+  border-radius: 0.5px;
+  background: currentColor;
 }
 
 .nav-glyph.plus::before,
@@ -2312,6 +2347,7 @@ body.resizing-panels webview {
 .board > .panel-header button,
 .board > .panel-header .actions,
 .board > .panel-header input,
+.board > .panel-header select,
 .board > .panel-header a {
   -webkit-app-region: no-drag;
 }

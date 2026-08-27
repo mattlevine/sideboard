@@ -47,8 +47,6 @@ interface Props {
       base?: string | null;
     },
   ) => void;
-  /** Open an http(s) URL in a center preview tab (e.g. localhost:port). */
-  onOpenUrl?: (url: string) => void;
   /** Select another chat tab in this worktree (e.g. after creating one for setup). */
   onSelectChat?: (id: string, created?: Thread) => void;
   /** Notify parent so file tabs can show the same git markers. */
@@ -155,7 +153,6 @@ export function RightSidebar({
   openFilePath = null,
   changesPath = null,
   onOpenFile,
-  onOpenUrl,
   onSelectChat,
   onFileChanges,
 }: Props) {
@@ -516,7 +513,8 @@ export function RightSidebar({
     return () => {
       cancelled = true;
     };
-  }, [thread.id, thread.updatedAt, upper]);
+    // Agent turns bump updatedAt constantly — don't re-walk files on every token.
+  }, [thread.id, upper]);
 
   const loadPrChecks = useCallback(async () => {
     const forWorktree = worktreeKey;
@@ -593,6 +591,12 @@ export function RightSidebar({
         }
         if (worktreeKeyRef.current !== worktreeKey) return;
         reloadDiff();
+        if (upper === 'files') {
+          void window.sideboard.listFiles(thread.id).then((files) => {
+            if (worktreeKeyRef.current !== worktreeKey) return;
+            setAllFiles(files);
+          }).catch(() => undefined);
+        }
         if (event.type === 'turn_finished') {
           void loadPrMeta().then(() => {
             // getPrMeta may persist a newly discovered prUrl — refresh thread props.
@@ -607,6 +611,7 @@ export function RightSidebar({
     thread.id,
     thread.worktreePath,
     worktreeKey,
+    upper,
     reloadDiff,
     loadPrMeta,
     loadPrChecks,
@@ -1464,14 +1469,9 @@ export function RightSidebar({
               <button
                 type="button"
                 className="dev-open-port"
-                title={`Open http://localhost:${primaryPort} in Sideboard (⌥/Alt-click for browser)`}
-                onClick={(e) => {
-                  const url = `http://localhost:${primaryPort}`;
-                  if (e.altKey || !onOpenUrl) {
-                    void window.sideboard.openExternal(url);
-                    return;
-                  }
-                  onOpenUrl(url);
+                title={`Open http://localhost:${primaryPort} in your default browser`}
+                onClick={() => {
+                  void window.sideboard.openExternal(`http://localhost:${primaryPort}`);
                 }}
               >
                 <RunScriptIcon name="globe" />

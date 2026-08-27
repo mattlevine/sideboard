@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Home and the left sidebar can sort worktrees by **Created** (default), **Name**, or **Recent activity**. Created keeps the list still while agents run.
+- Left sidebar nav (and the board page title) say **Board** instead of Home, with a three-column Kanban glyph.
+
+### Fixed
+
+- Composer auto-focus after a turn only runs in the open chat, and does not steal the caret from another field.
+- Chat autocomplete and the Files tab no longer re-walk the worktree on every agent token (that was janking the UI while turns ran).
+- Right sidebar **Open :port** (Run) opens the app in the default browser, not a Sideboard URL tab.
+
 ## [0.1.130] - 2026-08-26
 
 ### Fixed

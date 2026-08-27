@@ -538,7 +538,8 @@ export function ThreadPanel({
     return () => {
       cancelled = true;
     };
-  }, [thread.id, thread.updatedAt]);
+    // Agent turns bump updatedAt constantly — don't walk the worktree on every token.
+  }, [thread.id]);
 
   useEffect(() => {
     if (composerPrefill) {
@@ -563,12 +564,47 @@ export function ThreadPanel({
     const wasActive = wasAgentActiveRef.current;
     wasAgentActiveRef.current = agentActive;
     if (!wasActive || agentActive) return;
+    let cancelled = false;
+    void Promise.all([
+      window.sideboard.listFiles(thread.id),
+      window.sideboard.listSkills(thread.id),
+    ])
+      .then(([files, skillList]) => {
+        if (cancelled) return;
+        setFilePaths(files);
+        setSkills(skillList);
+      })
+      .catch(() => undefined);
+    // Only this chat's composer (ThreadPanel is mounted for the open thread).
+    // Don't steal the caret from another field or a background window.
+    if (!document.hasFocus()) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const active = document.activeElement;
+    if (
+      active &&
+      active !== document.body &&
+      active !== textareaRef.current &&
+      (active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        (active instanceof HTMLElement && active.isContentEditable))
+    ) {
+      return () => {
+        cancelled = true;
+      };
+    }
     setComposerFocused(true);
     const frame = window.requestAnimationFrame(() => {
       textareaRef.current?.focus({ preventScroll: true });
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [agentActive]);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [agentActive, thread.id]);
 
   // Reset stick-to-bottom when switching chats (show latest for the newly opened thread).
   useEffect(() => {
