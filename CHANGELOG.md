@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.134] - 2026-08-27
+
 ### Added
 
 - AbleTime as an issue source via hosted MCP (Settings, create-from, `list_issues`).
