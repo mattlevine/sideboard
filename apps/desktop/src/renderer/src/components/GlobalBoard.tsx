@@ -270,7 +270,7 @@ export function GlobalBoard({
               <span className="chat-empty-cube" />
             </div>
             <h3>No worktrees yet</h3>
-            <p>Add a ticket, PR, or branch to create a worktree. Home shows one card per checkout (chats nested inside): New → Draft → Review → Merged. Archive sends the worktree to Settings → History.</p>
+            <p>Add a ticket, PR, or branch to create a worktree.</p>
             <div className="chat-empty-action">
               <button type="button" className="primary" onClick={onAddToBoard}>
                 Add to Board
