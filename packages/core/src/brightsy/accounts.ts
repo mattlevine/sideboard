@@ -82,6 +82,10 @@ export async function listBrightsyAccounts(): Promise<BrightsyAccount[]> {
 
 export async function getBrightsySession(): Promise<BrightsySession> {
   try {
+    const { ensureBrightsyLocalConfigFresh } = await import('./oauth.js');
+    const { ensureConnectedBrightsyTeamTokens } = await import('./connected-teams.js');
+    await ensureBrightsyLocalConfigFresh();
+    await ensureConnectedBrightsyTeamTokens();
     loadBrightsyConfig(); // ensure login file exists
     const data = (await runBrightsyTeamsJson([])) as CliTeamsList;
     const accounts = Array.isArray(data.teams) ? data.teams : [];

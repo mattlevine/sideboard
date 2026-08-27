@@ -319,6 +319,24 @@ describe('opencodeAdapter.parseEvent', () => {
       },
     ]);
   });
+
+  it('marks standalone tool_result errors so the model can recover', () => {
+    expect(
+      opencodeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'tool_result',
+          id: 't1',
+          content: 'ENOENT',
+          isError: true,
+        }),
+      ),
+    ).toEqual({
+      type: 'tool_result',
+      id: 't1',
+      content: 'ENOENT',
+      isError: true,
+    });
+  });
 });
 
 describe('opencodeAdapter.resolveSessionId', () => {

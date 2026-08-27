@@ -13,6 +13,8 @@ export interface BrightsyLocalConfig {
 }
 
 export function brightsyConfigPath(): string {
+  const override = process.env.BRIGHTSY_CONFIG?.trim();
+  if (override) return override;
   return join(homedir(), '.brightsy', 'config.json');
 }
 

@@ -5077,8 +5077,9 @@ button.worktree-hover-card-title:hover {
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
-  max-height: min(40vh, 280px);
+  max-height: min(50vh, 360px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 0 8px;
   -webkit-app-region: no-drag;
   pointer-events: auto;
@@ -5100,6 +5101,7 @@ button.worktree-hover-card-title:hover {
 
 .queued-msg {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 10px;
   width: 100%;

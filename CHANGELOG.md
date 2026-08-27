@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chat autocomplete and the Files tab no longer re-walk the worktree on every agent token (that was janking the UI while turns ran).
 - Right sidebar **Open :port** (Run) opens the app in the default browser, not a Sideboard URL tab.
 
+## [0.1.131] - 2026-08-26
+
+### Fixed
+
+- Queue: more than one follow-up can sit while a turn is running. **Send now** starts the next message immediately instead of waiting for unwind or a full refresh.
+- Brightsy MCP: refresh the OAuth access token when expiry is missing or about to lapse, instead of prompting login again.
+- Agent crashes: the orchestrator feeds the error back as a follow-up turn (all agents) so the run can recover the way Cursor does.
+
+### Changed
+
+- Queuing a follow-up no longer flips a live running thread to queued.
+- Brightsy MCP injects `BRIGHTSY_REFRESH_TOKEN` so the host can refresh without a new login.
+
 ## [0.1.130] - 2026-08-26
 
 ### Fixed

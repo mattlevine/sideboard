@@ -4,7 +4,7 @@ import {
   pendingSlackExternalReplies,
 } from '../slack/outbound-watch.js';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
 import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
@@ -239,6 +239,11 @@ export class Orchestrator {
   private readonly turnBaselines = new Map<string, string>();
   /** Timers for orchestration session-quota auto-resume. */
   private readonly quotaResumeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /**
+   * Threads that already got a crash-continue turn. Cleared on a successful
+   * finish or a user send so a later crash can recover again.
+   */
+  private readonly crashContinued = new Set<string>();
   private maxConcurrent: number;
   private runningCount = 0;
 
@@ -523,6 +528,35 @@ export class Orchestrator {
     }
   }
 
+  /**
+   * Cursor-style recovery: after a runner crash, feed the error back as the
+   * next prompt so the same agent can continue instead of sitting on lastError.
+   */
+  private maybeEnqueueCrashContinue(
+    threadId: string,
+    opts: { detail: string; assistantText: string; partsCount: number },
+  ): void {
+    if (this.crashContinued.has(threadId)) return;
+    if (this.haltDrain.has(threadId)) return;
+    if (
+      !shouldFeedErrorBackToAgent({
+        detail: opts.detail,
+        assistantText: opts.assistantText,
+        partsCount: opts.partsCount,
+      })
+    ) {
+      return;
+    }
+    const thread = readThread(threadId);
+    if (!thread || thread.status === 'archived') return;
+    this.crashContinued.add(threadId);
+    const prompt = formatAgentErrorContinuePrompt(opts.detail);
+    const queue = [prompt, ...thread.queue];
+    updateThread(threadId, { queue });
+    this.emit({ type: 'queue_changed', threadId, queue });
+    this.haltDrain.delete(threadId);
+  }
+
   getThreads(includeArchived = false): Thread[] {
     return listThreads({ includeArchived });
   }
@@ -647,8 +681,14 @@ export class Orchestrator {
         throw new Error(`Thread is archived: ${thread.id}`);
       }
       const queue = [...current.queue, prompt];
+      this.crashContinued.delete(thread.id);
       this.haltDrain.delete(thread.id);
-      const patch: Parameters<typeof updateThread>[1] = { queue, status: 'queued' };
+      const inFlight =
+        this.activeTurns.has(thread.id) ||
+        this.startingTurns.has(thread.id) ||
+        current.status === 'running';
+      const patch: Parameters<typeof updateThread>[1] = { queue };
+      if (!inFlight) patch.status = 'queued';
       // Stale agentPid from a dead MCP/desktop child can pin drainQueue forever.
       const pid = current.agentPid;
       if (typeof pid === 'number' && pid > 0 && !isPidAlive(pid)) {
@@ -656,7 +696,9 @@ export class Orchestrator {
       }
       updateThread(thread.id, patch);
       this.emit({ type: 'queue_changed', threadId: thread.id, queue });
-      this.emit({ type: 'status_changed', threadId: thread.id, status: 'queued' });
+      if (!inFlight) {
+        this.emit({ type: 'status_changed', threadId: thread.id, status: 'queued' });
+      }
       // MCP/CLI enqueue only while the board is alive — otherwise the turn
       // runs in a stdio child with no renderer IPC (blank worktree chat).
       if (thisProcessShouldDrainAgentQueues()) {
@@ -1084,7 +1126,9 @@ export class Orchestrator {
 
       // Cursor: local runner can die mid-stream while the cloud agent finishes.
       // Recover the finished run from the SDK store so we don't strand the turn as bare exit 1.
+      // Skip on Send now / Stop — waiting here delays the next queued prompt by up to 4s.
       if (
+        !this.stoppedTurns.has(threadId) &&
         this.requireThread(threadId).agent === 'cursor' &&
         exitCode !== 0 &&
         !assistantText &&
@@ -1127,7 +1171,6 @@ export class Orchestrator {
         !assistantText &&
         parts.length === 0 &&
         !this.stoppedTurns.has(threadId) &&
-        this.requireThread(threadId).agent !== 'brightsy' &&
         shouldRetryFailedAgentTurn(detail, {
           hasSession: Boolean(this.requireThread(threadId).sessionId),
         })
@@ -1256,7 +1299,12 @@ export class Orchestrator {
         updateThread(threadId, { sessionId: null });
       }
       // Pick up agent `git branch -m` renames for sidebar labels.
-      await syncThreadBranchFromGit(threadId);
+      // Send now / Stop must not wait on git before drain starts the next prompt.
+      if (this.stoppedTurns.has(threadId)) {
+        void syncThreadBranchFromGit(threadId).catch(() => undefined);
+      } else {
+        await syncThreadBranchFromGit(threadId);
+      }
       if (this.stoppedTurns.has(threadId)) {
         // Preserve intentional stop — do not overwrite with idle/error from kill exit.
         const stopped = writeLiveStatus(threadId, 'stopped');
@@ -1288,9 +1336,16 @@ export class Orchestrator {
           });
         }
         this.emit({ type: 'turn_finished', threadId, exitCode });
-        if (exitCode !== 0) {
+        if (exitCode === 0) {
+          this.crashContinued.delete(threadId);
+        } else {
           const blob = [chatText, detail].filter(Boolean).join('\n');
           void this.maybeHandleOrchestrationQuotaFailover(threadId, blob);
+          this.maybeEnqueueCrashContinue(threadId, {
+            detail: detail || failDetail,
+            assistantText: chatText,
+            partsCount: parts.length,
+          });
         }
       }
     } catch (err) {
@@ -1310,6 +1365,11 @@ export class Orchestrator {
         }
         this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
         void this.maybeHandleOrchestrationQuotaFailover(threadId, message);
+        this.maybeEnqueueCrashContinue(threadId, {
+          detail: message,
+          assistantText: '',
+          partsCount: 0,
+        });
       }
     } finally {
       this.startingTurns.delete(threadId);

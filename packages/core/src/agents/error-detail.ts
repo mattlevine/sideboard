@@ -349,9 +349,10 @@ export function humanizeAgentFailDetail(detail: string): string {
 }
 
 /**
- * Transcript text for a finished turn. Runner crashes and other failures with
- * no assistant output go in the agent bubble so wait_for_turn / get_turn_result
- * (and a later retry) can plan around them — not only the lastError footer.
+ * Transcript text for a finished turn. Runner crashes and other failures go in
+ * the agent bubble so wait_for_turn / get_turn_result (and the next turn) can
+ * plan around them — not only the lastError footer. Partial assistant text
+ * is kept and the error is appended so the model sees both.
  */
 export function turnFailChatText(opts: {
   exitCode: number | null;
@@ -359,11 +360,60 @@ export function turnFailChatText(opts: {
   detail: string;
 }): string {
   const chat = opts.assistantText.trim();
-  if (chat) return chat;
-  if (opts.exitCode === 0) return '';
+  if (opts.exitCode === 0) return chat;
   const detail = opts.detail.trim();
-  if (detail) return humanizeAgentFailDetail(detail);
-  return formatTurnExitError(opts.exitCode ?? 1, '');
+  const fail = detail
+    ? humanizeAgentFailDetail(detail)
+    : formatTurnExitError(opts.exitCode ?? 1, '');
+  if (!chat) return fail;
+  const failCore = fail.replace(/^exit\s*\d+:\s*/i, '').trim();
+  if (
+    looksLikeAgentFailureMessage(chat) ||
+    (failCore && chat.includes(failCore)) ||
+    chat.includes(fail)
+  ) {
+    return chat;
+  }
+  return `${chat}\n\n${fail}`;
+}
+
+/**
+ * True when the host should start a follow-up turn that feeds the crash/error
+ * back to the same agent (Cursor-style), instead of leaving the thread parked
+ * on lastError for a human to retry.
+ */
+export function shouldFeedErrorBackToAgent(opts: {
+  detail: string;
+  assistantText?: string;
+  partsCount?: number;
+}): boolean {
+  const detail = opts.detail.trim();
+  const chat = (opts.assistantText ?? '').trim();
+  if (looksLikeAgentFailureMessage(detail) || looksLikeAgentFailureMessage(chat)) {
+    return false;
+  }
+  if (
+    looksLikeInvalidAgentSession(detail) ||
+    looksLikeV8Oom(detail) ||
+    looksLikeRetryableRunnerCrash(detail)
+  ) {
+    return true;
+  }
+  if (/without details|segfault|sig(?:segv|abrt|ill)|fatal error/i.test(detail)) {
+    return true;
+  }
+  return !chat && (opts.partsCount ?? 0) === 0;
+}
+
+/** User-turn text that tells the agent the previous process died and to recover. */
+export function formatAgentErrorContinuePrompt(detail: string): string {
+  const fail = humanizeAgentFailDetail(detail.trim()) || 'the agent process exited without details';
+  return [
+    'The previous agent process ended before it finished. Error:',
+    fail,
+    '',
+    'Continue from where you left off. Use the error to recover — do not restart the whole task unless the error requires it. If you cannot continue, say why.',
+  ].join('\n');
 }
 
 /** Build the thread lastError string for a non-zero agent exit. */

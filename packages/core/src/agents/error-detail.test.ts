@@ -10,6 +10,8 @@ import {
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
   shouldRetryFailedAgentTurn,
+  shouldFeedErrorBackToAgent,
+  formatAgentErrorContinuePrompt,
   pushTurnStderr,
   summarizeTurnStderr,
   turnFailChatText,
@@ -335,8 +337,44 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
         assistantText: 'already wrote a review',
         detail,
       }),
-    ).toBe('already wrote a review');
+    ).toContain('already wrote a review');
+    expect(
+      turnFailChatText({
+        exitCode: 1,
+        assistantText: 'already wrote a review',
+        detail,
+      }),
+    ).toContain('Cursor runner crashed');
     expect(turnFailChatText({ exitCode: 0, assistantText: '', detail })).toBe('');
+  });
+
+  it('feeds runner crashes back to the agent, but not auth/quota', () => {
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail:
+          'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.',
+      }),
+    ).toBe(true);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail: "You've hit your session limit · resets 7:10pm",
+      }),
+    ).toBe(false);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail: 'exit 1: agent exited without details',
+        assistantText: '',
+        partsCount: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail: 'some tool warning',
+        assistantText: 'I finished the edit',
+        partsCount: 2,
+      }),
+    ).toBe(false);
+    expect(formatAgentErrorContinuePrompt('segfault at 0x0')).toMatch(/Continue from where you left off/);
   });
 
   it('keeps exit code for opaque CLI failures', () => {
