@@ -20,3 +20,20 @@ export const MCP_WAIT_QUEUED_HINT =
 export function mcpWaitStillRunningHint(status: string): string {
   return status === 'queued' ? MCP_WAIT_QUEUED_HINT : MCP_WAIT_STILL_RUNNING_HINT;
 }
+
+export const MCP_WAIT_STOPPED_HINT =
+  'Child was stopped before the turn finished. Do not treat this as success. send_to_thread to resume, or tell the user.';
+
+export const MCP_WAIT_BROKEN_HINT =
+  'Child worktree is broken (missing on disk). Tell the user — do not treat this as success.';
+
+export const MCP_WAIT_ERROR_HINT =
+  'Child turn failed. lastError/text is the failure — switch agent, tell the user, or retry. Do not treat empty text as success.';
+
+/** Hint when wait_for_turn / get_turn_result is no longer stillRunning. */
+export function mcpWaitFinishedHint(status: string): string | undefined {
+  if (status === 'stopped') return MCP_WAIT_STOPPED_HINT;
+  if (status === 'broken') return MCP_WAIT_BROKEN_HINT;
+  if (status === 'error') return MCP_WAIT_ERROR_HINT;
+  return undefined;
+}

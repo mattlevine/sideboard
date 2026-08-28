@@ -1648,6 +1648,15 @@ app.whenReady().then(async () => {
   };
   pollSlackOutbound();
   setInterval(pollSlackOutbound, 12_000);
+  // Worktree agents can die without writing a thread file; reclaim stale
+  // `running` so wait_for_turn and the parent orchestrator notice.
+  setInterval(() => {
+    try {
+      orch.healStaleRunningTurns();
+    } catch {
+      // Next tick retries.
+    }
+  }, 8_000);
   setupApplicationMenu(() => mainWindow);
   try {
     const root = await resolveRepoRoot(process.cwd());

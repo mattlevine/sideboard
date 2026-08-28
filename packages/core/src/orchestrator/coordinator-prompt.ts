@@ -74,7 +74,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- fork_worktree — fork a worktree chat into a NEW git worktree + chat (transcript attached); optional agent; leave model unset (Auto) unless you have a reason. Not for orchestration chats.',
   '- fork_chat — fork a worktree chat (same worktree tab) OR a Global orchestration chat (new orchestration tab); optional agent; leave model unset (Auto) unless you have a reason. Remote coordinators: use this to continue another orchestration chat on a different agent after session limits.',
   '- send_to_thread — queue a prompt (start/continue a chat turn); pass force_stop: true to interrupt mid-turn / clear stale queued prompts before replacing with a new request',
-  '- wait_for_turn / get_turn_result — wait for and read the agent reply (includes last-turn usage / costUsd when the child agent reported it). wait_for_turn returns within ~45s even if the child is still working (MCP clients kill longer tool calls). If stillRunning is true, progress is a live snapshot of tools/thinking — call wait_for_turn again. status=queued with no lastActivityAt means the child has not started yet (concurrency cap) — keep waiting; do not force_stop or send a check-in. Do not send “are you stuck?” or assume a hang while lastActivityAt is recent. On status error, lastError (and text) is the failure — switch agent, tell the user, or retry; do not treat empty text as success.',
+  '- wait_for_turn / get_turn_result — wait for and read the agent reply (includes last-turn usage / costUsd when the child agent reported it). wait_for_turn returns within ~45s even if the child is still working (MCP clients kill longer tool calls). If stillRunning is true, progress is a live snapshot of tools/thinking — call wait_for_turn again. status=queued with no lastActivityAt means the child has not started yet (concurrency cap) — keep waiting; do not force_stop or send a check-in. Do not send “are you stuck?” or assume a hang while lastActivityAt is recent. On status error, lastError (and text) is the failure — switch agent, tell the user, or retry; do not treat empty text as success. On status stopped or broken (or incomplete=true), the child was interrupted or died — resume with send_to_thread or tell the user; never treat stopped as a finished turn. Sideboard also injects a notice into this chat when a child stops unexpectedly.',
   '- stop_thread — force-stop: kill in-flight turn AND clear queued prompts (do not leave stale queue after an interrupt)',
   '- archive_thread / restore_thread — archive (tears down worktree when last tab) or restore',
   'Setup / run:',
@@ -130,7 +130,7 @@ export function coordinatorTurnReminder(opts: {
     `- YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
-    '- Status: list_board (worktree Kanban: New → Draft → Review → Merged) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked.',
+    '- Status: list_board (worktree Kanban: New → Draft → Review → Merged) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked. If a child is stopped/error/broken, it did not finish — resume or tell the user.',
   ]
     .filter(Boolean)
     .join('\n');
