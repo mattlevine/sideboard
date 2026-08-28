@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- After `ask_user`, the sent answer in the user bubble renders markdown.
+- Create / Orchestration modal drops persist file bytes into `.context/attachments/` so the agent can Read them.
+- When a worktree child dies or is stopped, the parent orchestration chat gets a follow-up and `wait_for_turn` no longer looks like success.
+- Chat tool rows no longer show a clipped worktree-root path pill. Searches show the pattern instead of the folder.
+
 ## [0.1.135] - 2026-08-27
 
 ### Fixed
