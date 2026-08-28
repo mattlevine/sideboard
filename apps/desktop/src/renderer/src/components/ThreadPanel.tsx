@@ -16,7 +16,6 @@ import type {
 import {
   extractPendingPlanQuestions,
   formatPlanQuestionsForChat,
-  isPlanQuestionAnswersMessage,
   latestPendingPlanQuestions,
 } from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
@@ -216,6 +215,12 @@ function QueuedRemoveIcon() {
   );
 }
 
+/** Keep typed single newlines as markdown hard breaks. */
+function userTextToMarkdown(text: string): string {
+  return text.replace(/([^\n])\n(?!\n)/g, '$1  \n');
+}
+
+/** User bubble after send — including the ask-user answer transcript. */
 function UserMessageText({
   text,
   onThreadLinkClick,
@@ -223,14 +228,14 @@ function UserMessageText({
   text: string;
   onThreadLinkClick?: (threadRef: string) => void;
 }) {
-  if (isPlanQuestionAnswersMessage(text)) {
-    return (
-      <div className="msg-body msg-body-md">
-        <MarkdownMessage text={text} onThreadLinkClick={onThreadLinkClick} />
-      </div>
-    );
-  }
-  return <div className="msg-body">{text}</div>;
+  return (
+    <div className="msg-body msg-body-md">
+      <MarkdownMessage
+        text={userTextToMarkdown(text)}
+        onThreadLinkClick={onThreadLinkClick}
+      />
+    </div>
+  );
 }
 
 export function ThreadPanel({

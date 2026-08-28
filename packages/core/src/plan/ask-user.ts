@@ -197,7 +197,7 @@ export function formatPlanQuestionAnswers(
   questions: PlanQuestion[],
   answers: PlanQuestionAnswer[],
 ): string {
-  const lines: string[] = [PLAN_QUESTION_ANSWERS_PREFIX];
+  const lines: string[] = [PLAN_QUESTION_ANSWERS_PREFIX, ''];
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]!;
     const a = answers.find((x) => x.questionIndex === i);
@@ -206,7 +206,8 @@ export function formatPlanQuestionAnswers(
     if (a?.selected.length) parts.push(a.selected.join(', '));
     if (a?.other?.trim()) parts.push(a.other.trim());
     const body = parts.length ? parts.join(' · ') : '(no answer)';
-    lines.push(`${i + 1}. ${header}${q.question}`);
+    // Hard break so the arrow line stays in the list item and **bold** parses.
+    lines.push(`${i + 1}. ${header}${q.question}  `);
     lines.push(`   → ${body}`);
   }
   return lines.join('\n');

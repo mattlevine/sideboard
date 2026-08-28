@@ -5870,25 +5870,6 @@ button.worktree-hover-card-title:hover {
   font-weight: 500;
 }
 
-.plan-question-md {
-  font-size: inherit;
-  line-height: inherit;
-  font-weight: inherit;
-  letter-spacing: inherit;
-  color: inherit;
-}
-
-.plan-question-md p,
-.plan-question-md ul,
-.plan-question-md ol {
-  margin: 0;
-}
-
-.plan-question-md strong,
-.plan-question-md b {
-  color: inherit;
-}
-
 .plan-question-options {
   display: flex;
   flex-direction: column;
