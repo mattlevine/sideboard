@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { isShellToolName, isSubagentToolName, messagePartParentId, toolActivityLine } from '@sideboard/message-parts';
+import { isShellToolName, isSubagentToolName, messagePartParentId, toolActivityLine, visibleToolRowDetail } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
   isFilesPane,
@@ -431,7 +431,11 @@ export function AgentMessage({
     if (isHiddenChatTool(part.name)) return null;
     const clickable = hasCodeDiff(part);
     const isRunning = part.status === 'running';
-    const detail = toolRowDetail(part, kids, Boolean(streaming));
+    const detail = visibleToolRowDetail(
+      toolRowDetail(part, kids, Boolean(streaming)),
+      part.description ?? part.name,
+      worktreePath,
+    );
     const showTail =
       isRunning &&
       longRunningShells.has(part.id) &&

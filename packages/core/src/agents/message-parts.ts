@@ -11,15 +11,60 @@ function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v : undefined;
 }
 
+function looksLikeFilePath(value: string): boolean {
+  if (value.startsWith('/') || value.startsWith('~/')) return true;
+  if (/^[A-Za-z]:[\\/]/.test(value)) return true;
+  return value.includes('/') || value.includes('\\');
+}
+
+function stripWorktreePrefix(path: string, worktreePath?: string | null): string {
+  if (!worktreePath) return path;
+  const prefix = worktreePath.replace(/[/\\]+$/, '');
+  if (path === prefix || path === `${prefix}/`) return '';
+  if (path.startsWith(`${prefix}/`)) return path.slice(prefix.length + 1);
+  return path;
+}
+
+/**
+ * Chat tool-row pill. Absolute worktree paths ellipsize to the same prefix,
+ * so hide them when the description already has the basename; otherwise show
+ * a short relative path.
+ */
+export function visibleToolRowDetail(
+  detail: string | undefined,
+  description: string | undefined,
+  worktreePath?: string | null,
+): string | undefined {
+  if (!detail?.trim()) return undefined;
+  const raw = detail.trim();
+  const desc = (description ?? '').trim();
+  if (!looksLikeFilePath(raw)) {
+    if (desc === raw) return undefined;
+    return raw;
+  }
+  const rel = stripWorktreePrefix(raw, worktreePath);
+  if (!rel) return undefined;
+  const base = fileBasename(rel);
+  if (desc && (desc === base || desc.endsWith(` ${base}`))) return undefined;
+  if (rel.length <= 42) return rel;
+  const parts = rel.split(/[/\\]/).filter(Boolean);
+  if (parts.length >= 2) return `…/${parts.slice(-2).join('/')}`;
+  return base;
+}
+
 export function toolDetail(name: string, input?: Record<string, unknown>): string | undefined {
   if (!input) return undefined;
   const command = str(input.command) ?? str(input.cmd);
   if (command) return command;
+  const pattern = str(input.pattern) ?? str(input.glob) ?? str(input.glob_pattern);
+  const isSearch = /grep|glob|search|ripgrep|findfiles|semsearch/i.test(name);
+  if (isSearch && pattern) {
+    return pattern.length > 80 ? `${pattern.slice(0, 77)}…` : pattern;
+  }
   const path =
     str(input.file_path) ?? str(input.path) ?? str(input.filePath) ?? str(input.filename);
   if (path) return path;
-  const pattern = str(input.pattern) ?? str(input.glob) ?? str(input.glob_pattern);
-  if (pattern) return pattern;
+  if (pattern) return pattern.length > 80 ? `${pattern.slice(0, 77)}…` : pattern;
   const query = str(input.query) ?? str(input.prompt);
   if (query) return query.length > 80 ? `${query.slice(0, 77)}…` : query;
   try {
