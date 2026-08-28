@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
   DiffScope,
-  MessagePart,
   OrchestratorEvent,
   OrchestratorRuntime,
   Thread,
-  TokenUsage,
   Workspace,
 } from '@sideboard-ai/core';
 import type { WorktreeSortMode } from '@sideboard/home-board';
 import { lookupSoccerTeam } from '@sideboard/teams';
-import { foldLivePaintOps, type LivePaintOp } from './lib/live-paint';
+import { LivePaintProvider } from './lib/live-paint-context';
+import { createLivePaintStore } from './lib/live-paint-store';
+import type { LivePaintOp } from './lib/live-paint';
+import { applyThreadToLists, createThreadRefreshScheduler } from './lib/thread-refresh';
 import { ShowCostProvider } from './lib/show-cost';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
@@ -50,9 +51,6 @@ const LEFT_SIDEBAR_MIN = 180;
 const LEFT_SIDEBAR_MAX = 480;
 const RIGHT_SIDEBAR_MIN = 240;
 const RIGHT_SIDEBAR_MAX = 560;
-/** Stable empty parts — `?? []` in render would retrigger chat auto-scroll on every live chunk. */
-const EMPTY_LIVE_PARTS: MessagePart[] = [];
-
 function sameWorktreePath(a: string, b: string): boolean {
   const norm = (p: string) => p.replace(/\/$/, '');
   return norm(a) === norm(b);
@@ -103,6 +101,10 @@ export function App() {
   const [repoPath, setRepoPath] = useState('');
   const [threads, setThreads] = useState<Thread[]>([]);
   const [archived, setArchived] = useState<Thread[]>([]);
+  const threadsRef = useRef<Thread[]>([]);
+  const archivedRef = useRef<Thread[]>([]);
+  threadsRef.current = threads;
+  archivedRef.current = archived;
   const [view, setView] = useState<'board' | 'thread'>('board');
   const [worktreeSort, setWorktreeSort] = useState<WorktreeSortMode>(readWorktreeSort);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -117,12 +119,8 @@ export function App() {
   const [createState, setCreateState] = useState<CreateState | null>(null);
   /** Non-blocking create/archive status shown in the chat empty state. */
   const [paneProgress, setPaneProgress] = useState<PaneProgress | null>(null);
-  const [liveByThread, setLiveByThread] = useState<Record<string, string>>({});
-  const [livePartsByThread, setLivePartsByThread] = useState<Record<string, MessagePart[]>>({});
-  const [liveUsageByThread, setLiveUsageByThread] = useState<
-    Record<string, TokenUsage | null>
-  >({});
-  const [turnStartedAtByThread, setTurnStartedAtByThread] = useState<Record<string, number>>({});
+  const livePaintStoreRef = useRef(createLivePaintStore());
+  const livePaintStore = livePaintStoreRef.current;
   const [runtime, setRuntime] = useState<OrchestratorRuntime | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [appUpdate, setAppUpdate] = useState<{
@@ -308,14 +306,35 @@ export function App() {
           window.sideboard.getRuntime(),
           window.sideboard.listWorkspaces().catch(() => [] as Workspace[]),
         ]);
-        setThreads(all.filter((t) => t.status !== 'archived'));
-        setArchived(all.filter((t) => t.status === 'archived'));
+        const live = all.filter((t) => t.status !== 'archived');
+        const archivedThreads = all.filter((t) => t.status === 'archived');
+        threadsRef.current = live;
+        archivedRef.current = archivedThreads;
+        setThreads(live);
+        setArchived(archivedThreads);
         setRuntime(rt);
         setWorkspaces(Array.isArray(ws) ? ws : []);
       } while (refreshQueued.current);
     } finally {
       refreshBusy.current = false;
     }
+  }, []);
+
+  const refreshThread = useCallback(async (id: string) => {
+    const [thread, rt] = await Promise.all([
+      window.sideboard.getThread(id).catch(() => null),
+      window.sideboard.getRuntime().catch(() => null),
+    ]);
+    const next = applyThreadToLists(
+      { threads: threadsRef.current, archived: archivedRef.current },
+      thread,
+      id,
+    );
+    threadsRef.current = next.threads;
+    archivedRef.current = next.archived;
+    setThreads(next.threads);
+    setArchived(next.archived);
+    if (rt) setRuntime(rt);
   }, []);
 
   const refreshWorkspaces = useCallback(async () => {
@@ -385,34 +404,30 @@ export function App() {
     });
     void refresh();
     const pendingLive = { current: [] as LivePaintOp[] };
-    const liveSnapshot = {
-      current: {
-        output: {} as Record<string, string>,
-        parts: {} as Record<string, MessagePart[]>,
-        startedAt: {} as Record<string, number>,
-        usage: {} as Record<string, TokenUsage | null>,
-      },
-    };
     let liveRaf = 0;
     const flushLive = () => {
       liveRaf = 0;
       const ops = pendingLive.current;
       pendingLive.current = [];
       if (ops.length === 0) return;
-      const next = foldLivePaintOps(liveSnapshot.current, ops, Date.now());
-      liveSnapshot.current = next;
-      setLiveByThread(next.output);
-      setLivePartsByThread(next.parts);
-      setLiveUsageByThread(next.usage);
-      setTurnStartedAtByThread(next.startedAt);
+      livePaintStore.apply(ops);
     };
     const queueLive = (op: LivePaintOp) => {
       pendingLive.current.push(op);
       if (liveRaf) return;
       liveRaf = requestAnimationFrame(flushLive);
     };
+    const scheduler = createThreadRefreshScheduler({
+      refreshAll: () => {
+        void refresh();
+      },
+      refreshOne: (id) => {
+        void refreshThread(id);
+      },
+      debounceMs: 300,
+    });
     const offThreads = window.sideboard.onThreadsChanged(() => {
-      void refresh();
+      scheduler.schedule('full');
     });
     const offEvents = window.sideboard.onEvent((event: OrchestratorEvent) => {
       if (event.type === 'turn_output') {
@@ -428,8 +443,8 @@ export function App() {
         return;
       }
       if (event.type === 'turn_finished') {
-        // Keep the streamed bubble until refresh lands the persisted agent message
-        void refresh().then(() => {
+        // Keep the streamed bubble until this thread's persisted message lands
+        void refreshThread(event.threadId).then(() => {
           queueLive({ kind: 'clear', threadId: event.threadId });
         });
         return;
@@ -451,7 +466,7 @@ export function App() {
         event.type === 'dev_server_stopped' ||
         event.type === 'error'
       ) {
-        void refresh();
+        scheduler.schedule('status', event.threadId);
       }
     });
     const dismissedKey = 'sideboard.dismissedUpdateVersion';
@@ -483,6 +498,7 @@ export function App() {
     });
     return () => {
       if (liveRaf) cancelAnimationFrame(liveRaf);
+      scheduler.dispose();
       offThreads();
       offEvents();
       offAvailable();
@@ -490,7 +506,7 @@ export function App() {
       offUpdateError();
       offOpenSettings();
     };
-  }, [refresh]);
+  }, [refresh, refreshThread, livePaintStore]);
 
   // Conductor-style: lightly follow open PRs so external merges purple + auto-archive.
   const openPrSyncKey = useMemo(() => {
@@ -914,6 +930,7 @@ export function App() {
 
   return (
     <ShowCostProvider showCost={showCost}>
+    <LivePaintProvider store={livePaintStore}>
     <div className={appClass} style={appStyle}>
       {leftSidebarOpen && (
         <div className="sidebar-slot">
@@ -960,7 +977,6 @@ export function App() {
           threads={threads}
           workspaces={workspaces}
           runtime={runtime}
-          liveByThread={liveByThread}
           selectedId={selectedId}
           onOpenThread={(id) => {
             setSelectedId(id);
@@ -1003,10 +1019,6 @@ export function App() {
             ) : undefined;
             const threadPanelProps = {
               worktreeChats,
-              liveOutput: liveByThread[selected.id] ?? '',
-              liveParts: livePartsByThread[selected.id] ?? EMPTY_LIVE_PARTS,
-              liveUsage: liveUsageByThread[selected.id] ?? null,
-              turnStartedAt: turnStartedAtByThread[selected.id],
               onRefresh: () => void refresh(),
               onSelectChat: (id: string, created?: Thread) => {
                 if (created) {
@@ -1044,10 +1056,6 @@ export function App() {
               thread={selected}
               childThreads={children}
               worktreeChats={worktreeChats}
-              liveOutput={liveByThread[selected.id] ?? ''}
-              liveParts={livePartsByThread[selected.id] ?? EMPTY_LIVE_PARTS}
-              liveUsage={liveUsageByThread[selected.id] ?? null}
-              turnStartedAt={turnStartedAtByThread[selected.id]}
               onRefresh={() => void refresh()}
               onSelectChild={(id) => {
                 setSelectedId(id);
@@ -1335,6 +1343,7 @@ export function App() {
         onDismiss={dismissTeamToast}
       />
     </div>
+    </LivePaintProvider>
     </ShowCostProvider>
   );
 }

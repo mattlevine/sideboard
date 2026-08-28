@@ -173,11 +173,40 @@ export async function withThreadLock<T>(
   }
 }
 
+type ThreadListCache = {
+  dir: string;
+  byId: Map<string, Thread>;
+  listed: boolean;
+};
+
+let listCache: ThreadListCache | null = null;
+
+function cacheForDir(): ThreadListCache {
+  const dir = threadsDir();
+  if (!listCache || listCache.dir !== dir) {
+    listCache = { dir, byId: new Map(), listed: false };
+  }
+  return listCache;
+}
+
+/** Drop the in-memory thread list (other-process writes, tests, store watcher). */
+export function invalidateThreadListCache(): void {
+  listCache = null;
+}
+
+function rememberThread(thread: Thread): void {
+  cacheForDir().byId.set(thread.id, thread);
+}
+
 export function readThread(id: string): Thread | null {
+  const cached = cacheForDir().byId.get(id);
+  if (cached) return cached;
   const path = threadFilePath(id);
   if (!existsSync(path)) return null;
   const raw = readFileSync(path, 'utf8');
-  return normalizeThread(JSON.parse(raw) as Thread);
+  const thread = normalizeThread(JSON.parse(raw) as Thread);
+  rememberThread(thread);
+  return thread;
 }
 
 export function writeThread(thread: Thread): void {
@@ -186,6 +215,7 @@ export function writeThread(thread: Thread): void {
   const next = { ...thread, updatedAt: nowIso() };
   writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf8');
   renameSync(tmp, path);
+  rememberThread(next);
 }
 
 function idPath(id: string): string {
@@ -201,28 +231,35 @@ export function isThreadRecordFile(nameOrPath: string): boolean {
 }
 
 export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {
-  const files = readdirSync(threadsDir()).filter(isThreadRecordFile);
-  const threads = files
-    .map((f) => {
+  const cache = cacheForDir();
+  if (!cache.listed) {
+    const files = readdirSync(threadsDir()).filter(isThreadRecordFile);
+    const byId = new Map<string, Thread>();
+    for (const f of files) {
       try {
-        return normalizeThread(
+        const thread = normalizeThread(
           JSON.parse(readFileSync(threadFilePath(f.replace(/\.json$/, '')), 'utf8')) as Thread,
         );
+        if (typeof thread.id === 'string' && thread.id.length > 0) {
+          byId.set(thread.id, thread);
+        }
       } catch {
-        return null;
+        // skip unreadable records
       }
-    })
-    .filter(
-      (t): t is Thread =>
-        t !== null && typeof t.id === 'string' && t.id.length > 0,
-    )
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    }
+    cache.byId = byId;
+    cache.listed = true;
+  }
+  const threads = [...cache.byId.values()].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
 
   if (opts?.includeArchived) return threads;
   return threads.filter((t) => t.status !== 'archived');
 }
 
 export function deleteThreadRecord(id: string): void {
+  cacheForDir().byId.delete(id);
   const path = threadFilePath(id);
   if (existsSync(path)) unlinkSync(path);
   const lock = threadLockPath(id);

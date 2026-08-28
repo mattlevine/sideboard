@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.135] - 2026-08-27
+
+### Fixed
+
+- Archive confirm stays clickable while another worktree is tearing down. The processing pane is an Electron window-drag region; confirm modals are now `no-drag` so the click hits the button instead of moving the window.
+
+## [0.1.134] - 2026-08-27
+
+### Added
+
+- AbleTime as an issue source via hosted MCP (Settings, create-from, `list_issues`).
+
+### Fixed
+
+- Fan-out across several worktrees no longer freezes sidebar and board clicks. Live streams stay off the shell; transcript reloads and git-diff polls are coalesced.
+- Empty Home board no longer shows the kanban explainer.
+
 ## [0.1.133] - 2026-08-26
 
 ### Changed

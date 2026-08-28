@@ -8604,9 +8604,12 @@ button.linkish:hover {
   justify-content: center;
   /* Above composer-shell (25) and chat chrome; below composer pickers (11000) */
   z-index: 100;
+  /* Electron drag regions on the create/archive processing pane punch through
+     a visually-on-top modal unless this overlay is no-drag. */
+  -webkit-app-region: no-drag;
 }
 
-/* Creating / merging / archiving: dimmed overlay is a window-move surface. */
+/* Creating / merging: dimmed overlay is a window-move surface. Buttons stay no-drag. */
 .modal-backdrop:has(.create-processing) {
   -webkit-app-region: drag;
 }
@@ -8619,6 +8622,16 @@ button.linkish:hover {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
+  -webkit-app-region: no-drag;
+}
+
+.modal button,
+.modal input,
+.modal textarea,
+.modal select,
+.modal a,
+.modal [role="button"] {
+  -webkit-app-region: no-drag;
 }
 
 .modal h3 {

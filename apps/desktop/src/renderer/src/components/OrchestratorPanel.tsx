@@ -1,18 +1,12 @@
 import { useMemo, type ReactNode } from 'react';
-import type { MessagePart, Thread, TokenUsage } from '@sideboard-ai/core';
+import type { Thread } from '@sideboard-ai/core';
 import { isGlobalThread } from '../lib/global-workspace';
 import { ThreadPanel } from './ThreadPanel';
-
-const EMPTY_LIVE_PARTS: MessagePart[] = [];
 
 interface Props {
   thread: Thread;
   childThreads: Thread[];
   worktreeChats: Thread[];
-  liveOutput: string;
-  liveParts?: MessagePart[];
-  liveUsage?: TokenUsage | null;
-  turnStartedAt?: number;
   onRefresh: () => void;
   onSelectChild: (id: string) => void;
   onSelectChat: (id: string, created?: Thread) => void;
@@ -41,10 +35,6 @@ export function OrchestratorPanel({
   thread,
   childThreads,
   worktreeChats,
-  liveOutput,
-  liveParts = EMPTY_LIVE_PARTS,
-  liveUsage = null,
-  turnStartedAt,
   onRefresh,
   onSelectChild,
   onSelectChat,
@@ -119,10 +109,6 @@ export function OrchestratorPanel({
           key={thread.id}
           thread={thread}
           worktreeChats={worktreeChats}
-          liveOutput={liveOutput}
-          liveParts={liveParts}
-          liveUsage={liveUsage}
-          turnStartedAt={turnStartedAt}
           onRefresh={onRefresh}
           onSelectChat={onSelectChat}
           onLeaveThread={onLeaveThread}

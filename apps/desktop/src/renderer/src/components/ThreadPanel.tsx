@@ -9,11 +9,9 @@ import {
 import type {
   AgentKind,
   DiffScope,
-  MessagePart,
   ThinkingEffort,
   Thread,
   ThreadAttachment,
-  TokenUsage,
 } from '@sideboard-ai/core';
 import {
   extractPendingPlanQuestions,
@@ -49,6 +47,7 @@ import {
 import { mergeAppendableArtifact } from '../lib/artifacts';
 import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
+import { useLiveThread } from '../lib/live-paint-context';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
@@ -124,11 +123,6 @@ function isRedundantLastError(thread: Thread): boolean {
 interface Props {
   thread: Thread;
   worktreeChats: Thread[];
-  liveOutput: string;
-  liveParts?: MessagePart[];
-  /** In-progress turn usage (tokens + costUsd) from live stream events. */
-  liveUsage?: TokenUsage | null;
-  turnStartedAt?: number;
   onRefresh: () => void;
   onSelectChat: (id: string, created?: Thread) => void;
   /** When the active chat is archived and no sibling tabs remain (e.g. last orchestration). */
@@ -221,15 +215,9 @@ function QueuedRemoveIcon() {
   );
 }
 
-const EMPTY_LIVE_PARTS: MessagePart[] = [];
-
 export function ThreadPanel({
   thread,
   worktreeChats,
-  liveOutput,
-  liveParts = EMPTY_LIVE_PARTS,
-  liveUsage = null,
-  turnStartedAt,
   onRefresh,
   onSelectChat,
   onLeaveThread,
@@ -260,6 +248,11 @@ export function ThreadPanel({
   leftSidebarToggle,
   rightSidebarToggle,
 }: Props) {
+  const live = useLiveThread(thread.id);
+  const liveOutput = live.output;
+  const liveParts = live.parts;
+  const liveUsage = live.usage ?? null;
+  const turnStartedAt = live.startedAt;
   const showCost = useShowCost();
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
@@ -849,6 +842,20 @@ export function ThreadPanel({
       if (thread.messages[i]!.role === 'agent') return i;
     }
     return -1;
+  }, [thread.messages]);
+
+  const fallbackDurations = useMemo(() => {
+    const out: Array<number | undefined> = [];
+    let lastUserTs: string | undefined;
+    for (const m of thread.messages) {
+      if (m.role === 'user') lastUserTs = m.ts;
+      if (m.role === 'agent' && lastUserTs) {
+        out.push(Math.max(0, new Date(m.ts).getTime() - new Date(lastUserTs).getTime()));
+      } else {
+        out.push(undefined);
+      }
+    }
+    return out;
   }, [thread.messages]);
 
   const turnBusy =
@@ -1855,13 +1862,7 @@ export function ThreadPanel({
               </div>
             )}
           {thread.messages.map((m, i) => {
-            const prevUser = [...thread.messages.slice(0, i)]
-              .reverse()
-              .find((x) => x.role === 'user');
-            const fallbackDuration =
-              m.role === 'agent' && prevUser
-                ? Math.max(0, new Date(m.ts).getTime() - new Date(prevUser.ts).getTime())
-                : undefined;
+            const fallbackDuration = fallbackDurations[i];
             const hidePlanProse =
               showPlanCard &&
               !showStreaming &&

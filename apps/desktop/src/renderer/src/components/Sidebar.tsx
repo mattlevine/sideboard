@@ -32,6 +32,7 @@ import {
   usageTooltip,
 } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
+import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { SidebarToggle } from './SidebarToggle';
@@ -74,8 +75,6 @@ function isProjectPath(path: string): boolean {
   if (path === '/' || path === '.') return false;
   return true;
 }
-
-type WorktreeDiffStat = { additions: number; deletions: number; dirty: boolean };
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -438,11 +437,13 @@ function WorktreeSidebarRow({
   onRequestArchive: (chats: Thread[]) => void;
 }) {
   const [gitCardOpen, setGitCardOpenState] = useState(false);
-  const [stat, setStat] = useState<WorktreeDiffStat | null>(null);
-  const [loaded, setLoaded] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const gitCloseTimer = useRef<number | null>(null);
-  const fetchGen = useRef(0);
+  const { stat, loaded } = useWorktreeDirtyStat(
+    primary.id,
+    primary.worktreePath,
+    primary.status,
+  );
 
   function clearTimer(ref: { current: number | null }) {
     if (ref.current != null) {
@@ -468,38 +469,6 @@ function WorktreeSidebarRow({
       clearTimer(gitCloseTimer);
     };
   }, []);
-
-  // Load git dirty for the row glyph; refresh when the turn ends or on a slow poll.
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const gen = ++fetchGen.current;
-      try {
-        const diff = await window.sideboard.getDiff(primary.id, {
-          scope: 'uncommitted',
-          includePatches: false,
-        });
-        if (cancelled || gen !== fetchGen.current) return;
-        const s = diff.scopeStats?.uncommitted;
-        setStat({
-          additions: s?.additions ?? 0,
-          deletions: s?.deletions ?? 0,
-          dirty: Boolean(diff.dirty) || (s != null && (s.additions > 0 || s.deletions > 0)),
-        });
-        setLoaded(true);
-      } catch {
-        if (cancelled || gen !== fetchGen.current) return;
-        setStat({ additions: 0, deletions: 0, dirty: false });
-        setLoaded(true);
-      }
-    };
-    void load();
-    const interval = window.setInterval(() => void load(), 12_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [primary.id, primary.status, primary.worktreePath]);
 
   const dirty = loaded && Boolean(stat?.dirty);
 
