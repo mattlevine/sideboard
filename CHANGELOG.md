@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.135] - 2026-08-27
+
 ### Fixed
 
 - Archive confirm stays clickable while another worktree is tearing down. The processing pane is an Electron window-drag region; confirm modals are now `no-drag` so the click hits the button instead of moving the window.
