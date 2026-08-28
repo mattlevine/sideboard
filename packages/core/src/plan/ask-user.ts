@@ -185,12 +185,19 @@ export interface PlanQuestionAnswer {
   other?: string;
 }
 
+export const PLAN_QUESTION_ANSWERS_PREFIX = 'Answers to your questions:';
+
+/** True when a user message is the composer picker’s formatted answers. */
+export function isPlanQuestionAnswersMessage(text: string): boolean {
+  return text.startsWith(PLAN_QUESTION_ANSWERS_PREFIX);
+}
+
 /** Format answers as a concise user message for the agent. */
 export function formatPlanQuestionAnswers(
   questions: PlanQuestion[],
   answers: PlanQuestionAnswer[],
 ): string {
-  const lines: string[] = ['Answers to your questions:'];
+  const lines: string[] = [PLAN_QUESTION_ANSWERS_PREFIX];
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]!;
     const a = answers.find((x) => x.questionIndex === i);

@@ -16,6 +16,7 @@ import type {
 import {
   extractPendingPlanQuestions,
   formatPlanQuestionsForChat,
+  isPlanQuestionAnswersMessage,
   latestPendingPlanQuestions,
 } from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
@@ -213,6 +214,23 @@ function QueuedRemoveIcon() {
       <path d="M18 6 6 18M6 6l12 12" {...queuedIconStroke} />
     </QueuedIcon>
   );
+}
+
+function UserMessageText({
+  text,
+  onThreadLinkClick,
+}: {
+  text: string;
+  onThreadLinkClick?: (threadRef: string) => void;
+}) {
+  if (isPlanQuestionAnswersMessage(text)) {
+    return (
+      <div className="msg-body msg-body-md">
+        <MarkdownMessage text={text} onThreadLinkClick={onThreadLinkClick} />
+      </div>
+    );
+  }
+  return <div className="msg-body">{text}</div>;
 }
 
 export function ThreadPanel({
@@ -1933,7 +1951,12 @@ export function ThreadPanel({
                         onOpen={onSelectFile}
                       />
                     )}
-                    {m.text ? <div className="msg-body">{m.text}</div> : null}
+                    {m.text ? (
+                      <UserMessageText
+                        text={m.text}
+                        onThreadLinkClick={onOpenThreadLink}
+                      />
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1951,7 +1974,10 @@ export function ThreadPanel({
                   />
                 )}
                 {pendingTranscript ? (
-                  <div className="msg-body">{pendingTranscript}</div>
+                  <UserMessageText
+                    text={pendingTranscript}
+                    onThreadLinkClick={onOpenThreadLink}
+                  />
                 ) : null}
               </div>
             </div>

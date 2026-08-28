@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   formatPlanQuestionAnswers,
-  type PlanQuestion,
   type PlanQuestionAnswer,
   type PendingPlanQuestions,
 } from '@sideboard/plan-ask-user';
+import { MarkdownMessage } from './MarkdownMessage';
 
 interface Props {
   pending: PendingPlanQuestions;
@@ -193,7 +193,9 @@ export function PlanQuestionsPanel({
       </div>
 
       <div className="plan-question-card" key={`${pending.signature}-${qi}`}>
-        <div className="plan-question-text">{question.question}</div>
+        <div className="plan-question-text">
+          <MarkdownMessage text={question.question} className="md plan-question-md" />
+        </div>
         <div
           className="plan-question-options"
           role={multi ? 'group' : 'radiogroup'}
@@ -212,14 +214,19 @@ export function PlanQuestionsPanel({
                 <span className="plan-question-option-num" aria-hidden>
                   {num}
                 </span>
-                <span className="plan-question-option-body">
-                  <span className="plan-question-option-label">{opt.label}</span>
+                <div className="plan-question-option-body">
+                  <div className="plan-question-option-label">
+                    <MarkdownMessage text={opt.label} className="md plan-question-md" />
+                  </div>
                   {opt.description ? (
-                    <span className="plan-question-option-desc">
-                      {opt.description}
-                    </span>
+                    <div className="plan-question-option-desc">
+                      <MarkdownMessage
+                        text={opt.description}
+                        className="md plan-question-md"
+                      />
+                    </div>
                   ) : null}
-                </span>
+                </div>
               </button>
             );
           })}
@@ -232,9 +239,9 @@ export function PlanQuestionsPanel({
             <span className="plan-question-option-num" aria-hidden>
               0
             </span>
-            <span className="plan-question-option-body">
-              <span className="plan-question-option-label">Other…</span>
-            </span>
+            <div className="plan-question-option-body">
+              <div className="plan-question-option-label">Other…</div>
+            </div>
           </button>
           {draft.otherChecked ? (
             <input

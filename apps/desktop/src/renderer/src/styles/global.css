@@ -4698,6 +4698,10 @@ button.worktree-hover-card-title:hover {
   min-width: 0;
 }
 
+.msg.user .msg-body-md {
+  white-space: normal;
+}
+
 .msg.user .msg-attachments {
   margin: 0;
 }
@@ -5864,6 +5868,25 @@ button.worktree-hover-card-title:hover {
   line-height: 1.45;
   color: var(--text);
   font-weight: 500;
+}
+
+.plan-question-md {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+.plan-question-md p,
+.plan-question-md ul,
+.plan-question-md ol {
+  margin: 0;
+}
+
+.plan-question-md strong,
+.plan-question-md b {
+  color: inherit;
 }
 
 .plan-question-options {
