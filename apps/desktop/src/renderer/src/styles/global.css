@@ -10239,6 +10239,7 @@ body:has(.update-banner) .team-toast-stack {
   border-radius: 10px;
 }
 
+.create-modal.drag-over .create-body,
 .create-body.drag-over {
   outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
   outline-offset: -3px;

@@ -1,4 +1,5 @@
 import { CLOUD_ORCHESTRATOR_GOAL } from '../brightsy/cloud-connect-constants.js';
+import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 import {
   allocateTeamName,
@@ -154,6 +155,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     fast: opts.fast,
   });
   const agent = assertOrchestratorCapableAgent(resolved.agent);
+  const worktreePath = globalAgentCwd();
   const thread = createEmptyThread({
     title,
     // Stick nicknames the same way chat tabs do (avoid later sync overwrites).
@@ -161,7 +163,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     sourceType: 'orchestration',
     sourceRef,
     branchName: 'global',
-    worktreePath: globalAgentCwd(),
+    worktreePath,
     repoPath: GLOBAL_WORKSPACE_ID,
     agent,
     autonomy: opts.autonomy ?? 'default',
@@ -169,7 +171,10 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     effort: resolved.effort,
     fast: resolved.fast,
     planMode: Boolean(opts.planMode),
-    attachments: opts.attachments ?? [],
+    attachments: persistPendingFileAttachments(
+      worktreePath,
+      opts.attachments ?? [],
+    ),
     parentThreadId: opts.parentThreadId ?? null,
     status: 'idle',
   });

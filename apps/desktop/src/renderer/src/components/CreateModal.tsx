@@ -488,6 +488,20 @@ export function CreateModal({
       ? Boolean(goal.trim())
       : Boolean(repoPath));
 
+  async function attachDroppedFiles(files: File[]) {
+    if (busy || files.length === 0) return;
+    // Always read bytes — macOS screenshot thumbnails have a TemporaryItems
+    // path that disappears before the worktree exists.
+    const buffers = await buffersFromFiles(files, { includePathed: true });
+    const staged =
+      buffers.length > 0
+        ? await window.sideboard.attachmentsFromBuffers(buffers)
+        : await window.sideboard.attachmentsFromPaths(
+            absolutePathsFromFiles(files),
+          );
+    if (staged.length) setAttachments((prev) => [...prev, ...staged]);
+  }
+
   return (
     <div
       className="modal-backdrop"
@@ -496,11 +510,36 @@ export function CreateModal({
       }}
     >
       <div
-        className={`modal create-modal${busy ? ' is-creating' : ''}`}
+        className={`modal create-modal${busy ? ' is-creating' : ''}${createDragOver ? ' drag-over' : ''}`}
         role="dialog"
         aria-label="New thread"
         aria-busy={busy}
         onClick={(e) => e.stopPropagation()}
+        onDragEnter={(e) => {
+          if (!preventComposerFileDrag(e)) return;
+          setCreateDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (next && e.currentTarget.contains(next)) return;
+          setCreateDragOver(false);
+        }}
+        onDragOver={(e) => {
+          if (!canAcceptComposerFileDrop(e.dataTransfer)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'copy';
+          if (!createDragOver) setCreateDragOver(true);
+        }}
+        onDrop={(e) => {
+          if (!preventComposerFileDrag(e)) return;
+          setCreateDragOver(false);
+          const snap = snapshotComposerDrop(e.dataTransfer);
+          requestAnimationFrame(() => textareaRef.current?.focus());
+          void attachDroppedFiles(snap.files).catch((err) => {
+            setError(err instanceof Error ? err.message : String(err));
+          });
+        }}
       >
         {busy ? (
           <CreateProcessingOverlay
@@ -666,40 +705,6 @@ export function CreateModal({
 
         <div
           className={`create-body${createDragOver ? ' drag-over' : ''}`}
-          onDragEnter={(e) => {
-            if (!preventComposerFileDrag(e)) return;
-            setCreateDragOver(true);
-          }}
-          onDragLeave={(e) => {
-            const next = e.relatedTarget as Node | null;
-            if (next && e.currentTarget.contains(next)) return;
-            setCreateDragOver(false);
-          }}
-          onDragOver={(e) => {
-            if (!canAcceptComposerFileDrop(e.dataTransfer)) return;
-            e.preventDefault();
-            e.stopPropagation();
-            e.dataTransfer.dropEffect = 'copy';
-            if (!createDragOver) setCreateDragOver(true);
-          }}
-          onDrop={(e) => {
-            if (!preventComposerFileDrag(e)) return;
-            setCreateDragOver(false);
-            const snap = snapshotComposerDrop(e.dataTransfer);
-            requestAnimationFrame(() => textareaRef.current?.focus());
-            void (async () => {
-              const paths = absolutePathsFromFiles(snap.files);
-              const files =
-                paths.length > 0
-                  ? await window.sideboard.attachmentsFromPaths(paths)
-                  : await window.sideboard.attachmentsFromBuffers(
-                      await buffersFromFiles(snap.files),
-                    );
-              if (files.length) setAttachments((prev) => [...prev, ...files]);
-            })().catch((err) => {
-              setError(err instanceof Error ? err.message : String(err));
-            });
-          }}
         >
           {cowboy && mode !== 'orchestration' && (
             <div className="composer-plan-banner">
@@ -736,6 +741,14 @@ export function CreateModal({
             }
             onPaste={(e) => {
               if (busy) return;
+              const pasted = e.clipboardData?.files;
+              if (pasted && pasted.length > 0) {
+                e.preventDefault();
+                void attachDroppedFiles(Array.from(pasted)).catch((err) => {
+                  setError(err instanceof Error ? err.message : String(err));
+                });
+                return;
+              }
               void attachmentsFromLargePaste(e, attachments)
                 .then((files) => {
                   if (files?.length) setAttachments((prev) => [...prev, ...files]);

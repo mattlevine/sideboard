@@ -1,11 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   attachmentFromAbsolutePath,
   attachmentsFromWorktreePaths,
+  attachmentsFromBuffers,
   isImageFilePath,
+  persistPendingFileAttachments,
   stageAbsolutePathsAsAttachments,
   stageBuffersAsAttachments,
 } from './stage-files.js';
@@ -74,5 +76,44 @@ describe('stage-files', () => {
     ]);
     expect(att?.path).toBe('.context/attachments/drop.png');
     expect(att?.previewDataUrl).toBeTruthy();
+  });
+
+  it('persists create-modal image previews into the worktree', () => {
+    const worktree = tempDir();
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const [pending] = attachmentsFromBuffers([
+      { name: 'Screenshot.png', dataBase64: png.toString('base64') },
+    ]);
+    expect(pending?.path).toBeUndefined();
+    expect(pending?.content).toMatch(/copy it into the worktree/i);
+
+    const [persisted] = persistPendingFileAttachments(worktree, [pending!]);
+    expect(persisted?.path).toBe('.context/attachments/Screenshot.png');
+    expect(persisted?.content).toMatch(/Read tool/);
+    expect(
+      existsSync(join(worktree, '.context', 'attachments', 'Screenshot.png')),
+    ).toBe(true);
+    expect(
+      readFileSync(join(worktree, '.context', 'attachments', 'Screenshot.png')),
+    ).toEqual(png);
+  });
+
+  it('leaves issue chips and already-staged files alone', () => {
+    const worktree = tempDir();
+    const issue = {
+      id: 'i1',
+      name: 'ENG-1',
+      kind: 'issue' as const,
+      content: 'Linked issue',
+    };
+    const staged = {
+      id: 'f1',
+      name: 'notes.md',
+      kind: 'file' as const,
+      path: '.context/attachments/notes.md',
+      content: 'hello',
+    };
+    const out = persistPendingFileAttachments(worktree, [issue, staged]);
+    expect(out).toEqual([issue, staged]);
   });
 });

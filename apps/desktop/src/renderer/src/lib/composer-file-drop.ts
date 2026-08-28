@@ -65,10 +65,11 @@ export function absolutePathsFromDataTransfer(dt: DataTransfer): string[] {
 
 export async function buffersFromFiles(
   files: ElectronFile[],
+  opts?: { includePathed?: boolean },
 ): Promise<Array<{ name: string; dataBase64: string }>> {
   const out: Array<{ name: string; dataBase64: string }> = [];
   for (const file of files) {
-    if (pathForDroppedFile(file)) continue;
+    if (!opts?.includePathed && pathForDroppedFile(file)) continue;
     try {
       const buf = await file.arrayBuffer();
       out.push({
