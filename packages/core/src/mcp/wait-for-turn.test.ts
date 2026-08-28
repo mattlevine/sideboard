@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   MCP_WAIT_FOR_TURN_MAX_MS,
+  MCP_WAIT_ERROR_HINT,
   MCP_WAIT_QUEUED_HINT,
   MCP_WAIT_STILL_RUNNING_HINT,
+  MCP_WAIT_STOPPED_HINT,
+  mcpWaitFinishedHint,
   mcpWaitForTurnTimeoutMs,
   mcpWaitStillRunningHint,
 } from './wait-for-turn.js';
@@ -26,5 +29,13 @@ describe('mcpWaitStillRunningHint', () => {
   it('tells coordinators a queued child has not started', () => {
     expect(mcpWaitStillRunningHint('queued')).toBe(MCP_WAIT_QUEUED_HINT);
     expect(mcpWaitStillRunningHint('running')).toBe(MCP_WAIT_STILL_RUNNING_HINT);
+  });
+});
+
+describe('mcpWaitFinishedHint', () => {
+  it('flags stopped and error as incomplete', () => {
+    expect(mcpWaitFinishedHint('stopped')).toBe(MCP_WAIT_STOPPED_HINT);
+    expect(mcpWaitFinishedHint('error')).toBe(MCP_WAIT_ERROR_HINT);
+    expect(mcpWaitFinishedHint('idle')).toBeUndefined();
   });
 });

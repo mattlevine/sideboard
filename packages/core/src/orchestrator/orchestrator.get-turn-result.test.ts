@@ -19,7 +19,7 @@ describe('Orchestrator.getTurnResult', () => {
   });
 
   function seed(opts: {
-    status: 'idle' | 'error' | 'running' | 'queued';
+    status: 'idle' | 'error' | 'running' | 'queued' | 'stopped';
     lastError?: string | null;
     agentText?: string;
   }) {
@@ -69,6 +69,17 @@ describe('Orchestrator.getTurnResult', () => {
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.text).toBe('partial review');
     expect(result.lastError).toBe('exit 1: boom');
+  });
+
+  it('surfaces lastError when the child stopped with no assistant text', () => {
+    const thread = seed({
+      status: 'stopped',
+      lastError: 'Process died (agent exited)',
+    });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.status).toBe('stopped');
+    expect(result.stillRunning).toBe(false);
+    expect(result.text).toBe('Process died (agent exited)');
   });
 
   it('includes live progress while the turn is still running', async () => {

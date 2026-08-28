@@ -18,10 +18,12 @@ import {
   isAbleTimeConnected,
   resolveNewThreadOptions,
 } from '../store/app-settings.js';
+import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import {
   createEmptyThread,
   listThreads,
   readThread,
+  updateThread,
   writeThread,
 } from '../store/thread-store.js';
 import { ensureWorkspace } from '../store/workspaces.js';
@@ -29,7 +31,15 @@ import type {
   AgentKind,
   CreateThreadInput,
   Thread,
+  ThreadAttachment,
 } from '../types/thread.js';
+
+function persistCreateAttachments(
+  worktreePath: string,
+  attachments: ThreadAttachment[] | undefined,
+): ThreadAttachment[] {
+  return persistPendingFileAttachments(worktreePath, attachments ?? []);
+}
 
 export async function createThread(
   input: CreateThreadInput,
@@ -54,7 +64,16 @@ export async function createThread(
         repoPath: canonicalizeRepoPath(t.repoPath),
       })),
     );
-    if (existing) return readThread(existing.id) ?? existing;
+    if (existing) {
+      const thread = readThread(existing.id) ?? existing;
+      if (!input.attachments?.length) return thread;
+      return updateThread(thread.id, {
+        attachments: persistCreateAttachments(thread.worktreePath, [
+          ...thread.attachments,
+          ...input.attachments,
+        ]),
+      });
+    }
   }
 
   // Tickets no longer require agent Linear MCP — Sideboard Account owns
@@ -106,7 +125,7 @@ export async function createThread(
       effort: resolved.effort,
       fast: resolved.fast,
       planMode: Boolean(input.planMode),
-      attachments: input.attachments ?? [],
+      attachments: persistCreateAttachments(repoPath, input.attachments),
       sourceIsFork: false,
       parentThreadId: input.parentThreadId ?? null,
       status: 'idle',
@@ -206,7 +225,7 @@ export async function createThread(
     effort: resolved.effort,
     fast: resolved.fast,
     planMode: Boolean(input.planMode),
-    attachments,
+    attachments: persistCreateAttachments(worktreePath, attachments),
     sourceIsFork,
     parentThreadId: input.parentThreadId ?? null,
     status: 'idle',

@@ -4,6 +4,7 @@ import {
   formatPlanQuestionAnswers,
   formatPlanQuestionsForChat,
   isAskUserToolName,
+  isPlanQuestionAnswersMessage,
   latestPendingPlanQuestions,
   parsePlanQuestionsInput,
   planQuestionsSignature,
@@ -27,6 +28,26 @@ describe('parsePlanQuestionsInput', () => {
     expect(qs).toHaveLength(1);
     expect(qs[0]!.question).toBe('Which auth?');
     expect(qs[0]!.options[0]!.label).toBe('OAuth');
+  });
+
+  it('keeps markdown in question and option copy', () => {
+    const qs = parsePlanQuestionsInput({
+      questions: [
+        {
+          question: 'Use `AskUserQuestion` or **ask_user**?',
+          options: [
+            {
+              label: '`packages/core`',
+              description: 'Shared parser — **preferred** for both agents',
+            },
+            { label: 'Desktop only' },
+          ],
+        },
+      ],
+    });
+    expect(qs[0]!.question).toContain('**ask_user**');
+    expect(qs[0]!.options[0]!.label).toBe('`packages/core`');
+    expect(qs[0]!.options[0]!.description).toContain('**preferred**');
   });
 });
 
@@ -119,6 +140,25 @@ describe('latestPendingPlanQuestions', () => {
       liveParts: [askPart],
     });
     expect(pending?.id).toBe('q1');
+  });
+});
+
+describe('formatPlanQuestionAnswers', () => {
+  it('emits markdown the chat bubble can render', () => {
+    const md = formatPlanQuestionAnswers(
+      [
+        {
+          question: 'Which **auth**?',
+          header: 'Auth',
+          options: [{ label: 'OAuth' }, { label: 'API key' }],
+        },
+      ],
+      [{ questionIndex: 0, selected: ['OAuth'] }],
+    );
+    expect(isPlanQuestionAnswersMessage(md)).toBe(true);
+    expect(md).toContain('**Auth**');
+    expect(md).toContain('Which **auth**?');
+    expect(md).toContain('OAuth');
   });
 });
 

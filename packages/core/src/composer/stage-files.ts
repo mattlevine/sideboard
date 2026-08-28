@@ -251,6 +251,67 @@ export function attachmentsFromBuffers(buffers: ComposerFileBuffer[]): ThreadAtt
   });
 }
 
+function isWorktreeRelativePath(p: string): boolean {
+  if (!p || p.includes('..')) return false;
+  if (p.startsWith('/')) return false;
+  if (/^[A-Za-z]:[\\/]/.test(p)) return false;
+  return true;
+}
+
+function dataUrlToBase64(url: string | undefined): string | null {
+  if (!url) return null;
+  const m = /^data:[^;]+;base64,(.+)$/s.exec(url);
+  return m?.[1] ?? null;
+}
+
+const IMAGE_HINT_RE = /^Image attached:/;
+const PLACEHOLDER_CONTENT_RE =
+  /^\((could not |file too large|binary file|not a file|invalid path)/;
+
+/**
+ * After a worktree (or Global cwd) exists, copy create-modal / orchestration
+ * drops into `.context/attachments/` so agents can Read them. Pre-create
+ * attachments only keep a preview / inline text — macOS screenshot thumbnails
+ * live under TemporaryItems and vanish if we only store that path.
+ */
+export function persistPendingFileAttachments(
+  worktreePath: string,
+  attachments: ThreadAttachment[],
+): ThreadAttachment[] {
+  if (attachments.length === 0) return attachments;
+  const keep: ThreadAttachment[] = [];
+  const buffers: ComposerFileBuffer[] = [];
+  for (const att of attachments) {
+    if (att.kind !== 'file') {
+      keep.push(att);
+      continue;
+    }
+    if (att.path && isWorktreeRelativePath(att.path)) {
+      keep.push(att);
+      continue;
+    }
+    const fromPreview = dataUrlToBase64(att.previewDataUrl);
+    if (fromPreview) {
+      buffers.push({ name: att.name, dataBase64: fromPreview });
+      continue;
+    }
+    if (
+      att.content &&
+      !IMAGE_HINT_RE.test(att.content) &&
+      !PLACEHOLDER_CONTENT_RE.test(att.content)
+    ) {
+      buffers.push({
+        name: att.name,
+        dataBase64: Buffer.from(att.content, 'utf8').toString('base64'),
+      });
+      continue;
+    }
+    keep.push(att);
+  }
+  if (buffers.length === 0) return attachments;
+  return [...keep, ...stageBuffersAsAttachments(worktreePath, buffers)];
+}
+
 /**
  * Attach existing worktree-relative files (e.g. drag from the file tree).
  */

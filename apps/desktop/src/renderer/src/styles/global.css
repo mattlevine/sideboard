@@ -2877,8 +2877,9 @@ body.resizing-panels webview {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   width: 100%;
+  min-width: 0;
   padding: 4px 0;
   font-size: inherit;
   font-family: inherit;
@@ -2901,11 +2902,15 @@ body.resizing-panels webview {
 
 .turn-tool-desc {
   color: var(--muted);
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .turn-tool-pill {
   display: inline-block;
-  max-width: min(100%, 520px);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(100%, 280px);
   padding: 6px 10px;
   border-radius: 6px;
   background: #1e1e1e;
@@ -4696,6 +4701,10 @@ button.worktree-hover-card-title:hover {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+}
+
+.msg.user .msg-body-md {
+  white-space: normal;
 }
 
 .msg.user .msg-attachments {
@@ -10216,6 +10225,7 @@ body:has(.update-banner) .team-toast-stack {
   border-radius: 10px;
 }
 
+.create-modal.drag-over .create-body,
 .create-body.drag-over {
   outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
   outline-offset: -3px;

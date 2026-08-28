@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CLOUD_ORCHESTRATOR_GOAL } from '../brightsy/cloud-connect-constants.js';
@@ -46,6 +46,28 @@ describe('global-workspace', () => {
     expect(chat.title).toBe('Ship the feature');
     expect(isGlobalThread(chat)).toBe(true);
     expect(listGlobalThreads()).toHaveLength(1);
+  });
+
+  it('persists orchestration modal image drops into the global cwd', () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const chat = createGlobalChat({
+      agent: 'claude',
+      sourceRef: 'Look at this screenshot',
+      attachments: [
+        {
+          id: 'shot',
+          name: 'Screenshot.png',
+          kind: 'file',
+          previewDataUrl: `data:image/png;base64,${png.toString('base64')}`,
+          content:
+            'Image attached: Screenshot.png\nThe image is shown in the composer; copy it into the worktree if you need to inspect pixels.',
+        },
+      ],
+    });
+    expect(chat.attachments[0]?.path).toBe('.context/attachments/Screenshot.png');
+    expect(
+      existsSync(join(chat.worktreePath, '.context', 'attachments', 'Screenshot.png')),
+    ).toBe(true);
   });
 
   it('defaults orchestration chat titles to a soccer team nickname', () => {

@@ -74,6 +74,7 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
+import { notifyParentOfChildHalt } from './child-halt.js';
 import { createThread } from '../threads/create.js';
 import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
@@ -379,6 +380,9 @@ export class Orchestrator {
    * MCP-created review threads don't stay `queued` after the MCP child exits.
    */
   adoptPersistedQueues(): void {
+    if (thisProcessShouldDrainAgentQueues()) {
+      this.healStaleRunningTurns();
+    }
     for (const thread of listThreads()) {
       if (thread.status === 'stopped' || thread.status === 'archived') continue;
 
@@ -401,6 +405,33 @@ export class Orchestrator {
       if (thread.queue.length > 0) {
         this.haltDrain.delete(thread.id);
         void this.drainQueue(thread.id);
+      }
+    }
+  }
+
+  /**
+   * Mid-session: a worktree can sit at `running` after the agent process dies
+   * (Cursor/CLI crash, OOM) while wait_for_turn still reports stillRunning.
+   * Reclaim those and wake the parent orchestration chat.
+   */
+  healStaleRunningTurns(): void {
+    for (const thread of listThreads()) {
+      if (thread.status === 'archived') continue;
+      const handle = this.activeTurns.get(thread.id);
+      if (handle) {
+        const pid = thread.agentPid;
+        if (typeof pid === 'number' && pid > 0 && !isPidAlive(pid)) {
+          handle.kill();
+        }
+        continue;
+      }
+      if (!this.shouldReclaimRunningThread(thread)) continue;
+      setStatus(thread.id, 'stopped', 'Process died (agent exited)');
+      this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
+      this.emit({ type: 'turn_finished', threadId: thread.id, exitCode: 1 });
+      const latest = readThread(thread.id);
+      if (latest) {
+        notifyParentOfChildHalt(latest, 'stopped', (id, prompt) => this.send(id, prompt));
       }
     }
   }
@@ -1346,6 +1377,12 @@ export class Orchestrator {
             assistantText: chatText,
             partsCount: parts.length,
           });
+          if (!this.crashContinued.has(threadId)) {
+            const failed = readThread(threadId);
+            if (failed) {
+              notifyParentOfChildHalt(failed, 'error', (id, prompt) => this.send(id, prompt));
+            }
+          }
         }
       }
     } catch (err) {
@@ -1370,6 +1407,12 @@ export class Orchestrator {
           assistantText: '',
           partsCount: 0,
         });
+        if (!this.crashContinued.has(threadId)) {
+          const failed = readThread(threadId);
+          if (failed) {
+            notifyParentOfChildHalt(failed, 'error', (id, prompt) => this.send(id, prompt));
+          }
+        }
       }
     } finally {
       this.startingTurns.delete(threadId);
@@ -1398,7 +1441,7 @@ export class Orchestrator {
    */
   stop(
     threadRef: string,
-    opts?: { clearQueue?: boolean; continueQueue?: boolean },
+    opts?: { clearQueue?: boolean; continueQueue?: boolean; notifyParent?: boolean },
   ): Thread {
     const clearQueue = opts?.clearQueue !== false;
     const continueQueue = opts?.continueQueue === true;
@@ -1435,6 +1478,9 @@ export class Orchestrator {
     const stopped = writeLiveStatus(thread.id, 'stopped') ?? readThread(thread.id) ?? thread;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
+      if (opts?.notifyParent !== false) {
+        notifyParentOfChildHalt(stopped, 'stopped', (id, prompt) => this.send(id, prompt));
+      }
     }
     return stopped;
   }
@@ -1734,21 +1780,25 @@ export class Orchestrator {
         fn();
       };
       const off = this.on((event) => {
-        if (event.type === 'turn_finished' && event.threadId === thread.id) {
+        if (!('threadId' in event) || event.threadId !== thread.id) return;
+        if (event.type === 'turn_finished' || event.type === 'error') {
           const latest = readThread(thread.id);
           if (!latest) {
             finish(() => reject(new Error(`Thread not found: ${thread.id}`)));
             return;
           }
           finish(() => resolve(latest));
+          return;
         }
-        if (event.type === 'error' && event.threadId === thread.id) {
+        if (event.type === 'status_changed') {
           const latest = readThread(thread.id);
           if (!latest) {
             finish(() => reject(new Error(`Thread not found: ${thread.id}`)));
             return;
           }
-          finish(() => resolve(latest));
+          if (!['running', 'queued'].includes(latest.status)) {
+            finish(() => resolve(latest));
+          }
         }
       });
       timer = setInterval(() => {
@@ -1800,7 +1850,11 @@ export class Orchestrator {
     const thread = this.requireThread(threadRef);
     const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
     const lastError = thread.lastError ?? null;
-    const text = (lastAgent?.text ?? '').trim() || (thread.status === 'error' ? lastError ?? '' : '');
+    const text =
+      (lastAgent?.text ?? '').trim() ||
+      (thread.status === 'error' || thread.status === 'stopped' || thread.status === 'broken'
+        ? lastError ?? ''
+        : '');
     const stillRunning = thread.status === 'running' || thread.status === 'queued';
     const live = stillRunning ? readTurnLive(thread.id) : null;
     const queuedHint =

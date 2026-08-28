@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
@@ -25,6 +25,8 @@ vi.mock('../store/app-settings.js', () => ({
     fast: Boolean(opts.fast),
   }),
   cowboyModeEnabled: () => true,
+  isAbleTimeConnected: () => false,
+  getIssueSource: () => 'linear',
 }));
 
 const { createThreadWorktree } = vi.hoisted(() => ({
@@ -78,6 +80,31 @@ describe('createThread cowboy', () => {
     expect(thread.branchName).toBe('main');
     expect(thread.worktreePath).toContain('sideboard-cowboy-repo-');
     expect(createThreadWorktree).not.toHaveBeenCalled();
+  });
+
+  it('copies create-modal image drops into .context/attachments', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const thread = await createThread({
+      sourceType: 'branch',
+      sourceRef: 'default',
+      agent: 'claude',
+      repoPath: repo,
+      cowboy: true,
+      attachments: [
+        {
+          id: 'shot',
+          name: 'Screenshot.png',
+          kind: 'file',
+          previewDataUrl: `data:image/png;base64,${png.toString('base64')}`,
+          content:
+            'Image attached: Screenshot.png\nThe image is shown in the composer; copy it into the worktree if you need to inspect pixels.',
+        },
+      ],
+    });
+    expect(thread.attachments[0]?.path).toBe('.context/attachments/Screenshot.png');
+    expect(
+      existsSync(join(thread.worktreePath, '.context', 'attachments', 'Screenshot.png')),
+    ).toBe(true);
   });
 
   it('refuses cowboy when the checkout is not the default branch', async () => {

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   formatPlanQuestionAnswers,
-  type PlanQuestion,
   type PlanQuestionAnswer,
   type PendingPlanQuestions,
 } from '@sideboard/plan-ask-user';

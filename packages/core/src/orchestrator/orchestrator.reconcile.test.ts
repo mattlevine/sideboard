@@ -74,10 +74,10 @@ describe('Orchestrator.reconcile reclaim', () => {
     }
   });
 
-  it('does not reclaim by default (MCP-safe)', async () => {
+  it('does not reclaim when drainQueues is false (MCP-safe)', async () => {
     const thread = seedRunning(null);
     const orch = new Orchestrator();
-    await orch.reconcile();
+    await orch.reconcile(undefined, { drainQueues: false });
     expect(readThread(thread.id)?.status).toBe('running');
     expect(readThread(thread.id)?.lastError).toBeNull();
   });
@@ -126,6 +126,15 @@ describe('Orchestrator.reconcile reclaim', () => {
     expect(readThread(thread.id)?.status).toBe('queued');
     expect(readThread(thread.id)?.queue).toEqual(['review this pr']);
     drainSpy.mockRestore();
+  });
+
+  it('adoptPersistedQueues reclaims disk-running turns with a dead pid', () => {
+    const thread = seedRunning(999_999_999);
+    const orch = new Orchestrator();
+    orch.adoptPersistedQueues();
+    const next = readThread(thread.id)!;
+    expect(next.status).toBe('stopped');
+    expect(next.lastError).toMatch(/agent exited/);
   });
 
   it('adoptPersistedQueues heals queued+empty and drains non-empty queues', async () => {

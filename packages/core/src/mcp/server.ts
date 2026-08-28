@@ -18,6 +18,7 @@ import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
 import {
+  mcpWaitFinishedHint,
   mcpWaitStillRunningHint,
   mcpWaitForTurnTimeoutMs,
 } from './wait-for-turn.js';
@@ -857,7 +858,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume a hang. On status error, lastError/text is the failure. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
+    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume a hang. On status error, lastError/text is the failure. On status stopped or broken, the child did not finish — resume with send_to_thread or tell the user; do not treat that as success. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -879,7 +880,10 @@ export async function startMcpServer(): Promise<void> {
               stillRunning: result.stillRunning,
               progress: result.progress,
               lastActivityAt: result.lastActivityAt,
-              hint: result.stillRunning ? mcpWaitStillRunningHint(result.status) : undefined,
+              hint: result.stillRunning
+                ? mcpWaitStillRunningHint(result.status)
+                : mcpWaitFinishedHint(result.status),
+              incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
             }),
           },
         ],
@@ -899,7 +903,10 @@ export async function startMcpServer(): Promise<void> {
             type: 'text',
             text: JSON.stringify({
               ...result,
-              hint: result.stillRunning ? mcpWaitStillRunningHint(result.status) : undefined,
+              hint: result.stillRunning
+                ? mcpWaitStillRunningHint(result.status)
+                : mcpWaitFinishedHint(result.status),
+              incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
             }),
           },
         ],
@@ -924,7 +931,7 @@ export async function startMcpServer(): Promise<void> {
       }
       const clearQueue = force !== false;
       const hadQueued = t.queue.length > 0;
-      const stopped = orch.stop(ref, { clearQueue });
+      const stopped = orch.stop(ref, { clearQueue, notifyParent: false });
       return {
         content: [
           {

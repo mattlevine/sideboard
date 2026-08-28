@@ -7,6 +7,7 @@ import {
   stripBrightsyNdjsonNoise,
   toolDescription,
   toolDetail,
+  visibleToolRowDetail,
 } from './message-parts.js';
 
 describe('applyAgentEvent', () => {
@@ -251,6 +252,45 @@ describe('applyAgentEvent', () => {
 describe('toolDetail', () => {
   it('prefers command for bash', () => {
     expect(toolDetail('Bash', { command: 'ls -la' })).toBe('ls -la');
+  });
+
+  it('prefers the search pattern over the worktree path', () => {
+    expect(
+      toolDetail('Grep', {
+        path: '/Users/me/proj',
+        pattern: 'visibleToolRowDetail',
+      }),
+    ).toBe('visibleToolRowDetail');
+  });
+});
+
+describe('visibleToolRowDetail', () => {
+  const wt = '/Users/me/proj';
+
+  it('hides a path already named in the description', () => {
+    expect(
+      visibleToolRowDetail(
+        `${wt}/apps/desktop/src/CreateModal.tsx`,
+        'Read CreateModal.tsx',
+        wt,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('hides a pill that is only the worktree root', () => {
+    expect(visibleToolRowDetail(wt, 'Search files', wt)).toBeUndefined();
+  });
+
+  it('shows a short relative path when the description has no filename', () => {
+    expect(
+      visibleToolRowDetail(`${wt}/apps/desktop/src/CreateModal.tsx`, 'Search files', wt),
+    ).toBe('apps/desktop/src/CreateModal.tsx');
+  });
+
+  it('keeps shell commands', () => {
+    expect(visibleToolRowDetail('git status', 'Check git status', wt)).toBe(
+      'git status',
+    );
   });
 
   it('labels Cursor task tools from description', () => {

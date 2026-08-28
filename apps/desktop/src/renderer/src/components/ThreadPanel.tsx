@@ -215,6 +215,29 @@ function QueuedRemoveIcon() {
   );
 }
 
+/** Keep typed single newlines as markdown hard breaks. */
+function userTextToMarkdown(text: string): string {
+  return text.replace(/([^\n])\n(?!\n)/g, '$1  \n');
+}
+
+/** User bubble after send — including the ask-user answer transcript. */
+function UserMessageText({
+  text,
+  onThreadLinkClick,
+}: {
+  text: string;
+  onThreadLinkClick?: (threadRef: string) => void;
+}) {
+  return (
+    <div className="msg-body msg-body-md">
+      <MarkdownMessage
+        text={userTextToMarkdown(text)}
+        onThreadLinkClick={onThreadLinkClick}
+      />
+    </div>
+  );
+}
+
 export function ThreadPanel({
   thread,
   worktreeChats,
@@ -1933,7 +1956,12 @@ export function ThreadPanel({
                         onOpen={onSelectFile}
                       />
                     )}
-                    {m.text ? <div className="msg-body">{m.text}</div> : null}
+                    {m.text ? (
+                      <UserMessageText
+                        text={m.text}
+                        onThreadLinkClick={onOpenThreadLink}
+                      />
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1951,7 +1979,10 @@ export function ThreadPanel({
                   />
                 )}
                 {pendingTranscript ? (
-                  <div className="msg-body">{pendingTranscript}</div>
+                  <UserMessageText
+                    text={pendingTranscript}
+                    onThreadLinkClick={onOpenThreadLink}
+                  />
                 ) : null}
               </div>
             </div>
