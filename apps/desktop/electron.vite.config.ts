@@ -44,6 +44,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/agents/usage.ts',
         ),
+        '@sideboard/context-estimate': resolve(
+          __dirname,
+          '../../packages/core/src/composer/context-estimate.ts',
+        ),
         '@sideboard/worktree-labels': resolve(
           __dirname,
           '../../packages/core/src/git/worktree-labels.ts',

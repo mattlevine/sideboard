@@ -352,7 +352,58 @@ function eventsFromClaudeSystem(obj: Record<string, unknown>): AgentEvent | Agen
     };
   }
 
+  if (subtype === 'status') {
+    const status = claudeString(obj, 'status');
+    if (status === 'compacting') {
+      return { type: 'thinking', data: 'Compressing context…', replace: true };
+    }
+    return null;
+  }
+
+  if (subtype === 'compact_boundary' || subtype === 'compact') {
+    const meta = compactMetadataFromClaude(obj);
+    const trigger = meta.trigger ? ` (${meta.trigger})` : '';
+    const thinking: AgentEvent = {
+      type: 'thinking',
+      data: `Context compressed${trigger}`,
+    };
+    if (meta.postTokens != null && meta.postTokens > 0) {
+      return [
+        thinking,
+        {
+          type: 'usage',
+          data: {
+            inputTokens: 0,
+            outputTokens: 0,
+            lastRequestTokens: meta.postTokens,
+          },
+          scope: 'request',
+        },
+      ];
+    }
+    return thinking;
+  }
+
   return null;
+}
+
+function compactMetadataFromClaude(obj: Record<string, unknown>): {
+  trigger?: string;
+  postTokens?: number;
+} {
+  const raw = obj.compactMetadata ?? obj.compact_metadata;
+  if (!raw || typeof raw !== 'object') return {};
+  const meta = raw as Record<string, unknown>;
+  const trigger =
+    typeof meta.trigger === 'string' && meta.trigger.trim()
+      ? meta.trigger.trim()
+      : undefined;
+  const post = meta.postTokens ?? meta.post_tokens;
+  const postTokens =
+    typeof post === 'number' && Number.isFinite(post) && post > 0
+      ? Math.round(post)
+      : undefined;
+  return { trigger, postTokens };
 }
 
 export const claudeAdapter: AgentAdapter = {

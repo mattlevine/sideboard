@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
+import { contextFillRatio, contextMeterTooltip, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -48,6 +48,16 @@ describe('resolveContextWindow', () => {
         resolveContextWindow('cursor', 'default', 346_000),
       ),
     ).toBeCloseTo(0.346);
+  });
+});
+
+describe('contextMeterTooltip', () => {
+  it('names remaining occupancy after compression', () => {
+    const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 12_000 };
+    expect(contextMeterTooltip(usage, 1_000_000, { compacted: true })).toContain(
+      'remaining after compression',
+    );
+    expect(contextMeterTooltip(usage, 1_000_000)).toContain('last request input + cache');
   });
 });
 

@@ -12,6 +12,7 @@ export default defineConfig({
     alias: {
       '@sideboard/message-parts': core('agents/message-parts.ts'),
       '@sideboard/usage': core('agents/usage.ts'),
+      '@sideboard/context-estimate': core('composer/context-estimate.ts'),
       '@sideboard/worktree-labels': core('git/worktree-labels.ts'),
       '@sideboard/brightsy-targets': core('agents/brightsy-targets.ts'),
       '@sideboard/gh-errors': core('git/gh-errors.ts'),

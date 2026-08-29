@@ -105,7 +105,10 @@ export function applyTurnUsage(
     };
   }
   const merged = mergeUsage(current, incoming);
-  const occ = requestOccupancy(incoming);
+  const occ =
+    incoming.lastRequestTokens != null && incoming.lastRequestTokens > 0
+      ? incoming.lastRequestTokens
+      : requestOccupancy(incoming);
   return {
     ...merged,
     lastRequestTokens: occ > 0 ? occ : (current?.lastRequestTokens ?? occ),

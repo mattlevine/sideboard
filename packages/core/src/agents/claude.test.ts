@@ -554,6 +554,39 @@ describe('claudeAdapter.parseEvent', () => {
     ]);
   });
 
+  it('maps compact_boundary to a compression notice and post-compact occupancy', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'compact_boundary',
+          session_id: 'sess-parent',
+          compactMetadata: { trigger: 'auto', preTokens: 820_000, postTokens: 48_000 },
+        }),
+      ),
+    ).toEqual([
+      { type: 'thinking', data: 'Context compressed (auto)' },
+      {
+        type: 'usage',
+        data: { inputTokens: 0, outputTokens: 0, lastRequestTokens: 48_000 },
+        scope: 'request',
+      },
+    ]);
+  });
+
+  it('maps compacting status to thinking so the stream is not silent', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'status',
+          status: 'compacting',
+          session_id: 'sess-parent',
+        }),
+      ),
+    ).toEqual({ type: 'thinking', data: 'Compressing context…', replace: true });
+  });
+
   it('maps api_retry to thinking so long polls still show activity', () => {
     expect(
       claudeAdapter.parseEvent(

@@ -127,8 +127,12 @@ export function contextFillRatio(
 export function contextMeterTooltip(
   usage: TokenUsage,
   windowTokens: number,
+  opts?: { compacted?: boolean },
 ): string {
   const used = contextTokens(usage);
   const pct = Math.round(contextFillRatio(usage, windowTokens) * 100);
-  return `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — last request input + cache`;
+  const basis = opts?.compacted
+    ? 'remaining after compression'
+    : 'last request input + cache';
+  return `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — ${basis}`;
 }

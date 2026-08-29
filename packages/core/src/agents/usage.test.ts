@@ -164,6 +164,21 @@ describe('applyTurnUsage', () => {
     });
   });
 
+  it('honors an explicit lastRequestTokens on a request-scoped event (post-compression)', () => {
+    const stepped = applyTurnUsage(
+      null,
+      { inputTokens: 1_000, outputTokens: 10, cacheReadTokens: 800_000 },
+      'request',
+    );
+    const afterCompact = applyTurnUsage(
+      stepped,
+      { inputTokens: 0, outputTokens: 0, lastRequestTokens: 42_000 },
+      'request',
+    );
+    expect(afterCompact.lastRequestTokens).toBe(42_000);
+    expect(contextTokens(afterCompact)).toBe(42_000);
+  });
+
   it('does not zero lastRequestTokens on a cost-only request-scoped event', () => {
     const stepped = applyTurnUsage(
       null,
