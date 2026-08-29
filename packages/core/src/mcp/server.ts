@@ -834,7 +834,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_thread',
-    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. Set force_stop=true to interrupt an in-flight/queued turn (kill + clear queue) before queueing this prompt — use when the thread is mid-turn or has stale queued prompts you need to replace.',
+    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not force_stop to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that stops the child mid-thought. Call wait_for_turn again instead.',
     {
       ref: z.string(),
       prompt: z.string(),
@@ -844,7 +844,7 @@ export async function startMcpServer(): Promise<void> {
       if (force_stop) {
         const existing = orch.getThread(ref);
         if (existing) {
-          orch.stop(ref, { clearQueue: true });
+          orch.stop(ref, { clearQueue: true, notifyParent: false });
         }
       }
       const thread = await orch.send(ref, prompt);
