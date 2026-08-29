@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Chat context meter shows remaining occupancy after compression, not the pre-summary peak.
+- Chat tabs-bar meter shows next-request occupancy (with warn/hot colors), not the billed thread Σ.
 - Marketing homepage: crop the board shot flush to the window and place the worktree-chat shot after the three pillars.
 
 ## [0.1.136] - 2026-08-28

@@ -46,7 +46,7 @@ import {
 } from '../lib/right-pane-memory';
 import { mergeAppendableArtifact } from '../lib/artifacts';
 import { forwardContextUsage, threadHasCompactedContext } from '@sideboard/context-estimate';
-import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { useLiveThread } from '../lib/live-paint-context';
 import { AgentMessage } from './AgentMessage';
@@ -1563,21 +1563,34 @@ export function ThreadPanel({
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
         usageTotalLabel={
-          threadUsage
-            ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${formatCostSuffix(
-                threadUsage.costUsd,
+          latestContextUsage
+            ? `${contextOccupancyLabel(latestContextUsage, contextWindow)}${formatCostSuffix(
+                latestContextUsage.costUsd,
                 showCost,
               )}`
-            : null
+            : threadUsage
+              ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${formatCostSuffix(
+                  threadUsage.costUsd,
+                  showCost,
+                )}`
+              : null
         }
         usageTotalTooltip={
-          threadUsage ? `Thread total — ${usageTooltip(threadUsage, { showCost })}` : undefined
+          latestContextUsage
+            ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                compacted: contextCompacted,
+                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+              })
+            : threadUsage
+              ? `Thread total — ${usageTooltip(threadUsage, { showCost })}`
+              : undefined
         }
         contextRatio={contextRatio}
         contextTooltip={
           latestContextUsage
             ? contextMeterTooltip(latestContextUsage, contextWindow, {
                 compacted: contextCompacted,
+                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })
             : undefined
         }

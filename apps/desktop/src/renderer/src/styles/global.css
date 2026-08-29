@@ -2685,6 +2685,14 @@ body.resizing-panels webview {
   font-variant-numeric: tabular-nums;
 }
 
+.thread-meta.usage-cluster.warn .usage-total {
+  color: #e6b84d;
+}
+
+.thread-meta.usage-cluster.hot .usage-total {
+  color: var(--err, #e85d5d);
+}
+
 .thread-meta.usage-total {
   font-variant-numeric: tabular-nums;
   cursor: default;
