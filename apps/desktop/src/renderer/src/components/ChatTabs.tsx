@@ -7,6 +7,7 @@ import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { CaffeinateBadge } from './CaffeinateBadge';
+import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 
@@ -40,9 +41,12 @@ interface Props {
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
   statusBadge?: string | null;
-  /** Billed thread total (e.g. "4.6M tok"), same string as the worktree hover. */
+  /** Occupancy / 1M (or billed tok / 1M), muted — no warn/hot. */
   usageTotalLabel?: string | null;
   usageTotalTooltip?: string;
+  /** 0–1 fill of the fixed 1M window; omit to hide the ring. */
+  contextRatio?: number | null;
+  contextTooltip?: string;
   onSelectChat: (id: string) => void;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
@@ -77,6 +81,8 @@ export function ChatTabs({
   statusBadge = null,
   usageTotalLabel = null,
   usageTotalTooltip,
+  contextRatio = null,
+  contextTooltip,
   onSelectChat,
   onSelectFile,
   onCloseFile,
@@ -343,9 +349,14 @@ export function ChatTabs({
         />
       </div>
       <div className="chat-tabs-actions">
-        {usageTotalLabel && (
-          <span className="thread-meta usage-cluster" title={usageTotalTooltip}>
-            <span className="usage-total">{usageTotalLabel}</span>
+        {(usageTotalLabel || contextRatio != null) && (
+          <span className="thread-meta usage-cluster" title={contextTooltip ?? usageTotalTooltip}>
+            {contextRatio != null && (
+              <ContextMeter ratio={contextRatio} title={contextTooltip} />
+            )}
+            {usageTotalLabel && (
+              <span className="usage-total">{usageTotalLabel}</span>
+            )}
           </span>
         )}
         {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}

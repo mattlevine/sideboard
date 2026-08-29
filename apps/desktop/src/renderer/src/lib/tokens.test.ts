@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billedUsageLabel, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
+import { billedUsageLabel, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, resolveContextWindow, sumUsage, tabsContextLabel, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -92,6 +92,24 @@ describe('billedUsageLabel', () => {
     expect(billedUsageLabel(usage, false)).toBe('4.6M tok');
     expect(billedUsageLabel(usage, false)).not.toContain('/');
     expect(billedUsageLabel({ ...usage, costUsd: 1.23 }, true)).toBe('4.6M tok · $1.23');
+  });
+});
+
+describe('tabsContextLabel', () => {
+  it('shows occupancy against the fixed 1M window', () => {
+    const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 94_000 };
+    const billed = { inputTokens: 1_200_000, outputTokens: 200_000, cacheReadTokens: 3_200_000 };
+    expect(tabsContextLabel(usage, 1_000_000, billed, false)).toBe('94k / 1M');
+  });
+
+  it('keeps / 1M when occupancy is a billed leak', () => {
+    const leak = {
+      inputTokens: 800_000,
+      outputTokens: 50_000,
+      cacheReadTokens: 1_600_000,
+      lastRequestTokens: 2_500_000,
+    };
+    expect(tabsContextLabel(leak, 1_000_000, leak, false)).toBe('2.5M tok / 1M');
   });
 });
 

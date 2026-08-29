@@ -163,12 +163,32 @@ export function contextMeterTooltip(
   return bits.join(' · ');
 }
 
-/** Occupancy / window for tooltips and the agent-message chip, not the tabs bar. */
+/** Occupancy / window for tooltips and the agent-message chip. */
 export function contextOccupancyLabel(usage: TokenUsage, windowTokens: number): string {
   return `${formatTokenCount(contextTokens(usage))} / ${formatTokenCount(windowTokens)}`;
 }
 
-/** Billed total string shared by the worktree hover card and the tabs bar. */
+/** Billed total string shared by the worktree hover card. */
 export function billedUsageLabel(usage: TokenUsage, showCost: boolean): string {
   return `${formatTokenCount(totalTokens(usage))} tok${formatCostSuffix(usage.costUsd, showCost)}`;
+}
+
+/**
+ * Tabs-bar label: plausible occupancy / fixed window, else billed tok / window.
+ * Always includes the window so the 1M budget stays visible.
+ */
+export function tabsContextLabel(
+  usage: TokenUsage | null,
+  windowTokens: number,
+  billed: TokenUsage | null,
+  showCost: boolean,
+): string | null {
+  const occ = usage ? meterOccupancyTokens(usage, windowTokens) : null;
+  const window = formatTokenCount(windowTokens);
+  if (occ != null) {
+    const cost = billed ? formatCostSuffix(billed.costUsd, showCost) : '';
+    return `${formatTokenCount(occ)} / ${window}${cost}`;
+  }
+  if (billed) return `${billedUsageLabel(billed, showCost)} / ${window}`;
+  return `/ ${window}`;
 }

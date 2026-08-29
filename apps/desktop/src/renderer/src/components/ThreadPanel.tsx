@@ -45,7 +45,16 @@ import {
   type RightPaneSession,
 } from '../lib/right-pane-memory';
 import { mergeAppendableArtifact } from '../lib/artifacts';
-import { billedUsageLabel, sumUsage, usageTooltip } from '../lib/tokens';
+import { forwardContextUsage } from '@sideboard/context-estimate';
+import {
+  contextFillRatio,
+  contextMeterTooltip,
+  resolveContextWindow,
+  sumUsage,
+  tabsContextLabel,
+  totalTokens,
+  usageTooltip,
+} from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { useLiveThread } from '../lib/live-paint-context';
 import { AgentMessage } from './AgentMessage';
@@ -1281,6 +1290,22 @@ export function ThreadPanel({
     if (!liveUsage) return fromMessages;
     return sumUsage([fromMessages ?? undefined, liveUsage]);
   }, [thread.messages, liveUsage]);
+  const latestContextUsage = useMemo(() => {
+    if (liveUsage) return liveUsage;
+    for (let i = thread.messages.length - 1; i >= 0; i--) {
+      const m = thread.messages[i];
+      if (m?.role === 'agent' && m.usage) {
+        return forwardContextUsage(m.usage, thread.messages);
+      }
+    }
+    return null;
+  }, [thread.messages, liveUsage]);
+  const contextWindow = resolveContextWindow(thread.agent, thread.model);
+  const contextRatio = latestContextUsage
+    ? contextFillRatio(latestContextUsage, contextWindow)
+    : threadUsage
+      ? 0
+      : null;
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
 
@@ -1540,11 +1565,30 @@ export function ThreadPanel({
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
         usageTotalLabel={
-          threadUsage ? billedUsageLabel(threadUsage, showCost) : null
+          threadUsage || latestContextUsage
+            ? tabsContextLabel(
+                latestContextUsage,
+                contextWindow,
+                threadUsage,
+                showCost,
+              )
+            : null
         }
         usageTotalTooltip={
-          threadUsage
-            ? `Open chat — ${usageTooltip(threadUsage, { showCost })}`
+          latestContextUsage
+            ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+              })
+            : threadUsage
+              ? `Open chat — ${usageTooltip(threadUsage, { showCost })}`
+              : undefined
+        }
+        contextRatio={contextRatio}
+        contextTooltip={
+          latestContextUsage
+            ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+              })
             : undefined
         }
         openMenu={
