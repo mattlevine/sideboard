@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.138] - 2026-08-29
+
 ### Fixed
 
 - Chat tabs-bar meter shows next-request occupancy (with warn/hot colors), not the billed thread Σ.
@@ -16,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - “Create a new release” always means Electron + build npms (human publishes) + README/marketing + commit/push + Fly deploy if the site changed.
 - Marketing homepage: crop the board shot flush to the window and place the worktree-chat shot after the three pillars.
+
+## [0.1.137] - 2026-08-29
+
+Desktop pack only; superseded by 0.1.138.
 
 ## [0.1.136] - 2026-08-28
 
