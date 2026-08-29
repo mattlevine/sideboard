@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.139] - 2026-08-29
+
 ### Fixed
 
 - Worktree agents no longer look like they “stopped mid-thought” when the parent archives them, or when the coordinator `force_stop`s to “resume.” Halt notices fire only for an unexpected in-flight death. A stale on-disk `agentPid` no longer SIGTERMs a live Cursor/Claude runner.
