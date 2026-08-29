@@ -2704,14 +2704,6 @@ body.resizing-panels webview {
   stroke: var(--muted);
 }
 
-.context-meter.warn .context-meter-fill {
-  stroke: #e6b84d;
-}
-
-.context-meter.hot .context-meter-fill {
-  stroke: var(--err, #e85d5d);
-}
-
 .chat-tab-new-menu {
   right: 0;
   left: auto;

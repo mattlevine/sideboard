@@ -116,12 +116,27 @@ export function resolveContextWindow(
   return CONTEXT_WINDOW_TOKENS;
 }
 
+/**
+ * Occupancy that can fill the 1M ring. Values over the window are billed-turn
+ * leaks (summed tool rounds), not next-request size — do not paint a full ring.
+ */
+export function meterOccupancyTokens(
+  usage: TokenUsage,
+  windowTokens: number,
+): number | null {
+  if (windowTokens <= 0) return null;
+  const occ = contextTokens(usage);
+  if (occ <= 0 || occ > windowTokens) return null;
+  return occ;
+}
+
 export function contextFillRatio(
   usage: TokenUsage,
   windowTokens: number,
 ): number {
-  if (windowTokens <= 0) return 0;
-  return Math.min(1, contextTokens(usage) / windowTokens);
+  const occ = meterOccupancyTokens(usage, windowTokens);
+  if (occ == null || windowTokens <= 0) return 0;
+  return occ / windowTokens;
 }
 
 export function contextMeterTooltip(
@@ -129,13 +144,18 @@ export function contextMeterTooltip(
   windowTokens: number,
   opts?: { compacted?: boolean; billedTotal?: number },
 ): string {
-  const used = contextTokens(usage);
+  const occ = meterOccupancyTokens(usage, windowTokens);
+  const used = occ ?? contextTokens(usage);
   const pct = Math.round(contextFillRatio(usage, windowTokens) * 100);
   const basis = opts?.compacted
     ? 'remaining after compression'
-    : 'next request input + cache';
+    : occ == null
+      ? 'billed turn total (occupancy unknown)'
+      : 'next request input + cache';
   const bits = [
-    `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — ${basis}`,
+    occ == null
+      ? `Billed ${formatTokenCount(totalTokens(usage))} — occupancy over ${formatTokenCount(windowTokens)} or missing`
+      : `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — ${basis}`,
   ];
   if (opts?.billedTotal != null && opts.billedTotal > 0) {
     bits.push(`Thread billed Σ ${formatTokenCount(opts.billedTotal)}`);

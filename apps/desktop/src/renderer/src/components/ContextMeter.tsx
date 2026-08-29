@@ -14,12 +14,10 @@ export function ContextMeter({
   const r = (16 - stroke) / 2;
   const c = 2 * Math.PI * r;
   const filled = pct * c;
-  const hot = pct >= 0.85;
-  const warn = !hot && pct >= 0.65;
 
   return (
     <svg
-      className={`context-meter${hot ? ' hot' : warn ? ' warn' : ''}`}
+      className="context-meter"
       width={size}
       height={size}
       viewBox="0 0 16 16"

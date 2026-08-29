@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Chat tabs-bar token text matches the worktree hover card: muted billed `X tok`, no occupancy `/ 1M` ratio or warn/hot colors.
+- Agent-message context ring stays a muted meter: billed-turn totals over 1M no longer paint a full red ring. Live elapsed time ticks even if `turn_started` is late.
 
 ## [0.1.139] - 2026-08-29
 

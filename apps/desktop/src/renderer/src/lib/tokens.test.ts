@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billedUsageLabel, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
+import { billedUsageLabel, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -34,6 +34,18 @@ describe('contextFillRatio', () => {
       lastRequestTokens: 90_000,
     };
     expect(contextFillRatio(usage, 200_000)).toBeCloseTo(0.45);
+  });
+
+  it('does not fill a full ring from billed-turn occupancy over the window', () => {
+    const usage = {
+      inputTokens: 800_000,
+      outputTokens: 50_000,
+      cacheReadTokens: 1_600_000,
+      lastRequestTokens: 2_500_000,
+    };
+    expect(meterOccupancyTokens(usage, 1_000_000)).toBeNull();
+    expect(contextFillRatio(usage, 1_000_000)).toBe(0);
+    expect(contextMeterTooltip(usage, 1_000_000)).toContain('Billed');
   });
 });
 

@@ -7,7 +7,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, formatCostSuffix, contextTokens, usageTooltip, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
 import type { FilePathLink } from '../lib/file-path-link';
@@ -74,16 +74,28 @@ export function formatDuration(ms: number): string {
   return m2 === 0 ? `${hr}h` : `${hr}h ${m2}m`;
 }
 
-function useLiveDuration(startedAt: number | undefined, fixedMs: number | undefined): string | null {
+function useLiveDuration(
+  startedAt: number | undefined,
+  fixedMs: number | undefined,
+  streaming = false,
+): string | null {
   const [now, setNow] = useState(() => Date.now());
+  const streamOrigin = useRef<number | null>(null);
+  if (streaming && startedAt == null) {
+    streamOrigin.current ??= Date.now();
+  } else if (!streaming) {
+    streamOrigin.current = null;
+  }
+  const origin = startedAt ?? (streaming ? streamOrigin.current : null) ?? undefined;
+
   useEffect(() => {
-    if (startedAt == null) return;
+    if (origin == null) return;
     setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [startedAt]);
+  }, [origin]);
 
-  if (startedAt != null) return formatDuration(now - startedAt);
+  if (origin != null) return formatDuration(now - origin);
   if (fixedMs != null && Number.isFinite(fixedMs)) return formatDuration(fixedMs);
   return null;
 }
@@ -342,7 +354,7 @@ export function AgentMessage({
   const diffAnchorRef = useRef<HTMLElement | null>(null);
   const userToggledPhases = useRef(new Set<number>());
   const windowTokens = usage
-    ? resolveContextWindow(agent ?? 'claude', model, contextTokens(usage))
+    ? resolveContextWindow(agent ?? 'claude', model)
     : 0;
 
   function openFileReference(link: FilePathLink) {
@@ -381,7 +393,7 @@ export function AgentMessage({
     () => extractRightPaneContents(answer || text, safeParts, idPrefix),
     [answer, text, safeParts, idPrefix],
   );
-  const durationLabel = useLiveDuration(startedAt, durationMs);
+  const durationLabel = useLiveDuration(startedAt, durationMs, Boolean(streaming));
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
   const lastTraceIndex = (() => {
     for (let i = phases.length - 1; i >= 0; i--) {
@@ -602,7 +614,9 @@ export function AgentMessage({
         <div className="msg-footer">
           <div className="msg-footer-left">
             {durationLabel && (
-              <span className={`msg-age${startedAt != null ? ' live' : ''}`}>{durationLabel}</span>
+              <span className={`msg-age${startedAt != null || streaming ? ' live' : ''}`}>
+                {durationLabel}
+              </span>
             )}
             {usage && (
               <span className="msg-usage" title={usageTooltip(usage, { showCost })}>
@@ -611,7 +625,10 @@ export function AgentMessage({
                   title={contextMeterTooltip(usage, windowTokens)}
                   size={12}
                 />
-                {formatTokenCount(contextTokens(usage))} tok
+                {formatTokenCount(
+                  meterOccupancyTokens(usage, windowTokens) ?? totalTokens(usage),
+                )}{' '}
+                tok
                 {formatCostSuffix(usage.costUsd, showCost)}
               </span>
             )}
