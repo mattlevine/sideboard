@@ -49,6 +49,27 @@ export function threadHasCompactedContext(
 }
 
 /**
+ * Tokens the next request will start from — remaining transcript, not billed
+ * thread/turn sums. After compression, last-request size is the pre-summary
+ * peak so the transcript estimate wins. Otherwise a last-request that still
+ * fits the window is preferred (provider-accurate); billed leaks fall back
+ * to the transcript.
+ */
+export function forwardOccupancyTokens(
+  messages: ThreadMessage[],
+  usage?: TokenUsage | null,
+  windowTokens = 1_000_000,
+): number {
+  const estimated = estimateOccupancyTokens(messages);
+  if (threadHasCompactedContext(messages) && estimated > 0) return estimated;
+  if (usage) {
+    const last = contextTokens(usage);
+    if (last > 0 && last <= windowTokens) return last;
+  }
+  return estimated;
+}
+
+/**
  * Occupancy the next turn will start from.
  * After Sideboard compression the last agent `lastRequestTokens` is still the
  * pre-summary peak — cap it to the remaining transcript so the meter shows

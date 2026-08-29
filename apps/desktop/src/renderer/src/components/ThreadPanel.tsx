@@ -45,8 +45,16 @@ import {
   type RightPaneSession,
 } from '../lib/right-pane-memory';
 import { mergeAppendableArtifact } from '../lib/artifacts';
-import { forwardContextUsage, threadHasCompactedContext } from '@sideboard/context-estimate';
-import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { forwardOccupancyTokens, threadHasCompactedContext } from '@sideboard/context-estimate';
+import {
+  contextMeterTooltip,
+  occupancyFillRatio,
+  resolveContextWindow,
+  sumUsage,
+  tabsContextLabel,
+  totalTokens,
+  usageTooltip,
+} from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { useLiveThread } from '../lib/live-paint-context';
 import { AgentMessage } from './AgentMessage';
@@ -1283,27 +1291,35 @@ export function ThreadPanel({
     return sumUsage([fromMessages ?? undefined, liveUsage]);
   }, [thread.messages, liveUsage]);
   const latestContextUsage = useMemo(() => {
-    // Live occupancy is the current request. After compression, idle meter
-    // must use remaining transcript — lastRequestTokens is still the peak.
     if (liveUsage) return liveUsage;
     for (let i = thread.messages.length - 1; i >= 0; i--) {
       const m = thread.messages[i];
-      if (m?.role === 'agent' && m.usage) {
-        return forwardContextUsage(m.usage, thread.messages);
-      }
+      if (m?.role === 'agent' && m.usage) return m.usage;
     }
     return null;
   }, [thread.messages, liveUsage]);
-  const contextCompacted =
-    !liveUsage && threadHasCompactedContext(thread.messages);
-  const contextWindow = resolveContextWindow(
-    thread.agent,
-    thread.model,
-    latestContextUsage ? contextTokens(latestContextUsage) : 0,
+  const forwardMessages = useMemo(() => {
+    if (!liveOutput && liveParts.length === 0 && !liveUsage) return thread.messages;
+    return [
+      ...thread.messages,
+      {
+        role: 'agent' as const,
+        text: liveOutput,
+        parts: liveParts,
+        ts: new Date().toISOString(),
+      },
+    ];
+  }, [thread.messages, liveOutput, liveParts, liveUsage]);
+  const contextWindow = resolveContextWindow(thread.agent, thread.model);
+  const forwardOccupancy = useMemo(
+    () => forwardOccupancyTokens(forwardMessages, latestContextUsage, contextWindow),
+    [forwardMessages, latestContextUsage, contextWindow],
   );
-  const contextRatio = latestContextUsage
-    ? contextFillRatio(latestContextUsage, contextWindow)
-    : null;
+  const contextRatio =
+    forwardOccupancy > 0 || latestContextUsage || threadUsage
+      ? occupancyFillRatio(forwardOccupancy, contextWindow)
+      : null;
+  const contextCompacted = threadHasCompactedContext(forwardMessages);
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
 
@@ -1563,32 +1579,31 @@ export function ThreadPanel({
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
         usageTotalLabel={
-          latestContextUsage
-            ? `${contextOccupancyLabel(latestContextUsage, contextWindow)}${formatCostSuffix(
-                latestContextUsage.costUsd,
+          contextRatio != null
+            ? tabsContextLabel(
+                forwardOccupancy,
+                contextWindow,
+                threadUsage?.costUsd,
                 showCost,
-              )}`
-            : threadUsage
-              ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${formatCostSuffix(
-                  threadUsage.costUsd,
-                  showCost,
-                )}`
-              : null
+              )
+            : null
         }
         usageTotalTooltip={
           latestContextUsage
             ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                occupancy: forwardOccupancy,
                 compacted: contextCompacted,
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })
             : threadUsage
-              ? `Thread total — ${usageTooltip(threadUsage, { showCost })}`
+              ? `Open chat — ${usageTooltip(threadUsage, { showCost })}`
               : undefined
         }
         contextRatio={contextRatio}
         contextTooltip={
-          latestContextUsage
+          latestContextUsage || forwardOccupancy > 0
             ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                occupancy: forwardOccupancy,
                 compacted: contextCompacted,
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })
@@ -1926,6 +1941,11 @@ export function ThreadPanel({
                       ts={m.ts}
                       durationMs={m.durationMs ?? fallbackDuration}
                       usage={m.usage}
+                      occupancyTokens={
+                        !showStreaming && i === lastAgentMessageIndex
+                          ? forwardOccupancy
+                          : undefined
+                      }
                       agent={thread.agent}
                       model={thread.model}
                       threadId={thread.id}
@@ -2020,6 +2040,7 @@ export function ThreadPanel({
                   streaming
                   startedAt={turnStartedAt}
                   usage={liveUsage ?? undefined}
+                  occupancyTokens={forwardOccupancy}
                   agent={thread.agent}
                   model={thread.model}
                   threadId={thread.id}

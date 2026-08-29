@@ -1,3 +1,5 @@
+import { contextMeterTone } from '../lib/tokens';
+
 /** Compact circular context-fill meter (Cursor-style ring). */
 export function ContextMeter({
   ratio,
@@ -14,12 +16,11 @@ export function ContextMeter({
   const r = (16 - stroke) / 2;
   const c = 2 * Math.PI * r;
   const filled = pct * c;
-  const hot = pct >= 0.85;
-  const warn = !hot && pct >= 0.65;
+  const tone = contextMeterTone(pct);
 
   return (
     <svg
-      className={`context-meter${hot ? ' hot' : warn ? ' warn' : ''}`}
+      className={`context-meter${tone ? ` ${tone}` : ''}`}
       width={size}
       height={size}
       viewBox="0 0 16 16"

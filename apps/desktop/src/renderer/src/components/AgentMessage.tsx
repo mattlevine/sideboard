@@ -7,7 +7,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, formatCostSuffix, contextTokens, usageTooltip, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
 import type { FilePathLink } from '../lib/file-path-link';
@@ -32,6 +32,8 @@ interface Props {
   durationMs?: number;
   /** Token usage for this turn, when the agent CLI reports it. */
   usage?: TokenUsage;
+  /** Going-forward occupancy override (tabs/live meter — not billed turn Σ). */
+  occupancyTokens?: number;
   /** Used with usage for the context-fill ring (defaults to Claude-sized window). */
   agent?: AgentKind;
   model?: string | null;
@@ -74,16 +76,28 @@ export function formatDuration(ms: number): string {
   return m2 === 0 ? `${hr}h` : `${hr}h ${m2}m`;
 }
 
-function useLiveDuration(startedAt: number | undefined, fixedMs: number | undefined): string | null {
+function useLiveDuration(
+  startedAt: number | undefined,
+  fixedMs: number | undefined,
+  streaming = false,
+): string | null {
   const [now, setNow] = useState(() => Date.now());
+  const streamOrigin = useRef<number | null>(null);
+  if (streaming && startedAt == null) {
+    streamOrigin.current ??= Date.now();
+  } else if (!streaming) {
+    streamOrigin.current = null;
+  }
+  const origin = startedAt ?? (streaming ? streamOrigin.current : null) ?? undefined;
+
   useEffect(() => {
-    if (startedAt == null) return;
+    if (origin == null) return;
     setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [startedAt]);
+  }, [origin]);
 
-  if (startedAt != null) return formatDuration(now - startedAt);
+  if (origin != null) return formatDuration(now - origin);
   if (fixedMs != null && Number.isFinite(fixedMs)) return formatDuration(fixedMs);
   return null;
 }
@@ -315,6 +329,7 @@ export function AgentMessage({
   parts,
   durationMs,
   usage,
+  occupancyTokens,
   agent,
   model,
   startedAt,
@@ -341,9 +356,7 @@ export function AgentMessage({
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const diffAnchorRef = useRef<HTMLElement | null>(null);
   const userToggledPhases = useRef(new Set<number>());
-  const windowTokens = usage
-    ? resolveContextWindow(agent ?? 'claude', model, contextTokens(usage))
-    : 0;
+  const windowTokens = resolveContextWindow(agent ?? 'claude', model);
 
   function openFileReference(link: FilePathLink) {
     setFileRef(link);
@@ -381,7 +394,7 @@ export function AgentMessage({
     () => extractRightPaneContents(answer || text, safeParts, idPrefix),
     [answer, text, safeParts, idPrefix],
   );
-  const durationLabel = useLiveDuration(startedAt, durationMs);
+  const durationLabel = useLiveDuration(startedAt, durationMs, Boolean(streaming));
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');
   const lastTraceIndex = (() => {
     for (let i = phases.length - 1; i >= 0; i--) {
@@ -595,6 +608,7 @@ export function AgentMessage({
 
       {(durationLabel ||
         usage ||
+        occupancyTokens != null ||
         chips.length > 0 ||
         paneContents.length > 0 ||
         onFork ||
@@ -602,17 +616,48 @@ export function AgentMessage({
         <div className="msg-footer">
           <div className="msg-footer-left">
             {durationLabel && (
-              <span className={`msg-age${startedAt != null ? ' live' : ''}`}>{durationLabel}</span>
+              <span className={`msg-age${startedAt != null || streaming ? ' live' : ''}`}>
+                {durationLabel}
+              </span>
             )}
-            {usage && (
-              <span className="msg-usage" title={usageTooltip(usage, { showCost })}>
+            {(usage || occupancyTokens != null) && (
+              <span
+                className="msg-usage"
+                title={
+                  usage
+                    ? contextMeterTooltip(usage, windowTokens, {
+                        occupancy: occupancyTokens,
+                      })
+                    : occupancyTokens != null
+                      ? contextMeterTooltip(null, windowTokens, { occupancy: occupancyTokens })
+                      : undefined
+                }
+              >
                 <ContextMeter
-                  ratio={contextFillRatio(usage, windowTokens)}
-                  title={contextMeterTooltip(usage, windowTokens)}
+                  ratio={
+                    occupancyTokens != null
+                      ? occupancyFillRatio(occupancyTokens, windowTokens)
+                      : usage
+                        ? contextFillRatio(usage, windowTokens)
+                        : 0
+                  }
+                  title={
+                    usage
+                      ? contextMeterTooltip(usage, windowTokens, {
+                          occupancy: occupancyTokens,
+                        })
+                      : undefined
+                  }
                   size={12}
                 />
-                {formatTokenCount(contextTokens(usage))} tok
-                {formatCostSuffix(usage.costUsd, showCost)}
+                {formatTokenCount(
+                  occupancyTokens ??
+                    (usage
+                      ? (meterOccupancyTokens(usage, windowTokens) ?? totalTokens(usage))
+                      : 0),
+                )}{' '}
+                tok
+                {formatCostSuffix(usage?.costUsd, showCost)}
               </span>
             )}
             <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>
