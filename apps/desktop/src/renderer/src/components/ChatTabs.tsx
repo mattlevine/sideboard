@@ -7,7 +7,6 @@ import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { CaffeinateBadge } from './CaffeinateBadge';
-import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 
@@ -41,12 +40,9 @@ interface Props {
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
   statusBadge?: string | null;
-  /** Next-request occupancy (e.g. "94k / 1M"), not the billed thread sum. */
+  /** Billed thread total (e.g. "4.6M tok"), same string as the worktree hover. */
   usageTotalLabel?: string | null;
   usageTotalTooltip?: string;
-  /** 0–1 context fill from the latest turn; omit to hide the meter. */
-  contextRatio?: number | null;
-  contextTooltip?: string;
   onSelectChat: (id: string) => void;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
@@ -81,8 +77,6 @@ export function ChatTabs({
   statusBadge = null,
   usageTotalLabel = null,
   usageTotalTooltip,
-  contextRatio = null,
-  contextTooltip,
   onSelectChat,
   onSelectFile,
   onCloseFile,
@@ -349,25 +343,9 @@ export function ChatTabs({
         />
       </div>
       <div className="chat-tabs-actions">
-        {(usageTotalLabel || contextRatio != null) && (
-          <span
-            className={`thread-meta usage-cluster${
-              contextRatio != null && contextRatio >= 0.85
-                ? ' hot'
-                : contextRatio != null && contextRatio >= 0.65
-                  ? ' warn'
-                  : ''
-            }`}
-            title={contextTooltip ?? usageTotalTooltip}
-          >
-            {contextRatio != null && (
-              <ContextMeter ratio={contextRatio} title={contextTooltip} />
-            )}
-            {usageTotalLabel && (
-              <span className="usage-total" title={usageTotalTooltip}>
-                {usageTotalLabel}
-              </span>
-            )}
+        {usageTotalLabel && (
+          <span className="thread-meta usage-cluster" title={usageTotalTooltip}>
+            <span className="usage-total">{usageTotalLabel}</span>
           </span>
         )}
         {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}

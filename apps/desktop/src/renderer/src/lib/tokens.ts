@@ -143,7 +143,12 @@ export function contextMeterTooltip(
   return bits.join(' · ');
 }
 
-/** Tabs-bar label: occupancy / window, never the billed thread sum. */
+/** Occupancy / window for tooltips and the agent-message chip, not the tabs bar. */
 export function contextOccupancyLabel(usage: TokenUsage, windowTokens: number): string {
   return `${formatTokenCount(contextTokens(usage))} / ${formatTokenCount(windowTokens)}`;
+}
+
+/** Billed total string shared by the worktree hover card and the tabs bar. */
+export function billedUsageLabel(usage: TokenUsage, showCost: boolean): string {
+  return `${formatTokenCount(totalTokens(usage))} tok${formatCostSuffix(usage.costUsd, showCost)}`;
 }

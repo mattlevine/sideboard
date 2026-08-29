@@ -2679,18 +2679,11 @@ body.resizing-panels webview {
   align-items: center;
   gap: 6px;
   cursor: default;
+  color: var(--muted);
 }
 
 .thread-meta.usage-cluster .usage-total {
   font-variant-numeric: tabular-nums;
-}
-
-.thread-meta.usage-cluster.warn .usage-total {
-  color: #e6b84d;
-}
-
-.thread-meta.usage-cluster.hot .usage-total {
-  color: var(--err, #e85d5d);
 }
 
 .thread-meta.usage-total {

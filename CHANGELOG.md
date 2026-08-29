@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Chat tabs-bar token text matches the worktree hover card: muted billed `X tok`, no occupancy `/ 1M` ratio or warn/hot colors.
+
 ## [0.1.139] - 2026-08-29
 
 ### Fixed

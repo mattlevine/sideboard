@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
+import { billedUsageLabel, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -60,13 +60,26 @@ describe('contextMeterTooltip', () => {
     expect(contextMeterTooltip(usage, 1_000_000)).toContain('next request input + cache');
   });
 
-  it('keeps the billed thread sum in the tooltip, not the label', () => {
+  it('keeps the billed thread sum in the tooltip, not the occupancy label', () => {
     const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 94_000 };
     expect(contextOccupancyLabel(usage, 1_000_000)).toBe('94k / 1M');
     expect(contextOccupancyLabel(usage, 1_000_000)).not.toContain('3.4');
     expect(
       contextMeterTooltip(usage, 1_000_000, { billedTotal: 3_400_000 }),
     ).toContain('Thread billed Σ 3.4M');
+  });
+});
+
+describe('billedUsageLabel', () => {
+  it('matches the worktree hover card (billed tok, no / window)', () => {
+    const usage = {
+      inputTokens: 1_200_000,
+      outputTokens: 200_000,
+      cacheReadTokens: 3_200_000,
+    };
+    expect(billedUsageLabel(usage, false)).toBe('4.6M tok');
+    expect(billedUsageLabel(usage, false)).not.toContain('/');
+    expect(billedUsageLabel({ ...usage, costUsd: 1.23 }, true)).toBe('4.6M tok · $1.23');
   });
 });
 
