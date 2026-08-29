@@ -134,4 +134,4 @@ Desktop pack: `stage-cursor-runtime.js` must resolve `@cursor/sdk` from `package
 
 Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` (or a delta) when summing.
 
-Tabs-bar shows a muted occupancy ring plus `X / 1M` (fixed window). Do not paint warn/hot from billed-turn sums over that window. Hover card stays billed `X tok`. The agent-message chip keeps the same muted ring.
+Tabs-bar and the latest message chip meter use going-forward occupancy (remaining transcript / last request that fits the 1M window), never billed thread or turn Σ. Warn/hot colors are allowed from that fill (65% / 85%). Hover card stays billed `X tok`.

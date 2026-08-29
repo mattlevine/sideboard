@@ -9,6 +9,7 @@ import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
+import { contextMeterTone } from '../lib/tokens';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 
 export type NewChatTabOptions = {
@@ -41,7 +42,7 @@ interface Props {
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
   statusBadge?: string | null;
-  /** Occupancy / 1M (or billed tok / 1M), muted — no warn/hot. */
+  /** Going-forward occupancy / 1M. Warn/hot from that fill, not billed Σ. */
   usageTotalLabel?: string | null;
   usageTotalTooltip?: string;
   /** 0–1 fill of the fixed 1M window; omit to hide the ring. */
@@ -154,6 +155,7 @@ export function ChatTabs({
 
   const urlActive = Boolean(activeUrl) && !changesActive;
   const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive;
+  const meterTone = contextRatio != null ? contextMeterTone(contextRatio) : '';
 
   return (
     <div className="chat-tabs">
@@ -350,7 +352,10 @@ export function ChatTabs({
       </div>
       <div className="chat-tabs-actions">
         {(usageTotalLabel || contextRatio != null) && (
-          <span className="thread-meta usage-cluster" title={contextTooltip ?? usageTotalTooltip}>
+          <span
+            className={`thread-meta usage-cluster${meterTone ? ` ${meterTone}` : ''}`}
+            title={contextTooltip ?? usageTotalTooltip}
+          >
             {contextRatio != null && (
               <ContextMeter ratio={contextRatio} title={contextTooltip} />
             )}

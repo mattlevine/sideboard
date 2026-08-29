@@ -130,31 +130,54 @@ export function meterOccupancyTokens(
   return occ;
 }
 
+export function occupancyFillRatio(
+  occupancy: number,
+  windowTokens: number,
+): number {
+  if (windowTokens <= 0 || occupancy <= 0) return 0;
+  return Math.min(1, occupancy / windowTokens);
+}
+
 export function contextFillRatio(
   usage: TokenUsage,
   windowTokens: number,
 ): number {
   const occ = meterOccupancyTokens(usage, windowTokens);
-  if (occ == null || windowTokens <= 0) return 0;
-  return occ / windowTokens;
+  if (occ == null) return 0;
+  return occupancyFillRatio(occ, windowTokens);
+}
+
+/** Warn/hot from occupancy fill — never from billed thread totals. */
+export function contextMeterTone(ratio: number): '' | 'warn' | 'hot' {
+  if (!Number.isFinite(ratio) || ratio <= 0) return '';
+  if (ratio >= 0.85) return 'hot';
+  if (ratio >= 0.65) return 'warn';
+  return '';
 }
 
 export function contextMeterTooltip(
-  usage: TokenUsage,
+  usage: TokenUsage | null,
   windowTokens: number,
-  opts?: { compacted?: boolean; billedTotal?: number },
+  opts?: { compacted?: boolean; billedTotal?: number; occupancy?: number },
 ): string {
-  const occ = meterOccupancyTokens(usage, windowTokens);
-  const used = occ ?? contextTokens(usage);
-  const pct = Math.round(contextFillRatio(usage, windowTokens) * 100);
+  const occ =
+    opts?.occupancy != null && opts.occupancy > 0
+      ? opts.occupancy
+      : usage
+        ? meterOccupancyTokens(usage, windowTokens)
+        : null;
+  const used = occ ?? (usage ? contextTokens(usage) : 0);
+  const pct = Math.round(occupancyFillRatio(occ ?? 0, windowTokens) * 100);
   const basis = opts?.compacted
     ? 'remaining after compression'
     : occ == null
       ? 'billed turn total (occupancy unknown)'
-      : 'next request input + cache';
+      : 'next request (going-forward context)';
   const bits = [
     occ == null
-      ? `Billed ${formatTokenCount(totalTokens(usage))} — occupancy over ${formatTokenCount(windowTokens)} or missing`
+      ? usage
+        ? `Billed ${formatTokenCount(totalTokens(usage))} — occupancy over ${formatTokenCount(windowTokens)} or missing`
+        : `Context / ${formatTokenCount(windowTokens)}`
       : `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — ${basis}`,
   ];
   if (opts?.billedTotal != null && opts.billedTotal > 0) {
@@ -173,22 +196,12 @@ export function billedUsageLabel(usage: TokenUsage, showCost: boolean): string {
   return `${formatTokenCount(totalTokens(usage))} tok${formatCostSuffix(usage.costUsd, showCost)}`;
 }
 
-/**
- * Tabs-bar label: plausible occupancy / fixed window, else billed tok / window.
- * Always includes the window so the 1M budget stays visible.
- */
+/** Tabs-bar label: going-forward occupancy / fixed window. Never billed Σ. */
 export function tabsContextLabel(
-  usage: TokenUsage | null,
+  occupancy: number,
   windowTokens: number,
-  billed: TokenUsage | null,
-  showCost: boolean,
-): string | null {
-  const occ = usage ? meterOccupancyTokens(usage, windowTokens) : null;
-  const window = formatTokenCount(windowTokens);
-  if (occ != null) {
-    const cost = billed ? formatCostSuffix(billed.costUsd, showCost) : '';
-    return `${formatTokenCount(occ)} / ${window}${cost}`;
-  }
-  if (billed) return `${billedUsageLabel(billed, showCost)} / ${window}`;
-  return `/ ${window}`;
+  costUsd?: number | null,
+  showCost = false,
+): string {
+  return `${formatTokenCount(Math.max(0, occupancy))} / ${formatTokenCount(windowTokens)}${formatCostSuffix(costUsd, showCost)}`;
 }

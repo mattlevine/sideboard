@@ -45,10 +45,10 @@ import {
   type RightPaneSession,
 } from '../lib/right-pane-memory';
 import { mergeAppendableArtifact } from '../lib/artifacts';
-import { forwardContextUsage } from '@sideboard/context-estimate';
+import { forwardOccupancyTokens, threadHasCompactedContext } from '@sideboard/context-estimate';
 import {
-  contextFillRatio,
   contextMeterTooltip,
+  occupancyFillRatio,
   resolveContextWindow,
   sumUsage,
   tabsContextLabel,
@@ -1294,18 +1294,32 @@ export function ThreadPanel({
     if (liveUsage) return liveUsage;
     for (let i = thread.messages.length - 1; i >= 0; i--) {
       const m = thread.messages[i];
-      if (m?.role === 'agent' && m.usage) {
-        return forwardContextUsage(m.usage, thread.messages);
-      }
+      if (m?.role === 'agent' && m.usage) return m.usage;
     }
     return null;
   }, [thread.messages, liveUsage]);
+  const forwardMessages = useMemo(() => {
+    if (!liveOutput && liveParts.length === 0 && !liveUsage) return thread.messages;
+    return [
+      ...thread.messages,
+      {
+        role: 'agent' as const,
+        text: liveOutput,
+        parts: liveParts,
+        ts: new Date().toISOString(),
+      },
+    ];
+  }, [thread.messages, liveOutput, liveParts, liveUsage]);
   const contextWindow = resolveContextWindow(thread.agent, thread.model);
-  const contextRatio = latestContextUsage
-    ? contextFillRatio(latestContextUsage, contextWindow)
-    : threadUsage
-      ? 0
+  const forwardOccupancy = useMemo(
+    () => forwardOccupancyTokens(forwardMessages, latestContextUsage, contextWindow),
+    [forwardMessages, latestContextUsage, contextWindow],
+  );
+  const contextRatio =
+    forwardOccupancy > 0 || latestContextUsage || threadUsage
+      ? occupancyFillRatio(forwardOccupancy, contextWindow)
       : null;
+  const contextCompacted = threadHasCompactedContext(forwardMessages);
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
 
@@ -1565,11 +1579,11 @@ export function ThreadPanel({
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
         usageTotalLabel={
-          threadUsage || latestContextUsage
+          contextRatio != null
             ? tabsContextLabel(
-                latestContextUsage,
+                forwardOccupancy,
                 contextWindow,
-                threadUsage,
+                threadUsage?.costUsd,
                 showCost,
               )
             : null
@@ -1577,6 +1591,8 @@ export function ThreadPanel({
         usageTotalTooltip={
           latestContextUsage
             ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                occupancy: forwardOccupancy,
+                compacted: contextCompacted,
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })
             : threadUsage
@@ -1585,8 +1601,10 @@ export function ThreadPanel({
         }
         contextRatio={contextRatio}
         contextTooltip={
-          latestContextUsage
+          latestContextUsage || forwardOccupancy > 0
             ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                occupancy: forwardOccupancy,
+                compacted: contextCompacted,
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })
             : undefined
@@ -1923,6 +1941,11 @@ export function ThreadPanel({
                       ts={m.ts}
                       durationMs={m.durationMs ?? fallbackDuration}
                       usage={m.usage}
+                      occupancyTokens={
+                        !showStreaming && i === lastAgentMessageIndex
+                          ? forwardOccupancy
+                          : undefined
+                      }
                       agent={thread.agent}
                       model={thread.model}
                       threadId={thread.id}
@@ -2017,6 +2040,7 @@ export function ThreadPanel({
                   streaming
                   startedAt={turnStartedAt}
                   usage={liveUsage ?? undefined}
+                  occupancyTokens={forwardOccupancy}
                   agent={thread.agent}
                   model={thread.model}
                   threadId={thread.id}

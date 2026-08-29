@@ -7,7 +7,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
 import type { FilePathLink } from '../lib/file-path-link';
@@ -32,6 +32,8 @@ interface Props {
   durationMs?: number;
   /** Token usage for this turn, when the agent CLI reports it. */
   usage?: TokenUsage;
+  /** Going-forward occupancy override (tabs/live meter — not billed turn Σ). */
+  occupancyTokens?: number;
   /** Used with usage for the context-fill ring (defaults to Claude-sized window). */
   agent?: AgentKind;
   model?: string | null;
@@ -327,6 +329,7 @@ export function AgentMessage({
   parts,
   durationMs,
   usage,
+  occupancyTokens,
   agent,
   model,
   startedAt,
@@ -353,9 +356,7 @@ export function AgentMessage({
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const diffAnchorRef = useRef<HTMLElement | null>(null);
   const userToggledPhases = useRef(new Set<number>());
-  const windowTokens = usage
-    ? resolveContextWindow(agent ?? 'claude', model)
-    : 0;
+  const windowTokens = resolveContextWindow(agent ?? 'claude', model);
 
   function openFileReference(link: FilePathLink) {
     setFileRef(link);
@@ -607,6 +608,7 @@ export function AgentMessage({
 
       {(durationLabel ||
         usage ||
+        occupancyTokens != null ||
         chips.length > 0 ||
         paneContents.length > 0 ||
         onFork ||
@@ -618,18 +620,44 @@ export function AgentMessage({
                 {durationLabel}
               </span>
             )}
-            {usage && (
-              <span className="msg-usage" title={usageTooltip(usage, { showCost })}>
+            {(usage || occupancyTokens != null) && (
+              <span
+                className="msg-usage"
+                title={
+                  usage
+                    ? contextMeterTooltip(usage, windowTokens, {
+                        occupancy: occupancyTokens,
+                      })
+                    : occupancyTokens != null
+                      ? contextMeterTooltip(null, windowTokens, { occupancy: occupancyTokens })
+                      : undefined
+                }
+              >
                 <ContextMeter
-                  ratio={contextFillRatio(usage, windowTokens)}
-                  title={contextMeterTooltip(usage, windowTokens)}
+                  ratio={
+                    occupancyTokens != null
+                      ? occupancyFillRatio(occupancyTokens, windowTokens)
+                      : usage
+                        ? contextFillRatio(usage, windowTokens)
+                        : 0
+                  }
+                  title={
+                    usage
+                      ? contextMeterTooltip(usage, windowTokens, {
+                          occupancy: occupancyTokens,
+                        })
+                      : undefined
+                  }
                   size={12}
                 />
                 {formatTokenCount(
-                  meterOccupancyTokens(usage, windowTokens) ?? totalTokens(usage),
+                  occupancyTokens ??
+                    (usage
+                      ? (meterOccupancyTokens(usage, windowTokens) ?? totalTokens(usage))
+                      : 0),
                 )}{' '}
                 tok
-                {formatCostSuffix(usage.costUsd, showCost)}
+                {formatCostSuffix(usage?.costUsd, showCost)}
               </span>
             )}
             <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>

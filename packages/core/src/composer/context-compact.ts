@@ -14,6 +14,7 @@ export {
   estimateOccupancyTokens,
   estimateThreadChars,
   forwardContextUsage,
+  forwardOccupancyTokens,
   threadHasCompactedContext,
 } from './context-estimate.js';
 

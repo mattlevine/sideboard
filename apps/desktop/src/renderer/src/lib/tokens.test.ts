@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billedUsageLabel, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, resolveContextWindow, sumUsage, tabsContextLabel, totalTokens, usageTooltip } from './tokens';
+import { billedUsageLabel, contextFillRatio, contextMeterTone, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, occupancyFillRatio, resolveContextWindow, sumUsage, tabsContextLabel, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -69,7 +69,7 @@ describe('contextMeterTooltip', () => {
     expect(contextMeterTooltip(usage, 1_000_000, { compacted: true })).toContain(
       'remaining after compression',
     );
-    expect(contextMeterTooltip(usage, 1_000_000)).toContain('next request input + cache');
+    expect(contextMeterTooltip(usage, 1_000_000)).toContain('next request (going-forward context)');
   });
 
   it('keeps the billed thread sum in the tooltip, not the occupancy label', () => {
@@ -96,20 +96,24 @@ describe('billedUsageLabel', () => {
 });
 
 describe('tabsContextLabel', () => {
-  it('shows occupancy against the fixed 1M window', () => {
-    const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 94_000 };
-    const billed = { inputTokens: 1_200_000, outputTokens: 200_000, cacheReadTokens: 3_200_000 };
-    expect(tabsContextLabel(usage, 1_000_000, billed, false)).toBe('94k / 1M');
+  it('shows going-forward occupancy against the fixed 1M window', () => {
+    expect(tabsContextLabel(94_000, 1_000_000)).toBe('94k / 1M');
+    expect(tabsContextLabel(94_000, 1_000_000, 1.23, true)).toBe('94k / 1M · $1.23');
   });
 
-  it('keeps / 1M when occupancy is a billed leak', () => {
-    const leak = {
-      inputTokens: 800_000,
-      outputTokens: 50_000,
-      cacheReadTokens: 1_600_000,
-      lastRequestTokens: 2_500_000,
-    };
-    expect(tabsContextLabel(leak, 1_000_000, leak, false)).toBe('2.5M tok / 1M');
+  it('does not put billed thread totals in the numerator', () => {
+    expect(tabsContextLabel(4_200, 1_000_000)).toBe('4.2k / 1M');
+    expect(tabsContextLabel(4_200, 1_000_000)).not.toContain('2.5');
+    expect(tabsContextLabel(4_200, 1_000_000)).not.toContain('4.6');
+  });
+});
+
+describe('contextMeterTone', () => {
+  it('warns and heats from occupancy fill, not from a zero/unknown ring', () => {
+    expect(contextMeterTone(0)).toBe('');
+    expect(contextMeterTone(occupancyFillRatio(400_000, 1_000_000))).toBe('');
+    expect(contextMeterTone(occupancyFillRatio(700_000, 1_000_000))).toBe('warn');
+    expect(contextMeterTone(occupancyFillRatio(900_000, 1_000_000))).toBe('hot');
   });
 });
 

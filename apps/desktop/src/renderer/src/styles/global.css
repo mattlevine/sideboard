@@ -2686,6 +2686,14 @@ body.resizing-panels webview {
   font-variant-numeric: tabular-nums;
 }
 
+.thread-meta.usage-cluster.warn .usage-total {
+  color: #e6b84d;
+}
+
+.thread-meta.usage-cluster.hot .usage-total {
+  color: var(--err, #e85d5d);
+}
+
 .thread-meta.usage-total {
   font-variant-numeric: tabular-nums;
   cursor: default;
@@ -2702,6 +2710,14 @@ body.resizing-panels webview {
 
 .context-meter-fill {
   stroke: var(--muted);
+}
+
+.context-meter.warn .context-meter-fill {
+  stroke: #e6b84d;
+}
+
+.context-meter.hot .context-meter-fill {
+  stroke: var(--err, #e85d5d);
 }
 
 .chat-tab-new-menu {
