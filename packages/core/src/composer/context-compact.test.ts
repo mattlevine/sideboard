@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Thread, ThreadMessage } from '../types/thread.js';
 import {
   applyCompaction,
+  applyForwardOccupancy,
   buildSessionSeed,
+  estimateOccupancyTokens,
   estimateThreadChars,
+  forwardContextUsage,
   lastRequestOccupancy,
   maybeCompactContext,
   shouldCompactContext,
@@ -188,6 +191,11 @@ describe('context compact', () => {
 
     expect(result.didCompact).toBe(true);
     expect(result.thread.sessionId).toBeNull();
+    const lastAgent = [...result.thread.messages].reverse().find((m) => m.role === 'agent');
+    expect(lastAgent?.usage?.lastRequestTokens).toBe(
+      estimateOccupancyTokens(result.thread.messages),
+    );
+    expect(lastAgent?.usage?.lastRequestTokens).toBeLessThan(800_000);
   });
 
   it('occupancy helpers read lastRequestTokens from the latest usage', () => {
@@ -201,5 +209,34 @@ describe('context compact', () => {
     expect(lastRequestOccupancy({ messages })).toBe(12_000);
     expect(shouldResetSessionForOccupancy({ messages }, 10_000)).toBe(true);
     expect(shouldResetSessionForOccupancy({ messages }, 20_000)).toBe(false);
+  });
+
+  it('forwardContextUsage caps the meter to remaining transcript after compression', () => {
+    const recent = fatThread(4, 200);
+    const messages = [
+      msg('summary', '- Prior work summarized'),
+      ...recent.slice(0, 3),
+      {
+        ...recent[3]!,
+        role: 'agent' as const,
+        usage: { inputTokens: 50_000, outputTokens: 20, lastRequestTokens: 820_000 },
+      },
+    ];
+    const forward = forwardContextUsage(messages[messages.length - 1]!.usage!, messages);
+    expect(forward?.lastRequestTokens).toBe(estimateOccupancyTokens(messages));
+    expect(forward!.lastRequestTokens!).toBeLessThan(820_000);
+  });
+
+  it('applyForwardOccupancy writes going-forward occupancy onto the last agent turn', () => {
+    const messages = [
+      msg('summary', '- Compacted'),
+      msg('user', 'continue'),
+      msg('agent', 'ok', {
+        usage: { inputTokens: 10, outputTokens: 2, lastRequestTokens: 900_000 },
+      }),
+    ];
+    const next = applyForwardOccupancy(messages);
+    expect(next[2]?.usage?.lastRequestTokens).toBe(estimateOccupancyTokens(next));
+    expect(next[2]?.usage?.lastRequestTokens).toBeLessThan(900_000);
   });
 });

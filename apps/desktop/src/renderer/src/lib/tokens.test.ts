@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
+import { contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -48,6 +48,25 @@ describe('resolveContextWindow', () => {
         resolveContextWindow('cursor', 'default', 346_000),
       ),
     ).toBeCloseTo(0.346);
+  });
+});
+
+describe('contextMeterTooltip', () => {
+  it('names remaining occupancy after compression', () => {
+    const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 12_000 };
+    expect(contextMeterTooltip(usage, 1_000_000, { compacted: true })).toContain(
+      'remaining after compression',
+    );
+    expect(contextMeterTooltip(usage, 1_000_000)).toContain('next request input + cache');
+  });
+
+  it('keeps the billed thread sum in the tooltip, not the label', () => {
+    const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 94_000 };
+    expect(contextOccupancyLabel(usage, 1_000_000)).toBe('94k / 1M');
+    expect(contextOccupancyLabel(usage, 1_000_000)).not.toContain('3.4');
+    expect(
+      contextMeterTooltip(usage, 1_000_000, { billedTotal: 3_400_000 }),
+    ).toContain('Thread billed Σ 3.4M');
   });
 });
 

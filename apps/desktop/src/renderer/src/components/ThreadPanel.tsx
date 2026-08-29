@@ -45,7 +45,8 @@ import {
   type RightPaneSession,
 } from '../lib/right-pane-memory';
 import { mergeAppendableArtifact } from '../lib/artifacts';
-import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextTokens, resolveContextWindow } from '../lib/tokens';
+import { forwardContextUsage, threadHasCompactedContext } from '@sideboard/context-estimate';
+import { formatTokenCount, formatCostSuffix, sumUsage, totalTokens, usageTooltip, contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { useLiveThread } from '../lib/live-paint-context';
 import { AgentMessage } from './AgentMessage';
@@ -1282,13 +1283,19 @@ export function ThreadPanel({
     return sumUsage([fromMessages ?? undefined, liveUsage]);
   }, [thread.messages, liveUsage]);
   const latestContextUsage = useMemo(() => {
+    // Live occupancy is the current request. After compression, idle meter
+    // must use remaining transcript — lastRequestTokens is still the peak.
     if (liveUsage) return liveUsage;
     for (let i = thread.messages.length - 1; i >= 0; i--) {
       const m = thread.messages[i];
-      if (m?.role === 'agent' && m.usage) return m.usage;
+      if (m?.role === 'agent' && m.usage) {
+        return forwardContextUsage(m.usage, thread.messages);
+      }
     }
     return null;
   }, [thread.messages, liveUsage]);
+  const contextCompacted =
+    !liveUsage && threadHasCompactedContext(thread.messages);
   const contextWindow = resolveContextWindow(
     thread.agent,
     thread.model,
@@ -1556,20 +1563,35 @@ export function ThreadPanel({
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
         usageTotalLabel={
-          threadUsage
-            ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${formatCostSuffix(
-                threadUsage.costUsd,
+          latestContextUsage
+            ? `${contextOccupancyLabel(latestContextUsage, contextWindow)}${formatCostSuffix(
+                latestContextUsage.costUsd,
                 showCost,
               )}`
-            : null
+            : threadUsage
+              ? `Σ ${formatTokenCount(totalTokens(threadUsage))} tok${formatCostSuffix(
+                  threadUsage.costUsd,
+                  showCost,
+                )}`
+              : null
         }
         usageTotalTooltip={
-          threadUsage ? `Thread total — ${usageTooltip(threadUsage, { showCost })}` : undefined
+          latestContextUsage
+            ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                compacted: contextCompacted,
+                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+              })
+            : threadUsage
+              ? `Thread total — ${usageTooltip(threadUsage, { showCost })}`
+              : undefined
         }
         contextRatio={contextRatio}
         contextTooltip={
           latestContextUsage
-            ? contextMeterTooltip(latestContextUsage, contextWindow)
+            ? contextMeterTooltip(latestContextUsage, contextWindow, {
+                compacted: contextCompacted,
+                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+              })
             : undefined
         }
         openMenu={

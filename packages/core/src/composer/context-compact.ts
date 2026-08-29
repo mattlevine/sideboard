@@ -1,6 +1,21 @@
 import { contextTokens } from '../agents/usage.js';
 import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
+import {
+  applyForwardOccupancy,
+  estimateMessageChars,
+  estimateThreadChars,
+} from './context-estimate.js';
 import { summarizeConversation } from './summarize.js';
+
+export {
+  applyForwardOccupancy,
+  CHARS_PER_CONTEXT_TOKEN,
+  estimateMessageChars,
+  estimateOccupancyTokens,
+  estimateThreadChars,
+  forwardContextUsage,
+  threadHasCompactedContext,
+} from './context-estimate.js';
 
 /**
  * Sideboard transcript budget before summarizing older turns for the board /
@@ -26,39 +41,6 @@ export interface CompactThresholds {
   keepRecentChars?: number;
   keepRecentMessages?: number;
   minMessages?: number;
-}
-
-export function estimateMessageChars(message: ThreadMessage): number {
-  let n = message.text.length + 16;
-  for (const part of message.parts ?? []) {
-    n += estimatePartChars(part);
-  }
-  return n;
-}
-
-function estimatePartChars(part: MessagePart): number {
-  switch (part.type) {
-    case 'text':
-    case 'thinking':
-      return part.text.length;
-    case 'tool': {
-      const input = part.input ? JSON.stringify(part.input) : '';
-      return (
-        part.name.length +
-        (part.description?.length ?? 0) +
-        (part.detail?.length ?? 0) +
-        (part.result?.length ?? 0) +
-        input.length +
-        32
-      );
-    }
-    default:
-      return 0;
-  }
-}
-
-export function estimateThreadChars(messages: ThreadMessage[]): number {
-  return messages.reduce((sum, m) => sum + estimateMessageChars(m), 0);
 }
 
 export function shouldCompactContext(
@@ -272,8 +254,13 @@ export async function maybeCompactContext(
     cwd: thread.worktreePath,
   });
 
-  const messages = applyCompaction(thread.messages, summary, thresholds);
+  let messages = applyCompaction(thread.messages, summary, thresholds);
   const resetSession = shouldResetSessionForOccupancy({ messages: thread.messages });
+  // Session reset reseeds from this transcript — persist going-forward occupancy
+  // so the meter and lastRequestOccupancy match the compressed context.
+  if (resetSession) {
+    messages = applyForwardOccupancy(messages);
+  }
   // Persist via caller (updateThread) — return the patched shape here.
   const next: Thread = {
     ...thread,

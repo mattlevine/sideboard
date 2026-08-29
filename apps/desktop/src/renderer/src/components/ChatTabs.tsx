@@ -41,7 +41,7 @@ interface Props {
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
   statusBadge?: string | null;
-  /** Compact thread-wide token usage total (e.g. "Σ 12.3k tok"). */
+  /** Next-request occupancy (e.g. "94k / 1M"), not the billed thread sum. */
   usageTotalLabel?: string | null;
   usageTotalTooltip?: string;
   /** 0–1 context fill from the latest turn; omit to hide the meter. */
@@ -350,7 +350,16 @@ export function ChatTabs({
       </div>
       <div className="chat-tabs-actions">
         {(usageTotalLabel || contextRatio != null) && (
-          <span className="thread-meta usage-cluster">
+          <span
+            className={`thread-meta usage-cluster${
+              contextRatio != null && contextRatio >= 0.85
+                ? ' hot'
+                : contextRatio != null && contextRatio >= 0.65
+                  ? ' warn'
+                  : ''
+            }`}
+            title={contextTooltip ?? usageTotalTooltip}
+          >
             {contextRatio != null && (
               <ContextMeter ratio={contextRatio} title={contextTooltip} />
             )}

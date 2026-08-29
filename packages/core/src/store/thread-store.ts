@@ -3,6 +3,7 @@ import {
   existsSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
   readdirSync,
@@ -176,7 +177,7 @@ export async function withThreadLock<T>(
 type ThreadListCache = {
   dir: string;
   byId: Map<string, Thread>;
-  listed: boolean;
+  mtimeMs: Map<string, number>;
 };
 
 let listCache: ThreadListCache | null = null;
@@ -184,9 +185,29 @@ let listCache: ThreadListCache | null = null;
 function cacheForDir(): ThreadListCache {
   const dir = threadsDir();
   if (!listCache || listCache.dir !== dir) {
-    listCache = { dir, byId: new Map(), listed: false };
+    listCache = { dir, byId: new Map(), mtimeMs: new Map() };
   }
   return listCache;
+}
+
+function fileMtimeMs(path: string): number | null {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+function rememberThread(thread: Thread, mtimeMs?: number): void {
+  const cache = cacheForDir();
+  cache.byId.set(thread.id, thread);
+  if (mtimeMs != null) cache.mtimeMs.set(thread.id, mtimeMs);
+}
+
+function forgetThread(id: string): void {
+  const cache = cacheForDir();
+  cache.byId.delete(id);
+  cache.mtimeMs.delete(id);
 }
 
 /** Drop the in-memory thread list (other-process writes, tests, store watcher). */
@@ -194,18 +215,19 @@ export function invalidateThreadListCache(): void {
   listCache = null;
 }
 
-function rememberThread(thread: Thread): void {
-  cacheForDir().byId.set(thread.id, thread);
-}
-
 export function readThread(id: string): Thread | null {
-  const cached = cacheForDir().byId.get(id);
-  if (cached) return cached;
   const path = threadFilePath(id);
-  if (!existsSync(path)) return null;
+  const mtimeMs = fileMtimeMs(path);
+  if (mtimeMs == null) {
+    forgetThread(id);
+    return null;
+  }
+  const cache = cacheForDir();
+  const cached = cache.byId.get(id);
+  if (cached && cache.mtimeMs.get(id) === mtimeMs) return cached;
   const raw = readFileSync(path, 'utf8');
   const thread = normalizeThread(JSON.parse(raw) as Thread);
-  rememberThread(thread);
+  rememberThread(thread, mtimeMs);
   return thread;
 }
 
@@ -215,7 +237,7 @@ export function writeThread(thread: Thread): void {
   const next = { ...thread, updatedAt: nowIso() };
   writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf8');
   renameSync(tmp, path);
-  rememberThread(next);
+  rememberThread(next, fileMtimeMs(path) ?? Date.now());
 }
 
 function idPath(id: string): string {
@@ -232,23 +254,20 @@ export function isThreadRecordFile(nameOrPath: string): boolean {
 
 export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {
   const cache = cacheForDir();
-  if (!cache.listed) {
-    const files = readdirSync(threadsDir()).filter(isThreadRecordFile);
-    const byId = new Map<string, Thread>();
-    for (const f of files) {
-      try {
-        const thread = normalizeThread(
-          JSON.parse(readFileSync(threadFilePath(f.replace(/\.json$/, '')), 'utf8')) as Thread,
-        );
-        if (typeof thread.id === 'string' && thread.id.length > 0) {
-          byId.set(thread.id, thread);
-        }
-      } catch {
-        // skip unreadable records
-      }
+  const files = readdirSync(threadsDir()).filter(isThreadRecordFile);
+  const seen = new Set<string>();
+  for (const f of files) {
+    const id = f.replace(/\.json$/, '');
+    if (!id) continue;
+    seen.add(id);
+    try {
+      readThread(id);
+    } catch {
+      // skip unreadable records
     }
-    cache.byId = byId;
-    cache.listed = true;
+  }
+  for (const id of [...cache.byId.keys()]) {
+    if (!seen.has(id)) forgetThread(id);
   }
   const threads = [...cache.byId.values()].sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt),
@@ -259,7 +278,7 @@ export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {
 }
 
 export function deleteThreadRecord(id: string): void {
-  cacheForDir().byId.delete(id);
+  forgetThread(id);
   const path = threadFilePath(id);
   if (existsSync(path)) unlinkSync(path);
   const lock = threadLockPath(id);

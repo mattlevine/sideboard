@@ -419,7 +419,10 @@ export class Orchestrator {
       if (thread.status === 'archived') continue;
       const handle = this.activeTurns.get(thread.id);
       if (handle) {
-        const pid = thread.agentPid;
+        // Only signal the handle we own. Disk `agentPid` can still be the
+        // previous turn's dead pid for a beat after spawn — killing on that
+        // would SIGTERM a live runner mid-thought.
+        const pid = handle.pid;
         if (typeof pid === 'number' && pid > 0 && !isPidAlive(pid)) {
           handle.kill();
         }
@@ -1478,7 +1481,9 @@ export class Orchestrator {
     const stopped = writeLiveStatus(thread.id, 'stopped') ?? readThread(thread.id) ?? thread;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
-      if (opts?.notifyParent !== false) {
+      // Idle stop (archive, leftover status) is not a mid-turn death.
+      // MCP force_stop / stop_thread pass notifyParent: false — the caller already knows.
+      if (inFlight && opts?.notifyParent !== false) {
         notifyParentOfChildHalt(stopped, 'stopped', (id, prompt) => this.send(id, prompt));
       }
     }
@@ -2471,7 +2476,7 @@ export class Orchestrator {
 
   private async archiveUnlocked(threadRef: string): Promise<Thread> {
     const thread = this.requireThread(threadRef);
-    this.stop(thread.id);
+    this.stop(thread.id, { notifyParent: false });
     this.releaseOrchestratorCaffeinate(thread);
     if (isGlobalThread(thread)) {
       const archived = setStatus(thread.id, 'archived');
@@ -2522,7 +2527,7 @@ export class Orchestrator {
     opts?: { deleteBranch?: boolean },
   ): Promise<void> {
     const thread = this.requireThread(threadRef);
-    this.stop(thread.id);
+    this.stop(thread.id, { notifyParent: false });
     this.releaseOrchestratorCaffeinate(thread);
     if (isGlobalThread(thread)) {
       deleteThreadRecord(thread.id);

@@ -3,12 +3,15 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import {
   createEmptyThread,
   readThread,
   writeThread,
 } from '../store/thread-store.js';
+import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { Orchestrator } from './orchestrator.js';
+import { resetChildHaltNotifications } from './child-halt.js';
 
 describe('Orchestrator.stop force-stop', () => {
   let dataDir: string;
@@ -16,6 +19,7 @@ describe('Orchestrator.stop force-stop', () => {
   beforeEach(() => {
     dataDir = mkdtempSync(join(tmpdir(), 'sideboard-stop-'));
     vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+    resetChildHaltNotifications();
   });
 
   afterEach(() => {
@@ -155,6 +159,86 @@ describe('Orchestrator.stop force-stop', () => {
     expect(stopped.status).toBe('stopped');
     expect(stopped.queue).toEqual([]);
     expect(internal.stoppedTurns.has(thread.id)).toBe(true);
+  });
+
+  function seedOrchChild() {
+    mkdirSync(join(dataDir, 'global'), { recursive: true });
+    mkdirSync(join(dataDir, 'wt'), { recursive: true });
+    const parent = createEmptyThread({
+      title: 'San Lorenzo',
+      sourceType: 'orchestration',
+      sourceRef: 'Coordinate',
+      branchName: 'global',
+      worktreePath: join(dataDir, 'global'),
+      repoPath: GLOBAL_WORKSPACE_ID,
+      agent: 'cursor',
+    });
+    writeThread(parent);
+    const child = createEmptyThread({
+      title: 'Review PR',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/review',
+      worktreePath: join(dataDir, 'wt'),
+      repoPath: join(dataDir, 'repo'),
+      agent: 'cursor',
+      parentThreadId: parent.id,
+    });
+    writeThread(child);
+    return { parent, child };
+  }
+
+  it('does not tell the parent that an idle stop was a mid-turn death', async () => {
+    const { parent, child } = seedOrchChild();
+    const orch = new Orchestrator();
+    const send = vi.spyOn(orch, 'send').mockResolvedValue(readThread(parent.id)!);
+    orch.stop(child.id);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('notifies the parent only when a live turn is force-stopped', async () => {
+    const { parent, child } = seedOrchChild();
+    const orch = new Orchestrator();
+    const send = vi.spyOn(orch, 'send').mockResolvedValue(readThread(parent.id)!);
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+    };
+    internal.activeTurns.set(child.id, {
+      pid: 1,
+      kill: () => undefined,
+      done: Promise.resolve({
+        exitCode: 143,
+        sessionId: null,
+        assistantText: '',
+        parts: [],
+        usage: null,
+      }),
+    });
+    orch.stop(child.id);
+    expect(send).toHaveBeenCalledOnce();
+    expect(String(send.mock.calls[0]?.[1])).toContain('stopped before finishing');
+  });
+
+  it('does not notify the parent when MCP force_stop already owns the interrupt', () => {
+    const { child } = seedOrchChild();
+    const orch = new Orchestrator();
+    const send = vi.spyOn(orch, 'send');
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+    };
+    internal.activeTurns.set(child.id, {
+      pid: 1,
+      kill: () => undefined,
+      done: Promise.resolve({
+        exitCode: 143,
+        sessionId: null,
+        assistantText: '',
+        parts: [],
+        usage: null,
+      }),
+    });
+    orch.stop(child.id, { notifyParent: false });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('does not sticky-mark when nothing is in flight', () => {

@@ -12,7 +12,7 @@ Desktop and npm are a different path (`pnpm release` in the README).
 
 ## When
 
-After changing `site/` or `apps/slack-relay/`. The human has to ask you to deploy — do not ship to Fly on a copy edit unless they said so.
+After changing `site/` or `apps/slack-relay/`. A **create a new release** request includes this deploy when those trees changed ([release skill](../../.claude/skills/release/SKILL.md)). Do not ship to Fly on a copy-edit-only turn unless they said so.
 
 ## Command
 

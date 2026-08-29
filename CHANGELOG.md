@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.139] - 2026-08-29
+
+### Fixed
+
+- Worktree agents no longer look like they “stopped mid-thought” when the parent archives them, or when the coordinator `force_stop`s to “resume.” Halt notices fire only for an unexpected in-flight death. A stale on-disk `agentPid` no longer SIGTERMs a live Cursor/Claude runner.
+
+## [0.1.138] - 2026-08-29
+
+### Fixed
+
+- Chat tabs-bar meter shows next-request occupancy (with warn/hot colors), not the billed thread Σ.
+- Orchestration `list_threads` / `get_thread` / `wait_for_turn` see live worktree status again (MCP no longer keeps a stale in-memory cache). `get_thread` lists child agents and last message text.
+
+### Changed
+
+- “Create a new release” always means Electron + build npms (human publishes) + README/marketing + commit/push + Fly deploy if the site changed.
+- Marketing homepage: crop the board shot flush to the window and place the worktree-chat shot after the three pillars.
+
+## [0.1.137] - 2026-08-29
+
+Desktop pack only; superseded by 0.1.138.
+
 ## [0.1.136] - 2026-08-28
 
 ### Fixed

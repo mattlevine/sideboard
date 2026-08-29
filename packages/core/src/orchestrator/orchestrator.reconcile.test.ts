@@ -128,6 +128,23 @@ describe('Orchestrator.reconcile reclaim', () => {
     drainSpy.mockRestore();
   });
 
+  it('does not SIGTERM a live handle when disk agentPid is a stale dead pid', () => {
+    const thread = seedRunning(999_999_999);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+    };
+    internal.activeTurns.set(thread.id, {
+      pid: process.pid,
+      kill,
+      done: new Promise(() => undefined),
+    });
+    orch.healStaleRunningTurns();
+    expect(kill).not.toHaveBeenCalled();
+    expect(readThread(thread.id)?.status).toBe('running');
+  });
+
   it('adoptPersistedQueues reclaims disk-running turns with a dead pid', () => {
     const thread = seedRunning(999_999_999);
     const orch = new Orchestrator();

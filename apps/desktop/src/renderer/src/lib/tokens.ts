@@ -127,8 +127,23 @@ export function contextFillRatio(
 export function contextMeterTooltip(
   usage: TokenUsage,
   windowTokens: number,
+  opts?: { compacted?: boolean; billedTotal?: number },
 ): string {
   const used = contextTokens(usage);
   const pct = Math.round(contextFillRatio(usage, windowTokens) * 100);
-  return `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — last request input + cache`;
+  const basis = opts?.compacted
+    ? 'remaining after compression'
+    : 'next request input + cache';
+  const bits = [
+    `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — ${basis}`,
+  ];
+  if (opts?.billedTotal != null && opts.billedTotal > 0) {
+    bits.push(`Thread billed Σ ${formatTokenCount(opts.billedTotal)}`);
+  }
+  return bits.join(' · ');
+}
+
+/** Tabs-bar label: occupancy / window, never the billed thread sum. */
+export function contextOccupancyLabel(usage: TokenUsage, windowTokens: number): string {
+  return `${formatTokenCount(contextTokens(usage))} / ${formatTokenCount(windowTokens)}`;
 }
