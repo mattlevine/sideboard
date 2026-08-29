@@ -23,6 +23,7 @@ import {
   mcpWaitForTurnTimeoutMs,
 } from './wait-for-turn.js';
 import { readTurnLive } from '../store/turn-live.js';
+import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
 import { registerSlackTools } from './slack-tools.js';
 import { registerAbleTimeTools } from './abletime-tools.js';
 import { registerLinearTools } from './linear-tools.js';
@@ -269,7 +270,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_threads',
-    'List Sideboard threads across all workspaces (one summary line each — token-frugal). Each line ends with sideboard://thread/<id> — use that URL in markdown links so the UI can open the chat.',
+    'List Sideboard threads across all workspaces (one summary line each — token-frugal). Includes parent id, last message preview, and live progress so you can see worktree children. Each line ends with sideboard://thread/<id> — use that URL in markdown links so the UI can open the chat.',
     {},
     async () => {
       const threads = orch.getThreads(true);
@@ -282,8 +283,12 @@ export async function startMcpServer(): Promise<void> {
           t.status === 'running' || t.status === 'queued'
             ? readTurnLive(t.id)
             : null;
+        const parent = t.parentThreadId ? `  parent:${t.parentThreadId.slice(0, 8)}` : '';
+        const preview = lastMessagePreview(t.messages, 80);
+        const previewBit = preview ? `  ${preview}` : '';
+        const err = t.lastError ? `  error:${t.lastError.replace(/\s+/g, ' ').slice(0, 60)}` : '';
         const progress = live?.summary ? `  ${live.summary}` : '';
-        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}  sideboard://thread/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
+        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${err}  sideboard://thread/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
       });
       return {
         content: [{ type: 'text', text: lines.join('\n') || '(no threads)' }],
@@ -353,7 +358,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_thread',
-    'Get a compact thread summary by id/ref. While running, includes progress (last tool/thinking) and lastActivityAt. Includes usage (thread billed token + costUsd totals when providers reported cost) and lastTurnUsage.',
+    'Get a compact thread summary by id/ref. Includes last message preview, parentThreadId, and child worktree threads (status + lastText). While running, includes progress (last tool/thinking) and lastActivityAt. Includes usage (thread billed token + costUsd totals when providers reported cost) and lastTurnUsage.',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
@@ -375,8 +380,11 @@ export async function startMcpServer(): Promise<void> {
         branchName: t.branchName,
         worktreePath: t.worktreePath,
         sessionId: t.sessionId,
+        parentThreadId: t.parentThreadId,
+        children: childThreadRefs(t.id, orch.getThreads(false)),
         queueLength: t.queue.length,
         messageCount: t.messages.length,
+        lastText: lastMessagePreview(t.messages, 240),
         devPort: t.devPort,
         prUrl: t.prUrl,
         lastError: t.lastError ?? null,
