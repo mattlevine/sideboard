@@ -34,7 +34,7 @@ CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 | Slack Marketplace / Public Distribution | [slack-marketplace.md](slack-marketplace.md) |
 | Marketing site | `site/` — same Fly app as the relay; [deploy.md](deploy.md) |
 | Git worktrees / land | `packages/core/src/git/`, `packages/core/src/land/` |
-| Process skills | `packages/core/src/skills/` (discovery), `.claude/skills/` (committed guides) |
+| Process skills | `packages/core/src/skills/` (discovery + bundled `/long-running`), `.claude/skills/` (committed guides) |
 
 Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm dev`) before expecting the app to pick them up. The renderer may `import type` from `@sideboard-ai/core` but must not import values from the core barrel (that pulls Node `fs` into Vite). Value helpers go through `@sideboard/*` aliases in `apps/desktop/electron.vite.config.ts`.
 
@@ -71,3 +71,5 @@ Desktop `predev` builds core. After core changes, rebuild core (or restart `pnpm
 Recurring process guides are **Claude Code project skills** at `.claude/skills/<name>/SKILL.md` (committed). Sideboard discovers that folder (and `.cursor/skills`, legacy `.sideboard/skills`, …) for composer `/name` expand. Native Claude Code and `attach` load `.claude/skills` without Sideboard. New skills must not be written only under `.sideboard/skills`. The worktree playbook (`formatProcessGuideDirective`) and orchestrator playbook state this; the stock Review skill (`.claude/skills/review/SKILL.md`, seeded on worktree setup when missing) asks reviewers to propose a sentence for that skill when a missing rule will recur. Legacy `.sideboard/review.md` is copied into the skill on first setup.
 
 This repo ships [`.claude/skills/graph-engineering/SKILL.md`](../../.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`) — the method for fan-out / batch work. `.cursor/skills/graph-engineering` is a symlink so Cursor sees the same file. `AGENTS.md` / `CLAUDE.md` point at it for Codex and OpenCode.
+
+`/long-running` is a **Sideboard product skill** (`packages/core/src/skills/bundled/long-running.ts`). Discovery always includes it (`source: bundled`) so every worktree composer and agent can expand it — not only checkouts that committed `.claude/skills/long-running`. The worktree playbook (`formatLongRunningDirective`) and a per-turn reminder inject the detach helper path (`scripts/detached-job.js` in this repo; packaged extraResources `sideboard-mcp/scripts/detached-job.js`). Workspace / user / CLI skills with the same command still win. This repo’s [`.claude/skills/long-running/SKILL.md`](../../.claude/skills/long-running/SKILL.md) keeps Mac-release notes on top of the product method.

@@ -5,6 +5,7 @@ import {
   isPlaceholderBranch,
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
+import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
 import type { GithubGitAuthMode } from '../store/app-settings.js';
 import type { AgentKind, Thread } from '../types/thread.js';
 
@@ -140,12 +141,38 @@ export function formatWorktreeReminder(): string {
 export function formatProcessGuideDirective(): string {
   return [
     'Process guides (recurring work only):',
+    '- Long jobs (pack, test, deploy, anything that may run more than ~30s): Sideboard always provides `/long-running`. Detach and wait — do not ask the human to poll.',
     '- If `.claude/skills/graph-engineering/SKILL.md` exists, follow it (`/graph-engineering`) for migrations, ports, batch fixes, and other fan-out. Judge first; state on disk; grow the rulebook; do not patch around it.',
     '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill). Sideboard `/name`, Claude Code, and `attach` all load that path. Do not leave the method only in chat.',
     '- Merge-readiness notes: create or edit `.claude/skills/review/SKILL.md` and commit it. That file is allowed. Do not use `.sideboard/review.md` for new notes (legacy; setup copies it into the skill).',
     '- Do not write new skills under `.sideboard/skills/` (that folder only — other `.sideboard/` files such as settings.toml are fine). Point Codex/OpenCode at the Claude skill from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.',
     '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
   ].join('\n');
+}
+
+/**
+ * How to keep a long shell job alive across Sideboard turn interrupts.
+ * Injected on every fresh worktree session; reminder repeats the helper path
+ * because CLI `--resume` drops cachedPrefix.
+ */
+export function formatLongRunningDirective(opts?: { scriptPath?: string | null }): string {
+  const invoke = formatDetachedJobInvoke(opts?.scriptPath);
+  return [
+    'Long-running jobs (mandatory when a command may run more than ~30s):',
+    'A Sideboard worktree turn SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted. `block_until_ms: 0` is not enough. Do not ask the human to poll.',
+    `Helper (same tool as \`scripts/detached-job.js\` when that file exists in the worktree): \`${invoke}\``,
+    `- Start once: \`${invoke} start <id> -- <command> [args...]\` (cwd = this worktree). If JSON says already-running, do not start again.`,
+    '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running` — the side column is the live view.',
+    `- Loop \`${invoke} wait <id>\` (returns in ~45s). stillRunning → present the same id with \`content=delta\` only → wait again. Do not resend the full log or HTML.`,
+    '- ok → finish the task. failed → read the log, fix, start once.',
+    'State: `.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
+  ].join('\n');
+}
+
+/** Short long-job line on every worktree turn (survives CLI resume). */
+export function formatLongRunningReminder(opts?: { scriptPath?: string | null }): string {
+  const invoke = formatDetachedJobInvoke(opts?.scriptPath);
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait, present_artifact type=log (delta). Do not ask the human to poll.`;
 }
 
 /**

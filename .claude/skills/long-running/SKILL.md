@@ -9,11 +9,15 @@ description: >-
 
 # Long-running jobs
 
+Sideboard ships this method to **every** worktree agent (`/long-running` is a product skill). This repo copy adds Mac-release notes below. A workspace skill with the same name wins over the bundled copy.
+
 A Sideboard or Cursor **worktree turn** SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted. `block_until_ms: 0` is not enough — the child stays in that group.
 
 Do **not** ask the human to check back. Detach, then **wait** in 45s slices (same idea as MCP `wait_for_turn`) until `stillRunning` is false.
 
 ## Tool
+
+Prefer the helper path from the Sideboard playbook (absolute `node "…" start`). In this repo, `scripts/detached-job.js` is the same file.
 
 ```bash
 # Start (exits in ~1s; job survives this turn)

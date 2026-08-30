@@ -37,4 +37,4 @@ If you only need a TUI/dashboard over `claude`/`codex` worktrees, a thinner clon
 
 Those tools version **deterministic multi-agent pipelines** in YAML. Sideboard orchestrates **live coding sessions** in git worktrees. Related category name; different job.
 
-Recurring *method* still belongs on disk — as a committed Claude Code skill (`.claude/skills/<name>/SKILL.md`), not a locked DAG. Sideboard `/name`, Claude Code, and `attach` load the same file. Exploratory fleet work stays a loop; fan-out that will repeat earns a skill. This repo’s method skill is [`/graph-engineering`](../.claude/skills/graph-engineering/SKILL.md). See [Process skills](../README.md#process-skills).
+Recurring *method* still belongs on disk — as a committed Claude Code skill (`.claude/skills/<name>/SKILL.md`), not a locked DAG. Sideboard `/name`, Claude Code, and `attach` load the same file. Exploratory fleet work stays a loop; fan-out that will repeat earns a skill. This repo’s method skill is [`/graph-engineering`](../.claude/skills/graph-engineering/SKILL.md). Sideboard also ships `/long-running` to every worktree agent (product skill). See [Process skills](../README.md#process-skills).

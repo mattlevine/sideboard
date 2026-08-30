@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/long-running` is a Sideboard product skill for every worktree agent (not only this repo). Fresh sessions get the detach-and-wait playbook; each turn repeats the helper path. Packaged apps ship `scripts/detached-job.js` next to Sideboard MCP.
+
 ## [0.1.140] - 2026-08-29
 
 ### Added

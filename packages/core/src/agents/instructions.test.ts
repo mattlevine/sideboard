@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   formatArtifactDirective,
+  formatLongRunningDirective,
+  formatLongRunningReminder,
   formatProcessGuideDirective,
   formatRenameBranchDirective,
   formatUiReminder,
@@ -47,10 +49,37 @@ describe('formatUiReminder', () => {
   });
 });
 
+describe('formatLongRunningDirective', () => {
+  it('tells every worktree agent to detach, wait, and log', () => {
+    const text = formatLongRunningDirective({
+      scriptPath: '/abs/detached-job.js',
+    });
+    expect(text).toMatch(/Long-running jobs/);
+    expect(text).toContain('node "/abs/detached-job.js"');
+    expect(text).toMatch(/start <id>/);
+    expect(text).toMatch(/present_artifact/);
+    expect(text).toMatch(/type=log/);
+    expect(text).toMatch(/\/long-running/);
+    expect(text).toMatch(/Do not ask the human to poll/);
+  });
+});
+
+describe('formatLongRunningReminder', () => {
+  it('repeats the helper path so resume still works', () => {
+    const text = formatLongRunningReminder({
+      scriptPath: '/abs/detached-job.js',
+    });
+    expect(text).toContain('node "/abs/detached-job.js"');
+    expect(text).toMatch(/present_artifact type=log/);
+    expect(text).toMatch(/Do not ask the human to poll/);
+  });
+});
+
 describe('formatProcessGuideDirective', () => {
   it('sends new skills to .claude/skills so native agents see them', () => {
     const text = formatProcessGuideDirective();
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
+    expect(text).toMatch(/\/long-running/);
     expect(text).toMatch(/graph-engineering/);
     expect(text).toMatch(/\/graph-engineering/);
     expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);
@@ -114,6 +143,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Git authentication \(Settings → Git mode: auto\)/);
     expect(text).not.toMatch(/GitHub app/i);
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
+    expect(text).toMatch(/\/long-running/);
     expect(text).toMatch(/graph-engineering/);
     expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);
     expect(text).toMatch(/Skip a guide for a one-off/);

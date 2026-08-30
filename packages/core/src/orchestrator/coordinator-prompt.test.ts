@@ -167,6 +167,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('ask_user');
       expect(claude).toMatch(/status stopped or broken/);
       expect(claude).toContain('.claude/skills/');
+      expect(claude).toContain('/long-running');
       expect(claude).toContain('graph-engineering');
       expect(claude).toContain('/graph-engineering');
       expect(claude).toMatch(/Do not use `\.sideboard\/skills\//);

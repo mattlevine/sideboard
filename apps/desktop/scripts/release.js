@@ -273,14 +273,16 @@ if (doDesktop) {
       appResources,
       'sideboard-mcp/node_modules/@modelcontextprotocol/sdk/package.json',
     );
+    const mcpDetached = path.join(appResources, 'sideboard-mcp/scripts/detached-job.js');
     if (
       !fs.existsSync(mcpEntry) ||
       !fs.existsSync(mcpCli) ||
       !fs.existsSync(mcpSqlite) ||
-      !fs.existsSync(mcpSdk)
+      !fs.existsSync(mcpSdk) ||
+      !fs.existsSync(mcpDetached)
     ) {
       throw new Error(
-        'Packaged extraResources sideboard-mcp is incomplete (run-stdio, CLI, sqlite, or MCP SDK missing). Aborting release.',
+        'Packaged extraResources sideboard-mcp is incomplete (run-stdio, CLI, sqlite, MCP SDK, or detached-job missing). Aborting release.',
       );
     }
   console.log('✅ Verified extraResources sideboard-mcp');

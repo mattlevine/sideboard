@@ -98,7 +98,7 @@ pnpm release patch mac       # desktop GitHub Release only
 pnpm release patch all never # dry-run / local artifacts
 ```
 
-Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run`, loop `wait`, and `present_artifact` `type=log` with `content=delta`. Same wait tool for any long job: [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md).
+Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run`, loop `wait`, and `present_artifact` `type=log` with `content=delta`. Same wait tool for any long job: `/long-running` (Sideboard ships this to every worktree agent; this repo also has [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md)).
 
 After `npm i -g @sideboard-ai/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 
@@ -518,6 +518,8 @@ When the same shape of work will happen again, write a Claude Code project skill
 - After merge to the default branch, **new worktrees inherit** the file. Existing siblings need an update from that branch.
 
 This repo’s method skill is [`.claude/skills/graph-engineering/SKILL.md`](.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`): judge first, state on disk, grow the rulebook, blind review, fix the process not the instances. A Cursor symlink lives at `.cursor/skills/graph-engineering`. Type `/graph-engineering` in the Sideboard composer to attach it.
+
+`/long-running` is a **Sideboard product skill** — every worktree agent gets the detach-and-wait playbook (and the helper ships with the app). A committed `.claude/skills/long-running` in a repo still wins if you want to customize it.
 
 Older threads that already point at a repo-local path keep working; new threads always use the home-dir (or configured) root.
 

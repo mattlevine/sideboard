@@ -63,6 +63,11 @@ export * from './hook/convention-setup.js';
 export * from './hook/cursor-worktrees.js';
 export * from './diff/diff.js';
 export * from './skills/discover.js';
+export * from './skills/detached-job-path.js';
+export {
+  BUNDLED_LONG_RUNNING_PATH,
+  LONG_RUNNING_SKILL_COMMAND,
+} from './skills/bundled/long-running.js';
 export * from './composer/expand.js';
 export * from './composer/diff-comment.js';
 export * from './composer/stage-files.js';
