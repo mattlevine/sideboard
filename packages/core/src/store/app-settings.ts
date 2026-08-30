@@ -29,7 +29,7 @@ const DEFAULT_AGENTS = new Set<AgentKind>([
 ]);
 
 /**
- * Account-level defaults for Create / new chat tabs (Settings → Account).
+ * App-level defaults for Create / new chat tabs (Settings → Agents).
  * Omitted fields fall back to Claude + Auto + High thinking at runtime.
  */
 export interface DefaultsAppSettings {
@@ -111,7 +111,7 @@ export const GITHUB_GIT_AUTH_MODES = ['auto', 'gh', 'ssh', 'token'] as const;
 export interface IntegrationsSettings {
   /** Linear personal API key (https://linear.app/settings/api). Fallback when OAuth is unused. */
   linearApiKey?: string;
-  /** Linear OAuth access token (Account → Linear → Connect via browser). */
+  /** Linear OAuth access token (Settings → Issues → Linear → Connect via browser). */
   linearAccessToken?: string;
   /** Linear OAuth refresh token (rotated on each refresh). */
   linearRefreshToken?: string;
@@ -130,7 +130,7 @@ export interface IntegrationsSettings {
    * When the preferred tracker is not connected, runtime falls back to GitHub Issues.
    */
   issueSource?: IssueSource;
-  /** Slack app Client ID for browser OAuth (Account → Slack). */
+  /** Slack app Client ID for browser OAuth (Settings → Remote → Slack). */
   slackClientId?: string;
   /** Slack app Client Secret for browser OAuth. */
   slackClientSecret?: string;
@@ -164,6 +164,26 @@ export interface IntegrationsSettings {
   abletimeHost?: string;
   /** Display name of the connected AbleTime user (non-secret). */
   abletimeViewerName?: string;
+  /** Vercel personal token (vaulted). Injected as VERCEL_TOKEN. */
+  vercelToken?: string;
+  /** Display name of the connected Vercel user (non-secret). */
+  vercelViewerName?: string;
+  /** Supabase personal access token (vaulted). Injected as SUPABASE_ACCESS_TOKEN. */
+  supabaseAccessToken?: string;
+  /** Display name of the connected Supabase org (non-secret). */
+  supabaseViewerName?: string;
+  /** PostHog personal API key (vaulted). Injected as POSTHOG_PERSONAL_API_KEY. */
+  posthogPersonalApiKey?: string;
+  /** PostHog API host (default https://us.posthog.com). */
+  posthogHost?: string;
+  /** Display name of the connected PostHog user (non-secret). */
+  posthogViewerName?: string;
+  /** Sentry auth token (vaulted). Injected as SENTRY_AUTH_TOKEN. */
+  sentryAuthToken?: string;
+  /** Sentry API host (default https://sentry.io). */
+  sentryHost?: string;
+  /** Display name of the connected Sentry org (non-secret). */
+  sentryViewerName?: string;
 }
 
 /**
@@ -260,7 +280,7 @@ export interface AppSettings {
   brightsy: BrightsyHarnessSettings;
   /** GitHub / Linear connections and issue-source preference. */
   integrations: IntegrationsSettings;
-  /** Default agent + model for new chats (Settings → Account). */
+  /** Default agent + model for new chats (Settings → Agents). */
   defaults: DefaultsAppSettings;
   /** Power-user / Conductor-style advanced preferences. */
   advanced: AdvancedAppSettings;
@@ -277,6 +297,10 @@ export type PublicIntegrationsSettings = Omit<
   | 'slackAppToken'
   | 'githubPat'
   | 'abletimeAccessToken'
+  | 'vercelToken'
+  | 'supabaseAccessToken'
+  | 'posthogPersonalApiKey'
+  | 'sentryAuthToken'
 > & {
   /** True when Linear is connected (OAuth or API key). */
   hasLinearApiKey: boolean;
@@ -287,7 +311,27 @@ export type PublicIntegrationsSettings = Omit<
   hasGithubPat: boolean;
   /** True when an AbleTime personal access token is stored. */
   hasAbleTimeToken: boolean;
+  hasVercelToken: boolean;
+  hasSupabaseToken: boolean;
+  hasPosthogToken: boolean;
+  hasSentryToken: boolean;
 };
+
+/** Renderer / empty-state flags (no token values). */
+export function emptyPublicIntegrations(): PublicIntegrationsSettings {
+  return {
+    hasLinearApiKey: false,
+    hasLinearOAuth: false,
+    hasSlackClientSecret: false,
+    hasSlackAppToken: false,
+    hasGithubPat: false,
+    hasAbleTimeToken: false,
+    hasVercelToken: false,
+    hasSupabaseToken: false,
+    hasPosthogToken: false,
+    hasSentryToken: false,
+  };
+}
 
 /** Settings payload for the desktop UI. Secret values are omitted. */
 export type PublicAppSettings = Omit<AppSettings, 'integrations'> & {
@@ -314,6 +358,10 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   const slackAppToken = integrations.slackAppToken;
   const githubPat = integrations.githubPat;
   const abletimeAccessToken = integrations.abletimeAccessToken;
+  const vercelToken = integrations.vercelToken;
+  const supabaseAccessToken = integrations.supabaseAccessToken;
+  const posthogPersonalApiKey = integrations.posthogPersonalApiKey;
+  const sentryAuthToken = integrations.sentryAuthToken;
   delete integrations.linearApiKey;
   delete integrations.linearAccessToken;
   delete integrations.linearRefreshToken;
@@ -322,6 +370,10 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   delete integrations.slackAppToken;
   delete integrations.githubPat;
   delete integrations.abletimeAccessToken;
+  delete integrations.vercelToken;
+  delete integrations.supabaseAccessToken;
+  delete integrations.posthogPersonalApiKey;
+  delete integrations.sentryAuthToken;
   return {
     ...settings,
     environment,
@@ -333,6 +385,10 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
       hasSlackAppToken: Boolean(slackAppToken?.trim()),
       hasGithubPat: Boolean(githubPat?.trim()),
       hasAbleTimeToken: Boolean(abletimeAccessToken?.trim()),
+      hasVercelToken: Boolean(vercelToken?.trim()),
+      hasSupabaseToken: Boolean(supabaseAccessToken?.trim()),
+      hasPosthogToken: Boolean(posthogPersonalApiKey?.trim()),
+      hasSentryToken: Boolean(sentryAuthToken?.trim()),
     },
   };
 }
@@ -492,6 +548,46 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (typeof source.abletimeViewerName === 'string') {
     const name = source.abletimeViewerName.trim().slice(0, 120);
     if (name) out.abletimeViewerName = name;
+  }
+  if (typeof source.vercelToken === 'string') {
+    const token = source.vercelToken.trim();
+    if (token) out.vercelToken = token;
+  }
+  if (typeof source.vercelViewerName === 'string') {
+    const name = source.vercelViewerName.trim().slice(0, 120);
+    if (name) out.vercelViewerName = name;
+  }
+  if (typeof source.supabaseAccessToken === 'string') {
+    const token = source.supabaseAccessToken.trim();
+    if (token) out.supabaseAccessToken = token;
+  }
+  if (typeof source.supabaseViewerName === 'string') {
+    const name = source.supabaseViewerName.trim().slice(0, 120);
+    if (name) out.supabaseViewerName = name;
+  }
+  if (typeof source.posthogPersonalApiKey === 'string') {
+    const key = source.posthogPersonalApiKey.trim();
+    if (key) out.posthogPersonalApiKey = key;
+  }
+  if (typeof source.posthogHost === 'string') {
+    const host = source.posthogHost.trim();
+    if (host) out.posthogHost = host;
+  }
+  if (typeof source.posthogViewerName === 'string') {
+    const name = source.posthogViewerName.trim().slice(0, 120);
+    if (name) out.posthogViewerName = name;
+  }
+  if (typeof source.sentryAuthToken === 'string') {
+    const token = source.sentryAuthToken.trim();
+    if (token) out.sentryAuthToken = token;
+  }
+  if (typeof source.sentryHost === 'string') {
+    const host = source.sentryHost.trim();
+    if (host) out.sentryHost = host;
+  }
+  if (typeof source.sentryViewerName === 'string') {
+    const name = source.sentryViewerName.trim().slice(0, 120);
+    if (name) out.sentryViewerName = name;
   }
   return out;
 }
@@ -680,6 +776,10 @@ function diskHoldsSecrets(disk: AppSettings): boolean {
       disk.integrations.slackAppToken ||
       disk.integrations.githubPat ||
       disk.integrations.abletimeAccessToken ||
+      disk.integrations.vercelToken ||
+      disk.integrations.supabaseAccessToken ||
+      disk.integrations.posthogPersonalApiKey ||
+      disk.integrations.sentryAuthToken ||
       Object.keys(disk.environment).length > 0,
   );
 }
@@ -712,6 +812,18 @@ function mergeVault(disk: AppSettings): AppSettings {
   if (vault.abletimeAccessToken && !integrations.abletimeAccessToken) {
     integrations.abletimeAccessToken = vault.abletimeAccessToken;
   }
+  if (vault.vercelToken && !integrations.vercelToken) {
+    integrations.vercelToken = vault.vercelToken;
+  }
+  if (vault.supabaseAccessToken && !integrations.supabaseAccessToken) {
+    integrations.supabaseAccessToken = vault.supabaseAccessToken;
+  }
+  if (vault.posthogPersonalApiKey && !integrations.posthogPersonalApiKey) {
+    integrations.posthogPersonalApiKey = vault.posthogPersonalApiKey;
+  }
+  if (vault.sentryAuthToken && !integrations.sentryAuthToken) {
+    integrations.sentryAuthToken = vault.sentryAuthToken;
+  }
   return { ...disk, environment, integrations };
 }
 
@@ -725,6 +837,10 @@ function persistSplit(settings: AppSettings): void {
   const slackAppToken = integrations.slackAppToken;
   const githubPat = integrations.githubPat;
   const abletimeAccessToken = integrations.abletimeAccessToken;
+  const vercelToken = integrations.vercelToken;
+  const supabaseAccessToken = integrations.supabaseAccessToken;
+  const posthogPersonalApiKey = integrations.posthogPersonalApiKey;
+  const sentryAuthToken = integrations.sentryAuthToken;
   delete integrations.linearApiKey;
   delete integrations.linearAccessToken;
   delete integrations.linearRefreshToken;
@@ -733,6 +849,10 @@ function persistSplit(settings: AppSettings): void {
   delete integrations.slackAppToken;
   delete integrations.githubPat;
   delete integrations.abletimeAccessToken;
+  delete integrations.vercelToken;
+  delete integrations.supabaseAccessToken;
+  delete integrations.posthogPersonalApiKey;
+  delete integrations.sentryAuthToken;
   writePrivateFile(
     appSettingsPath(),
     `${JSON.stringify({ ...settings, environment: {}, integrations }, null, 2)}\n`,
@@ -746,6 +866,10 @@ function persistSplit(settings: AppSettings): void {
     slackAppToken,
     githubPat,
     abletimeAccessToken,
+    vercelToken,
+    supabaseAccessToken,
+    posthogPersonalApiKey,
+    sentryAuthToken,
     environment: settings.environment,
   });
 }
@@ -881,6 +1005,16 @@ export function updateIntegrationsSettings(
     abletimeAccessToken?: string | null;
     abletimeHost?: string | null;
     abletimeViewerName?: string | null;
+    vercelToken?: string | null;
+    vercelViewerName?: string | null;
+    supabaseAccessToken?: string | null;
+    supabaseViewerName?: string | null;
+    posthogPersonalApiKey?: string | null;
+    posthogHost?: string | null;
+    posthogViewerName?: string | null;
+    sentryAuthToken?: string | null;
+    sentryHost?: string | null;
+    sentryViewerName?: string | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -991,6 +1125,80 @@ export function updateIntegrationsSettings(
       integrations.abletimeViewerName = patch.abletimeViewerName.trim().slice(0, 120);
     }
   }
+  if ('vercelToken' in patch) {
+    if (patch.vercelToken == null || patch.vercelToken.trim() === '') {
+      delete integrations.vercelToken;
+      delete integrations.vercelViewerName;
+    } else {
+      integrations.vercelToken = patch.vercelToken.trim();
+    }
+  }
+  if ('vercelViewerName' in patch) {
+    if (patch.vercelViewerName == null || patch.vercelViewerName.trim() === '') {
+      delete integrations.vercelViewerName;
+    } else {
+      integrations.vercelViewerName = patch.vercelViewerName.trim().slice(0, 120);
+    }
+  }
+  if ('supabaseAccessToken' in patch) {
+    if (patch.supabaseAccessToken == null || patch.supabaseAccessToken.trim() === '') {
+      delete integrations.supabaseAccessToken;
+      delete integrations.supabaseViewerName;
+    } else {
+      integrations.supabaseAccessToken = patch.supabaseAccessToken.trim();
+    }
+  }
+  if ('supabaseViewerName' in patch) {
+    if (patch.supabaseViewerName == null || patch.supabaseViewerName.trim() === '') {
+      delete integrations.supabaseViewerName;
+    } else {
+      integrations.supabaseViewerName = patch.supabaseViewerName.trim().slice(0, 120);
+    }
+  }
+  if ('posthogPersonalApiKey' in patch) {
+    if (patch.posthogPersonalApiKey == null || patch.posthogPersonalApiKey.trim() === '') {
+      delete integrations.posthogPersonalApiKey;
+      delete integrations.posthogViewerName;
+    } else {
+      integrations.posthogPersonalApiKey = patch.posthogPersonalApiKey.trim();
+    }
+  }
+  if ('posthogHost' in patch) {
+    if (patch.posthogHost == null || patch.posthogHost.trim() === '') {
+      delete integrations.posthogHost;
+    } else {
+      integrations.posthogHost = patch.posthogHost.trim();
+    }
+  }
+  if ('posthogViewerName' in patch) {
+    if (patch.posthogViewerName == null || patch.posthogViewerName.trim() === '') {
+      delete integrations.posthogViewerName;
+    } else {
+      integrations.posthogViewerName = patch.posthogViewerName.trim().slice(0, 120);
+    }
+  }
+  if ('sentryAuthToken' in patch) {
+    if (patch.sentryAuthToken == null || patch.sentryAuthToken.trim() === '') {
+      delete integrations.sentryAuthToken;
+      delete integrations.sentryViewerName;
+    } else {
+      integrations.sentryAuthToken = patch.sentryAuthToken.trim();
+    }
+  }
+  if ('sentryHost' in patch) {
+    if (patch.sentryHost == null || patch.sentryHost.trim() === '') {
+      delete integrations.sentryHost;
+    } else {
+      integrations.sentryHost = patch.sentryHost.trim();
+    }
+  }
+  if ('sentryViewerName' in patch) {
+    if (patch.sentryViewerName == null || patch.sentryViewerName.trim() === '') {
+      delete integrations.sentryViewerName;
+    } else {
+      integrations.sentryViewerName = patch.sentryViewerName.trim().slice(0, 120);
+    }
+  }
   return saveAppSettings({ ...current, integrations });
 }
 
@@ -1080,7 +1288,7 @@ export function resolveThreadDefaults(
 
 /**
  * Resolve agent/model/effort/fast for a newly created thread.
- * Omitted fields use Account defaults (Settings → Account).
+ * Omitted fields use Agents defaults (Settings → Agents).
  * Pass `model: null` explicitly to force Auto / agent-default.
  */
 export function resolveNewThreadOptions(
@@ -1275,7 +1483,7 @@ export function brightsyCloudConnectEnabled(
   return Boolean(settings.brightsy.cloudConnectEnabled);
 }
 
-/** Slack Socket Mode inbound (Account → Slack). Default off. */
+/** Slack Socket Mode inbound (Settings → Remote → Slack). Default off. */
 export function slackListenEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
@@ -1598,7 +1806,41 @@ export function applyAppEnvironment(
       target[key] = value;
     }
   }
+  applyOptionalServiceTokens(target, settings.integrations);
   return target;
+}
+
+function fillEnvGap(
+  target: NodeJS.ProcessEnv,
+  key: string,
+  value: string | undefined,
+): void {
+  const v = value?.trim();
+  if (!key || !v) return;
+  if (target[key] == null || target[key] === '') target[key] = v;
+}
+
+/** Connected optional-service tokens fill agent env gaps (shell / Environment win). */
+function applyOptionalServiceTokens(
+  target: NodeJS.ProcessEnv,
+  integrations: IntegrationsSettings,
+): void {
+  fillEnvGap(target, 'VERCEL_TOKEN', integrations.vercelToken);
+  fillEnvGap(target, 'SUPABASE_ACCESS_TOKEN', integrations.supabaseAccessToken);
+  fillEnvGap(target, 'POSTHOG_PERSONAL_API_KEY', integrations.posthogPersonalApiKey);
+  fillEnvGap(
+    target,
+    'POSTHOG_HOST',
+    integrations.posthogHost ||
+      (integrations.posthogPersonalApiKey ? 'https://us.posthog.com' : undefined),
+  );
+  fillEnvGap(target, 'SENTRY_AUTH_TOKEN', integrations.sentryAuthToken);
+  fillEnvGap(
+    target,
+    'SENTRY_URL',
+    integrations.sentryHost ||
+      (integrations.sentryAuthToken ? 'https://sentry.io' : undefined),
+  );
 }
 
 /** Env for a child process: host env + Sideboard settings (settings fill gaps). */

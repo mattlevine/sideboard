@@ -138,6 +138,11 @@ import {
   formatWorktreeDirective,
   formatWorktreeReminder,
 } from '../agents/instructions.js';
+import {
+  formatOptionalServicesDirective,
+  formatOptionalServicesReminder,
+} from '../integrations/optional-services.js';
+import { loadAppSettings } from '../store/app-settings.js';
 import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
 import {
   extractPresentedPlan,
@@ -980,6 +985,10 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatWorktreeReminder()
         : null;
+    const optionalServicesReminder =
+      thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
+        ? formatOptionalServicesReminder(loadAppSettings().integrations)
+        : null;
     const slackReplyContext = formatSlackRepliesForTurn(
       pendingSlackExternalReplies(thread.messages),
     );
@@ -987,6 +996,7 @@ export class Orchestrator {
       thread.planMode ? PLAN_MODE_INSTRUCTION : null,
       orchestrationReminder,
       worktreeReminder,
+      optionalServicesReminder,
       artifactReminder,
       slackReplyContext,
       expandedPrompt,
@@ -1031,6 +1041,10 @@ export class Orchestrator {
             gitAuthMode,
           });
     const artifactDirective = isBrightsy ? null : formatArtifactDirective();
+    const optionalServicesDirective =
+      isBrightsy || isOrchestration
+        ? null
+        : formatOptionalServicesDirective(loadAppSettings().integrations);
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     const renameBranchDirective =
       !isBrightsy && !isOrchestration && autoRenameBranchEnabled()
@@ -1081,6 +1095,7 @@ export class Orchestrator {
       : [
           coordinatorDirective,
           worktreeDirective,
+          optionalServicesDirective,
           artifactDirective,
           renameBranchDirective,
           seed,
@@ -1241,6 +1256,7 @@ export class Orchestrator {
         const retryPrefix = [
           coordinatorDirective,
           worktreeDirective,
+          optionalServicesDirective,
           artifactDirective,
           renameBranchDirective,
           retrySeed,

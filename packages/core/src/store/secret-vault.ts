@@ -11,6 +11,10 @@ export interface SettingsSecretVault {
   slackAppToken?: string;
   githubPat?: string;
   abletimeAccessToken?: string;
+  vercelToken?: string;
+  supabaseAccessToken?: string;
+  posthogPersonalApiKey?: string;
+  sentryAuthToken?: string;
   environment?: Record<string, string>;
 }
 
@@ -53,6 +57,18 @@ function normalizeVault(raw: SettingsSecretVault): SettingsSecretVault {
   }
   if (typeof raw.abletimeAccessToken === 'string' && raw.abletimeAccessToken.trim()) {
     out.abletimeAccessToken = raw.abletimeAccessToken.trim();
+  }
+  if (typeof raw.vercelToken === 'string' && raw.vercelToken.trim()) {
+    out.vercelToken = raw.vercelToken.trim();
+  }
+  if (typeof raw.supabaseAccessToken === 'string' && raw.supabaseAccessToken.trim()) {
+    out.supabaseAccessToken = raw.supabaseAccessToken.trim();
+  }
+  if (typeof raw.posthogPersonalApiKey === 'string' && raw.posthogPersonalApiKey.trim()) {
+    out.posthogPersonalApiKey = raw.posthogPersonalApiKey.trim();
+  }
+  if (typeof raw.sentryAuthToken === 'string' && raw.sentryAuthToken.trim()) {
+    out.sentryAuthToken = raw.sentryAuthToken.trim();
   }
   if (raw.environment && typeof raw.environment === 'object') {
     const environment: Record<string, string> = {};

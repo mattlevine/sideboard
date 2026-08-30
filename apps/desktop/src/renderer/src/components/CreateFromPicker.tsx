@@ -32,7 +32,7 @@ interface Props {
   onClose: () => void;
   onSelect: (selection: CreateFromSelection) => void;
   onClear?: () => void;
-  onOpenAccount?: () => void;
+  onOpenIssues?: () => void;
 }
 
 export function CreateFromPicker({
@@ -48,7 +48,7 @@ export function CreateFromPicker({
   onClose,
   onSelect,
   onClear,
-  onOpenAccount,
+  onOpenIssues,
 }: Props) {
   const [tab, setTab] = useState<CreateFromTab>('prs');
   const [query, setQuery] = useState('');
@@ -398,7 +398,7 @@ export function CreateFromPicker({
                   type="button"
                   className="composer-picker-row"
                   onClick={() => {
-                    onOpenAccount?.();
+                    onOpenIssues?.();
                     onClose();
                   }}
                 >
@@ -424,7 +424,7 @@ export function CreateFromPicker({
                   type="button"
                   className="composer-picker-row"
                   onClick={() => {
-                    onOpenAccount?.();
+                    onOpenIssues?.();
                     onClose();
                   }}
                 >

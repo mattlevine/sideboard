@@ -67,8 +67,8 @@ interface Props {
   onCreateFailed?: (message: string) => void;
   /** Called after a workspace is added so the sidebar can refresh. */
   onWorkspacesChanged?: () => void;
-  /** Open Settings → Account (e.g. Linear setup). */
-  onOpenAccount?: () => void;
+  /** Open Settings → Issues (e.g. Linear / AbleTime setup). */
+  onOpenIssues?: () => void;
 }
 
 function isRealProjectPath(path: string | null | undefined): path is string {
@@ -144,7 +144,7 @@ export function CreateModal({
   onCreateStart,
   onCreateFailed,
   onWorkspacesChanged,
-  onOpenAccount,
+  onOpenIssues,
 }: Props) {
   const [mode, setMode] = useState<Mode>(
     initialMode === 'orchestration' ? 'orchestration' : 'create',
@@ -835,7 +835,7 @@ export function CreateModal({
         onClose={() => setPickerOpen(false)}
         onSelect={setSelection}
         onClear={() => setSelection(null)}
-        onOpenAccount={onOpenAccount}
+        onOpenIssues={onOpenIssues}
       />
     </div>
   );

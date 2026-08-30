@@ -409,7 +409,7 @@ export function SchedulesSettings() {
                   setForm((f) => ({ ...f, agent: e.target.value as AgentKind | '' }))
                 }
               >
-                <option value="">Account default</option>
+                <option value="">Agents default</option>
                 {ORCHESTRATOR_AGENT_KINDS.map((agent) => (
                   <option key={agent} value={agent}>
                     {agent}

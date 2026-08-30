@@ -15,7 +15,7 @@ Recurring multi-item / fan-out work: follow [`.claude/skills/graph-engineering/S
 Product / user docs (not required for every change):
 
 - [../agent-adapters.md](../agent-adapters.md) — adding a coding agent
-- [../remote-integrations.md](../remote-integrations.md) — Slack listen / destinations
+- [../remote-integrations.md](../remote-integrations.md) — Settings map, Slack listen / destinations, Linear, connectors
 - [../COMPARE.md](../COMPARE.md) — vs Conductor / other boards
 - [../../README.md](../../README.md) — product overview, [process skills](../../README.md#process-skills), [scheduled orchestration](../../README.md#scheduled-orchestration)
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md) — PR checklist

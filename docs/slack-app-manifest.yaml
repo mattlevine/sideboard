@@ -16,7 +16,7 @@ display_information:
     Sideboard is a local control plane for AI coding agents. This Slack app sends
     DMs and @mentions to the Sideboard orchestrator on your machine and posts
     replies back in-thread. It also lets agents list channels, search, read, and
-    post across every Slack workspace you connect in Sideboard Account settings.
+    post across every Slack workspace you connect in Settings → Remote.
     No public Event URL — inbound uses Socket Mode.
 
 features:

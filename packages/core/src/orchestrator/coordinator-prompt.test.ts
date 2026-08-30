@@ -162,6 +162,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('create_schedule');
       expect(claude).toContain('slack_replies');
       expect(claude).toContain('Sideboard MCP');
+      expect(claude).toMatch(/Prefer official CLIs/);
+      expect(claude).toMatch(/Do not add vendor MCPs/);
       expect(claude).toContain('ask_user');
       expect(claude).toMatch(/status stopped or broken/);
       expect(claude).toContain('.claude/skills/');

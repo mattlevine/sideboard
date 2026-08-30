@@ -192,10 +192,76 @@ export async function openInSystemTerminal(command: string): Promise<void> {
   );
 }
 
-async function whichCli(bin: string): Promise<string | null> {
+export async function whichOnPath(bin: string): Promise<string | null> {
   const which = await run('which', [bin], { reject: false, timeoutMs: 3_000 });
   if (which.exitCode !== 0) return null;
   return which.stdout.trim().split(/\r?\n/).find(Boolean) ?? null;
+}
+
+/**
+ * `npm i -g` in-process; opens Terminal if npm needs a TTY or sudo.
+ * Skips install when `cliBin` already resolves on PATH.
+ */
+export async function installNpmGlobalPackage(opts: {
+  npmPackage: string;
+  installCommand: string;
+  cliBin: string | null;
+}): Promise<AgentSetupActionResult> {
+  enrichPathWithNpmGlobalBin();
+  if (opts.cliBin) {
+    const existing = await whichOnPath(opts.cliBin);
+    if (existing) {
+      return {
+        ok: true,
+        command: existing,
+        message: isConductorBundledCli(existing)
+          ? `Using Conductor’s ${opts.cliBin} at ${existing}. No extra install — Log in only if auth is missing.`
+          : `Already on PATH: ${existing}`,
+      };
+    }
+  }
+
+  const result = await run('npm', ['install', '-g', opts.npmPackage], { reject: false });
+  const ok = result.exitCode === 0;
+  if (!ok) {
+    try {
+      await openInSystemTerminal(opts.installCommand);
+      return {
+        ok: false,
+        openedTerminal: true,
+        command: opts.installCommand,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        message: `npm install failed (exit ${result.exitCode}). Opened Terminal with: ${opts.installCommand}`,
+      };
+    } catch {
+      return {
+        ok: false,
+        command: opts.installCommand,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        message:
+          result.stderr.trim() ||
+          result.stdout.trim() ||
+          `npm install failed (exit ${result.exitCode})`,
+      };
+    }
+  }
+
+  enrichPathWithNpmGlobalBin();
+  const binPath = opts.cliBin ? await whichOnPath(opts.cliBin) : null;
+  return {
+    ok: true,
+    command: opts.installCommand,
+    exitCode: 0,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    message: binPath
+      ? `Installed ${opts.npmPackage} → ${binPath}`
+      : `Installed ${opts.npmPackage} (CLI not yet on PATH)`,
+  };
 }
 
 /** Install a CLI agent: npm packages run in-process; curl installers open Terminal. */
@@ -222,69 +288,12 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
     };
   }
 
-  enrichPathWithNpmGlobalBin();
   const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];
-  if (cliBin) {
-    const existing = await whichCli(cliBin);
-    if (existing) {
-      return {
-        ok: true,
-        command: existing,
-        message: isConductorBundledCli(existing)
-          ? `Using Conductor’s ${cliBin} at ${existing}. No extra install — Log in only if auth is missing.`
-          : `Already on PATH: ${existing}`,
-      };
-    }
-  }
-
-  const result = await run('npm', ['install', '-g', info.npmPackage], { reject: false });
-  const ok = result.exitCode === 0;
-  if (!ok) {
-    // Fall back to Terminal so the user can see interactive npm errors / sudo prompts.
-    try {
-      await openInSystemTerminal(info.installCommand);
-      return {
-        ok: false,
-        openedTerminal: true,
-        command: info.installCommand,
-        exitCode: result.exitCode,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        message:
-          `npm install failed (exit ${result.exitCode}). Opened Terminal with: ${info.installCommand}`,
-      };
-    } catch {
-      return {
-        ok: false,
-        command: info.installCommand,
-        exitCode: result.exitCode,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        message:
-          result.stderr.trim() ||
-          result.stdout.trim() ||
-          `npm install failed (exit ${result.exitCode})`,
-      };
-    }
-  }
-
-  // Refresh PATH and confirm the CLI resolves where Terminal will look.
-  enrichPathWithNpmGlobalBin();
-  let binPath: string | null = null;
-  if (cliBin) {
-    binPath = await whichCli(cliBin);
-  }
-
-  return {
-    ok: true,
-    command: info.installCommand,
-    exitCode: 0,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    message: binPath
-      ? `Installed ${info.npmPackage} → ${binPath}`
-      : `Installed ${info.npmPackage} (CLI not yet on PATH — Log in still exports Electron’s PATH into Terminal)`,
-  };
+  return installNpmGlobalPackage({
+    npmPackage: info.npmPackage,
+    installCommand: info.installCommand,
+    cliBin,
+  });
 }
 
 /** Open the agent’s login/auth command in the system terminal. */

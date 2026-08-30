@@ -72,7 +72,7 @@ They install as a brand-new customer, including **uninstall**.
 
 - **App Home** (Home tab on): first-run “download Sideboard / name this Mac / DM the bot”, plus support email. Messages tab can stay for DMs.
 - Subscribe to `app_uninstalled` and delete that workspace’s tokens on the Mac + any relay state.
-- Post-OAuth success page: “Open Sideboard → Settings → Account → Slack” (not a dead end).
+- Post-OAuth success page: “Open Sideboard → Settings → Remote → Slack” (not a dead end).
 - Meaningful errors when no Mac is online (not “something went wrong”).
 - LLM disclaimer on landing + long description; Security & Compliance: models are the user’s local agents (Claude / Codex / OpenCode / Cursor); Slack text is not used to train LLMs.
 
@@ -165,7 +165,7 @@ Same history/replies APIs in private channels the bot was added to.
 `users.lookupByEmail` and email fields on `users.list` so `slack_post to=name@company.com` resolves to a user. We do not send email.
 
 **`team:read`** — drop unless we call `team.info`.  
-Workspace name in Account settings today comes from `auth.test`, which does not need this scope.
+Workspace name in Settings → Remote today comes from `auth.test`, which does not need this scope.
 
 #### User token — paste (MCP only)
 
@@ -204,7 +204,7 @@ Resolve people while acting as the installer (`slack_list_users` / destination l
 
 - Service is free; no paid Sideboard account.
 - Install: latest Apple Silicon DMG from GitHub Releases.
-- After Slack OAuth: open desktop → Settings → Account → Slack workspaces → wait until Relay connected.
+- After Slack OAuth: open desktop → Settings → Remote → Slack → wait until Relay connected.
 - Uninstall: Slack → App → Remove, then confirm Sideboard drops the workspace.
 - We cannot give them a Slack workspace login (Slack forbids that). They install into **their** workspace.
 

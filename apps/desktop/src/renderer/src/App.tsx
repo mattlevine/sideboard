@@ -21,7 +21,7 @@ import { OrchestratorPanel } from './components/OrchestratorPanel';
 import { GlobalBoard } from './components/GlobalBoard';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
 import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
@@ -251,9 +251,7 @@ export function App() {
     setOpenUrl(null);
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsInitialNav, setSettingsInitialNav] = useState<
-    'account' | 'agents' | 'environment' | 'schedules' | 'advanced' | 'history'
-  >('account');
+  const [settingsInitialNav, setSettingsInitialNav] = useState<SettingsNavId>('agents');
   /** Settings → Advanced → Show cost (when available) (default off). */
   const [showCost, setShowCost] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
@@ -493,7 +491,7 @@ export function App() {
       setAppUpdate((prev) => (prev?.phase === 'available' ? null : prev));
     });
     const offOpenSettings = window.sideboardUpdate.onOpenSettings(() => {
-      setSettingsInitialNav('account');
+      setSettingsInitialNav('agents');
       setSettingsOpen(true);
     });
     return () => {
@@ -1204,10 +1202,10 @@ export function App() {
           onWorkspacesChanged={() => {
             void refreshWorkspaces();
           }}
-          onOpenAccount={() => {
+          onOpenIssues={() => {
             setCreateState(null);
             setSettingsOpen(true);
-            setSettingsInitialNav('account');
+            setSettingsInitialNav('issues');
           }}
           onCreateStart={(info) => {
             if (createState.stayOnBoard) return;
@@ -1277,7 +1275,7 @@ export function App() {
           }}
           onOpenArchived={(id) => {
             setSettingsOpen(false);
-            setSettingsInitialNav('account');
+            setSettingsInitialNav('agents');
             setSelectedId(id);
             setView('thread');
             setMultiSelected(new Set([id]));
@@ -1287,7 +1285,7 @@ export function App() {
           }}
           onClose={() => {
             setSettingsOpen(false);
-            setSettingsInitialNav('account');
+            setSettingsInitialNav('agents');
           }}
         />
       )}

@@ -111,7 +111,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Do not merge the PR unless/);
     expect(text).toMatch(/gh stack merge/);
     expect(text).toMatch(/Short git requests/i);
-    expect(text).toMatch(/Git authentication \(Account → GitHub mode: auto\)/);
+    expect(text).toMatch(/Git authentication \(Settings → Git mode: auto\)/);
     expect(text).not.toMatch(/GitHub app/i);
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
     expect(text).toMatch(/graph-engineering/);
