@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140] - 2026-08-29
+
 ### Added
 
 - Settings panels for Git, Issues, Remote (Slack), and Connectors (Vercel, Supabase, PostHog, Sentry). Default agent/model/effort lives at the top of Agents. Slack is Settings → Remote.
