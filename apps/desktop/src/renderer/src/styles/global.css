@@ -2679,6 +2679,7 @@ body.resizing-panels webview {
   align-items: center;
   gap: 6px;
   cursor: default;
+  color: var(--muted);
 }
 
 .thread-meta.usage-cluster .usage-total {

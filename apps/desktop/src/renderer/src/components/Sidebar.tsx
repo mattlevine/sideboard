@@ -24,13 +24,7 @@ import {
   unreadWorktreeKey,
 } from '../lib/unread-worktrees';
 import { useCaffeinateHold } from '../lib/caffeinate-tab';
-import {
-  formatCostSuffix,
-  formatTokenCount,
-  sumUsage,
-  totalTokens,
-  usageTooltip,
-} from '../lib/tokens';
+import { billedUsageLabel, sumUsage, usageTooltip } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { BrandMark } from './BrandMark';
@@ -177,11 +171,10 @@ function groupSpendLabel(
 ): { label: string; tooltip: string } | null {
   const usage = sumUsage(threads.flatMap((t) => t.messages.map((m) => m.usage)));
   if (!usage) return null;
-  const toks = formatTokenCount(totalTokens(usage));
   const chatNote =
     threads.length > 1 ? ` across ${threads.length} open chats` : '';
   return {
-    label: `${toks} tok${formatCostSuffix(usage.costUsd, showCost)}`,
+    label: billedUsageLabel(usage, showCost),
     tooltip: `Open chats${chatNote} — ${usageTooltip(usage, { showCost })}`,
   };
 }

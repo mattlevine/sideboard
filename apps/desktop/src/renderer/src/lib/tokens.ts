@@ -116,26 +116,69 @@ export function resolveContextWindow(
   return CONTEXT_WINDOW_TOKENS;
 }
 
+/**
+ * Occupancy that can fill the 1M ring. Values over the window are billed-turn
+ * leaks (summed tool rounds), not next-request size — do not paint a full ring.
+ */
+export function meterOccupancyTokens(
+  usage: TokenUsage,
+  windowTokens: number,
+): number | null {
+  if (windowTokens <= 0) return null;
+  const occ = contextTokens(usage);
+  if (occ <= 0 || occ > windowTokens) return null;
+  return occ;
+}
+
+export function occupancyFillRatio(
+  occupancy: number,
+  windowTokens: number,
+): number {
+  if (windowTokens <= 0 || occupancy <= 0) return 0;
+  return Math.min(1, occupancy / windowTokens);
+}
+
 export function contextFillRatio(
   usage: TokenUsage,
   windowTokens: number,
 ): number {
-  if (windowTokens <= 0) return 0;
-  return Math.min(1, contextTokens(usage) / windowTokens);
+  const occ = meterOccupancyTokens(usage, windowTokens);
+  if (occ == null) return 0;
+  return occupancyFillRatio(occ, windowTokens);
+}
+
+/** Warn/hot from occupancy fill — never from billed thread totals. */
+export function contextMeterTone(ratio: number): '' | 'warn' | 'hot' {
+  if (!Number.isFinite(ratio) || ratio <= 0) return '';
+  if (ratio >= 0.85) return 'hot';
+  if (ratio >= 0.65) return 'warn';
+  return '';
 }
 
 export function contextMeterTooltip(
-  usage: TokenUsage,
+  usage: TokenUsage | null,
   windowTokens: number,
-  opts?: { compacted?: boolean; billedTotal?: number },
+  opts?: { compacted?: boolean; billedTotal?: number; occupancy?: number },
 ): string {
-  const used = contextTokens(usage);
-  const pct = Math.round(contextFillRatio(usage, windowTokens) * 100);
+  const occ =
+    opts?.occupancy != null && opts.occupancy > 0
+      ? opts.occupancy
+      : usage
+        ? meterOccupancyTokens(usage, windowTokens)
+        : null;
+  const used = occ ?? (usage ? contextTokens(usage) : 0);
+  const pct = Math.round(occupancyFillRatio(occ ?? 0, windowTokens) * 100);
   const basis = opts?.compacted
     ? 'remaining after compression'
-    : 'next request input + cache';
+    : occ == null
+      ? 'billed turn total (occupancy unknown)'
+      : 'next request (going-forward context)';
   const bits = [
-    `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — ${basis}`,
+    occ == null
+      ? usage
+        ? `Billed ${formatTokenCount(totalTokens(usage))} — occupancy over ${formatTokenCount(windowTokens)} or missing`
+        : `Context / ${formatTokenCount(windowTokens)}`
+      : `Context ~${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} (${pct}%) — ${basis}`,
   ];
   if (opts?.billedTotal != null && opts.billedTotal > 0) {
     bits.push(`Thread billed Σ ${formatTokenCount(opts.billedTotal)}`);
@@ -143,7 +186,22 @@ export function contextMeterTooltip(
   return bits.join(' · ');
 }
 
-/** Tabs-bar label: occupancy / window, never the billed thread sum. */
+/** Occupancy / window for tooltips and the agent-message chip. */
 export function contextOccupancyLabel(usage: TokenUsage, windowTokens: number): string {
   return `${formatTokenCount(contextTokens(usage))} / ${formatTokenCount(windowTokens)}`;
+}
+
+/** Billed total string shared by the worktree hover card. */
+export function billedUsageLabel(usage: TokenUsage, showCost: boolean): string {
+  return `${formatTokenCount(totalTokens(usage))} tok${formatCostSuffix(usage.costUsd, showCost)}`;
+}
+
+/** Tabs-bar label: going-forward occupancy / fixed window. Never billed Σ. */
+export function tabsContextLabel(
+  occupancy: number,
+  windowTokens: number,
+  costUsd?: number | null,
+  showCost = false,
+): string {
+  return `${formatTokenCount(Math.max(0, occupancy))} / ${formatTokenCount(windowTokens)}${formatCostSuffix(costUsd, showCost)}`;
 }

@@ -7,6 +7,7 @@ import {
   estimateOccupancyTokens,
   estimateThreadChars,
   forwardContextUsage,
+  forwardOccupancyTokens,
   lastRequestOccupancy,
   maybeCompactContext,
   shouldCompactContext,
@@ -225,6 +226,35 @@ describe('context compact', () => {
     const forward = forwardContextUsage(messages[messages.length - 1]!.usage!, messages);
     expect(forward?.lastRequestTokens).toBe(estimateOccupancyTokens(messages));
     expect(forward!.lastRequestTokens!).toBeLessThan(820_000);
+  });
+
+  it('forwardOccupancyTokens uses remaining transcript after compression, not billed peak', () => {
+    const recent = fatThread(4, 200);
+    const messages = [
+      msg('summary', '- Prior work summarized'),
+      ...recent.slice(0, 3),
+      {
+        ...recent[3]!,
+        role: 'agent' as const,
+        usage: { inputTokens: 50_000, outputTokens: 20, lastRequestTokens: 820_000 },
+      },
+    ];
+    const forward = forwardOccupancyTokens(messages, messages[messages.length - 1]!.usage);
+    expect(forward).toBe(estimateOccupancyTokens(messages));
+    expect(forward).toBeLessThan(820_000);
+  });
+
+  it('forwardOccupancyTokens ignores last-request billed leaks over the window', () => {
+    const messages = [msg('user', 'hello'), msg('agent', 'ok')];
+    const leak = {
+      inputTokens: 800_000,
+      outputTokens: 50_000,
+      cacheReadTokens: 1_600_000,
+      lastRequestTokens: 2_500_000,
+    };
+    const forward = forwardOccupancyTokens(messages, leak, 1_000_000);
+    expect(forward).toBe(estimateOccupancyTokens(messages));
+    expect(forward).toBeLessThan(10_000);
   });
 
   it('applyForwardOccupancy writes going-forward occupancy onto the last agent turn', () => {

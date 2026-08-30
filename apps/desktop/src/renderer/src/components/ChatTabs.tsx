@@ -9,6 +9,7 @@ import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
+import { contextMeterTone } from '../lib/tokens';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 
 export type NewChatTabOptions = {
@@ -41,10 +42,10 @@ interface Props {
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
   statusBadge?: string | null;
-  /** Next-request occupancy (e.g. "94k / 1M"), not the billed thread sum. */
+  /** Going-forward occupancy / 1M. Warn/hot from that fill, not billed Σ. */
   usageTotalLabel?: string | null;
   usageTotalTooltip?: string;
-  /** 0–1 context fill from the latest turn; omit to hide the meter. */
+  /** 0–1 fill of the fixed 1M window; omit to hide the ring. */
   contextRatio?: number | null;
   contextTooltip?: string;
   onSelectChat: (id: string) => void;
@@ -154,6 +155,7 @@ export function ChatTabs({
 
   const urlActive = Boolean(activeUrl) && !changesActive;
   const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive;
+  const meterTone = contextRatio != null ? contextMeterTone(contextRatio) : '';
 
   return (
     <div className="chat-tabs">
@@ -351,22 +353,14 @@ export function ChatTabs({
       <div className="chat-tabs-actions">
         {(usageTotalLabel || contextRatio != null) && (
           <span
-            className={`thread-meta usage-cluster${
-              contextRatio != null && contextRatio >= 0.85
-                ? ' hot'
-                : contextRatio != null && contextRatio >= 0.65
-                  ? ' warn'
-                  : ''
-            }`}
+            className={`thread-meta usage-cluster${meterTone ? ` ${meterTone}` : ''}`}
             title={contextTooltip ?? usageTotalTooltip}
           >
             {contextRatio != null && (
               <ContextMeter ratio={contextRatio} title={contextTooltip} />
             )}
             {usageTotalLabel && (
-              <span className="usage-total" title={usageTotalTooltip}>
-                {usageTotalLabel}
-              </span>
+              <span className="usage-total">{usageTotalLabel}</span>
             )}
           </span>
         )}

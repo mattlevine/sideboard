@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextFillRatio, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, resolveContextWindow, sumUsage, totalTokens, usageTooltip } from './tokens';
+import { billedUsageLabel, contextFillRatio, contextMeterTone, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, occupancyFillRatio, resolveContextWindow, sumUsage, tabsContextLabel, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -35,6 +35,18 @@ describe('contextFillRatio', () => {
     };
     expect(contextFillRatio(usage, 200_000)).toBeCloseTo(0.45);
   });
+
+  it('does not fill a full ring from billed-turn occupancy over the window', () => {
+    const usage = {
+      inputTokens: 800_000,
+      outputTokens: 50_000,
+      cacheReadTokens: 1_600_000,
+      lastRequestTokens: 2_500_000,
+    };
+    expect(meterOccupancyTokens(usage, 1_000_000)).toBeNull();
+    expect(contextFillRatio(usage, 1_000_000)).toBe(0);
+    expect(contextMeterTooltip(usage, 1_000_000)).toContain('Billed');
+  });
 });
 
 describe('resolveContextWindow', () => {
@@ -57,16 +69,51 @@ describe('contextMeterTooltip', () => {
     expect(contextMeterTooltip(usage, 1_000_000, { compacted: true })).toContain(
       'remaining after compression',
     );
-    expect(contextMeterTooltip(usage, 1_000_000)).toContain('next request input + cache');
+    expect(contextMeterTooltip(usage, 1_000_000)).toContain('next request (going-forward context)');
   });
 
-  it('keeps the billed thread sum in the tooltip, not the label', () => {
+  it('keeps the billed thread sum in the tooltip, not the occupancy label', () => {
     const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 94_000 };
     expect(contextOccupancyLabel(usage, 1_000_000)).toBe('94k / 1M');
     expect(contextOccupancyLabel(usage, 1_000_000)).not.toContain('3.4');
     expect(
       contextMeterTooltip(usage, 1_000_000, { billedTotal: 3_400_000 }),
     ).toContain('Thread billed Σ 3.4M');
+  });
+});
+
+describe('billedUsageLabel', () => {
+  it('matches the worktree hover card (billed tok, no / window)', () => {
+    const usage = {
+      inputTokens: 1_200_000,
+      outputTokens: 200_000,
+      cacheReadTokens: 3_200_000,
+    };
+    expect(billedUsageLabel(usage, false)).toBe('4.6M tok');
+    expect(billedUsageLabel(usage, false)).not.toContain('/');
+    expect(billedUsageLabel({ ...usage, costUsd: 1.23 }, true)).toBe('4.6M tok · $1.23');
+  });
+});
+
+describe('tabsContextLabel', () => {
+  it('shows going-forward occupancy against the fixed 1M window', () => {
+    expect(tabsContextLabel(94_000, 1_000_000)).toBe('94k / 1M');
+    expect(tabsContextLabel(94_000, 1_000_000, 1.23, true)).toBe('94k / 1M · $1.23');
+  });
+
+  it('does not put billed thread totals in the numerator', () => {
+    expect(tabsContextLabel(4_200, 1_000_000)).toBe('4.2k / 1M');
+    expect(tabsContextLabel(4_200, 1_000_000)).not.toContain('2.5');
+    expect(tabsContextLabel(4_200, 1_000_000)).not.toContain('4.6');
+  });
+});
+
+describe('contextMeterTone', () => {
+  it('warns and heats from occupancy fill, not from a zero/unknown ring', () => {
+    expect(contextMeterTone(0)).toBe('');
+    expect(contextMeterTone(occupancyFillRatio(400_000, 1_000_000))).toBe('');
+    expect(contextMeterTone(occupancyFillRatio(700_000, 1_000_000))).toBe('warn');
+    expect(contextMeterTone(occupancyFillRatio(900_000, 1_000_000))).toBe('hot');
   });
 });
 
