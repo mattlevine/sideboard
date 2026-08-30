@@ -133,6 +133,8 @@ import {
 } from '../composer/context-compact.js';
 import {
   formatArtifactDirective,
+  formatLongRunningDirective,
+  formatLongRunningReminder,
   formatRenameBranchDirective,
   formatUiReminder,
   formatWorktreeDirective,
@@ -981,6 +983,10 @@ export class Orchestrator {
     // Re-assert on every turn (incl. CLI --resume, which drops cachedPrefix).
     const artifactReminder =
       thread.agent !== 'brightsy' ? formatUiReminder() : null;
+    const longRunningReminder =
+      thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
+        ? formatLongRunningReminder()
+        : null;
     const worktreeReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatWorktreeReminder()
@@ -998,6 +1004,7 @@ export class Orchestrator {
       worktreeReminder,
       optionalServicesReminder,
       artifactReminder,
+      longRunningReminder,
       slackReplyContext,
       expandedPrompt,
     ]
@@ -1041,6 +1048,8 @@ export class Orchestrator {
             gitAuthMode,
           });
     const artifactDirective = isBrightsy ? null : formatArtifactDirective();
+    const longRunningDirective =
+      isBrightsy || isOrchestration ? null : formatLongRunningDirective();
     const optionalServicesDirective =
       isBrightsy || isOrchestration
         ? null
@@ -1097,6 +1106,7 @@ export class Orchestrator {
           worktreeDirective,
           optionalServicesDirective,
           artifactDirective,
+          longRunningDirective,
           renameBranchDirective,
           seed,
         ]
@@ -1258,6 +1268,7 @@ export class Orchestrator {
           worktreeDirective,
           optionalServicesDirective,
           artifactDirective,
+          longRunningDirective,
           renameBranchDirective,
           retrySeed,
         ]

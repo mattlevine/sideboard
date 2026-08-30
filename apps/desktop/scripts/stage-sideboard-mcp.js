@@ -138,6 +138,13 @@ async function main() {
 
   copyTree(path.join(repoRoot, 'packages/core/dist'), path.join(dest, 'core-dist'));
   copyTree(path.join(repoRoot, 'packages/cli/dist'), path.join(dest, 'cli-dist'));
+  const detachedSrc = path.join(repoRoot, 'scripts/detached-job.js');
+  const detachedDest = path.join(dest, 'scripts/detached-job.js');
+  if (!fs.existsSync(detachedSrc)) {
+    throw new Error(`stage-sideboard-mcp: missing ${detachedSrc}`);
+  }
+  fs.mkdirSync(path.dirname(detachedDest), { recursive: true });
+  fs.copyFileSync(detachedSrc, detachedDest);
   fs.writeFileSync(
     path.join(dest, 'package.json'),
     `${JSON.stringify({ name: 'sideboard-mcp', private: true, type: 'module' }, null, 2)}\n`,

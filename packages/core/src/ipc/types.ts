@@ -410,7 +410,7 @@ export interface IpcApi {
       command: string;
       description: string;
       path: string;
-      source: 'workspace' | 'user' | 'cli';
+      source: 'workspace' | 'user' | 'cli' | 'bundled';
     }>
   >;
   openInEditor(threadRef: string, editor?: string, relativePath?: string): Promise<void>;

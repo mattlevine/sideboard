@@ -34,6 +34,17 @@ describe('expandComposerPrompt', () => {
     expect(result.agentPrompt.startsWith('Please /git-commit')).toBe(true);
   });
 
+  it('attaches the bundled /long-running skill in a worktree with no project skills', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sb-expand-bundled-'));
+    mkdirSync(root, { recursive: true });
+    const result = expandComposerPrompt(root, 'please /long-running for this pack');
+    expect(result.skillsUsed).toHaveLength(1);
+    expect(result.skillsUsed[0]?.command).toBe('long-running');
+    expect(result.skillsUsed[0]?.source).toBe('bundled');
+    expect(result.agentPrompt).toMatch(/Detach/);
+    expect(result.agentPrompt).toMatch(/present_artifact/);
+  });
+
   it('passes through plain prompts', () => {
     const root = mkdtempSync(join(tmpdir(), 'sb-expand-plain-'));
     mkdirSync(root, { recursive: true });
