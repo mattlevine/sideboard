@@ -371,7 +371,7 @@ export type LinearAssignedIssuesResult = {
 
 /**
  * List open issues assigned to the authenticated Linear user via GraphQL.
- * Uses Sideboard-stored OAuth token or API key (Account → Linear), not agent MCP.
+ * Uses Sideboard-stored OAuth token or API key (Settings → Issues → Linear), not agent MCP.
  */
 export async function listLinearAssignedIssues(
   opts?: { limit?: number; apiKey?: string | null },

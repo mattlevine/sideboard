@@ -61,7 +61,7 @@ Also true, and useful on the way:
 - **Local-first / Slack-remote** — agents stay on this Mac (VPN, private git, internal APIs); Slack is how you and a coworker reach them ([setup](#slack))
 - **Portable process skills** — recurring guides are Claude Code project skills (`.claude/skills/<name>/SKILL.md`). Sideboard `/name`, Claude Code, and `attach` all load that path ([Process skills](#process-skills))
 
-Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Process skills](#process-skills) · [Security](SECURITY.md)
+Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Settings](#settings) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Process skills](#process-skills) · [Security](SECURITY.md)
 
 Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only)
 
@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.139/Sideboard-0.1.139-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.140/Sideboard-0.1.140-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -293,8 +293,8 @@ Add to `~/.config/opencode/opencode.jsonc` (or a project `opencode.jsonc`) under
 Once connected, agents get tools to:
 
 - **Discover** — `list_board` (worktree Kanban: New → Draft → Review → Merged; `create_thread` adds a worktree), `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear, AbleTime MCP, or GitHub), `list_threads`
-- **Linear tickets** — `linear_list_teams`, `linear_get_issue`, `linear_create_issue`, `linear_update_issue`, `linear_comment` (Account OAuth; reconnect if you connected before write access)
-- **AbleTime tickets** — `abletime_orientation`, `abletime_list_projects`, `abletime_list_tasks`, `abletime_search_tasks`, `abletime_get_task`, `abletime_create_task`, `abletime_ensure_task` (Account personal access token → hosted MCP). When AbleTime is the preferred issue source, starting work without a ticket auto-creates one to track against.
+- **Linear tickets** — `linear_list_teams`, `linear_get_issue`, `linear_create_issue`, `linear_update_issue`, `linear_comment` (Settings → Issues OAuth; reconnect if you connected before write access)
+- **AbleTime tickets** — `abletime_orientation`, `abletime_list_projects`, `abletime_list_tasks`, `abletime_search_tasks`, `abletime_get_task`, `abletime_create_task`, `abletime_ensure_task` (Settings → Issues personal access token → hosted MCP). When AbleTime is the preferred issue source, starting work without a ticket auto-creates one to track against.
 - **Workspaces** — `add_workspace` / `remove_workspace`
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids). `create_thread` reuses a live worktree for the same ticket, PR, or named branch (`alreadyStarted`); default-branch create still opens a new isolated worktree. `wait_for_turn` returns within ~45s with `stillRunning` + live `progress` while the child is still working — call it again; do not assume a hang. `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
@@ -306,9 +306,36 @@ Once connected, agents get tools to:
 
 Ready-for-review land (`confirm_land`) and `purge_thread` stay human-only. Coordinators commit, push, and open PRs by asking the worktree agent. They merge only when the user explicitly asked.
 
+## Settings
+
+Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not per-agent MCP.
+
+| Panel | What |
+|-------|------|
+| **Agents** | Default agent, model, and effort for new chats, then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
+| **Issues** | Preferred tracker plus Linear and AbleTime |
+| **Remote** | Slack — remote-control this Mac |
+| **Connectors** | Optional project services: Vercel, Supabase, PostHog, Sentry |
+| **Environment** | Extra env vars injected into agent runs |
+| **Schedules** | Local jobs that wake an orchestration chat |
+| **Advanced** | Cowboy mode, caffeinate, show cost, Brightsy MCP inject |
+| **History** | Archived chats |
+
+## Git
+
+**Settings → Git.** Pick how Sideboard and worktree agents authenticate GitHub on this Mac:
+
+- **Auto** (recommended) — HTTPS in the agent process using this Mac’s `gh` login
+- **gh CLI auth** — rewrite `git@github.com` remotes to HTTPS; git/gh use a Sideboard credential file
+- **SSH** — keep SSH remotes (batch-mode; fails instead of prompting Keychain)
+- **Personal access token** — store a PAT on this Mac (not in the agent environment)
+
+If git/gh fail with auth errors, run `gh auth login` on this Mac or set a PAT here. Agents should not wait for a Keychain dialog.
+
 ## Linear
 
-**Settings → Account → Linear → Connect via browser.** Sideboard stores the OAuth token on this Mac and uses it for Create-from / Link issue and MCP ticket tools (`linear_create_issue`, `linear_update_issue`, `linear_comment`). A personal API key still works if you paste one.
+**Settings → Issues → Linear → Connect via browser.** Sideboard stores the OAuth token on this Mac and uses it for Create-from / Link issue and MCP ticket tools (`linear_create_issue`, `linear_update_issue`, `linear_comment`). A personal API key still works if you paste one.
 
 OAuth requests `read,write`. Linear’s OAuth app page has no scopes checklist — Sideboard sets them in `LINEAR_OAUTH_SCOPES`. If you connected when Sideboard was read-only, **Disconnect and Connect via browser** so Linear re-consents.
 
@@ -316,7 +343,7 @@ Desktop Connect uses Chromium networking so corporate VPNs/proxies that break No
 
 ## AbleTime
 
-**Settings → Account → AbleTime.** Enable **Agent access (MCP)** in AbleTime (Settings → Integrations → API Keys), then paste a personal access token from Profile → API Access (`apt_…`). Sideboard talks to AbleTime’s hosted MCP (`POST https://track.abletime.com/api/public/v2/mcp`) — list/search/create tasks, and **ensure** a task exists to track against.
+**Settings → Issues → AbleTime.** Enable **Agent access (MCP)** in AbleTime (Settings → Integrations → API Keys), then paste a personal access token from Profile → API Access (`apt_…`). Sideboard talks to AbleTime’s hosted MCP (`POST https://track.abletime.com/api/public/v2/mcp`) — list/search/create tasks, and **ensure** a task exists to track against.
 
 Set **Issue source** to AbleTime. Create-from / Home list AbleTime tasks. Starting a thread from the default branch (no ticket) auto-creates an AbleTime task and attaches it. Orchestration tools: `abletime_orientation`, `abletime_ensure_task`, `abletime_create_task`, and the list/search/get variants.
 
@@ -349,7 +376,7 @@ Keep the desktop app running after you connect a workspace. Slack cannot reach t
 
 ### Connect
 
-**Settings → Account → Slack workspaces**
+**Settings → Remote → Slack**
 
 1. **Add via browser** — installs the official Sideboard Slack app into a workspace (use this; paste-only bot tokens cannot prove which Slack user owns the Mac). Until **Manage Distribution → Activate Public Distribution** is on, Slack sends that flow to the app’s home workspace (`brightsy.slack.com`) and will not list other teams. Slack requires an HTTPS redirect; Sideboard uses `https://relay.sideboard.cloud/slack/callback`. The relay exchanges the OAuth code (the client secret stays on the server). Sideboard polls until that finishes.
 2. **This Mac** — name the destination (`Personal`, `Work`, …). Each Mac gets a stable id; both can stay online at once.
@@ -390,6 +417,19 @@ Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_user
 If someone replies in Slack to a message Sideboard posted, that reply is copied into the orchestration chat as information (not a command) and the posting chat gets a follow-up turn. If you were talking to the orchestrator from Slack, Sideboard FYIs you there too.
 
 More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
+
+## Connectors
+
+**Settings → Connectors.** Optional tokens for project services. Agents use official CLIs (or the PostHog HTTP API) with env injected into the worktree — not vendor MCPs.
+
+| Service | Env | Agent path |
+|---------|-----|------------|
+| Vercel | `VERCEL_TOKEN` | `vercel` CLI |
+| Supabase | `SUPABASE_ACCESS_TOKEN` | `supabase` CLI |
+| PostHog | `POSTHOG_PERSONAL_API_KEY`, optional `POSTHOG_HOST` | HTTP API (no first-class CLI) |
+| Sentry | `SENTRY_AUTH_TOKEN`, optional `SENTRY_URL` | `sentry-cli` |
+
+Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supabase`, or `sentry-cli` is missing, **Install CLI** runs `npm i -g` (opens Terminal if npm needs sudo). Sideboard does not auto-install on Connect. Slack is **Settings → Remote**, not here.
 
 ## Scheduled orchestration
 

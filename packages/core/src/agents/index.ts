@@ -69,10 +69,12 @@ export {
   getAgentSetupInfo,
   listAgentSetupInfo,
   installAgent,
+  installNpmGlobalPackage,
   loginAgent,
   openInSystemTerminal,
   prepareTerminalCommand,
   resolveLoginCommand,
+  whichOnPath,
 } from './install.js';
 export type { AgentSetupInfo, AgentSetupKind, AgentSetupActionResult } from './install.js';
 

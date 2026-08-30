@@ -11,7 +11,7 @@ import type {
 
 interface IssuePickerProps {
   open: boolean;
-  /** @deprecated Ignored — issues come from Sideboard Account connections. */
+  /** @deprecated Ignored — issues come from Sideboard Issues connections. */
   agent?: Thread['agent'];
   repoPath: string;
   onClose: () => void;
@@ -101,7 +101,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
               <span className="composer-picker-main">
                 <span className="composer-picker-title">Set up Linear</span>
                 <span className="composer-picker-sub">
-                  Sign in from Settings → Account (showing GitHub Issues for now)
+                  Sign in from Settings → Issues (showing GitHub Issues for now)
                 </span>
               </span>
               <span className="composer-picker-hint">
@@ -126,7 +126,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
               <span className="composer-picker-main">
                 <span className="composer-picker-title">Set up AbleTime</span>
                 <span className="composer-picker-sub">
-                  Paste a personal access token in Settings → Account
+                  Paste a personal access token in Settings → Issues
                 </span>
               </span>
               <span className="composer-picker-hint">

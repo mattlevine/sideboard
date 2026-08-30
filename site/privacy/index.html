@@ -34,14 +34,14 @@
 <article style="max-width:720px;margin:0 auto;padding:56px 40px 110px">
 <span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Privacy</span>
 <h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:18px 0 8px;color:#edf0f3">Privacy policy</h1>
-<p style="margin:0;color:#8b949c;font-size:14px">Last updated 15 August 2026. Sideboard is a local Mac app plus a Slack relay at <code>relay.sideboard.cloud</code>.</p>
+<p style="margin:0;color:#8b949c;font-size:14px">Last updated 29 August 2026. Sideboard is a local Mac app plus a Slack relay at <code>relay.sideboard.cloud</code>.</p>
 
 <h2>What this covers</h2>
 <p>This policy describes data handled by the Sideboard desktop/CLI on your computer and by the hosted Slack relay. It is written for people who install the Sideboard Slack app. The marketing site at www.sideboard.cloud does not require an account.</p>
 
 <h2>What we collect</h2>
 <ul>
-<li><strong>On your Mac.</strong> Workspace tokens, Slack team and user ids, device name, thread/worktree metadata, and chat you have with agents. Tokens live in an encrypted vault on disk (<code>slack-workspaces.json</code>), not in the renderer or in git.</li>
+<li><strong>On your Mac.</strong> Slack workspace tokens, team and user ids, device name, thread/worktree metadata, and chat you have with agents. Optional tokens for GitHub, Linear, AbleTime, Vercel, Supabase, PostHog, and Sentry also live in the encrypted vault on disk — not in the renderer or in git. Slack workspaces are stored as <code>slack-workspaces.json</code>.</li>
 <li><strong>Through the Slack relay.</strong> Slack OAuth codes and the resulting bot/user tokens (held in memory for about five minutes so the desktop can fetch them), then Slack message text, channel ids, user ids, and team ids needed to route DMs and @mentions to your Mac. The relay does not receive git repos, secrets, or VPN-only traffic.</li>
 <li><strong>We do not</strong> require a Sideboard cloud account. We do not sell Slack data. We do not use Slack data to train Sideboard models — Sideboard does not host a model.</li>
 </ul>
@@ -58,7 +58,7 @@
 </ul>
 
 <h2>Access, transfer, and deletion</h2>
-<p>You can disconnect a workspace in Sideboard → Settings → Account → Slack, and remove the app from your Slack workspace (Apps → Sideboard → Remove). That drops tokens on the Mac and stops Listen for that team.</p>
+<p>You can disconnect a workspace in Sideboard → Settings → Remote → Slack, and remove the app from your Slack workspace (Apps → Sideboard → Remove). That drops tokens on the Mac and stops Listen for that team.</p>
 <p>To request access, export, or deletion of data Sideboard still holds (for example a leftover vault file, or a question about relay logs), email <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. That address is enough; you do not need another account. We will respond within two business days. For GDPR/CCPA-style deletion requests, say so in the email and include the Slack team id if you have it.</p>
 
 <h2>Contact</h2>

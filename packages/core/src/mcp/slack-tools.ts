@@ -38,14 +38,14 @@ function fail(err: unknown) {
 export function registerSlackTools(server: McpServer): void {
   server.tool(
     'list_teams',
-    'List Slack workspaces connected in Sideboard Account settings. Each row is team_id + name. Pass team_id to slack_list_channels, slack_list_users, slack_search, slack_read, slack_post, and slack_replies.',
+    'List Slack workspaces connected in Settings → Remote. Each row is team_id + name. Pass team_id to slack_list_channels, slack_list_users, slack_search, slack_read, slack_post, and slack_replies.',
     {},
     async () => {
       const teams = listSlackWorkspaces();
       if (teams.length === 0) {
         return text({
           teams: [],
-          hint: 'No Slack workspaces connected. Add one in Account → Slack workspaces (paste xoxb-/xoxp- or browser sign-in).',
+          hint: 'No Slack workspaces connected. Add one in Settings → Remote → Slack (paste xoxb-/xoxp- or browser sign-in).',
         });
       }
       return text({

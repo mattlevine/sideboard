@@ -205,7 +205,7 @@ export { githubAgentGitEnv } from './git-auth-mode.js';
 /**
  * Env pin so bare `gh` (and agents) target this checkout's **origin**, not
  * Makerkit-style `upstream`. `GH_REPO` is the CLI's documented override.
- * HTTPS rewrite / credential helper follow Account → GitHub git-auth mode.
+ * HTTPS rewrite / credential helper follow Settings → Git git-auth mode.
  * Token is warmed into a store file — not `GH_TOKEN` in the child env.
  */
 export async function originGhRepoEnv(

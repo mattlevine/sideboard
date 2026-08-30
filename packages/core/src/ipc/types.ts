@@ -37,6 +37,8 @@ import type {
   GithubGitAuthMode,
   IssueSource,
 } from '../store/app-settings.js';
+import type { OptionalServiceId } from '../integrations/optional-services.js';
+import type { OptionalServiceCliStatus } from '../integrations/optional-cli.js';
 import type { Workspace } from '../store/workspaces.js';
 import type { AddBoardPinInput, BoardPin, HomeBoardLoaded } from '../board/home-board.js';
 import type { BrightsyChatTargets } from '../agents/brightsy-targets.js';
@@ -165,6 +167,12 @@ export interface IpcApi {
     githubPat?: string | null;
     abletimeAccessToken?: string | null;
     abletimeHost?: string | null;
+    vercelToken?: string | null;
+    supabaseAccessToken?: string | null;
+    posthogPersonalApiKey?: string | null;
+    posthogHost?: string | null;
+    sentryAuthToken?: string | null;
+    sentryHost?: string | null;
   }): Promise<PublicAppSettings>;
   updateDefaultsSettings(patch: {
     agent?: AgentKind | null;
@@ -196,6 +204,18 @@ export interface IpcApi {
   }): Promise<PublicAppSettings>;
   /** Clear the stored AbleTime personal access token. */
   disconnectAbleTime(): Promise<PublicAppSettings>;
+  /** Verify and store a Vercel / Supabase / PostHog / Sentry token. */
+  connectOptionalService(input: {
+    id: OptionalServiceId;
+    token: string;
+    host?: string | null;
+  }): Promise<PublicAppSettings>;
+  /** Clear a stored optional-service token. */
+  disconnectOptionalService(id: OptionalServiceId): Promise<PublicAppSettings>;
+  /** PATH status for connector CLIs (`vercel`, `supabase`, `sentry-cli`). */
+  detectOptionalServiceClis(): Promise<OptionalServiceCliStatus[]>;
+  /** `npm i -g` a missing connector CLI (same helper as Settings → Agents). */
+  installOptionalServiceCli(id: OptionalServiceId): Promise<AgentSetupActionResult>;
   /**
    * Find or create an AbleTime task to track work against
    * (hosted MCP create_task / search_tasks).

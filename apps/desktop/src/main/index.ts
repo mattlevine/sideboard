@@ -90,6 +90,11 @@ import {
   disconnectLinear,
   disconnectAbleTimeConnection,
   verifyAbleTimeConnection,
+  connectOptionalService,
+  disconnectOptionalService,
+  detectOptionalServiceClis,
+  installOptionalServiceCli,
+  type OptionalServiceId,
   ensureAbleTimeTask,
   toAbleTimeIssueInfo,
   runSlackListen,
@@ -1016,6 +1021,29 @@ function registerIpc(): void {
   ipcMain.handle('disconnectAbleTime', () =>
     toPublicAppSettings(disconnectAbleTimeConnection()),
   );
+  ipcMain.handle(
+    'connectOptionalService',
+    async (
+      _e,
+      input: { id: OptionalServiceId; token: string; host?: string | null },
+    ) => {
+      const saved = await connectOptionalService(input);
+      return toPublicAppSettings(saved);
+    },
+  );
+  ipcMain.handle('disconnectOptionalService', (_e, id: OptionalServiceId) =>
+    toPublicAppSettings(disconnectOptionalService(id)),
+  );
+  ipcMain.handle('detectOptionalServiceClis', () => {
+    ensureAgentPath();
+    applyAppEnvironment(process.env);
+    return detectOptionalServiceClis();
+  });
+  ipcMain.handle('installOptionalServiceCli', async (_e, id: OptionalServiceId) => {
+    ensureAgentPath();
+    applyAppEnvironment(process.env);
+    return installOptionalServiceCli(id);
+  });
   ipcMain.handle(
     'ensureAbleTimeTask',
     async (

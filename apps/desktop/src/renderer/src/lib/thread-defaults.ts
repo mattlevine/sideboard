@@ -1,7 +1,7 @@
 import type { AgentKind, ThinkingEffort } from '@sideboard-ai/core';
 import { parseThinkingEffort } from '../components/ThinkingEffortChip';
 
-/** Account defaults for Create / new chat tabs (Settings → Account). */
+/** App defaults for Create / new chat tabs (Settings → Agents). */
 export async function loadThreadDefaults(): Promise<{
   agent: AgentKind;
   model: string | null;

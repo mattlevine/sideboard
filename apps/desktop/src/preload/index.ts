@@ -56,6 +56,10 @@ const api: IpcApi = {
   disconnectLinear: () => ipcRenderer.invoke('disconnectLinear'),
   connectAbleTime: (input) => ipcRenderer.invoke('connectAbleTime', input),
   disconnectAbleTime: () => ipcRenderer.invoke('disconnectAbleTime'),
+  connectOptionalService: (input) => ipcRenderer.invoke('connectOptionalService', input),
+  disconnectOptionalService: (id) => ipcRenderer.invoke('disconnectOptionalService', id),
+  detectOptionalServiceClis: () => ipcRenderer.invoke('detectOptionalServiceClis'),
+  installOptionalServiceCli: (id) => ipcRenderer.invoke('installOptionalServiceCli', id),
   ensureAbleTimeTask: (input) => ipcRenderer.invoke('ensureAbleTimeTask', input),
   disconnectSlackWorkspace: (teamId) =>
     ipcRenderer.invoke('disconnectSlackWorkspace', teamId),

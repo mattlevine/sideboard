@@ -136,7 +136,7 @@ export function slackTokenFor(
     const token = ws.user_token?.trim();
     if (!token) {
       throw new Error(
-        `Slack search needs a user token for ${ws.team_name}. Reconnect via Account → Slack (browser) or paste an xoxp- token.`,
+        `Slack search needs a user token for ${ws.team_name}. Reconnect via Settings → Remote → Slack (browser) or paste an xoxp- token.`,
       );
     }
     return token;
@@ -159,7 +159,7 @@ export function requireSlackWorkspace(teamId: string): SlackWorkspace {
     const connected = listSlackWorkspaces();
     const hint =
       connected.length === 0
-        ? 'Connect a workspace in Account → Slack workspaces.'
+        ? 'Connect a workspace in Settings → Remote → Slack.'
         : `Connected: ${connected.map((t) => `${t.team_name} (${t.team_id})`).join(', ')}`;
     throw new Error(`Unknown Slack team_id "${teamId}". ${hint}`);
   }

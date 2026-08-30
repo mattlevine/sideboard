@@ -76,7 +76,7 @@ export function githubAgentGitEnv(existing?: EnvLike): Record<string, string> {
 }
 
 /**
- * Extra env for a worktree agent given Account → GitHub git-auth mode.
+ * Extra env for a worktree agent given Settings → Git git-auth mode.
  * Does not set `GH_REPO` (caller adds that after resolving origin).
  *
  * Token is written to a 0600 credential store + isolated `GH_CONFIG_DIR` in
@@ -251,33 +251,33 @@ export function formatGitAuthModeDirective(mode: GithubGitAuthMode): string {
     '- `git` and `gh` already authenticate in this process. Do not look for tokens in the environment, paste credentials into commands, or switch remotes to SSH.',
     '- Do not set GitHub token environment variables, pass `--with-token`, or run `gh auth login` from this turn.',
     '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below.',
-    '- If git/gh fail with auth errors, tell the user to run `gh auth login` on this Mac (or set a PAT in Account → GitHub). Do not wait for a Keychain dialog.',
+    '- If git/gh fail with auth errors, tell the user to run `gh auth login` on this Mac (or set a PAT in Settings → Git). Do not wait for a Keychain dialog.',
   ];
   switch (mode) {
     case 'gh':
       return [
-        'Git authentication (Account → GitHub mode: gh CLI):',
+        'Git authentication (Settings → Git mode: gh CLI):',
         '- This process rewrites `git@github.com:` and `ssh://git@github.com/` to HTTPS.',
         ...shared,
       ].join('\n');
     case 'ssh':
       return [
-        'Git authentication (Account → GitHub mode: SSH):',
+        'Git authentication (Settings → Git mode: SSH):',
         '- Keep SSH remotes (`git@github.com:…`). Do not rewrite them to HTTPS.',
-        '- SSH is batch-mode: it will not prompt for a Keychain password. If push fails with `Permission denied (publickey)`, tell the user to unlock ssh-agent or switch Account → GitHub to Auto / gh CLI — do not rewrite remotes yourself.',
+        '- SSH is batch-mode: it will not prompt for a Keychain password. If push fails with `Permission denied (publickey)`, tell the user to unlock ssh-agent or switch Settings → Git to Auto / gh CLI — do not rewrite remotes yourself.',
         '- `gh` already authenticates for PRs/API (no token in the environment). Do not set GitHub token environment variables or run `gh auth login` from this turn.',
         '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below.',
       ].join('\n');
     case 'token':
       return [
-        'Git authentication (Account → GitHub mode: personal access token):',
+        'Git authentication (Settings → Git mode: personal access token):',
         '- This process rewrites GitHub SSH remotes to HTTPS.',
         ...shared,
       ].join('\n');
     case 'auto':
     default:
       return [
-        'Git authentication (Account → GitHub mode: auto):',
+        'Git authentication (Settings → Git mode: auto):',
         '- This process rewrites GitHub SSH remotes to HTTPS so git/ssh never prompt the macOS Keychain (required for unattended orchestrator turns).',
         ...shared,
       ].join('\n');

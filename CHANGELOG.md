@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140] - 2026-08-29
+
+### Added
+
+- Settings panels for Git, Issues, Remote (Slack), and Connectors (Vercel, Supabase, PostHog, Sentry). Default agent/model/effort lives at the top of Agents. Slack is Settings → Remote.
+- **Install CLI** on Connectors when `vercel`, `supabase`, or `sentry-cli` is missing (`npm i -g`, Terminal fallback). Does not auto-install on Connect. PostHog stays HTTP-only.
+
+### Changed
+
+- Removed the Account settings panel. Settings opens on Agents. User-facing paths now say Settings → Git / Issues / Remote / Connectors.
+
 ### Fixed
 
 - Chat tabs-bar token text matches the worktree hover card: muted billed `X tok`, no occupancy `/ 1M` ratio or warn/hot colors.

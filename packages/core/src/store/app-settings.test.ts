@@ -268,6 +268,50 @@ describe('app settings', () => {
     expect(mod.getGithubPat()).toBeNull();
   });
 
+  it('vaults optional service tokens and injects them into agent env', async () => {
+    const mod = await load();
+    const saved = mod.updateIntegrationsSettings({
+      vercelToken: 'vercel_test',
+      vercelViewerName: 'matt',
+      supabaseAccessToken: 'sbp_test',
+      posthogPersonalApiKey: 'phx_test',
+      posthogHost: 'https://eu.posthog.com',
+      sentryAuthToken: 'sentry_test',
+    });
+    expect(saved.integrations.vercelToken).toBe('vercel_test');
+    expect(saved.integrations.supabaseAccessToken).toBe('sbp_test');
+    expect(saved.integrations.posthogPersonalApiKey).toBe('phx_test');
+    expect(saved.integrations.sentryAuthToken).toBe('sentry_test');
+
+    const pub = mod.toPublicAppSettings(mod.loadAppSettings());
+    expect(pub.integrations.hasVercelToken).toBe(true);
+    expect(pub.integrations.hasSupabaseToken).toBe(true);
+    expect(pub.integrations.hasPosthogToken).toBe(true);
+    expect(pub.integrations.hasSentryToken).toBe(true);
+    expect(pub.integrations.vercelViewerName).toBe('matt');
+    expect((pub.integrations as { vercelToken?: string }).vercelToken).toBeUndefined();
+
+    const target: NodeJS.ProcessEnv = { VERCEL_TOKEN: 'from-shell' };
+    mod.applyAppEnvironment(target);
+    expect(target.VERCEL_TOKEN).toBe('from-shell');
+    expect(target.SUPABASE_ACCESS_TOKEN).toBe('sbp_test');
+    expect(target.POSTHOG_PERSONAL_API_KEY).toBe('phx_test');
+    expect(target.POSTHOG_HOST).toBe('https://eu.posthog.com');
+    expect(target.SENTRY_AUTH_TOKEN).toBe('sentry_test');
+    expect(target.SENTRY_URL).toBe('https://sentry.io');
+
+    const cleared = mod.updateIntegrationsSettings({
+      vercelToken: null,
+      supabaseAccessToken: null,
+      posthogPersonalApiKey: null,
+      sentryAuthToken: null,
+    });
+    expect(cleared.integrations.vercelToken).toBeUndefined();
+    expect(mod.toPublicAppSettings(mod.loadAppSettings()).integrations.hasVercelToken).toBe(
+      false,
+    );
+  });
+
   it('round-trips default agent, model, and effort', async () => {
     const mod = await load();
     expect(mod.getDefaultAgent()).toBe('claude');

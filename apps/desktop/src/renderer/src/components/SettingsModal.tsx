@@ -7,22 +7,43 @@ import type {
   Autonomy,
   BrightsySession,
   CliAgentKind,
-  SlackListenStatus,
-  GitHubStatus,
-  GithubGitAuthMode,
-  IssueSource,
   PublicAppSettings,
-  SlackWorkspaceInfo,
   ThinkingEffort,
   Thread,
 } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
+import { emptyPublicIntegrations } from '../lib/optional-services';
+import { ConnectorsSettings } from './ConnectorsSettings';
+import { GitSettings } from './GitSettings';
+import { IssuesSettings } from './IssuesSettings';
+import { RemoteSettings } from './RemoteSettings';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { SchedulesSettings } from './SchedulesSettings';
 import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
 
-type NavId = 'account' | 'agents' | 'environment' | 'schedules' | 'advanced' | 'history';
+export type SettingsNavId =
+  | 'agents'
+  | 'git'
+  | 'issues'
+  | 'remote'
+  | 'connectors'
+  | 'environment'
+  | 'schedules'
+  | 'advanced'
+  | 'history';
+
+const SETTINGS_NAV_TITLES: Record<Exclude<SettingsNavId, 'agents'>, string> = {
+  git: 'Git',
+  issues: 'Issues',
+  remote: 'Remote',
+  connectors: 'Connectors',
+  environment: 'Environment',
+  schedules: 'Schedules',
+  advanced: 'Advanced',
+  history: 'History',
+};
+type NavId = SettingsNavId;
 type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
 
 const CLI_PATH_AGENTS = new Set<AgentPanel>(['claude', 'codex', 'opencode', 'brightsy']);
@@ -61,14 +82,7 @@ function emptyAppSettings(): PublicAppSettings {
     codex: {},
     opencode: {},
     brightsy: {},
-    integrations: {
-      hasLinearApiKey: false,
-      hasLinearOAuth: false,
-      hasSlackClientSecret: false,
-      hasSlackAppToken: false,
-      hasGithubPat: false,
-      hasAbleTimeToken: false,
-    },
+    integrations: emptyPublicIntegrations(),
     defaults: {},
     advanced: {},
   };
@@ -89,12 +103,7 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
     opencode: next.opencode ?? {},
     brightsy: next.brightsy ?? {},
     integrations: {
-      hasLinearApiKey: false,
-      hasLinearOAuth: false,
-      hasSlackClientSecret: false,
-      hasSlackAppToken: false,
-      hasGithubPat: false,
-      hasAbleTimeToken: false,
+      ...emptyPublicIntegrations(),
       ...next.integrations,
     },
     defaults: next.defaults ?? {},
@@ -141,7 +150,7 @@ function defaultAgentModelLabel(
 
 interface Props {
   onClose: () => void;
-  /** Initial sidebar section (e.g. Account from Create-from Linear setup). */
+  /** Initial sidebar section (e.g. Issues from Create-from Linear setup). */
   initialNav?: NavId;
   /** Archived threads for Settings → History. */
   archived?: Thread[];
@@ -199,7 +208,7 @@ const AGENT_PANELS: Array<{
     label: 'Brightsy',
     envKey: null,
     blurb:
-      'Hosted chat via the Brightsy CLI (`brightsy login`) — no local file edits. Connect a team below for Brightsy schema and files. Slack (Account) is how you remote-control this Mac.',
+      'Hosted chat via the Brightsy CLI (`brightsy login`) — no local file edits. Connect a team below for Brightsy schema and files. Slack (Remote) is how you remote-control this Mac.',
     docsUrl: 'https://www.npmjs.com/package/@brightsy/cli',
   },
 ];
@@ -210,19 +219,13 @@ function maskSecret(value: string): string {
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
 }
 
-/** IPC maps OAuth abort to these messages — do not import Node core into the renderer. */
-function isOauthCancelled(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return /sign-in cancelled/i.test(message);
-}
-
 function statusFor(statuses: AgentStatus[], id: AgentPanel): AgentStatus | undefined {
   return statuses.find((s) => s.agent === id);
 }
 
 export function SettingsModal({
   onClose,
-  initialNav = 'account',
+  initialNav = 'agents',
   archived = [],
   onRestoreArchived,
   onOpenArchived,
@@ -243,55 +246,22 @@ export function SettingsModal({
   const [cliPathDraft, setCliPathDraft] = useState('');
   const [systemCliPath, setSystemCliPath] = useState<string | null>(null);
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
-  const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
-  const [slackWorkspaces, setSlackWorkspaces] = useState<SlackWorkspaceInfo[]>([]);
-  const [slackListen, setSlackListen] = useState<SlackListenStatus | null>(null);
-  const [slackTokenDraft, setSlackTokenDraft] = useState('');
-  const [slackOauthBusy, setSlackOauthBusy] = useState(false);
-  const [slackDeviceLabelDraft, setSlackDeviceLabelDraft] = useState('');
-  const [linearKeyDraft, setLinearKeyDraft] = useState('');
-  const [showLinearKey, setShowLinearKey] = useState(false);
-  const [abletimeTokenDraft, setAbletimeTokenDraft] = useState('');
-  const [showAbletimeToken, setShowAbletimeToken] = useState(false);
-  const [abletimeHostDraft, setAbletimeHostDraft] = useState('');
-  const [abletimeBusy, setAbletimeBusy] = useState(false);
-  const [githubPatDraft, setGithubPatDraft] = useState('');
-  const [showGithubPat, setShowGithubPat] = useState(false);
-  const [linearOauthBusy, setLinearOauthBusy] = useState(false);
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
   const [setupLog, setSetupLog] = useState<string | null>(null);
   const loginAbortRef = useRef<AbortController | null>(null);
 
   async function reload() {
-    const slackListenApi = window.sideboard.getSlackListenStatus;
-    const [s, agents, session, gh, slack, slackIn] = await Promise.all([
+    const [s, agents, session] = await Promise.all([
       window.sideboard.getAppSettings(),
       window.sideboard.detectAgents(),
       window.sideboard.getBrightsySession().catch(() => null),
-      window.sideboard.getGitHubStatus().catch(() => null),
-      window.sideboard.getSlackWorkspaces().catch(() => [] as SlackWorkspaceInfo[]),
-      typeof slackListenApi === 'function'
-        ? slackListenApi().catch(() => null)
-        : Promise.resolve(null),
     ]);
     const next = normalizeSettings(s);
     setSettings(next);
     setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 5));
     setStatuses(agents);
     setBrightsySession(session);
-    setGithubStatus(gh);
-    setSlackWorkspaces(slack);
-    setSlackListen(slackIn);
-    setLinearKeyDraft('');
-    setAbletimeTokenDraft('');
-    setAbletimeHostDraft(s.integrations.abletimeHost?.trim() || '');
-    setSlackTokenDraft('');
-    setSlackDeviceLabelDraft(
-      s.integrations.slackDeviceLabel?.trim() ||
-        slackIn?.deviceLabel?.trim() ||
-        '',
-    );
   }
 
   useEffect(() => {
@@ -314,18 +284,6 @@ export function SettingsModal({
   }, [agentPanel]);
 
   useEffect(() => {
-    if (nav !== 'account') return;
-    const api = window.sideboard.getSlackListenStatus;
-    if (typeof api !== 'function') return;
-    const id = window.setInterval(() => {
-      void api()
-        .then(setSlackListen)
-        .catch(() => undefined);
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [nav]);
-
-  useEffect(() => {
     setSetupLog(null);
     setSetupBusy(null);
   }, [agentPanel]);
@@ -340,8 +298,6 @@ export function SettingsModal({
 
   useEffect(() => {
     return () => {
-      void window.sideboard.cancelSlackOAuth?.();
-      void window.sideboard.cancelLinearOAuth?.();
       loginAbortRef.current?.abort();
     };
   }, []);
@@ -503,37 +459,6 @@ export function SettingsModal({
     onSettingsChange?.(normalized);
   }
 
-  async function saveIntegrationsPatch(patch: {
-    linearApiKey?: string | null;
-    issueSource?: IssueSource | null;
-    slackDeviceLabel?: string | null;
-    githubGitAuthMode?: GithubGitAuthMode | null;
-    githubPat?: string | null;
-    abletimeAccessToken?: string | null;
-    abletimeHost?: string | null;
-  }) {
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await window.sideboard.updateIntegrationsSettings(patch);
-      applySettings(next);
-      setLinearKeyDraft('');
-      if ('abletimeAccessToken' in patch) setAbletimeTokenDraft('');
-      if ('githubPat' in patch) setGithubPatDraft('');
-      if ('slackDeviceLabel' in patch) {
-        setSlackDeviceLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
-        const listenApi = window.sideboard.getSlackListenStatus;
-        if (typeof listenApi === 'function') {
-          setSlackListen(await listenApi().catch(() => null));
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function saveDefaultsPatch(patch: {
     agent?: AgentKind | null;
     model?: string | null;
@@ -611,16 +536,6 @@ export function SettingsModal({
             </div>
             <button
               type="button"
-              className={`settings-nav-btn${nav === 'account' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('account');
-                setAgentPanel(null);
-              }}
-            >
-              Account
-            </button>
-            <button
-              type="button"
               className={`settings-nav-btn${nav === 'agents' && !agentPanel ? ' active' : ''}`}
               onClick={() => {
                 setNav('agents');
@@ -652,6 +567,46 @@ export function SettingsModal({
                 })}
               </div>
             )}
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'git' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('git');
+                setAgentPanel(null);
+              }}
+            >
+              Git
+            </button>
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'issues' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('issues');
+                setAgentPanel(null);
+              }}
+            >
+              Issues
+            </button>
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'remote' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('remote');
+                setAgentPanel(null);
+              }}
+            >
+              Remote
+            </button>
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'connectors' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('connectors');
+                setAgentPanel(null);
+              }}
+            >
+              Connectors
+            </button>
             <button
               type="button"
               className={`settings-nav-btn${nav === 'environment' ? ' active' : ''}`}
@@ -697,19 +652,11 @@ export function SettingsModal({
           <div className="settings-main">
             <div className="settings-main-header">
               <h3>
-                {nav === 'account'
-                  ? 'Account'
-                  : nav === 'environment'
-                  ? 'Environment'
-                  : nav === 'schedules'
-                    ? 'Schedules'
-                  : nav === 'advanced'
-                    ? 'Advanced'
-                    : nav === 'history'
-                      ? 'History'
-                    : activeAgent
-                      ? activeAgent.label
-                      : 'Agents'}
+                {nav === 'agents'
+                  ? activeAgent
+                    ? activeAgent.label
+                    : 'Agents'
+                  : SETTINGS_NAV_TITLES[nav]}
               </h3>
               <button type="button" className="icon-btn" title="Close" onClick={onClose}>
                 ✕
@@ -718,22 +665,59 @@ export function SettingsModal({
 
             {error && <div className="settings-error">{error}</div>}
 
-            {nav === 'account' && (
+            {nav === 'git' && (
+              <GitSettings
+                settings={settings}
+                applySettings={applySettings}
+                busy={busy}
+                setBusy={setBusy}
+                setError={setError}
+              />
+            )}
+
+            {nav === 'issues' && (
+              <IssuesSettings
+                settings={settings}
+                applySettings={applySettings}
+                busy={busy}
+                setBusy={setBusy}
+                setError={setError}
+              />
+            )}
+
+            {nav === 'remote' && (
+              <RemoteSettings
+                settings={settings}
+                applySettings={applySettings}
+                busy={busy}
+                setBusy={setBusy}
+                setError={setError}
+              />
+            )}
+
+            {nav === 'connectors' && (
+              <ConnectorsSettings
+                settings={settings}
+                applySettings={applySettings}
+                busy={busy}
+                setBusy={setBusy}
+                setError={setError}
+              />
+            )}
+
+            {nav === 'agents' && !activeAgent && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Connect GitHub, Linear, and Slack. These connections are owned by Sideboard —
-                  not per-agent MCP.
+                  Default agent for new chats, then the harnesses. Credentials set here also appear
+                  under Environment and are injected into agent runs.
                 </p>
-
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
                     <div>
-                      <div className="settings-section-title">
-                        Default agent, model &amp; effort
-                      </div>
+                      <div className="settings-section-title">Default agent, model &amp; effort</div>
                       <p className="settings-hint">
-                        Used for new workspace chats, chat tabs, and MCP-spawned worktrees
-                        (when agent/model are omitted).
+                        Used for new workspace chats, chat tabs, and MCP-spawned worktrees (when
+                        agent/model are omitted).
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
                         {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort)}
@@ -749,622 +733,6 @@ export function SettingsModal({
                     </button>
                   </div>
                 </div>
-
-                <div className="settings-section settings-section-card">
-                  <div className="settings-toggle-row">
-                    <div>
-                      <div className="settings-section-title">GitHub</div>
-                      <p className="settings-hint">
-                        Choose how Sideboard and worktree agents authenticate git on this Mac.
-                        The selected mode is injected into agent prompts so they use the same path.
-                      </p>
-                      {githubStatus?.connected ? (
-                        <p className="settings-status-text" style={{ marginTop: 8 }}>
-                          <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
-                          Connected to {githubStatus.login ?? 'GitHub'}
-                        </p>
-                      ) : (
-                        <p className="settings-hint" style={{ marginTop: 8 }}>
-                          {githubStatus?.reason ?? 'Not connected'}
-                        </p>
-                      )}
-                    </div>
-                    <div className="row" style={{ gap: 8, margin: 0 }}>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          void window.sideboard
-                            .getGitHubStatus()
-                            .then(setGithubStatus)
-                            .catch((err) =>
-                              setError(err instanceof Error ? err.message : String(err)),
-                            );
-                        }}
-                      >
-                        Refresh
-                      </button>
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={busy}
-                        onClick={() => {
-                          void window.sideboard.openExternal(
-                            'https://cli.github.com/manual/gh_auth_login',
-                          );
-                        }}
-                      >
-                        Manage
-                      </button>
-                    </div>
-                  </div>
-                  <div className="settings-mode-list" role="radiogroup" aria-label="GitHub git authentication">
-                    {(
-                      [
-                        {
-                          id: 'auto' as const,
-                          title: 'Auto',
-                          badge: 'Recommended',
-                          hint: 'HTTPS in the agent process using this Mac’s gh login. Keychain may prompt once at app start; Slack and unattended Cursor turns do not.',
-                        },
-                        {
-                          id: 'gh' as const,
-                          title: 'gh CLI auth',
-                          hint: 'Rewrite git@github.com remotes to HTTPS. git/gh use a Sideboard credential file — no GH_TOKEN in the agent, no Keychain after launch.',
-                        },
-                        {
-                          id: 'ssh' as const,
-                          title: 'SSH',
-                          hint: 'Keep SSH remotes. Batch-mode only — will not prompt Keychain. Slack/Cursor fail if ssh-agent is locked.',
-                        },
-                        {
-                          id: 'token' as const,
-                          title: 'Personal access token',
-                          hint: 'Store a PAT on this Mac. Agents get HTTPS remotes via the same credential file (token is not in their environment).',
-                        },
-                      ] satisfies Array<{
-                        id: GithubGitAuthMode;
-                        title: string;
-                        hint: string;
-                        badge?: string;
-                      }>
-                    ).map((opt) => {
-                      const selected =
-                        (settings.integrations.githubGitAuthMode ?? 'auto') === opt.id;
-                      return (
-                        <label
-                          key={opt.id}
-                          className={`settings-mode-option${selected ? ' selected' : ''}`}
-                        >
-                          <input
-                            type="radio"
-                            name="github-git-auth-mode"
-                            checked={selected}
-                            disabled={busy}
-                            onChange={() =>
-                              void saveIntegrationsPatch({ githubGitAuthMode: opt.id })
-                            }
-                          />
-                          <div className="settings-mode-option-body">
-                            <div className="settings-mode-option-title">
-                              {opt.title}
-                              {opt.badge ? (
-                                <span className="settings-badge">{opt.badge}</span>
-                              ) : null}
-                            </div>
-                            <p className="settings-hint" style={{ marginTop: 4 }}>
-                              {opt.hint}
-                            </p>
-                            {opt.id === 'token' && selected ? (
-                              <div className="row" style={{ marginTop: 10, gap: 8 }}>
-                                {settings.integrations.hasGithubPat ? (
-                                  <>
-                                    <p className="settings-status-text" style={{ flex: 1, margin: 0 }}>
-                                      Token saved on this Mac
-                                    </p>
-                                    <button
-                                      type="button"
-                                      disabled={busy}
-                                      onClick={() =>
-                                        void saveIntegrationsPatch({ githubPat: null })
-                                      }
-                                    >
-                                      Clear
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <input
-                                      type={showGithubPat ? 'text' : 'password'}
-                                      value={githubPatDraft}
-                                      onChange={(e) => setGithubPatDraft(e.target.value)}
-                                      placeholder="ghp_… or github_pat_…"
-                                      style={{ flex: 1 }}
-                                      autoComplete="off"
-                                    />
-                                    <button
-                                      type="button"
-                                      className="settings-inline-btn"
-                                      onClick={() => setShowGithubPat((v) => !v)}
-                                    >
-                                      {showGithubPat ? 'Hide' : 'Show'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={busy || !githubPatDraft.trim()}
-                                      onClick={() =>
-                                        void saveIntegrationsPatch({
-                                          githubPat: githubPatDraft.trim(),
-                                        })
-                                      }
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="settings-inline-btn"
-                                      onClick={() => {
-                                        void window.sideboard.openExternal(
-                                          'https://github.com/settings/tokens/new?scopes=repo,read:org,workflow',
-                                        );
-                                      }}
-                                    >
-                                      Create token
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            ) : null}
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="settings-section settings-section-card">
-                  <div className="settings-section-title">Linear</div>
-                  <p className="settings-hint">
-                    Connect Linear so Sideboard can list, create, update, and comment on issues.
-                    Sign in with your browser — same pattern as Slack. If you connected before
-                    write access shipped, Disconnect and Connect via browser again.
-                  </p>
-                  {settings.integrations.hasLinearApiKey ? (
-                    <div className="settings-toggle-row" style={{ marginTop: 10 }}>
-                      <div>
-                        <p className="settings-status-text">
-                          <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
-                          {settings.integrations.hasLinearOAuth
-                            ? [
-                                'Connected',
-                                settings.integrations.linearViewerName,
-                                settings.integrations.linearOrganizationName,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')
-                            : 'Connected · key saved on this Mac'}
-                        </p>
-                      </div>
-                      <div className="row" style={{ gap: 8, margin: 0 }}>
-                        <button
-                          type="button"
-                          disabled={busy || linearOauthBusy}
-                          onClick={() => {
-                            setBusy(true);
-                            setError(null);
-                            void window.sideboard
-                              .disconnectLinear()
-                              .then((next) => applySettings(next))
-                              .catch((err) =>
-                                setError(err instanceof Error ? err.message : String(err)),
-                              )
-                              .finally(() => setBusy(false));
-                          }}
-                        >
-                          Disconnect
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="row" style={{ marginTop: 10, gap: 8 }}>
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={busy || linearOauthBusy}
-                        onClick={() => {
-                          setLinearOauthBusy(true);
-                          setError(null);
-                          void window.sideboard
-                            .startLinearOAuth()
-                            .then((next) => applySettings(next))
-                            .catch((err) => {
-                              if (isOauthCancelled(err)) return;
-                              setError(err instanceof Error ? err.message : String(err));
-                            })
-                            .finally(() => setLinearOauthBusy(false));
-                        }}
-                      >
-                        {linearOauthBusy ? 'Waiting for Linear…' : 'Connect via browser'}
-                      </button>
-                      {linearOauthBusy ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void window.sideboard.cancelLinearOAuth();
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      ) : null}
-                      <input
-                        type={showLinearKey ? 'text' : 'password'}
-                        value={linearKeyDraft}
-                        onChange={(e) => setLinearKeyDraft(e.target.value)}
-                        placeholder="or paste lin_api_…"
-                        style={{ flex: 1 }}
-                        autoComplete="off"
-                      />
-                      <button
-                        type="button"
-                        disabled={busy || linearOauthBusy || !linearKeyDraft.trim()}
-                        onClick={() =>
-                          void saveIntegrationsPatch({ linearApiKey: linearKeyDraft.trim() })
-                        }
-                      >
-                        Connect
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="settings-section settings-section-card">
-                  <div className="settings-section-title">AbleTime</div>
-                  <p className="settings-hint">
-                    Connect AbleTime so Sideboard can list tasks and auto-create one
-                    to track against when you start work without a ticket. Uses
-                    AbleTime&apos;s hosted MCP (
-                    <code>POST /api/public/v2/mcp</code>
-                    ). Enable <strong>Agent access (MCP)</strong> in AbleTime, then
-                    paste a personal access token from Profile → API Access (
-                    <code>apt_…</code>
-                    ).
-                  </p>
-                  {settings.integrations.hasAbleTimeToken ? (
-                    <div className="settings-toggle-row" style={{ marginTop: 10 }}>
-                      <div>
-                        <p className="settings-status-text">
-                          <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
-                          {[
-                            'Connected',
-                            settings.integrations.abletimeViewerName,
-                            settings.integrations.abletimeHost,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </p>
-                      </div>
-                      <div className="row" style={{ gap: 8, margin: 0 }}>
-                        <button
-                          type="button"
-                          disabled={busy || abletimeBusy}
-                          onClick={() => {
-                            setBusy(true);
-                            setError(null);
-                            void window.sideboard
-                              .disconnectAbleTime()
-                              .then((next) => applySettings(next))
-                              .catch((err) =>
-                                setError(err instanceof Error ? err.message : String(err)),
-                              )
-                              .finally(() => setBusy(false));
-                          }}
-                        >
-                          Disconnect
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: 10 }}>
-                      <div className="row" style={{ gap: 8 }}>
-                        <input
-                          type={showAbletimeToken ? 'text' : 'password'}
-                          value={abletimeTokenDraft}
-                          onChange={(e) => setAbletimeTokenDraft(e.target.value)}
-                          placeholder="apt_…"
-                          style={{ flex: 1 }}
-                          autoComplete="off"
-                        />
-                        <button
-                          type="button"
-                          className="settings-inline-btn"
-                          onClick={() => setShowAbletimeToken((v) => !v)}
-                        >
-                          {showAbletimeToken ? 'Hide' : 'Show'}
-                        </button>
-                        <button
-                          type="button"
-                          className="primary"
-                          disabled={busy || abletimeBusy || !abletimeTokenDraft.trim()}
-                          onClick={() => {
-                            setAbletimeBusy(true);
-                            setError(null);
-                            void window.sideboard
-                              .connectAbleTime({
-                                token: abletimeTokenDraft.trim(),
-                                host: abletimeHostDraft.trim() || null,
-                              })
-                              .then((next) => {
-                                applySettings(next);
-                                setAbletimeTokenDraft('');
-                              })
-                              .catch((err) =>
-                                setError(err instanceof Error ? err.message : String(err)),
-                              )
-                              .finally(() => setAbletimeBusy(false));
-                          }}
-                        >
-                          {abletimeBusy ? 'Checking…' : 'Connect'}
-                        </button>
-                      </div>
-                      <input
-                        value={abletimeHostDraft}
-                        onChange={(e) => setAbletimeHostDraft(e.target.value)}
-                        placeholder="https://track.abletime.com"
-                        style={{ marginTop: 8, width: '100%' }}
-                        autoComplete="off"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="settings-section settings-section-card">
-                  <div className="settings-section-title">Slack workspaces</div>
-                  <p className="settings-hint">
-                    Click <strong>Add via browser</strong> to install the Sideboard Slack app into a
-                    workspace. Listening starts automatically. DMs and @mentions go to the Global
-                    orchestrator while Sideboard is running. Until the Slack app has{' '}
-                    <strong>Public Distribution</strong> on, Slack only offers the home workspace
-                    (Brightsy) — that is a Slack app setting, not a Sideboard picker.
-                  </p>
-                  {slackWorkspaces.length > 0 ? (
-                    <div className="settings-check-list" style={{ marginTop: 10 }}>
-                      {slackWorkspaces.map((ws) => (
-                        <div key={ws.team_id} className="settings-toggle-row">
-                          <div>
-                            <p className="settings-status-text">
-                              <span
-                                className="settings-dot ok"
-                                style={{ display: 'inline-block', marginRight: 8 }}
-                              />
-                              {ws.team_name}
-                              <span className="settings-hint"> · {ws.team_id}</span>
-                              {!ws.has_user_token ? (
-                                <span className="settings-hint"> · search needs user token</span>
-                              ) : null}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={busy || slackOauthBusy}
-                      onClick={() => {
-                        setBusy(true);
-                        setError(null);
-                        void window.sideboard
-                          .disconnectSlackWorkspace(ws.team_id)
-                          .then((list) => {
-                            setSlackWorkspaces(list);
-                            return window.sideboard.getSlackListenStatus?.();
-                          })
-                          .then((status) => {
-                            if (status) setSlackListen(status);
-                          })
-                          .catch((err) =>
-                            setError(err instanceof Error ? err.message : String(err)),
-                          )
-                          .finally(() => setBusy(false));
-                      }}
-                          >
-                            Disconnect
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="settings-hint" style={{ marginTop: 8 }}>
-                      No workspaces connected yet.
-                    </p>
-                  )}
-                  <div className="row" style={{ marginTop: 10, gap: 8 }}>
-                    <input
-                      type="password"
-                      value={slackTokenDraft}
-                      onChange={(e) => setSlackTokenDraft(e.target.value)}
-                      placeholder="xoxb-… or xoxp-…"
-                      style={{ flex: 1 }}
-                      autoComplete="off"
-                    />
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={busy || slackOauthBusy || !slackTokenDraft.trim()}
-                      onClick={() => {
-                        setBusy(true);
-                        setError(null);
-                        void window.sideboard
-                          .connectSlackToken(slackTokenDraft.trim())
-                          .then((list) => {
-                            setSlackWorkspaces(list);
-                            setSlackTokenDraft('');
-                            return window.sideboard.getSlackListenStatus?.();
-                          })
-                          .then((status) => {
-                            if (status) setSlackListen(status);
-                          })
-                          .catch((err) =>
-                            setError(err instanceof Error ? err.message : String(err)),
-                          )
-                          .finally(() => setBusy(false));
-                      }}
-                    >
-                      Add workspace
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || slackOauthBusy}
-                      onClick={() => {
-                        setSlackOauthBusy(true);
-                        setError(null);
-                        void window.sideboard
-                          .startSlackOAuth()
-                          .then((list) => {
-                            setSlackWorkspaces(list);
-                            return window.sideboard.getSlackListenStatus?.();
-                          })
-                          .then((status) => {
-                            if (status) setSlackListen(status);
-                          })
-                          .catch((err) => {
-                            if (isOauthCancelled(err)) return;
-                            setError(err instanceof Error ? err.message : String(err));
-                          })
-                          .finally(() => setSlackOauthBusy(false));
-                      }}
-                    >
-                      {slackOauthBusy ? 'Waiting for Slack…' : 'Add via browser'}
-                    </button>
-                    {slackOauthBusy ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void window.sideboard.cancelSlackOAuth();
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    ) : null}
-                  </div>
-                  <div style={{ marginTop: 16 }}>
-                    <div className="settings-section-title">This Mac</div>
-                    <p className="settings-hint">
-                      Each MacBook is its own Slack destination. Name this one{' '}
-                      <strong>Personal</strong> or <strong>Work</strong>. Replies come
-                      back as <code>Work: …</code> so you know which Mac answered.
-                      Address one with <code>work:</code> or <code>personal:</code> at
-                      the start of the DM (case doesn&apos;t matter).
-                    </p>
-                    <div className="row" style={{ marginTop: 8, gap: 8 }}>
-                      <input
-                        value={slackDeviceLabelDraft}
-                        onChange={(e) => setSlackDeviceLabelDraft(e.target.value)}
-                        placeholder="Personal"
-                        style={{ flex: 1 }}
-                        autoComplete="off"
-                      />
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={
-                          busy ||
-                          !slackDeviceLabelDraft.trim() ||
-                          slackDeviceLabelDraft.trim() ===
-                            (settings.integrations.slackDeviceLabel?.trim() || '')
-                        }
-                        onClick={() =>
-                          void saveIntegrationsPatch({
-                            slackDeviceLabel: slackDeviceLabelDraft.trim(),
-                          })
-                        }
-                      >
-                        Save name
-                      </button>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 16 }}>
-                    <div className="settings-section-title">Listening</div>
-                    <p className="settings-hint">
-                      DMs to the bot and @mentions go to the Global orchestrator. Keep Sideboard
-                      running.
-                    </p>
-                  </div>
-                  <p className="settings-hint" style={{ marginTop: 8 }}>
-                    {slackListen?.workspaceCount
-                      ? slackListen.running
-                        ? `${
-                            slackListen.mode === 'relay'
-                              ? 'Relay connected'
-                              : 'Listening'
-                          }${slackListen.deviceLabel ? ` · ${slackListen.deviceLabel}` : ''} · ${slackListen.workspaceCount} workspace${slackListen.workspaceCount === 1 ? '' : 's'}`
-                        : slackListen.lastError
-                          ? `Not connected — ${slackListen.lastError}`
-                          : slackListen.mode
-                            ? 'Connecting…'
-                            : 'Listen is not available on this Mac yet.'
-                      : 'Connect a workspace to start listening.'}
-                  </p>
-                  {slackListen?.lastLog ? (
-                    <p className="settings-hint settings-cloud-log">{slackListen.lastLog}</p>
-                  ) : null}
-                  <p className="settings-hint" style={{ marginTop: 12 }}>
-                    Connect a workspace with Add via browser. Listening only receives your Slack
-                    user&apos;s messages on this Mac.
-                  </p>
-                </div>
-
-                <div className="settings-section settings-section-card">
-                  <div className="settings-section-title">Issue source</div>
-                  <p className="settings-hint">
-                    Prefer GitHub Issues, Linear, or AbleTime in Create-from and Home.
-                    If the preferred tracker is not connected, GitHub Issues are used
-                    automatically. When AbleTime is selected, new work without a ticket
-                    auto-creates a task to track against.
-                  </p>
-                  <div className="row" style={{ marginTop: 10, gap: 8 }}>
-                    {([
-                      { id: 'github' as const, label: 'GitHub Issues' },
-                      { id: 'linear' as const, label: 'Linear' },
-                      { id: 'abletime' as const, label: 'AbleTime' },
-                    ]).map((opt) => {
-                      const preferred = settings.integrations.issueSource ?? 'github';
-                      const active = preferred === opt.id;
-                      const linearOk = Boolean(settings.integrations.hasLinearApiKey);
-                      const abletimeOk = Boolean(settings.integrations.hasAbleTimeToken);
-                      const disabled =
-                        (opt.id === 'linear' && !linearOk) ||
-                        (opt.id === 'abletime' && !abletimeOk);
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          className={active ? 'primary' : ''}
-                          disabled={busy || disabled}
-                          title={
-                            disabled
-                              ? opt.id === 'abletime'
-                                ? 'Connect AbleTime first'
-                                : 'Connect Linear first'
-                              : undefined
-                          }
-                          onClick={() =>
-                            void saveIntegrationsPatch({ issueSource: opt.id })
-                          }
-                        >
-                          {opt.label}
-                          {opt.id === 'linear' && !linearOk ? ' (not connected)' : ''}
-                          {opt.id === 'abletime' && !abletimeOk ? ' (not connected)' : ''}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {nav === 'agents' && !activeAgent && (
-              <div className="settings-body">
-                <p className="settings-lead">
-                  Configure agent harnesses the way Conductor does. Credentials set here also appear
-                  under Environment and are injected into agent runs.
-                </p>
                 <div className="settings-agent-list">
                   {AGENT_PANELS.map((a) => {
                     const st = statusFor(statuses, a.id);
@@ -1692,7 +1060,7 @@ export function SettingsModal({
                     <p className="settings-hint">
                       Uses <code>brightsy teams</code> / <code>switch</code>. Connected teams
                       unlock hosted Brightsy chat and the Brightsy schema/files datasource. Slack
-                      (Account) is the remote path for this Mac.
+                      (Remote) is the remote path for this Mac.
                     </p>
                     {!brightsySession?.connected ? (
                       <p className="settings-hint">
