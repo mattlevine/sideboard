@@ -11,26 +11,30 @@ permissions:
 jobs:
   release-cli:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
           version: 9.12.3
+      # Do not set registry-url: setup-node would write an empty
+      # _authToken= line that makes npm skip the OIDC exchange.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+      - name: Ensure npm CLI supports trusted publishing
+        run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @sideboard-ai/core build
       - run: pnpm --filter @sideboard-ai/cli build
       - run: pnpm --filter @sideboard-ai/cli test
+      # No `if: secrets.*` — GitHub rejects the secrets context in `if`.
+      # No NODE_AUTH_TOKEN — a token (and 2FA) would override OIDC.
       - name: Publish CLI + MCP (core) to npm
-        if: ${{ secrets.NPM_TOKEN != '' }}
         run: node scripts/publish-npm.js
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   release-desktop-mac:
     runs-on: macos-latest

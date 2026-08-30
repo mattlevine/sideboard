@@ -3,7 +3,8 @@
  * Build and publish @sideboard-ai/core + @sideboard-ai/cli to npm.
  *
  * Expects versions already bumped (e.g. by apps/desktop/scripts/release.js).
- * Uses NPM_TOKEN / NODE_AUTH_TOKEN when set; otherwise the logged-in npm user.
+ * Auth (first match): NPM_TOKEN / NODE_AUTH_TOKEN, GitHub Actions OIDC
+ * (ACTIONS_ID_TOKEN_REQUEST_*), or the logged-in npm user.
  *
  * Usage:
  *   node scripts/publish-npm.js
@@ -28,6 +29,13 @@ function run(cmd, opts = {}) {
   });
 }
 
+function githubOidcAvailable() {
+  return Boolean(
+    process.env.ACTIONS_ID_TOKEN_REQUEST_URL &&
+      process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN,
+  );
+}
+
 function ensureNpmAuth() {
   if (process.env.NPM_TOKEN || process.env.NODE_AUTH_TOKEN) {
     const token = process.env.NPM_TOKEN || process.env.NODE_AUTH_TOKEN;
@@ -49,6 +57,11 @@ function ensureNpmAuth() {
     };
   }
 
+  if (githubOidcAvailable()) {
+    console.log('🔐 Using GitHub Actions OIDC (npm trusted publishing)');
+    return () => undefined;
+  }
+
   try {
     const who = execSync('npm whoami', {
       encoding: 'utf8',
@@ -58,7 +71,7 @@ function ensureNpmAuth() {
     return () => undefined;
   } catch {
     throw new Error(
-      'Not logged in to npm. Run `npm login`, or set NPM_TOKEN / NODE_AUTH_TOKEN.',
+      'Not logged in to npm. Run `npm login`, set NPM_TOKEN / NODE_AUTH_TOKEN, or publish from GitHub Actions with trusted publishing (id-token: write).',
     );
   }
 }
@@ -87,8 +100,15 @@ try {
     .join(' ');
 
   // Core first — CLI depends on the published version.
-  run(`pnpm --filter @sideboard-ai/core publish ${publishArgs}`);
-  run(`pnpm --filter @sideboard-ai/cli publish ${publishArgs}`);
+  // pnpm publish does not always complete the npm OIDC exchange; use npm on GHA.
+  if (githubOidcAvailable() && !process.env.NPM_TOKEN && !process.env.NODE_AUTH_TOKEN) {
+    const npmFlags = ['--access public', dryRun ? '--dry-run' : ''].filter(Boolean).join(' ');
+    run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/core') });
+    run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/cli') });
+  } else {
+    run(`pnpm --filter @sideboard-ai/core publish ${publishArgs}`);
+    run(`pnpm --filter @sideboard-ai/cli publish ${publishArgs}`);
+  }
 
   console.log(
     dryRun
