@@ -2,8 +2,10 @@
 name: release
 description: >-
   Cut a Sideboard version. “Create a new release” means: signed Mac Electron
-  GitHub Release, build CLI/core npms (human publishes), README + marketing
-  if needed, commit, push, Fly deploy if site/relay changed. Use for electron
+  GitHub Release, build CLI/core npms (human publishes unless they asked for
+  CI/npm), README + marketing if needed, commit, push, Fly deploy if
+  site/relay changed. `.github/workflows/release.yml` runs only on a pushed
+  `v*` tag (npm OIDC + CI Electron) — not workflow_dispatch. Use for electron
   release, desktop release, pnpm release, or “I’ll publish npms.”
 ---
 
@@ -84,6 +86,7 @@ A worktree turn SIGTERMs a foreground `pnpm release`. Detach the pack, then **wa
     ```
 
     Force-push **only** that version tag. Never force-push `main` / `master`.
+    Pushing or moving `vX.Y.Z` is what starts `.github/workflows/release.yml` (see below).
 12. Open or update the thread PR against **origin** (not `upstream`). If the existing PR is already merged, open a new one.
 13. **Deploy if needed.** When `site/` or `apps/slack-relay/` changed in this cut:
 
@@ -102,7 +105,43 @@ Every desktop pack in a Sideboard `thread/*` worktree used to die at `stage-curs
 
 pnpm does not hoist `@cursor/sdk` to the worktree root (only `packages/core` depends on it). The main checkout can look fine if a leftover root hoist exists. Staging must resolve `@cursor/sdk`, `execa`, and `smol-toml` from `packages/core/package.json` — same as `stage-sideboard-mcp.js`. Do not add `@cursor/sdk` to the root package to paper over it. See `docs/system/conventions.md` (Desktop pack in a Sideboard worktree).
 
-Signing/notarization reads `apps/desktop/.env` (`CSC_*`, `APPLE_*`). `GH_TOKEN` comes from that file or `gh auth token`. CI `release.yml` on tags is not a substitute for a local signed build.
+Signing/notarization for the **local** pack reads `apps/desktop/.env` (`CSC_*`, `APPLE_*`). `GH_TOKEN` comes from that file or `gh auth token`.
+
+## GitHub Actions (`release.yml`)
+
+There is no **Run workflow** / `workflow_dispatch`. The workflow runs only when a **`v*` tag is pushed** to **origin** (`mattlevine/sideboard`):
+
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+```
+
+That is why step 11 retargets `vX.Y.Z` onto the Release commit. A tag that still points at an old main commit will run Actions against that old tree.
+
+Two jobs, both on the same tag push:
+
+| Job | Runner | What it does |
+|---|---|---|
+| `release-cli` | `ubuntu-latest` | Builds/tests, then publishes `@sideboard-ai/core` + `@sideboard-ai/cli` via **npm trusted publishing (OIDC)**. |
+| `release-desktop-mac` | `macos-latest` | Vite + stage Node/MCP/Cursor runtime + `electron-builder --mac --publish always` (GitHub Release + `latest-mac.yml`). |
+
+`release-cli` uses `permissions: id-token: write`. Do **not** gate it on `if: secrets.NPM_TOKEN` — GitHub rejects the `secrets` context in `if` (`Unrecognized named-value: 'secrets'`). Do **not** set `NODE_AUTH_TOKEN` or `setup-node` `registry-url` on that job; both skip the OIDC exchange. Trusted publisher on npmjs.com: `mattlevine/sideboard`, workflow file `.github/workflows/release.yml`, **no Environment name**. The `NPM_TOKEN` repo secret is unused for this job.
+
+`release-desktop-mac` signs/notarizes only when repo secrets `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are set. If `CSC_LINK` is empty, it still packs and uploads with `-c.mac.identity=null` (unsigned; no auto-update). CI Electron is not a substitute for the local signed Apple Silicon pack in this skill.
+
+To fire Actions on current `origin/main` without a new local pack (human asked to run the workflow):
+
+```bash
+git fetch origin
+git tag -a "vX.Y.Z" -m "Sideboard vX.Y.Z" -f
+git push origin "refs/tags/vX.Y.Z" --force
+```
+
+Use the version in `package.json`. Force-push **only** that version tag. Watch **Actions → Release**.
+
+Pushing `.github/workflows/*.yml` needs the GitHub `workflow` OAuth scope (`gh auth refresh -s workflow`). A token without it is rejected (`refusing to allow an OAuth App to create or update workflow`).
 
 ## npm publish (only when asked)
 
@@ -132,3 +171,4 @@ Worktree agents still detach the Mac pack after `bump-only`; do not run the comb
 - Commit `apps/desktop/.env` or `apps/desktop/release/`.
 - Force-push `main` / `master`.
 - Foreground pack/notarize/deploy in a worktree agent turn, restart a pack because the user asked “status?”, or ask the human to poll a long job.
+- Expect Actions → Release to have a **Run workflow** button. Trigger it by pushing a `v*` tag.

@@ -1,6 +1,13 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import {
+  BUNDLED_LONG_RUNNING_PATH,
+  LONG_RUNNING_SKILL_BODY,
+  LONG_RUNNING_SKILL_COMMAND,
+  LONG_RUNNING_SKILL_DESCRIPTION,
+  LONG_RUNNING_SKILL_NAME,
+} from './bundled/long-running.js';
 
 export interface SkillInfo {
   id: string;
@@ -8,7 +15,27 @@ export interface SkillInfo {
   command: string;
   description: string;
   path: string;
-  source: 'workspace' | 'user' | 'cli';
+  source: 'workspace' | 'user' | 'cli' | 'bundled';
+}
+
+export const BUNDLED_SKILL_PREFIX = 'bundled:';
+
+function bundledSkills(): SkillInfo[] {
+  return [
+    {
+      id: BUNDLED_LONG_RUNNING_PATH,
+      name: LONG_RUNNING_SKILL_NAME,
+      command: LONG_RUNNING_SKILL_COMMAND,
+      description: LONG_RUNNING_SKILL_DESCRIPTION.slice(0, 240),
+      path: BUNDLED_LONG_RUNNING_PATH,
+      source: 'bundled',
+    },
+  ];
+}
+
+function bundledSkillBody(id: string): string | null {
+  if (id === LONG_RUNNING_SKILL_COMMAND) return LONG_RUNNING_SKILL_BODY;
+  return null;
 }
 
 function toCommand(name: string): string {
@@ -133,11 +160,12 @@ function scanClaudePluginSkills(pluginsRoot: string, out: SkillInfo[]): void {
 }
 
 /**
- * Discover skills from the worktree + user/CLI skill locations.
- * Workspace skills win over user/CLI when command names collide.
+ * Discover skills from the worktree + user/CLI skill locations + Sideboard
+ * product skills (`bundled`). Workspace skills win when command names collide.
  * New repo skills should be written to `.claude/skills` so Claude Code and
  * `attach` load them without Sideboard. `.sideboard/skills` is still scanned
- * (legacy) but native agents do not see it.
+ * (legacy) but native agents do not see it. `/long-running` is always present
+ * (bundled) unless a workspace/user/cli skill overrides it.
  */
 export function discoverSkills(worktreePath: string): SkillInfo[] {
   const home = homedir();
@@ -161,8 +189,15 @@ export function discoverSkills(worktreePath: string): SkillInfo[] {
   // Claude Code plugins (CLI-installed skills)
   scanClaudePluginSkills(join(home, '.claude/plugins'), collected);
 
-  // Deduplicate by command — workspace > user > cli
-  const rank: Record<SkillInfo['source'], number> = { workspace: 0, user: 1, cli: 2 };
+  collected.push(...bundledSkills());
+
+  // Deduplicate by command — workspace > user > cli > bundled
+  const rank: Record<SkillInfo['source'], number> = {
+    workspace: 0,
+    user: 1,
+    cli: 2,
+    bundled: 3,
+  };
   const byCommand = new Map<string, SkillInfo>();
   for (const skill of collected) {
     const prev = byCommand.get(skill.command);
@@ -175,6 +210,12 @@ export function discoverSkills(worktreePath: string): SkillInfo[] {
 }
 
 export function readSkillBody(skillPath: string, maxChars = 12_000): string {
+  if (skillPath.startsWith(BUNDLED_SKILL_PREFIX)) {
+    const body = bundledSkillBody(skillPath.slice(BUNDLED_SKILL_PREFIX.length));
+    if (body) {
+      return body.length > maxChars ? `${body.slice(0, maxChars)}\n\n…(truncated)` : body;
+    }
+  }
   const raw = readFileSync(skillPath, 'utf8');
   // Strip frontmatter for the agent body
   if (raw.startsWith('---')) {
