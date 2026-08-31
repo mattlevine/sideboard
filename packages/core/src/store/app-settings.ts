@@ -1831,15 +1831,17 @@ function applyOptionalServiceTokens(
   fillEnvGap(
     target,
     'POSTHOG_HOST',
-    integrations.posthogHost ||
-      (integrations.posthogPersonalApiKey ? 'https://us.posthog.com' : undefined),
+    integrations.posthogPersonalApiKey
+      ? integrations.posthogHost || 'https://us.posthog.com'
+      : undefined,
   );
   fillEnvGap(target, 'SENTRY_AUTH_TOKEN', integrations.sentryAuthToken);
   fillEnvGap(
     target,
     'SENTRY_URL',
-    integrations.sentryHost ||
-      (integrations.sentryAuthToken ? 'https://sentry.io' : undefined),
+    integrations.sentryAuthToken
+      ? integrations.sentryHost || 'https://sentry.io'
+      : undefined,
   );
 }
 

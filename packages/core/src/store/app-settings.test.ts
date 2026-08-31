@@ -310,6 +310,11 @@ describe('app settings', () => {
     expect(mod.toPublicAppSettings(mod.loadAppSettings()).integrations.hasVercelToken).toBe(
       false,
     );
+
+    const after: NodeJS.ProcessEnv = {};
+    mod.applyAppEnvironment(after);
+    expect(after.POSTHOG_HOST).toBeUndefined();
+    expect(after.SENTRY_URL).toBeUndefined();
   });
 
   it('round-trips default agent, model, and effort', async () => {
