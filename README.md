@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.141/Sideboard-0.1.141-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.142/Sideboard-0.1.142-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -98,7 +98,7 @@ pnpm release patch mac       # desktop GitHub Release only
 pnpm release patch all never # dry-run / local artifacts
 ```
 
-Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run`, loop `wait`, and `present_artifact` `type=log` with `content=delta`. Same wait tool for any long job: `/long-running` (Sideboard ships this to every worktree agent; this repo also has [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md)).
+Pushing a `v*` tag to origin runs [`.github/workflows/release.yml`](.github/workflows/release.yml) (npm OIDC + Mac Electron). Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run`, loop `wait`, and `present_artifact` `type=log` with `content=delta`. Same wait tool for any long job: `/long-running` (Sideboard ships this to every worktree agent; this repo also has [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md)).
 
 After `npm i -g @sideboard-ai/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 
