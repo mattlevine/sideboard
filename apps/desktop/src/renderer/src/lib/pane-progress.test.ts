@@ -39,6 +39,18 @@ describe('threadHasVisibleFirstTurn', () => {
       threadHasVisibleFirstTurn(thread({ id: 't1', lastError: 'First prompt failed' })),
     ).toBe(true);
   });
+
+  it('ignores setup lastError while the first agent turn is still running', () => {
+    expect(
+      threadHasVisibleFirstTurn(
+        thread({
+          id: 't1',
+          status: 'running',
+          lastError: 'Setup exited 1',
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('shouldHoldCreateOverlay', () => {

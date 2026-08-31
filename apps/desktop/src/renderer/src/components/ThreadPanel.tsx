@@ -114,6 +114,8 @@ import {
 function isRedundantLastError(thread: Thread): boolean {
   const err = thread.lastError?.trim();
   if (!err) return false;
+  // Setup / reconcile can stamp lastError mid-stream; the agent is still working.
+  if (thread.status === 'running') return true;
   const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
   const body = lastAgent?.text?.trim() ?? '';
   if (!body) return false;
