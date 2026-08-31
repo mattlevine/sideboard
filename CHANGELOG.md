@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.143] - 2026-08-30
+
+### Fixed
+
+- Brightsy worktree chats seed from the last successful `summarize_context` tool plus every later turn, instead of a last-6-message cap. Sideboard `role: 'summary'` compaction is not the cutoff.
+
 ## [0.1.142] - 2026-08-30
 
 ### Fixed

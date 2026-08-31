@@ -185,6 +185,110 @@ export function buildSessionSeed(
   ].join('\n');
 }
 
+/** Brightsy server tool that compresses chat history (`context_summary` payload). */
+export const BRIGHTSY_SUMMARIZE_CONTEXT_TOOL = 'summarize_context';
+
+/**
+ * Pull the summary text from a Brightsy `summarize_context` tool result.
+ * Successful payloads are `{ context_summary: "..." }`; failures are skipped.
+ */
+export function extractBrightsyContextSummary(
+  result: string | undefined,
+): string | null {
+  if (!result?.trim()) return null;
+  const trimmed = result.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith('context summarization failed') ||
+    lower.startsWith('nothing to summarize') ||
+    lower.startsWith('no messages found') ||
+    lower.startsWith('messages are required') ||
+    lower.startsWith('agent id is required')
+  ) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      context_summary?: unknown;
+      error?: unknown;
+    };
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if (parsed.error != null && typeof parsed.context_summary !== 'string') {
+        return null;
+      }
+      if (
+        typeof parsed.context_summary === 'string' &&
+        parsed.context_summary.trim()
+      ) {
+        return parsed.context_summary.trim();
+      }
+      return null;
+    }
+  } catch {
+    // plain-text summary
+  }
+  if (trimmed.includes('"error"') && !trimmed.includes('context_summary')) {
+    return null;
+  }
+  return trimmed;
+}
+
+export function findLastBrightsyContextSummary(
+  messages: ThreadMessage[],
+): { index: number; text: string } | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== 'agent') continue;
+    for (const part of message.parts ?? []) {
+      if (part.type !== 'tool' || part.name !== BRIGHTSY_SUMMARIZE_CONTEXT_TOOL) {
+        continue;
+      }
+      if (part.status === 'error') continue;
+      const text = extractBrightsyContextSummary(part.result);
+      if (text) return { index: i, text };
+    }
+  }
+  return null;
+}
+
+/**
+ * Messages Brightsy should see after its last successful `summarize_context`
+ * tool (everything after that tool row). Matches Brightsy's own prompt
+ * builder: drop history before the tool result, keep the tail. No last-N cap.
+ * If the tool has never succeeded, return the full history.
+ */
+export function messagesSinceLastBrightsyContextSummary(
+  messages: ThreadMessage[],
+): ThreadMessage[] {
+  const match = findLastBrightsyContextSummary(messages);
+  if (!match) return messages;
+  return messages.slice(match.index + 1);
+}
+
+/**
+ * Brightsy `chat` is a stateless completion (one stdin blob, no --resume).
+ * Seed the last `summarize_context` result plus every later turn, text-only
+ * so other tool dumps do not empty-complete.
+ */
+export function buildBrightsySessionSeed(messages: ThreadMessage[]): string | null {
+  const match = findLastBrightsyContextSummary(messages);
+  const tail = match ? messages.slice(match.index + 1) : messages;
+  const body = formatMessagesAsTranscript(tail, { tools: 'none' });
+  if (!match && !body.trim()) return null;
+  const blocks = [
+    'Sideboard conversation context (restored after compaction or a new session):',
+    '',
+  ];
+  if (match) {
+    blocks.push(`## Prior summary\n${match.text}`, '');
+  }
+  if (body.trim()) {
+    blocks.push(body, '');
+  }
+  blocks.push('Continue from this context. Do not repeat the summary unless asked.');
+  return blocks.join('\n');
+}
+
 export function applyCompaction(
   messages: ThreadMessage[],
   summaryText: string,

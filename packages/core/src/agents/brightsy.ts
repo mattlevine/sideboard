@@ -328,8 +328,9 @@ async function syncCliForTarget(accountId: string | undefined): Promise<void> {
 /**
  * Brightsy hosted-agent adapter. `brightsy chat --json` emits NDJSON events
  * (text deltas, tool output, usage, error, done); the message is piped on
- * stdin. The CLI has no session resume, so resolveSessionId always returns
- * null and Sideboard seeds each turn from thread history. Brightsy agents run
+ * stdin. The CLI has no session resume (`chat` is a stateless completion), so
+ * resolveSessionId always returns null and Sideboard seeds each turn from the
+ * last `summarize_context` tool through the current turn. Brightsy agents run
  * server-side — they converse about the worktree but never edit local files.
  * All Brightsy agents/models use OpenRouter chat-completions syntax; the CLI
  * owns that wire format.
