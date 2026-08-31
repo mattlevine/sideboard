@@ -61,11 +61,11 @@ export function ConnectorsSettings({
       ...prev,
       posthog: {
         ...prev.posthog,
-        host: settings.integrations.posthogHost?.trim() || prev.posthog.host,
+        host: settings.integrations.posthogHost?.trim() || '',
       },
       sentry: {
         ...prev.sentry,
-        host: settings.integrations.sentryHost?.trim() || prev.sentry.host,
+        host: settings.integrations.sentryHost?.trim() || '',
       },
     }));
   }, [settings.integrations.posthogHost, settings.integrations.sentryHost]);
@@ -136,7 +136,7 @@ export function ConnectorsSettings({
           const viewer = optionalViewerName(spec.id, settings.integrations);
           const storedHost = optionalHost(spec.id, settings.integrations);
           const draft = optionalDrafts[spec.id];
-          const open = draft.open || (!connected && draft.token.length > 0);
+          const open = draft.open;
           const checking = optionalBusy === spec.id;
           const cli = cliStatus[spec.id];
           const showInstall = Boolean(spec.cli && cli && !cli.installed);
@@ -186,7 +186,11 @@ export function ConnectorsSettings({
                       onClick={() =>
                         setOptionalDrafts((prev) => ({
                           ...prev,
-                          [spec.id]: { ...prev[spec.id], open: !prev[spec.id].open },
+                          [spec.id]: {
+                            ...prev[spec.id],
+                            open: !prev[spec.id].open,
+                            token: prev[spec.id].open ? '' : prev[spec.id].token,
+                          },
                         }))
                       }
                     >

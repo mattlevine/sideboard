@@ -31,12 +31,6 @@ export function IssuesSettings({
     setAbletimeHostDraft(settings.integrations.abletimeHost?.trim() || '');
   }, [settings.integrations.abletimeHost]);
 
-  useEffect(() => {
-    return () => {
-      void window.sideboard.cancelLinearOAuth?.();
-    };
-  }, []);
-
   async function saveIntegrationsPatch(patch: {
     linearApiKey?: string | null;
     issueSource?: IssueSource | null;

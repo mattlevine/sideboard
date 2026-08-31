@@ -248,10 +248,12 @@ function clearConnection(integrations: IntegrationsSettings, id: OptionalService
   if (id === 'posthog') {
     delete integrations.posthogPersonalApiKey;
     delete integrations.posthogViewerName;
+    delete integrations.posthogHost;
     return;
   }
   delete integrations.sentryAuthToken;
   delete integrations.sentryViewerName;
+  delete integrations.sentryHost;
 }
 
 /** Verify a token and persist it (vaulted). */

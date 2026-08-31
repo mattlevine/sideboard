@@ -299,6 +299,10 @@ export function SettingsModal({
   useEffect(() => {
     return () => {
       loginAbortRef.current?.abort();
+      // Cancel in-flight OAuth only when Settings closes — not when switching
+      // sidebar items, which unmount Issues/Remote while the browser flow is open.
+      void window.sideboard.cancelLinearOAuth?.();
+      void window.sideboard.cancelSlackOAuth?.();
     };
   }, []);
 

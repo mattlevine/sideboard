@@ -93,6 +93,56 @@ describe('optional services', () => {
     expect(cleared.integrations.vercelViewerName).toBeUndefined();
   });
 
+  it('connects Supabase after listing organizations', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify([{ name: "mattlevine's Org" }, { name: 'Reventure Labs' }]),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const mod = await load();
+    mod.setHttpFetchImpl(fetchImpl as unknown as typeof fetch);
+    const saved = await mod.connectOptionalService({
+      id: 'supabase',
+      token: 'sbp_test',
+    });
+    expect(saved.integrations.supabaseAccessToken).toBe('sbp_test');
+    expect(saved.integrations.supabaseViewerName).toBe("mattlevine's Org +1");
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
+    expect(url).toBe('https://api.supabase.com/v1/organizations');
+  });
+
+  it('clears PostHog host on disconnect so agent env is not left pointed at the old origin', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ email: 'matt@acme' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const mod = await load();
+    mod.setHttpFetchImpl(fetchImpl as unknown as typeof fetch);
+    const saved = await mod.connectOptionalService({
+      id: 'posthog',
+      token: 'phx_test',
+      host: 'eu.posthog.com',
+    });
+    expect(saved.integrations.posthogHost).toBe('https://eu.posthog.com');
+    expect(saved.integrations.posthogViewerName).toBe('matt@acme');
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
+    expect(url).toBe('https://eu.posthog.com/api/users/@me/');
+
+    const cleared = mod.disconnectOptionalService('posthog');
+    expect(cleared.integrations.posthogPersonalApiKey).toBeUndefined();
+    expect(cleared.integrations.posthogViewerName).toBeUndefined();
+    expect(cleared.integrations.posthogHost).toBeUndefined();
+
+    const settings = await import('../store/app-settings.js');
+    const target: NodeJS.ProcessEnv = {};
+    settings.applyAppEnvironment(target);
+    expect(target.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
+    expect(target.POSTHOG_HOST).toBeUndefined();
+  });
+
   it('rejects a bad PostHog token without persisting', async () => {
     const mod = await load();
     mod.setHttpFetchImpl(
@@ -124,5 +174,16 @@ describe('optional services', () => {
     expect(saved.integrations.sentryViewerName).toBe('acme');
     const [url] = fetchImpl.mock.calls[0] as unknown as [string];
     expect(url).toBe('https://acme.sentry.io/api/0/organizations/');
+
+    const cleared = mod.disconnectOptionalService('sentry');
+    expect(cleared.integrations.sentryAuthToken).toBeUndefined();
+    expect(cleared.integrations.sentryViewerName).toBeUndefined();
+    expect(cleared.integrations.sentryHost).toBeUndefined();
+
+    const settings = await import('../store/app-settings.js');
+    const target: NodeJS.ProcessEnv = {};
+    settings.applyAppEnvironment(target);
+    expect(target.SENTRY_AUTH_TOKEN).toBeUndefined();
+    expect(target.SENTRY_URL).toBeUndefined();
   });
 });

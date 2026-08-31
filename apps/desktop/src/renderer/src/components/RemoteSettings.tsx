@@ -58,12 +58,6 @@ export function RemoteSettings({
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      void window.sideboard.cancelSlackOAuth?.();
-    };
-  }, []);
-
   async function saveSlackDeviceLabel() {
     const label = slackDeviceLabelDraft.trim();
     if (!label) return;
