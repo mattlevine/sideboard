@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.144] - 2026-08-31
+
 ### Fixed
 
 - Workspace setup no longer paints `Setup exited 1` over a live Claude turn. Setup still logs in the Setup panel; lastError is reserved for idle threads. Chat, sidebar, and board hide lastError while status is `running`.
