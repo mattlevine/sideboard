@@ -66,7 +66,7 @@ function previewForThread(
   live: string | undefined,
 ): { text: string; markdown: boolean } {
   if (live) return { text: live, markdown: true };
-  if (t.lastError) return { text: t.lastError, markdown: false };
+  if (t.lastError && t.status !== 'running') return { text: t.lastError, markdown: false };
   const last = t.messages[t.messages.length - 1];
   if (last?.role === 'agent' || last?.role === 'user') {
     return { text: last.text, markdown: last.role === 'agent' };

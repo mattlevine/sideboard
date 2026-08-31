@@ -89,6 +89,10 @@ import { git } from '../git/run.js';
 import { withRepoGitLock } from '../git/repo-git-lock.js';
 import { clearTurnLive, noteTurnLiveEvent, readTurnLive } from '../store/turn-live.js';
 import { shouldReadThreadToHealReconcile } from './reconcile-heal.js';
+import {
+  isStaleLastErrorDuringTurn,
+  shouldStampSetupLastError,
+} from './setup-last-error.js';
 import { requestReview } from '../review/request-review.js';
 import { forkThreadWorktree as forkThreadWorktreeImpl } from '../threads/fork-worktree.js';
 import {
@@ -675,6 +679,16 @@ export class Orchestrator {
       const message = err instanceof Error ? err.message : String(err);
       if (/no setup script/i.test(message)) return;
       if (/already running/i.test(message)) return;
+      const live = readThread(threadId);
+      if (
+        !shouldStampSetupLastError({
+          turnInFlight:
+            this.activeTurns.has(threadId) || this.startingTurns.has(threadId),
+          status: live?.status,
+        })
+      ) {
+        return;
+      }
       updateThread(threadId, {
         lastError: `Setup failed: ${message}`,
       });
@@ -1127,10 +1141,9 @@ export class Orchestrator {
           if (event.type === 'stderr' && typeof event.data === 'string') {
             pushTurnStderr(stderrTail, event.data);
           }
-          // Heal false "Process died (reconciled on startup)" while we still own the turn
-          // (MCP subprocess reconcile used to stamp this mid tool-use).
-          // Do not parse the full transcript on every tool_result/stderr/usage —
-          // concurrent agents doing that stall Electron navigation.
+          // Heal stale lastError (reconcile-on-startup, setup exit) while we
+          // still own the turn. Skip high-frequency frames — full thread reads
+          // on every tool_result/stderr stall Electron navigation.
           const now = Date.now();
           if (
             shouldReadThreadToHealReconcile(
@@ -1141,8 +1154,11 @@ export class Orchestrator {
           ) {
             this.lastReconcileHealAt.set(threadId, now);
             const live = readThread(threadId);
+            // Cursor's slower spawn already wipes lastError at spawn-complete
+            // (setup often finished by then). Claude is already in tool_use,
+            // so also clear setup / reconcile stamps on later tool events.
             if (
-              live?.lastError?.includes('reconciled on startup') &&
+              isStaleLastErrorDuringTurn(live?.lastError) &&
               (this.activeTurns.has(threadId) || this.startingTurns.has(threadId))
             ) {
               setStatus(threadId, 'running');
@@ -1714,9 +1730,18 @@ export class Orchestrator {
         );
       }
       if (setup.exitCode !== 0 && setup.exitCode !== null) {
-        updateThread(thread.id, {
-          lastError: `Setup exited ${setup.exitCode}`,
-        });
+        const live = readThread(thread.id);
+        if (
+          shouldStampSetupLastError({
+            turnInFlight:
+              this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id),
+            status: live?.status,
+          })
+        ) {
+          updateThread(thread.id, {
+            lastError: `Setup exited ${setup.exitCode}`,
+          });
+        }
       }
       this.emit({ type: 'setup_finished', threadId: thread.id, exitCode: setup.exitCode });
       return { exitCode: setup.exitCode, source: setup.source };

@@ -23,7 +23,7 @@ export type CreatePaneProgress = {
 export function threadHasVisibleFirstTurn(thread: FirstTurnThread): boolean {
   return (
     thread.messages.length > 0 ||
-    Boolean(thread.lastError) ||
+    (Boolean(thread.lastError) && thread.status !== 'running') ||
     thread.status === 'error' ||
     thread.status === 'broken'
   );

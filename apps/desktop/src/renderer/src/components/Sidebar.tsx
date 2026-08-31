@@ -152,7 +152,9 @@ function worktreeSlug(thread: Thread): string {
 }
 
 function previewSnippet(thread: Thread): string {
-  if (thread.lastError?.trim()) return thread.lastError.trim();
+  if (thread.lastError?.trim() && thread.status !== 'running') {
+    return thread.lastError.trim();
+  }
   const last = [...thread.messages].reverse().find(
     (m) => m.role === 'agent' || m.role === 'user',
   );
