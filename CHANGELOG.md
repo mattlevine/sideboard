@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.142] - 2026-08-30
+
+### Fixed
+
+- Disconnecting PostHog or Sentry now clears the stored host so `POSTHOG_HOST` / `SENTRY_URL` are not left in agent env.
+- Linear and Slack browser sign-in no longer cancel when switching Settings sidebar items. Closing Settings still cancels an in-flight flow.
+- Connect Cancel on Settings → Connectors closes the form after a token has been typed.
+
 ## [0.1.141] - 2026-08-29
 
 ### Added
