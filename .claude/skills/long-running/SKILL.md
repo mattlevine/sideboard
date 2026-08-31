@@ -82,11 +82,9 @@ Never tell the user “say status when it’s done.” You wait.
 
 ## Mac desktop release
 
-After `bump-only`, either:
+Default: push/retarget the `v*` tag and watch Actions — do not pack locally. Full steps: [`.claude/skills/release/SKILL.md`](../release/SKILL.md).
 
 ```bash
-node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run
-node scripts/detached-job.js wait mac-release
+node scripts/detached-job.js start gha-release -- gh run watch <run-id> --exit-status
+node scripts/detached-job.js wait gha-release
 ```
-
-or `node apps/desktop/scripts/release-mac-detached.js` then `--wait` (same wait tool, legacy pid/log). Full steps: [`.claude/skills/release/SKILL.md`](../release/SKILL.md).

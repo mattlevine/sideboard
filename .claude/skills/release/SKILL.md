@@ -1,19 +1,20 @@
 ---
 name: release
 description: >-
-  Cut a Sideboard version. “Create a new release” means: signed Mac Electron
-  GitHub Release, build CLI/core npms (human publishes unless they asked for
-  CI/npm), README + marketing if needed, commit, push, Fly deploy if
-  site/relay changed. `.github/workflows/release.yml` runs only on a pushed
-  `v*` tag (npm OIDC + CI Electron) — not workflow_dispatch. Use for electron
-  release, desktop release, pnpm release, or “I’ll publish npms.”
+  Cut a Sideboard version. Default: bump, README/changelog, commit, merge,
+  then push/retarget the `v*` tag so `.github/workflows/release.yml` publishes
+  npm (OIDC) and the signed Mac desktop. No workflow_dispatch. Do not pack
+  Electron in a worktree turn. Use for electron release, desktop release,
+  pnpm release, or “I’ll publish npms.”
 ---
 
 # Release
 
-Shared version lives in four `package.json` files (root, `apps/desktop`, `packages/cli`, `packages/core`). Desktop GitHub Releases are signed/notarized on this Mac.
+Shared version lives in four `package.json` files (root, `apps/desktop`, `packages/cli`, `packages/core`).
 
-Long pack/notarize/deploy uses [`.claude/skills/long-running/SKILL.md`](../long-running/SKILL.md) (`/long-running`). Do not ask the human to poll.
+**The Release Action runs when a `v*` tag is pushed to origin.** That is the default path. Do not pack Electron in a worktree turn. A human at a real terminal may still run `pnpm release patch mac` locally.
+
+Long waits (Actions watch, Fly deploy, optional local pack) use [`.claude/skills/long-running/SKILL.md`](../long-running/SKILL.md) (`/long-running`). Do not ask the human to poll.
 
 ## What “create a new release” means
 
@@ -25,8 +26,8 @@ These phrases are the **same default** — do not ask which one they meant:
 
 Do **all** of the following:
 
-1. **Electron** — bump, signed Apple Silicon dmg+zip, notarize, publish GitHub Release (`electron-updater` `latest-mac.yml`).
-2. **Build npms** — `pnpm --filter @sideboard-ai/core build` and `pnpm --filter @sideboard-ai/cli build` (and CLI tests). **Do not `npm publish`.** Tell the human the version is ready: `node scripts/publish-npm.js`.
+1. **Electron** — bump, then let `.github/workflows/release.yml` pack/sign/publish the Apple Silicon dmg+zip (`electron-updater` `latest-mac.yml`) when the `v*` tag is pushed.
+2. **npm** — the same tag job publishes `@sideboard-ai/core` + `@sideboard-ai/cli` via OIDC. It skips versions already on npm. Do not run `node scripts/publish-npm.js` from the worktree unless they explicitly asked.
 3. **README** — Desktop download URL for `vX.Y.Z`.
 4. **Marketing** — update `site/` (and `site/docs/`) when the public story changed (install, Slack, features). Homepage download buttons already point at `/releases/latest`; still refresh copy/screenshots if this cut warrants it.
 5. **Changelog** — move `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`.
@@ -37,58 +38,43 @@ Merge the PR only when asked. Do not publish npm unless they explicitly said **p
 
 ## Worktree agents
 
-A worktree turn SIGTERMs a foreground `pnpm release`. Detach the pack, then **wait** (45s slices) until it finishes.
+The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not start a local Mac pack. Do not run foreground `pnpm release`.
 
-1. Merge `origin/main`. Copy `apps/desktop/.env` from the main checkout if missing (gitignored — do not commit or print it).
-2. Land feature work. Write `CHANGELOG.md` `[Unreleased]` for what is shipping. Commit so the tree is clean except version files.
+1. Merge `origin/main`.
+2. Land feature work. Write `CHANGELOG.md` `[Unreleased]` for what is shipping.
 3. Bump versions **only** (skip if `package.json` is already the new version):
 
    ```bash
    node apps/desktop/scripts/release.js patch mac bump-only
    ```
 
-4. Start the Mac pack **once**:
-
-   ```bash
-   node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run
-   ```
-
-5. **Wait yourself** — loop until `stillRunning` is false. Do not end the turn and ask the user to check.
-
-   ```bash
-   node scripts/detached-job.js wait mac-release
-   ```
-
-   Same contract as `wait_for_turn`: returns within ~45s with progress. Call wait again while `stillRunning`. After start and after every wait, `present_artifact` `type=log` `artifact_id=mac-release` with `content=delta` only.
-6. On `failed`: fix from the log and start the pack **once**. Do not bump again.
-7. On `ok`: GitHub Release + DMG are published. Then:
-
-   ```bash
-   pnpm --filter @sideboard-ai/core build
-   pnpm --filter @sideboard-ai/cli build
-   pnpm --filter @sideboard-ai/cli test
-   ```
-
-   Do **not** run `node scripts/publish-npm.js` (that publishes). Leave a chat note that they can publish with that command.
-8. Point README Desktop download at:
+   Signing env (`apps/desktop/.env`) is not required for this path.
+4. Point README Desktop download at:
 
    `https://github.com/mattlevine/sideboard/releases/download/vX.Y.Z/Sideboard-X.Y.Z-arm64.dmg`
 
-9. Update `site/` if the public story changed. Move `[Unreleased]` notes into `## [X.Y.Z] - YYYY-MM-DD`.
-10. Commit (`Release vX.Y.Z`). Mention in the message that npm is a separate publish.
-11. Push and **retarget** the version tag onto this Release commit. electron-builder’s GitHub publisher creates `vX.Y.Z` on `origin/main` even when the pack ran from a worktree. A plain `git push origin vX.Y.Z` is rejected. Do **not** leave the tag on main — that is the same miss as 0.1.129 / 0.1.130.
+5. Update `site/` if the public story changed. Move `[Unreleased]` notes into `## [X.Y.Z] - YYYY-MM-DD`.
+6. Commit (`Release vX.Y.Z`).
+7. Open or update the thread PR against **origin**. Merge when asked (or when this turn is a Merge PR / “commit push and merge”).
+8. After the Release commit is on `origin/main`, **retarget** the version tag onto that commit. A tag left on an older SHA packs the old tree. Force-push **only** that version tag — never `main` / `master`.
 
-    ```bash
-    git push -u origin HEAD
-    git tag -a "vX.Y.Z" -m "Sideboard vX.Y.Z" -f
-    git push origin "refs/tags/vX.Y.Z" --force
-    gh release edit "vX.Y.Z" --target "$(git rev-parse HEAD)"
-    ```
+   ```bash
+   git fetch origin
+   git tag -a "vX.Y.Z" -m "Sideboard vX.Y.Z" origin/main -f
+   git push origin "refs/tags/vX.Y.Z" --force
+   ```
 
-    Force-push **only** that version tag. Never force-push `main` / `master`.
-    Pushing or moving `vX.Y.Z` is what starts `.github/workflows/release.yml` (see below).
-12. Open or update the thread PR against **origin** (not `upstream`). If the existing PR is already merged, open a new one.
-13. **Deploy if needed.** When `site/` or `apps/slack-relay/` changed in this cut:
+   That push is what starts `.github/workflows/release.yml`. There is no **Run workflow** button.
+9. **Watch Actions yourself** (`/long-running`). Do not ask the human to poll.
+
+   ```bash
+   RUN=$(gh run list --workflow=release.yml --limit 1 --json databaseId,headBranch --jq '.[0].databaseId')
+   node scripts/detached-job.js start gha-release -- gh run watch "$RUN" --exit-status
+   ```
+
+   `present_artifact` `type=log` `artifact_id=gha-release` with `content=delta` only. CI on the same commit title is **not** a second Release — only the tag workflow publishes.
+10. On desktop job **heap OOM**: raise `NODE_OPTIONS` in `release.yml`, land that on main, retarget the **same** `vX.Y.Z` (do not bump). `publish-npm.js` skips versions already on npm.
+11. **Deploy if needed.** When `site/` or `apps/slack-relay/` changed in this cut:
 
     ```bash
     node scripts/detached-job.js start fly-deploy -- fly deploy --config apps/slack-relay/fly.toml --dockerfile apps/slack-relay/Dockerfile .
@@ -118,7 +104,7 @@ on:
       - 'v*'
 ```
 
-That is why step 11 retargets `vX.Y.Z` onto the Release commit. A tag that still points at an old main commit will run Actions against that old tree.
+That is why step 8 retargets `vX.Y.Z` onto the Release commit on `origin/main`. A tag that still points at an old SHA will run Actions against that old tree.
 
 Two jobs, both on the same tag push:
 
@@ -129,7 +115,9 @@ Two jobs, both on the same tag push:
 
 `release-cli` uses `permissions: id-token: write`. Do **not** gate it on `if: secrets.NPM_TOKEN` — GitHub rejects the `secrets` context in `if` (`Unrecognized named-value: 'secrets'`). Do **not** set `NODE_AUTH_TOKEN` or `setup-node` `registry-url` on that job; both skip the OIDC exchange. Trusted publisher on npmjs.com: `mattlevine/sideboard`, workflow file `.github/workflows/release.yml`, **no Environment name**. The `NPM_TOKEN` repo secret is unused for this job.
 
-`release-desktop-mac` signs/notarizes only when repo secrets `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are set. If `CSC_LINK` is empty, it still packs and uploads with `-c.mac.identity=null` (unsigned; no auto-update). CI Electron is not a substitute for the local signed Apple Silicon pack in this skill.
+`release-desktop-mac` signs/notarizes only when repo secrets `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are set. If `CSC_LINK` is empty, it still packs and uploads with `-c.mac.identity=null` (unsigned; no auto-update). The job sets `NODE_OPTIONS=--max-old-space-size=8192` so `electron-vite` does not OOM on the hosted runner.
+
+CI (`ci.yml` on PR / `main` push) only tests. GitHub titles those runs with the commit message, so they look like extra Release jobs — they are not.
 
 To fire Actions on current `origin/main` without a new local pack (human asked to run the workflow):
 
@@ -160,7 +148,7 @@ pnpm release          # patch, desktop + npm publish
 pnpm release minor
 ```
 
-Worktree agents still detach the Mac pack after `bump-only`; do not run the combined foreground `pnpm release` from a chat turn. After the pack, they may run `node scripts/publish-npm.js` only if the user asked to publish npm.
+Worktree agents push the `v*` tag and watch Actions. Do not run the combined foreground `pnpm release` from a chat turn.
 
 ## Do not
 
@@ -170,5 +158,6 @@ Worktree agents still detach the Mac pack after `bump-only`; do not run the comb
 - Push to `upstream` or merge locally into the main checkout.
 - Commit `apps/desktop/.env` or `apps/desktop/release/`.
 - Force-push `main` / `master`.
-- Foreground pack/notarize/deploy in a worktree agent turn, restart a pack because the user asked “status?”, or ask the human to poll a long job.
+- Pack Electron locally in a worktree turn, or restart a job because the user asked “status?”.
 - Expect Actions → Release to have a **Run workflow** button. Trigger it by pushing a `v*` tag.
+- Ask the human to poll a long job.

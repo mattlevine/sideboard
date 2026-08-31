@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -38,6 +42,9 @@ jobs:
 
   release-desktop-mac:
     runs-on: macos-latest
+    env:
+      # electron-vite OOM'd at the default ~2 GiB heap on macos-latest (v0.1.142).
+      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
