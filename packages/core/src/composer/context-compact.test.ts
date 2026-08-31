@@ -3,13 +3,17 @@ import type { Thread, ThreadMessage } from '../types/thread.js';
 import {
   applyCompaction,
   applyForwardOccupancy,
+  buildBrightsySessionSeed,
   buildSessionSeed,
   estimateOccupancyTokens,
   estimateThreadChars,
+  extractBrightsyContextSummary,
+  findLastBrightsyContextSummary,
   forwardContextUsage,
   forwardOccupancyTokens,
   lastRequestOccupancy,
   maybeCompactContext,
+  messagesSinceLastBrightsyContextSummary,
   shouldCompactContext,
   shouldResetSessionForOccupancy,
   splitForCompaction,
@@ -71,6 +75,130 @@ describe('context compact', () => {
     expect(seed).toContain('Prior work on auth');
     expect(seed).toContain('fix the login bug');
     expect(seed).toContain('Patched auth.ts');
+  });
+
+  it('extractBrightsyContextSummary reads context_summary and skips failures', () => {
+    expect(
+      extractBrightsyContextSummary(
+        JSON.stringify({ context_summary: 'User asked about billing.' }),
+      ),
+    ).toBe('User asked about billing.');
+    expect(extractBrightsyContextSummary(JSON.stringify({ error: 'nope' }))).toBeNull();
+    expect(
+      extractBrightsyContextSummary('Context summarization failed: timeout'),
+    ).toBeNull();
+  });
+
+  it('messagesSinceLastBrightsyContextSummary starts after the last successful tool', () => {
+    const messages = [
+      msg('user', 'old goal'),
+      msg('agent', 'old work'),
+      msg('agent', 'compressed', {
+        parts: [
+          {
+            type: 'tool',
+            id: 'c1',
+            name: 'summarize_context',
+            status: 'done',
+            result: JSON.stringify({ context_summary: 'Auth shipped' }),
+          },
+        ],
+      }),
+      msg('user', 'now tests'),
+      msg('agent', 'added specs'),
+      msg('agent', 'compressed again', {
+        parts: [
+          {
+            type: 'tool',
+            id: 'c2',
+            name: 'summarize_context',
+            status: 'done',
+            result: JSON.stringify({ context_summary: 'Tests next' }),
+          },
+        ],
+      }),
+      msg('user', 'run them'),
+      msg('agent', 'green'),
+    ];
+    const window = messagesSinceLastBrightsyContextSummary(messages);
+    expect(window.map((m) => m.text)).toEqual(['run them', 'green']);
+    expect(findLastBrightsyContextSummary(messages)?.text).toBe('Tests next');
+  });
+
+  it('messagesSinceLastBrightsyContextSummary ignores Sideboard role:summary and failed tools', () => {
+    const messages = [
+      msg('summary', '- Sideboard compact — not Brightsy'),
+      msg('user', 'keep me when no tool'),
+      msg('agent', 'failed compress', {
+        parts: [
+          {
+            type: 'tool',
+            id: 'c0',
+            name: 'summarize_context',
+            status: 'done',
+            result: JSON.stringify({ error: 'failed again' }),
+          },
+        ],
+      }),
+    ];
+    expect(messagesSinceLastBrightsyContextSummary(messages)).toEqual(messages);
+  });
+
+  it('messagesSinceLastBrightsyContextSummary returns the full thread when never summarized', () => {
+    const messages = fatThread(20, 20);
+    expect(messagesSinceLastBrightsyContextSummary(messages)).toEqual(messages);
+  });
+
+  it('buildBrightsySessionSeed includes every turn after summarize_context, not a last-N cap', () => {
+    const afterSummary = Array.from({ length: 10 }, (_, i) =>
+      msg(i % 2 === 0 ? 'user' : 'agent', `turn-${i}`),
+    );
+    const messages = [
+      msg('user', 'ancient'),
+      msg('agent', 'dropped after summarize_context', {
+        parts: [
+          {
+            type: 'tool',
+            id: 'c1',
+            name: 'summarize_context',
+            status: 'done',
+            result: JSON.stringify({ context_summary: 'Prior work on auth' }),
+          },
+        ],
+      }),
+      ...afterSummary,
+    ];
+    const seed = buildBrightsySessionSeed(messages);
+    expect(seed).toContain('Prior work on auth');
+    expect(seed).toContain('turn-0');
+    expect(seed).toContain('turn-9');
+    expect(seed).not.toContain('ancient');
+    expect(seed).not.toContain('dropped after summarize_context');
+    expect(seed).not.toContain('#### Tool:');
+  });
+
+  it('buildBrightsySessionSeed omits non-summary tool bodies', () => {
+    const seed = buildBrightsySessionSeed([
+      msg('user', 'edit the file'),
+      msg('agent', 'Done', {
+        parts: [
+          {
+            type: 'tool',
+            id: 't1',
+            name: 'Edit',
+            status: 'done',
+            description: 'Edit auth.ts',
+            input: { file_path: 'src/auth.ts' },
+            result: 'ok',
+            filePath: 'src/auth.ts',
+          },
+        ],
+      }),
+    ]);
+    expect(seed).toContain('edit the file');
+    expect(seed).toContain('Done');
+    expect(seed).not.toContain('#### Tool:');
+    expect(seed).not.toContain('src/auth.ts');
   });
 
   it('includes full tool input and result in session seed', () => {

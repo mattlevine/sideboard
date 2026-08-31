@@ -128,6 +128,7 @@ import {
   type ComposerFileBuffer,
 } from '../composer/stage-files.js';
 import {
+  buildBrightsySessionSeed,
   buildSessionSeed,
   maybeCompactContext,
 } from '../composer/context-compact.js';
@@ -1067,11 +1068,10 @@ export class Orchestrator {
     let seed: string | null = null;
     if (!fresh.sessionId) {
       const prior = fresh.messages.slice(0, -1);
-      // Brightsy has no session resume and rejects/empty-completes on oversized
-      // tool-heavy seeds — keep a short text-only transcript.
-      seed = isBrightsy
-        ? buildSessionSeed(prior.slice(-6), { tools: 'none' })
-        : buildSessionSeed(prior);
+      // Brightsy has no session resume. Window from the last successful
+      // `summarize_context` tool (not Sideboard `role: 'summary'`), then every
+      // later turn — text-only so other tool dumps empty-complete. No last-N cap.
+      seed = isBrightsy ? buildBrightsySessionSeed(prior) : buildSessionSeed(prior);
     }
 
     // Fresh orchestration sessions get audience + workspace inventory.
@@ -1262,7 +1262,9 @@ export class Orchestrator {
         });
         const retryThread = this.requireThread(threadId);
         const prior = retryThread.messages.slice(0, -1);
-        const retrySeed = buildSessionSeed(prior);
+        const retrySeed = isBrightsy
+          ? buildBrightsySessionSeed(prior)
+          : buildSessionSeed(prior);
         const retryPrefix = [
           coordinatorDirective,
           worktreeDirective,
