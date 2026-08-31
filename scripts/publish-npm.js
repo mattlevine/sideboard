@@ -29,6 +29,18 @@ function run(cmd, opts = {}) {
   });
 }
 
+function publishedOnNpm(name, version) {
+  try {
+    const out = execSync(`npm view ${name}@${version} version`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return out === version;
+  } catch {
+    return false;
+  }
+}
+
 function githubOidcAvailable() {
   return Boolean(
     process.env.ACTIONS_ID_TOKEN_REQUEST_URL &&
@@ -99,15 +111,30 @@ try {
     .filter(Boolean)
     .join(' ');
 
+  const coreName = '@sideboard-ai/core';
+  const cliName = '@sideboard-ai/cli';
+  const coreDone = !dryRun && publishedOnNpm(coreName, corePkg.version);
+  const cliDone = !dryRun && publishedOnNpm(cliName, cliPkg.version);
+  if (coreDone && cliDone) {
+    console.log(
+      `\n⏭  ${coreName}@${corePkg.version} and ${cliName}@${cliPkg.version} already on npm — skip publish`,
+    );
+    return;
+  }
+
   // Core first — CLI depends on the published version.
   // pnpm publish does not always complete the npm OIDC exchange; use npm on GHA.
   if (githubOidcAvailable() && !process.env.NPM_TOKEN && !process.env.NODE_AUTH_TOKEN) {
     const npmFlags = ['--access public', dryRun ? '--dry-run' : ''].filter(Boolean).join(' ');
-    run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/core') });
-    run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/cli') });
+    if (!coreDone) run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/core') });
+    else console.log(`⏭  ${coreName}@${corePkg.version} already on npm`);
+    if (!cliDone) run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/cli') });
+    else console.log(`⏭  ${cliName}@${cliPkg.version} already on npm`);
   } else {
-    run(`pnpm --filter @sideboard-ai/core publish ${publishArgs}`);
-    run(`pnpm --filter @sideboard-ai/cli publish ${publishArgs}`);
+    if (!coreDone) run(`pnpm --filter @sideboard-ai/core publish ${publishArgs}`);
+    else console.log(`⏭  ${coreName}@${corePkg.version} already on npm`);
+    if (!cliDone) run(`pnpm --filter @sideboard-ai/cli publish ${publishArgs}`);
+    else console.log(`⏭  ${cliName}@${cliPkg.version} already on npm`);
   }
 
   console.log(

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Disconnecting PostHog or Sentry now clears the stored host so `POSTHOG_HOST` / `SENTRY_URL` are not left in agent env.
 - Linear and Slack browser sign-in no longer cancel when switching Settings sidebar items. Closing Settings still cancels an in-flight flow.
 - Connect Cancel on Settings → Connectors closes the form after a token has been typed.
+- Actions Mac pack raises the Node heap so `electron-vite` can finish on `macos-latest`. Re-pushing the same `v*` tag skips npm versions that are already published.
 
 ## [0.1.141] - 2026-08-29
 

@@ -98,7 +98,7 @@ pnpm release patch mac       # desktop GitHub Release only
 pnpm release patch all never # dry-run / local artifacts
 ```
 
-Pushing a `v*` tag to origin runs [`.github/workflows/release.yml`](.github/workflows/release.yml) (npm OIDC + Mac Electron). Worktree / chat agents: do **not** run `pnpm release patch mac` in the turn (a new message SIGTERMs the pack). Bump with `node apps/desktop/scripts/release.js patch mac bump-only`, then `node scripts/detached-job.js start mac-release -- node apps/desktop/scripts/release-mac-detached.js --run`, loop `wait`, and `present_artifact` `type=log` with `content=delta`. Same wait tool for any long job: `/long-running` (Sideboard ships this to every worktree agent; this repo also has [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md)).
+Pushing a `v*` tag to origin is what runs [`.github/workflows/release.yml`](.github/workflows/release.yml) (npm OIDC + Mac Electron). There is no **Run workflow** button. Worktree / chat agents: bump, commit the Release, merge, then retarget `vX.Y.Z` onto that commit and push the tag — do **not** pack Electron in the turn. Watch **Actions → Release**; use `/long-running` only to wait on `gh run watch`. Local `pnpm release patch mac` is for a human at a real terminal.
 
 After `npm i -g @sideboard-ai/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 
