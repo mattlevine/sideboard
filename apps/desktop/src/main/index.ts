@@ -1510,6 +1510,7 @@ function registerIpc(): void {
     (_e, ref: string, opts?: { draft?: boolean; web?: boolean }) =>
       orch.confirmLand(ref, opts),
   );
+  ipcMain.handle('markPrReady', (_e, ref: string) => orch.markPrReady(ref));
   ipcMain.handle('mergePr', (_e, ref: string) => orch.mergePr(ref));
   ipcMain.handle(
     'askGit',
