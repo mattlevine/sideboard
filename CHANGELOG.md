@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.145] - 2026-09-02
+
+### Added
+
+- Right sidebar **Ready for review** on a linked draft PR when the working tree is clean and `origin/<branch>` has every local commit (`gh pr ready`). Merge stays in the overflow menu.
+
 ## [0.1.144] - 2026-08-31
 
 ### Fixed
