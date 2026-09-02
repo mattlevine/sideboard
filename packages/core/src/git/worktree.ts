@@ -1298,6 +1298,34 @@ export async function listWorktrees(repoPath: string): Promise<
   return entries;
 }
 
+/** Commits on HEAD not yet on `origin/<branch>`. Unknown / never-pushed counts as ahead. */
+export async function countUnpushedVsOrigin(worktreePath: string): Promise<number> {
+  const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath, {
+    reject: false,
+  });
+  const branch = head.stdout.trim();
+  if (branch && branch !== 'HEAD') {
+    const remote = await git(
+      ['rev-list', '--count', `origin/${branch}..HEAD`],
+      worktreePath,
+      { reject: false },
+    );
+    if (remote.exitCode === 0) {
+      const n = Number(remote.stdout.trim());
+      return Number.isFinite(n) ? n : 1;
+    }
+    const all = await git(['rev-list', '--count', 'HEAD'], worktreePath, {
+      reject: false,
+    });
+    if (all.exitCode === 0) {
+      const n = Number(all.stdout.trim());
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 1;
+  }
+  return 1;
+}
+
 export async function isDirty(worktreePath: string): Promise<boolean> {
   // Default `-unormal` collapses untracked dirs (fast). Do not use `-uall` —
   // that walks every untracked file and made Changes wait seconds.
@@ -1395,6 +1423,70 @@ export async function pushBranch(
   throw new Error(httpsErr || sshErr || `git push origin ${branchName} failed`);
 }
 
+async function runPrReady(
+  cwd: string,
+  selector: string,
+  slug: string | null,
+): Promise<void> {
+  const readyArgs = ['pr', 'ready', selector];
+  if (slug) readyArgs.push('--repo', slug);
+  const ready = await gh(readyArgs, cwd, { reject: false });
+  if (ready.exitCode !== 0) {
+    throw new Error(
+      ready.stderr.trim() ||
+        ready.stdout.trim() ||
+        'Could not mark draft pull request as ready',
+    );
+  }
+}
+
+/** Mark a draft pull request ready for review (`gh pr ready`). Idempotent. */
+export async function markPrReady(
+  cwd: string,
+  selector: string,
+): Promise<{ url: string; state: string; isDraft: boolean }> {
+  const slug = await resolveGithubRepoSlug(cwd);
+  const viewArgs = ['pr', 'view', selector, '--json', 'url,state,isDraft'];
+  if (slug) viewArgs.push('--repo', slug);
+  const before = await gh(viewArgs, cwd, { reject: false });
+  if (before.exitCode !== 0 || !before.stdout.trim()) {
+    throw new Error(before.stderr.trim() || 'Could not load pull request');
+  }
+  let url = '';
+  let state = '';
+  let isDraft = false;
+  try {
+    const parsed = JSON.parse(before.stdout) as {
+      url?: string;
+      state?: string;
+      isDraft?: boolean;
+    };
+    url = String(parsed.url ?? '');
+    state = String(parsed.state ?? '').toUpperCase();
+    isDraft = Boolean(parsed.isDraft);
+  } catch {
+    throw new Error('Could not parse pull request details');
+  }
+  if (state === 'MERGED' || state === 'CLOSED') {
+    return { url, state, isDraft: false };
+  }
+  if (isDraft) {
+    if (await isDirty(cwd)) {
+      throw new Error(
+        'Commit and push local work before marking the pull request ready for review.',
+      );
+    }
+    const unpushed = await countUnpushedVsOrigin(cwd);
+    if (unpushed > 0) {
+      throw new Error(
+        'Push this branch to origin before marking the pull request ready for review.',
+      );
+    }
+    await runPrReady(cwd, selector, slug);
+  }
+  return { url, state: state || 'OPEN', isDraft: false };
+}
+
 /** Merge an open pull request.
  * When the worktree is on a GitHub PR stack, uses `gh stack merge` (atomic through that PR).
  * Otherwise: draft → ready, then `gh pr merge` (squash by default). */
@@ -1449,16 +1541,7 @@ export async function mergePr(
   }
 
   if (isDraft) {
-    const readyArgs = ['pr', 'ready', selector];
-    if (slug) readyArgs.push('--repo', slug);
-    const ready = await gh(readyArgs, cwd, { reject: false });
-    if (ready.exitCode !== 0) {
-      throw new Error(
-        ready.stderr.trim() ||
-          ready.stdout.trim() ||
-          'Could not mark draft pull request as ready',
-      );
-    }
+    await runPrReady(cwd, selector, slug);
   }
 
   const method = opts?.method ?? 'squash';

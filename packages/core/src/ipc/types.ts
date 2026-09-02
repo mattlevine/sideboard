@@ -439,6 +439,10 @@ export interface IpcApi {
     threadRef: string,
     opts?: { draft?: boolean; web?: boolean },
   ): Promise<LandResult>;
+  /** Mark the thread's linked draft PR ready for review (`gh pr ready`). */
+  markPrReady(
+    threadRef: string,
+  ): Promise<{ url: string; state: string; isDraft: boolean }>;
   /** Merge the thread's linked PR on GitHub (`gh pr merge`). */
   mergePr(threadRef: string): Promise<{ url: string; state: string }>;
   /** Desktop git buttons: push/PR when clean, else queue the worktree agent. */

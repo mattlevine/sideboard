@@ -16,6 +16,7 @@ import {
   getPrDetails,
   getPrMeta as fetchPrMeta,
   isDirty,
+  markPrReady as markGithubPrReady,
   mergePr as mergeGithubPr,
   pushBranch,
   removeWorktree,
@@ -2055,6 +2056,35 @@ export class Orchestrator {
       await syncThreadBranchFromGit(thread.id);
     }
     return result;
+  }
+
+  async markPrReady(
+    threadRef: string,
+  ): Promise<{ url: string; state: string; isDraft: boolean }> {
+    const { thread, selectors, cwd } = await this.withPrSelector(threadRef);
+    this.assertNotGlobal(thread, 'Ready for review');
+    const selector = selectors[0];
+    if (!selector) throw new Error('No pull request linked to this thread');
+    const result = await markGithubPrReady(cwd, selector);
+    const meta = await fetchPrMeta(cwd, selector);
+    if (meta) {
+      await this.persistPrMetaAndMaybeArchive(thread, { ...meta, isDraft: false });
+      return { url: meta.url || result.url, state: meta.state || result.state, isDraft: false };
+    }
+    await this.persistPrMetaAndMaybeArchive(thread, {
+      number: 0,
+      title: thread.prTitle ?? thread.title,
+      url: result.url || thread.prUrl || '',
+      state: result.state || 'OPEN',
+      isDraft: false,
+      reviewDecision: null,
+      baseRefName: '',
+      headRefName: '',
+      isInMergeQueue: false,
+      mergeable: null,
+      mergeStateStatus: null,
+    });
+    return { ...result, isDraft: false };
   }
 
   async mergePr(threadRef: string): Promise<{ url: string; state: string }> {
