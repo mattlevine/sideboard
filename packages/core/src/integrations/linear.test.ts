@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createLinearIssue,
   commentLinearIssue,
+  flipLinearRelationType,
   getLinearIssue,
   linearCycleIsActive,
   listLinearAssignedIssues,
@@ -44,6 +45,69 @@ function issueNode(overrides: Record<string, unknown> = {}) {
       states: { nodes: TEAM.states },
     },
     labels: { nodes: [{ name: 'p0' }] },
+    creator: { id: 'user-2', name: 'Ada' },
+    project: { id: 'proj-1', name: 'Ship' },
+    estimate: 3,
+    dueDate: '2026-09-10',
+    branchName: 'matt/eng-9-ship-it',
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    parent: {
+      id: 'parent-uuid',
+      identifier: 'ENG-1',
+      title: 'Epic',
+      url: 'https://linear.app/acme/issue/ENG-1',
+    },
+    children: {
+      nodes: [
+        {
+          id: 'child-uuid',
+          identifier: 'ENG-11',
+          title: 'Subtask',
+          url: 'https://linear.app/acme/issue/ENG-11',
+        },
+      ],
+    },
+    relations: {
+      nodes: [
+        {
+          type: 'blocks',
+          relatedIssue: {
+            id: 'blocked-uuid',
+            identifier: 'ENG-8',
+            title: 'Depends on ship',
+            url: 'https://linear.app/acme/issue/ENG-8',
+          },
+        },
+      ],
+    },
+    inverseRelations: {
+      nodes: [
+        {
+          type: 'blocks',
+          issue: {
+            id: 'blocker-uuid',
+            identifier: 'ENG-2',
+            title: 'Unblock ship',
+            url: 'https://linear.app/acme/issue/ENG-2',
+          },
+        },
+      ],
+    },
+    comments: {
+      nodes: [
+        {
+          id: 'c-1',
+          body: 'Looks good',
+          url: 'https://linear.app/c-1',
+          createdAt: '2026-09-01T12:00:00.000Z',
+          user: { id: 'user-2', name: 'Ada' },
+        },
+      ],
+    },
+    attachments: {
+      nodes: [{ id: 'att-1', title: 'Spec', url: 'https://example.com/spec', subtitle: 'doc' }],
+    },
     ...overrides,
   };
 }
@@ -93,6 +157,15 @@ describe('linearCycleIsActive', () => {
         now,
       ),
     ).toBe(false);
+  });
+});
+
+describe('flipLinearRelationType', () => {
+  it('flips incoming inverse relation types to this issue\'s view', () => {
+    expect(flipLinearRelationType('blocks')).toBe('blockedBy');
+    expect(flipLinearRelationType('blockedBy')).toBe('blocks');
+    expect(flipLinearRelationType('duplicate')).toBe('duplicateOf');
+    expect(flipLinearRelationType('related')).toBe('related');
   });
 });
 
@@ -238,11 +311,43 @@ describe('Linear GraphQL writes', () => {
     const issue = await getLinearIssue('ENG-9');
     expect(issue.identifier).toBe('ENG-9');
     expect(issue.team?.key).toBe('ENG');
+    expect(issue.creator?.name).toBe('Ada');
+    expect(issue.project).toEqual({ id: 'proj-1', name: 'Ship' });
+    expect(issue.estimate).toBe(3);
+    expect(issue.parent?.identifier).toBe('ENG-1');
+    expect(issue.children).toEqual([
+      expect.objectContaining({ identifier: 'ENG-11', title: 'Subtask' }),
+    ]);
+    expect(issue.relations).toEqual([
+      {
+        type: 'blocks',
+        issue: expect.objectContaining({ identifier: 'ENG-8' }),
+      },
+      {
+        type: 'blockedBy',
+        issue: expect.objectContaining({ identifier: 'ENG-2' }),
+      },
+    ]);
+    expect(issue.comments).toEqual([
+      expect.objectContaining({
+        id: 'c-1',
+        body: 'Looks good',
+        user: { id: 'user-2', name: 'Ada' },
+      }),
+    ]);
+    expect(issue.attachments).toEqual([
+      expect.objectContaining({ id: 'att-1', title: 'Spec', url: 'https://example.com/spec' }),
+    ]);
     const query = String(
       JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}')).query ?? '',
     );
     expect(query).toMatch(/states\s*\(\s*first:\s*50\s*\)/);
     expect(query).toContain('description');
+    expect(query).toMatch(/comments\s*\(\s*first:\s*50\s*\)/);
+    expect(query).toMatch(/relations\s*\(\s*first:\s*25\s*\)/);
+    expect(query).toMatch(/inverseRelations\s*\(\s*first:\s*25\s*\)/);
+    expect(query).toContain('parent');
+    expect(query).toMatch(/children\s*\(\s*first:\s*25\s*\)/);
   });
 
   it('lists assigned issues with the active cycle mapped', async () => {
@@ -281,6 +386,8 @@ describe('Linear GraphQL writes', () => {
     expect(query).toMatch(/labels\s*\(\s*first:\s*10\s*\)/);
     expect(query).not.toMatch(/states\s*(\(|\{)/);
     expect(query).not.toContain('description');
+    expect(query).not.toMatch(/comments\s*\(/);
+    expect(query).not.toMatch(/relations\s*\(/);
   });
 
   it('rewrites GraphQL permission errors', async () => {

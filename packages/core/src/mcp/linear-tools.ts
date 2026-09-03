@@ -50,7 +50,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_get_issue',
-    'Get a Linear issue by uuid or identifier (ENG-123).',
+    'Get a Linear issue by uuid or identifier (ENG-123). Returns description, comments, relations (blocks/blockedBy/related/duplicate), parent/children, project, cycle, labels, and other metadata.',
     { id: z.string() },
     async ({ id }) => {
       try {
