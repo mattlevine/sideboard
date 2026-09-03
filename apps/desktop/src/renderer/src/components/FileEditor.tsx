@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffScope, ThreadAttachment } from '@sideboard-ai/core';
+import { buildCodeRefAttachment } from '@sideboard/code-ref';
 import {
   buildDiffCommentAttachment,
   type DiffCommentLine,
 } from '@sideboard/diff-comment';
-import { documentPreviewKind } from '../lib/language';
+import { detectLanguage, documentPreviewKind } from '../lib/language';
 import { parseUnifiedPatch } from '../lib/tool-diff';
 import { DiffLines } from './DiffLines';
 import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
@@ -29,6 +30,8 @@ interface Props {
   onSaved?: () => void;
   /** Attach a line-anchored diff comment to the thread composer. */
   onDiffComment?: (attachment: ThreadAttachment) => void;
+  /** Attach a code selection from Edit view to the thread composer. */
+  onCodeReference?: (attachment: ThreadAttachment) => void;
 }
 
 export function FileEditor({
@@ -42,6 +45,7 @@ export function FileEditor({
   onClose,
   onSaved,
   onDiffComment,
+  onCodeReference,
 }: Props) {
   const previewKind = documentPreviewKind(path);
   const isImage = previewKind === 'image';
@@ -370,6 +374,21 @@ export function FileEditor({
             value={content}
             readOnly={binary || truncated}
             onChange={setContent}
+            onAddReference={
+              onCodeReference
+                ? (sel) => {
+                    onCodeReference(
+                      buildCodeRefAttachment({
+                        path,
+                        startLine: sel.startLine,
+                        endLine: sel.endLine,
+                        text: sel.text,
+                        language: detectLanguage(path),
+                      }),
+                    );
+                  }
+                : undefined
+            }
           />
         </Suspense>
       )}

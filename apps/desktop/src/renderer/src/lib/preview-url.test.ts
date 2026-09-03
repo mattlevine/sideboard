@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePreviewUrl, previewUrlTabLabel } from './preview-url';
+import { githubPrNumber, normalizePreviewUrl, previewUrlTabLabel } from './preview-url';
 
 describe('normalizePreviewUrl', () => {
   it('accepts http(s) URLs', () => {
@@ -22,5 +22,18 @@ describe('normalizePreviewUrl', () => {
 describe('previewUrlTabLabel', () => {
   it('shows host and path', () => {
     expect(previewUrlTabLabel('http://localhost:3000/docs')).toBe('localhost:3000/docs');
+  });
+
+  it('shows the GitHub PR number', () => {
+    expect(previewUrlTabLabel('https://github.com/acme/app/pull/99')).toBe('#99');
+    expect(previewUrlTabLabel('https://github.com/acme/app/pull/99/files')).toBe('#99');
+  });
+});
+
+
+describe('githubPrNumber', () => {
+  it('reads /pull/N from github.com', () => {
+    expect(githubPrNumber('https://github.com/acme/app/pull/99')).toBe('99');
+    expect(githubPrNumber('https://example.com/acme/app/pull/99')).toBeNull();
   });
 });

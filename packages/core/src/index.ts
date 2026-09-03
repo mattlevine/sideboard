@@ -70,6 +70,7 @@ export {
 } from './skills/bundled/long-running.js';
 export * from './composer/expand.js';
 export * from './composer/diff-comment.js';
+export * from './composer/code-ref.js';
 export * from './composer/stage-files.js';
 export * from './composer/pasted-text.js';
 export * from './composer/context-compact.js';

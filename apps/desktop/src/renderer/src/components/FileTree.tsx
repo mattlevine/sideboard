@@ -1,5 +1,11 @@
 import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
 import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
+import {
+  AddReferenceButton,
+  AddReferenceMenu,
+  contextMenuTarget,
+  type PathRefTarget,
+} from './AddReferenceAction';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 
 export interface TreeNode {
@@ -62,6 +68,13 @@ function fileGlyph(name: string): string {
   return '•';
 }
 
+export function filesUnderPrefix(paths: string[], prefix: string): string[] {
+  const root = prefix.replace(/\/+$/, '');
+  if (!root) return [...paths];
+  const needle = `${root}/`;
+  return paths.filter((p) => p === root || p.startsWith(needle));
+}
+
 interface Props {
   paths: string[];
   selected: string | null;
@@ -71,6 +84,8 @@ interface Props {
   changes?: Record<string, GitFileChange>;
   /** When set, files can be dragged onto the CMS file manager. */
   threadId?: string;
+  /** Add a file or folder as a composer reference. */
+  onAddReference?: (target: PathRefTarget & { childPaths?: string[] }) => void;
 }
 
 export function FileTree({
@@ -80,9 +95,13 @@ export function FileTree({
   onSelect,
   changes = {},
   threadId,
+  onAddReference,
 }: Props) {
   const tree = useMemo(() => buildFileTree(paths), [paths]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['apps', 'packages', 'scripts']));
+  const [menu, setMenu] = useState<{ target: PathRefTarget; x: number; y: number } | null>(
+    null,
+  );
 
   const q = filter.trim().toLowerCase();
 
@@ -92,6 +111,13 @@ export function FileTree({
       if (next.has(path)) next.delete(path);
       else next.add(path);
       return next;
+    });
+  }
+
+  function addRef(target: PathRefTarget) {
+    onAddReference?.({
+      ...target,
+      childPaths: target.kind === 'dir' ? filesUnderPrefix(paths, target.path) : undefined,
     });
   }
 
@@ -108,6 +134,11 @@ export function FileTree({
       }
     }
 
+    const target: PathRefTarget = { path: node.path, kind: node.kind };
+    const refBtn = onAddReference ? (
+      <AddReferenceButton label={node.path} onAdd={() => addRef(target)} />
+    ) : null;
+
     if (node.kind === 'file') {
       const change = changes[node.path];
       const onDragStart = (e: DragEvent) => {
@@ -115,19 +146,29 @@ export function FileTree({
         setSideboardFileDrag(e.dataTransfer, [node.path], threadId);
       };
       return (
-        <button
+        <div
           key={node.path}
-          type="button"
-          className={`tree-row${selected === node.path ? ' active' : ''}${change ? ' changed' : ''}`}
-          style={{ paddingLeft: 8 + depth * 12 }}
-          onClick={() => onSelect(node.path)}
-          draggable={Boolean(threadId)}
-          onDragStart={onDragStart}
+          className="tree-row-wrap"
+          onContextMenu={
+            onAddReference
+              ? (e) => setMenu(contextMenuTarget(e, target))
+              : undefined
+          }
         >
-          <span className="tree-glyph file">{fileGlyph(node.name)}</span>
-          <span className="tree-name">{node.name}</span>
-          {change && <GitChangeBadge change={change} />}
-        </button>
+          <button
+            type="button"
+            className={`tree-row${selected === node.path ? ' active' : ''}${change ? ' changed' : ''}`}
+            style={{ paddingLeft: 8 + depth * 12 }}
+            onClick={() => onSelect(node.path)}
+            draggable={Boolean(threadId)}
+            onDragStart={onDragStart}
+          >
+            <span className="tree-glyph file">{fileGlyph(node.name)}</span>
+            <span className="tree-name">{node.name}</span>
+            {change && <GitChangeBadge change={change} />}
+          </button>
+          {refBtn}
+        </div>
       );
     }
 
@@ -135,16 +176,26 @@ export function FileTree({
     const kids = node.children ?? [];
     return (
       <div key={node.path}>
-        <button
-          type="button"
-          className="tree-row dir"
-          style={{ paddingLeft: 8 + depth * 12 }}
-          onClick={() => toggle(node.path)}
+        <div
+          className="tree-row-wrap"
+          onContextMenu={
+            onAddReference
+              ? (e) => setMenu(contextMenuTarget(e, target))
+              : undefined
+          }
         >
-          <span className="tree-chevron">{open ? '▾' : '▸'}</span>
-          <span className="tree-glyph dir" />
-          <span className="tree-name">{node.name}</span>
-        </button>
+          <button
+            type="button"
+            className="tree-row dir"
+            style={{ paddingLeft: 8 + depth * 12 }}
+            onClick={() => toggle(node.path)}
+          >
+            <span className="tree-chevron">{open ? '▾' : '▸'}</span>
+            <span className="tree-glyph dir" />
+            <span className="tree-name">{node.name}</span>
+          </button>
+          {refBtn}
+        </div>
         {open && kids.map((c) => renderNode(c, depth + 1))}
       </div>
     );
@@ -152,5 +203,18 @@ export function FileTree({
 
   if (!tree.length) return <div className="empty">No files</div>;
 
-  return <div className="file-tree">{tree.map((n) => renderNode(n, 0))}</div>;
+  return (
+    <div className="file-tree">
+      {tree.map((n) => renderNode(n, 0))}
+      {menu && onAddReference && (
+        <AddReferenceMenu
+          target={menu.target}
+          x={menu.x}
+          y={menu.y}
+          onAdd={addRef}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </div>
+  );
 }

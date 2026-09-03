@@ -25,6 +25,9 @@ interface Props {
   onNavigateUrl?: (from: string, to: string) => void;
   onShowChat?: () => void;
   urlPreviewSuspended?: boolean;
+  prPageOpen?: boolean;
+  onSelectPrPage?: () => void;
+  onClosePrPage?: () => void;
 }
 
 function countStatus(threads: Thread[], status: Thread['status']): number {
@@ -51,6 +54,9 @@ export function OrchestratorPanel({
   onNavigateUrl,
   onShowChat,
   urlPreviewSuspended,
+  prPageOpen,
+  onSelectPrPage,
+  onClosePrPage,
 }: Props) {
   const global = isGlobalThread(thread);
   const childSummary = useMemo(() => {
@@ -124,6 +130,9 @@ export function OrchestratorPanel({
           onNavigateUrl={onNavigateUrl}
           onShowChat={onShowChat}
           urlPreviewSuspended={urlPreviewSuspended}
+          prPageOpen={prPageOpen}
+          onSelectPrPage={onSelectPrPage}
+          onClosePrPage={onClosePrPage}
         />
       </div>
     </div>

@@ -5,8 +5,16 @@ import type {
   DiffScope,
   PrCheckRun,
   Thread,
+  ThreadAttachment,
 } from '@sideboard-ai/core';
+import { buildPathRefAttachment } from '@sideboard/code-ref';
 import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
+import {
+  AddReferenceButton,
+  AddReferenceMenu,
+  contextMenuTarget,
+  type PathRefTarget,
+} from './AddReferenceAction';
 import { FileTree } from './FileTree';
 import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
@@ -56,6 +64,10 @@ interface Props {
   onSelectChat?: (id: string, created?: Thread) => void;
   /** Notify parent so file tabs can show the same git markers. */
   onFileChanges?: (changes: ReturnType<typeof fileChangeMap>) => void;
+  /** Attach a file/folder reference from the listing to the composer. */
+  onAddReference?: (attachment: ThreadAttachment) => void;
+  /** Open the native PR page (GitHub API), not github.com in a webview. */
+  onOpenPr?: () => void;
 }
 
 type UpperTab = 'changes' | 'files' | 'checks';
@@ -160,11 +172,18 @@ export function RightSidebar({
   onOpenFile,
   onSelectChat,
   onFileChanges,
+  onAddReference,
+  onOpenPr,
 }: Props) {
   const [upper, setUpper] = useState<UpperTab>('files');
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewMenuOpen, setReviewMenuOpen] = useState(false);
   const reviewBtnRef = useRef<HTMLButtonElement>(null);
+  const [pathRefMenu, setPathRefMenu] = useState<{
+    target: PathRefTarget;
+    x: number;
+    y: number;
+  } | null>(null);
   const [lower, setLower] = useState<LowerTab>('run');
   const [diff, setDiff] = useState<DiffResult | null>(null);
   /** True after the includeMeta pass — first paint reports unpushed: 0. */
@@ -724,6 +743,10 @@ export function RightSidebar({
   };
   const pillModifier = prUrl ? prPillModifier(pillOpts) : '';
   const pillStatus = prUrl ? prPillStatusLabel(pillOpts) : '';
+  const shortPillStatus =
+    pillModifier === 'merged' ||
+    pillModifier === 'closed' ||
+    pillModifier === 'queued';
   /** Local work that still needs to land before merge. */
   const hasLocalChanges =
     Boolean(diff?.dirty) || (diff?.unpushed ?? 0) > 0;
@@ -1071,15 +1094,50 @@ export function RightSidebar({
       <div className={`right-top${pillModifier ? ` ${pillModifier}` : ''}`}>
         <div className="right-top-row">
           {prUrl ? (
-            <button
-              type="button"
-              className={`pr-pill${pillModifier ? ` ${pillModifier}` : ''}`}
-              onClick={() => void window.sideboard.openExternal(prUrl)}
-              title={pillStatus ? `${num ? `#${num}` : 'PR'} · ${pillStatus}` : prUrl}
-            >
-              <span className="pr-pill-num">{num ? `#${num}` : 'PR'} ↗</span>
-              {pillStatus ? <span className="pr-status">{pillStatus}</span> : null}
-            </button>
+            <div className={`pr-link${pillModifier ? ` ${pillModifier}` : ''}`}>
+              <div className="pr-pill">
+                <button
+                  type="button"
+                  className="pr-pill-main"
+                  onClick={() => {
+                    if (onOpenPr) onOpenPr();
+                    else void window.sideboard.openExternal(prUrl);
+                  }}
+                  title={
+                    pillStatus
+                      ? `Open ${num ? `#${num}` : 'PR'} · ${pillStatus}`
+                      : `Open ${num ? `#${num}` : 'pull request'}`
+                  }
+                >
+                  <span className="pr-pill-num">{num ? `#${num}` : 'PR'}</span>
+                </button>
+                {pillStatus ? (
+                  <button
+                    type="button"
+                    className={`pr-pill-status${shortPillStatus ? ' is-short' : ''}`}
+                    onClick={() => {
+                      if (onOpenPr) onOpenPr();
+                      else void window.sideboard.openExternal(prUrl);
+                    }}
+                    title={
+                      pillStatus
+                        ? `Open ${num ? `#${num}` : 'PR'} · ${pillStatus}`
+                        : undefined
+                    }
+                  >
+                    {pillStatus}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="pr-pill-ext"
+                  onClick={() => void window.sideboard.openExternal(prUrl)}
+                  title="Open on GitHub"
+                >
+                  ↗
+                </button>
+              </div>
+            </div>
           ) : null}
           <div className="right-actions">
             <div className="split-btn" ref={prMenuRef}>
@@ -1445,25 +1503,47 @@ export function RightSidebar({
               {diff && diff.files.length > 0 && (
                 <div className="right-file-list changes-file-list">
                   {diff.files.map((f) => (
-                    <button
+                    <div
                       key={f.path}
-                      type="button"
-                      className={`right-file${f.path === selected || f.path === changesPath || f.path === openFilePath ? ' active' : ''}`}
-                      onClick={() => focusChangedFile(f.path)}
-                      draggable
-                      onDragStart={(e) => {
-                        setSideboardFileDrag(e.dataTransfer, [f.path], thread.id);
-                      }}
+                      className="right-file-wrap"
+                      onContextMenu={
+                        onAddReference
+                          ? (e) =>
+                              setPathRefMenu(
+                                contextMenuTarget(e, { path: f.path, kind: 'file' }),
+                              )
+                          : undefined
+                      }
                     >
-                      <span className="right-file-path">{f.path}</span>
-                      <GitChangeBadge
-                        change={{
-                          status: f.status,
-                          additions: f.additions,
-                          deletions: f.deletions,
+                      <button
+                        type="button"
+                        className={`right-file${f.path === selected || f.path === changesPath || f.path === openFilePath ? ' active' : ''}`}
+                        onClick={() => focusChangedFile(f.path)}
+                        draggable
+                        onDragStart={(e) => {
+                          setSideboardFileDrag(e.dataTransfer, [f.path], thread.id);
                         }}
-                      />
-                    </button>
+                      >
+                        <span className="right-file-path">{f.path}</span>
+                        <GitChangeBadge
+                          change={{
+                            status: f.status,
+                            additions: f.additions,
+                            deletions: f.deletions,
+                          }}
+                        />
+                      </button>
+                      {onAddReference && (
+                        <AddReferenceButton
+                          label={f.path}
+                          onAdd={() =>
+                            onAddReference(
+                              buildPathRefAttachment({ path: f.path, entry: 'file' }),
+                            )
+                          }
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -1497,6 +1577,18 @@ export function RightSidebar({
                     onSelect={(path) => onOpenFile?.(path)}
                     changes={changeByPath}
                     threadId={thread.id}
+                    onAddReference={
+                      onAddReference
+                        ? (target) =>
+                            onAddReference(
+                              buildPathRefAttachment({
+                                path: target.path,
+                                entry: target.kind,
+                                childPaths: target.childPaths,
+                              }),
+                            )
+                        : undefined
+                    }
                   />
                 </div>
               )}
@@ -1511,6 +1603,23 @@ export function RightSidebar({
               loading={prChecksLoading}
               onRefresh={() => void loadPrChecks()}
               onFixWithAgent={(check) => void fixCheckWithAgent(check)}
+            />
+          )}
+
+          {pathRefMenu && onAddReference && (
+            <AddReferenceMenu
+              target={pathRefMenu.target}
+              x={pathRefMenu.x}
+              y={pathRefMenu.y}
+              onAdd={(target) =>
+                onAddReference(
+                  buildPathRefAttachment({
+                    path: target.path,
+                    entry: target.kind,
+                  }),
+                )
+              }
+              onClose={() => setPathRefMenu(null)}
             />
           )}
 

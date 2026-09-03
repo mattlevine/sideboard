@@ -30,6 +30,8 @@ interface Props {
   onUrlClick?: (url: string) => void;
   /** When true, defer mermaid rendering to avoid parse errors on incomplete syntax. */
   isStreaming?: boolean;
+  /** Linked badge images (PR descriptions) should stay clickable links, not expand overlays. */
+  expandImages?: boolean;
 }
 
 function isSafeExternalUrl(href: string): boolean {
@@ -65,11 +67,23 @@ export function MarkdownMessage({
   onThreadLinkClick,
   onUrlClick,
   isStreaming = false,
+  expandImages = true,
 }: Props) {
   const components: ComponentProps<typeof ReactMarkdown>['components'] = {
     img({ src, alt, title, className }) {
       const srcStr = typeof src === 'string' ? src : '';
       if (!srcStr) return null;
+      if (!expandImages) {
+        return (
+          <img
+            src={srcStr}
+            alt={typeof alt === 'string' ? alt : ''}
+            title={typeof title === 'string' ? title : undefined}
+            className={typeof className === 'string' ? className : undefined}
+            loading="lazy"
+          />
+        );
+      }
       return (
         <MarkdownImage
           src={srcStr}

@@ -26,9 +26,23 @@ export function normalizePreviewUrl(input: string): string | null {
   return null;
 }
 
+/** GitHub pull number from a PR URL (`/pull/99`), or null. */
+export function githubPrNumber(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!/(^|\.)github\.com$/i.test(u.hostname)) return null;
+    const m = u.pathname.match(/\/pull\/(\d+)/);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Short label for a URL tab (hostname + path, trimmed). */
 export function previewUrlTabLabel(url: string): string {
   try {
+    const pr = githubPrNumber(url);
+    if (pr) return `#${pr}`;
     const u = new URL(url);
     const path = u.pathname === '/' ? '' : u.pathname;
     const label = `${u.host}${path}${u.search}${u.hash}`;

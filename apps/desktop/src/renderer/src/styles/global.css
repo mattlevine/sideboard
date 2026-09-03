@@ -4361,6 +4361,11 @@ button.worktree-hover-card-title:hover {
   border-color: color-mix(in srgb, #0284c7 30%, var(--border));
 }
 
+.attachment-icon.kind-code-ref {
+  color: color-mix(in srgb, #86efac 50%, var(--muted));
+  border-color: color-mix(in srgb, #16a34a 30%, var(--border));
+}
+
 .composer-picker-backdrop {
   position: fixed;
   inset: 0;
@@ -6264,8 +6269,8 @@ button.worktree-hover-card-title:hover {
   border-style: dashed;
 }
 
-.right-top.open .pr-pill .pr-status,
-.right-top.draft .pr-pill .pr-status {
+.right-top.open .pr-status,
+.right-top.draft .pr-status {
   color: #75beff;
 }
 
@@ -6275,7 +6280,7 @@ button.worktree-hover-card-title:hover {
   color: #f0c14d;
 }
 
-.right-top.needs-approval .pr-pill .pr-status {
+.right-top.needs-approval .pr-status {
   color: #e2b340;
 }
 
@@ -6285,7 +6290,7 @@ button.worktree-hover-card-title:hover {
   color: #8fd9a8;
 }
 
-.right-top.approved .pr-pill .pr-status {
+.right-top.approved .pr-status {
   color: #6fcf97;
 }
 
@@ -6296,8 +6301,8 @@ button.worktree-hover-card-title:hover {
   color: #ffa198;
 }
 
-.right-top.rejected .pr-pill .pr-status,
-.right-top.conflicts .pr-pill .pr-status {
+.right-top.rejected .pr-status,
+.right-top.conflicts .pr-status {
   color: #ff7b72;
 }
 
@@ -6307,7 +6312,7 @@ button.worktree-hover-card-title:hover {
   color: #b0b5ba;
 }
 
-.right-top.closed .pr-pill .pr-status {
+.right-top.closed .pr-status {
   color: #9aa0a6;
 }
 
@@ -6317,7 +6322,7 @@ button.worktree-hover-card-title:hover {
   color: #e8d4ff;
 }
 
-.right-top.merged .pr-pill .pr-status {
+.right-top.merged .pr-status {
   color: #d2a8ff;
 }
 
@@ -6327,7 +6332,7 @@ button.worktree-hover-card-title:hover {
   color: #9ee8e2;
 }
 
-.right-top.queued .pr-pill .pr-status {
+.right-top.queued .pr-status {
   color: #6fdbd4;
 }
 
@@ -6449,6 +6454,7 @@ button.worktree-hover-card-title:hover {
 }
 
 .right-top button,
+.right-top .pr-link,
 .right-top .pr-pill,
 .right-top .branch-pill,
 .right-top .split-btn,
@@ -6458,6 +6464,7 @@ button.worktree-hover-card-title:hover {
 
 .right-top-row {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -6482,12 +6489,23 @@ button.worktree-hover-card-title:hover {
   justify-content: center;
 }
 
+.right-top .pr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
 .right-top .pr-pill {
   border-radius: 6px;
-  gap: 6px;
+  gap: 0;
   flex: 0 1 auto;
   justify-content: flex-start;
-  max-width: 100%;
+  padding: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .right-top .split-caret {
@@ -6689,6 +6707,16 @@ button.worktree-hover-card-title:hover {
   }
 }
 
+/* Drop long Draft/Open/review labels before #93 + Ready for review wrap.
+   Keep Merged / Closed / Queued so the split (#N | status | ↗) stays
+   readable at the default 340px sidebar. */
+@container right-sidebar (max-width: 380px) {
+  .right-top .pr-status:not(.is-short),
+  .right-top .pr-pill-status:not(.is-short) {
+    display: none;
+  }
+}
+
 /* Compact only when the pane is genuinely narrow — default width (340) must
    keep "Commit & push" / "Changes" / "Archive" text, not icons. */
 @container right-sidebar (max-width: 280px) {
@@ -6719,15 +6747,20 @@ button.worktree-hover-card-title:hover {
     padding-right: 8px;
   }
 
-  .right-top .pr-pill {
+  .right-top .pr-link {
     min-width: 0;
     flex: 1 1 auto;
+  }
+
+  .right-top .pr-pill {
+    min-width: 0;
     overflow: hidden;
-    padding: 0 8px;
+    padding: 0;
     height: 28px;
   }
 
-  .right-top .pr-pill .pr-status {
+  .right-top .pr-status,
+  .right-top .pr-pill-status {
     display: none;
   }
 }
@@ -7068,6 +7101,14 @@ button.worktree-hover-card-title:hover {
   line-height: 1;
 }
 
+.pr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .pr-pill,
 .branch-pill {
   display: inline-flex;
@@ -7089,11 +7130,63 @@ button.worktree-hover-card-title:hover {
   overflow: hidden;
 }
 
-.pr-pill-num {
-  /* Keep #123 visible when the pill is squeezed (Draft used to clip to status). */
+.pr-pill {
+  gap: 0;
+  padding: 0;
   flex-shrink: 0;
+}
+
+.pr-pill .pr-pill-main,
+.pr-pill .pr-pill-status,
+.pr-pill .pr-pill-ext {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pr-pill .pr-pill-main {
+  padding: 0 4px 0 10px;
+}
+
+.pr-pill .pr-pill-status {
+  padding: 0 8px;
+  font-weight: 500;
+  white-space: nowrap;
+  /* Yield before #123 / ↗ so Draft drops off when the pane is tight. */
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  border-left: 1px dashed;
+  border-left-color: inherit;
+}
+
+.pr-pill .pr-pill-ext {
+  padding: 0 8px;
+  /* Same dashed split as Ready for review / split-caret. */
+  border-left: 1px dashed;
+  border-left-color: inherit;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.pr-pill .pr-pill-main:hover:not(:disabled),
+.pr-pill .pr-pill-status:hover:not(:disabled),
+.pr-pill .pr-pill-ext:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.pr-pill-num {
+  flex-shrink: 0;
 }
 
 .branch-pill {
@@ -7126,7 +7219,7 @@ button.worktree-hover-card-title:hover {
   border-radius: 999px;
 }
 
-.pr-pill .pr-status {
+.pr-link .pr-status {
   color: #9cdcfe;
   font-weight: 500;
   min-width: 0;
@@ -7134,81 +7227,81 @@ button.worktree-hover-card-title:hover {
   text-overflow: ellipsis;
 }
 
-.pr-pill.merged {
+.pr-link.merged .pr-pill {
   background: rgba(163, 113, 247, 0.14);
   border-color: rgba(163, 113, 247, 0.45);
   color: #d2a8ff;
 }
 
-.pr-pill.merged .pr-status {
+.pr-link.merged .pr-status {
   color: #e2c5ff;
 }
 
-.pr-pill.queued {
+.pr-link.queued .pr-pill {
   background: rgba(57, 192, 201, 0.14);
   border-color: rgba(57, 192, 201, 0.45);
   color: #6fdbd4;
 }
 
-.pr-pill.queued .pr-status {
+.pr-link.queued .pr-status {
   color: #9ee8e2;
 }
 
-.pr-pill.closed {
+.pr-link.closed .pr-pill {
   background: rgba(139, 148, 158, 0.12);
   border-color: rgba(139, 148, 158, 0.4);
   color: #9aa0a6;
 }
 
-.pr-pill.closed .pr-status {
+.pr-link.closed .pr-status {
   color: #b0b5ba;
 }
 
-.pr-pill.draft {
+.pr-link.draft .pr-pill {
   border-style: dashed;
 }
 
-.pr-pill.conflicts {
+.pr-link.conflicts .pr-pill {
   background: rgba(248, 81, 73, 0.12);
   border-color: rgba(248, 81, 73, 0.5);
   color: #ff7b72;
 }
 
-.pr-pill.conflicts .pr-status {
+.pr-link.conflicts .pr-status {
   color: #ffa198;
 }
 
-.pr-pill.open .pr-status {
+.pr-link.open .pr-status {
   color: #9cdcfe;
 }
 
-.pr-pill.needs-approval {
+.pr-link.needs-approval .pr-pill {
   background: rgba(210, 153, 34, 0.12);
   border-color: rgba(210, 153, 34, 0.5);
   color: #e2b340;
 }
 
-.pr-pill.needs-approval .pr-status {
+.pr-link.needs-approval .pr-status {
   color: #f0c14d;
 }
 
-.pr-pill.approved {
+.pr-link.approved .pr-pill {
   background: rgba(63, 185, 80, 0.1);
   border-color: rgba(63, 185, 80, 0.35);
   color: #6fcf97;
 }
 
-.pr-pill.approved .pr-status {
+.pr-link.approved .pr-status {
   color: #8fd9a8;
 }
 
-.pr-pill.rejected {
+.pr-link.rejected .pr-pill {
   background: rgba(248, 81, 73, 0.12);
   border-color: rgba(248, 81, 73, 0.45);
   color: #f85149;
 }
 
-.pr-pill.rejected .pr-status {
+.pr-link.rejected .pr-status {
   color: #ff7b72;
 }
 
@@ -7244,6 +7337,63 @@ button.worktree-hover-card-title:hover {
 
 .tree-scroll {
   max-height: 220px;
+}
+
+.tree-row-wrap,
+.right-file-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 2px;
+  border-radius: 4px;
+}
+
+.tree-row-wrap .tree-row,
+.right-file-wrap .right-file {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-ref-btn {
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  margin: 0;
+  padding: 2px 6px;
+  min-width: 22px;
+  min-height: 22px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+}
+
+.tree-row-wrap:hover .add-ref-btn,
+.tree-row-wrap:focus-within .add-ref-btn,
+.right-file-wrap:hover .add-ref-btn,
+.right-file-wrap:focus-within .add-ref-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.add-ref-btn:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.add-ref-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.add-ref-menu-path {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
 }
 
 .tree-row {
@@ -7914,9 +8064,37 @@ button.linkish:hover {
 }
 
 .code-view {
+  position: relative;
   flex: 1;
   min-height: 120px;
   overflow: hidden;
+}
+
+.code-ref-action {
+  position: absolute;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, 6px);
+  white-space: nowrap;
+}
+
+.code-ref-action:hover {
+  border-color: var(--accent);
+}
+
+.code-ref-action-range {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
 }
 
 .code-view .monaco-editor,
@@ -8970,6 +9148,222 @@ button.linkish:hover {
   border: 0;
   border-top: 1px solid var(--border);
   background: var(--bg);
+}
+
+.pr-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding-bottom: 64px;
+  overflow: auto;
+}
+
+.thread-chat-column:has(.composer-shell.has-queue.overlay) .pr-page {
+  padding-bottom: 180px;
+}
+
+.pr-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 16px 20px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.pr-page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pr-page-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.pr-page-number {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.pr-page-diff {
+  display: inline-flex;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
+}
+
+.pr-page-diff .add {
+  color: #6a9955;
+}
+
+.pr-page-diff .del {
+  color: #f14c4c;
+}
+
+.pr-page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.pr-page-sections {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.pr-page-sections button {
+  margin: 0;
+  padding: 8px 2px 10px;
+  margin-right: 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pr-page-sections button.active {
+  color: var(--text);
+  border-bottom-color: #c4a574;
+  background: transparent;
+}
+
+.pr-page-sections button:hover:not(:disabled) {
+  color: var(--text);
+  background: transparent;
+}
+
+.pr-page-count {
+  margin-left: 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.pr-page-open {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pr-page-open:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.pr-page-add {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.pr-page-empty {
+  padding: 28px 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pr-page-body,
+.pr-page-activity {
+  padding: 16px 20px 24px;
+  max-width: 860px;
+}
+
+.pr-page-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pr-page-item {
+  padding: 14px 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.pr-page-item:last-child {
+  border-bottom: none;
+}
+
+.pr-page-item-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pr-page-author {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.pr-page-item-body {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.pr-page .md-image-expand {
+  display: none;
+}
+
+.pr-page-body img,
+.pr-page-item-body img,
+.pr-page-html img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+  border-radius: 6px;
+}
+
+/* Badge / shield links stay compact so the <a> is the hit target, not a full-width image. */
+.pr-page-body a img,
+.pr-page-item-body a img,
+.pr-page-html a img {
+  display: inline-block;
+  width: auto;
+  max-height: 40px;
+  margin: 6px 8px 6px 0;
+}
+
+.pr-page-html picture,
+.pr-page-item-body picture,
+.pr-page-body picture {
+  display: inline-block;
+  margin: 6px 8px 6px 0;
+}
+
+.pr-page-html a,
+.pr-page-item-body a,
+.pr-page-body a {
+  color: #75beff;
 }
 
 .file-ref-code .doc-preview {

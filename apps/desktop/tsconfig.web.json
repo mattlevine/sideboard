@@ -22,6 +22,7 @@
       "@sideboard/brightsy-targets": ["../../packages/core/src/agents/brightsy-targets.ts"],
       "@sideboard/gh-errors": ["../../packages/core/src/git/gh-errors.ts"],
       "@sideboard/diff-comment": ["../../packages/core/src/composer/diff-comment.ts"],
+      "@sideboard/code-ref": ["../../packages/core/src/composer/code-ref.ts"],
       "@sideboard/teams": ["../../packages/core/src/git/teams.ts"],
       "@sideboard/orchestrator-capable": ["../../packages/core/src/agents/orchestrator-capable.ts"],
       "@sideboard/plan-ask-user": ["../../packages/core/src/plan/ask-user.ts"],

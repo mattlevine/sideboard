@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import type { ThreadAttachment } from '@sideboard-ai/core';
+import { buildCodeRefAttachment } from '@sideboard/code-ref';
 import type { FilePathLink } from '../lib/file-path-link';
-import { documentPreviewKind } from '../lib/language';
+import { detectLanguage, documentPreviewKind } from '../lib/language';
 import { DocumentPreview, DocumentPreviewModeToggle } from './DocumentPreview';
 
 const CodeView = lazy(() =>
@@ -13,6 +15,7 @@ interface Props {
   worktreePath?: string;
   onClose: () => void;
   onOpenInTab: (path: string) => void;
+  onCodeReference?: (attachment: ThreadAttachment) => void;
 }
 
 export function FileReferenceModal({
@@ -21,6 +24,7 @@ export function FileReferenceModal({
   worktreePath,
   onClose,
   onOpenInTab,
+  onCodeReference,
 }: Props) {
   const previewKind = documentPreviewKind(link.path);
   const isImage = previewKind === 'image';
@@ -143,6 +147,21 @@ export function FileReferenceModal({
                 readOnly
                 revealLine={link.startLine}
                 highlightEndLine={link.endLine}
+                onAddReference={
+                  onCodeReference
+                    ? (sel) => {
+                        onCodeReference(
+                          buildCodeRefAttachment({
+                            path: link.path,
+                            startLine: sel.startLine,
+                            endLine: sel.endLine,
+                            text: sel.text,
+                            language: detectLanguage(link.path),
+                          }),
+                        );
+                      }
+                    : undefined
+                }
               />
             </Suspense>
           </div>
