@@ -5,6 +5,8 @@ import {
   canonicalizeRepoPath,
   createThreadWorktree,
   currentBranch,
+  fastForwardMainCheckoutIfSafe,
+  fetchOriginForWorktree,
   fetchPrHead,
   getPr,
   getPrForHeadBranch,
@@ -110,6 +112,8 @@ export async function createThread(
         `Cowboy mode uses ${defaultBranch} in the project folder. Switch that checkout to ${defaultBranch} first (currently ${head}).`,
       );
     }
+    await fetchOriginForWorktree(repoPath, defaultBranch);
+    await fastForwardMainCheckoutIfSafe(repoPath, { branch: defaultBranch });
     const explicitTitle = input.title?.trim();
     const thread = createEmptyThread({
       title: explicitTitle || `Cowboy · ${head}`,
@@ -181,7 +185,8 @@ export async function createThread(
     sourceRef = await resolveDefaultBranch(repoPath);
   } else if (sourceType === 'branch') {
     // Quick create / "default branch" → repo default (usually main).
-    // createThreadWorktree then forks from origin/<default>, not a stale local tip.
+    // createThreadWorktree fetches origin/<default> and forks from that tip.
+    // The project folder is fast-forwarded only when it is on that branch and clean.
     if (!sourceRef || sourceRef === 'HEAD' || sourceRef === 'default') {
       sourceRef = await resolveDefaultBranch(repoPath);
     } else {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.146] - 2026-09-02
+
+### Fixed
+
+- New worktrees fetch `origin/<branch>` (same HTTPS fallback as push) before `git worktree add`, so they start from the remote default-branch tip. If the project folder is on that default branch and clean, create also fast-forwards it (`merge --ff-only`). Dirty or off-branch checkouts are left alone.
+
 ## [0.1.145] - 2026-09-02
 
 ### Added
