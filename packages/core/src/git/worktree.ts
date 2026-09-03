@@ -1101,6 +1101,79 @@ function isLocalPrFetchBranch(ref: string): boolean {
   return /^sideboard-pr-\d+$/.test(ref.trim());
 }
 
+/** Branch name to `git fetch origin <name>` — never a pull/checkout of the main tree. */
+export function originFetchBranch(sourceRef: string): string | null {
+  const ref = sourceRef.trim();
+  if (!ref || isLocalPrFetchBranch(ref)) return null;
+  if (ref.startsWith('refs/remotes/origin/')) {
+    return ref.slice('refs/remotes/origin/'.length) || null;
+  }
+  if (ref.startsWith('refs/heads/')) {
+    return ref.slice('refs/heads/'.length) || null;
+  }
+  if (ref.startsWith('refs/')) return null;
+  if (ref.startsWith('origin/')) return ref.slice('origin/'.length) || null;
+  return ref;
+}
+
+async function fetchOriginWithAuth(
+  repoPath: string,
+  args: string[],
+  timeoutMs: number,
+): Promise<boolean> {
+  const first = await git(args, repoPath, { reject: false, timeoutMs });
+  if (first.exitCode === 0) return true;
+
+  const mode = getGithubGitAuthMode();
+  if (mode === 'ssh') return false;
+
+  const token = await resolveGithubAgentToken(mode, repoPath);
+  if (!token) return false;
+
+  const tryHttps = async (header: string) =>
+    git(args, repoPath, {
+      reject: false,
+      timeoutMs,
+      env: { GIT_TERMINAL_PROMPT: '0' },
+      config: {
+        'url.https://github.com/.insteadOf': 'git@github.com:',
+        'http.extraHeader': header,
+      },
+    });
+
+  const bearer = await tryHttps(`AUTHORIZATION: bearer ${token}`);
+  if (bearer.exitCode === 0) return true;
+
+  const basic = Buffer.from(`x-access-token:${token}`, 'utf8').toString('base64');
+  const basicFetch = await tryHttps(`Authorization: Basic ${basic}`);
+  return basicFetch.exitCode === 0;
+}
+
+/**
+ * Refresh `origin/<branch>` remote-tracking refs before `git worktree add`.
+ * Does **not** pull, merge, checkout, or reset the main repo working tree —
+ * new worktrees start from the remote tip; the project folder stays untouched.
+ */
+export async function fetchOriginForWorktree(
+  repoPath: string,
+  sourceRef: string,
+  opts?: { timeoutMs?: number },
+): Promise<boolean> {
+  const timeoutMs = opts?.timeoutMs ?? 20_000;
+  const branch = originFetchBranch(sourceRef);
+  if (!branch) return false;
+
+  // Fetch the start-point ref first (fast). A full `--prune` of every remote
+  // branch used to be the only fetch — it timed out and left origin/main stale.
+  const tipOk = await fetchOriginWithAuth(
+    repoPath,
+    ['fetch', 'origin', branch],
+    timeoutMs,
+  );
+  await fetchOriginWithAuth(repoPath, ['fetch', 'origin', '--prune'], timeoutMs);
+  return tipOk;
+}
+
 export async function createThreadWorktree(opts: {
   repoPath: string;
   sourceRef: string;
@@ -1116,47 +1189,14 @@ export async function createThreadWorktree(opts: {
   // Pin gh to origin before agents run `gh pr …` in this worktree.
   await ensureGhPreferOrigin(opts.repoPath);
 
-  // Prefer an already-known tip so MCP create_thread does not block on a hung
-  // `git fetch` (credential/SSH prompts serialize the whole MCP stdio server).
-  let startPoint: string | null = null;
-  try {
-    startPoint = await resolveWorktreeStartPoint(opts.repoPath, opts.sourceRef);
-  } catch {
-    startPoint = null;
-  }
-
   if (!isLocalPrFetchBranch(opts.sourceRef)) {
-    // Soft refresh when we already have a tip; longer only when we must resolve.
-    const fetchTimeoutMs = startPoint ? 12_000 : 45_000;
-    await git(['fetch', 'origin', '--prune'], opts.repoPath, {
-      reject: false,
-      timeoutMs: fetchTimeoutMs,
-    });
-    if (
-      !opts.sourceRef.startsWith('origin/') &&
-      !opts.sourceRef.startsWith('refs/')
-    ) {
-      await git(['fetch', 'origin', opts.sourceRef], opts.repoPath, {
-        reject: false,
-        timeoutMs: fetchTimeoutMs,
-      });
-    }
-    try {
-      startPoint = await resolveWorktreeStartPoint(
-        opts.repoPath,
-        opts.sourceRef,
-      );
-    } catch (err) {
-      if (!startPoint) throw err;
-      // Keep pre-fetch tip if refresh failed/timed out.
-    }
+    await fetchOriginForWorktree(opts.repoPath, opts.sourceRef);
   }
 
-  if (!startPoint) {
-    throw new Error(
-      `Invalid git reference: ${opts.sourceRef} (and fetch did not resolve it)`,
-    );
-  }
+  const startPoint = await resolveWorktreeStartPoint(
+    opts.repoPath,
+    opts.sourceRef,
+  );
 
   // Conductor: one workspace per branch — if branch is already checked out,
   // create a sibling branch with -2/-3 suffix instead of failing cryptically.
@@ -1208,10 +1248,7 @@ export async function createExistingBranchWorktree(opts: {
   }
 
   await ensureGhPreferOrigin(opts.repoPath);
-  await git(['fetch', 'origin', '--prune'], opts.repoPath, { reject: false });
-  if (!branchName.startsWith('origin/') && !branchName.startsWith('refs/')) {
-    await git(['fetch', 'origin', branchName], opts.repoPath, { reject: false });
-  }
+  await fetchOriginForWorktree(opts.repoPath, branchName);
 
   const existing = await listWorktrees(opts.repoPath);
   const already = existing.find((w) => w.branch === branchName);

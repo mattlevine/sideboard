@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- New worktrees fetch `origin/<branch>` (same HTTPS fallback as push) before `git worktree add`, so they start from the remote default-branch tip. The main checkout is not pulled or reset.
+
 ## [0.1.145] - 2026-09-02
 
 ### Added

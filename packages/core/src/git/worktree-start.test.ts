@@ -1,10 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { wtRoot } = vi.hoisted(() => ({ wtRoot: { current: '/tmp/sb-wt-root' } }));
 
 vi.mock('./run.js', () => ({
   git: vi.fn(),
   gh: vi.fn(),
   resolveGhAuthToken: vi.fn(),
 }));
+
+vi.mock('../store/paths.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../store/paths.js')>();
+  return {
+    ...actual,
+    worktreesRoot: () => wtRoot.current,
+  };
+});
 
 vi.mock('../store/app-settings.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../store/app-settings.js')>();
@@ -17,7 +30,13 @@ vi.mock('../store/app-settings.js', async (importOriginal) => {
 
 import { gh, git, resolveGhAuthToken } from './run.js';
 import { resetGithubAgentTokenMemo } from './git-auth-mode.js';
-import { fetchPrHead, resolveWorktreeStartPoint } from './worktree.js';
+import {
+  createThreadWorktree,
+  fetchOriginForWorktree,
+  fetchPrHead,
+  originFetchBranch,
+  resolveWorktreeStartPoint,
+} from './worktree.js';
 
 const gitMock = vi.mocked(git);
 const ghMock = vi.mocked(gh);
@@ -241,5 +260,157 @@ describe('fetchPrHead', () => {
     await expect(
       fetchPrHead('/repo', 77, 'sideboard-pr-77'),
     ).rejects.toThrow(/Failed to fetch PR #77 head into sideboard-pr-77/);
+  });
+});
+
+describe('originFetchBranch', () => {
+  it('maps default and origin-qualified refs to the remote branch name', () => {
+    expect(originFetchBranch('main')).toBe('main');
+    expect(originFetchBranch('origin/main')).toBe('main');
+    expect(originFetchBranch('refs/heads/main')).toBe('main');
+    expect(originFetchBranch('refs/remotes/origin/main')).toBe('main');
+    expect(originFetchBranch('fix/panel')).toBe('fix/panel');
+  });
+
+  it('skips local-only PR fetch branches', () => {
+    expect(originFetchBranch('sideboard-pr-12')).toBeNull();
+  });
+});
+
+describe('fetchOriginForWorktree', () => {
+  beforeEach(() => {
+    gitMock.mockReset();
+    ghMock.mockReset();
+    tokenMock.mockReset();
+    resetGithubAgentTokenMemo();
+  });
+
+  it('fetches the start-point branch before a full prune', async () => {
+    const order: string[] = [];
+    gitMock.mockImplementation(async (args) => {
+      order.push(args.join(' '));
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+
+    await expect(fetchOriginForWorktree('/repo', 'main')).resolves.toBe(true);
+    expect(order[0]).toBe('fetch origin main');
+    expect(order).toContain('fetch origin --prune');
+  });
+
+  it('retries the tip fetch over HTTPS when SSH is denied', async () => {
+    tokenMock.mockResolvedValue('gho_fetch');
+    gitMock.mockImplementation(async (args, _cwd, opts) => {
+      if (args.join(' ') === 'fetch origin main') {
+        if (opts?.config?.['http.extraHeader']?.includes('gho_fetch')) {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        return {
+          stdout: '',
+          stderr: 'Permission denied (publickey).',
+          exitCode: 128,
+        };
+      }
+      if (args.join(' ') === 'fetch origin --prune') {
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+
+    await expect(fetchOriginForWorktree('/repo', 'origin/main')).resolves.toBe(
+      true,
+    );
+    expect(gitMock).toHaveBeenCalledWith(
+      ['fetch', 'origin', 'main'],
+      '/repo',
+      expect.objectContaining({
+        reject: false,
+        env: { GIT_TERMINAL_PROMPT: '0' },
+        config: {
+          'url.https://github.com/.insteadOf': 'git@github.com:',
+          'http.extraHeader': 'AUTHORIZATION: bearer gho_fetch',
+        },
+      }),
+    );
+  });
+
+  it('does not fetch local PR heads', async () => {
+    await expect(fetchOriginForWorktree('/repo', 'sideboard-pr-3')).resolves.toBe(
+      false,
+    );
+    expect(gitMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('createThreadWorktree', () => {
+  beforeEach(() => {
+    gitMock.mockReset();
+    ghMock.mockReset();
+    tokenMock.mockReset();
+    resetGithubAgentTokenMemo();
+    wtRoot.current = mkdtempSync(join(tmpdir(), 'sb-wt-root-'));
+  });
+
+  afterEach(() => {
+    rmSync(wtRoot.current, { recursive: true, force: true });
+  });
+
+  function mockCreateGit() {
+    gitMock.mockImplementation(async (args) => {
+      const key = args.join(' ');
+      if (key.startsWith('remote get-url')) {
+        return key.endsWith(' origin')
+          ? {
+              stdout: 'https://github.com/acme/app.git',
+              stderr: '',
+              exitCode: 0,
+            }
+          : { stdout: '', stderr: '', exitCode: 1 };
+      }
+      if (args[0] === 'fetch') {
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (key === 'rev-parse --verify origin/main') {
+        return { stdout: 'abc123', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === 'worktree' && args[1] === 'add') {
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+  }
+
+  it('adds the worktree from origin/main after fetching, without pulling the main checkout', async () => {
+    mockCreateGit();
+    const created = await createThreadWorktree({
+      repoPath: '/repo',
+      sourceRef: 'main',
+      slug: 'ajax',
+    });
+
+    expect(created.branchName).toBe('thread/ajax');
+    expect(created.worktreePath).toBe(join(wtRoot.current, 'ajax'));
+
+    const verbs = gitMock.mock.calls.map((c) => c[0]?.[0]);
+    expect(verbs).toContain('fetch');
+    expect(verbs.indexOf('fetch')).toBeLessThan(verbs.indexOf('worktree'));
+    expect(verbs).not.toContain('pull');
+    expect(verbs).not.toContain('merge');
+    expect(verbs).not.toContain('checkout');
+    expect(verbs).not.toContain('reset');
+
+    const add = gitMock.mock.calls.find(
+      (c) => c[0]?.[0] === 'worktree' && c[0]?.[1] === 'add',
+    );
+    expect(add?.[0]).toEqual([
+      'worktree',
+      'add',
+      '-b',
+      'thread/ajax',
+      join(wtRoot.current, 'ajax'),
+      'origin/main',
+    ]);
+    expect(
+      gitMock.mock.calls.some((c) => c[0]?.join(' ') === 'fetch origin main'),
+    ).toBe(true);
   });
 });
