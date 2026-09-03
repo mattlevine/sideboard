@@ -1124,7 +1124,12 @@ async function fetchOriginWithAuth(
   const first = await git(args, repoPath, { reject: false, timeoutMs });
   if (first.exitCode === 0) return true;
 
-  const mode = getGithubGitAuthMode();
+  let mode: GithubGitAuthMode;
+  try {
+    mode = getGithubGitAuthMode();
+  } catch {
+    return false;
+  }
   if (mode === 'ssh') return false;
 
   const token = await resolveGithubAgentToken(mode, repoPath);
@@ -1174,6 +1179,102 @@ export async function fetchOriginForWorktree(
   return tipOk;
 }
 
+export type FastForwardMainResult = {
+  updated: boolean;
+  reason:
+    | 'updated'
+    | 'already-current'
+    | 'not-on-default'
+    | 'dirty'
+    | 'diverged'
+    | 'no-origin-tip'
+    | 'ff-failed';
+};
+
+/**
+ * Fast-forward the project-folder checkout to `origin/<default>` when that is
+ * safe: already on the default branch, clean, and a strict ancestor of the
+ * remote tip. Never checkout, reset, or merge if it would not fast-forward.
+ */
+export async function fastForwardMainCheckoutIfSafe(
+  repoPath: string,
+  opts?: { branch?: string },
+): Promise<FastForwardMainResult> {
+  try {
+    const branch =
+      opts?.branch?.trim() ||
+      (await resolveDefaultBranch(repoPath, { network: false }));
+    const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], repoPath, {
+      reject: false,
+    });
+    const current = head.stdout.trim();
+    if (
+      head.exitCode !== 0 ||
+      !current ||
+      current === 'HEAD' ||
+      current !== branch
+    ) {
+      return { updated: false, reason: 'not-on-default' };
+    }
+
+    if (await isDirty(repoPath)) {
+      return { updated: false, reason: 'dirty' };
+    }
+
+    const remote = `origin/${branch}`;
+    const remoteOk = await git(['rev-parse', '--verify', remote], repoPath, {
+      reject: false,
+    });
+    if (remoteOk.exitCode !== 0) {
+      return { updated: false, reason: 'no-origin-tip' };
+    }
+
+    const ancestor = await git(
+      ['merge-base', '--is-ancestor', 'HEAD', remote],
+      repoPath,
+      { reject: false },
+    );
+    if (ancestor.exitCode !== 0) {
+      return { updated: false, reason: 'diverged' };
+    }
+
+    const behind = await git(
+      ['rev-list', '--count', `HEAD..${remote}`],
+      repoPath,
+      { reject: false },
+    );
+    const n = Number(behind.stdout.trim());
+    if (behind.exitCode !== 0 || !Number.isFinite(n) || n <= 0) {
+      return { updated: false, reason: 'already-current' };
+    }
+
+    const ff = await git(['merge', '--ff-only', remote], repoPath, {
+      reject: false,
+    });
+    if (ff.exitCode !== 0) {
+      return { updated: false, reason: 'ff-failed' };
+    }
+    return { updated: true, reason: 'updated' };
+  } catch {
+    return { updated: false, reason: 'ff-failed' };
+  }
+}
+
+/** Fetch the create start-point (and default branch) and ff the project folder if safe. */
+async function refreshOriginAndMaybeFastForwardMain(
+  repoPath: string,
+  sourceRef: string,
+): Promise<void> {
+  if (!isLocalPrFetchBranch(sourceRef)) {
+    await fetchOriginForWorktree(repoPath, sourceRef);
+  }
+  const def = await resolveDefaultBranch(repoPath, { network: false });
+  if (originFetchBranch(sourceRef) !== def) {
+    await fetchOriginForWorktree(repoPath, def);
+  }
+  await fastForwardMainCheckoutIfSafe(repoPath, { branch: def });
+}
+
 export async function createThreadWorktree(opts: {
   repoPath: string;
   sourceRef: string;
@@ -1189,9 +1290,7 @@ export async function createThreadWorktree(opts: {
   // Pin gh to origin before agents run `gh pr …` in this worktree.
   await ensureGhPreferOrigin(opts.repoPath);
 
-  if (!isLocalPrFetchBranch(opts.sourceRef)) {
-    await fetchOriginForWorktree(opts.repoPath, opts.sourceRef);
-  }
+  await refreshOriginAndMaybeFastForwardMain(opts.repoPath, opts.sourceRef);
 
   const startPoint = await resolveWorktreeStartPoint(
     opts.repoPath,
@@ -1248,7 +1347,7 @@ export async function createExistingBranchWorktree(opts: {
   }
 
   await ensureGhPreferOrigin(opts.repoPath);
-  await fetchOriginForWorktree(opts.repoPath, branchName);
+  await refreshOriginAndMaybeFastForwardMain(opts.repoPath, branchName);
 
   const existing = await listWorktrees(opts.repoPath);
   const already = existing.find((w) => w.branch === branchName);

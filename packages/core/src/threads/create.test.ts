@@ -12,22 +12,26 @@ vi.mock('../detect/detect.js', () => ({
   })),
 }));
 
-vi.mock('../store/app-settings.js', () => ({
-  resolveNewThreadOptions: (opts: {
-    agent?: string;
-    model?: string | null;
-    effort?: string;
-    fast?: boolean;
-  }) => ({
-    agent: opts.agent ?? 'claude',
-    model: opts.model ?? null,
-    effort: opts.effort ?? 'high',
-    fast: Boolean(opts.fast),
-  }),
-  cowboyModeEnabled: () => true,
-  isAbleTimeConnected: () => false,
-  getIssueSource: () => 'linear',
-}));
+vi.mock('../store/app-settings.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../store/app-settings.js')>();
+  return {
+    ...actual,
+    resolveNewThreadOptions: (opts: {
+      agent?: string;
+      model?: string | null;
+      effort?: string;
+      fast?: boolean;
+    }) => ({
+      agent: opts.agent ?? 'claude',
+      model: opts.model ?? null,
+      effort: opts.effort ?? 'high',
+      fast: Boolean(opts.fast),
+    }),
+    cowboyModeEnabled: () => true,
+    isAbleTimeConnected: () => false,
+    getIssueSource: () => 'linear',
+  };
+});
 
 const { createThreadWorktree } = vi.hoisted(() => ({
   createThreadWorktree: vi.fn(),

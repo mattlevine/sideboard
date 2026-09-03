@@ -394,9 +394,10 @@ describe('createThreadWorktree', () => {
     expect(verbs).toContain('fetch');
     expect(verbs.indexOf('fetch')).toBeLessThan(verbs.indexOf('worktree'));
     expect(verbs).not.toContain('pull');
-    expect(verbs).not.toContain('merge');
     expect(verbs).not.toContain('checkout');
     expect(verbs).not.toContain('reset');
+    // Project folder is not on main in this mock — skip ff-only merge.
+    expect(verbs).not.toContain('merge');
 
     const add = gitMock.mock.calls.find(
       (c) => c[0]?.[0] === 'worktree' && c[0]?.[1] === 'add',
