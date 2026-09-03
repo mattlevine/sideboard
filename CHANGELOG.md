@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.147] - 2026-09-02
+
 ### Added
 
 - Right-sidebar PR pill splits into `#N` / status (opens the in-app PR tab) and `↗` (opens GitHub). Merged / Closed / Queued stay visible at the default sidebar width.
