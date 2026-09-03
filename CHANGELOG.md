@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `linear_get_issue` returns comments, relations (blocks/blockedBy/related/duplicate), parent/children, project, estimate, due date, attachments, and other ticket metadata. Assigned-issue lists stay slim so Linear's query-complexity cap does not fire.
 
+### Fixed
+
+- Core package build no longer fails TypeScript when mapping Linear comments and attachments.
+
 ## [0.1.147] - 2026-09-02
 
 ### Added

@@ -434,37 +434,37 @@ function mapRelations(node: LinearIssueNode): LinearIssueRelation[] {
 }
 
 function mapComments(node: LinearIssueNode): LinearIssueComment[] {
-  return (node.comments?.nodes ?? [])
-    .map((comment) => {
-      const id = String(comment.id ?? '');
-      const body = String(comment.body ?? '');
-      if (!id && !body) return null;
-      return {
-        id,
-        body,
-        url: comment.url?.trim() || undefined,
-        createdAt: comment.createdAt?.trim() || undefined,
-        updatedAt: comment.updatedAt?.trim() || undefined,
-        user: mapUser(comment.user),
-      };
-    })
-    .filter((c): c is LinearIssueComment => Boolean(c));
+  const out: LinearIssueComment[] = [];
+  for (const comment of node.comments?.nodes ?? []) {
+    const id = String(comment.id ?? '');
+    const body = String(comment.body ?? '');
+    if (!id && !body) continue;
+    out.push({
+      id,
+      body,
+      url: comment.url?.trim() || undefined,
+      createdAt: comment.createdAt?.trim() || undefined,
+      updatedAt: comment.updatedAt?.trim() || undefined,
+      user: mapUser(comment.user),
+    });
+  }
+  return out;
 }
 
 function mapAttachments(node: LinearIssueNode): LinearIssueAttachment[] {
-  return (node.attachments?.nodes ?? [])
-    .map((attachment) => {
-      const id = String(attachment.id ?? '');
-      const url = String(attachment.url ?? '').trim();
-      if (!id && !url) return null;
-      return {
-        id,
-        title: String(attachment.title ?? ''),
-        url,
-        subtitle: attachment.subtitle?.trim() || undefined,
-      };
-    })
-    .filter((a): a is LinearIssueAttachment => Boolean(a));
+  const out: LinearIssueAttachment[] = [];
+  for (const attachment of node.attachments?.nodes ?? []) {
+    const id = String(attachment.id ?? '');
+    const url = String(attachment.url ?? '').trim();
+    if (!id && !url) continue;
+    out.push({
+      id,
+      title: String(attachment.title ?? ''),
+      url,
+      subtitle: attachment.subtitle?.trim() || undefined,
+    });
+  }
+  return out;
 }
 
 function mapIssue(node: LinearIssueNode): LinearIssue {
@@ -490,9 +490,10 @@ function mapIssue(node: LinearIssueNode): LinearIssue {
           id: String(team.id),
           key: String(team.key ?? ''),
           name: String(team.name ?? ''),
-          states: (team.states?.nodes ?? [])
-            .map((s) => mapState(s))
-            .filter((s): s is LinearWorkflowState => Boolean(s)),
+          states: (team.states?.nodes ?? []).flatMap((s) => {
+            const state = mapState(s);
+            return state ? [state] : [];
+          }),
         }
       : undefined,
     labels: (node.labels?.nodes ?? [])
@@ -503,9 +504,10 @@ function mapIssue(node: LinearIssueNode): LinearIssue {
       ? { id: String(node.project.id), name: String(node.project.name ?? '') }
       : undefined,
     parent: mapIssueRef(node.parent),
-    children: (node.children?.nodes ?? [])
-      .map((child) => mapIssueRef(child))
-      .filter((c): c is LinearIssueRef => Boolean(c)),
+    children: (node.children?.nodes ?? []).flatMap((child) => {
+      const ref = mapIssueRef(child);
+      return ref ? [ref] : [];
+    }),
     relations: mapRelations(node),
     comments: mapComments(node),
     attachments: mapAttachments(node),
@@ -536,9 +538,10 @@ function mapTeam(node: {
     id: String(node.id ?? ''),
     key: String(node.key ?? ''),
     name: String(node.name ?? ''),
-    states: (node.states?.nodes ?? [])
-      .map((s) => mapState(s))
-      .filter((s): s is LinearWorkflowState => Boolean(s)),
+    states: (node.states?.nodes ?? []).flatMap((s) => {
+      const state = mapState(s);
+      return state ? [state] : [];
+    }),
   };
 }
 
