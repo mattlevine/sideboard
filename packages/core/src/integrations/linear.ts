@@ -6,9 +6,10 @@ const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
 
 /**
  * Linear scores each nested connection as `first` (default 50) × children.
- * A 200-issue list that also pulls `team.states` exceeds the 10k/query cap
- * (`Query too complex`). List only the fields Home / Create-from need;
- * fetch workflow states on single-issue get/create/update.
+ * A 200-issue list that also pulls `team.states` / `comments` / `relations`
+ * exceeds the 10k/query cap (`Query too complex`). List only the fields
+ * Home / Create-from need; fetch comments, relations, and the rest of the
+ * metadata on single-issue get/create/update.
  */
 const LIST_ISSUE_FIELDS = `
   id
@@ -21,6 +22,13 @@ const LIST_ISSUE_FIELDS = `
   cycle { name number startsAt endsAt completedAt }
 `;
 
+const ISSUE_REF_FIELDS = `
+  id
+  identifier
+  title
+  url
+`;
+
 const ISSUE_FIELDS = `
   id
   identifier
@@ -28,11 +36,46 @@ const ISSUE_FIELDS = `
   description
   url
   priority
+  estimate
+  dueDate
+  branchName
+  createdAt
+  updatedAt
+  completedAt
   state { id name type }
   assignee { id name }
+  creator { id name }
   team { id key name states(first: 50) { nodes { id name type } } }
   labels(first: 50) { nodes { name } }
   cycle { name number startsAt endsAt completedAt }
+  project { id name }
+  parent { ${ISSUE_REF_FIELDS} }
+  children(first: 25) { nodes { ${ISSUE_REF_FIELDS} } }
+  relations(first: 25) {
+    nodes {
+      type
+      relatedIssue { ${ISSUE_REF_FIELDS} }
+    }
+  }
+  inverseRelations(first: 25) {
+    nodes {
+      type
+      issue { ${ISSUE_REF_FIELDS} }
+    }
+  }
+  comments(first: 50) {
+    nodes {
+      id
+      body
+      url
+      createdAt
+      updatedAt
+      user { id name }
+    }
+  }
+  attachments(first: 20) {
+    nodes { id title url subtitle }
+  }
 `;
 
 const ASSIGNED_ISSUES_QUERY = `
@@ -98,6 +141,15 @@ mutation SideboardCommentCreate($input: CommentCreateInput!) {
 }
 `;
 
+type LinearUserNode = { id?: string; name?: string } | null;
+
+type LinearIssueRefNode = {
+  id?: string;
+  identifier?: string;
+  title?: string;
+  url?: string;
+} | null;
+
 type LinearIssueNode = {
   id?: string;
   identifier?: string;
@@ -105,8 +157,15 @@ type LinearIssueNode = {
   description?: string | null;
   url?: string;
   priority?: number | null;
+  estimate?: number | null;
+  dueDate?: string | null;
+  branchName?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  completedAt?: string | null;
   state?: { id?: string; name?: string; type?: string } | null;
-  assignee?: { id?: string; name?: string } | null;
+  assignee?: LinearUserNode;
+  creator?: LinearUserNode;
   team?: {
     id?: string;
     key?: string;
@@ -122,6 +181,28 @@ type LinearIssueNode = {
     endsAt?: string;
     completedAt?: string | null;
   } | null;
+  project?: { id?: string; name?: string } | null;
+  parent?: LinearIssueRefNode;
+  children?: { nodes?: LinearIssueRefNode[] };
+  relations?: {
+    nodes?: Array<{ type?: string; relatedIssue?: LinearIssueRefNode }>;
+  };
+  inverseRelations?: {
+    nodes?: Array<{ type?: string; issue?: LinearIssueRefNode }>;
+  };
+  comments?: {
+    nodes?: Array<{
+      id?: string;
+      body?: string;
+      url?: string;
+      createdAt?: string;
+      updatedAt?: string;
+      user?: LinearUserNode;
+    }>;
+  };
+  attachments?: {
+    nodes?: Array<{ id?: string; title?: string; url?: string; subtitle?: string }>;
+  };
 };
 
 export interface LinearWorkflowState {
@@ -137,6 +218,35 @@ export interface LinearTeam {
   states: LinearWorkflowState[];
 }
 
+export interface LinearIssueRef {
+  id: string;
+  identifier: string;
+  title: string;
+  url: string;
+}
+
+export interface LinearIssueRelation {
+  /** Linear relation type from this issue's perspective (blocks, blockedBy, related, duplicate, duplicateOf). */
+  type: string;
+  issue: LinearIssueRef;
+}
+
+export interface LinearIssueComment {
+  id: string;
+  body: string;
+  url?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  user?: { id: string; name: string };
+}
+
+export interface LinearIssueAttachment {
+  id: string;
+  title: string;
+  url: string;
+  subtitle?: string;
+}
+
 export interface LinearIssue {
   id: string;
   identifier: string;
@@ -144,13 +254,25 @@ export interface LinearIssue {
   url: string;
   description?: string;
   priority?: number;
+  estimate?: number;
+  dueDate?: string;
+  branchName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string;
   state?: LinearWorkflowState;
   assignee?: { id: string; name: string };
+  creator?: { id: string; name: string };
   team?: { id: string; key: string; name: string; states: LinearWorkflowState[] };
   labels: string[];
   cycle?: { name: string; number?: number; isActive: boolean } | null;
+  project?: { id: string; name: string };
+  parent?: LinearIssueRef;
+  children: LinearIssueRef[];
+  relations: LinearIssueRelation[];
+  comments: LinearIssueComment[];
+  attachments: LinearIssueAttachment[];
 }
-
 export interface LinearComment {
   id: string;
   body: string;
@@ -262,6 +384,89 @@ function mapCycle(
   };
 }
 
+function mapUser(node?: LinearUserNode): { id: string; name: string } | undefined {
+  if (!node?.id && !node?.name) return undefined;
+  return {
+    id: String(node.id ?? ''),
+    name: String(node.name ?? ''),
+  };
+}
+
+function mapIssueRef(node?: LinearIssueRefNode): LinearIssueRef | undefined {
+  if (!node?.id && !node?.identifier) return undefined;
+  return {
+    id: String(node.id ?? node.identifier ?? ''),
+    identifier: String(node.identifier ?? node.id ?? ''),
+    title: String(node.title ?? ''),
+    url: String(node.url ?? ''),
+  };
+}
+
+/** Incoming inverseRelations use the other issue's type — flip to this issue's view. */
+export function flipLinearRelationType(type: string): string {
+  switch (type) {
+    case 'blocks':
+      return 'blockedBy';
+    case 'blockedBy':
+      return 'blocks';
+    case 'duplicate':
+      return 'duplicateOf';
+    case 'duplicateOf':
+      return 'duplicate';
+    default:
+      return type;
+  }
+}
+
+function mapRelations(node: LinearIssueNode): LinearIssueRelation[] {
+  const out: LinearIssueRelation[] = [];
+  for (const rel of node.relations?.nodes ?? []) {
+    const issue = mapIssueRef(rel.relatedIssue);
+    if (!issue) continue;
+    out.push({ type: String(rel.type ?? 'related'), issue });
+  }
+  for (const rel of node.inverseRelations?.nodes ?? []) {
+    const issue = mapIssueRef(rel.issue);
+    if (!issue) continue;
+    out.push({ type: flipLinearRelationType(String(rel.type ?? 'related')), issue });
+  }
+  return out;
+}
+
+function mapComments(node: LinearIssueNode): LinearIssueComment[] {
+  return (node.comments?.nodes ?? [])
+    .map((comment) => {
+      const id = String(comment.id ?? '');
+      const body = String(comment.body ?? '');
+      if (!id && !body) return null;
+      return {
+        id,
+        body,
+        url: comment.url?.trim() || undefined,
+        createdAt: comment.createdAt?.trim() || undefined,
+        updatedAt: comment.updatedAt?.trim() || undefined,
+        user: mapUser(comment.user),
+      };
+    })
+    .filter((c): c is LinearIssueComment => Boolean(c));
+}
+
+function mapAttachments(node: LinearIssueNode): LinearIssueAttachment[] {
+  return (node.attachments?.nodes ?? [])
+    .map((attachment) => {
+      const id = String(attachment.id ?? '');
+      const url = String(attachment.url ?? '').trim();
+      if (!id && !url) return null;
+      return {
+        id,
+        title: String(attachment.title ?? ''),
+        url,
+        subtitle: attachment.subtitle?.trim() || undefined,
+      };
+    })
+    .filter((a): a is LinearIssueAttachment => Boolean(a));
+}
+
 function mapIssue(node: LinearIssueNode): LinearIssue {
   const team = node.team;
   return {
@@ -271,10 +476,15 @@ function mapIssue(node: LinearIssueNode): LinearIssue {
     url: String(node.url ?? ''),
     description: node.description?.trim() || undefined,
     priority: typeof node.priority === 'number' ? node.priority : undefined,
+    estimate: typeof node.estimate === 'number' ? node.estimate : undefined,
+    dueDate: node.dueDate?.trim() || undefined,
+    branchName: node.branchName?.trim() || undefined,
+    createdAt: node.createdAt?.trim() || undefined,
+    updatedAt: node.updatedAt?.trim() || undefined,
+    completedAt: node.completedAt?.trim() || undefined,
     state: mapState(node.state),
-    assignee: node.assignee?.id
-      ? { id: String(node.assignee.id), name: String(node.assignee.name ?? '') }
-      : undefined,
+    assignee: mapUser(node.assignee),
+    creator: mapUser(node.creator),
     team: team?.id
       ? {
           id: String(team.id),
@@ -289,9 +499,18 @@ function mapIssue(node: LinearIssueNode): LinearIssue {
       .map((l) => l.name)
       .filter((n): n is string => Boolean(n)),
     cycle: mapCycle(node.cycle),
+    project: node.project?.id
+      ? { id: String(node.project.id), name: String(node.project.name ?? '') }
+      : undefined,
+    parent: mapIssueRef(node.parent),
+    children: (node.children?.nodes ?? [])
+      .map((child) => mapIssueRef(child))
+      .filter((c): c is LinearIssueRef => Boolean(c)),
+    relations: mapRelations(node),
+    comments: mapComments(node),
+    attachments: mapAttachments(node),
   };
 }
-
 function toIssueInfo(issue: LinearIssue): IssueInfo {
   return {
     id: issue.id,
