@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.148] - 2026-09-03
+
+### Added
+
+- `linear_get_issue` returns comments, relations (blocks/blockedBy/related/duplicate), parent/children, project, estimate, due date, attachments, and other ticket metadata. Assigned-issue lists stay slim so Linear's query-complexity cap does not fire.
+
 ## [0.1.147] - 2026-09-02
 
 ### Added
