@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
+import type { AgentKind, MessagePart, ThreadAttachment, TokenUsage } from '@sideboard-ai/core';
 import { isShellToolName, isSubagentToolName, messagePartParentId, toolActivityLine, visibleToolRowDetail } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
@@ -44,6 +44,8 @@ interface Props {
   worktreePath?: string;
   knownFilePaths?: string[];
   onOpenFile?: (path: string) => void;
+  /** Attach a code selection from a file-reference preview to the composer. */
+  onCodeReference?: (attachment: ThreadAttachment) => void;
   /** Navigate to another Sideboard thread from a markdown deep link. */
   onOpenThread?: (threadRef: string) => void;
   /** Open a document or schema pane in the side column. */
@@ -338,6 +340,7 @@ export function AgentMessage({
   worktreePath,
   knownFilePaths,
   onOpenFile,
+  onCodeReference,
   onOpenThread,
   onOpenArtifact,
   activeArtifactId = null,
@@ -804,6 +807,7 @@ export function AgentMessage({
           worktreePath={worktreePath}
           onClose={() => setFileRef(null)}
           onOpenInTab={onOpenFile}
+          onCodeReference={onCodeReference}
         />
       )}
     </div>

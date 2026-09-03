@@ -4,6 +4,7 @@ import type {
   OrchestratorEvent,
   OrchestratorRuntime,
   Thread,
+  ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
 import type { WorktreeSortMode } from '@sideboard/home-board';
@@ -136,6 +137,8 @@ export function App() {
   const [openUrl, setOpenUrl] = useState<string | null>(null);
   /** Dedicated Changes center tab (not a per-file name tab). */
   const [changesOpen, setChangesOpen] = useState(false);
+  /** Native PR page (GitHub API), not an embedded github.com tab. */
+  const [prPageOpen, setPrPageOpen] = useState(false);
   const [changesPath, setChangesPath] = useState<string | null>(null);
   const [changesDiffScope, setChangesDiffScope] = useState<DiffScope>('uncommitted');
   const [changesCommitSha, setChangesCommitSha] = useState<string | null>(null);
@@ -154,6 +157,7 @@ export function App() {
     setFileChanges({});
     setChangesOpen(false);
     setChangesPath(null);
+    setPrPageOpen(false);
   }, [selectedId]);
 
   function openFile(
@@ -173,11 +177,13 @@ export function App() {
       setChangesDiffBase(opts.base ?? null);
       setOpenFilePath(null);
       setOpenUrl(null);
+      setPrPageOpen(false);
       setOpenFileView('diff');
       return;
     }
     setChangesOpen(false);
     setOpenUrl(null);
+    setPrPageOpen(false);
     setOpenFiles((prev) => (prev.includes(path) ? prev : [...prev, path]));
     setOpenFilePath(path);
     setOpenFileView('edit');
@@ -206,6 +212,7 @@ export function App() {
     }
     setChangesOpen(false);
     setOpenFilePath(null);
+    setPrPageOpen(false);
     setOpenUrls((prev) => (prev.includes(url) ? prev : [...prev, url]));
     setOpenUrl(url);
   }
@@ -213,6 +220,7 @@ export function App() {
   function selectPreviewUrl(url: string) {
     setChangesOpen(false);
     setOpenFilePath(null);
+    setPrPageOpen(false);
     setOpenUrl(url);
   }
 
@@ -249,6 +257,18 @@ export function App() {
     setChangesOpen(true);
     setOpenFilePath(null);
     setOpenUrl(null);
+    setPrPageOpen(false);
+  }
+
+  function openPrPage() {
+    setChangesOpen(false);
+    setOpenFilePath(null);
+    setOpenUrl(null);
+    setPrPageOpen(true);
+  }
+
+  function closePrPage() {
+    setPrPageOpen(false);
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<SettingsNavId>('agents');
@@ -1045,8 +1065,12 @@ export function App() {
                 setOpenFilePath(null);
                 setOpenUrl(null);
                 setChangesOpen(false);
+                setPrPageOpen(false);
               },
               urlPreviewSuspended: settingsOpen,
+              prPageOpen,
+              onSelectPrPage: openPrPage,
+              onClosePrPage: closePrPage,
             };
             return selected.sourceType === 'orchestration' || isGlobalThread(selected) ? (
             <OrchestratorPanel
@@ -1131,6 +1155,18 @@ export function App() {
                 onAskAboutFile={(path) =>
                   setPrefill(`Look at the changes in ${path} and suggest next steps.`)
                 }
+                onAddReference={(att: ThreadAttachment) => {
+                  void (async () => {
+                    const latest = await window.sideboard.getThread(selected.id);
+                    const next = [
+                      ...(latest?.attachments ?? selected.attachments ?? []),
+                      att,
+                    ];
+                    await window.sideboard.setAttachments(selected.id, next);
+                    void refresh();
+                  })();
+                }}
+                onOpenPr={openPrPage}
               />
             </div>
           )}

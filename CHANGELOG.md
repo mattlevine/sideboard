@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Right-sidebar PR pill splits into `#N` / status (opens the in-app PR tab) and `↗` (opens GitHub). Merged / Closed / Queued stay visible at the default sidebar width.
+- Files, folders, and selected code can be added to chat as `code-ref` attachments (`@` on a listing, or a selection in the editor).
+
 ## [0.1.146] - 2026-09-02
 
 ### Fixed

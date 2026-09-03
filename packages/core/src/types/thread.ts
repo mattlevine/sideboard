@@ -80,7 +80,7 @@ export interface ThreadMessage {
 export interface ThreadAttachment {
   id: string;
   name: string;
-  kind: 'transcript' | 'file' | 'issue' | 'workspace' | 'diff-comment';
+  kind: 'transcript' | 'file' | 'issue' | 'workspace' | 'diff-comment' | 'code-ref';
   content: string;
   /** Worktree-relative path when this attachment is a real file that can be opened in a tab. */
   path?: string;

@@ -64,6 +64,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/composer/diff-comment.ts',
         ),
+        '@sideboard/code-ref': resolve(
+          __dirname,
+          '../../packages/core/src/composer/code-ref.ts',
+        ),
         '@sideboard/teams': resolve(
           __dirname,
           '../../packages/core/src/git/teams.ts',

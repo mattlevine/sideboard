@@ -55,6 +55,12 @@ interface Props {
   onCloseUrl?: (url: string) => void;
   onSelectChanges?: () => void;
   onCloseChanges?: () => void;
+  /** Native PR page tab (GitHub API), not an embedded github.com preview. */
+  prPageOpen?: boolean;
+  prPageActive?: boolean;
+  prPageTitle?: string;
+  onSelectPrPage?: () => void;
+  onClosePrPage?: () => void;
   onNewTab: (opts?: NewChatTabOptions) => void;
   onRename: (id: string, title: string) => void;
   onCloseTab?: (id: string) => void;
@@ -91,6 +97,11 @@ export function ChatTabs({
   onCloseUrl,
   onSelectChanges,
   onCloseChanges,
+  prPageOpen = false,
+  prPageActive = false,
+  prPageTitle = 'PR',
+  onSelectPrPage,
+  onClosePrPage,
   onNewTab,
   onRename,
   onCloseTab,
@@ -153,14 +164,40 @@ export function ChatTabs({
     setEditingId(null);
   }
 
-  const urlActive = Boolean(activeUrl) && !changesActive;
-  const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive;
+  const urlActive = Boolean(activeUrl) && !changesActive && !prPageActive;
+  const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive && !prPageActive;
   const meterTone = contextRatio != null ? contextMeterTone(contextRatio) : '';
 
   return (
     <div className="chat-tabs">
       {leftSidebarToggle}
       <div className="chat-tabs-scroll">
+        {prPageOpen && (
+          <div
+            className={`chat-tab file-tab-item pr-tab${prPageActive ? ' active' : ''}`}
+            onClick={() => onSelectPrPage?.()}
+            title={prPageTitle}
+          >
+            <span className="chat-tab-file-icon" aria-hidden>
+              ⎇
+            </span>
+            <span className="chat-tab-title">{prPageTitle}</span>
+            {onClosePrPage && (
+              <button
+                type="button"
+                className="chat-tab-close"
+                title="Close PR"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClosePrPage();
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
+
         {changesOpen && (
           <div
             className={`chat-tab file-tab-item changes-tab${changesActive ? ' active' : ''}`}
@@ -254,7 +291,7 @@ export function ChatTabs({
         })}
 
         {chats.map((t) => {
-          const active = !fileActive && !urlActive && !changesActive && t.id === activeChatId;
+          const active = !fileActive && !urlActive && !changesActive && !prPageActive && t.id === activeChatId;
           const caffeinated = chatTabIsCaffeinated(
             t,
             caffeinateHold,

@@ -17,6 +17,7 @@ export default defineConfig({
       '@sideboard/brightsy-targets': core('agents/brightsy-targets.ts'),
       '@sideboard/gh-errors': core('git/gh-errors.ts'),
       '@sideboard/diff-comment': core('composer/diff-comment.ts'),
+      '@sideboard/code-ref': core('composer/code-ref.ts'),
       '@sideboard/teams': core('git/teams.ts'),
       '@sideboard/orchestrator-capable': core('agents/orchestrator-capable.ts'),
       '@sideboard/plan-ask-user': core('plan/ask-user.ts'),

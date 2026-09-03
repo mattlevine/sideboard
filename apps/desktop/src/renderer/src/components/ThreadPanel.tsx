@@ -90,7 +90,9 @@ import { ComposerAttachmentChips } from './ComposerOptionsToolbar';
 import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
+import { PrPage } from './PrPage';
 import { UrlPreview } from './UrlPreview';
+import { prTabTitle } from '../lib/pr-activity';
 import {
   canAcceptComposerFileDrop,
   composerDropSourcesFromSnapshot,
@@ -174,6 +176,10 @@ interface Props {
   onNavigateUrl?: (from: string, to: string) => void;
   onSelectChanges?: () => void;
   onCloseChanges?: () => void;
+  /** Native PR page (GitHub API conversation / description). */
+  prPageOpen?: boolean;
+  onSelectPrPage?: () => void;
+  onClosePrPage?: () => void;
   onShowChat?: () => void;
   /** Open another thread from a sideboard://thread/<id> markdown link. */
   onOpenThreadLink?: (threadRef: string) => void;
@@ -275,6 +281,9 @@ export function ThreadPanel({
   onNavigateUrl,
   onSelectChanges,
   onCloseChanges,
+  prPageOpen = false,
+  onSelectPrPage,
+  onClosePrPage,
   onShowChat,
   onOpenThreadLink,
   urlPreviewSuspended = false,
@@ -869,7 +878,8 @@ export function ThreadPanel({
     !showPlanQuestions &&
     !openFilePath &&
     !openUrl &&
-    !changesOpen;
+    !changesOpen &&
+    !prPageOpen;
 
   const lastAgentMessageIndex = useMemo(() => {
     for (let i = thread.messages.length - 1; i >= 0; i--) {
@@ -1236,6 +1246,12 @@ export function ThreadPanel({
     setComposerFocused(true);
   }
 
+  function attachToChat(att: ThreadAttachment) {
+    void appendAttachments([att]).then(() => {
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    });
+  }
+
   async function addAttachmentsFromPicker() {
     setPlusOpen(false);
     const files = await window.sideboard.pickFiles(thread.id);
@@ -1323,7 +1339,7 @@ export function ThreadPanel({
       : null;
   const contextCompacted = threadHasCompactedContext(forwardMessages);
 
-  const chatViewOpen = !openFilePath && !openUrl && !changesOpen;
+  const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
 
   function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean {
     if (isSchemaPane(a) && isSchemaPane(b)) {
@@ -1572,7 +1588,12 @@ export function ThreadPanel({
         openUrls={openUrls}
         activeUrl={openUrl}
         changesOpen={changesOpen}
-        changesActive={changesOpen && !openFilePath && !openUrl}
+        changesActive={changesOpen && !openFilePath && !openUrl && !prPageOpen}
+        prPageOpen={prPageOpen}
+        prPageActive={prPageOpen && !openFilePath && !openUrl && !changesOpen}
+        prPageTitle={prTabTitle(thread)}
+        onSelectPrPage={onSelectPrPage}
+        onClosePrPage={onClosePrPage}
         changesCount={Object.keys(fileChanges).length}
         fileChanges={fileChanges}
         leftSidebarToggle={leftSidebarToggle}
@@ -1800,7 +1821,9 @@ export function ThreadPanel({
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
         <div className="thread-chat-column">
-      {changesOpen && changesPath ? (
+      {prPageOpen ? (
+        <PrPage threadId={thread.id} onAddToChat={attachToChat} />
+      ) : changesOpen && changesPath ? (
         <FileEditor
           key={`changes:${changesPath}:${changesDiffScope}:${changesCommitSha ?? ''}`}
           threadId={thread.id}
@@ -1812,11 +1835,8 @@ export function ThreadPanel({
           diffBase={changesDiffBase}
           onClose={() => onCloseChanges?.()}
           onSaved={onRefresh}
-          onDiffComment={(att) => {
-            void appendAttachments([att]).then(() => {
-              requestAnimationFrame(() => textareaRef.current?.focus());
-            });
-          }}
+          onDiffComment={attachToChat}
+          onCodeReference={attachToChat}
         />
       ) : openUrl ? (
         <UrlPreview
@@ -1834,11 +1854,8 @@ export function ThreadPanel({
           initialView={openFileView}
           onClose={() => onCloseFile?.(openFilePath)}
           onSaved={onRefresh}
-          onDiffComment={(att) => {
-            void appendAttachments([att]).then(() => {
-              requestAnimationFrame(() => textareaRef.current?.focus());
-            });
-          }}
+          onDiffComment={attachToChat}
+          onCodeReference={attachToChat}
         />
       ) : (
         <div className="chat" ref={chatRef}>
@@ -1954,6 +1971,7 @@ export function ThreadPanel({
                       worktreePath={thread.worktreePath}
                       knownFilePaths={filePaths}
                       onOpenFile={onSelectFile}
+                      onCodeReference={attachToChat}
                       onOpenThread={onOpenThreadLink}
                       onOpenArtifact={openRightPane}
                       activeArtifactId={rightPane?.id}
@@ -2049,6 +2067,7 @@ export function ThreadPanel({
                   worktreePath={thread.worktreePath}
                   knownFilePaths={filePaths}
                   onOpenFile={onSelectFile}
+                  onCodeReference={attachToChat}
                   onOpenThread={onOpenThreadLink}
                   onOpenArtifact={openRightPane}
                   activeArtifactId={rightPane?.id}
@@ -2125,7 +2144,7 @@ export function ThreadPanel({
       )}
 
       <div
-        className={`composer-shell${openFilePath || changesOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}${
+        className={`composer-shell${openFilePath || changesOpen || prPageOpen ? ' overlay' : ''}${composerExpanded ? ' expanded' : ' collapsed'}${
           showQueueDock ? ' has-queue' : ''
         }`}
       >

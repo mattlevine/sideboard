@@ -54,6 +54,8 @@ function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
       return 'FILE';
     case 'diff-comment':
       return 'DIFF';
+    case 'code-ref':
+      return 'REF';
     default:
       return 'MD';
   }
