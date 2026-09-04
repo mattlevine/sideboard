@@ -165,7 +165,7 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
     '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running` — the side column is the live view.',
     `- Loop \`${invoke} wait <id>\` (returns in ~45s). stillRunning → present the same id with \`content=delta\` only → wait again. Do not resend the full log or HTML.`,
     '- ok → finish the task. failed → read the log, fix, start once.',
-    'State: `.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
+    'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
   ].join('\n');
 }
 

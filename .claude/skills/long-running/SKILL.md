@@ -33,7 +33,7 @@ node scripts/detached-job.js status <id>
 node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]
 ```
 
-`<id>` is kebab-case (`mac-release`, `core-test`, `fly-deploy`). State is `.sideboard/detached-jobs/<id>/` (gitignored).
+`<id>` is kebab-case (`mac-release`, `core-test`, `fly-deploy`). State is `.context/.sideboard/detached-jobs/<id>/` (local scratch).
 
 Wait JSON:
 

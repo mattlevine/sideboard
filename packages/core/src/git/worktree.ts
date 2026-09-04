@@ -1504,7 +1504,7 @@ export async function isDirty(worktreePath: string): Promise<boolean> {
 import { isWorkspaceScratchPath } from '../paths/workspace-scratch.js';
 
 /**
- * Local workspace scratch (`.context/attachments`, legacy `.sideboard/attachments`).
+ * Local workspace scratch (`.context/`, including detached-job logs).
  * Must not force the right-sidebar primary action to "Commit & push".
  */
 export function isSideboardScratchPath(relativePath: string): boolean {

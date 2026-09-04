@@ -19,7 +19,7 @@ describe('ensureWorktreeSideboardIgnored', () => {
     return dir;
   }
 
-  it('writes .sideboard/ to info/exclude and skip-worktrees tracked files', async () => {
+  it('writes .sideboard/ and .context/ to info/exclude and skip-worktrees tracked files', async () => {
     const dir = await initRepo();
     await ensureWorktreeSideboardIgnored(dir);
     await ensureWorktreeSideboardIgnored(dir);
@@ -29,10 +29,37 @@ describe('ensureWorktreeSideboardIgnored', () => {
     ).stdout.trim();
     const exclude = readFileSync(join(gitDir, 'info', 'exclude'), 'utf8');
     expect(exclude.match(/^\.sideboard\/$/gm)?.length).toBe(1);
+    expect(exclude.match(/^\.context\/$/gm)?.length).toBe(1);
 
     writeFileSync(join(dir, '.sideboard', 'settings.toml'), 'setup = "changed"\n');
     writeFileSync(join(dir, '.sideboard', 'plan.md'), '# local\n');
+    mkdirSync(join(dir, '.context', '.sideboard', 'detached-jobs', 'x'), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(dir, '.context', '.sideboard', 'detached-jobs', 'x', 'log'),
+      'hi\n',
+    );
     const status = (await execa('git', ['status', '--porcelain'], { cwd: dir })).stdout;
     expect(status).not.toMatch(/\.sideboard/);
+    expect(status).not.toMatch(/\.context/);
+  });
+
+  it('appends .context/ when exclude already has .sideboard/', async () => {
+    const dir = await initRepo();
+    const gitDir = (
+      await execa('git', ['rev-parse', '--absolute-git-dir'], { cwd: dir })
+    ).stdout.trim();
+    const excludePath = join(gitDir, 'info', 'exclude');
+    mkdirSync(join(gitDir, 'info'), { recursive: true });
+    writeFileSync(
+      excludePath,
+      '# Sideboard worktree scratch — do not commit\n.sideboard/\n',
+      'utf8',
+    );
+    await ensureWorktreeSideboardIgnored(dir);
+    const exclude = readFileSync(excludePath, 'utf8');
+    expect(exclude.match(/^\.sideboard\/$/gm)?.length).toBe(1);
+    expect(exclude.match(/^\.context\/$/gm)?.length).toBe(1);
   });
 });
