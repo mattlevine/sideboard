@@ -14,6 +14,33 @@ const HTTPS_REWRITE: Array<{ key: string; value: string }> = [
   { key: 'url.https://github.com/.insteadOf', value: 'ssh://git@github.com/' },
 ];
 
+/**
+ * Process-only `insteadOf` so `git@` / `ssh://` / host-alias remotes speak
+ * HTTPS without editing the stored remote. `-c url.*.insteadOf` can only hold
+ * one value; callers must apply these via {@link appendIndexedGitConfig}.
+ */
+export function githubHttpsInsteadOfEntries(
+  remoteUrl?: string | null,
+): Array<{ key: string; value: string }> {
+  const entries = [...HTTPS_REWRITE];
+  const url = remoteUrl?.trim() ?? '';
+  const scpAlias = url.match(/^(git@github\.com-[^:]+):/i);
+  if (scpAlias?.[1]) {
+    entries.push({
+      key: 'url.https://github.com/.insteadOf',
+      value: `${scpAlias[1]}:`,
+    });
+  }
+  const sshAlias = url.match(/^ssh:\/\/git@(github\.com-[^/]+)\//i);
+  if (sshAlias?.[1]) {
+    entries.push({
+      key: 'url.https://github.com/.insteadOf',
+      value: `ssh://git@${sshAlias[1]}/`,
+    });
+  }
+  return entries;
+}
+
 type EnvLike = NodeJS.ProcessEnv | Record<string, string | undefined>;
 
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -68,11 +95,17 @@ export function appendIndexedGitConfig(
  * When Sideboard has warmed a credential store, git uses that file instead of
  * embedding a token in env.
  */
-export function githubAgentGitEnv(existing?: EnvLike): Record<string, string> {
+export function githubAgentGitEnv(
+  existing?: EnvLike,
+  opts?: { remoteUrl?: string | null },
+): Record<string, string> {
   const helpers = githubAgentAuthReady()
     ? githubCredentialHelperGitConfig()
     : [{ key: 'credential.helper', value: '' }];
-  return appendIndexedGitConfig(existing, [...HTTPS_REWRITE, ...helpers]);
+  return appendIndexedGitConfig(existing, [
+    ...githubHttpsInsteadOfEntries(opts?.remoteUrl),
+    ...helpers,
+  ]);
 }
 
 /**
@@ -92,7 +125,9 @@ export function applyGithubGitAuthEnv(
   const token = (opts.token?.trim() || existing?.GH_TOKEN?.trim() || '') || '';
   if (token) materializeGithubAgentAuth(token);
   Object.assign(out, githubGhConfigEnv());
-  if (opts.mode === 'ssh') return out;
+  // SSH-only (no gh/PAT): keep remotes on SSH. When a token exists, still
+  // rewrite in-process so ask_git / Electron can push without ssh-agent.
+  if (opts.mode === 'ssh' && !token) return out;
   Object.assign(out, githubAgentGitEnv(existing));
   return out;
 }
@@ -263,8 +298,9 @@ export function formatGitAuthModeDirective(mode: GithubGitAuthMode): string {
     case 'ssh':
       return [
         'Git authentication (Settings → Git mode: SSH):',
-        '- Keep SSH remotes (`git@github.com:…`). Do not rewrite them to HTTPS.',
-        '- SSH is batch-mode: it will not prompt for a Keychain password. If push fails with `Permission denied (publickey)`, tell the user to unlock ssh-agent or switch Settings → Git to Auto / gh CLI — do not rewrite remotes yourself.',
+        '- Stored remotes stay SSH (`git@github.com:…`). Do not `git remote set-url` or rewrite them to HTTPS.',
+        '- This process may push over HTTPS via `gh` (process-only `insteadOf`) so ask_git / unattended turns work when ssh-agent is missing — that does not change the stored remote.',
+        '- SSH is batch-mode: it will not prompt for a Keychain password. If both SSH and HTTPS fail, tell the user to unlock ssh-agent or run `gh auth login` (or switch Settings → Git to Auto).',
         '- `gh` already authenticates for PRs/API (no token in the environment). Do not set GitHub token environment variables or run `gh auth login` from this turn.',
         '- Push with `git push -u origin HEAD`. Create/update PRs with `gh` as below.',
       ].join('\n');

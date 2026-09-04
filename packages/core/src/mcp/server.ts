@@ -1069,7 +1069,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` if SSH is missing). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd.',
+    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z

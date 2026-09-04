@@ -324,9 +324,12 @@ describe('fetchOriginForWorktree', () => {
       '/repo',
       expect.objectContaining({
         reject: false,
-        env: { GIT_TERMINAL_PROMPT: '0' },
+        env: expect.objectContaining({
+          GIT_TERMINAL_PROMPT: '0',
+          GIT_CONFIG_VALUE_0: 'git@github.com:',
+          GIT_CONFIG_VALUE_1: 'ssh://git@github.com/',
+        }),
         config: {
-          'url.https://github.com/.insteadOf': 'git@github.com:',
           'http.extraHeader': 'AUTHORIZATION: bearer gho_fetch',
         },
       }),

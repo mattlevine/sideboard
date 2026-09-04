@@ -18,7 +18,11 @@ import {
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
 import { formatGhLandError, formatMergePrError, isGhRateLimitError } from './gh-errors.js';
-import { applyGithubGitAuthEnv, resolveGithubAgentToken } from './git-auth-mode.js';
+import {
+  applyGithubGitAuthEnv,
+  githubAgentGitEnv,
+  resolveGithubAgentToken,
+} from './git-auth-mode.js';
 import { gh, git } from './run.js';
 import { withRepoGitLock } from './repo-git-lock.js';
 import {
@@ -1116,6 +1120,19 @@ export function originFetchBranch(sourceRef: string): string | null {
   return ref;
 }
 
+async function originRemoteUrl(cwd: string): Promise<string> {
+  const result = await git(['remote', 'get-url', 'origin'], cwd, { reject: false });
+  return result.exitCode === 0 ? result.stdout.trim() : '';
+}
+
+/** HTTPS retry env for ask_git / fetch when SSH remotes fail (ssh-agent missing). */
+function githubHttpsRetryEnv(remoteUrl?: string | null): Record<string, string> {
+  return {
+    GIT_TERMINAL_PROMPT: '0',
+    ...githubAgentGitEnv(undefined, { remoteUrl }),
+  };
+}
+
 async function fetchOriginWithAuth(
   repoPath: string,
   args: string[],
@@ -1130,18 +1147,17 @@ async function fetchOriginWithAuth(
   } catch {
     return false;
   }
-  if (mode === 'ssh') return false;
 
   const token = await resolveGithubAgentToken(mode, repoPath);
   if (!token) return false;
 
+  const remoteUrl = await originRemoteUrl(repoPath);
   const tryHttps = async (header: string) =>
     git(args, repoPath, {
       reject: false,
       timeoutMs,
-      env: { GIT_TERMINAL_PROMPT: '0' },
+      env: githubHttpsRetryEnv(remoteUrl),
       config: {
-        'url.https://github.com/.insteadOf': 'git@github.com:',
         'http.extraHeader': header,
       },
     });
@@ -1531,19 +1547,19 @@ export async function pushBranch(
       sshErr ||
         `git push origin ${branchName} failed` +
           (!token
-            ? ' (no SSH agent and gh auth token unavailable — run: gh auth login)'
+            ? ' (SSH remote and gh auth token unavailable — unlock ssh-agent or run: gh auth login)'
             : ''),
     );
   }
 
   // Dock/Finder/agent shells often lack ssh-agent; gh keyring still works.
-  // Keep remote name `origin` via insteadOf so upstream tracking stays correct.
+  // Keep stored remotes SSH; insteadOf is process-only so ask_git still works.
+  const remoteUrl = await originRemoteUrl(worktreePath);
   const tryHttps = async (header: string) =>
     git(['push', '-u', 'origin', branchName], worktreePath, {
       reject: false,
-      env: { GIT_TERMINAL_PROMPT: '0' },
+      env: githubHttpsRetryEnv(remoteUrl),
       config: {
-        'url.https://github.com/.insteadOf': 'git@github.com:',
         'http.extraHeader': header,
       },
     });

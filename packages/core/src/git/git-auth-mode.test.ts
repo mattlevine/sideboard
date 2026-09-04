@@ -8,6 +8,7 @@ import {
   codexUnattendedGitConfigArgs,
   formatGitAuthModeDirective,
   githubAgentGitEnv,
+  githubHttpsInsteadOfEntries,
   mergeAgentGitAuthEnv,
   nonInteractiveGitProcessEnv,
   resetGithubAgentTokenMemo,
@@ -22,6 +23,20 @@ describe('nonInteractiveGitProcessEnv', () => {
     expect(env.SSH_ASKPASS).toBe('echo');
     expect(env.GIT_SSH_COMMAND).toMatch(/BatchMode=yes/);
     expect(env.GH_PROMPT_DISABLED).toBe('1');
+  });
+});
+
+describe('githubHttpsInsteadOfEntries', () => {
+  it('rewrites scp, ssh://, and host-alias remotes without editing them', () => {
+    expect(githubHttpsInsteadOfEntries()).toEqual([
+      { key: 'url.https://github.com/.insteadOf', value: 'git@github.com:' },
+      { key: 'url.https://github.com/.insteadOf', value: 'ssh://git@github.com/' },
+    ]);
+    expect(githubHttpsInsteadOfEntries('git@github.com-work:acme/app.git')).toEqual([
+      { key: 'url.https://github.com/.insteadOf', value: 'git@github.com:' },
+      { key: 'url.https://github.com/.insteadOf', value: 'ssh://git@github.com/' },
+      { key: 'url.https://github.com/.insteadOf', value: 'git@github.com-work:' },
+    ]);
   });
 });
 
@@ -126,9 +141,11 @@ describe('applyGithubGitAuthEnv', () => {
     expect(env.GIT_CONFIG_VALUE_3).toContain('store --file=');
   });
 
-  it('ssh still warms gh config when a token is available', () => {
+  it('ssh rewrites in-process when a gh token exists so ask_git can push', () => {
     const env = applyGithubGitAuthEnv({}, { mode: 'ssh', token: 'gho_secret' });
-    expect(env.GIT_CONFIG_COUNT).toBeUndefined();
+    expect(env.GIT_CONFIG_COUNT).toBe('4');
+    expect(env.GIT_CONFIG_VALUE_0).toBe('git@github.com:');
+    expect(env.GIT_CONFIG_VALUE_1).toBe('ssh://git@github.com/');
     expect(env.GH_CONFIG_DIR).toBe(githubGhConfigDir());
     expect(JSON.stringify(env)).not.toContain('gho_secret');
   });
@@ -208,10 +225,11 @@ describe('formatGitAuthModeDirective', () => {
     expect(text).not.toMatch(/GitHub app/i);
   });
 
-  it('ssh forbids rewriting remotes', () => {
+  it('ssh forbids rewriting stored remotes and mentions ask_git HTTPS fallback', () => {
     const text = formatGitAuthModeDirective('ssh');
     expect(text).toMatch(/mode: SSH/);
-    expect(text).toMatch(/Do not rewrite them to HTTPS/);
+    expect(text).toMatch(/Do not `git remote set-url`/);
+    expect(text).toMatch(/ask_git/);
     expect(text).toMatch(/Keychain/);
     expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).not.toMatch(/GitHub app/i);
