@@ -73,7 +73,7 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
    ```
 
    `present_artifact` `type=log` `artifact_id=gha-release` with `content=delta` only. CI on the same commit title is **not** a second Release — only the tag workflow publishes.
-10. On desktop job **heap OOM**: raise `NODE_OPTIONS` in `release.yml`, land that on main, retarget the **same** `vX.Y.Z` (do not bump). `publish-npm.js` skips versions already on npm.
+10. On desktop job **heap OOM** or **`SecKeychainUnlock` / `set-key-partition-list`**: fix `release.yml` (heap → `NODE_OPTIONS`; keychain → import-cert step, do not pass `CSC_LINK` into electron-builder), land that on main, retarget the **same** `vX.Y.Z` (do not bump). `publish-npm.js` skips versions already on npm. This is not the Apple Developer agreement prompt (that fails at notarization).
 11. **Deploy if needed.** When `site/` or `apps/slack-relay/` changed in this cut:
 
     ```bash
@@ -111,11 +111,13 @@ Two jobs, both on the same tag push:
 | Job | Runner | What it does |
 |---|---|---|
 | `release-cli` | `ubuntu-latest` | Builds/tests, then publishes `@sideboard-ai/core` + `@sideboard-ai/cli` via **npm trusted publishing (OIDC)**. |
-| `release-desktop-mac` | `macos-latest` | Vite + stage Node/MCP/Cursor runtime + `electron-builder --mac --publish always` (GitHub Release + `latest-mac.yml`). |
+| `release-desktop-mac` | `macos-latest` | Import Developer ID into a runner keychain, Vite + stage Node/MCP/Cursor runtime, then `electron-builder --mac --publish always` without `CSC_LINK` (GitHub Release + `latest-mac.yml`). |
 
 `release-cli` uses `permissions: id-token: write`. Do **not** gate it on `if: secrets.NPM_TOKEN` — GitHub rejects the `secrets` context in `if` (`Unrecognized named-value: 'secrets'`). Do **not** set `NODE_AUTH_TOKEN` or `setup-node` `registry-url` on that job; both skip the OIDC exchange. Trusted publisher on npmjs.com: `mattlevine/sideboard`, workflow file `.github/workflows/release.yml`, **no Environment name**. The `NPM_TOKEN` repo secret is unused for this job.
 
-`release-desktop-mac` signs/notarizes only when repo secrets `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are set. If `CSC_LINK` is empty, it still packs and uploads with `-c.mac.identity=null` (unsigned; no auto-update). The job sets `NODE_OPTIONS=--max-old-space-size=8192` so `electron-vite` does not OOM on the hosted runner.
+`release-desktop-mac` signs/notarizes only when repo secrets `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are set. The job imports the `.p12` into a runner keychain and **unsets** `CSC_LINK` before `electron-builder` (electron-builder#10066: `set-key-partition-list` uses the p12 password, which macOS 26.6 rejects). If `MAC_CSC_LINK` is empty, it still packs and uploads with `-c.mac.identity=null` (unsigned; no auto-update). The job sets `NODE_OPTIONS=--max-old-space-size=8192` so `electron-vite` does not OOM on the hosted runner.
+
+Do **not** treat a `SecKeychainUnlock: The user name or passphrase you entered is not correct` failure as an Apple Developer Program agreement problem. Agreement / paid-account lapses fail later in **notarization** (`notarytool` / “you must first sign the relevant contracts”). The keychain error is local to the runner and is the #10066 path — keep the import-then-auto-discover workaround until a published `electron-builder` includes the fix.
 
 CI (`ci.yml` on PR / `main` push) only tests. GitHub titles those runs with the commit message, so they look like extra Release jobs — they are not.
 
