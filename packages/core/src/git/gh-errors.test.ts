@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clampGithubPrBody,
   extractGhErrorDetail,
   formatGhLandError,
   formatIpcInvokeError,
   formatMergePrError,
   formatRateLimitResetHint,
+  GITHUB_PR_BODY_SAFE_CHARS,
+  isGhPrBodyTooLongError,
   isGhRateLimitError,
   isPrNotMergeableError,
 } from './gh-errors.js';
@@ -38,6 +41,35 @@ describe('extractGhErrorDetail', () => {
       'GraphQL: API rate limit already exceeded for user ID 836225.',
     );
   });
+
+  it('does not return the huge --body payload when GraphQL says body is too long', () => {
+    const huge = 'x'.repeat(80_000);
+    const raw =
+      `Command failed with exit code 1: gh pr create --title 'x' --body '${huge}'\n` +
+      'GraphQL: Body is too long (maximum is 65536 characters)';
+    const detail = extractGhErrorDetail(raw);
+    expect(detail).toMatch(/body is too long/i);
+    expect(detail.length).toBeLessThan(200);
+    expect(detail).not.toContain(huge.slice(0, 40));
+  });
+});
+
+describe('isGhPrBodyTooLongError / clampGithubPrBody', () => {
+  it('matches GitHub’s PR body limit copy', () => {
+    expect(
+      isGhPrBodyTooLongError('GraphQL: Body is too long (maximum is 65536 characters)'),
+    ).toBe(true);
+    expect(isGhPrBodyTooLongError('the request exceeds the maximum allowed size')).toBe(
+      true,
+    );
+    expect(isGhPrBodyTooLongError('GraphQL: Head sha already exists')).toBe(false);
+  });
+
+  it('clamps generated bodies under GitHub’s limit', () => {
+    const out = clampGithubPrBody('a'.repeat(80_000));
+    expect(out.length).toBeLessThanOrEqual(GITHUB_PR_BODY_SAFE_CHARS);
+    expect(out).toMatch(/truncated to fit GitHub/);
+  });
 });
 
 describe('formatGhLandError', () => {
@@ -63,6 +95,18 @@ describe('formatGhLandError', () => {
     expect(formatGhLandError('GraphQL: Head sha already exists')).toBe(
       'GraphQL: Head sha already exists',
     );
+  });
+
+  it('tells the agent to retry with a short PR body', () => {
+    const huge = 'FULL_DIFF_PAYLOAD\n'.repeat(8_000);
+    const msg = formatGhLandError(
+      `Command failed with exit code 1: gh pr create --body '${huge}'\nGraphQL: Body is too long (maximum is 65536 characters)`,
+    );
+    expect(msg).toMatch(/GraphQL body is too long/);
+    expect(msg).toMatch(/already pushed/);
+    expect(msg).toMatch(/body-file/);
+    expect(msg.length).toBeLessThan(500);
+    expect(msg).not.toContain('FULL_DIFF_PAYLOAD');
   });
 
   it('explains missing head when Sideboard already targeted a repo', () => {

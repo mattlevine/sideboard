@@ -26,6 +26,7 @@ import { findConventionSetup } from './convention-setup.js';
 import { runCursorWorktreeSetup } from './cursor-worktrees.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 import { ensureReviewSkillFile, REVIEW_SKILL_PATH } from '../review/request-review.js';
+import { ensureWorktreeSideboardIgnored } from '../git/worktree-exclude.js';
 
 export type SetupRunResult = {
   ran: boolean;
@@ -408,6 +409,7 @@ export async function runWorkspaceSetup(
   onLine?: (line: string) => void,
   opts?: { signal?: AbortSignal; defaultBranch?: string },
 ): Promise<SetupRunResult> {
+  await ensureWorktreeSideboardIgnored(worktreePath);
   const reviewSkill = ensureReviewSkillFile(worktreePath);
   if (reviewSkill.wrote) {
     onLine?.(

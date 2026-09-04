@@ -128,6 +128,8 @@ describe('formatWorktreeDirective', () => {
       { githubSlug: 'mattlevine/storycycle-ai' },
     );
     expect(text).toContain('gh pr create --draft -R mattlevine/storycycle-ai');
+    expect(text).toMatch(/body-file/);
+    expect(text).toMatch(/65,536/);
     expect(text).toMatch(/upstream instead of origin/i);
     expect(text).toMatch(/git push -u origin HEAD/i);
     expect(text).toMatch(/Keychain/);

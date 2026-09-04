@@ -1,4 +1,6 @@
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, readdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
   BranchInfo,
@@ -17,7 +19,13 @@ import {
   type TeamName,
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
-import { formatGhLandError, formatMergePrError, isGhRateLimitError } from './gh-errors.js';
+import {
+  clampGithubPrBody,
+  formatGhLandError,
+  formatMergePrError,
+  isGhRateLimitError,
+} from './gh-errors.js';
+import { ensureWorktreeSideboardIgnored } from './worktree-exclude.js';
 import {
   applyGithubGitAuthEnv,
   githubAgentGitEnv,
@@ -1342,6 +1350,7 @@ export async function createThreadWorktree(opts: {
   branchName = added;
 
   await ensureGhPreferOrigin(worktreePath);
+  await ensureWorktreeSideboardIgnored(worktreePath);
   return { branchName, worktreePath };
 }
 
@@ -1409,6 +1418,7 @@ export async function createExistingBranchWorktree(opts: {
   }
 
   await ensureGhPreferOrigin(worktreePath);
+  await ensureWorktreeSideboardIgnored(worktreePath);
   return { branchName, worktreePath };
 }
 
@@ -1525,7 +1535,9 @@ export async function commitAll(
 ): Promise<boolean> {
   const dirty = await isDirty(worktreePath);
   if (!dirty) return false;
+  await ensureWorktreeSideboardIgnored(worktreePath);
   await git(['add', '-A'], worktreePath);
+  await git(['reset', '-q', '--', '.sideboard'], worktreePath, { reject: false });
   await git(['commit', '-m', message], worktreePath);
   return true;
 }
@@ -1750,6 +1762,48 @@ export async function createOrUpdatePr(
   const repoArgs = ghRepoSelectArgs(slug);
   const headRef = ghHeadRef(slug, opts.head);
   const branchOnly = opts.head.trim().replace(/^refs\/heads\//, '');
+  const bodyText = clampGithubPrBody(opts.body ?? opts.title);
+  const bodyFile = join(
+    tmpdir(),
+    `sideboard-pr-body-${process.pid}-${randomBytes(6).toString('hex')}.md`,
+  );
+  writeFileSync(bodyFile, bodyText.endsWith('\n') ? bodyText : `${bodyText}\n`, 'utf8');
+  const bodyArgs = ['--body-file', bodyFile];
+
+  try {
+    return await createOrUpdatePrWithBodyFile(worktreePath, {
+      ...opts,
+      slug,
+      repoArgs,
+      headRef,
+      branchOnly,
+      bodyArgs,
+    });
+  } finally {
+    try {
+      unlinkSync(bodyFile);
+    } catch {
+      // temp file
+    }
+  }
+}
+
+async function createOrUpdatePrWithBodyFile(
+  worktreePath: string,
+  opts: {
+    title: string;
+    base: string;
+    head: string;
+    draft?: boolean;
+    web?: boolean;
+    slug: string;
+    repoArgs: string[];
+    headRef: string;
+    branchOnly: string;
+    bodyArgs: string[];
+  },
+): Promise<string> {
+  const { slug, repoArgs, headRef, branchOnly, bodyArgs } = opts;
 
   const existing = await gh(
     [...repoArgs, 'pr', 'view', branchOnly, '--json', 'url', '--jq', '.url'],
@@ -1767,8 +1821,7 @@ export async function createOrUpdatePr(
         branchOnly,
         '--title',
         opts.title,
-        '--body',
-        opts.body ?? opts.title,
+        ...bodyArgs,
       ],
       worktreePath,
       { reject: false },
@@ -1784,8 +1837,7 @@ export async function createOrUpdatePr(
       '--web',
       '--title',
       opts.title,
-      '--body',
-      opts.body ?? opts.title,
+      ...bodyArgs,
       '--base',
       opts.base,
       '--head',
@@ -1808,8 +1860,7 @@ export async function createOrUpdatePr(
     'create',
     '--title',
     opts.title,
-    '--body',
-    opts.body ?? opts.title,
+    ...bodyArgs,
     '--base',
     opts.base,
     '--head',

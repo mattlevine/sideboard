@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 vi.mock('./run.js', () => ({
   git: vi.fn(),
@@ -68,6 +69,9 @@ describe('createOrUpdatePr', () => {
         return { stdout: '', stderr: 'not found', exitCode: 1 };
       }
       if (args.includes('pr') && args.includes('create')) {
+        const file = args[args.indexOf('--body-file') + 1];
+        expect(file).toBeTruthy();
+        expect(readFileSync(file!, 'utf8')).toContain('body');
         return {
           stdout: 'https://github.com/mattlevine/storycycle-ai/pull/99\n',
           stderr: '',
@@ -88,19 +92,51 @@ describe('createOrUpdatePr', () => {
     const createCall = ghMock.mock.calls.find((c) =>
       c[0].includes('create'),
     );
-    expect(createCall?.[0]).toEqual([
-      '-R',
-      'mattlevine/storycycle-ai',
-      'pr',
-      'create',
-      '--title',
-      'Fix advisories',
-      '--body',
-      'body',
-      '--base',
-      'main',
-      '--head',
-      'mattlevine:fix/nextjs-mcp-sdk-advisories',
-    ]);
+    expect(createCall?.[0][0]).toBe('-R');
+    expect(createCall?.[0][1]).toBe('mattlevine/storycycle-ai');
+    expect(createCall?.[0]).toContain('--body-file');
+    expect(createCall?.[0]).not.toContain('--body');
+    expect(createCall?.[0]).toContain('--title');
+    expect(createCall?.[0]).toContain('Fix advisories');
+    expect(createCall?.[0]).toContain('--head');
+    expect(createCall?.[0]).toContain('mattlevine:fix/nextjs-mcp-sdk-advisories');
+  });
+
+  it('throws a short GraphQL body-too-long error the agent can act on', async () => {
+    gitMock.mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
+        return {
+          stdout: 'git@github.com:mattlevine/storycycle-ai.git',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+    ghMock.mockImplementation(async (args) => {
+      if (args[0] === 'repo' && args[1] === 'set-default') {
+        return { stdout: 'mattlevine/storycycle-ai', stderr: '', exitCode: 0 };
+      }
+      if (args.includes('pr') && args.includes('view')) {
+        return { stdout: '', stderr: 'not found', exitCode: 1 };
+      }
+      if (args.includes('pr') && args.includes('create')) {
+        return {
+          stdout: '',
+          stderr: 'GraphQL: Body is too long (maximum is 65536 characters)',
+          exitCode: 1,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+
+    await expect(
+      createOrUpdatePr('/tmp/wt', {
+        title: 'Huge',
+        body: 'x'.repeat(80_000),
+        base: 'main',
+        head: 'thread/x',
+      }),
+    ).rejects.toThrow(/GraphQL body is too long/);
   });
 });

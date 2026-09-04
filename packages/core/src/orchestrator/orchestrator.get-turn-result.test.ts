@@ -1,9 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { threadFilePath } from '../store/paths.js';
 import { createEmptyThread, writeThread } from '../store/thread-store.js';
 import { Orchestrator } from './orchestrator.js';
+
+function stampUpdatedAt(threadId: string, updatedAt: string): void {
+  const path = threadFilePath(threadId);
+  const next = { ...JSON.parse(readFileSync(path, 'utf8')), updatedAt };
+  writeFileSync(path, JSON.stringify(next, null, 2));
+  const old = new Date(updatedAt);
+  utimesSync(path, old, old);
+}
 
 describe('Orchestrator.getTurnResult', () => {
   let dataDir: string;
@@ -22,6 +31,7 @@ describe('Orchestrator.getTurnResult', () => {
     status: 'idle' | 'error' | 'running' | 'queued' | 'stopped';
     lastError?: string | null;
     agentText?: string;
+    queue?: string[];
   }) {
     const worktreePath = join(dataDir, 'wt');
     mkdirSync(worktreePath, { recursive: true });
@@ -36,6 +46,7 @@ describe('Orchestrator.getTurnResult', () => {
       status: opts.status,
     });
     thread.lastError = opts.lastError ?? null;
+    if (opts.queue) thread.queue = opts.queue;
     if (opts.agentText) {
       thread.messages.push({
         role: 'agent',
@@ -98,11 +109,45 @@ describe('Orchestrator.getTurnResult', () => {
   });
 
   it('explains queued threads that have not started yet', () => {
-    const thread = seed({ status: 'queued' });
+    const thread = seed({ status: 'queued', queue: ['review this pr'] });
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.stillRunning).toBe(true);
     expect(result.status).toBe('queued');
     expect(result.progress).toBe('Queued — waiting for a concurrency slot');
+  });
+
+  it('does not treat leftover running status as live after the agent died', () => {
+    const thread = seed({
+      status: 'running',
+      agentText: 'Agent is running. Waiting for gate to pass.',
+    });
+    stampUpdatedAt(thread.id, '2020-01-01T00:00:00.000Z');
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(false);
+    expect(result.status).toBe('stopped');
+    expect(result.progress).toBeNull();
+    expect(result.text).not.toMatch(/gate to pass/i);
+  });
+
+  it('does not treat empty queued as waiting for a slot', () => {
+    const thread = seed({ status: 'queued' });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(false);
+    expect(result.status).toBe('idle');
+    expect(result.progress).toBeNull();
+  });
+
+  it('hides Cursor gate chatter from progress while a turn is still live', async () => {
+    const { writeTurnLive } = await import('../store/turn-live.js');
+    const thread = seed({ status: 'running' });
+    writeTurnLive(thread.id, {
+      updatedAt: new Date().toISOString(),
+      summary: 'Agent is running. Waiting for gate to pass.',
+      toolCount: 0,
+    });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.progress).toBeNull();
   });
 
   it('includes last-turn usage and costUsd when present', () => {
