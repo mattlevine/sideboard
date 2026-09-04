@@ -151,7 +151,7 @@ import {
   formatOptionalServicesDirective,
   formatOptionalServicesReminder,
 } from '../integrations/optional-services.js';
-import { loadAppSettings } from '../store/app-settings.js';
+import { loadAppSettings, type FollowUpBehavior } from '../store/app-settings.js';
 import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
 import {
   extractPresentedPlan,
@@ -773,12 +773,18 @@ export class Orchestrator {
     return thread;
   }
 
-  async send(threadRef: string, prompt: string): Promise<Thread> {
+  async send(
+    threadRef: string,
+    prompt: string,
+    opts?: { followUp?: FollowUpBehavior },
+  ): Promise<Thread> {
     const thread = this.requireThread(threadRef);
     if (thread.status === 'archived') {
       throw new Error(`Thread is archived: ${thread.id}`);
     }
-    return withThreadLock(thread.id, async () => {
+    const followUp = opts?.followUp === 'steer' ? 'steer' : 'queue';
+    let shouldSteer = false;
+    const sent = await withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       if (current.status === 'archived') {
         throw new Error(`Thread is archived: ${thread.id}`);
@@ -790,6 +796,8 @@ export class Orchestrator {
         this.activeTurns.has(thread.id) ||
         this.startingTurns.has(thread.id) ||
         current.status === 'running';
+      // Skip the inbox (in-flight turn or already-parked follow-ups).
+      shouldSteer = followUp === 'steer' && (inFlight || current.queue.length > 0);
       const patch: Parameters<typeof updateThread>[1] = { queue };
       if (!inFlight) patch.status = 'queued';
       // Stale agentPid from a dead MCP/desktop child can pin drainQueue forever.
@@ -804,17 +812,26 @@ export class Orchestrator {
       }
       // MCP/CLI enqueue only while the board is alive — otherwise the turn
       // runs in a stdio child with no renderer IPC (blank worktree chat).
-      if (thisProcessShouldDrainAgentQueues()) {
+      // Steer promotes via sendQueuedMessageNow after the lock.
+      if (thisProcessShouldDrainAgentQueues() && !shouldSteer) {
         void this.drainQueue(thread.id);
       }
       return this.requireThread(thread.id);
     });
+    if (shouldSteer && sent.queue.length > 0) {
+      return this.sendQueuedMessageNow(sent.id, sent.queue.length - 1);
+    }
+    return sent;
   }
 
-  async fanOut(threadRefs: string[], prompt: string): Promise<Thread[]> {
+  async fanOut(
+    threadRefs: string[],
+    prompt: string,
+    opts?: { followUp?: FollowUpBehavior },
+  ): Promise<Thread[]> {
     const results: Thread[] = [];
     for (const ref of threadRefs) {
-      results.push(await this.send(ref, prompt));
+      results.push(await this.send(ref, prompt, opts));
     }
     return results;
   }

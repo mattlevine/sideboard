@@ -737,6 +737,32 @@ export function SettingsModal({
                     </button>
                   </div>
                 </div>
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Follow-up behavior</div>
+                  <p className="settings-hint">
+                    When you send while an agent is already working. Steer (default) skips the
+                    queue and adds the message to the chat immediately. Queue waits until the
+                    current turn finishes.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
+                    <label className="settings-hint" htmlFor="follow-up-behavior">
+                      Default
+                    </label>
+                    <select
+                      id="follow-up-behavior"
+                      value={advanced.followUpBehavior ?? 'steer'}
+                      disabled={busy}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v !== 'steer' && v !== 'queue') return;
+                        void saveAdvancedPatch({ followUpBehavior: v });
+                      }}
+                    >
+                      <option value="steer">Steer — send now, skip the queue</option>
+                      <option value="queue">Queue — wait for the current turn</option>
+                    </select>
+                  </div>
+                </div>
                 <div className="settings-agent-list">
                   {AGENT_PANELS.map((a) => {
                     const st = statusFor(statuses, a.id);

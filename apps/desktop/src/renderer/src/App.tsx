@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
   DiffScope,
+  FollowUpBehavior,
   OrchestratorEvent,
   OrchestratorRuntime,
   Thread,
@@ -14,6 +15,7 @@ import { createLivePaintStore } from './lib/live-paint-store';
 import type { LivePaintOp } from './lib/live-paint';
 import { applyThreadToLists, createThreadRefreshScheduler } from './lib/thread-refresh';
 import { ShowCostProvider } from './lib/show-cost';
+import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateModal } from './components/CreateModal';
@@ -274,6 +276,8 @@ export function App() {
   const [settingsInitialNav, setSettingsInitialNav] = useState<SettingsNavId>('agents');
   /** Settings → Advanced → Show cost (when available) (default off). */
   const [showCost, setShowCost] = useState(false);
+  /** Settings → Agents → Follow-up behavior (default steer). */
+  const [followUpBehavior, setFollowUpBehavior] = useState<FollowUpBehavior>('steer');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -367,6 +371,7 @@ export function App() {
   useEffect(() => {
     void window.sideboard.getAppSettings().then((s) => {
       setShowCost(Boolean(s.advanced?.showCost));
+      setFollowUpBehavior(s.advanced?.followUpBehavior === 'queue' ? 'queue' : 'steer');
     });
   }, []);
 
@@ -948,6 +953,7 @@ export function App() {
 
   return (
     <ShowCostProvider showCost={showCost}>
+    <FollowUpBehaviorProvider followUpBehavior={followUpBehavior}>
     <LivePaintProvider store={livePaintStore}>
     <div className={appClass} style={appStyle}>
       {leftSidebarOpen && (
@@ -1318,6 +1324,7 @@ export function App() {
           }}
           onSettingsChange={(s) => {
             setShowCost(Boolean(s.advanced?.showCost));
+            setFollowUpBehavior(s.advanced?.followUpBehavior === 'queue' ? 'queue' : 'steer');
           }}
           onClose={() => {
             setSettingsOpen(false);
@@ -1378,6 +1385,7 @@ export function App() {
       />
     </div>
     </LivePaintProvider>
+    </FollowUpBehaviorProvider>
     </ShowCostProvider>
   );
 }

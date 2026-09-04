@@ -56,6 +56,7 @@ import {
   usageTooltip,
 } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
+import { useFollowUpBehavior } from '../lib/follow-up-behavior';
 import { useLiveThread } from '../lib/live-paint-context';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
@@ -297,6 +298,7 @@ export function ThreadPanel({
   const liveUsage = live.usage ?? null;
   const turnStartedAt = live.startedAt;
   const showCost = useShowCost();
+  const followUpBehavior = useFollowUpBehavior();
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [setupRunning, setSetupRunning] = useState(false);
@@ -966,15 +968,19 @@ export function ThreadPanel({
     [],
   );
 
+  const followUpBusy =
+    turnBusy ||
+    thread.queue.length > 0 ||
+    followUpQueue.length > 0 ||
+    pendingFollowUps.length > 0;
+  /** Steer skips the composer queue and lands in the transcript immediately. */
+  const steeringFollowUp = followUpBehavior === 'steer' && followUpBusy;
+
   function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
     if (pendingPlanQuestions) {
       setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
     }
-    const queueing =
-      turnBusy ||
-      thread.queue.length > 0 ||
-      followUpQueue.length > 0 ||
-      pendingFollowUps.length > 0;
+    const queueing = followUpBusy && !steeringFollowUp;
     if (queueing) {
       setPendingFollowUps((prev) => [
         ...prev,
@@ -997,18 +1003,14 @@ export function ThreadPanel({
   async function send() {
     const text = prompt.trim();
     if (!text) return;
-    const queueing =
-      turnBusy ||
-      thread.queue.length > 0 ||
-      followUpQueue.length > 0 ||
-      pendingFollowUps.length > 0;
-    if (!queueing && busy) return;
+    const queueing = followUpBusy && !steeringFollowUp;
+    if (!followUpBusy && busy) return;
     const snapshotAttachments = [...(thread.attachments ?? [])];
     beginPendingSend(text, snapshotAttachments);
     setPrompt('');
     setCursor(0);
     suppressArtifactAutoOpen.current = false;
-    if (!queueing) setBusy(true);
+    if (!followUpBusy) setBusy(true);
     try {
       await window.sideboard.sendToThread(thread.id, text);
     } catch (err) {
@@ -1025,7 +1027,7 @@ export function ThreadPanel({
       setPrompt(text);
       window.alert(err instanceof Error ? err.message : String(err));
     } finally {
-      if (!queueing) setBusy(false);
+      if (!followUpBusy) setBusy(false);
     }
   }
 
@@ -1123,7 +1125,9 @@ export function ThreadPanel({
       ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
       : `Implement the plan in ${PLAN_FILE_REL}.`;
     setPendingUser(text);
-    setPendingInTranscript(!turnBusy && thread.queue.length === 0);
+    setPendingInTranscript(
+      steeringFollowUp || (!turnBusy && thread.queue.length === 0),
+    );
     setPrompt('');
     try {
       await window.sideboard.sendToThread(thread.id, text);
@@ -2384,7 +2388,9 @@ export function ThreadPanel({
               rows={composerExpanded ? 3 : 1}
               placeholder={
                 thread.status === 'running' || thread.status === 'queued'
-                  ? 'Queued when you send…'
+                  ? followUpBehavior === 'steer'
+                    ? 'Steer — send now to add to the chat…'
+                    : 'Queued when you send…'
                   : planAwaitingApproval
                     ? 'Optional notes for Approve / Hand off…'
                     : thread.planMode
@@ -2623,7 +2629,13 @@ export function ThreadPanel({
                   type="button"
                   className="send-btn"
                   disabled={!prompt.trim() || (busy && !agentActive)}
-                  title={agentActive ? 'Queue message' : 'Send'}
+                  title={
+                  agentActive
+                    ? followUpBehavior === 'steer'
+                      ? 'Steer — send now, skip the queue'
+                      : 'Queue message'
+                    : 'Send'
+                }
                   onClick={() => void send()}
                 >
                   ↑

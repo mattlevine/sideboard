@@ -192,6 +192,16 @@ export interface IntegrationsSettings {
  */
 export type OrchestrationQuotaOnLimit = 'switch_agent' | 'wait_reset';
 
+/**
+ * How a follow-up send behaves while a turn is already in flight.
+ * Conductor: Settings → General → Follow-up behavior (default steer).
+ * - `steer` (default): skip the queue — interrupt and start the new prompt now
+ * - `queue`: wait behind the current turn (and any already-queued follow-ups)
+ */
+export type FollowUpBehavior = 'queue' | 'steer';
+
+export const FOLLOW_UP_BEHAVIORS = ['steer', 'queue'] as const;
+
 export interface AdvancedAppSettings {
   /**
    * Ask the agent to rename the temporary `thread/<team>` branch on first send.
@@ -265,6 +275,11 @@ export interface AdvancedAppSettings {
   orchestrationQuotaOnLimit?: OrchestrationQuotaOnLimit;
   /** Agent to continue on after a session limit (default: cursor). Ignored when equal to the limited agent. */
   orchestrationQuotaFallbackAgent?: AgentKind;
+  /**
+   * Follow-up send while a turn is running.
+   * Omitted = {@link followUpBehavior} default (`steer`).
+   */
+  followUpBehavior?: FollowUpBehavior;
 }
 
 export interface AppSettings {
@@ -683,6 +698,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   ) {
     out.orchestrationQuotaFallbackAgent =
       source.orchestrationQuotaFallbackAgent as AgentKind;
+  }
+  if (source.followUpBehavior === 'queue' || source.followUpBehavior === 'steer') {
+    out.followUpBehavior = source.followUpBehavior;
   }
   return out;
 }
@@ -1630,6 +1648,9 @@ export function updateAdvancedSettings(
   ) {
     advanced.orchestrationQuotaFallbackAgent = patch.orchestrationQuotaFallbackAgent;
   }
+  if (patch.followUpBehavior === 'queue' || patch.followUpBehavior === 'steer') {
+    advanced.followUpBehavior = patch.followUpBehavior;
+  }
   return saveAppSettings({ ...current, advanced });
 }
 
@@ -1720,6 +1741,13 @@ export function orchestrationQuotaFallbackAgent(
     return preferred;
   }
   return 'cursor';
+}
+
+/** Conductor default: steer — skip the queue and start the follow-up now. */
+export function followUpBehavior(
+  settings: AppSettings = loadAppSettings(),
+): FollowUpBehavior {
+  return settings.advanced.followUpBehavior === 'queue' ? 'queue' : 'steer';
 }
 
 export function maxConcurrentAgents(

@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import { Command } from 'commander';
 import {
   detectAgents,
+  followUpBehavior,
   getOrchestrator,
   listBranches,
   listPrs,
@@ -291,7 +292,7 @@ async function main(): Promise<void> {
             process.stderr.write(event.event.data + '\n');
           }
         });
-        await orch.fanOut(refs, prompt);
+        await orch.fanOut(refs, prompt, { followUp: followUpBehavior() });
         for (const ref of refs) {
           await orch.waitForTurn(ref);
         }
@@ -305,7 +306,7 @@ async function main(): Promise<void> {
           if (event.event.type === 'stderr') process.stderr.write(event.event.data + '\n');
         }
       });
-      await orch.send(thread, prompt);
+      await orch.send(thread, prompt, { followUp: followUpBehavior() });
       const done = await orch.waitForTurn(thread);
       off();
       console.log(chalk.dim(`\n[${done.status}]`));
