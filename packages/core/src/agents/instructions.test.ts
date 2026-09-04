@@ -61,6 +61,7 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/type=log/);
     expect(text).toMatch(/\/long-running/);
     expect(text).toMatch(/Do not ask the human to poll/);
+    expect(text).toMatch(/\.context\/\.sideboard\/detached-jobs/);
   });
 });
 

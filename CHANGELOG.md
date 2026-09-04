@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Detached long-job logs live under `.context/.sideboard/detached-jobs/` (workspace scratch). Wait/status still find a legacy `.sideboard/detached-jobs/` job.
+
 ## [0.1.150] - 2026-09-04
 
 ### Added

@@ -4,20 +4,18 @@ import { git } from './run.js';
 
 /** Worktree-local ignore — agents must not commit Sideboard scratch. */
 export const WORKTREE_SIDEBOARD_EXCLUDE = '.sideboard/';
+export const WORKTREE_CONTEXT_EXCLUDE = '.context/';
 
 const EXCLUDE_COMMENT = '# Sideboard worktree scratch — do not commit';
 
-function excludeHasSideboard(body: string): boolean {
-  return body.split(/\r?\n/).some((line) => {
-    const t = line.trim();
-    return t === '.sideboard/' || t === '.sideboard' || t === '/.sideboard/';
-  });
+function excludeHasLine(body: string, ...needles: string[]): boolean {
+  return body.split(/\r?\n/).some((line) => needles.includes(line.trim()));
 }
 
 /**
- * Ignore `.sideboard/` in this worktree only (`$GIT_DIR/info/exclude`) and
- * skip-worktree any already-tracked files there so `git add -A` cannot stage
- * settings.toml / review.md / detached-jobs.
+ * Ignore `.sideboard/` and `.context/` in this worktree only (`$GIT_DIR/info/exclude`)
+ * and skip-worktree any already-tracked files under `.sideboard/` so `git add -A`
+ * cannot stage settings.toml / review.md or detached-job logs.
  */
 export async function ensureWorktreeSideboardIgnored(
   worktreePath: string,
@@ -39,13 +37,19 @@ export async function ensureWorktreeSideboardIgnored(
   } catch {
     body = '';
   }
-  if (!excludeHasSideboard(body)) {
+  const missing: string[] = [];
+  if (
+    !excludeHasLine(body, '.sideboard/', '.sideboard', '/.sideboard/')
+  ) {
+    missing.push(WORKTREE_SIDEBOARD_EXCLUDE);
+  }
+  if (!excludeHasLine(body, '.context/', '.context', '/.context/')) {
+    missing.push(WORKTREE_CONTEXT_EXCLUDE);
+  }
+  if (missing.length > 0) {
     const prefix = body && !body.endsWith('\n') ? `${body}\n` : body;
-    writeFileSync(
-      excludePath,
-      `${prefix}${EXCLUDE_COMMENT}\n${WORKTREE_SIDEBOARD_EXCLUDE}\n`,
-      'utf8',
-    );
+    const header = body.includes(EXCLUDE_COMMENT) ? '' : `${EXCLUDE_COMMENT}\n`;
+    writeFileSync(excludePath, `${prefix}${header}${missing.join('\n')}\n`, 'utf8');
   }
 
   const listed = await git(['ls-files', '-z', '--', '.sideboard'], worktreePath, {

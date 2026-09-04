@@ -20,6 +20,9 @@ describe('isSideboardScratchPath', () => {
     expect(isSideboardScratchPath('.sideboard/detached-jobs/x/log.txt')).toBe(
       true,
     );
+    expect(
+      isSideboardScratchPath('.context/.sideboard/detached-jobs/x/log'),
+    ).toBe(true);
     expect(isSideboardScratchPath('.claude/skills/review/SKILL.md')).toBe(false);
     expect(isSideboardScratchPath('apps/web/lib/foo.ts')).toBe(false);
   });

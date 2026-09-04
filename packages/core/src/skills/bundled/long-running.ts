@@ -30,7 +30,7 @@ node <detached-job.js> wait <id> --until-done
 node <detached-job.js> status <id>
 \`\`\`
 
-\`<id>\` is kebab-case (\`mac-release\`, \`core-test\`, \`fly-deploy\`). State is \`.sideboard/detached-jobs/<id>/\` (local scratch).
+\`<id>\` is kebab-case (\`mac-release\`, \`core-test\`, \`fly-deploy\`). State is \`.context/.sideboard/detached-jobs/<id>/\` (local scratch).
 
 Wait JSON:
 

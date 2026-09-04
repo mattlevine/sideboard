@@ -7,6 +7,11 @@ const os = require('os');
 const path = require('path');
 const {
   sanitizeId,
+  jobsRoot,
+  jobPaths,
+  jobPathsAt,
+  resolveJobKind,
+  startJob,
   snapshotFromPaths,
   waitSnapshot,
   inferPhase,
@@ -14,6 +19,41 @@ const {
   renderJobHtml,
   takeDelta,
 } = require('./detached-job.js');
+
+describe('jobPaths', () => {
+  it('writes new jobs under .context/.sideboard/detached-jobs', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-root-'));
+    assert.equal(
+      jobsRoot(root),
+      path.join(root, '.context', '.sideboard', 'detached-jobs'),
+    );
+    const p = jobPaths(root, 'gha-release');
+    assert.equal(
+      p.dir,
+      path.join(root, '.context', '.sideboard', 'detached-jobs', 'gha-release'),
+    );
+    assert.equal(resolveJobKind(root, 'gha-release'), 'modern');
+  });
+
+  it('wait/status find a legacy .sideboard/detached-jobs job', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-legacy-'));
+    const legacy = jobPathsAt(root, 'gha-release', 'legacy');
+    fs.mkdirSync(legacy.dir, { recursive: true });
+    fs.writeFileSync(legacy.log, 'old\n');
+    assert.equal(resolveJobKind(root, 'gha-release'), 'legacy');
+    assert.equal(jobPaths(root, 'gha-release').dir, legacy.dir);
+  });
+
+  it('startJob writes a gitignore under .context/.sideboard', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-start-'));
+    const result = startJob(root, 'core-test', ['true']);
+    assert.equal(result.started, true);
+    assert.ok(result.log.includes(`${path.sep}.context${path.sep}.sideboard${path.sep}detached-jobs${path.sep}`));
+    const gi = path.join(root, '.context', '.sideboard', '.gitignore');
+    assert.equal(fs.existsSync(gi), true);
+    assert.match(fs.readFileSync(gi, 'utf8'), /\*/);
+  });
+});
 
 describe('sanitizeId', () => {
   it('accepts kebab ids', () => {

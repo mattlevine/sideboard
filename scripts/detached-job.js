@@ -11,7 +11,8 @@
  *   node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]
  *   node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
  *
- * Job state: .sideboard/detached-jobs/<id>/ (gitignored).
+ * Job state: .context/.sideboard/detached-jobs/<id>/ (local scratch).
+ * Wait/status still find a legacy .sideboard/detached-jobs/<id>/ job.
  */
 
 'use strict';
@@ -30,8 +31,23 @@ function repoRootFrom(cwd = process.cwd()) {
   return cwd;
 }
 
-function jobsRoot(root) {
-  return path.join(root, '.sideboard', 'detached-jobs');
+const DETACHED_JOBS_REL = ['.context', '.sideboard', 'detached-jobs'];
+const LEGACY_DETACHED_JOBS_REL = ['.sideboard', 'detached-jobs'];
+const CONTEXT_SIDEBOARD_GITIGNORE = `# Sideboard detached-job scratch (local only)
+*
+!.gitignore
+`;
+
+function jobsRoot(root, kind = 'modern') {
+  const rel = kind === 'legacy' ? LEGACY_DETACHED_JOBS_REL : DETACHED_JOBS_REL;
+  return path.join(root, ...rel);
+}
+
+function ensureContextSideboardGitignore(root) {
+  const dir = path.join(root, '.context', '.sideboard');
+  const gi = path.join(dir, '.gitignore');
+  fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(gi)) fs.writeFileSync(gi, CONTEXT_SIDEBOARD_GITIGNORE);
 }
 
 function sanitizeId(id) {
@@ -42,8 +58,8 @@ function sanitizeId(id) {
   return s;
 }
 
-function jobPaths(root, id) {
-  const dir = path.join(jobsRoot(root), sanitizeId(id));
+function jobPathsAt(root, id, kind = 'modern') {
+  const dir = path.join(jobsRoot(root, kind), sanitizeId(id));
   return {
     dir,
     pid: path.join(dir, 'pid'),
@@ -53,6 +69,18 @@ function jobPaths(root, id) {
     ui: path.join(dir, 'ui.html'),
     cursor: path.join(dir, 'cursor'),
   };
+}
+
+function resolveJobKind(root, id) {
+  const modern = jobPathsAt(root, id, 'modern');
+  if (fs.existsSync(modern.dir)) return 'modern';
+  const legacy = jobPathsAt(root, id, 'legacy');
+  if (fs.existsSync(legacy.dir)) return 'legacy';
+  return 'modern';
+}
+
+function jobPaths(root, id) {
+  return jobPathsAt(root, id, resolveJobKind(root, id));
 }
 
 function isAlive(pid) {
@@ -296,8 +324,7 @@ function readStartedAt(metaFile) {
   }
 }
 
-function snapshotJob(root, id) {
-  const p = jobPaths(root, id);
+function snapshotFromJobPaths(p) {
   return snapshotFromPaths({
     pidFile: p.pid,
     logFile: p.log,
@@ -306,6 +333,10 @@ function snapshotJob(root, id) {
     ui: p.ui,
     cursorFile: p.cursor,
   });
+}
+
+function snapshotJob(root, id) {
+  return snapshotFromJobPaths(jobPaths(root, id));
 }
 
 function printWaitResult(snap) {
@@ -370,11 +401,19 @@ async function waitSnapshot(getSnap, timeoutMs) {
 }
 
 function startJob(root, id, command, opts = {}) {
-  const p = jobPaths(root, id);
-  const existing = snapshotJob(root, id);
-  if (existing.running) {
-    return { started: false, reason: 'already-running', snapshot: existing };
+  const modern = jobPathsAt(root, id, 'modern');
+  const legacy = jobPathsAt(root, id, 'legacy');
+  const existingModern = snapshotFromJobPaths(modern);
+  const existingLegacy = snapshotFromJobPaths(legacy);
+  if (existingModern.running || existingLegacy.running) {
+    return {
+      started: false,
+      reason: 'already-running',
+      snapshot: existingModern.running ? existingModern : existingLegacy,
+    };
   }
+  const p = modern;
+  ensureContextSideboardGitignore(root);
   fs.mkdirSync(p.dir, { recursive: true });
   try {
     fs.unlinkSync(p.exit);
@@ -533,8 +572,13 @@ async function main(argv = process.argv) {
 module.exports = {
   WAIT_SLICE_MS,
   WAIT_STILL_RUNNING_HINT,
+  DETACHED_JOBS_REL,
+  LEGACY_DETACHED_JOBS_REL,
   sanitizeId,
+  jobsRoot,
   jobPaths,
+  jobPathsAt,
+  resolveJobKind,
   isAlive,
   snapshotFromPaths,
   snapshotJob,

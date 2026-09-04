@@ -7,8 +7,14 @@
 /** Preferred local attachments root (plan, drops, review seed). */
 export const ATTACHMENTS_DIR = '.context/attachments';
 
+/** Detached long-job state (logs, pid, ui). */
+export const DETACHED_JOBS_DIR = '.context/.sideboard/detached-jobs';
+
 /** Pre-migration Sideboard scratch root — still read for compatibility. */
 export const LEGACY_ATTACHMENTS_DIR = '.sideboard/attachments';
+
+/** Pre-migration detached-job state — wait/status still resolve this path. */
+export const LEGACY_DETACHED_JOBS_DIR = '.sideboard/detached-jobs';
 
 const ATTACHMENTS_GITIGNORE = `# Sideboard / workspace attachments (local only)
 *
