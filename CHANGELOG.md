@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Settings → Agents → Follow-up behavior (Steer or Queue, default Steer). Steer skips the composer queue and starts the follow-up immediately, the same as Send now.
+
 ### Fixed
 
 - Actions Mac pack imports the Developer ID `.p12` into a runner keychain instead of handing `CSC_LINK` to electron-builder. macOS 26.6 rejects electron-builder's `set-key-partition-list` call (it unlocks with the p12 password). Re-pushing the same `v*` tag skips npm versions that are already published.

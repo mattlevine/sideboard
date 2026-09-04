@@ -104,6 +104,7 @@ import {
   hasBakedSlackOAuth,
   pollSlackOutboundWatches,
   getDefaultAgent,
+  followUpBehavior,
   ensureSlackDeviceIdentity,
   loadAppSettings,
   toPublicAppSettings,
@@ -1253,7 +1254,9 @@ function registerIpc(): void {
   ipcMain.handle('adopt', (_e, input: AdoptInput) => orch.adopt(input));
   ipcMain.handle('listConductor', () => orch.listConductor());
   ipcMain.handle('adoptFromConductor', (_e, id: string) => orch.adoptFromConductor(id));
-  ipcMain.handle('sendToThread', (_e, ref: string, prompt: string) => orch.send(ref, prompt));
+  ipcMain.handle('sendToThread', (_e, ref: string, prompt: string) =>
+    orch.send(ref, prompt, { followUp: followUpBehavior() }),
+  );
   ipcMain.handle('editQueuedMessage', (_e, ref: string, index: number, text: string) =>
     orch.editQueuedMessage(ref, index, text),
   );
@@ -1269,7 +1272,9 @@ function registerIpc(): void {
   ipcMain.handle('setThreadOptions', (_e, ref: string, patch: ThreadOptionsPatch) =>
     orch.setThreadOptions(ref, patch),
   );
-  ipcMain.handle('fanOut', (_e, refs: string[], prompt: string) => orch.fanOut(refs, prompt));
+  ipcMain.handle('fanOut', (_e, refs: string[], prompt: string) =>
+    orch.fanOut(refs, prompt, { followUp: followUpBehavior() }),
+  );
   ipcMain.handle(
     'startOrchestration',
     (

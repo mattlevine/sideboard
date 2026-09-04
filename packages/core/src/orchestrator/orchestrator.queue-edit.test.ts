@@ -202,6 +202,50 @@ describe('Orchestrator queued-message editing', () => {
     expect(updated.status).toBe('running');
   });
 
+  it('steers a follow-up to the front and interrupts the in-flight turn', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread(['later']);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(thread.id, 'steer now', { followUp: 'steer' });
+    expect(kill).toHaveBeenCalledOnce();
+    expect(updated.queue[0]).toBe('steer now');
+    expect(updated.queue).toContain('later');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
+  it('steers ahead of parked follow-ups when nothing is in flight', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread(['parked']);
+    const idle = readThread(thread.id)!;
+    idle.status = 'idle';
+    writeThread(idle);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+
+    const updated = await orch.send(thread.id, 'steer now', { followUp: 'steer' });
+    expect(updated.queue[0]).toBe('steer now');
+    expect(updated.queue).toContain('parked');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
   it('drains send() when this process is the desktop host', async () => {
     writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
     const thread = seedThread([]);
