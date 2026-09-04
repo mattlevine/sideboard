@@ -376,6 +376,7 @@ describe('app settings', () => {
     expect(mod.showCostEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
     expect(mod.maxConcurrentAgents()).toBe(5);
+    expect(mod.followUpBehavior()).toBe('steer');
 
     const saved = mod.updateAdvancedSettings({
       autoRenameBranch: false,
@@ -388,6 +389,7 @@ describe('app settings', () => {
       showCost: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
+      followUpBehavior: 'queue',
     });
     expect(saved.advanced).toEqual({
       autoRenameBranch: false,
@@ -400,7 +402,13 @@ describe('app settings', () => {
       showCost: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
+      followUpBehavior: 'queue',
     });
+    expect(mod.followUpBehavior()).toBe('queue');
+    expect(mod.updateAdvancedSettings({ followUpBehavior: 'steer' }).advanced.followUpBehavior).toBe(
+      'steer',
+    );
+    expect(mod.followUpBehavior()).toBe('steer');
     expect(mod.autoRenameBranchEnabled()).toBe(false);
     expect(mod.caffeinateWhileSlackListenEnabled()).toBe(true);
     expect(mod.caffeinateWhileSchedulesEnabled()).toBe(true);
