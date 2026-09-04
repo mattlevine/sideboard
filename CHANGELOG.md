@@ -7,13 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.150] - 2026-09-04
+
 ### Added
 
 - Settings → Agents → Follow-up behavior (Steer or Queue, default Steer). Steer skips the composer queue and starts the follow-up immediately, the same as Send now.
+- Issue search can find unassigned tickets and other people's work (`assignee`: me / unassigned / all / user). Linear MCP `linear_search_issues` and `list_issues` gain `query` + `assignee`.
 
 ### Fixed
 
 - Actions Mac pack imports the Developer ID `.p12` into a runner keychain instead of handing `CSC_LINK` to electron-builder. macOS 26.6 rejects electron-builder's `set-key-partition-list` call (it unlocks with the p12 password). Re-pushing the same `v*` tag skips npm versions that are already published.
+- `ask_git` can push when origin is SSH: stored remotes stay `git@`, and the process retries over HTTPS via `gh` when ssh-agent is missing.
+- `ask_git` / `gh pr create` GraphQL “body is too long” is returned as a short `lastError` so the agent can retry with a brief `--body-file`. Sideboard writes the body via `--body-file` and clamps generated descriptions.
+- Coordinators no longer report a stopped child as “Agent is running. Waiting for gate to pass.” `stillRunning` requires a live handle, pid, or queue — leftover disk `running` is healed.
+- Worktrees ignore `.sideboard/` (`$GIT_DIR/info/exclude` + skip-worktree) so agents cannot commit Sideboard scratch.
 
 ## [0.1.149] - 2026-09-03
 
