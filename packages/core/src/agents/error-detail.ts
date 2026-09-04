@@ -239,7 +239,7 @@ export function looksLikeRetryableRunnerCrash(text: string): boolean {
   if (/cannot find (?:package|module)|err_module_not_found/.test(lower)) return false;
   if (!lower) return true;
   return (
-    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|cursor runner crashed in node|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|connection stalled|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
+    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|cursor runner crashed in node|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|connection stalled|network request failed|cursor startup failed:.+\(retryable\)|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
       lower,
     )
   );
@@ -344,6 +344,11 @@ export function humanizeAgentFailDetail(detail: string): string {
     return /retry the turn/i.test(raw)
       ? raw
       : `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
+  }
+  if (/network request failed|cursor startup failed:.+\(retryable\)/.test(lower)) {
+    return /retry the turn/i.test(raw)
+      ? raw
+      : `${raw} — retry the turn (a transient Cursor SDK network error).`;
   }
   return raw;
 }

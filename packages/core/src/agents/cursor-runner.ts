@@ -20,7 +20,9 @@ import {
   cursorSessionRecoveryMessage,
   isAgentBusyError,
   isUnresumableCursorSession,
+  cursorRetryableTransportMessage,
   iterateUntilIdle,
+  retryOnceOnRetryableCursorError,
   withCursorLocalHangGuards,
 } from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
@@ -166,20 +168,27 @@ async function main(): Promise<number> {
     ...(mcpServers ? { mcpServers } : {}),
   };
 
+  const retryTransport = <T>(fn: () => Promise<T>): Promise<T> =>
+    retryOnceOnRetryableCursorError(fn, (err) => {
+      emit({ type: 'stderr', data: cursorRetryableTransportMessage(err) });
+    });
+
   async function createAgent() {
-    return Agent.create(createOpts);
+    return retryTransport(() => Agent.create(createOpts));
   }
 
   async function openAgent() {
     try {
       return req.agentId
-        ? await Agent.resume(req.agentId, {
-            apiKey,
-            model,
-            mode,
-            local,
-            ...(mcpServers ? { mcpServers } : {}),
-          })
+        ? await retryTransport(() =>
+            Agent.resume(req.agentId!, {
+              apiKey,
+              model,
+              mode,
+              local,
+              ...(mcpServers ? { mcpServers } : {}),
+            }),
+          )
         : await createAgent();
     } catch (err) {
       // Stale / purged cloud ids, cwd-reused dead agents, and JSONL checkpoints
@@ -202,7 +211,7 @@ async function main(): Promise<number> {
       ...extra,
     };
     try {
-      return await agent.send(req.prompt, sendOpts);
+      return await retryTransport(() => agent.send(req.prompt, sendOpts));
     } catch (err) {
       if (!isAgentBusyError(err)) throw err;
       const n = await cancelStaleLocalRuns(agent.agentId, {
@@ -216,7 +225,7 @@ async function main(): Promise<number> {
             ? `Cursor agent had ${n} stale active run(s) — cancelled and retrying`
             : 'Cursor agent busy — retrying send',
       });
-      return agent.send(req.prompt, sendOpts);
+      return retryTransport(() => agent.send(req.prompt, sendOpts));
     }
   }
 

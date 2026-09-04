@@ -130,6 +130,8 @@ Desktop renderer: `import type` from `@sideboard-ai/core` is fine; runtime value
 
 Desktop pack: `stage-cursor-runtime.js` must resolve `@cursor/sdk` from `packages/core/package.json`. A Sideboard worktree does not hoist that package to the repo root — `createRequire(root package.json)` fails every `pnpm release` / `dist` there. Do not revert `fromFile` to the root package.
 
+Cursor transport retry (`retryOnceOnRetryableCursorError`, `CursorAgentError.isRetryable`) is runner-only. Claude / Codex / OpenCode / Brightsy shell out; their CLIs already retry (`system/api_retry`, `reconnecting...`). Do not wrap `buildTurn` / `execa` in that same create/resume/send retry.
+
 ## Cost / usage fields
 
 Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` (or a delta) when summing.
