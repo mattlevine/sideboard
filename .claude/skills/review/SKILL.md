@@ -124,7 +124,7 @@ File: src/client/frontends/desktop/core/UserData.ts
 
 ## Growing the rules
 
-If a blocking issue is a missing or ambiguous repo rule that will recur, add one sentence to `.claude/skills/review/SKILL.md` (create the skill if it is missing — that is allowed and should be committed). Do not only patch this diff when the same miss will happen again. Do not write new skills under `.sideboard/skills/`. Do not use `.sideboard/review.md` for new notes.
+If a blocking issue is a missing or ambiguous repo rule that will recur, add one sentence to `.claude/skills/review/SKILL.md` when that skill already exists. Otherwise write it to `.context/review.md` (do not create a review skill). Do not only patch this diff when the same miss will happen again. Do not write new skills under `.sideboard/skills/`.
 
 Desktop renderer: `import type` from `@sideboard-ai/core` is fine; runtime value imports from that barrel pull Node deps (`execa`) into Vite and break `electron-vite build` / the right-sidebar Run script. Use a `@sideboard/…` alias to a Node-free core file (see `electron.vite.config.ts`; e.g. `@sideboard/home-board`, `@sideboard/issue-source-labels`) or a local renderer helper. Do not import `store/global-workspace.ts` or `board/load-home-board.ts` into the renderer — those pull Node.
 

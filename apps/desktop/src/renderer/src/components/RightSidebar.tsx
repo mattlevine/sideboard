@@ -973,7 +973,7 @@ export function RightSidebar({
     }
   }
 
-  /** Opt-in: create/open editable review guidelines (`.claude/skills/review/SKILL.md`). */
+  /** Opt-in: open the review skill, or write/open `.context/review.md`. */
   async function customizeReviewGuidelines() {
     setReviewMenuOpen(false);
     try {

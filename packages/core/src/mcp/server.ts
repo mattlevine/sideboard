@@ -1041,8 +1041,25 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'get_pr_checks',
+    'Snapshot of GitHub PR checks for a worktree thread (`gh pr checks` plus merge/review gates). null = no PR. If the user gave a goal (Greptile 5/5, CI green), the worktree agent watches with `gh pr checks --watch` via /long-running — this tool is a snapshot, not a waiter. Coordinators: do not run gh from the orchestration cwd.',
+    { ref: z.string().describe('Worktree thread id/ref') },
+    async ({ ref }) => {
+      try {
+        const checks = await orch.getPrChecks(ref);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(checks) }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
     'request_review',
-    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .claude/skills/review/SKILL.md when present (else seeds that skill from .sideboard/review.md or the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
+    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .claude/skills/review/SKILL.md when present (else copies .sideboard/review.md into .context/review.md, or seeds that file from the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
     { ref: z.string().describe('Worktree thread id/ref to review') },
     async ({ ref }) => {
       try {
@@ -1071,7 +1088,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd. If this tool errors that the GraphQL/PR body is too long, the branch is already pushed — have the worktree agent retry `gh pr create --body-file` with a short description (GitHub limit 65,536 characters). Do not invent SSH/auth failures from that error.',
+    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Do not start a checks loop on a plain push — only if the user gave a goal (Greptile 5/5, CI green). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd. If this tool errors that the GraphQL/PR body is too long, the branch is already pushed — have the worktree agent retry `gh pr create --body-file` with a short description (GitHub limit 65,536 characters). Do not invent SSH/auth failures from that error.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z

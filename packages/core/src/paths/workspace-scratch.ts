@@ -1,7 +1,7 @@
 /**
  * Workspace-local scratch (Conductor-style `.context/`), not committed.
- * Repo-owned Sideboard config stays under `.sideboard/` (settings) and
- * `.claude/skills/` (review + process guides).
+ * Repo-owned Sideboard config stays under `.sideboard/` (settings).
+ * Process guides live in `.claude/skills/` only when the repo already has them.
  */
 
 /** Preferred local attachments root (plan, drops, review seed). */

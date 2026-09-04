@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.151/Sideboard-0.1.151-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.152/Sideboard-0.1.152-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -301,7 +301,7 @@ Once connected, agents get tools to:
 - **Ask the user** — `ask_user` (composer multiple-choice when work is blocked on a concrete choice — not greetings or “what next?” menus). Agents explain options in chat first; Sideboard shows the picker and mirrors questions in the transcript.
 - **Schedules** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration profile). Jobs fire only while Sideboard.app is running. Overnight: **Settings → Advanced → Caffeinate while schedules are enabled**, or `set_caffeinate`.
 - **Setup / run** — `run_setup` (also runs automatically on new worktrees), `list_run_scripts`, `run_dev_script`, `stop_dev_script`
-- **Inspect / review / PRs** — `get_diff`; `request_review` (opens a Review chat tab on a worktree thread); `ask_git` (commit & push, draft PR, resolve conflicts, merge — same prompts as the desktop git buttons). Merge only when the user explicitly asked.
+- **Inspect / review / PRs** — `get_diff`; `get_pr_checks` (snapshot); `request_review` (opens a Review chat tab on a worktree thread); `ask_git` (commit & push, draft PR, resolve conflicts, merge — same prompts as the desktop git buttons). If a goal is given (Greptile 5/5, CI green), the worktree agent watch-fix-pushes until it lands. Merge only when the user explicitly asked.
 - **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while Slack Listen is on, and while schedules are enabled.
 
 Ready-for-review land (`confirm_land`) and `purge_thread` stay human-only. Coordinators commit, push, and open PRs by asking the worktree agent. They merge only when the user explicitly asked.
@@ -507,14 +507,14 @@ New worktrees run setup automatically (create / fork / stack layer) in the backg
 
 ### Review guidelines
 
-New worktrees seed `.claude/skills/review/SKILL.md` when that file is missing (copied from `.sideboard/review.md` if you already have one). Commit the skill so later worktrees and native Claude Code / `attach` inherit the same merge-readiness bar. The Review button attaches that skill; **Customize guidelines…** creates or opens it. A gitignored `.context/attachments/Review request.md` still works as a local override until the skill exists. Workspace-local chat scratch (plans, drops) lives under `.context/attachments/` — same idea as Conductor’s `.context` vs committed `.sideboard/` / `.claude/` config.
+If the repo already has `.claude/skills/review/SKILL.md`, Review and **Customize guidelines…** use that file. Otherwise Sideboard copies `.sideboard/review.md` into the worktree’s `.context/review.md` (or seeds that file from the stock template). It does not create a review skill. Workspace-local chat scratch (plans, drops) lives under `.context/attachments/` — same idea as Conductor’s `.context` vs committed `.sideboard/` / `.claude/` config.
 
 ### Process skills
 
 When the same shape of work will happen again, write a Claude Code project skill at `.claude/skills/<name>/SKILL.md` and commit it. Sideboard’s composer `/name` expander, Claude Code, and `attach` all load that path — so the guide works outside Sideboard. Do not put new skills in `.sideboard/skills` (Sideboard still scans it; other agents do not). Point Codex/OpenCode at the file from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.
 
 - **One-offs** should not create a skill. The first run is still a loop; corrections become sentences in the guide.
-- **Same miss twice** → edit the skill (or `.claude/skills/review/SKILL.md` for merge reviews) and rerun. Do not patch three threads and leave the process unchanged.
+- **Same miss twice** → edit the skill (or `.claude/skills/review/SKILL.md` when that review skill exists, else `.context/review.md`) and rerun. Do not patch three threads and leave the process unchanged.
 - After merge to the default branch, **new worktrees inherit** the file. Existing siblings need an update from that branch.
 
 This repo’s method skill is [`.claude/skills/graph-engineering/SKILL.md`](.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`): judge first, state on disk, grow the rulebook, blind review, fix the process not the instances. A Cursor symlink lives at `.cursor/skills/graph-engineering`. Type `/graph-engineering` in the Sideboard composer to attach it.

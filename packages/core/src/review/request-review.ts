@@ -19,14 +19,17 @@ export {
 };
 import { ATTACHMENTS_DIR, LEGACY_ATTACHMENTS_DIR } from '../paths/workspace-scratch.js';
 
-/** Legacy committed guidelines. New repos use {@link REVIEW_SKILL_PATH}. */
+/** Repo-level source copied into the worktree `.context` when no review skill exists. */
 export const REPO_REVIEW_PATH = '.sideboard/review.md';
 
 export const REPO_REVIEW_NAME = 'review.md';
 
+/** Worktree working copy (gitignored). Review attaches this when there is no skill. */
+export const CONTEXT_REVIEW_PATH = '.context/review.md';
+
 /**
- * Local scratch guidelines (gitignored under `.context/attachments/`).
- * Used as a gitignored override when the review skill is absent.
+ * Leftover local scratch from an older fallback. Still read; new writes go to
+ * {@link CONTEXT_REVIEW_PATH}.
  */
 export const REVIEW_REQUEST_PATH = `${ATTACHMENTS_DIR}/Review request.md`;
 
@@ -98,61 +101,110 @@ function skillGuidelines(content: string, source: ReviewGuidelinesSource): Resol
   };
 }
 
+function contextGuidelines(
+  content: string,
+  source: ReviewGuidelinesSource,
+): ResolvedReviewGuidelines {
+  return {
+    path: CONTEXT_REVIEW_PATH,
+    name: REPO_REVIEW_NAME,
+    content,
+    source,
+  };
+}
+
+function writeContextGuidelines(worktreePath: string, content: string): string {
+  const abs = join(worktreePath, CONTEXT_REVIEW_PATH);
+  mkdirSync(dirname(abs), { recursive: true });
+  const body = content.endsWith('\n') ? content : `${content}\n`;
+  writeFileSync(abs, body, 'utf8');
+  return body;
+}
+
+function readSideboardReview(worktreePath: string, repoPath?: string): string | null {
+  const fromWorktree = readTextIfPresent(join(worktreePath, REPO_REVIEW_PATH));
+  if (fromWorktree) return fromWorktree;
+  const repo = repoPath?.replace(/\/+$/, '');
+  const wt = worktreePath.replace(/\/+$/, '');
+  if (!repo || repo === wt) return null;
+  return readTextIfPresent(join(repo, REPO_REVIEW_PATH));
+}
+
+export interface EnsuredReviewGuidelines extends ResolvedReviewGuidelines {
+  wrote: boolean;
+}
+
 /**
- * Write `.claude/skills/review/SKILL.md` when missing so Review, Claude Code,
- * and `attach` share one committed file. Copies `.sideboard/review.md` or a
- * customized local attachment when present. Does not git commit.
+ * Prefer an existing `.claude/skills/review/SKILL.md`. Otherwise copy
+ * `.sideboard/review.md` (worktree, then main repo) into
+ * `.context/review.md`. Never creates a Claude skill.
  */
-export function ensureReviewSkillFile(worktreePath: string): {
+export function ensureReviewGuidelinesFile(
+  worktreePath: string,
+  repoPath?: string,
+): EnsuredReviewGuidelines {
+  const skillContent = readTextIfPresent(join(worktreePath, REVIEW_SKILL_PATH));
+  if (skillContent) {
+    return { ...skillGuidelines(skillContent, 'skill'), wrote: false };
+  }
+
+  const contextContent = readTextIfPresent(join(worktreePath, CONTEXT_REVIEW_PATH));
+  if (contextContent && !shouldRefreshReviewRequestTemplate(contextContent)) {
+    return { ...contextGuidelines(contextContent, 'local'), wrote: false };
+  }
+
+  const fromSideboard = readSideboardReview(worktreePath, repoPath);
+  if (fromSideboard && !shouldRefreshReviewRequestTemplate(fromSideboard)) {
+    const body = writeContextGuidelines(worktreePath, fromSideboard);
+    return { ...contextGuidelines(body, 'repo'), wrote: true };
+  }
+
+  const local = readLocalGuidelines(worktreePath);
+  const body = writeContextGuidelines(worktreePath, local?.content ?? REVIEW_REQUEST_TEMPLATE);
+  return {
+    ...contextGuidelines(body, local ? 'local' : 'stock'),
+    wrote: true,
+  };
+}
+
+/**
+ * @deprecated Prefer {@link ensureReviewGuidelinesFile}. Never writes a Claude skill.
+ */
+export function ensureReviewSkillFile(
+  worktreePath: string,
+  repoPath?: string,
+): {
   path: string;
   content: string;
   wrote: boolean;
 } {
-  const abs = join(worktreePath, REVIEW_SKILL_PATH);
-  const existing = readTextIfPresent(abs);
-  if (existing) {
-    return { path: REVIEW_SKILL_PATH, content: existing, wrote: false };
-  }
-  const fromRepo = readTextIfPresent(join(worktreePath, REPO_REVIEW_PATH));
-  const fromLocal = readLocalGuidelines(worktreePath)?.content ?? null;
-  const content = wrapReviewSkillMarkdown(fromRepo ?? fromLocal ?? REVIEW_REQUEST_TEMPLATE);
-  mkdirSync(dirname(abs), { recursive: true });
-  writeFileSync(abs, content, 'utf8');
-  return { path: REVIEW_SKILL_PATH, content, wrote: true };
+  const g = ensureReviewGuidelinesFile(worktreePath, repoPath);
+  return { path: g.path, content: g.content, wrote: g.wrote };
 }
 
 /**
  * Resolve which review guidelines to attach:
- * 1. `.claude/skills/review/SKILL.md` (committed Claude skill)
- * 2. `.context/attachments/Review request.md` (local override, gitignored)
- * 3. Legacy `.sideboard/review.md` / `.sideboard/attachments/`
- * 4. Seed the review skill from stock (or copy legacy repo file)
+ * 1. `.claude/skills/review/SKILL.md` (committed Claude skill, if present)
+ * 2. `.context/review.md` (worktree copy)
+ * 3. Copy `.sideboard/review.md` from the worktree or main repo into `.context/review.md`
+ * 4. Seed `.context/review.md` from stock
  */
-export function resolveReviewGuidelines(worktreePath: string): ResolvedReviewGuidelines {
-  const skillContent = readTextIfPresent(join(worktreePath, REVIEW_SKILL_PATH));
-  if (skillContent) return skillGuidelines(skillContent, 'skill');
-
-  const local = readLocalGuidelines(worktreePath);
-  if (local) {
-    return {
-      path: local.path,
-      name: REVIEW_REQUEST_NAME,
-      content: local.content,
-      source: 'local',
-    };
-  }
-
-  const seeded = ensureReviewSkillFile(worktreePath);
-  return skillGuidelines(seeded.content, seeded.wrote ? 'stock' : 'skill');
+export function resolveReviewGuidelines(
+  worktreePath: string,
+  repoPath?: string,
+): ResolvedReviewGuidelines {
+  return ensureReviewGuidelinesFile(worktreePath, repoPath);
 }
 
 /**
  * Ensure a file the user can edit for guidelines.
- * Prefers `.claude/skills/review/SKILL.md` (portable, committed).
+ * Prefers an existing review skill; otherwise writes `.context/review.md`.
  */
-export function ensureReviewRequestFile(worktreePath: string): ResolvedReviewGuidelines {
-  const seeded = ensureReviewSkillFile(worktreePath);
-  return skillGuidelines(seeded.content, 'skill');
+export function ensureReviewRequestFile(
+  worktreePath: string,
+  repoPath?: string,
+): ResolvedReviewGuidelines {
+  return ensureReviewGuidelinesFile(worktreePath, repoPath);
 }
 
 export function buildReviewRequestAttachment(
@@ -164,7 +216,7 @@ export function buildReviewRequestAttachment(
     opts?.name ??
     (path === REVIEW_SKILL_PATH
       ? REVIEW_SKILL_NAME
-      : path === REPO_REVIEW_PATH
+      : path === REPO_REVIEW_PATH || path === CONTEXT_REVIEW_PATH
         ? REPO_REVIEW_NAME
         : REVIEW_REQUEST_NAME);
   return {
@@ -183,6 +235,7 @@ export function buildReviewRequestAttachment(
 export function readExistingReviewRequestFile(worktreePath: string): string | null {
   return (
     readTextIfPresent(join(worktreePath, REVIEW_SKILL_PATH)) ??
+    readTextIfPresent(join(worktreePath, CONTEXT_REVIEW_PATH)) ??
     readTextIfPresent(join(worktreePath, REPO_REVIEW_PATH)) ??
     readTextIfPresent(join(worktreePath, REVIEW_REQUEST_PATH)) ??
     readTextIfPresent(join(worktreePath, LEGACY_REVIEW_REQUEST_PATH))
@@ -216,7 +269,7 @@ export async function requestReview(
     throw new Error(`Thread is archived: ${from.id}`);
   }
 
-  const guidelines = resolveReviewGuidelines(from.worktreePath);
+  const guidelines = resolveReviewGuidelines(from.worktreePath, from.repoPath);
   const tab = createChatTab({
     fromThreadId: from.id,
     title: 'Review',

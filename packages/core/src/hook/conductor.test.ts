@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import {
   runWorkspaceSetup,
   stripNestedElectronEnv,
 } from './conductor.js';
-import { REVIEW_SKILL_PATH } from '../review/request-review.js';
+import { CONTEXT_REVIEW_PATH, REPO_REVIEW_PATH, REVIEW_SKILL_PATH } from '../review/request-review.js';
 
 describe('resolveFilesToCopy', () => {
   it('prefers .worktreeinclude over settings', () => {
@@ -154,11 +154,24 @@ describe('runConventionSetup / runWorkspaceSetup', () => {
     expect(lines.join('\n')).not.toContain('from-convention');
   });
 
-  it('seeds .claude/skills/review/SKILL.md when missing', async () => {
+  it('copies review guidelines into .context/review.md when no review skill exists', async () => {
     const wt = mkdtempSync(join(tmpdir(), 'sideboard-review-skill-'));
     const lines: string[] = [];
     await runWorkspaceSetup(wt, wt, (l) => lines.push(l));
-    expect(existsSync(join(wt, REVIEW_SKILL_PATH))).toBe(true);
-    expect(lines.join('\n')).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
+    expect(existsSync(join(wt, REVIEW_SKILL_PATH))).toBe(false);
+    expect(existsSync(join(wt, CONTEXT_REVIEW_PATH))).toBe(true);
+    expect(lines.join('\n')).toMatch(/\.context\/review\.md/);
+  });
+
+  it('copies the main repo .sideboard/review.md into the worktree .context', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'sideboard-review-repo-'));
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-review-wt-'));
+    mkdirSync(join(repo, '.sideboard'), { recursive: true });
+    writeFileSync(join(repo, REPO_REVIEW_PATH), '## Recommendation\nfrom repo\n');
+    const lines: string[] = [];
+    await runWorkspaceSetup(repo, wt, (l) => lines.push(l));
+    expect(existsSync(join(wt, REVIEW_SKILL_PATH))).toBe(false);
+    expect(readFileSync(join(wt, CONTEXT_REVIEW_PATH), 'utf8')).toContain('from repo');
+    expect(existsSync(join(wt, REPO_REVIEW_PATH))).toBe(false);
   });
 });

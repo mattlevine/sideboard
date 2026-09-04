@@ -3,17 +3,19 @@ import {
   REVIEW_REQUEST_TEMPLATE,
   REVIEW_SKILL_NAME,
   REVIEW_SKILL_PATH,
-  wrapReviewSkillMarkdown,
 } from '@sideboard/review-request-template';
 
 export { REVIEW_REQUEST_TEMPLATE, REVIEW_SKILL_NAME, REVIEW_SKILL_PATH };
 
-/** Legacy committed guidelines. New repos use {@link REVIEW_SKILL_PATH}. */
+/** Repo-level source copied into the worktree `.context` when no review skill exists. */
 export const REPO_REVIEW_PATH = '.sideboard/review.md';
 
 export const REPO_REVIEW_NAME = 'review.md';
 
-/** Local scratch guidelines (gitignored under `.context/attachments/`). */
+/** Worktree working copy (gitignored). */
+export const CONTEXT_REVIEW_PATH = '.context/review.md';
+
+/** Leftover local scratch. New writes go to {@link CONTEXT_REVIEW_PATH}. */
 export const REVIEW_REQUEST_PATH = '.context/attachments/Review request.md';
 
 export const REVIEW_REQUEST_NAME = 'Review request.md';
@@ -48,7 +50,7 @@ export function buildReviewRequestAttachment(
     opts?.name ??
     (path === REVIEW_SKILL_PATH
       ? REVIEW_SKILL_NAME
-      : path === REPO_REVIEW_PATH
+      : path === REPO_REVIEW_PATH || path === CONTEXT_REVIEW_PATH
         ? REPO_REVIEW_NAME
         : REVIEW_REQUEST_NAME);
   return {
@@ -90,6 +92,7 @@ export async function readExistingReviewRequestFile(
 ): Promise<string | null> {
   return (
     (await readTextIfPresent(threadId, REVIEW_SKILL_PATH)) ??
+    (await readTextIfPresent(threadId, CONTEXT_REVIEW_PATH)) ??
     (await readTextIfPresent(threadId, REPO_REVIEW_PATH)) ??
     (await readTextIfPresent(threadId, REVIEW_REQUEST_PATH))
   );
@@ -97,8 +100,8 @@ export async function readExistingReviewRequestFile(
 
 /**
  * Ensure a file the user can edit for guidelines (Customize menu).
- * Writes `.claude/skills/review/SKILL.md` when missing (copies legacy
- * `.sideboard/review.md` or a customized local attachment).
+ * Prefers an existing `.claude/skills/review/SKILL.md`. Otherwise copies
+ * `.sideboard/review.md` into `.context/review.md`. Never creates a Claude skill.
  */
 export async function ensureReviewRequestFile(
   threadId: string,
@@ -113,19 +116,30 @@ export async function ensureReviewRequestFile(
     };
   }
 
+  const contextContent = await readTextIfPresent(threadId, CONTEXT_REVIEW_PATH);
+  if (contextContent && !shouldRefreshReviewRequestTemplate(contextContent)) {
+    return {
+      path: CONTEXT_REVIEW_PATH,
+      name: REPO_REVIEW_NAME,
+      content: contextContent,
+      source: 'local',
+    };
+  }
+
   const repoContent = await readTextIfPresent(threadId, REPO_REVIEW_PATH);
-  const localContent = await readTextIfPresent(threadId, REVIEW_REQUEST_PATH);
+  const leftover = await readTextIfPresent(threadId, REVIEW_REQUEST_PATH);
   const body =
-    repoContent ??
-    (localContent && !shouldRefreshReviewRequestTemplate(localContent)
-      ? localContent
-      : REVIEW_REQUEST_TEMPLATE);
-  const content = wrapReviewSkillMarkdown(body);
-  await window.sideboard.writeFile(threadId, REVIEW_SKILL_PATH, content);
+    repoContent && !shouldRefreshReviewRequestTemplate(repoContent)
+      ? repoContent
+      : leftover && !shouldRefreshReviewRequestTemplate(leftover)
+        ? leftover
+        : REVIEW_REQUEST_TEMPLATE;
+  const content = body.endsWith('\n') ? body : `${body}\n`;
+  await window.sideboard.writeFile(threadId, CONTEXT_REVIEW_PATH, content);
   return {
-    path: REVIEW_SKILL_PATH,
-    name: REVIEW_SKILL_NAME,
+    path: CONTEXT_REVIEW_PATH,
+    name: REPO_REVIEW_NAME,
     content,
-    source: 'skill',
+    source: repoContent ? 'repo' : leftover ? 'local' : 'stock',
   };
 }

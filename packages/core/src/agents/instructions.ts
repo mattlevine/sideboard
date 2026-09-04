@@ -104,7 +104,7 @@ export function formatWorktreeDirective(
     'Short git requests from the Sideboard UI are complete instructions — expand them using the rules above without asking for clarification:',
   );
   lines.push(
-    '- "Commit and push." → commit any uncommitted work with a purpose-stating message, then push to origin (updates an existing PR if one is linked).',
+    '- "Commit and push." → commit any uncommitted work with a purpose-stating message, then push to origin (updates an existing PR if one is linked). Do not start a checks loop unless they gave a goal.',
   );
   lines.push(
     '- "Commit, push, and open a draft PR." → commit, push, then create a draft PR with `gh pr create --draft -R …` (title/body from the change purpose).',
@@ -113,7 +113,7 @@ export function formatWorktreeDirective(
     '- "Commit, push, and open a PR in the browser." → commit, push, then `gh pr create --web -R …`.',
   );
   lines.push(
-    '- "Fix CI: <name>." → investigate that failing check, fix it, commit, and push.',
+    '- "Fix CI: <name>." → investigate that failing check, fix it, commit, and push. Loop only if they gave a goal to keep going until it passes.',
   );
   lines.push(
     '- "Merge the remote branch (<base>) into your branch and resolve conflicts. Then, commit and push your changes." → fetch the PR base, merge it into this branch, resolve conflicts carefully, commit, and push until the PR is mergeable.',
@@ -125,13 +125,27 @@ export function formatWorktreeDirective(
     '- "Merge PR." → merge this thread\'s open pull request on GitHub (this phrase is the explicit ask). If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.',
   );
   lines.push('');
+  lines.push(formatPrGateDirective());
+  lines.push('');
   lines.push(formatProcessGuideDirective());
   return lines.join('\n');
 }
 
 /** Short isolation line on every worktree turn (survives CLI resume). */
 export function formatWorktreeReminder(): string {
-  return 'Sideboard worktree: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout.';
+  return 'Sideboard worktree: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push.';
+}
+
+/**
+ * Watch-fix-push loop only when the user gives a goal (not after every push).
+ */
+export function formatPrGateDirective(): string {
+  return [
+    'If a goal is given (not after every push):',
+    '- Enter a watch-fix-push loop and stay in it until that goal is met or you are blocked (examples: “Greptile 5/5”, “CI green”, “until checks pass”). Do not stop after one red run or one review cycle.',
+    '- Wait with `/long-running`: `gh pr checks --watch` (add `-R <origin>` when needed). Present the log. Do not ask the human to poll.',
+    '- Greptile 5/5: wait for the greptile check; read the latest `N/5` from the PR body or Greptile’s most recently *updated* issue comment; also fetch unresolved review comments / the “Prompt to fix all with AI” block. Done = **5/5 and zero unresolved Greptile comments**. If Greptile is idle, comment `@greptile review`. Cap about 5 iterations, then report leftovers. Do not merge unless asked.',
+  ].join('\n');
 }
 
 /**
@@ -144,7 +158,7 @@ export function formatProcessGuideDirective(): string {
     '- Long jobs (pack, test, deploy, anything that may run more than ~30s): Sideboard always provides `/long-running`. Detach and wait — do not ask the human to poll.',
     '- If `.claude/skills/graph-engineering/SKILL.md` exists, follow it (`/graph-engineering`) for migrations, ports, batch fixes, and other fan-out. Judge first; state on disk; grow the rulebook; do not patch around it.',
     '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill). Sideboard `/name`, Claude Code, and `attach` all load that path. Do not leave the method only in chat.',
-    '- Merge-readiness notes: create or edit `.claude/skills/review/SKILL.md` and commit it. That file is allowed. Do not use `.sideboard/review.md` for new notes (legacy; setup copies it into the skill).',
+    '- Merge-readiness notes: if `.claude/skills/review/SKILL.md` already exists, edit it. Otherwise write them to `.context/review.md` (copied from `.sideboard/review.md` when that file exists). Do not create a review skill.',
     '- Do not write new skills under `.sideboard/skills/` (that folder only — other `.sideboard/` files such as settings.toml are fine). Point Codex/OpenCode at the Claude skill from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.',
     '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
   ].join('\n');
