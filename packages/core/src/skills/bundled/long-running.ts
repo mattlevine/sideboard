@@ -68,4 +68,14 @@ node <detached-job.js> wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
 4. On \`ok\`, present once more (\`status=ok\`, last \`delta\`) and finish the task. On \`failed\`, fix from the log.
 
 Never tell the user “say status when it’s done.” You wait.
+
+## PR checks (only if a goal is given)
+
+Do **not** watch after every push. If the user gave a goal (Greptile 5/5, CI green, until checks pass), wait the same way:
+
+\`\`\`bash
+node <detached-job.js> start pr-checks -- gh pr checks --watch
+\`\`\`
+
+On miss, fix, commit, push, and watch again until the goal is met or you are blocked. Do not ask the human to poll. Do not merge unless asked.
 `;

@@ -1,7 +1,7 @@
 import type { ThreadAttachment } from '@sideboard-ai/core';
 import {
+  CONTEXT_REVIEW_PATH,
   REPO_REVIEW_NAME,
-  REPO_REVIEW_PATH,
   REVIEW_REQUEST_NAME,
   REVIEW_REQUEST_PATH,
   REVIEW_SKILL_NAME,
@@ -15,7 +15,7 @@ export function attachmentOpenPath(att: ThreadAttachment): string | null {
   if (raw) return raw.endsWith('/') ? null : raw;
   if (att.kind === 'file') {
     if (att.name === REVIEW_SKILL_NAME) return REVIEW_SKILL_PATH;
-    if (att.name === REPO_REVIEW_NAME) return REPO_REVIEW_PATH;
+    if (att.name === REPO_REVIEW_NAME) return CONTEXT_REVIEW_PATH;
     if (att.name === REVIEW_REQUEST_NAME) return REVIEW_REQUEST_PATH;
     if (att.name.includes('/')) return att.name;
   }

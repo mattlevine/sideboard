@@ -118,7 +118,7 @@ File: src/client/frontends/desktop/core/UserData.ts
 
 ## Growing the rules
 
-If a blocking issue is a missing or ambiguous repo rule that will recur, add one sentence to \`.claude/skills/review/SKILL.md\` (create the skill if it is missing — that is allowed and should be committed). Do not only patch this diff when the same miss will happen again. Do not write new skills under \`.sideboard/skills/\`. Do not use \`.sideboard/review.md\` for new notes.
+If a blocking issue is a missing or ambiguous repo rule that will recur, add one sentence to \`.claude/skills/review/SKILL.md\` when that skill already exists. Otherwise write it to \`.context/review.md\` (do not create a review skill). Do not only patch this diff when the same miss will happen again. Do not write new skills under \`.sideboard/skills/\`.
 `;
 
 /** Committed Claude Code project skill — Review attaches this when present. */

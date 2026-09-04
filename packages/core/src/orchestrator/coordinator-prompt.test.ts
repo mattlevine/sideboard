@@ -158,6 +158,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('force_stop: true');
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('ask_git');
+      expect(claude).toContain('get_pr_checks');
+      expect(claude).toMatch(/If the user gave a goal/);
       expect(claude).toContain('set_caffeinate');
       expect(claude).toContain('create_schedule');
       expect(claude).toContain('slack_replies');

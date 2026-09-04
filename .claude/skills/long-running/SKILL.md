@@ -80,6 +80,16 @@ node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern 
 
 Never tell the user “say status when it’s done.” You wait.
 
+## PR checks (only if a goal is given)
+
+Do **not** watch after every push. If the user gave a goal (Greptile 5/5, CI green, until checks pass), wait the same way:
+
+```bash
+node scripts/detached-job.js start pr-checks -- gh pr checks --watch
+```
+
+On miss, fix, commit, push, and watch again until the goal is met or you are blocked. Do not ask the human to poll. Do not merge unless asked.
+
 ## Mac desktop release
 
 Default: push/retarget the `v*` tag and watch Actions — do not pack locally. Full steps: [`.claude/skills/release/SKILL.md`](../release/SKILL.md).

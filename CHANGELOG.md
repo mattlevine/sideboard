@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Review no longer seeds `.claude/skills/review/SKILL.md`. If that skill already exists, Review and Customize use it; otherwise Sideboard copies `.sideboard/review.md` into the worktree `.context/review.md` (or seeds that file from the stock template).
+- If a goal is given (Greptile 5/5, CI green), worktree agents watch-fix-push until it lands. They do not start that loop after a plain push. MCP `get_pr_checks` is a snapshot.
+
 ## [0.1.151] - 2026-09-04
 
 ### Changed

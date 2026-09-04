@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  CONTEXT_REVIEW_PATH,
   REPO_REVIEW_PATH,
   REVIEW_REQUEST_PATH,
   REVIEW_REQUEST_PREFILL,
@@ -10,8 +11,8 @@ import {
   REVIEW_SKILL_NAME,
   REVIEW_SKILL_PATH,
   buildReviewRequestAttachment,
+  ensureReviewGuidelinesFile,
   ensureReviewRequestFile,
-  ensureReviewSkillFile,
   readExistingReviewRequestFile,
   requestReview,
   resolveReviewGuidelines,
@@ -60,40 +61,75 @@ describe('requestReview', () => {
     expect(resolved.content).toContain('skill policy');
   });
 
-  it('uses local attachments when the skill and repo file are absent', () => {
+  it('copies .sideboard/review.md into .context/review.md when the skill is absent', () => {
+    writeFileSync(join(worktree, REPO_REVIEW_PATH), '## Recommendation\nrepo policy\n');
+    const resolved = resolveReviewGuidelines(worktree);
+    expect(resolved.source).toBe('repo');
+    expect(resolved.path).toBe(CONTEXT_REVIEW_PATH);
+    expect(resolved.content).toContain('repo policy');
+    expect(existsSync(join(worktree, CONTEXT_REVIEW_PATH))).toBe(true);
+    expect(existsSync(join(worktree, REVIEW_SKILL_PATH))).toBe(false);
+  });
+
+  it('copies .sideboard/review.md from the main repo when the worktree has none', () => {
+    const repo = join(tmpdir(), `sideboard-review-repo-${Date.now()}`);
+    mkdirSync(join(repo, '.sideboard'), { recursive: true });
+    writeFileSync(join(repo, REPO_REVIEW_PATH), '## Recommendation\nfrom main repo\n');
+    const resolved = resolveReviewGuidelines(worktree, repo);
+    expect(resolved.source).toBe('repo');
+    expect(resolved.path).toBe(CONTEXT_REVIEW_PATH);
+    expect(resolved.content).toContain('from main repo');
+    expect(existsSync(join(worktree, CONTEXT_REVIEW_PATH))).toBe(true);
+    expect(existsSync(join(worktree, REPO_REVIEW_PATH))).toBe(false);
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('keeps an existing .context/review.md without rewriting it', () => {
+    mkdirSync(join(worktree, '.context'), { recursive: true });
+    writeFileSync(join(worktree, CONTEXT_REVIEW_PATH), '## Recommendation\nlocal copy\n');
+    writeFileSync(join(worktree, REPO_REVIEW_PATH), '## Recommendation\nrepo newer\n');
+    const resolved = resolveReviewGuidelines(worktree);
+    expect(resolved.source).toBe('local');
+    expect(resolved.path).toBe(CONTEXT_REVIEW_PATH);
+    expect(resolved.content).toContain('local copy');
+  });
+
+  it('copies leftover attachments into .context/review.md', () => {
     mkdirSync(join(worktree, '.context', 'attachments'), { recursive: true });
     writeFileSync(join(worktree, REVIEW_REQUEST_PATH), '## Recommendation\nlocal\n');
     const resolved = resolveReviewGuidelines(worktree);
     expect(resolved.source).toBe('local');
-    expect(resolved.path).toBe(REVIEW_REQUEST_PATH);
+    expect(resolved.path).toBe(CONTEXT_REVIEW_PATH);
     expect(resolved.content).toContain('local');
+    expect(existsSync(join(worktree, CONTEXT_REVIEW_PATH))).toBe(true);
   });
 
-  it('seeds .claude/skills/review/SKILL.md from stock when nothing exists', () => {
+  it('seeds .context/review.md from stock when no skill or sideboard file exists', () => {
     const resolved = resolveReviewGuidelines(worktree);
     expect(resolved.source).toBe('stock');
-    expect(resolved.path).toBe(REVIEW_SKILL_PATH);
-    expect(existsSync(join(worktree, REVIEW_SKILL_PATH))).toBe(true);
-    expect(existsSync(join(worktree, REVIEW_REQUEST_PATH))).toBe(false);
-    expect(resolved.content).toContain('name: review');
+    expect(resolved.path).toBe(CONTEXT_REVIEW_PATH);
+    expect(existsSync(join(worktree, REVIEW_SKILL_PATH))).toBe(false);
+    expect(existsSync(join(worktree, CONTEXT_REVIEW_PATH))).toBe(true);
+    expect(resolved.content).not.toContain('name: review');
     expect(resolved.content).toContain('## Required outcome');
   });
 
-  it('copies legacy .sideboard/review.md into the skill on setup', () => {
-    mkdirSync(join(worktree, '.sideboard'), { recursive: true });
-    writeFileSync(join(worktree, REPO_REVIEW_PATH), '# custom repo\n');
-    const seeded = ensureReviewSkillFile(worktree);
-    expect(seeded.wrote).toBe(true);
-    expect(seeded.content).toContain('custom repo');
-    expect(seeded.content).toContain('name: review');
-    expect(readExistingReviewRequestFile(worktree)).toContain('custom repo');
+  it('does not create a review skill when one is already present', () => {
+    mkdirSync(join(worktree, '.claude', 'skills', 'review'), { recursive: true });
+    writeFileSync(join(worktree, REVIEW_SKILL_PATH), wrapReviewSkillMarkdown('# skill policy\n'));
+    const seeded = ensureReviewGuidelinesFile(worktree);
+    expect(seeded.wrote).toBe(false);
+    expect(seeded.path).toBe(REVIEW_SKILL_PATH);
+    expect(existsSync(join(worktree, CONTEXT_REVIEW_PATH))).toBe(false);
   });
 
-  it('customize ensures the review skill when neither exists', () => {
+  it('customize writes .context/review.md when no review skill exists', () => {
     const ensured = ensureReviewRequestFile(worktree);
-    expect(ensured.source).toBe('skill');
-    expect(ensured.path).toBe(REVIEW_SKILL_PATH);
-    expect(existsSync(join(worktree, REVIEW_SKILL_PATH))).toBe(true);
+    expect(ensured.source).toBe('stock');
+    expect(ensured.path).toBe(CONTEXT_REVIEW_PATH);
+    expect(existsSync(join(worktree, REVIEW_SKILL_PATH))).toBe(false);
+    expect(existsSync(join(worktree, CONTEXT_REVIEW_PATH))).toBe(true);
+    expect(readExistingReviewRequestFile(worktree)).toContain('## Required outcome');
   });
 
   it('rejects orchestrator threads', async () => {
@@ -154,10 +190,11 @@ describe('requestReview', () => {
     expect(att.content).toBe('hello');
   });
 
-  it('stock template asks reviewers to grow the review skill', () => {
+  it('stock template grows an existing review skill, else .context/review.md', () => {
     expect(REVIEW_REQUEST_TEMPLATE).toMatch(/Growing the rules/);
     expect(REVIEW_REQUEST_TEMPLATE).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
-    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/that is allowed/);
+    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/\.context\/review\.md/);
+    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/do not create a review skill/);
     expect(REVIEW_REQUEST_TEMPLATE).toMatch(/\.sideboard\/skills\//);
   });
 });

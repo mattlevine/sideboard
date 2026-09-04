@@ -6,6 +6,7 @@ import {
   formatArtifactDirective,
   formatLongRunningDirective,
   formatLongRunningReminder,
+  formatPrGateDirective,
   formatProcessGuideDirective,
   formatRenameBranchDirective,
   formatUiReminder,
@@ -76,6 +77,18 @@ describe('formatLongRunningReminder', () => {
   });
 });
 
+describe('formatPrGateDirective', () => {
+  it('enters a watch-fix-push loop only when a goal is given', () => {
+    const text = formatPrGateDirective();
+    expect(text).toMatch(/If a goal is given/);
+    expect(text).toMatch(/not after every push/);
+    expect(text).toMatch(/watch-fix-push/);
+    expect(text).toMatch(/Greptile 5\/5/);
+    expect(text).toMatch(/gh pr checks --watch/);
+    expect(text).toMatch(/5\/5 and zero unresolved/);
+  });
+});
+
 describe('formatProcessGuideDirective', () => {
   it('sends new skills to .claude/skills so native agents see them', () => {
     const text = formatProcessGuideDirective();
@@ -84,21 +97,25 @@ describe('formatProcessGuideDirective', () => {
     expect(text).toMatch(/graph-engineering/);
     expect(text).toMatch(/\/graph-engineering/);
     expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);
-    expect(text).toMatch(/That file is allowed/);
+    expect(text).toMatch(/Do not create a review skill/);
     expect(text).toMatch(/that folder only/);
     expect(text).toMatch(/attach/);
     expect(text).toMatch(/AGENTS\.md/);
     expect(text).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
+    expect(text).toMatch(/\.context\/review\.md/);
+    expect(text).toMatch(/\.sideboard\/review\.md/);
   });
 });
 
 describe('formatWorktreeReminder', () => {
   it('is a short isolation line for resumed turns', () => {
     const text = formatWorktreeReminder();
-    expect(text.length).toBeLessThan(220);
+    expect(text.length).toBeLessThan(420);
     expect(text).toMatch(/stay in this cwd/i);
     expect(text).toMatch(/origin/i);
     expect(text).toMatch(/upstream/i);
+    expect(text).toMatch(/If a goal is given/);
+    expect(text).toMatch(/do not watch after every push/i);
   });
 });
 
@@ -139,6 +156,10 @@ describe('formatWorktreeDirective', () => {
     expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).toMatch(/Never push to or open PRs against `upstream`/i);
     expect(text).toMatch(/Commit and push\./);
+    expect(text).toMatch(/If a goal is given/);
+    expect(text).toMatch(/watch-fix-push/);
+    expect(text).toMatch(/Greptile 5\/5/);
+    expect(text).toMatch(/not after every push/);
     expect(text).toMatch(/Merge PR\./);
     expect(text).toMatch(/Do not merge the PR unless/);
     expect(text).toMatch(/gh stack merge/);
