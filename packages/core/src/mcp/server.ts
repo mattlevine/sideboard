@@ -1527,11 +1527,18 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List issues from Sideboard Account connections (Linear, AbleTime MCP, or GitHub Issues; falls back to GitHub when the preferred tracker is not connected). Linear/AbleTime are account-wide; GitHub Issues are scoped to repoPath from list_workspaces. When AbleTime is the issue source and work has no ticket, call abletime_ensure_task (or create_thread from the default branch — Sideboard auto-creates a task to track against). Prefer list_board for Home columns. Then create_thread with sourceType=ticket.',
-    { repoPath: z.string() },
-    async ({ repoPath }) => {
+    'List or search issues from Sideboard Account connections (Linear, AbleTime MCP, or GitHub Issues; falls back to GitHub when the preferred tracker is not connected). Linear defaults to issues assigned to you; pass assignee=unassigned for no owner, assignee=all for everyone (including unassigned), or a user id / GitHub login. Optional query searches title/identifier. Linear/AbleTime are account-wide; GitHub Issues are scoped to repoPath from list_workspaces. Prefer linear_search_issues when Linear is connected and you need unassigned or other people\'s tickets. When AbleTime is the issue source and work has no ticket, call abletime_ensure_task (or create_thread from the default branch — Sideboard auto-creates a task to track against). Prefer list_board for Home columns. Then create_thread with sourceType=ticket.',
+    {
+      repoPath: z.string(),
+      query: z.string().optional().describe('Search title, identifier, or description'),
+      assignee: z
+        .string()
+        .optional()
+        .describe('me (Linear default), unassigned, all, a user id, or a GitHub login'),
+    },
+    async ({ repoPath, query, assignee }) => {
       const root = await resolveRepoRoot(repoPath);
-      const result = await listIssues(root);
+      const result = await listIssues(root, { query, assignee });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

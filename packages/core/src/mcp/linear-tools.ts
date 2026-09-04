@@ -4,6 +4,7 @@ import {
   commentLinearIssue,
   createLinearIssue,
   getLinearIssue,
+  listLinearIssuesFiltered,
   listLinearTeams,
   updateLinearIssue,
 } from '../integrations/linear.js';
@@ -42,6 +43,29 @@ export function registerLinearTools(server: McpServer): void {
     async () => {
       try {
         return text(await listLinearTeams());
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.tool(
+    'linear_search_issues',
+    'Search or list open Linear issues. Not limited to the current user — pass assignee=unassigned for issues with no owner, assignee=all (default when query is set) for anyone including unassigned, assignee=me for yours, or a user id / name. Optional query uses Linear search (title, identifier, description).',
+    {
+      query: z
+        .string()
+        .optional()
+        .describe('Search text (identifier, title, description). Omit to list by assignee only.'),
+      assignee: z
+        .string()
+        .optional()
+        .describe('me, unassigned, all, a Linear user id, or a display name. Default: all when query is set, otherwise me.'),
+      limit: z.number().int().positive().max(250).optional(),
+    },
+    async ({ query, assignee, limit }) => {
+      try {
+        return text(await listLinearIssuesFiltered({ query, assignee, limit }));
       } catch (err) {
         return fail(err);
       }

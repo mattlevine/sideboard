@@ -147,6 +147,8 @@ describe('integrations / issues', () => {
       json: async () => ({
         data: {
           viewer: {
+            id: 'user-1',
+            name: 'Matt',
             assignedIssues: {
               nodes: [
                 {
@@ -172,5 +174,78 @@ describe('integrations / issues', () => {
     const auth = (fetchMock.mock.calls[0]?.[1] as { headers?: Record<string, string> })
       ?.headers?.Authorization;
     expect(auth).toBe('lin_api_test');
+  });
+
+  it('searches Linear issues that are not assigned to the viewer', async () => {
+    const { settings, issues } = await load();
+    settings.updateIntegrationsSettings({
+      linearApiKey: 'lin_api_test',
+      issueSource: 'linear',
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          viewer: { id: 'user-1', name: 'Matt' },
+          searchIssues: {
+            nodes: [
+              {
+                id: 'open',
+                identifier: 'ENG-2',
+                title: 'Unowned inbox',
+                url: 'https://linear.app/eng-2',
+                labels: { nodes: [] },
+              },
+            ],
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await issues.listIssues('/tmp/repo', {
+      query: 'inbox',
+      assignee: 'unassigned',
+    });
+    expect(result.issues[0]?.identifier).toBe('ENG-2');
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}')) as {
+      query?: string;
+      variables?: { term?: string; filter?: { assignee?: { null?: boolean } } };
+    };
+    expect(body.query).toContain('SideboardSearchIssues');
+    expect(body.variables?.term).toBe('inbox');
+    expect(body.variables?.filter?.assignee).toEqual({ null: true });
+  });
+
+  it('matches assignee filters including unassigned', async () => {
+    const { issues } = await load();
+    expect(issues.issueMatchesAssignee({ assignee: undefined }, 'unassigned')).toBe(true);
+    expect(issues.issueMatchesAssignee({ assignee: 'Ada', assignees: ['Ada'] }, 'unassigned')).toBe(
+      false,
+    );
+    expect(issues.issueMatchesAssignee({ assignee: 'Ada', assignees: ['Ada'] }, 'me', 'Ada')).toBe(
+      true,
+    );
+    expect(issues.issueMatchesAssignee({ assignee: 'Ada', assignees: ['Ada'] }, 'all')).toBe(true);
+  });
+
+  it('passes GitHub unassigned search to gh', async () => {
+    const { issues } = await load();
+    const gh = vi.spyOn(await import('../git/run.js'), 'gh').mockImplementation(async (args) => {
+      if (args[0] === 'api') {
+        return { stdout: 'octocat\n', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === 'issue') {
+        expect(args).toContain('--search');
+        expect(args[args.indexOf('--search') + 1]).toContain('no:assignee');
+        return { stdout: '[]', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const result = await issues.listIssues('/tmp/repo', { assignee: 'unassigned' });
+    expect(result.source).toBe('github');
+    expect(result.issues).toEqual([]);
+    expect(gh).toHaveBeenCalled();
   });
 });

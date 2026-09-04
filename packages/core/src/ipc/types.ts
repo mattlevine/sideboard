@@ -56,7 +56,7 @@ import type {
   UpdateScheduledTaskPatch,
 } from '../store/schedules.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
-import type { ListIssuesResult } from '../integrations/issues.js';
+import type { ListIssuesOptions, ListIssuesResult } from '../integrations/issues.js';
 
 /** Live status of the Brightsy cloud connect daemon in the desktop app. */
 export interface CloudConnectStatus {
@@ -238,7 +238,7 @@ export interface IpcApi {
    * Unified issues for Create-from / Link issue (Linear, AbleTime MCP, or
    * GitHub Issues, based on Account preference with GitHub fallback).
    */
-  listIssues(repoPath: string): Promise<ListIssuesResult>;
+  listIssues(repoPath: string, opts?: ListIssuesOptions): Promise<ListIssuesResult>;
   /**
    * Home Kanban: pulled items plus a cached Linear/GitHub snapshot used to
    * sync their metadata. Pass refresh to hit remotes again.

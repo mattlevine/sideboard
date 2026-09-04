@@ -3,12 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildLinearIssueFilter,
   createLinearIssue,
   commentLinearIssue,
   flipLinearRelationType,
   getLinearIssue,
   linearCycleIsActive,
   listLinearAssignedIssues,
+  listLinearIssuesFiltered,
   listLinearTeams,
   resolveLinearState,
   resolveLinearTeam,
@@ -166,6 +168,23 @@ describe('flipLinearRelationType', () => {
     expect(flipLinearRelationType('blockedBy')).toBe('blocks');
     expect(flipLinearRelationType('duplicate')).toBe('duplicateOf');
     expect(flipLinearRelationType('related')).toBe('related');
+  });
+});
+
+describe('buildLinearIssueFilter', () => {
+  it('filters me, unassigned, all, and named users', () => {
+    expect(buildLinearIssueFilter()).toEqual({
+      state: { type: { nin: ['completed', 'canceled'] } },
+      assignee: { isMe: true },
+    });
+    expect(buildLinearIssueFilter({ assignee: 'unassigned' }).assignee).toEqual({ null: true });
+    expect(buildLinearIssueFilter({ assignee: 'all' }).assignee).toBeUndefined();
+    expect(buildLinearIssueFilter({ assignee: 'user-uuid-not-valid' }).assignee).toEqual({
+      name: { eqIgnoreCase: 'user-uuid-not-valid' },
+    });
+    expect(
+      buildLinearIssueFilter({ assignee: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }).assignee,
+    ).toEqual({ id: { eq: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' } });
   });
 });
 
@@ -388,6 +407,37 @@ describe('Linear GraphQL writes', () => {
     expect(query).not.toContain('description');
     expect(query).not.toMatch(/comments\s*\(/);
     expect(query).not.toMatch(/relations\s*\(/);
+  });
+
+  it('lists unassigned issues and searches beyond the current viewer', async () => {
+    await withAuth();
+    const fetchMock = mockGraphql((query, variables) => {
+      if (query.includes('SideboardSearchIssues')) {
+        expect(variables.filter).toEqual({
+          state: { type: { nin: ['completed', 'canceled'] } },
+        });
+        expect(variables.term).toBe('inbox');
+        return {
+          viewer: { id: 'user-1', name: 'Matt' },
+          searchIssues: { nodes: [issueNode({ assignee: null, title: 'Inbox' })] },
+        };
+      }
+      expect(query).toContain('SideboardIssues');
+      expect(variables.filter).toEqual({
+        state: { type: { nin: ['completed', 'canceled'] } },
+        assignee: { null: true },
+      });
+      return {
+        viewer: { id: 'user-1', name: 'Matt' },
+        issues: { nodes: [issueNode({ assignee: null, title: 'No owner' })] },
+      };
+    });
+    const unassigned = await listLinearIssuesFiltered({ assignee: 'unassigned' });
+    expect(unassigned.issues[0]?.title).toBe('No owner');
+    expect(unassigned.issues[0]?.assignee).toBeUndefined();
+    const searched = await listLinearIssuesFiltered({ query: 'inbox' });
+    expect(searched.issues[0]?.title).toBe('Inbox');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('rewrites GraphQL permission errors', async () => {

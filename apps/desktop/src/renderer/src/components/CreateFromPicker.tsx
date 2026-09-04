@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { issueSourceLabel } from '@sideboard/issue-source-labels';
-import type { BranchInfo, IssueInfo, IssueSource, PrInfo, Workspace } from '@sideboard-ai/core';
+import type {
+  BranchInfo,
+  IssueInfo,
+  IssueSource,
+  ListIssuesResult,
+  PrInfo,
+  Workspace,
+} from '@sideboard-ai/core';
 import { defaultTicketScope, issueInTicketScope, type TicketScope } from '../lib/home-board';
 
 export type CreateFromTab = 'prs' | 'branches' | 'issues';
@@ -65,6 +72,41 @@ export function CreateFromPicker({
   const [ticketScope, setTicketScope] = useState<TicketScope>('assigned');
   const [viewerLogin, setViewerLogin] = useState('');
 
+  const applyIssueResult = (result: ListIssuesResult) => {
+    setIssues(result.issues);
+    setIssueSource(result.source);
+    setPreferredSource(result.preferredSource);
+    setLinearOk(result.linearConnected);
+    setAbletimeOk(result.abletimeConnected);
+    setViewerLogin(result.viewer?.login || result.viewer?.name || '');
+  };
+
+  const loadIssues = async (assignee?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await window.sideboard.listIssues(
+        repoPath,
+        assignee ? { assignee } : undefined,
+      );
+      applyIssueResult(result);
+      return result;
+    } catch (err) {
+      setIssues([]);
+      setError(err instanceof Error ? err.message : String(err));
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setLinearScope = (scope: TicketScope) => {
+    setTicketScope(scope);
+    const assignee =
+      scope === 'unassigned' ? 'unassigned' : scope === 'all' || scope === 'cycle' ? 'all' : 'me';
+    void loadIssues(assignee);
+  };
+
   useEffect(() => {
     if (!open || !repoPath) return;
     let cancelled = false;
@@ -89,12 +131,7 @@ export function CreateFromPicker({
         } else {
           const result = await window.sideboard.listIssues(repoPath);
           if (!cancelled) {
-            setIssues(result.issues);
-            setIssueSource(result.source);
-            setPreferredSource(result.preferredSource);
-            setLinearOk(result.linearConnected);
-            setAbletimeOk(result.abletimeConnected);
-            setViewerLogin(result.viewer?.login || result.viewer?.name || '');
+            applyIssueResult(result);
             setTicketScope(defaultTicketScope(result.source));
           }
         }
@@ -360,16 +397,30 @@ export function CreateFromPicker({
                   <button
                     type="button"
                     className={ticketScope === 'assigned' ? 'active' : ''}
-                    onClick={() => setTicketScope('assigned')}
+                    onClick={() => setLinearScope('assigned')}
                   >
                     Assigned to me
                   </button>
                   <button
                     type="button"
+                    className={ticketScope === 'unassigned' ? 'active' : ''}
+                    onClick={() => setLinearScope('unassigned')}
+                  >
+                    Unassigned
+                  </button>
+                  <button
+                    type="button"
                     className={ticketScope === 'cycle' ? 'active' : ''}
-                    onClick={() => setTicketScope('cycle')}
+                    onClick={() => setLinearScope('cycle')}
                   >
                     This cycle
+                  </button>
+                  <button
+                    type="button"
+                    className={ticketScope === 'all' ? 'active' : ''}
+                    onClick={() => setLinearScope('all')}
+                  >
+                    All open
                   </button>
                 </>
               ) : (

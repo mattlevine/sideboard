@@ -94,6 +94,24 @@ query SideboardAssignedIssues($first: Int!) {
 }
 `;
 
+const ISSUES_QUERY = `
+query SideboardIssues($first: Int!, $filter: IssueFilter) {
+  viewer { id name }
+  issues(first: $first, orderBy: updatedAt, filter: $filter) {
+    nodes { ${LIST_ISSUE_FIELDS} }
+  }
+}
+`;
+
+const SEARCH_ISSUES_QUERY = `
+query SideboardSearchIssues($term: String!, $first: Int!, $filter: IssueFilter) {
+  viewer { id name }
+  searchIssues(term: $term, first: $first, includeArchived: false, filter: $filter) {
+    nodes { ${LIST_ISSUE_FIELDS} }
+  }
+}
+`;
+
 const TEAMS_QUERY = `
 query SideboardTeams {
   viewer { id name }
@@ -591,6 +609,114 @@ export type LinearAssignedIssuesResult = {
   issues: IssueInfo[];
 };
 
+/** `me`, `unassigned`, `all`, a Linear user id, or a display name. */
+export type LinearAssigneeFilter = string;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assigneeFilterKey(assignee?: string | null): string {
+  return (assignee ?? '').trim();
+}
+
+/**
+ * Linear `IssueFilter` for open issues. Default assignee is `me` so existing
+ * Home / Create-from callers stay assigned-to-you unless they ask otherwise.
+ */
+export function buildLinearIssueFilter(input?: {
+  assignee?: string | null;
+}): Record<string, unknown> {
+  const filter: Record<string, unknown> = {
+    state: { type: { nin: ['completed', 'canceled'] } },
+  };
+  const raw = assigneeFilterKey(input?.assignee) || 'me';
+  const key = raw.toLowerCase();
+  if (key === 'all' || key === '*') return filter;
+  if (key === 'unassigned' || key === 'none' || key === 'null') {
+    filter.assignee = { null: true };
+    return filter;
+  }
+  if (key === 'me' || key === '@me') {
+    filter.assignee = { isMe: true };
+    return filter;
+  }
+  if (UUID_RE.test(raw)) {
+    filter.assignee = { id: { eq: raw } };
+    return filter;
+  }
+  filter.assignee = { name: { eqIgnoreCase: raw } };
+  return filter;
+}
+
+type LinearListedPayload = {
+  viewer?: {
+    id?: string;
+    name?: string;
+    assignedIssues?: { nodes?: LinearIssueNode[] };
+  };
+  issues?: { nodes?: LinearIssueNode[] };
+  searchIssues?: { nodes?: LinearIssueNode[] };
+};
+
+function isAssignedToMe(assignee: string): boolean {
+  const key = assignee.toLowerCase();
+  return key === 'me' || key === '@me';
+}
+
+function listedLinearIssues(
+  json: LinearListedPayload,
+  nodes: LinearIssueNode[] | undefined,
+): LinearAssignedIssuesResult {
+  return {
+    viewer: {
+      id: String(json.viewer?.id ?? ''),
+      name: String(json.viewer?.name ?? ''),
+    },
+    issues: (nodes ?? []).map((node) => toIssueInfo(mapIssue(node))),
+  };
+}
+
+/**
+ * List or search open Linear issues. `assignee` is `me` (default when there is
+ * no query), `unassigned`, `all`, a user id, or a display name. A query uses
+ * Linear `searchIssues` so results are not limited to the current viewer.
+ */
+export async function listLinearIssuesFiltered(
+  opts?: {
+    limit?: number;
+    apiKey?: string | null;
+    assignee?: string | null;
+    query?: string;
+  },
+): Promise<LinearAssignedIssuesResult> {
+  const first = Math.max(1, Math.min(250, opts?.limit ?? 200));
+  const query = opts?.query?.trim() ?? '';
+  const assignee = assigneeFilterKey(opts?.assignee) || (query ? 'all' : 'me');
+  const filter = buildLinearIssueFilter({ assignee });
+  if (query) {
+    const json = await linearGraphql<LinearListedPayload>(
+      SEARCH_ISSUES_QUERY,
+      { term: query, first, filter },
+      opts,
+    );
+    return listedLinearIssues(json, json.searchIssues?.nodes);
+  }
+  if (isAssignedToMe(assignee)) {
+    const json = await linearGraphql<LinearListedPayload>(
+      ASSIGNED_ISSUES_QUERY,
+      { first },
+      opts,
+    );
+    return listedLinearIssues(json, json.viewer?.assignedIssues?.nodes);
+  }
+  const json = await linearGraphql<LinearListedPayload>(
+    ISSUES_QUERY,
+    { first, filter },
+    opts,
+  );
+  return listedLinearIssues(json, json.issues?.nodes);
+}
+
 /**
  * List open issues assigned to the authenticated Linear user via GraphQL.
  * Uses Sideboard-stored OAuth token or API key (Settings → Issues → Linear), not agent MCP.
@@ -598,23 +724,7 @@ export type LinearAssignedIssuesResult = {
 export async function listLinearAssignedIssues(
   opts?: { limit?: number; apiKey?: string | null },
 ): Promise<LinearAssignedIssuesResult> {
-  const first = Math.max(1, Math.min(250, opts?.limit ?? 200));
-  const json = await linearGraphql<{
-    viewer?: {
-      id?: string;
-      name?: string;
-      assignedIssues?: { nodes?: LinearIssueNode[] };
-    };
-  }>(ASSIGNED_ISSUES_QUERY, { first }, opts);
-  return {
-    viewer: {
-      id: String(json.viewer?.id ?? ''),
-      name: String(json.viewer?.name ?? ''),
-    },
-    issues: (json.viewer?.assignedIssues?.nodes ?? []).map((node) =>
-      toIssueInfo(mapIssue(node)),
-    ),
-  };
+  return listLinearIssuesFiltered({ ...opts, assignee: 'me' });
 }
 
 export async function listLinearIssuesDirect(

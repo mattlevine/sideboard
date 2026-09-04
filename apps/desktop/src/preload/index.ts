@@ -73,7 +73,7 @@ const api: IpcApi = {
       ipcRenderer.removeListener('caffeinate-hold:changed', handler);
     };
   },
-  listIssues: (repoPath) => ipcRenderer.invoke('listIssues', repoPath),
+  listIssues: (repoPath, opts) => ipcRenderer.invoke('listIssues', repoPath, opts),
   loadHomeBoard: (opts) => ipcRenderer.invoke('loadHomeBoard', opts),
   addBoardItem: (input) => ipcRenderer.invoke('addBoardItem', input),
   removeBoardItem: (id) => ipcRenderer.invoke('removeBoardItem', id),

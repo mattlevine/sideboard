@@ -31,24 +31,40 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
   useEffect(() => {
     if (!open) return;
     setQuery('');
+  }, [open, repoPath]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
-    void window.sideboard
-      .listIssues(repoPath)
-      .then((result) => {
-        setIssues(result.issues);
-        setSource(result.source);
-        setPreferredSource(result.preferredSource);
-        setLinearConnected(result.linearConnected);
-        setAbletimeConnected(result.abletimeConnected);
-        if (result.issues.length === 0) setError('empty');
-      })
-      .catch((err) => {
-        setIssues([]);
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => setLoading(false));
-  }, [open, repoPath]);
+    const q = query.trim();
+    const timer = window.setTimeout(() => {
+      void window.sideboard
+        .listIssues(repoPath, q ? { query: q, assignee: 'all' } : undefined)
+        .then((result) => {
+          if (cancelled) return;
+          setIssues(result.issues);
+          setSource(result.source);
+          setPreferredSource(result.preferredSource);
+          setLinearConnected(result.linearConnected);
+          setAbletimeConnected(result.abletimeConnected);
+          if (result.issues.length === 0) setError('empty');
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setIssues([]);
+          setError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, q ? 300 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, repoPath, query]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
