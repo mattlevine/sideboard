@@ -22,6 +22,7 @@ import {
   mcpWaitStillRunningHint,
   mcpWaitForTurnTimeoutMs,
 } from './wait-for-turn.js';
+import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
 import { registerSlackTools } from './slack-tools.js';
@@ -29,6 +30,7 @@ import { registerAbleTimeTools } from './abletime-tools.js';
 import { registerLinearTools } from './linear-tools.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
+import { formatGhLandError } from '../git/gh-errors.js';
 import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
 import { getHomeBoardInputs } from '../board/load-home-board.js';
 import {
@@ -279,15 +281,13 @@ export async function startMcpServer(): Promise<void> {
           t.repoPath === GLOBAL_WORKSPACE_ID
             ? 'Orchestration'
             : basename(t.repoPath) || t.repoPath;
-        const live =
-          t.status === 'running' || t.status === 'queued'
-            ? readTurnLive(t.id)
-            : null;
+        const live = orch.threadLooksLive(t) ? readTurnLive(t.id) : null;
         const parent = t.parentThreadId ? `  parent:${t.parentThreadId.slice(0, 8)}` : '';
         const preview = lastMessagePreview(t.messages, 80);
         const previewBit = preview ? `  ${preview}` : '';
         const err = t.lastError ? `  error:${t.lastError.replace(/\s+/g, ' ').slice(0, 60)}` : '';
-        const progress = live?.summary ? `  ${live.summary}` : '';
+        const progress =
+          live?.summary && !isInternalAgentStatusText(live.summary) ? `  ${live.summary}` : '';
         return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${err}  sideboard://thread/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
       });
       return {
@@ -365,10 +365,10 @@ export async function startMcpServer(): Promise<void> {
       if (!t) {
         return { content: [{ type: 'text', text: `Thread not found: ${ref}` }], isError: true };
       }
-      const live =
-        t.status === 'running' || t.status === 'queued'
-          ? readTurnLive(t.id)
-          : null;
+      const stillRunning = orch.threadLooksLive(t);
+      const live = stillRunning ? readTurnLive(t.id) : null;
+      const liveSummary =
+        live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
       const spend = orch.getThreadUsage(t.id);
       const summary = {
         id: t.id,
@@ -388,10 +388,12 @@ export async function startMcpServer(): Promise<void> {
         devPort: t.devPort,
         prUrl: t.prUrl,
         lastError: t.lastError ?? null,
-        stillRunning: t.status === 'running' || t.status === 'queued',
+        stillRunning,
         progress:
-          live?.summary ??
-          (t.status === 'queued' ? 'Queued — waiting for a concurrency slot' : null),
+          liveSummary ??
+          (stillRunning && t.status === 'queued'
+            ? 'Queued — waiting for a concurrency slot'
+            : null),
         lastActivityAt: live?.updatedAt ?? null,
         usage: spend.usage,
         lastTurnUsage: spend.lastTurnUsage,
@@ -866,7 +868,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume a hang. On status error, lastError/text is the failure. On status stopped or broken, the child did not finish — resume with send_to_thread or tell the user; do not treat that as success. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
+    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. stillRunning is the source of truth — if false, the child is not working (do not say it is waiting for a gate). If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume a hang. On status error, lastError/text is the failure. On status stopped or broken, the child did not finish — resume with send_to_thread or tell the user; do not treat that as success. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -1069,7 +1071,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` if SSH is missing). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd.',
+    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd. If this tool errors that the GraphQL/PR body is too long, the branch is already pushed — have the worktree agent retry `gh pr create --body-file` with a short description (GitHub limit 65,536 characters). Do not invent SSH/auth failures from that error.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z
@@ -1096,8 +1098,28 @@ export async function startMcpServer(): Promise<void> {
           ],
         };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { content: [{ type: 'text', text: message }], isError: true };
+        const raw = err instanceof Error ? err.message : String(err);
+        const message = formatGhLandError(raw);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  error: true,
+                  action,
+                  lastError: message,
+                  hint: /body is too long/i.test(message)
+                    ? 'Branch is already pushed. send_to_thread so the worktree agent runs gh pr create --draft -R <origin> --body-file <short.md>. Keep the description short.'
+                    : undefined,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        };
       }
     },
   );
@@ -1527,11 +1549,18 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List issues from Sideboard Account connections (Linear, AbleTime MCP, or GitHub Issues; falls back to GitHub when the preferred tracker is not connected). Linear/AbleTime are account-wide; GitHub Issues are scoped to repoPath from list_workspaces. When AbleTime is the issue source and work has no ticket, call abletime_ensure_task (or create_thread from the default branch — Sideboard auto-creates a task to track against). Prefer list_board for Home columns. Then create_thread with sourceType=ticket.',
-    { repoPath: z.string() },
-    async ({ repoPath }) => {
+    'List or search issues from Sideboard Account connections (Linear, AbleTime MCP, or GitHub Issues; falls back to GitHub when the preferred tracker is not connected). Linear defaults to issues assigned to you; pass assignee=unassigned for no owner, assignee=all for everyone (including unassigned), or a user id / GitHub login. Optional query searches title/identifier. Linear/AbleTime are account-wide; GitHub Issues are scoped to repoPath from list_workspaces. Prefer linear_search_issues when Linear is connected and you need unassigned or other people\'s tickets. When AbleTime is the issue source and work has no ticket, call abletime_ensure_task (or create_thread from the default branch — Sideboard auto-creates a task to track against). Prefer list_board for Home columns. Then create_thread with sourceType=ticket.',
+    {
+      repoPath: z.string(),
+      query: z.string().optional().describe('Search title, identifier, or description'),
+      assignee: z
+        .string()
+        .optional()
+        .describe('me (Linear default), unassigned, all, a user id, or a GitHub login'),
+    },
+    async ({ repoPath, query, assignee }) => {
       const root = await resolveRepoRoot(repoPath);
-      const result = await listIssues(root);
+      const result = await listIssues(root, { query, assignee });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

@@ -62,6 +62,7 @@ import type {
   ThreadOptionsPatch,
   TokenUsage,
 } from '../types/thread.js';
+import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { sumUsageList } from '../agents/usage.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import {
@@ -183,6 +184,9 @@ import {
   SLACK_REPLY_FORMATTING,
 } from './coordinator-prompt.js';
 
+/** Status may be `running` for this long before `agentPid` is written. */
+export const LIVE_TURN_SPAWN_GRACE_MS = 15_000;
+
 /** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
 export function isPidAlive(pid: number): boolean {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -292,6 +296,48 @@ export class Orchestrator {
     const pid = thread.agentPid;
     if (typeof pid === 'number' && pid > 0 && isPidAlive(pid)) return false;
     return true;
+  }
+
+  /**
+   * Whether a child is actually turning — not leftover disk `running` after
+   * the process died. Coordinators were telling users “Agent is running.
+   * Waiting for gate to pass” from stale stillRunning.
+   */
+  threadLooksLive(thread: Pick<Thread, 'id' | 'status' | 'queue' | 'agentPid' | 'updatedAt'>): boolean {
+    if (thread.status === 'queued') {
+      if (this.draining.has(thread.id) || this.startingTurns.has(thread.id)) return true;
+      return thread.queue.length > 0;
+    }
+    if (thread.status !== 'running') return false;
+    if (this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id)) return true;
+    const pid = thread.agentPid;
+    if (typeof pid === 'number' && pid > 0 && isPidAlive(pid)) return true;
+    const updated = Date.parse(thread.updatedAt ?? '');
+    // Spawn window: status is running before agentPid is written.
+    if (Number.isFinite(updated) && Date.now() - updated < LIVE_TURN_SPAWN_GRACE_MS) return true;
+    return false;
+  }
+
+  /** Desktop-only: persist idle/stopped when MCP would otherwise keep reporting live. */
+  private healStaleReportedActivity(thread: Thread): Thread {
+    if (!thisProcessShouldDrainAgentQueues()) return thread;
+    if (this.threadLooksLive(thread)) return thread;
+    if (thread.status === 'running') {
+      this.healStaleRunningTurns();
+      return readThread(thread.id) ?? thread;
+    }
+    if (
+      thread.status === 'queued' &&
+      thread.queue.length === 0 &&
+      !this.activeTurns.has(thread.id) &&
+      !this.startingTurns.has(thread.id) &&
+      !this.draining.has(thread.id)
+    ) {
+      setStatus(thread.id, 'idle');
+      this.emit({ type: 'status_changed', threadId: thread.id, status: 'idle' });
+      return readThread(thread.id) ?? thread;
+    }
+    return thread;
   }
 
   async reconcile(
@@ -1841,8 +1887,8 @@ export class Orchestrator {
     timeoutMs = 600_000,
     opts?: { resolveIfStillRunning?: boolean },
   ): Promise<Thread> {
-    const thread = this.requireThread(threadRef);
-    if (!['running', 'queued'].includes(thread.status)) {
+    const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
+    if (!this.threadLooksLive(thread)) {
       return thread;
     }
     const start = Date.now();
@@ -1879,12 +1925,13 @@ export class Orchestrator {
         }
       });
       timer = setInterval(() => {
-        const current = readThread(thread.id);
-        if (!current) {
+        const raw = readThread(thread.id);
+        if (!raw) {
           finish(() => reject(new Error(`Thread not found: ${thread.id}`)));
           return;
         }
-        if (!['running', 'queued'].includes(current.status)) {
+        const current = this.healStaleReportedActivity(raw);
+        if (!this.threadLooksLive(current)) {
           finish(() => resolve(current));
           return;
         }
@@ -1924,18 +1971,21 @@ export class Orchestrator {
     /** Token + cost for the last finished agent turn, when reported. */
     usage: TokenUsage | null;
   } {
-    const thread = this.requireThread(threadRef);
+    const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
     const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
     const lastError = thread.lastError ?? null;
+    const rawText = (lastAgent?.text ?? '').trim();
     const text =
-      (lastAgent?.text ?? '').trim() ||
+      (rawText && !isInternalAgentStatusText(rawText) ? rawText : '') ||
       (thread.status === 'error' || thread.status === 'stopped' || thread.status === 'broken'
         ? lastError ?? ''
         : '');
-    const stillRunning = thread.status === 'running' || thread.status === 'queued';
+    const stillRunning = this.threadLooksLive(thread);
     const live = stillRunning ? readTurnLive(thread.id) : null;
+    const liveSummary =
+      live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
     const queuedHint =
-      thread.status === 'queued' && !live?.summary
+      stillRunning && thread.status === 'queued' && !liveSummary
         ? 'Queued — waiting for a concurrency slot'
         : null;
     return {
@@ -1944,7 +1994,7 @@ export class Orchestrator {
       sessionId: thread.sessionId,
       lastError,
       stillRunning,
-      progress: live?.summary ?? queuedHint,
+      progress: liveSummary ?? queuedHint,
       lastActivityAt: live?.updatedAt ?? null,
       usage: lastAgent?.usage ?? null,
     };
@@ -2393,7 +2443,14 @@ export class Orchestrator {
       thread.worktreePath?.trim() &&
       !(await isDirty(thread.worktreePath))
     ) {
-      await this.pushAndMaybeOpenPr(thread, action);
+      try {
+        await this.pushAndMaybeOpenPr(thread, action);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        updateThread(thread.id, { lastError: message });
+        this.emit({ type: 'error', threadId: thread.id, message });
+        throw err;
+      }
       return this.requireThread(threadRef);
     }
     let prBase: string | undefined;
@@ -2678,6 +2735,8 @@ export class Orchestrator {
       await withRepoGitLock(thread.repoPath, async () => {
         await git(['worktree', 'add', dest, thread.branchName], thread.repoPath);
       });
+      const { ensureWorktreeSideboardIgnored } = await import('../git/worktree-exclude.js');
+      await ensureWorktreeSideboardIgnored(dest);
       void createThreadWorktree;
       void slug;
     }

@@ -12,6 +12,15 @@ describe('lastMessagePreview', () => {
     ).toBe('Done. Pushed a draft.');
   });
 
+  it('skips Cursor gate chatter so coordinators do not parrot it', () => {
+    expect(
+      lastMessagePreview([
+        { role: 'agent', text: 'Pushed a draft.', ts: '1' },
+        { role: 'agent', text: 'Agent is running. Waiting for gate to pass.', ts: '2' },
+      ]),
+    ).toBe('Pushed a draft.');
+  });
+
   it('truncates long text', () => {
     const preview = lastMessagePreview(
       [{ role: 'agent', text: 'x'.repeat(200), ts: '1' }],

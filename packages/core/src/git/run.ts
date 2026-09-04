@@ -1,5 +1,6 @@
 import { execa, type ExecaError } from 'execa';
 import { ensureAgentPath } from '../agents/path.js';
+import { githubAgentAuthReady, githubGhConfigEnv } from './github-agent-auth.js';
 import { clearStaleIndexLocks, isIndexLockError } from './stale-lock.js';
 
 export async function run(
@@ -127,6 +128,9 @@ export async function gh(
     env: {
       GH_PROMPT_DISABLED: '1',
       GIT_TERMINAL_PROMPT: '0',
+      // Isolated hosts.yml uses git_protocol: https so `gh pr create` does not
+      // shell out over SSH when Settings → Git is SSH (ask_git in Electron).
+      ...(githubAgentAuthReady() ? githubGhConfigEnv() : {}),
     },
   });
 }

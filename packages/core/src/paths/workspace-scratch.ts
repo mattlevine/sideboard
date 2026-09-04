@@ -30,6 +30,8 @@ export function isWorkspaceScratchPath(relativePath: string): boolean {
     p.startsWith(`${ATTACHMENTS_DIR}/`) ||
     p === LEGACY_ATTACHMENTS_DIR ||
     p.startsWith(`${LEGACY_ATTACHMENTS_DIR}/`) ||
+    p === '.sideboard' ||
+    p.startsWith('.sideboard/') ||
     p === '.context' ||
     p.startsWith('.context/')
   );

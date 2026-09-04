@@ -135,6 +135,8 @@ export async function adoptThread(input: AdoptInput): Promise<Thread> {
   writeThread(thread);
   const { ensureWorkspace } = await import('../store/workspaces.js');
   await ensureWorkspace(repoPath);
+  const { ensureWorktreeSideboardIgnored } = await import('../git/worktree-exclude.js');
+  await ensureWorktreeSideboardIgnored(input.worktreePath);
   return thread;
 }
 

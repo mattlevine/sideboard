@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAgentEvent,
+  isInternalAgentStatusText,
   liveActivitySummary,
   toolActivityLine,
   partsToAssistantText,
@@ -371,6 +372,25 @@ describe('liveActivitySummary', () => {
 
   it('says queued when nothing has started', () => {
     expect(liveActivitySummary([], { queued: true })).toBe('Queued — waiting for a slot');
+  });
+
+  it('does not surface Cursor gate chatter as live progress', () => {
+    expect(
+      liveActivitySummary([
+        {
+          type: 'thinking',
+          text: 'Agent is running. Waiting for gate to pass.',
+        },
+      ]),
+    ).toBe('Working…');
+  });
+});
+
+describe('isInternalAgentStatusText', () => {
+  it('matches Cursor runner gate lines', () => {
+    expect(isInternalAgentStatusText('Agent is running. Waiting for gate to pass.')).toBe(true);
+    expect(isInternalAgentStatusText('waiting for gate to pass')).toBe(true);
+    expect(isInternalAgentStatusText('Pushed a draft.')).toBe(false);
   });
 });
 

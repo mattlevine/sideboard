@@ -1,4 +1,6 @@
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, readdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
   BranchInfo,
@@ -17,8 +19,18 @@ import {
   type TeamName,
 } from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
-import { formatGhLandError, formatMergePrError, isGhRateLimitError } from './gh-errors.js';
-import { applyGithubGitAuthEnv, resolveGithubAgentToken } from './git-auth-mode.js';
+import {
+  clampGithubPrBody,
+  formatGhLandError,
+  formatMergePrError,
+  isGhRateLimitError,
+} from './gh-errors.js';
+import { ensureWorktreeSideboardIgnored } from './worktree-exclude.js';
+import {
+  applyGithubGitAuthEnv,
+  githubAgentGitEnv,
+  resolveGithubAgentToken,
+} from './git-auth-mode.js';
 import { gh, git } from './run.js';
 import { withRepoGitLock } from './repo-git-lock.js';
 import {
@@ -1116,6 +1128,19 @@ export function originFetchBranch(sourceRef: string): string | null {
   return ref;
 }
 
+async function originRemoteUrl(cwd: string): Promise<string> {
+  const result = await git(['remote', 'get-url', 'origin'], cwd, { reject: false });
+  return result.exitCode === 0 ? result.stdout.trim() : '';
+}
+
+/** HTTPS retry env for ask_git / fetch when SSH remotes fail (ssh-agent missing). */
+function githubHttpsRetryEnv(remoteUrl?: string | null): Record<string, string> {
+  return {
+    GIT_TERMINAL_PROMPT: '0',
+    ...githubAgentGitEnv(undefined, { remoteUrl }),
+  };
+}
+
 async function fetchOriginWithAuth(
   repoPath: string,
   args: string[],
@@ -1130,18 +1155,17 @@ async function fetchOriginWithAuth(
   } catch {
     return false;
   }
-  if (mode === 'ssh') return false;
 
   const token = await resolveGithubAgentToken(mode, repoPath);
   if (!token) return false;
 
+  const remoteUrl = await originRemoteUrl(repoPath);
   const tryHttps = async (header: string) =>
     git(args, repoPath, {
       reject: false,
       timeoutMs,
-      env: { GIT_TERMINAL_PROMPT: '0' },
+      env: githubHttpsRetryEnv(remoteUrl),
       config: {
-        'url.https://github.com/.insteadOf': 'git@github.com:',
         'http.extraHeader': header,
       },
     });
@@ -1326,6 +1350,7 @@ export async function createThreadWorktree(opts: {
   branchName = added;
 
   await ensureGhPreferOrigin(worktreePath);
+  await ensureWorktreeSideboardIgnored(worktreePath);
   return { branchName, worktreePath };
 }
 
@@ -1393,6 +1418,7 @@ export async function createExistingBranchWorktree(opts: {
   }
 
   await ensureGhPreferOrigin(worktreePath);
+  await ensureWorktreeSideboardIgnored(worktreePath);
   return { branchName, worktreePath };
 }
 
@@ -1509,7 +1535,9 @@ export async function commitAll(
 ): Promise<boolean> {
   const dirty = await isDirty(worktreePath);
   if (!dirty) return false;
+  await ensureWorktreeSideboardIgnored(worktreePath);
   await git(['add', '-A'], worktreePath);
+  await git(['reset', '-q', '--', '.sideboard'], worktreePath, { reject: false });
   await git(['commit', '-m', message], worktreePath);
   return true;
 }
@@ -1531,19 +1559,19 @@ export async function pushBranch(
       sshErr ||
         `git push origin ${branchName} failed` +
           (!token
-            ? ' (no SSH agent and gh auth token unavailable — run: gh auth login)'
+            ? ' (SSH remote and gh auth token unavailable — unlock ssh-agent or run: gh auth login)'
             : ''),
     );
   }
 
   // Dock/Finder/agent shells often lack ssh-agent; gh keyring still works.
-  // Keep remote name `origin` via insteadOf so upstream tracking stays correct.
+  // Keep stored remotes SSH; insteadOf is process-only so ask_git still works.
+  const remoteUrl = await originRemoteUrl(worktreePath);
   const tryHttps = async (header: string) =>
     git(['push', '-u', 'origin', branchName], worktreePath, {
       reject: false,
-      env: { GIT_TERMINAL_PROMPT: '0' },
+      env: githubHttpsRetryEnv(remoteUrl),
       config: {
-        'url.https://github.com/.insteadOf': 'git@github.com:',
         'http.extraHeader': header,
       },
     });
@@ -1734,6 +1762,48 @@ export async function createOrUpdatePr(
   const repoArgs = ghRepoSelectArgs(slug);
   const headRef = ghHeadRef(slug, opts.head);
   const branchOnly = opts.head.trim().replace(/^refs\/heads\//, '');
+  const bodyText = clampGithubPrBody(opts.body ?? opts.title);
+  const bodyFile = join(
+    tmpdir(),
+    `sideboard-pr-body-${process.pid}-${randomBytes(6).toString('hex')}.md`,
+  );
+  writeFileSync(bodyFile, bodyText.endsWith('\n') ? bodyText : `${bodyText}\n`, 'utf8');
+  const bodyArgs = ['--body-file', bodyFile];
+
+  try {
+    return await createOrUpdatePrWithBodyFile(worktreePath, {
+      ...opts,
+      slug,
+      repoArgs,
+      headRef,
+      branchOnly,
+      bodyArgs,
+    });
+  } finally {
+    try {
+      unlinkSync(bodyFile);
+    } catch {
+      // temp file
+    }
+  }
+}
+
+async function createOrUpdatePrWithBodyFile(
+  worktreePath: string,
+  opts: {
+    title: string;
+    base: string;
+    head: string;
+    draft?: boolean;
+    web?: boolean;
+    slug: string;
+    repoArgs: string[];
+    headRef: string;
+    branchOnly: string;
+    bodyArgs: string[];
+  },
+): Promise<string> {
+  const { slug, repoArgs, headRef, branchOnly, bodyArgs } = opts;
 
   const existing = await gh(
     [...repoArgs, 'pr', 'view', branchOnly, '--json', 'url', '--jq', '.url'],
@@ -1751,8 +1821,7 @@ export async function createOrUpdatePr(
         branchOnly,
         '--title',
         opts.title,
-        '--body',
-        opts.body ?? opts.title,
+        ...bodyArgs,
       ],
       worktreePath,
       { reject: false },
@@ -1768,8 +1837,7 @@ export async function createOrUpdatePr(
       '--web',
       '--title',
       opts.title,
-      '--body',
-      opts.body ?? opts.title,
+      ...bodyArgs,
       '--base',
       opts.base,
       '--head',
@@ -1792,8 +1860,7 @@ export async function createOrUpdatePr(
     'create',
     '--title',
     opts.title,
-    '--body',
-    opts.body ?? opts.title,
+    ...bodyArgs,
     '--base',
     opts.base,
     '--head',

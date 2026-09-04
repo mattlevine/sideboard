@@ -111,7 +111,7 @@ export function GitSettings({
               {
                 id: 'ssh' as const,
                 title: 'SSH',
-                hint: 'Keep SSH remotes. Batch-mode only — will not prompt Keychain. Slack/Cursor fail if ssh-agent is locked.',
+                hint: 'Keep SSH remotes stored. ask_git / unattended push still use HTTPS via gh when ssh-agent is missing. Batch-mode SSH will not prompt Keychain.',
               },
               {
                 id: 'token' as const,

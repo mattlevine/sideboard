@@ -61,9 +61,9 @@ describe('pushBranch', () => {
     const httpsCall = gitMock.mock.calls.find((c) =>
       c[2]?.config?.['http.extraHeader']?.includes('AUTHORIZATION: bearer gho_test'),
     );
-    expect(httpsCall?.[2]?.config?.['url.https://github.com/.insteadOf']).toBe(
-      'git@github.com:',
-    );
+    expect(httpsCall?.[2]?.env?.GIT_CONFIG_VALUE_0).toBe('git@github.com:');
+    expect(httpsCall?.[2]?.env?.GIT_CONFIG_VALUE_1).toBe('ssh://git@github.com/');
+    expect(httpsCall?.[2]?.config?.['http.extraHeader']).toContain('gho_test');
   });
 
   it('falls back to Basic x-access-token when bearer is rejected', async () => {
@@ -92,6 +92,33 @@ describe('pushBranch', () => {
       c[2]?.config?.['http.extraHeader']?.startsWith('Authorization: Basic '),
     );
     expect(basicCall).toBeTruthy();
+  });
+
+  it('rewrites ssh:// remotes on the HTTPS retry', async () => {
+    gitMock.mockImplementation(async (args, _cwd, opts) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return {
+          stdout: 'ssh://git@github.com/mattlevine/sideboard.git',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (opts?.config?.['http.extraHeader']?.includes('gho_test')) {
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      return {
+        stdout: '',
+        stderr: 'Permission denied (publickey).',
+        exitCode: 128,
+      };
+    });
+    tokenMock.mockResolvedValue('gho_test');
+
+    await pushBranch('/tmp/wt', 'feat/site');
+    const httpsCall = gitMock.mock.calls.find((c) =>
+      c[2]?.config?.['http.extraHeader']?.includes('gho_test'),
+    );
+    expect(httpsCall?.[2]?.env?.GIT_CONFIG_VALUE_1).toBe('ssh://git@github.com/');
   });
 
   it('throws the SSH error when gh has no token', async () => {

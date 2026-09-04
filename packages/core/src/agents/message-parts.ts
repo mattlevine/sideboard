@@ -168,6 +168,18 @@ export function isSubagentToolName(name: string | undefined): boolean {
   return /connectedAgentRequest/i.test(n);
 }
 
+/**
+ * Cursor/runner status chatter that is not a real reply. Coordinators were
+ * parroting “Agent is running. Waiting for gate to pass” after the child stopped.
+ */
+export function isInternalAgentStatusText(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (/waiting for gate to pass/i.test(t)) return true;
+  if (/^agent is running\b/i.test(t) && t.length < 160) return true;
+  return false;
+}
+
 /** Bash/Agent poll wrappers — not the interesting work the user wants to see. */
 export function isPollWrapperToolName(name: string | undefined): boolean {
   const n = (name ?? '').replace(/[_-]/g, '');
@@ -179,7 +191,10 @@ type ToolPart = Extract<MessagePart, { type: 'tool' }>;
 function lastTextPart(parts: MessagePart[], type: 'thinking' | 'text'): string {
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i];
-    if (p.type === type && p.text.trim()) return p.text.trim();
+    if (p.type !== type) continue;
+    const text = p.text.trim();
+    if (!text || isInternalAgentStatusText(text)) continue;
+    return text;
   }
   return '';
 }

@@ -75,6 +75,7 @@ import {
   listPrs,
   listLinearIssues,
   listIssues,
+  type ListIssuesOptions,
   getHomeBoardInputs,
   addBoardPin,
   removeBoardPin,
@@ -1065,8 +1066,8 @@ function registerIpc(): void {
     setSlackListen(opts),
   );
   ipcMain.handle('getCaffeinateHold', () => caffeinateUiState());
-  ipcMain.handle('listIssues', async (_e, path: string) =>
-    listIssues(await resolveRepoRoot(path)),
+  ipcMain.handle('listIssues', async (_e, path: string, opts?: ListIssuesOptions) =>
+    listIssues(await resolveRepoRoot(path), opts),
   );
   ipcMain.handle('loadHomeBoard', async (_e, opts?: { refresh?: boolean }) =>
     getHomeBoardInputs(orch.listWorkspaces(), { refresh: opts?.refresh }),

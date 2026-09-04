@@ -662,6 +662,24 @@ describe('assembleHomeBoard', () => {
     )).toBe(true);
     expect(issueInTicketScope(
       issue({
+        identifier: 'ENG-3',
+        title: 'Inbox',
+        provider: 'linear',
+      }),
+      'unassigned',
+    )).toBe(true);
+    expect(issueInTicketScope(
+      issue({
+        identifier: 'ENG-4',
+        title: 'Taken',
+        provider: 'linear',
+        assignee: 'Ada',
+        assignees: ['Ada'],
+      }),
+      'unassigned',
+    )).toBe(false);
+    expect(issueInTicketScope(
+      issue({
         identifier: 'ENG-2',
         title: 'Backlog',
         provider: 'linear',

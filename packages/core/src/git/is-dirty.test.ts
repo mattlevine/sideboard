@@ -15,7 +15,11 @@ describe('isSideboardScratchPath', () => {
     expect(isSideboardScratchPath('.sideboard/attachments/Review request.md')).toBe(
       true,
     );
-    expect(isSideboardScratchPath('.sideboard/review.md')).toBe(false);
+    expect(isSideboardScratchPath('.sideboard/review.md')).toBe(true);
+    expect(isSideboardScratchPath('.sideboard/settings.toml')).toBe(true);
+    expect(isSideboardScratchPath('.sideboard/detached-jobs/x/log.txt')).toBe(
+      true,
+    );
     expect(isSideboardScratchPath('.claude/skills/review/SKILL.md')).toBe(false);
     expect(isSideboardScratchPath('apps/web/lib/foo.ts')).toBe(false);
   });

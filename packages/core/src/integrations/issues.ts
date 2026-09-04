@@ -8,10 +8,25 @@ import {
   type IssueSource,
 } from '../store/app-settings.js';
 import type { IssueInfo } from '../types/thread.js';
-import { listAbleTimeAssignedIssues } from './abletime.js';
-import { listLinearAssignedIssues } from './linear.js';
+import {
+  listAbleTimeAssignedIssues,
+  searchAbleTimeTasks,
+  toAbleTimeIssueInfo,
+} from './abletime.js';
+import { listLinearIssuesFiltered } from './linear.js';
 
 export type { IssueSource };
+
+/** `me`, `unassigned`, `all`, a tracker user id, or a display name / GitHub login. */
+export type IssueAssigneeFilter = string;
+
+export interface ListIssuesOptions {
+  /** me (Linear default), unassigned, all, or a user id / GitHub login. */
+  assignee?: IssueAssigneeFilter;
+  /** Case-insensitive search (Linear `searchIssues`, GitHub `--search`, AbleTime search). */
+  query?: string;
+  limit?: number;
+}
 
 export interface ListIssuesResult {
   source: IssueSource;
@@ -24,13 +39,37 @@ export interface ListIssuesResult {
   viewer?: { login?: string; name?: string };
 }
 
+function assigneeKey(assignee?: string | null): string {
+  return (assignee ?? '').trim().toLowerCase();
+}
+
+export function issueMatchesAssignee(
+  issue: Pick<IssueInfo, 'assignee' | 'assignees'>,
+  assignee?: string | null,
+  viewerName = '',
+): boolean {
+  const key = assigneeKey(assignee);
+  if (!key || key === 'all' || key === '*') return true;
+  const names = [...(issue.assignees ?? []), issue.assignee ?? '']
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean);
+  if (key === 'unassigned' || key === 'none' || key === 'null') {
+    return names.length === 0;
+  }
+  if (key === 'me' || key === '@me') {
+    const me = viewerName.trim().toLowerCase();
+    return Boolean(me && names.includes(me));
+  }
+  return names.includes(key);
+}
+
 /**
  * List GitHub Issues for the repo via `gh` (machine-global auth).
  * Scoped to the workspace's connected GitHub remote via `--repo`.
  */
 export async function listGitHubIssues(
   repoPath: string,
-  opts?: { limit?: number },
+  opts?: { limit?: number; assignee?: string; query?: string },
 ): Promise<IssueInfo[]> {
   const limit = Math.max(1, Math.min(1000, opts?.limit ?? 200));
   const slug = await resolveGithubRepoSlug(repoPath);
@@ -44,6 +83,17 @@ export async function listGitHubIssues(
     '--state',
     'open',
   ];
+  const query = opts?.query?.trim() ?? '';
+  const assignee = opts?.assignee?.trim() ?? '';
+  const key = assignee.toLowerCase();
+  const searchParts: string[] = [];
+  if (query) searchParts.push(query);
+  if (key === 'unassigned' || key === 'none' || key === 'null') {
+    searchParts.push('no:assignee');
+  } else if (key && key !== 'all' && key !== '*') {
+    args.push('--assignee', key === 'me' || key === '@me' ? '@me' : assignee);
+  }
+  if (searchParts.length) args.push('--search', searchParts.join(' '));
   if (slug) args.push('--repo', slug);
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) return [];
@@ -99,15 +149,24 @@ async function githubViewerLogin(repoPath: string): Promise<string> {
  * Uses Sideboard Account connections — Linear GraphQL, AbleTime hosted MCP,
  * or GitHub Issues via `gh`.
  */
-export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
+export async function listIssues(
+  repoPath: string,
+  opts?: ListIssuesOptions,
+): Promise<ListIssuesResult> {
   const settings = loadAppSettings();
   const preferredSource = settings.integrations.issueSource ?? 'github';
   const linearConnected = isLinearConnected(settings);
   const abletimeConnected = isAbleTimeConnected(settings);
   const source = resolveEffectiveIssueSource(settings);
+  const query = opts?.query?.trim() || undefined;
+  const assignee = opts?.assignee?.trim() || undefined;
 
   if (source === 'linear') {
-    const listed = await listLinearAssignedIssues();
+    const listed = await listLinearIssuesFiltered({
+      assignee,
+      query,
+      limit: opts?.limit,
+    });
     return {
       source,
       preferredSource,
@@ -122,13 +181,20 @@ export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
   }
 
   if (source === 'abletime') {
-    const listed = await listAbleTimeAssignedIssues();
+    const [listed, searched] = await Promise.all([
+      listAbleTimeAssignedIssues(),
+      query ? searchAbleTimeTasks(query) : Promise.resolve(null),
+    ]);
+    const viewerName = listed.viewer.name ?? listed.viewer.id ?? '';
+    const issues = (searched ? searched.map(toAbleTimeIssueInfo) : listed.issues).filter(
+      (issue) => issueMatchesAssignee(issue, assignee, viewerName),
+    );
     return {
       source,
       preferredSource,
       linearConnected,
       abletimeConnected,
-      issues: listed.issues,
+      issues,
       viewer: {
         login: listed.viewer.name,
         name: listed.viewer.name,
@@ -137,7 +203,7 @@ export async function listIssues(repoPath: string): Promise<ListIssuesResult> {
   }
 
   const [issues, login] = await Promise.all([
-    listGitHubIssues(repoPath),
+    listGitHubIssues(repoPath, { assignee, query, limit: opts?.limit }),
     githubViewerLogin(repoPath),
   ]);
   return {

@@ -630,7 +630,7 @@ export const BOARD_PAGE_SIZE = 40;
 export type BoardKindFilter = 'all' | 'tickets' | 'prs' | 'branches' | 'threads';
 
 /** Who / which sprint the Create-from ticket list includes. */
-export type TicketScope = 'cycle' | 'assigned' | 'all';
+export type TicketScope = 'cycle' | 'assigned' | 'unassigned' | 'all';
 
 /** Linear is already assigned-to-you (same as Conductor). GitHub / AbleTime default to all open. */
 export function defaultTicketScope(issueSource: string): TicketScope {
@@ -652,13 +652,22 @@ export function issueAssignedToViewer(
   return names.includes(me);
 }
 
-/** Linear list is already assigned-to-you; GitHub “assigned” needs viewer login. */
+/** Linear “assigned” is filtered in the API when the list is assigned-only; mixed lists use viewer login. */
 export function issueInTicketScope(
   issue: Pick<IssueInfo, 'provider' | 'assignees' | 'assignee' | 'cycle'>,
   scope: TicketScope,
   viewerLogin = '',
 ): boolean {
   if (scope === 'all') return true;
+  if (scope === 'unassigned') {
+    const names = [
+      ...(issue.assignees ?? []),
+      issue.assignee ?? '',
+    ]
+      .map((n) => n.trim())
+      .filter(Boolean);
+    return names.length === 0;
+  }
   if (scope === 'cycle') {
     if (issue.provider === 'linear' || issue.cycle) {
       return Boolean(issue.cycle?.isActive);

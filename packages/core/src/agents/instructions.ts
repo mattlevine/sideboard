@@ -92,11 +92,11 @@ export function formatWorktreeDirective(
     );
   } else if (opts?.githubSlug) {
     lines.push(
-      `- Prefer a draft PR first: \`gh pr create --draft -R ${opts.githubSlug}\` (or update via \`gh pr edit -R ${opts.githubSlug}\`) once the change set is coherent. Always pass \`-R ${opts.githubSlug}\` (this worktree's origin). Bare \`gh pr create\` may target upstream instead of origin on dual-remote checkouts. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.`,
+      `- Prefer a draft PR first: \`gh pr create --draft -R ${opts.githubSlug}\` (or update via \`gh pr edit -R ${opts.githubSlug}\`) once the change set is coherent. Always pass \`-R ${opts.githubSlug}\` (this worktree's origin). Bare \`gh pr create\` may target upstream instead of origin on dual-remote checkouts. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name. If GitHub rejects the GraphQL body as too long, retry with a short \`--body-file\` (limit 65,536 characters) — do not paste a changelog or diff into \`--body\`.`,
     );
   } else {
     lines.push(
-      '- Prefer a draft PR first: `gh pr create --draft -R <origin-owner/name>` (or update via `gh pr edit -R …`) once the change set is coherent. Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree — never from `upstream`. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name.',
+      '- Prefer a draft PR first: `gh pr create --draft -R <origin-owner/name>` (or update via `gh pr edit -R …`) once the change set is coherent. Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree — never from `upstream`. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name. If GitHub rejects the GraphQL body as too long, retry with a short `--body-file` (limit 65,536 characters) — do not paste a changelog or diff into `--body`.',
     );
   }
   lines.push('');
