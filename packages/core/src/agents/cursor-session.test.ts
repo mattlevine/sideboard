@@ -6,7 +6,9 @@ import {
   cursorSessionRecoveryMessage,
   isAgentBusyError,
   isUnresumableCursorSession,
+  isRetryableCursorTransportError,
   iterateUntilIdle,
+  retryOnceOnRetryableCursorError,
   withCursorLocalHangGuards,
 } from './cursor-session.js';
 
@@ -97,6 +99,56 @@ describe('cursorSessionRecoveryMessage', () => {
 
   it('stringifies non-Error values', () => {
     expect(cursorErrorMessage('plain')).toBe('plain');
+  });
+});
+
+describe('isRetryableCursorTransportError', () => {
+  it('detects SDK isRetryable and Network request failed', () => {
+    expect(
+      isRetryableCursorTransportError(
+        Object.assign(new Error('Network request failed'), { isRetryable: true }),
+      ),
+    ).toBe(true);
+    expect(isRetryableCursorTransportError(new Error('Network request failed'))).toBe(true);
+  });
+
+  it('ignores auth and credits even when marked retryable', () => {
+    expect(
+      isRetryableCursorTransportError(
+        Object.assign(new Error('invalid API key'), { isRetryable: true }),
+      ),
+    ).toBe(false);
+    expect(isRetryableCursorTransportError(new Error('Credit balance is too low'))).toBe(false);
+    expect(isRetryableCursorTransportError(new Error('model gpt-x not found'))).toBe(false);
+  });
+});
+
+describe('retryOnceOnRetryableCursorError', () => {
+  it('retries once then succeeds', async () => {
+    let calls = 0;
+    const onRetry = vi.fn();
+    const result = await retryOnceOnRetryableCursorError(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error('Network request failed'), { isRetryable: true });
+        }
+        return 'ok';
+      },
+      onRetry,
+      0,
+    );
+    expect(result).toBe('ok');
+    expect(calls).toBe(2);
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it('does not retry permanent failures', async () => {
+    await expect(
+      retryOnceOnRetryableCursorError(async () => {
+        throw new Error('invalid API key');
+      }, undefined, 0),
+    ).rejects.toThrow(/invalid API key/);
   });
 });
 

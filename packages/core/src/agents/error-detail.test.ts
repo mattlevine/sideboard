@@ -117,6 +117,12 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(humanizeAgentFailDetail('model gpt-x not found')).toMatch(/pick another model/i);
   });
 
+  it('hints retryable Cursor startup network errors', () => {
+    expect(
+      humanizeAgentFailDetail('Cursor startup failed: Network request failed (retryable)'),
+    ).toMatch(/retry the turn/i);
+  });
+
   it('detects invalid resume / missing session failures', () => {
     expect(looksLikeInvalidAgentSession('Session not found')).toBe(true);
     expect(looksLikeInvalidAgentSession('No conversation found with session ID: abc')).toBe(
@@ -157,8 +163,30 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
         'Cursor run failed (run-efad13a4-5c61-401c-8e76-6559fd0908cc): Connection stalled',
       ),
     ).toBe(true);
+    expect(
+      looksLikeRetryableRunnerCrash('Cursor startup failed: Network request failed (retryable)'),
+    ).toBe(true);
+    expect(looksLikeRetryableRunnerCrash('Network request failed')).toBe(true);
+    expect(
+      shouldRetryFailedAgentTurn('Cursor startup failed: Network request failed (retryable)', {
+        hasSession: false,
+      }),
+    ).toBe(true);
     expect(looksLikeRetryableRunnerCrash('Credit balance is too low')).toBe(false);
     expect(looksLikeRetryableRunnerCrash("Cannot find package 'execa'")).toBe(false);
+    expect(
+      looksLikeRetryableRunnerCrash('Cursor startup failed: invalid API key'),
+    ).toBe(false);
+    // CLI agents retry inside the vendor process — do not treat their API
+    // errors as a dead runner (that would stack a second full spawn).
+    expect(looksLikeRetryableRunnerCrash('API Error: 500 Internal server error')).toBe(
+      false,
+    );
+    expect(looksLikeRetryableRunnerCrash('API Error: Connection error')).toBe(false);
+    expect(looksLikeRetryableRunnerCrash('API retry 5/5 (wait 800ms)')).toBe(false);
+    expect(
+      shouldRetryFailedAgentTurn('Codex turn failed', { hasSession: false }),
+    ).toBe(false);
     expect(
       shouldRetryFailedAgentTurn('Session not found', { hasSession: true }),
     ).toBe(true);

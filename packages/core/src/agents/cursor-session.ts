@@ -43,6 +43,58 @@ export function cursorSessionRecoveryMessage(err: unknown, agentId?: string | nu
 }
 
 /**
+ * SDK `CursorAgentError.isRetryable` — usually a transient create/resume/send
+ * transport failure (`Network request failed`). Do not treat auth/credits as
+ * retryable even if the message mentions "network".
+ */
+export function isRetryableCursorTransportError(err: unknown): boolean {
+  if (looksLikeNonRetryableCursorFailure(cursorErrorMessage(err))) return false;
+  if (
+    err &&
+    typeof err === 'object' &&
+    'isRetryable' in err &&
+    (err as { isRetryable?: unknown }).isRetryable === true
+  ) {
+    return true;
+  }
+  return /network request failed/i.test(cursorErrorMessage(err));
+}
+
+function looksLikeNonRetryableCursorFailure(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    /invalid (?:user )?api key|not logged in|not authenticated|unauthorized|credit balance|out of credits|insufficient.?quota/.test(
+      lower,
+    )
+  );
+}
+
+export function cursorRetryableTransportMessage(err: unknown): string {
+  const detail = cursorErrorMessage(err) || 'network error';
+  return `Cursor hit a retryable error (${detail}) — retrying once`;
+}
+
+/** Short pause before a create/resume/send retry so a blip can clear. */
+export const CURSOR_RETRYABLE_TRANSPORT_DELAY_MS = 1_500;
+
+export async function retryOnceOnRetryableCursorError<T>(
+  fn: () => Promise<T>,
+  onRetry?: (err: unknown) => void,
+  delayMs = CURSOR_RETRYABLE_TRANSPORT_DELAY_MS,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isRetryableCursorTransportError(err)) throw err;
+    onRetry?.(err);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    return fn();
+  }
+}
+
+/**
  * Local SDK `send()` does not throw `agent_busy`. A previous runner that died
  * leaves a persisted RUNNING run; `force` expires it (SDK: crashed CLI recovery).
  */

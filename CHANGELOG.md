@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.149] - 2026-09-03
+
+### Fixed
+
+- Cursor turns that fail at create/resume/send with a retryable SDK network error (`Network request failed`) are retried once in the runner, then respawned once by the orchestrator. Claude, Codex, OpenCode, and Brightsy still rely on their own CLI retries.
+
 ## [0.1.148] - 2026-09-03
 
 ### Added
