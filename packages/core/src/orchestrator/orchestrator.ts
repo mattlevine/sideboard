@@ -728,24 +728,14 @@ export class Orchestrator {
   /** Run workspace setup after a new worktree is created (no-op if none configured). */
   private async runSetupAfterCreate(threadId: string): Promise<void> {
     try {
-      await this.runSetup(threadId);
+      // Failures stay in the Setup panel. Stamping lastError here paints a red
+      // error on a brand-new chat tab — especially when many worktrees start
+      // at once and install scripts race before the first prompt is sent.
+      await this.runSetup(threadId, { stampLastError: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (/no setup script/i.test(message)) return;
       if (/already running/i.test(message)) return;
-      const live = readThread(threadId);
-      if (
-        !shouldStampSetupLastError({
-          turnInFlight:
-            this.activeTurns.has(threadId) || this.startingTurns.has(threadId),
-          status: live?.status,
-        })
-      ) {
-        return;
-      }
-      updateThread(threadId, {
-        lastError: `Setup failed: ${message}`,
-      });
     }
   }
 
@@ -1779,7 +1769,10 @@ export class Orchestrator {
     return snap;
   }
 
-  async runSetup(threadRef: string): Promise<{ exitCode: number | null; source?: string | null }> {
+  async runSetup(
+    threadRef: string,
+    opts?: { stampLastError?: boolean },
+  ): Promise<{ exitCode: number | null; source?: string | null }> {
     const thread = this.requireThread(threadRef);
     this.assertNotGlobal(thread, 'Setup');
     const key = `${thread.id}:setup`;
@@ -1826,10 +1819,12 @@ export class Orchestrator {
       if (setup.exitCode !== 0 && setup.exitCode !== null) {
         const live = readThread(thread.id);
         if (
+          (opts?.stampLastError ?? true) &&
           shouldStampSetupLastError({
             turnInFlight:
               this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id),
             status: live?.status,
+            hasQueuedPrompt: Boolean(live?.queue?.length),
           })
         ) {
           updateThread(thread.id, {

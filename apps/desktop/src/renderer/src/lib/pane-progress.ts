@@ -19,11 +19,21 @@ export type CreatePaneProgress = {
   awaitingFirstPrompt?: boolean;
 };
 
+export function isSetupLastError(err: string | null | undefined): boolean {
+  return /^Setup (exited|failed)\b/i.test(err?.trim() ?? '');
+}
+
 /** True once the first user turn (or a create failure) is visible in chat. */
 export function threadHasVisibleFirstTurn(thread: FirstTurnThread): boolean {
+  const err = thread.lastError?.trim();
+  const showError =
+    Boolean(err) &&
+    !isSetupLastError(err) &&
+    thread.status !== 'running' &&
+    thread.status !== 'queued';
   return (
     thread.messages.length > 0 ||
-    (Boolean(thread.lastError) && thread.status !== 'running') ||
+    showError ||
     thread.status === 'error' ||
     thread.status === 'broken'
   );
