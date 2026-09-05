@@ -42,8 +42,8 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
 
 /**
  * Worktree Claude turns: auto-approve the UI tools that the worktree MCP
- * profile always registers (present_* / ask_user). Slack / list_* stay
- * orchestration-only so they stay out of the cached tools prefix.
+ * profile always registers (present_* / ask_user / wait_for_job). Slack /
+ * list_* stay orchestration-only so they stay out of the cached tools prefix.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_artifact',
@@ -51,6 +51,7 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_files',
   'mcp__sideboard__ask_user',
   'mcp__sideboard__present_plan',
+  'mcp__sideboard__wait_for_job',
 ] as const;
 
 /** Account issue tools on the worktree MCP profile. */

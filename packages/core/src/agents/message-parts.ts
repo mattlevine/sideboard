@@ -94,6 +94,9 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/present_files$/i.test(name)) {
     return str(input?.title) ? `Files ${str(input?.title)}` : 'Present files';
   }
+  if (/wait_for_job$/i.test(name)) {
+    return str(input?.id) ? `Wait for ${str(input?.id)}` : 'Wait for job';
+  }
   if (isSubagentToolName(name)) {
     const desc = str(input?.description);
     const sub = asRecord(input?.subagentType);

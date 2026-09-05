@@ -10,6 +10,7 @@ export const WORKTREE_MCP_TOOLS = [
   'present_plan',
   'present_schema',
   'present_files',
+  'wait_for_job',
 ] as const;
 
 /** GitHub Issues via Account `gh` — always registered on worktree + orchestration. */

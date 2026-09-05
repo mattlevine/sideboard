@@ -21,6 +21,7 @@ import {
   mcpWaitStillRunningHint,
   mcpWaitForTurnTimeoutMs,
 } from './wait-for-turn.js';
+import { mcpWaitForJobTimeoutMs, waitForDetachedJob } from './wait-for-job.js';
 import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
@@ -254,9 +255,9 @@ export async function startMcpServer(): Promise<void> {
     name: 'sideboard',
     version: '0.1.0',
   });
-  // Worktree profile: present_* / ask_user + Account issue tools (GitHub /
-  // Linear / AbleTime). Fleet list_*, Slack, and create/send/wait stay on
-  // orchestration (tools are the cached prefix).
+  // Worktree profile: present_* / ask_user / wait_for_job + Account issue
+  // tools (GitHub / Linear / AbleTime). Fleet list_*, Slack, and create/send
+  // stay on orchestration (tools are the cached prefix).
   const worktreeProfile = sideboardMcpProfile() === 'worktree';
   if (worktreeProfile) {
     registerConnectedIssueVendorTools(server);
@@ -634,6 +635,23 @@ export async function startMcpServer(): Promise<void> {
           'Files pane accepted. Sideboard desktop opens the Files column beside chat.',
       };
       return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+    },
+  );
+
+  server.tool(
+    'wait_for_job',
+    'Wait on a detached long job (tests, pack, deploy) started with detached-job.js. MCP clients kill tools around 60s, so this returns within 45s. stillRunning is the source of truth — if true, present_artifact type=log with content=delta (same artifact_id) and call wait_for_job again. Do not end the turn or tell the user you will let them know later. If false, ok/failed is the result.',
+    {
+      id: z
+        .string()
+        .describe('Detached job id (same kebab-case id passed to detached-job.js start)'),
+      timeoutMs: z.number().optional(),
+    },
+    async ({ id, timeoutMs }) => {
+      const result = await waitForDetachedJob(process.cwd(), id, {
+        timeoutMs: mcpWaitForJobTimeoutMs(timeoutMs),
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
