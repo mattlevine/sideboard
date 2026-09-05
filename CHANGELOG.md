@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.154] - 2026-09-05
+
 ### Added
 
 - Marketing site and docs describe the contextually aware find-work flow (Settings → Agents / Projects roles and notes; “find me some work” lists, “find me work and start it” starts).
