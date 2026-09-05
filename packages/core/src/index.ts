@@ -124,6 +124,7 @@ export {
   HOME_BOARD_CACHE_TTL_MS,
   isHomeBoardThread,
   findLiveThreadForCreate,
+  findLiveThreadForCreateSource,
   groupHomeBoardWorktrees,
   classifyWorktreeColumn,
   worktreeBoardStatus,

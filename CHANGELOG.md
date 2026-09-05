@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Creating from a ticket, PR, or named branch that already has a live worktree reuses that checkout (including PR ↔ head-branch). The Create-from picker marks those rows Already open and does not allow a second worktree.
+
 ## [0.1.152] - 2026-09-04
 
 ### Changed

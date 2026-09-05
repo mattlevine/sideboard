@@ -585,7 +585,8 @@ export interface CreateThreadInput {
   cowboy?: boolean;
   /**
    * When false, always create a new worktree (fork_worktree, best-of-n).
-   * Default true: reuse a live ticket/PR/named-branch worktree instead of a second checkout.
+   * Default true: a ticket, PR, or named branch may have only one live worktree —
+   * return that thread instead of a second checkout.
    */
   reuseExisting?: boolean;
 }

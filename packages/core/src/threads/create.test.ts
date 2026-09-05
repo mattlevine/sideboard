@@ -33,8 +33,10 @@ vi.mock('../store/app-settings.js', async (importOriginal) => {
   };
 });
 
-const { createThreadWorktree } = vi.hoisted(() => ({
+const { createThreadWorktree, getPr, getPrForHeadBranch } = vi.hoisted(() => ({
   createThreadWorktree: vi.fn(),
+  getPr: vi.fn(),
+  getPrForHeadBranch: vi.fn(),
 }));
 
 vi.mock('../git/worktree.js', async (importOriginal) => {
@@ -42,6 +44,8 @@ vi.mock('../git/worktree.js', async (importOriginal) => {
   return {
     ...actual,
     createThreadWorktree,
+    getPr,
+    getPrForHeadBranch,
   };
 });
 
@@ -56,6 +60,10 @@ describe('createThread cowboy', () => {
     dataDir = mkdtempSync(join(tmpdir(), 'sideboard-cowboy-data-'));
     vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
     createThreadWorktree.mockReset();
+    getPr.mockReset();
+    getPrForHeadBranch.mockReset();
+    getPr.mockResolvedValue(null);
+    getPrForHeadBranch.mockResolvedValue(null);
     repo = mkdtempSync(join(tmpdir(), 'sideboard-cowboy-repo-'));
     await execa('git', ['init', '-b', 'main'], { cwd: repo });
     await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: repo });
@@ -134,6 +142,10 @@ describe('createThread reuses a live named branch', () => {
     dataDir = mkdtempSync(join(tmpdir(), 'sideboard-reuse-data-'));
     vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
     createThreadWorktree.mockReset();
+    getPr.mockReset();
+    getPrForHeadBranch.mockReset();
+    getPr.mockResolvedValue(null);
+    getPrForHeadBranch.mockResolvedValue(null);
     createThreadWorktree.mockResolvedValue({
       branchName: 'thread/new',
       worktreePath: join(tmpdir(), 'sideboard-reuse-wt'),
@@ -193,6 +205,58 @@ describe('createThread reuses a live named branch', () => {
     });
     expect(next.id).not.toBe(existing.id);
     expect(createThreadWorktree).toHaveBeenCalled();
+  });
+
+  it('reuses a branch worktree when creating from its attached PR', async () => {
+    const existing = createEmptyThread({
+      title: 'Already open',
+      sourceType: 'branch',
+      sourceRef: 'feat/login',
+      branchName: 'thread/limon',
+      worktreePath: join(repo, 'wt'),
+      repoPath: repo,
+      agent: 'claude',
+      prUrl: 'https://github.com/acme/app/pull/9',
+    });
+    writeThread(existing);
+    const again = await createThread({
+      sourceType: 'pr',
+      sourceRef: '9',
+      agent: 'claude',
+      repoPath: repo,
+    });
+    expect(again.id).toBe(existing.id);
+    expect(createThreadWorktree).not.toHaveBeenCalled();
+    expect(getPr).not.toHaveBeenCalled();
+  });
+
+  it('reuses a PR worktree when creating from its head branch', async () => {
+    const existing = createEmptyThread({
+      title: 'PR worktree',
+      sourceType: 'pr',
+      sourceRef: '9',
+      branchName: 'thread/other',
+      worktreePath: join(repo, 'wt'),
+      repoPath: repo,
+      agent: 'claude',
+      prUrl: 'https://github.com/acme/app/pull/9',
+    });
+    writeThread(existing);
+    getPrForHeadBranch.mockResolvedValue({
+      number: 9,
+      title: 'Login',
+      headRefName: 'feat/login',
+      url: 'https://github.com/acme/app/pull/9',
+      isCrossRepository: false,
+    });
+    const again = await createThread({
+      sourceType: 'branch',
+      sourceRef: 'feat/login',
+      agent: 'claude',
+      repoPath: repo,
+    });
+    expect(again.id).toBe(existing.id);
+    expect(createThreadWorktree).not.toHaveBeenCalled();
   });
 
   it('does not reuse when reuseExisting is false', async () => {

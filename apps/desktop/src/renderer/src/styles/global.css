@@ -4580,6 +4580,17 @@ button.worktree-hover-card-title:hover {
   background: var(--bg-hover);
 }
 
+.composer-picker-row:disabled,
+.composer-picker-row.is-occupied {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.composer-picker-row:disabled:hover,
+.composer-picker-row.is-occupied:hover {
+  background: transparent;
+}
+
 .composer-picker-icons {
   width: 18px;
   height: 18px;
