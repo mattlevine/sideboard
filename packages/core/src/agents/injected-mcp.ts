@@ -64,7 +64,7 @@ export function sideboardWorktreeAllowedTools(opts?: {
   linear?: boolean;
   abletime?: boolean;
 }): string[] {
-  const out = [...SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS];
+  const out: string[] = [...SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS];
   if (opts?.github !== false) out.push(...SIDEBOARD_GITHUB_MCP_ALLOWED_TOOLS);
   if (opts?.linear) out.push(...SIDEBOARD_LINEAR_MCP_ALLOWED_TOOLS);
   if (opts?.abletime) out.push(...SIDEBOARD_ABLETIME_MCP_ALLOWED_TOOLS);
