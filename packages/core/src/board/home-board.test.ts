@@ -19,6 +19,7 @@ import {
   findBoardIssue,
   findBoardPr,
   findLiveThreadForCreate,
+  findLiveThreadForCreateSource,
   haystackMatches,
   isAccountWideIssueSource,
   issueInTicketScope,
@@ -469,6 +470,18 @@ describe('threadMatchesPr / reviewPrs', () => {
         pr({ number: 9, title: 'Ship' }),
       ),
     ).toBe(false);
+    expect(
+      threadMatchesPr(
+        thread({
+          id: '5',
+          sourceType: 'ticket',
+          sourceRef: 'ENG-1',
+          title: 'Ship',
+          prUrl: 'https://github.com/acme/app/pull/9',
+        }),
+        { number: 9, title: 'Ship', url: '', headRefName: '' },
+      ),
+    ).toBe(true);
   });
 
   it('shows open PRs without a live thread in Review', () => {
@@ -891,6 +904,62 @@ describe('assembleHomeBoard', () => {
         live,
       ),
     ).toBeUndefined();
+    expect(
+      findLiveThreadForCreate(
+        { sourceType: 'pr', sourceRef: '9', repoPath: '/repo' },
+        [
+          thread({
+            id: 'from-branch',
+            sourceType: 'branch',
+            sourceRef: 'feat/login',
+            branchName: 'thread/limon',
+            prUrl: 'https://github.com/acme/app/pull/9',
+            repoPath: '/repo',
+          }),
+        ],
+      )?.id,
+    ).toBe('from-branch');
+    expect(
+      findLiveThreadForCreate(
+        {
+          sourceType: 'pr',
+          sourceRef: '9',
+          repoPath: '/repo',
+          headRefName: 'feat/login',
+        },
+        [
+          thread({
+            id: 'named-only',
+            sourceType: 'branch',
+            sourceRef: 'feat/login',
+            branchName: 'thread/limon',
+            repoPath: '/repo',
+          }),
+        ],
+      )?.id,
+    ).toBe('named-only');
+    expect(
+      findLiveThreadForCreateSource(
+        { kind: 'branch', ref: 'feat/login', repoPath: '/repo' },
+        [
+          thread({
+            id: 'pr-wt',
+            sourceType: 'pr',
+            sourceRef: '9',
+            branchName: 'thread/other',
+            repoPath: '/repo',
+          }),
+        ],
+        [
+          {
+            number: 9,
+            title: 'Login',
+            url: 'https://github.com/acme/app/pull/9',
+            headRefName: 'feat/login',
+          },
+        ],
+      )?.id,
+    ).toBe('pr-wt');
   });
 
   it('resolves Start refs to the matching ticket or PR', () => {

@@ -300,6 +300,18 @@ describe('threadMatchesPr / reviewPrs', () => {
         pr({ number: 9, title: 'Ship' }),
       ),
     ).toBe(false);
+    expect(
+      threadMatchesPr(
+        thread({
+          id: '5',
+          sourceType: 'ticket',
+          sourceRef: 'ENG-1',
+          title: 'Ship',
+          prUrl: 'https://github.com/acme/app/pull/9',
+        }),
+        { number: 9, title: 'Ship', url: '', headRefName: '' },
+      ),
+    ).toBe(true);
   });
 
   it('shows open PRs without a live thread in Review', () => {

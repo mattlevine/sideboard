@@ -43,6 +43,48 @@ function persistCreateAttachments(
   return persistPendingFileAttachments(worktreePath, attachments ?? []);
 }
 
+function liveThreadsForCreate() {
+  return listThreads({ includeArchived: false }).map((t) => ({
+    ...t,
+    repoPath: canonicalizeRepoPath(t.repoPath),
+  }));
+}
+
+function reuseLiveThread(
+  input: CreateThreadInput,
+  repoPath: string,
+  match: {
+    sourceType: CreateThreadInput['sourceType'];
+    sourceRef: string;
+    title?: string;
+    prUrl?: string;
+    headRefName?: string;
+  },
+): Thread | undefined {
+  if (input.reuseExisting === false) return undefined;
+  const existing = findLiveThreadForCreate(
+    {
+      sourceType: match.sourceType,
+      sourceRef: match.sourceRef,
+      repoPath,
+      title: match.title ?? input.title,
+      cowboy: input.cowboy,
+      prUrl: match.prUrl,
+      headRefName: match.headRefName,
+    },
+    liveThreadsForCreate(),
+  );
+  if (!existing) return undefined;
+  const thread = readThread(existing.id) ?? existing;
+  if (!input.attachments?.length) return thread;
+  return updateThread(thread.id, {
+    attachments: persistCreateAttachments(thread.worktreePath, [
+      ...thread.attachments,
+      ...input.attachments,
+    ]),
+  });
+}
+
 export async function createThread(
   input: CreateThreadInput,
   _onSetupLine?: (line: string) => void,
@@ -52,31 +94,12 @@ export async function createThread(
     throw new Error(`Repo not found: ${repoPath}`);
   }
 
-  if (input.reuseExisting !== false) {
-    const existing = findLiveThreadForCreate(
-      {
-        sourceType: input.sourceType,
-        sourceRef: input.sourceRef,
-        repoPath,
-        title: input.title,
-        cowboy: input.cowboy,
-      },
-      listThreads({ includeArchived: false }).map((t) => ({
-        ...t,
-        repoPath: canonicalizeRepoPath(t.repoPath),
-      })),
-    );
-    if (existing) {
-      const thread = readThread(existing.id) ?? existing;
-      if (!input.attachments?.length) return thread;
-      return updateThread(thread.id, {
-        attachments: persistCreateAttachments(thread.worktreePath, [
-          ...thread.attachments,
-          ...input.attachments,
-        ]),
-      });
-    }
-  }
+  const reused = reuseLiveThread(input, repoPath, {
+    sourceType: input.sourceType,
+    sourceRef: input.sourceRef,
+    title: input.title,
+  });
+  if (reused) return reused;
 
   // Tickets no longer require agent Linear MCP — Sideboard Account owns
   // Linear/GitHub/AbleTime issue connections (see integrations/).
@@ -165,6 +188,12 @@ export async function createThread(
       persistedSourceRef = task.identifier;
       title = title?.trim() || task.title;
       attachments = [...attachments, issueAttachmentForAbleTimeTask(task)];
+      const reusedTicket = reuseLiveThread(
+        { ...input, sourceType: 'ticket', sourceRef, title, attachments },
+        repoPath,
+        { sourceType: 'ticket', sourceRef, title },
+      );
+      if (reusedTicket) return reusedTicket;
     }
   }
 
@@ -175,6 +204,14 @@ export async function createThread(
     if (!Number.isFinite(num)) throw new Error(`Invalid PR number: ${input.sourceRef}`);
     const pr = await getPr(repoPath, num);
     if (!pr) throw new Error(`PR #${num} not found`);
+    const reusedPr = reuseLiveThread(input, repoPath, {
+      sourceType: 'pr',
+      sourceRef: String(pr.number),
+      title: input.title ?? pr.title,
+      prUrl: pr.url,
+      headRefName: pr.headRefName,
+    });
+    if (reusedPr) return reusedPr;
     sourceIsFork = pr.isCrossRepository;
     prUrl = pr.url;
     const localFetchBranch = `sideboard-pr-${pr.number}`;
@@ -193,9 +230,19 @@ export async function createThread(
       // Worktree branch is still thread/<team>. Attach the existing GitHub PR
       // for the source branch so the sidebar matches create-from-PR.
       const existing = await getPrForHeadBranch(repoPath, sourceRef);
-      if (existing?.url) {
-        prUrl = existing.url;
-        prTitle = existing.title;
+      if (existing) {
+        const reusedPr = reuseLiveThread(input, repoPath, {
+          sourceType: 'pr',
+          sourceRef: String(existing.number),
+          title: input.title ?? existing.title,
+          prUrl: existing.url,
+          headRefName: existing.headRefName,
+        });
+        if (reusedPr) return reusedPr;
+        if (existing.url) {
+          prUrl = existing.url;
+          prTitle = existing.title;
+        }
       }
     }
   } else if (sourceType === 'adopt') {

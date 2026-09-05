@@ -677,7 +677,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_thread',
-    `Create a worktree thread (chat) from branch, pr, or ticket. If a live worktree already matches that ticket, PR, or named branch, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
+    `Create a worktree thread (chat) from branch, pr, or ticket. A ticket, PR, or named branch may have only one live worktree — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -718,7 +718,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'start_board_card',
-    'Same as create_thread for a ticket, PR, or named branch (attaches issue text when Sideboard can resolve it). Reuses the live worktree if one already matches. Then send_to_thread.',
+    'Same as create_thread for a ticket, PR, or named branch (attaches issue text when Sideboard can resolve it). Does not create a second worktree when one already matches — returns that thread (alreadyStarted). Then send_to_thread.',
     {
       kind: z.enum(['ticket', 'pr', 'branch']),
       ref: z

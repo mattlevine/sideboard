@@ -6,9 +6,15 @@ import type {
   IssueSource,
   ListIssuesResult,
   PrInfo,
+  Thread,
   Workspace,
 } from '@sideboard-ai/core';
-import { defaultTicketScope, issueInTicketScope, type TicketScope } from '../lib/home-board';
+import {
+  defaultTicketScope,
+  findLiveThreadForCreateSource,
+  issueInTicketScope,
+  type TicketScope,
+} from '../lib/home-board';
 
 export type CreateFromTab = 'prs' | 'branches' | 'issues';
 
@@ -62,6 +68,7 @@ export function CreateFromPicker({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prs, setPrs] = useState<PrInfo[]>([]);
+  const [liveThreads, setLiveThreads] = useState<Thread[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [issues, setIssues] = useState<IssueInfo[]>([]);
   const [issueSource, setIssueSource] = useState<IssueSource>('github');
@@ -118,15 +125,23 @@ export function CreateFromPicker({
     setIssues([]);
     void (async () => {
       try {
+        const threads = await window.sideboard.getThreads(false);
+        if (!cancelled) {
+          setLiveThreads(threads);
+        }
         if (tab === 'prs') {
           const list = await window.sideboard.listPrs(repoPath);
           if (!cancelled) setPrs(list);
         } else if (tab === 'branches') {
-          const list = await window.sideboard.listBranches(repoPath, {
-            unmergedOnly: true,
-          });
+          const [list, openPrs] = await Promise.all([
+            window.sideboard.listBranches(repoPath, {
+              unmergedOnly: true,
+            }),
+            window.sideboard.listPrs(repoPath).catch(() => [] as PrInfo[]),
+          ]);
           if (!cancelled) {
             setBranches(list.filter((b) => !b.name.startsWith('thread/')));
+            setPrs(openPrs);
           }
         } else {
           const result = await window.sideboard.listIssues(repoPath);
@@ -181,6 +196,27 @@ export function CreateFromPicker({
         i.labels.some((l) => l.toLowerCase().includes(q)),
     );
   }, [scopedIssues, q]);
+
+  function sourceIsOccupied(
+    kind: 'ticket' | 'pr' | 'branch',
+    ref: string,
+    extra?: { title?: string; url?: string; headRefName?: string },
+  ): boolean {
+    return Boolean(
+      findLiveThreadForCreateSource(
+        {
+          kind,
+          ref,
+          repoPath,
+          title: extra?.title,
+          url: extra?.url,
+          headRefName: extra?.headRefName,
+        },
+        liveThreads,
+        prs,
+      ),
+    );
+  }
 
   if (!open) return null;
 
@@ -311,12 +347,21 @@ export function CreateFromPicker({
             {filteredPrs.length === 0 ? (
               <div className="composer-picker-empty">No open PRs</div>
             ) : (
-              filteredPrs.slice(0, 50).map((p) => (
+              filteredPrs.slice(0, 50).map((p) => {
+                const occupied = sourceIsOccupied('pr', String(p.number), {
+                  title: p.title,
+                  url: p.url,
+                  headRefName: p.headRefName,
+                });
+                return (
                 <button
                   key={p.number}
                   type="button"
-                  className="composer-picker-row"
+                  className={`composer-picker-row${occupied ? ' is-occupied' : ''}`}
+                  disabled={occupied}
+                  title={occupied ? 'Already has an active worktree' : undefined}
                   onClick={() => {
+                    if (occupied) return;
                     onSelect({
                       kind: 'pr',
                       ref: String(p.number),
@@ -338,10 +383,11 @@ export function CreateFromPicker({
                     <span className="composer-picker-sub">{p.headRefName}</span>
                   </span>
                   <span className="composer-picker-hint">
-                    Select <kbd>↵</kbd>
+                    {occupied ? 'Already open' : <>Select <kbd>↵</kbd></>}
                   </span>
                 </button>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -364,12 +410,17 @@ export function CreateFromPicker({
                 Select <kbd>↵</kbd>
               </span>
             </button>
-            {filteredBranches.slice(0, 50).map((b) => (
+            {filteredBranches.slice(0, 50).map((b) => {
+              const occupied = sourceIsOccupied('branch', b.name);
+              return (
               <button
                 key={b.name}
                 type="button"
-                className="composer-picker-row"
+                className={`composer-picker-row${occupied ? ' is-occupied' : ''}`}
+                disabled={occupied}
+                title={occupied ? 'Already has an active worktree' : undefined}
                 onClick={() => {
+                  if (occupied) return;
                   onSelect({ kind: 'branch', ref: b.name });
                   if (closeOnSelect) onClose();
                 }}
@@ -382,10 +433,11 @@ export function CreateFromPicker({
                   </span>
                 </span>
                 <span className="composer-picker-hint">
-                  Select <kbd>↵</kbd>
+                  {occupied ? 'Already open' : <>Select <kbd>↵</kbd></>}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -545,12 +597,20 @@ export function CreateFromPicker({
                   No {issueSourceLabel(issueSource)} issues
                 </div>
               ) : (
-                filteredIssues.slice(0, 50).map((issue) => (
+                filteredIssues.slice(0, 50).map((issue) => {
+                  const occupied = sourceIsOccupied('ticket', issue.identifier, {
+                    title: issue.title,
+                    url: issue.url,
+                  });
+                  return (
                   <button
                     key={issue.id || issue.identifier}
                     type="button"
-                    className="composer-picker-row"
+                    className={`composer-picker-row${occupied ? ' is-occupied' : ''}`}
+                    disabled={occupied}
+                    title={occupied ? 'Already has an active worktree' : undefined}
                     onClick={() => {
+                      if (occupied) return;
                       onSelect({
                         kind: 'ticket',
                         ref: issue.identifier,
@@ -576,10 +636,11 @@ export function CreateFromPicker({
                       </span>
                     </span>
                     <span className="composer-picker-hint">
-                      Select <kbd>↵</kbd>
+                      {occupied ? 'Already open' : <>Select <kbd>↵</kbd></>}
                     </span>
                   </button>
-                ))
+                  );
+                })
               )}
             </div>
           </>

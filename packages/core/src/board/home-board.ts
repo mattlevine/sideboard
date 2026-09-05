@@ -355,6 +355,17 @@ function urlsMatch(a: string, b: string): boolean {
   return Boolean(a && b && norm(a) === norm(b));
 }
 
+/** True when `prUrl` is GitHub PR `number` (`…/pull/12` or `…/pull/12/…`). */
+export function threadPrUrlMatchesNumber(
+  thread: Pick<Thread, 'prUrl'>,
+  number: number,
+): boolean {
+  if (!Number.isFinite(number) || number < 1) return false;
+  const url = (thread.prUrl ?? '').trim();
+  if (!url) return false;
+  return new RegExp(`/pull/${number}(?:/|$|[?#])`, 'i').test(url);
+}
+
 /** Live thread for this PR: sourceType=pr + number, prUrl, or head branch. */
 export function threadMatchesPr(
   thread: Pick<Thread, 'sourceType' | 'sourceRef' | 'title' | 'prUrl' | 'branchName'>,
@@ -365,6 +376,7 @@ export function threadMatchesPr(
     return true;
   }
   if (thread.prUrl && pr.url && urlsMatch(thread.prUrl, pr.url)) return true;
+  if (threadPrUrlMatchesNumber(thread, pr.number)) return true;
   const head = pr.headRefName.trim().toLowerCase();
   if (!head) return false;
   const branch = (thread.branchName ?? '').trim().toLowerCase();
@@ -428,31 +440,36 @@ export function isDefaultBranchCreateRef(ref: string): boolean {
   return !head || DEFAULTISH_BRANCH.test(head);
 }
 
+export type LiveCreateMatchThread = Pick<
+  Thread,
+  | 'id'
+  | 'status'
+  | 'sourceType'
+  | 'sourceRef'
+  | 'title'
+  | 'prUrl'
+  | 'branchName'
+  | 'repoPath'
+  | 'cowboy'
+>;
+
+export type FindLiveThreadForCreateInput = {
+  sourceType: Exclude<Thread['sourceType'], 'orchestration'>;
+  sourceRef: string;
+  repoPath: string;
+  title?: string;
+  cowboy?: boolean;
+  /** When creating from a PR (or a named branch that already has one). */
+  prUrl?: string;
+  headRefName?: string;
+};
+
 /**
  * Live worktree already covering this create (ticket, PR, or named branch).
  * Default-branch / "new worktree" creates return undefined so each one stays isolated.
  */
-export function findLiveThreadForCreate<
-  T extends Pick<
-    Thread,
-    | 'id'
-    | 'status'
-    | 'sourceType'
-    | 'sourceRef'
-    | 'title'
-    | 'prUrl'
-    | 'branchName'
-    | 'repoPath'
-    | 'cowboy'
-  >,
->(
-  input: {
-    sourceType: Exclude<Thread['sourceType'], 'orchestration'>;
-    sourceRef: string;
-    repoPath: string;
-    title?: string;
-    cowboy?: boolean;
-  },
+export function findLiveThreadForCreate<T extends LiveCreateMatchThread>(
+  input: FindLiveThreadForCreateInput,
   threads: T[],
 ): T | undefined {
   const live = threads.filter(
@@ -478,23 +495,84 @@ export function findLiveThreadForCreate<
       threadMatchesPr(t, {
         number: Number.isFinite(number) ? number : -1,
         title: input.title ?? '',
-        url: '',
-        headRefName: '',
+        url: input.prUrl ?? '',
+        headRefName: input.headRefName ?? '',
       }),
     );
   }
 
   if (input.sourceType === 'branch') {
     if (isDefaultBranchCreateRef(input.sourceRef)) return undefined;
-    return live.find((t) =>
+    const byBranch = live.find((t) =>
       threadMatchesBranch(t, {
         ref: input.sourceRef,
         repoPath: input.repoPath,
       }),
     );
+    if (byBranch) return byBranch;
+    if (input.prUrl || input.headRefName) {
+      const number = Number(normalizeIssueKey(input.sourceRef));
+      return live.find((t) =>
+        threadMatchesPr(t, {
+          number: Number.isFinite(number) ? number : -1,
+          title: input.title ?? '',
+          url: input.prUrl ?? '',
+          headRefName: input.headRefName ?? input.sourceRef,
+        }),
+      );
+    }
+    return undefined;
   }
 
   return undefined;
+}
+
+export type CreateFromSourceKind = 'ticket' | 'pr' | 'branch';
+
+/**
+ * Occupied create target: same ticket, PR, or named branch already has a live
+ * worktree (including PR ↔ head-branch when `prs` is provided).
+ */
+export function findLiveThreadForCreateSource<T extends LiveCreateMatchThread>(
+  source: {
+    kind: CreateFromSourceKind;
+    ref: string;
+    repoPath: string;
+    title?: string;
+    url?: string;
+    headRefName?: string;
+  },
+  threads: T[],
+  prs?: Array<Pick<PrInfo, 'number' | 'title' | 'url' | 'headRefName'>>,
+): T | undefined {
+  const found = findLiveThreadForCreate(
+    {
+      sourceType: source.kind,
+      sourceRef: source.ref,
+      repoPath: source.repoPath,
+      title: source.title,
+      prUrl: source.url,
+      headRefName: source.headRefName,
+    },
+    threads,
+  );
+  if (found) return found;
+  if (source.kind !== 'branch' || !prs?.length) return undefined;
+  if (isDefaultBranchCreateRef(source.ref)) return undefined;
+  const head = normalizeBranchRef(source.ref);
+  const pr = prs.find((p) => normalizeBranchRef(p.headRefName) === head);
+  if (!pr) return undefined;
+  return findLiveThreadForCreate(
+    {
+      sourceType: 'pr',
+      sourceRef: String(pr.number),
+      repoPath: source.repoPath,
+      title: pr.title,
+      prUrl: pr.url,
+      headRefName: pr.headRefName,
+    },
+    threads,
+  );
 }
 
 export function threadMatchesPin(
@@ -1033,7 +1111,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs nest as inner cards). create_thread reuses a live worktree for the same ticket, PR, or named branch — do not recreate it. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs nest as inner cards). Do not create a second worktree for a ticket, PR, or named branch that already has a live checkout — create_thread / start_board_card return that thread (alreadyStarted). Creating from the default branch still opens a new isolated worktree. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(
