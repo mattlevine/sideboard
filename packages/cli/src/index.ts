@@ -1079,12 +1079,32 @@ async function main(): Promise<void> {
   program
     .command('prs')
     .option('--repo <path>', 'repo path', process.cwd())
+    .option('--state <state>', 'open | closed | merged | all | review', 'open')
+    .option('--queue <queue>', 'review | mine | approved | changes')
+    .option(
+      '--label <name>',
+      'GitHub label (repeat or comma-separated). e.g. eng-review',
+      (value: string, previous: string[]) => previous.concat(value),
+      [] as string[],
+    )
+    .option('--reviewer <who>', 'me | unassigned | GitHub login')
+    .option('--search <query>', 'extra GitHub search tokens')
+    .option('--limit <n>', 'max rows', '200')
     .action(async (opts) => {
       const repo = await resolveRepoRoot(opts.repo);
-      const prs = await listPrs(repo);
+      const prs = await listPrs(repo, {
+        queue: opts.queue,
+        state: opts.state,
+        labels: opts.label,
+        reviewer: opts.reviewer,
+        query: opts.search,
+        limit: Number(opts.limit) || 200,
+      });
       for (const p of prs) {
+        const tags = p.labels?.length ? `  [${p.labels.join(', ')}]` : '';
+        const reviewers = p.reviewers?.length ? `  reviewers:${p.reviewers.join(',')}` : '';
         console.log(
-          `#${p.number}  ${p.title}  ${p.headRefName}${p.isCrossRepository ? ' [fork]' : ''}`,
+          `#${p.number}  ${p.title}  ${p.headRefName}${p.isCrossRepository ? ' [fork]' : ''}${tags}${reviewers}`,
         );
       }
     });

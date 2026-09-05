@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.152/Sideboard-0.1.152-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.153/Sideboard-0.1.153-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -292,7 +292,7 @@ Add to `~/.config/opencode/opencode.jsonc` (or a project `opencode.jsonc`) under
 
 Once connected, agents get tools to:
 
-- **Discover** — `list_board` (worktree Kanban: New → Draft → Review → Merged; `create_thread` adds a worktree), `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` / `list_issues` (Linear, AbleTime MCP, or GitHub), `list_threads`
+- **Discover** — `list_board` (worktree Kanban: New → Draft → Review → Merged; `create_thread` adds a worktree), `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` (`queue=review` for the unclaimed `eng-review` inbox — PRs for assigned ticket work; a team like `engineering-team` is not a claim; also `state`, `label`, `reviewer` = `me` / `unassigned` / login) / `list_issues` (Linear, AbleTime MCP, or GitHub), `list_threads`
 - **Linear tickets** — `linear_list_teams`, `linear_search_issues` / `list_issues` (`query`, `assignee` = `me` / `unassigned` / `all` / user, `limit` default 40 max 250; raise `limit` or tighten `query` when `truncated`), `linear_get_issue`, `linear_create_issue`, `linear_update_issue`, `linear_comment` (Settings → Issues OAuth; reconnect if you connected before write access). Linear / AbleTime mutation tools register only when that account is connected.
 - **AbleTime tickets** — `abletime_orientation`, `abletime_list_projects`, `abletime_list_tasks`, `abletime_search_tasks`, `abletime_get_task`, `abletime_create_task`, `abletime_ensure_task` (Settings → Issues personal access token → hosted MCP). When AbleTime is the preferred issue source, starting work without a ticket auto-creates one to track against.
 - **Workspaces** — `add_workspace` / `remove_workspace`
@@ -312,7 +312,8 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 
 | Panel | What |
 |-------|------|
-| **Agents** | Default agent, model, and effort for new chats, then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Agents** | Default agent, model, and effort; your roles and notes (how to find tickets and review PRs); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Projects** | Per-repo role overrides and notes (empty roles inherit Agents) |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |
 | **Remote** | Slack — remote-control this Mac |

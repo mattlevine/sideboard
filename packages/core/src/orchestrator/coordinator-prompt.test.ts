@@ -53,6 +53,37 @@ describe('coordinator-prompt', () => {
     );
   });
 
+  it('appends viewer roles and project notes on workspace inventory lines', async () => {
+    const { updateDefaultsSettings, updateProjectProfileSettings } = await import(
+      '../store/app-settings.js'
+    );
+    updateDefaultsSettings({ roles: ['engineering'], notes: 'assignee=me' });
+    updateProjectProfileSettings('/Users/me/sideboard', {
+      roles: ['design'],
+      notes: 'design-review only',
+    });
+    expect(
+      formatWorkspaceInventory([
+        {
+          name: 'sideboard',
+          path: '/Users/me/sideboard',
+          addedAt: '2026-01-01T00:00:00.000Z',
+          githubSlug: 'acme/sideboard',
+        },
+      ]),
+    ).toContain('roles:design');
+    expect(
+      formatWorkspaceInventory([
+        {
+          name: 'sideboard',
+          path: '/Users/me/sideboard',
+          addedAt: '2026-01-01T00:00:00.000Z',
+          githubSlug: 'acme/sideboard',
+        },
+      ]),
+    ).toContain('design-review only');
+  });
+
   it('first-turn prompt is audience + inventory, not the fleet playbook', () => {
     const prompt = coordinatorSystemPrompt({
       goal: 'Ship the feature',
@@ -133,6 +164,17 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_turn_result.*usage/s);
   });
 
+  it('fleet playbook maps review-inbox asks to list_prs, not tickets', () => {
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('list_prs(queue=review, limit=N)');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not use it for that review-inbox ask');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('engineering-team');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Settings → Agents / Projects roles');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('eng-review');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Find work:');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('find me work and start it');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Show the options');
+  });
+
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
     const prev = process.env.SIDEBOARD_APP_DATA;
     const root = mkdtempSync(join(tmpdir(), 'sb-global-cwd-'));
@@ -155,6 +197,11 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('list_board');
       expect(claude).toContain('start_board_card');
       expect(claude).toContain('Typical flow (Home board)');
+      expect(claude).toContain('Typical flow (find work)');
+      expect(claude).toContain('show the options');
+      expect(claude).toContain('find me work and start it');
+      expect(claude).toContain('Typical flow (review inbox)');
+      expect(claude).toContain('list_prs(queue=review, limit=N)');
       expect(claude).toContain('force_stop: true');
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('ask_git');

@@ -27,6 +27,7 @@ import type {
 } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
+  AccountRole,
   AdvancedAppSettings,
   AppSettings,
   PublicAppSettings,
@@ -180,7 +181,13 @@ export interface IpcApi {
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
+    roles?: AccountRole[] | null;
+    notes?: string | null;
   }): Promise<PublicAppSettings>;
+  updateProjectProfileSettings(
+    repoPath: string,
+    patch: { roles?: AccountRole[] | null; notes?: string | null },
+  ): Promise<PublicAppSettings>;
   /** Machine-global GitHub status via `gh`. */
   getGitHubStatus(): Promise<GitHubStatus>;
   /** Connected Slack workspaces (no tokens). */

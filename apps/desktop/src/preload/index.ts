@@ -46,6 +46,8 @@ const api: IpcApi = {
     ipcRenderer.invoke('updateIntegrationsSettings', patch),
   updateDefaultsSettings: (patch) =>
     ipcRenderer.invoke('updateDefaultsSettings', patch),
+  updateProjectProfileSettings: (repoPath, patch) =>
+    ipcRenderer.invoke('updateProjectProfileSettings', repoPath, patch),
   getGitHubStatus: () => ipcRenderer.invoke('getGitHubStatus'),
   getSlackWorkspaces: () => ipcRenderer.invoke('getSlackWorkspaces'),
   connectSlackToken: (token) => ipcRenderer.invoke('connectSlackToken', token),

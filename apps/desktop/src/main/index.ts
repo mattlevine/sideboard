@@ -141,6 +141,7 @@ import {
   updateClaudeSettings,
   updateAgentExecutable,
   updateDefaultsSettings,
+  updateProjectProfileSettings,
   updateIntegrationsSettings,
   type AdvancedAppSettings,
   type AgentKind,
@@ -954,6 +955,14 @@ function registerIpc(): void {
         fast?: boolean | null;
       },
     ) => toPublicAppSettings(updateDefaultsSettings(patch)),
+  );
+  ipcMain.handle(
+    'updateProjectProfileSettings',
+    (
+      _e,
+      repoPath: string,
+      patch: { roles?: string[] | null; notes?: string | null },
+    ) => toPublicAppSettings(updateProjectProfileSettings(repoPath, patch)),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
   ipcMain.handle('getSlackWorkspaces', () => listSlackWorkspaces());

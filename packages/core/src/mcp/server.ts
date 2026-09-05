@@ -32,6 +32,13 @@ import {
   formatMcpIssueList,
   mcpJson,
 } from './issue-list.js';
+import { formatMcpPrList } from './pr-list.js';
+import { resolveListPrsOptions } from '../git/list-prs.js';
+import {
+  formatWorkspaceProfileSuffix,
+  resolveViewerProfile,
+  resolveViewerProfileForRepo,
+} from '../store/app-settings.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { formatGhLandError } from '../git/gh-errors.js';
@@ -254,16 +261,23 @@ export async function startMcpServer(): Promise<void> {
   if (!worktreeProfile) {
   server.tool(
     'list_workspaces',
-    'List registered Sideboard workspaces (repos). Each line is name, path, and github:owner/repo when resolvable — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread.',
+    'List registered Sideboard workspaces (repos). Each line is name, path, github:owner/repo when resolvable, and viewer roles/notes when set — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread. Roles and notes (Settings → Agents / Projects) say which tickets and review PRs belong to the user.',
     {},
     async () => {
       const workspaces = orch.listWorkspaces();
       const lines = await Promise.all(
         workspaces.map(async (w) => {
           const slug = await resolveGithubRepoSlug(w.path).catch(() => null);
+          let profile;
+          try {
+            profile = resolveViewerProfileForRepo(w.path);
+          } catch {
+            profile = resolveViewerProfile();
+          }
+          const suffix = formatWorkspaceProfileSuffix(profile);
           return slug
-            ? `${w.name}  ${w.path}  github:${slug}`
-            : `${w.name}  ${w.path}`;
+            ? `${w.name}  ${w.path}  github:${slug}${suffix}`
+            : `${w.name}  ${w.path}${suffix}`;
         }),
       );
       return {
@@ -1422,24 +1436,65 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_prs',
-    'List open GitHub PRs for a registered workspace. Pass repoPath from list_workspaces (uses gh against that repo remote). Then create_thread with sourceType=pr.',
-    { repoPath: z.string() },
-    async ({ repoPath }) => {
+    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_workspaces. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled eng-review with no individual user reviewer. Prefer teams that match Settings → Agents / Projects roles for this repo. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_thread with sourceType=pr.',
+    {
+      repoPath: z.string(),
+      query: z.string().optional().describe('GitHub search tokens (title, draft:true, …)'),
+      queue: z
+        .enum(['review', 'mine', 'approved', 'changes'])
+        .optional()
+        .describe(
+          'review = unclaimed eng-review inbox (use for "get me N tickets to review"). mine = review-requested:@me. approved / changes = eng-approved / eng-requested-changes.',
+        ),
+      state: z
+        .enum(['open', 'closed', 'merged', 'all', 'review'])
+        .optional()
+        .describe('GitHub PR state (default open). review is an alias for queue=review.'),
+      label: z
+        .string()
+        .optional()
+        .describe(
+          'GitHub label / workflow tag. Comma-separated AND. Examples: eng-review, eng-approved, eng-requested-changes',
+        ),
+      reviewer: z
+        .string()
+        .optional()
+        .describe(
+          'me (review requested of you), unassigned (no individual reviewer; team queues like engineering-team still count), all, or a GitHub login',
+        ),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(250)
+        .optional()
+        .describe('Page size (default 40, max 250). Raise when truncated is true.'),
+    },
+    async ({ repoPath, query, queue, state, label, reviewer, limit }) => {
       const root = await resolveRepoRoot(repoPath);
-      const prs = await listPrs(root);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: prs
-              .map(
-                (p) =>
-                  `#${p.number} ${p.title} (${p.headRefName})${p.isCrossRepository ? ' [fork]' : ''}`,
-              )
-              .join('\n'),
-          },
-        ],
-      };
+      const page = clampMcpIssueLimit(limit);
+      const resolved = resolveListPrsOptions({
+        query,
+        queue,
+        state,
+        labels: label,
+        reviewer,
+        limit: page + 1,
+      });
+      const prs = await listPrs(root, resolved);
+      const windowed = applyIssueListWindow(prs, page);
+      return mcpJson(
+        formatMcpPrList({
+          queue: resolved.queue,
+          state: resolved.state,
+          labels: resolved.labels,
+          reviewer: resolved.reviewer,
+          query: resolved.query,
+          limit: page,
+          prs: windowed.items,
+          truncated: windowed.truncated,
+        }),
+      );
     },
   );
 
@@ -1569,7 +1624,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Then create_thread with sourceType=ticket.',
+    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Then create_thread with sourceType=ticket.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('Search title, identifier, or description'),

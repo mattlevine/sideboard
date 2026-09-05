@@ -1,9 +1,18 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveGithubRepoSlug } from '../git/worktree.js';
-import { resolveThreadDefaults } from '../store/app-settings.js';
+import {
+  formatAccountProfilePlaybookLine,
+  formatProjectProfilePlaybookLines,
+  formatWorkspaceProfileSuffix,
+  loadAppSettings,
+  resolveAccountProfileFromSettings,
+  resolveThreadDefaults,
+  resolveViewerProfile,
+  resolveViewerProfileForRepo,
+} from '../store/app-settings.js';
 import { globalAgentCwd, sideboardReposDir } from '../store/paths.js';
-import type { Workspace } from '../store/workspaces.js';
+import { listWorkspaces, type Workspace } from '../store/workspaces.js';
 
 export type WorkspaceInventoryEntry = Workspace & {
   /** Best-effort GitHub `owner/repo` from remote / gh. */
@@ -18,7 +27,8 @@ export function formatWorkspaceInventory(
   return workspaces
     .map((w) => {
       const slug = w.githubSlug?.trim() ? `  github:${w.githubSlug.trim()}` : '';
-      return `- ${w.name}: ${w.path}${slug}`;
+      const profile = formatWorkspaceProfileSuffix(safeViewerProfile(w.path));
+      return `- ${w.name}: ${w.path}${slug}${profile}`;
     })
     .join('\n');
 }
@@ -53,9 +63,10 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Role: you oversee Sideboard worktree agents across registered repos. You do not live inside one of those worktrees.',
   'Sideboard MCP (fleet control — prefer these for status and orchestration):',
   'Discover:',
-  '- list_workspaces — registered repos (path + github slug when known)',
+  '- list_workspaces — registered repos (path + github slug + roles/notes when set). Use that profile to pick the right repo for tickets or reviews.',
   '- list_board — Home Kanban of worktrees (New / Draft / Review / Merged; one card per checkout). Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind, column, limit.',
-  '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces. list_issues (query, assignee=me|unassigned|all|user, limit default 40 max 250) lists Linear, AbleTime, or GitHub; raise limit or tighten query when truncated.',
+  '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces. Review is PRs (the surface for assigned ticket work), not the tickets: "Get me N tickets to review" → list_prs(queue=review, limit=N) then create_thread sourceType=pr. That is open non-draft PRs labeled eng-review with no individual user reviewer yet. A team request (engineering-team) is not a claim — the viewer is on that team and can pick it up; claimed means an individual account is the reviewer. Bots ignored. Prefer teams that match Settings → Agents / Projects roles (check one or more of Engineering, Design, Product, or extras they added — never a combined both value; project roles override account for that repo). queue=mine is review-requested:@me; queue=approved|changes uses those labels. Also: state, label, reviewer=me|unassigned|login, query, limit default 40 max 250; raise limit or tighten when truncated. list_issues (query, assignee=me|unassigned|all|user, limit default 40 max 250) lists Linear, AbleTime, or GitHub tickets — do not use it for that review-inbox ask. When they ask for tickets to work on, use their notes (assignee=me or unassigned as the notes say) and prefer ones that match their roles.',
+  '- Find work: when they ask to find work, pick up tickets, or list reviews, use Settings → Agents (account) plus Settings → Projects (per-repo) roles and notes. Tickets → list_issues. Reviews → list_prs(queue=review). Show the options — do not create_thread or start unless they also asked to start (e.g. “find me work and start it”). Do not start this unprompted.',
   '- linear_* (when Linear is connected) — list_teams for team key/states; get/create/update/comment with ENG-123. Scope errors: reconnect Linear in Account settings.',
   '- abletime_* (when AbleTime is connected) — orientation first; ensure_task when work has no ticket (or create_thread from the default branch auto-creates one).',
   '- list_teams / slack_list_channels / slack_list_users / slack_search / slack_read / slack_post / slack_replies — Slack workspaces from Settings → Remote; pass team_id from list_teams',
@@ -116,6 +127,56 @@ function accountDefaultsPlaybookLine(): string {
   return `- Account defaults for create_thread (omit agent/model to use these): agent=${d.agent}, model=${model}, effort=${d.effort}`;
 }
 
+function safeViewerProfile(repoPath?: string) {
+  try {
+    return resolveViewerProfileForRepo(repoPath);
+  } catch {
+    return resolveViewerProfile();
+  }
+}
+
+function accountRolePlaybookLine(): string {
+  try {
+    return formatAccountProfilePlaybookLine(resolveAccountProfileFromSettings());
+  } catch {
+    return '';
+  }
+}
+
+function accountRoleReminderLine(): string {
+  let profile;
+  try {
+    profile = resolveAccountProfileFromSettings();
+  } catch {
+    return '';
+  }
+  if (profile.roleLabels.length === 0 && !profile.notes) return '';
+  const roles = profile.roleLabels.length ? profile.roleLabels.join(', ') : 'no roles';
+  return `- Viewer profile: ${roles}. Use Settings notes with list_issues / list_prs when they ask to find work.`;
+}
+
+function projectProfilePlaybookBlock(): string {
+  let settings;
+  try {
+    settings = loadAppSettings();
+  } catch {
+    return '';
+  }
+  const names = new Map(
+    listWorkspaces().map((w) => [w.path.replace(/\/+$/, ''), w.name] as const),
+  );
+  const projects = Object.entries(settings.projects).map(([path, project]) => {
+    const resolved = resolveViewerProfile(settings.defaults, project);
+    const key = path.replace(/\/+$/, '');
+    return {
+      name: names.get(key) ?? key.split('/').filter(Boolean).pop() ?? path,
+      roleLabels: resolved.rolesFromProject ? resolved.roleLabels : [],
+      notes: resolved.projectNotes,
+    };
+  });
+  return formatProjectProfilePlaybookLines(projects);
+}
+
 /**
  * Short identity block prepended to every orchestration turn prompt.
  * Survives Claude `--resume` (which drops cachedPrefix). Fleet playbook lives
@@ -133,6 +194,7 @@ export function coordinatorTurnReminder(opts: {
     `- YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
+    accountRoleReminderLine() || null,
     '- Status: list_board (worktree Kanban: New → Draft → Review → Merged) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked. If a child is stopped/error/broken, it did not finish — resume or tell the user.',
   ]
     .filter(Boolean)
@@ -194,7 +256,9 @@ export function ensureGlobalCoordinatorCwd(opts?: {
     '',
     COORDINATOR_TOOL_PLAYBOOK,
     '',
-    accountDefaultsPlaybookLine(),
+    [accountDefaultsPlaybookLine(), accountRolePlaybookLine(), projectProfilePlaybookBlock()]
+      .filter(Boolean)
+      .join('\n'),
     '',
     coordinatorGreenfieldPlaybook(reposDir),
     '',
@@ -206,6 +270,8 @@ export function ensureGlobalCoordinatorCwd(opts?: {
     'Never pass `agent=codex` when you yourself are Codex — nested Codex deadlocks on shared ~/.codex locks. Omit agent (Account default) or use cursor/claude.',
     'Typical flow (Home board): list_board → create_thread (sourceType=ticket|pr|branch) → send_to_thread → wait_for_turn (loop while stillRunning) → ask_git create-draft → wait_for_turn. Merge only if the user explicitly asked (`ask_git` merge).',
     'Typical flow (branch / explicit source): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn (loop while stillRunning) → ask_git create-draft.',
+    'Typical flow (find work): list_workspaces → pick repo(s) matching viewer roles/notes → list_issues (tickets) or list_prs(queue=review) (reviews) → show the options. Only create_thread + send_to_thread when they asked to start (e.g. “find me work and start it”) — then wait_for_turn (loop while stillRunning) → ask_git create-draft.',
+    'Typical flow (review inbox): list_workspaces → list_prs(queue=review, limit=N) → show those PRs (ticket ids in the title when present). create_thread sourceType=pr only when they asked to start / do the work. Do not list_issues for "tickets to review".',
     'Typical flow (new app): Bash create/clone under repos dir → add_workspace → create_thread → send_to_thread (implement) → wait_for_turn (loop while stillRunning) → ask_git create-draft.',
     'Always ask worktree agents to commit, push, and open draft PRs (`ask_git` / `send_to_thread`). If the user gave a goal (Greptile 5/5, CI green), pass that goal through so they watch-fix-push until it lands — do not start that loop on a plain push, and do not tell the human to poll. Tell them to merge only when the user explicitly asked. The worktree agent runs git/gh; never merge from this orchestration cwd.',
   ].join('\n');
