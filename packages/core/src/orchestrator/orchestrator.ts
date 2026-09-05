@@ -38,6 +38,13 @@ import {
 } from '../git/pr-merge-archive.js';
 import { runWorkspaceSetup, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
 import {
+  appendSetupLog,
+  beginSetupLog,
+  finishSetupLog,
+  readSetupLog,
+  type SetupLogSnapshot,
+} from '../store/setup-log.js';
+import {
   cleanupOrphanWorktrees,
   findOrphanWorktrees,
   shouldRunWorktreeCleanup,
@@ -1762,6 +1769,16 @@ export class Orchestrator {
     return this.requireThread(threadRef).activeRuns ?? [];
   }
 
+  getSetupLog(threadRef: string): SetupLogSnapshot {
+    const thread = this.getThread(threadRef);
+    if (!thread) return readSetupLog(threadRef);
+    const snap = readSetupLog(thread.id);
+    if (snap.running && !this.processes.has(`${thread.id}:setup`)) {
+      return { ...snap, running: false };
+    }
+    return snap;
+  }
+
   async runSetup(threadRef: string): Promise<{ exitCode: number | null; source?: string | null }> {
     const thread = this.requireThread(threadRef);
     this.assertNotGlobal(thread, 'Setup');
@@ -1776,22 +1793,35 @@ export class Orchestrator {
       startedAt: new Date().toISOString(),
       kill: () => abort.abort(),
     });
+    beginSetupLog(thread.id);
     this.emit({ type: 'setup_started', threadId: thread.id });
+
+    let finished = false;
+    const finish = (exitCode: number | null, source?: string | null) => {
+      if (finished) return;
+      finished = true;
+      finishSetupLog(thread.id, exitCode, source);
+      this.emit({ type: 'setup_finished', threadId: thread.id, exitCode });
+    };
 
     try {
       const setup = await runWorkspaceSetup(
         thread.repoPath,
         thread.worktreePath,
         (line) => {
+          appendSetupLog(thread.id, line);
           this.emit({ type: 'setup_output', threadId: thread.id, line });
         },
         { signal: abort.signal },
       );
 
       if (!setup.ran) {
-        throw new Error(
-          'No setup script in .sideboard/settings.toml, .conductor/settings.toml, .cursor/worktrees.json, or script/setup (bin/setup, scripts/setup)',
-        );
+        const line =
+          'No setup script in .sideboard/settings.toml, .conductor/settings.toml, .cursor/worktrees.json, or script/setup (bin/setup, scripts/setup)';
+        appendSetupLog(thread.id, line);
+        this.emit({ type: 'setup_output', threadId: thread.id, line });
+        finish(null, null);
+        throw new Error(line);
       }
       if (setup.exitCode !== 0 && setup.exitCode !== null) {
         const live = readThread(thread.id);
@@ -1807,8 +1837,11 @@ export class Orchestrator {
           });
         }
       }
-      this.emit({ type: 'setup_finished', threadId: thread.id, exitCode: setup.exitCode });
+      finish(setup.exitCode, setup.source);
       return { exitCode: setup.exitCode, source: setup.source };
+    } catch (err) {
+      finish(null, null);
+      throw err;
     } finally {
       this.processes.delete(key);
     }

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- New worktrees show `[scripts] setup` in the right-sidebar Setup tab: the pane opens while setup runs, output is persisted so a late mount still replays the log, and a worktree `settings.toml` that only defines run scripts still inherits `setup` from the main checkout (`.sideboard` or `.conductor`).
 - Creating from a ticket, PR, or named branch that already has a live worktree reuses that checkout (including PR ↔ head-branch). The Create-from picker marks those rows Already open and does not allow a second worktree.
 
 ## [0.1.152] - 2026-09-04

@@ -18,6 +18,8 @@ export {
   secureFileUnlocksWith,
 } from './store/secure-file.js';
 export * from './store/thread-store.js';
+export type { SetupLogSnapshot } from './store/setup-log.js';
+export { emptySetupLog, mergeSetupOutput, readSetupLog } from './store/setup-log.js';
 export * from './store/schedules.js';
 export { armSchedules, fireSchedule, formatScheduledPrompt } from './orchestrator/schedule-runner.js';
 export {
