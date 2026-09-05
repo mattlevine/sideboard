@@ -51,6 +51,27 @@ describe('threadHasVisibleFirstTurn', () => {
       ),
     ).toBe(false);
   });
+
+  it('ignores setup lastError while the first prompt is queued or the tab is still empty', () => {
+    expect(
+      threadHasVisibleFirstTurn(
+        thread({
+          id: 't1',
+          status: 'queued',
+          lastError: 'Setup exited 1',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      threadHasVisibleFirstTurn(
+        thread({
+          id: 't1',
+          status: 'idle',
+          lastError: 'Setup failed: pnpm install',
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('shouldHoldCreateOverlay', () => {

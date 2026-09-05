@@ -11,6 +11,7 @@ import {
   type WorktreeSortMode,
 } from '@sideboard/home-board';
 import type { Thread } from '@sideboard-ai/core';
+import { isSetupLastError } from '../lib/pane-progress';
 import { WorktreeSortSelect } from './WorktreeSortSelect';
 import {
   GLOBAL_WORKSPACE_ID,
@@ -151,7 +152,12 @@ function worktreeSlug(thread: Thread): string {
 }
 
 function previewSnippet(thread: Thread): string {
-  if (thread.lastError?.trim() && thread.status !== 'running') {
+  if (
+    thread.lastError?.trim() &&
+    thread.status !== 'running' &&
+    thread.status !== 'queued' &&
+    !(isSetupLastError(thread.lastError) && thread.messages.length === 0)
+  ) {
     return thread.lastError.trim();
   }
   const last = [...thread.messages].reverse().find(

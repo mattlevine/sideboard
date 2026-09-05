@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isSetupLastError,
   isStaleLastErrorDuringTurn,
   shouldStampSetupLastError,
 } from './setup-last-error.js';
@@ -21,6 +22,28 @@ describe('shouldStampSetupLastError', () => {
     expect(
       shouldStampSetupLastError({ turnInFlight: false, status: 'running' }),
     ).toBe(false);
+  });
+
+  it('does not stamp while the first prompt is queued for a concurrency slot', () => {
+    expect(
+      shouldStampSetupLastError({ turnInFlight: false, status: 'queued' }),
+    ).toBe(false);
+    expect(
+      shouldStampSetupLastError({
+        turnInFlight: false,
+        status: 'idle',
+        hasQueuedPrompt: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isSetupLastError', () => {
+  it('matches auto-setup chrome only', () => {
+    expect(isSetupLastError('Setup exited 1')).toBe(true);
+    expect(isSetupLastError('Setup failed: pnpm install')).toBe(true);
+    expect(isSetupLastError('First prompt failed: timeout')).toBe(false);
+    expect(isSetupLastError('exit 1')).toBe(false);
   });
 });
 

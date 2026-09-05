@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.154] - 2026-09-05
+
+### Added
+
+- Marketing site and docs describe the contextually aware find-work flow (Settings → Agents / Projects roles and notes; “find me some work” lists, “find me work and start it” starts).
+
+### Fixed
+
+- Creating several worktrees at once no longer paints a red setup error on the new chat tabs. Automatic setup after create stays in the Setup panel; a queued first prompt is treated like an in-flight turn.
+
 ## [0.1.153] - 2026-09-05
 
 ### Added

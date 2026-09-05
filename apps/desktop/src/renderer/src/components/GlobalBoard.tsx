@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
+import { isSetupLastError } from '../lib/pane-progress';
 import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
@@ -65,7 +66,14 @@ function previewForThread(
   live: string | undefined,
 ): { text: string; markdown: boolean } {
   if (live) return { text: live, markdown: true };
-  if (t.lastError && t.status !== 'running') return { text: t.lastError, markdown: false };
+  if (
+    t.lastError &&
+    t.status !== 'running' &&
+    t.status !== 'queued' &&
+    !(isSetupLastError(t.lastError) && t.messages.length === 0)
+  ) {
+    return { text: t.lastError, markdown: false };
+  }
   const last = t.messages[t.messages.length - 1];
   if (last?.role === 'agent' || last?.role === 'user') {
     return { text: last.text, markdown: last.role === 'agent' };

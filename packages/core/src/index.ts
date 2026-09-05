@@ -85,6 +85,11 @@ export * from './threads/fork-worktree.js';
 export * from './threads/stack-layers.js';
 export * from './threads/adopt.js';
 export * from './orchestrator/orchestrator.js';
+export {
+  isSetupLastError,
+  isStaleLastErrorDuringTurn,
+  shouldStampSetupLastError,
+} from './orchestrator/setup-last-error.js';
 export * from './review/request-review.js';
 export * from './paths/workspace-scratch.js';
 export * from './plan/ask-user.js';

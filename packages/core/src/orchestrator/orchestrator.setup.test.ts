@@ -42,7 +42,10 @@ describe('Orchestrator.runSetup lastError', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  function seedThread(status: 'idle' | 'running' = 'idle') {
+  function seedThread(
+    status: 'idle' | 'running' | 'queued' = 'idle',
+    extra?: { queue?: string[] },
+  ) {
     const worktreePath = join(dataDir, 'wt');
     mkdirSync(worktreePath, { recursive: true });
     const thread = createEmptyThread({
@@ -54,6 +57,7 @@ describe('Orchestrator.runSetup lastError', () => {
       repoPath: join(dataDir, 'repo'),
       agent: 'claude',
       status,
+      queue: extra?.queue ?? [],
     });
     writeThread(thread);
     return thread;
@@ -81,6 +85,20 @@ describe('Orchestrator.runSetup lastError', () => {
     const thread = seedThread('running');
     const orch = new Orchestrator();
     await orch.runSetup(thread.id);
+    expect(readThread(thread.id)?.lastError).toBeNull();
+  });
+
+  it('does not stamp lastError while the first prompt is queued', async () => {
+    const thread = seedThread('queued', { queue: ['start this ticket'] });
+    const orch = new Orchestrator();
+    await orch.runSetup(thread.id);
+    expect(readThread(thread.id)?.lastError).toBeNull();
+  });
+
+  it('does not stamp lastError on automatic setup after create', async () => {
+    const thread = seedThread('idle');
+    const orch = new Orchestrator();
+    await orch.runSetup(thread.id, { stampLastError: false });
     expect(readThread(thread.id)?.lastError).toBeNull();
   });
 

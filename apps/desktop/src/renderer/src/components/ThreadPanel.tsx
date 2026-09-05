@@ -60,6 +60,7 @@ import { useFollowUpBehavior } from '../lib/follow-up-behavior';
 import { useLiveThread } from '../lib/live-paint-context';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
+import { isSetupLastError } from '../lib/pane-progress';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
 import { ThinkingEffortChip } from './ThinkingEffortChip';
@@ -116,8 +117,11 @@ import {
 function isRedundantLastError(thread: Thread): boolean {
   const err = thread.lastError?.trim();
   if (!err) return false;
-  // Setup / reconcile can stamp lastError mid-stream; the agent is still working.
-  if (thread.status === 'running') return true;
+  // Setup / reconcile can stamp lastError mid-stream; the agent is still working
+  // (or waiting for a concurrency slot after a batch create).
+  if (thread.status === 'running' || thread.status === 'queued') return true;
+  // Auto setup after create belongs in the Setup panel, not a red empty tab.
+  if (isSetupLastError(err) && thread.messages.length === 0) return true;
   const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
   const body = lastAgent?.text?.trim() ?? '';
   if (!body) return false;
@@ -1823,7 +1827,7 @@ export function ThreadPanel({
             !pendingUser &&
             !pendingTranscript &&
             !showStreaming &&
-            !thread.lastError && (
+            !(thread.lastError && !isRedundantLastError(thread)) && (
               <div className="chat-empty">
                 {setupRunning ? (
                   <>
