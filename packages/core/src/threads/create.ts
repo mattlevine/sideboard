@@ -43,7 +43,7 @@ function persistCreateAttachments(
   return persistPendingFileAttachments(worktreePath, attachments ?? []);
 }
 
-function liveThreadsForCreate(repoPath: string) {
+function liveThreadsForCreate() {
   return listThreads({ includeArchived: false }).map((t) => ({
     ...t,
     repoPath: canonicalizeRepoPath(t.repoPath),
@@ -72,7 +72,7 @@ function reuseLiveThread(
       prUrl: match.prUrl,
       headRefName: match.headRefName,
     },
-    liveThreadsForCreate(repoPath),
+    liveThreadsForCreate(),
   );
   if (!existing) return undefined;
   const thread = readThread(existing.id) ?? existing;
