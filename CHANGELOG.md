@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.155] - 2026-09-05
+
+### Changed
+
+- Marketing site and docs headline the find-work flow as **Contextually aware**.
+
 ## [0.1.154] - 2026-09-05
 
 ### Added
