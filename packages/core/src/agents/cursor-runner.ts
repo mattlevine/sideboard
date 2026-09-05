@@ -8,7 +8,7 @@
  * Uses {@link JsonlLocalAgentStore} instead of the SDK's default SQLite store:
  * Electron's embedded Node (used via ELECTRON_RUN_AS_NODE) lacks `node:sqlite`.
  */
-import { Agent, CursorAgentError, JsonlLocalAgentStore } from '@cursor/sdk';
+import { Agent, CursorAgentError, JsonlLocalAgentStore, type LocalAgentOptions } from '@cursor/sdk';
 import { mkdirSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
@@ -153,10 +153,11 @@ async function main(): Promise<number> {
   });
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
   const store = localAgentStore(req.threadId);
+  const isolateSources: NonNullable<LocalAgentOptions['settingSources']> = [];
   const local = withCursorLocalHangGuards({
     cwd: req.cwd,
     store,
-    ...(req.isolateAmbientMcp ? { settingSources: [] as const } : {}),
+    ...(req.isolateAmbientMcp ? { settingSources: isolateSources } : {}),
   });
   // Inline MCP is not persisted on resume — pass every turn (create + resume + send).
   const mcpServers =
