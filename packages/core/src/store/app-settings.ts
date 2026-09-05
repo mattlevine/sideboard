@@ -49,8 +49,8 @@ export interface DefaultsAppSettings {
    */
   fast?: boolean;
   /**
-   * Roles on this Mac (Settings → Agents). Multi-select of coded roles
-   * (Engineering, Design, Product — check all that apply; never `both`).
+   * Roles on this Mac (Settings → Agents). Multi-select: check Engineering /
+   * Design / Product and/or add more slugs. Never a combined `both` value.
    * Used so “tickets to work on” / “PRs to review” follow the right queues.
    */
   roles?: AccountRole[];
@@ -1318,11 +1318,15 @@ export function getDefaultFast(
 export {
   ACCOUNT_ROLES,
   ACCOUNT_ROLE_LABELS,
+  ACCOUNT_ROLE_MAX,
+  ACCOUNT_ROLE_PRESETS,
+  accountRoleLabel,
   formatAccountProfilePlaybookLine,
   preferTeamsForRole,
   resolveAccountProfile,
   reviewTeamHintsForRoles,
   type AccountRole,
+  type AccountRolePreset,
   type AccountProfile,
   type ResolvedAccountProfile,
 } from './account-profile.js';

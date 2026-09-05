@@ -1,15 +1,24 @@
-/** Account-level roles for ticket / PR recommendations (Settings → Agents). */
-export const ACCOUNT_ROLES = ['engineering', 'design', 'product'] as const;
-export type AccountRole = (typeof ACCOUNT_ROLES)[number];
+/** Built-in role slugs shown as Settings checkboxes. More can be added in the UI. */
+export const ACCOUNT_ROLE_PRESETS = ['engineering', 'design', 'product'] as const;
+export type AccountRolePreset = (typeof ACCOUNT_ROLE_PRESETS)[number];
 
-export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = {
+/** Any kebab-case role slug (presets plus user-added). Never the combined `both`. */
+export type AccountRole = string;
+
+/** Coded presets — extra roles are freeform slugs. */
+export const ACCOUNT_ROLES = ACCOUNT_ROLE_PRESETS;
+
+export const ACCOUNT_ROLE_MAX = 16;
+
+export const ACCOUNT_ROLE_LABELS: Record<string, string> = {
   engineering: 'Engineering',
   design: 'Design',
   product: 'Product',
+  qa: 'QA',
 };
 
 export interface AccountProfile {
-  /** One or more coded roles — never a combined `both` value. */
+  /** One or more roles — never a combined `both` value. */
   roles?: AccountRole[];
   /** Legacy single role — folded into `roles` when reading. */
   role?: AccountRole;
@@ -22,21 +31,37 @@ export interface ResolvedAccountProfile {
   reviewTeamHints: string[];
 }
 
-const ROLE_TEAM_HINTS: Record<AccountRole, string[]> = {
+const ROLE_TEAM_HINTS: Record<string, string[]> = {
   engineering: ['engineering-team', 'engineering', 'eng-team'],
   design: ['design-team', 'design'],
   product: ['product-team', 'product'],
 };
 
-export function isAccountRole(value: string | null | undefined): value is AccountRole {
-  const key = (value ?? '').trim().toLowerCase();
-  return (ACCOUNT_ROLES as readonly string[]).includes(key);
+export function accountRoleLabel(role: string): string {
+  const known = ACCOUNT_ROLE_LABELS[role];
+  if (known) return known;
+  return role
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 export function normalizeAccountRole(value?: string | null): AccountRole | undefined {
-  const key = (value ?? '').trim().toLowerCase();
+  const key = (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
   if (key === 'both') return undefined;
-  return isAccountRole(key) ? key : undefined;
+  if (key.length < 2 || key.length > 40) return undefined;
+  if (!/^[a-z][a-z0-9-]*$/.test(key)) return undefined;
+  return key;
+}
+
+export function isAccountRole(value: string | null | undefined): value is AccountRole {
+  return Boolean(normalizeAccountRole(value));
 }
 
 export function normalizeAccountRoles(
@@ -45,10 +70,10 @@ export function normalizeAccountRoles(
 ): AccountRole[] {
   const raw = Array.isArray(roles) ? roles : [];
   const out: AccountRole[] = [];
-  const seen = new Set<AccountRole>();
+  const seen = new Set<string>();
   const push = (value: unknown) => {
     const role = normalizeAccountRole(typeof value === 'string' ? value : '');
-    if (!role || seen.has(role)) return;
+    if (!role || seen.has(role) || out.length >= ACCOUNT_ROLE_MAX) return;
     seen.add(role);
     out.push(role);
   };
@@ -61,7 +86,8 @@ export function reviewTeamHintsForRoles(roles: AccountRole[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const role of roles) {
-    for (const hint of ROLE_TEAM_HINTS[role]) {
+    const hints = ROLE_TEAM_HINTS[role] ?? teamHintsForCustomRole(role);
+    for (const hint of hints) {
       const key = hint.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -71,11 +97,18 @@ export function reviewTeamHintsForRoles(roles: AccountRole[]): string[] {
   return out;
 }
 
+function teamHintsForCustomRole(role: string): string[] {
+  const slug = role.trim().toLowerCase();
+  if (!slug) return [];
+  if (slug.endsWith('-team') || slug.endsWith('-squad')) return [slug];
+  return [`${slug}-team`, slug];
+}
+
 export function resolveAccountProfile(input?: AccountProfile | null): ResolvedAccountProfile {
   const roles = normalizeAccountRoles(input?.roles, input?.role);
   return {
     roles,
-    roleLabels: roles.map((role) => ACCOUNT_ROLE_LABELS[role]),
+    roleLabels: roles.map((role) => accountRoleLabel(role)),
     reviewTeamHints: reviewTeamHintsForRoles(roles),
   };
 }

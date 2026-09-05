@@ -369,13 +369,13 @@ describe('app settings', () => {
     expect(mod.resolveAccountProfileFromSettings().roles).toEqual([]);
 
     const saved = mod.updateDefaultsSettings({
-      roles: ['engineering', 'design', 'both', 'product'],
+      roles: ['engineering', 'design', 'both', 'QA'],
     });
-    expect(saved.defaults.roles).toEqual(['engineering', 'design', 'product']);
+    expect(saved.defaults.roles).toEqual(['engineering', 'design', 'qa']);
     expect(mod.resolveAccountProfileFromSettings().roleLabels).toEqual([
       'Engineering',
       'Design',
-      'Product',
+      'QA',
     ]);
 
     const cleared = mod.updateDefaultsSettings({ roles: [] });

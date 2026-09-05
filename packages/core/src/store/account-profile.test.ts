@@ -15,9 +15,10 @@ describe('account-profile', () => {
       'design',
     ]);
     expect(normalizeAccountRoles([], 'design')).toEqual(['design']);
-    expect(normalizeAccountRoles(['engineering', 'engineering', 'nope'])).toEqual([
+    expect(normalizeAccountRoles(['engineering', 'engineering', 'nope!!'])).toEqual([
       'engineering',
     ]);
+    expect(normalizeAccountRoles(['QA', 'data science'])).toEqual(['qa', 'data-science']);
     expect(normalizeAccountRole('both')).toBeUndefined();
     expect(normalizeAccountRoles(['both'])).toEqual([]);
     expect(normalizeAccountRoles(['engineering', 'both', 'design'])).toEqual([
@@ -32,6 +33,7 @@ describe('account-profile', () => {
     expect(reviewTeamHintsForRoles(['engineering', 'design'])).toEqual(
       expect.arrayContaining(['engineering-team', 'design-team']),
     );
+    expect(reviewTeamHintsForRoles(['qa'])).toEqual(['qa-team', 'qa']);
   });
 
   it('keeps only viewer teams that match the selected roles', () => {
@@ -57,5 +59,8 @@ describe('account-profile', () => {
     expect(line).toMatch(/Engineering, Design/);
     expect(line).toMatch(/individual reviewer/);
     expect(line).not.toMatch(/\bboth\b/i);
+    expect(
+      formatAccountProfilePlaybookLine(resolveAccountProfile({ roles: ['qa'] })),
+    ).toMatch(/QA/);
   });
 });

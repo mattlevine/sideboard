@@ -118,6 +118,28 @@ const ACCOUNT_ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
   { value: 'product', label: 'Product' },
 ];
 
+const ACCOUNT_ROLE_PRESET_VALUES = new Set(ACCOUNT_ROLE_OPTIONS.map((opt) => opt.value));
+
+function slugAccountRole(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .replace(/[^a-z0-9-]/g, '');
+}
+
+function accountRoleChipLabel(role: string): string {
+  const known = ACCOUNT_ROLE_OPTIONS.find((opt) => opt.value === role);
+  if (known) return known.label;
+  return role
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 const DEFAULT_AGENT_LABELS: Record<AgentKind, string> = {
   claude: 'Claude',
   codex: 'Codex',
@@ -254,6 +276,7 @@ export function SettingsModal({
   const [systemCliPath, setSystemCliPath] = useState<string | null>(null);
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
+  const [roleDraft, setRoleDraft] = useState('');
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
   const [setupLog, setSetupLog] = useState<string | null>(null);
   const loginAbortRef = useRef<AbortController | null>(null);
@@ -520,6 +543,7 @@ export function SettingsModal({
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
   const selectedRoles = settings.defaults?.roles ?? [];
+  const extraRoles = selectedRoles.filter((role) => !ACCOUNT_ROLE_PRESET_VALUES.has(role));
 
   const filteredArchived = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
@@ -750,8 +774,8 @@ export function SettingsModal({
                   <div className="settings-section-title">Your roles</div>
                   <p className="settings-hint">
                     Used when you ask for tickets to work on or PRs to review. Check every role
-                    that applies — Engineering and Design together is fine; there is no “both”
-                    option. Recommendations follow those team queues.
+                    that applies, or add another — Engineering and Design together is fine; there
+                    is no “both” option. Recommendations follow those team queues.
                   </p>
                   <div
                     style={{
@@ -784,6 +808,85 @@ export function SettingsModal({
                         </label>
                       );
                     })}
+                  </div>
+                  {extraRoles.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.4rem',
+                        marginTop: '0.65rem',
+                      }}
+                    >
+                      {extraRoles.map((role) => (
+                        <span
+                          key={role}
+                          className="settings-hint"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            border: '1px solid color-mix(in srgb, var(--sb-fg, #1a1a1a) 14%, transparent)',
+                          }}
+                        >
+                          {accountRoleChipLabel(role)}
+                          <button
+                            type="button"
+                            className="ghost"
+                            disabled={busy}
+                            aria-label={`Remove ${accountRoleChipLabel(role)}`}
+                            style={{ padding: 0, minWidth: 0, lineHeight: 1 }}
+                            onClick={() => {
+                              void saveDefaultsPatch({
+                                roles: selectedRoles.filter((item) => item !== role),
+                              });
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="settings-key-row" style={{ marginTop: '0.65rem' }}>
+                    <input
+                      id="account-role-add"
+                      placeholder="Add another role (QA, data, …)"
+                      value={roleDraft}
+                      disabled={busy}
+                      onChange={(e) => setRoleDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        const slug = slugAccountRole(roleDraft);
+                        if (!slug || slug.length < 2 || slug === 'both') return;
+                        if (!selectedRoles.includes(slug)) {
+                          void saveDefaultsPatch({ roles: [...selectedRoles, slug] });
+                        }
+                        setRoleDraft('');
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        busy ||
+                        slugAccountRole(roleDraft).length < 2 ||
+                        slugAccountRole(roleDraft) === 'both'
+                      }
+                      onClick={() => {
+                        const slug = slugAccountRole(roleDraft);
+                        if (!slug || slug.length < 2 || slug === 'both') return;
+                        if (!selectedRoles.includes(slug)) {
+                          void saveDefaultsPatch({ roles: [...selectedRoles, slug] });
+                        }
+                        setRoleDraft('');
+                      }}
+                    >
+                      Add
+                    </button>
                   </div>
                 </div>
                 <div className="settings-section settings-section-card">
