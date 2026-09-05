@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- MCP `list_prs` can find the review inbox: `queue=review` is open non-draft PRs labeled `eng-review` with no individual user reviewer (the “get me N tickets to review” path — PRs for assigned ticket work). A team request such as `engineering-team` is not a claim. Also `state`, `label`, `reviewer` (`me` / `unassigned` / login). Same compact page as `list_issues` (default 40, max 250, `truncated`).
+
 ### Changed
 
 - MCP `list_issues` / `linear_search_issues` return a compact first page (default 40, max 250) with `truncated`. Pass `query` and/or a higher `limit` to search beyond 40. Linear and AbleTime mutation tools register only when connected. `list_linear_issues` is removed.

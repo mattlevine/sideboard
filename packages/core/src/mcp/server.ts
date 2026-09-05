@@ -32,6 +32,8 @@ import {
   formatMcpIssueList,
   mcpJson,
 } from './issue-list.js';
+import { formatMcpPrList } from './pr-list.js';
+import { resolveListPrsOptions } from '../git/list-prs.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { formatGhLandError } from '../git/gh-errors.js';
@@ -1422,24 +1424,65 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_prs',
-    'List open GitHub PRs for a registered workspace. Pass repoPath from list_workspaces (uses gh against that repo remote). Then create_thread with sourceType=pr.',
-    { repoPath: z.string() },
-    async ({ repoPath }) => {
+    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_workspaces. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled eng-review with no individual user reviewer. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_thread with sourceType=pr.',
+    {
+      repoPath: z.string(),
+      query: z.string().optional().describe('GitHub search tokens (title, draft:true, …)'),
+      queue: z
+        .enum(['review', 'mine', 'approved', 'changes'])
+        .optional()
+        .describe(
+          'review = unclaimed eng-review inbox (use for "get me N tickets to review"). mine = review-requested:@me. approved / changes = eng-approved / eng-requested-changes.',
+        ),
+      state: z
+        .enum(['open', 'closed', 'merged', 'all', 'review'])
+        .optional()
+        .describe('GitHub PR state (default open). review is an alias for queue=review.'),
+      label: z
+        .string()
+        .optional()
+        .describe(
+          'GitHub label / workflow tag. Comma-separated AND. Examples: eng-review, eng-approved, eng-requested-changes',
+        ),
+      reviewer: z
+        .string()
+        .optional()
+        .describe(
+          'me (review requested of you), unassigned (no individual reviewer; team queues like engineering-team still count), all, or a GitHub login',
+        ),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(250)
+        .optional()
+        .describe('Page size (default 40, max 250). Raise when truncated is true.'),
+    },
+    async ({ repoPath, query, queue, state, label, reviewer, limit }) => {
       const root = await resolveRepoRoot(repoPath);
-      const prs = await listPrs(root);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: prs
-              .map(
-                (p) =>
-                  `#${p.number} ${p.title} (${p.headRefName})${p.isCrossRepository ? ' [fork]' : ''}`,
-              )
-              .join('\n'),
-          },
-        ],
-      };
+      const page = clampMcpIssueLimit(limit);
+      const resolved = resolveListPrsOptions({
+        query,
+        queue,
+        state,
+        labels: label,
+        reviewer,
+        limit: page + 1,
+      });
+      const prs = await listPrs(root, resolved);
+      const windowed = applyIssueListWindow(prs, page);
+      return mcpJson(
+        formatMcpPrList({
+          queue: resolved.queue,
+          state: resolved.state,
+          labels: resolved.labels,
+          reviewer: resolved.reviewer,
+          query: resolved.query,
+          limit: page,
+          prs: windowed.items,
+          truncated: windowed.truncated,
+        }),
+      );
     },
   );
 

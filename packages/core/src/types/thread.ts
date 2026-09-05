@@ -250,6 +250,20 @@ export interface PrInfo {
   isDraft?: boolean;
   /** Present when `gh pr view --json state` is requested. */
   state?: string;
+  /** GitHub label names when listed via `gh pr list --json labels`. */
+  labels?: string[];
+  /** Requested reviewer logins / team slugs (humans and bots). */
+  reviewRequests?: string[];
+  /** Individual user reviewers only (bots and teams omitted). */
+  reviewers?: string[];
+  /** Team / group review requests (e.g. `engineering-team`) — not a claim. */
+  teams?: string[];
+  /** GraphQL `reviewDecision` when requested (`APPROVED`, `CHANGES_REQUESTED`, …). */
+  reviewDecision?: string | null;
+  /** Assignee logins when listed via `gh pr list --json assignees`. */
+  assignees?: string[];
+  /** Ticket ids parsed from the title (`ENG-12`, `#44`) when the PR is for assigned work. */
+  tickets?: string[];
 }
 
 /** One CI check from `gh pr checks --json`, or a synthetic merge/review gate. */

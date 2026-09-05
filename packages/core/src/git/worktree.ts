@@ -32,6 +32,14 @@ import {
   resolveGithubAgentToken,
 } from './git-auth-mode.js';
 import { gh, git } from './run.js';
+import {
+  applyPrListResponse,
+  buildGhPrListArgs,
+  listGithubViewerTeamSlugs,
+  prListFetchLimit,
+  resolveListPrsOptions,
+  type ListPrsOptions,
+} from './list-prs.js';
 import { withRepoGitLock } from './repo-git-lock.js';
 import {
   getGithubGitAuthMode,
@@ -377,20 +385,34 @@ export async function listBranches(
   return sorted.filter((b) => keep.has(b.name));
 }
 
-export async function listPrs(repoPath: string): Promise<PrInfo[]> {
+export type { ListPrsOptions } from './list-prs.js';
+
+export async function listPrs(
+  repoPath: string,
+  opts?: ListPrsOptions,
+): Promise<PrInfo[]> {
   const slug = await resolveGithubRepoSlug(repoPath);
-  const args = [
-    'pr',
-    'list',
-    '--json',
-    'number,title,headRefName,url,isCrossRepository,author',
-    '--limit',
-    '200',
-  ];
-  if (slug) args.push('--repo', slug);
+  const resolved = resolveListPrsOptions(opts);
+  const limit = resolved.limit ?? 200;
+  const reviewerKey = (resolved.reviewer ?? '').trim().toLowerCase();
+  const needsUnclaimed =
+    reviewerKey === 'unassigned' || reviewerKey === 'none' || reviewerKey === 'null';
+  const viewerTeams =
+    resolved.viewerTeams ??
+    (needsUnclaimed ? await listGithubViewerTeamSlugs(repoPath).catch(() => []) : undefined);
+  const fetchLimit = prListFetchLimit(limit, resolved.reviewer);
+  const args = buildGhPrListArgs({
+    slug,
+    state: resolved.state,
+    labels: resolved.labels,
+    reviewer: resolved.reviewer,
+    query: resolved.query,
+    draft: resolved.draft,
+    limit: fetchLimit,
+  });
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) return [];
-  return JSON.parse(stdout) as PrInfo[];
+  return applyPrListResponse(stdout, { ...resolved, limit, viewerTeams });
 }
 
 export async function getPr(

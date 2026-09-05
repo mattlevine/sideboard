@@ -133,6 +133,13 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_turn_result.*usage/s);
   });
 
+  it('fleet playbook maps review-inbox asks to list_prs, not tickets', () => {
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('list_prs(queue=review, limit=N)');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not use it for that review-inbox ask');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('engineering-team');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('eng-review');
+  });
+
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
     const prev = process.env.SIDEBOARD_APP_DATA;
     const root = mkdtempSync(join(tmpdir(), 'sb-global-cwd-'));
@@ -155,6 +162,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('list_board');
       expect(claude).toContain('start_board_card');
       expect(claude).toContain('Typical flow (Home board)');
+      expect(claude).toContain('Typical flow (review inbox)');
+      expect(claude).toContain('list_prs(queue=review, limit=N)');
       expect(claude).toContain('force_stop: true');
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('ask_git');
