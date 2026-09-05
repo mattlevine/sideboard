@@ -1,16 +1,15 @@
 /** Account-level roles for ticket / PR recommendations (Settings → Agents). */
-export const ACCOUNT_ROLES = ['engineering', 'design', 'product', 'other'] as const;
+export const ACCOUNT_ROLES = ['engineering', 'design', 'product'] as const;
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = {
   engineering: 'Engineering',
   design: 'Design',
   product: 'Product',
-  other: 'Other',
 };
 
 export interface AccountProfile {
-  /** One or more roles (Engineering and Design, or just one). */
+  /** One or more coded roles — never a combined `both` value. */
   roles?: AccountRole[];
   /** Legacy single role — folded into `roles` when reading. */
   role?: AccountRole;
@@ -27,15 +26,16 @@ const ROLE_TEAM_HINTS: Record<AccountRole, string[]> = {
   engineering: ['engineering-team', 'engineering', 'eng-team'],
   design: ['design-team', 'design'],
   product: ['product-team', 'product'],
-  other: [],
 };
 
 export function isAccountRole(value: string | null | undefined): value is AccountRole {
-  return Boolean(value && (ACCOUNT_ROLES as readonly string[]).includes(value));
+  const key = (value ?? '').trim().toLowerCase();
+  return (ACCOUNT_ROLES as readonly string[]).includes(key);
 }
 
 export function normalizeAccountRole(value?: string | null): AccountRole | undefined {
   const key = (value ?? '').trim().toLowerCase();
+  if (key === 'both') return undefined;
   return isAccountRole(key) ? key : undefined;
 }
 
@@ -81,9 +81,9 @@ export function resolveAccountProfile(input?: AccountProfile | null): ResolvedAc
 }
 
 /**
- * Prefer GitHub teams that match the selected account roles. An engineer+designer
- * on both `engineering-team` and `design-team` keeps both; Engineering-only
- * drops design-team.
+ * Prefer GitHub teams that match the selected account roles. Engineering +
+ * Design on both `engineering-team` and `design-team` keeps both lists;
+ * Engineering-only drops design-team.
  */
 export function preferTeamsForRole(viewerTeams: string[], hints: string[]): string[] {
   const teams = viewerTeams.map((t) => t.trim()).filter(Boolean);

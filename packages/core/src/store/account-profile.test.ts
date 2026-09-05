@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatAccountProfilePlaybookLine,
+  normalizeAccountRole,
   normalizeAccountRoles,
   preferTeamsForRole,
   resolveAccountProfile,
@@ -8,7 +9,7 @@ import {
 } from './account-profile.js';
 
 describe('account-profile', () => {
-  it('accepts one role or several, and folds a legacy single role', () => {
+  it('accepts one role or several, and drops a combined both value', () => {
     expect(normalizeAccountRoles(['engineering', 'design'])).toEqual([
       'engineering',
       'design',
@@ -17,13 +18,20 @@ describe('account-profile', () => {
     expect(normalizeAccountRoles(['engineering', 'engineering', 'nope'])).toEqual([
       'engineering',
     ]);
+    expect(normalizeAccountRole('both')).toBeUndefined();
+    expect(normalizeAccountRoles(['both'])).toEqual([]);
+    expect(normalizeAccountRoles(['engineering', 'both', 'design'])).toEqual([
+      'engineering',
+      'design',
+    ]);
   });
 
   it('unions team hints for every selected role', () => {
     expect(reviewTeamHintsForRoles(['engineering'])).toContain('engineering-team');
     expect(reviewTeamHintsForRoles(['design'])).toContain('design-team');
-    const both = reviewTeamHintsForRoles(['engineering', 'design']);
-    expect(both).toEqual(expect.arrayContaining(['engineering-team', 'design-team']));
+    expect(reviewTeamHintsForRoles(['engineering', 'design'])).toEqual(
+      expect.arrayContaining(['engineering-team', 'design-team']),
+    );
   });
 
   it('keeps only viewer teams that match the selected roles', () => {
@@ -48,5 +56,6 @@ describe('account-profile', () => {
     );
     expect(line).toMatch(/Engineering, Design/);
     expect(line).toMatch(/individual reviewer/);
+    expect(line).not.toMatch(/\bboth\b/i);
   });
 });

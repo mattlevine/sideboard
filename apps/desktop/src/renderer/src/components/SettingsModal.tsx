@@ -749,8 +749,9 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Your roles</div>
                   <p className="settings-hint">
-                    Used when you ask for tickets to work on or PRs to review. Pick Engineering,
-                    Design, or both — recommendations follow those team queues.
+                    Used when you ask for tickets to work on or PRs to review. Check every role
+                    that applies — Engineering and Design together is fine; there is no “both”
+                    option. Recommendations follow those team queues.
                   </p>
                   <div
                     style={{

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- MCP `list_prs` can find the review inbox: `queue=review` is open non-draft PRs labeled `eng-review` with no individual user reviewer (the “get me N tickets to review” path — PRs for assigned ticket work). A team request such as `engineering-team` is not a claim. Settings → Agents has a multi-select **Your roles** (Engineering and/or Design) so recommendations follow the right team queues. Also `state`, `label`, `reviewer` (`me` / `unassigned` / login). Same compact page as `list_issues` (default 40, max 250, `truncated`).
+- MCP `list_prs` can find the review inbox: `queue=review` is open non-draft PRs labeled `eng-review` with no individual user reviewer (the “get me N tickets to review” path — PRs for assigned ticket work). A team request such as `engineering-team` is not a claim. Settings → Agents has a multi-select **Your roles** (check Engineering, Design, and/or Product — no combined “both” value) so recommendations follow the right team queues. Also `state`, `label`, `reviewer` (`me` / `unassigned` / login). Same compact page as `list_issues` (default 40, max 250, `truncated`).
 
 ### Changed
 

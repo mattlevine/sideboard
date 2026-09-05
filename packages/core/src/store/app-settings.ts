@@ -49,9 +49,9 @@ export interface DefaultsAppSettings {
    */
   fast?: boolean;
   /**
-   * Roles on this Mac (Settings → Agents). One or more of Engineering /
-   * Design / Product — used so “tickets to work on” / “PRs to review”
-   * follow the right team queues.
+   * Roles on this Mac (Settings → Agents). Multi-select of coded roles
+   * (Engineering, Design, Product — check all that apply; never `both`).
+   * Used so “tickets to work on” / “PRs to review” follow the right queues.
    */
   roles?: AccountRole[];
   /** @deprecated Folded into {@link DefaultsAppSettings.roles} on read. */
