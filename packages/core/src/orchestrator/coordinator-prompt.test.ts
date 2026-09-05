@@ -170,7 +170,9 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('engineering-team');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Settings → Agents / Projects roles');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('eng-review');
-    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Find work (little intervention)');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Find work:');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('find me work and start it');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Show the options');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
@@ -196,6 +198,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('start_board_card');
       expect(claude).toContain('Typical flow (Home board)');
       expect(claude).toContain('Typical flow (find work)');
+      expect(claude).toContain('show the options');
+      expect(claude).toContain('find me work and start it');
       expect(claude).toContain('Typical flow (review inbox)');
       expect(claude).toContain('list_prs(queue=review, limit=N)');
       expect(claude).toContain('force_stop: true');

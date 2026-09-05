@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- MCP `list_prs` can find the review inbox: `queue=review` is open non-draft PRs labeled `eng-review` with no individual user reviewer (the “get me N tickets to review” path — PRs for assigned ticket work). A team request such as `engineering-team` is not a claim. Settings → Agents has a multi-select **Your roles** plus notes for how to find tickets and review PRs (check Engineering, Design, and/or Product, or add another — no combined “both” value). Settings → **Projects** can override roles and add notes per repo. Orchestration uses that profile when you ask it to find work and start worktrees. Also `state`, `label`, `reviewer` (`me` / `unassigned` / login). Same compact page as `list_issues` (default 40, max 250, `truncated`).
+- MCP `list_prs` can find the review inbox: `queue=review` is open non-draft PRs labeled `eng-review` with no individual user reviewer (the “get me N tickets to review” path — PRs for assigned ticket work). A team request such as `engineering-team` is not a claim. Settings → Agents has a multi-select **Your roles** plus notes for how to find tickets and review PRs (check Engineering, Design, and/or Product, or add another — no combined “both” value). Settings → **Projects** can override roles and add notes per repo. Orchestration uses that profile when you ask it to find work (lists options) or “find me work and start it” (creates worktrees). Also `state`, `label`, `reviewer` (`me` / `unassigned` / login). Same compact page as `list_issues` (default 40, max 250, `truncated`).
 
 ### Changed
 

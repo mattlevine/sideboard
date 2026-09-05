@@ -198,7 +198,7 @@ export function formatAccountProfilePlaybookLine(profile: ResolvedViewerProfile)
   return (
     `- Viewer profile: ${parts.join('. ')}. ` +
     `A team review request is not a claim — only an individual reviewer is. ` +
-    `When they ask to find work, use these notes with list_issues (tickets) and list_prs(queue=review) (reviews), then create_thread and start the work.`
+    `When they ask to find work, use these notes with list_issues (tickets) and list_prs(queue=review) (reviews) and show the options. Only create_thread and start when they also asked to start.`
   );
 }
 
