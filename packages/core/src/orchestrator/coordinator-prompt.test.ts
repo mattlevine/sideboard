@@ -173,6 +173,8 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Find work:');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('find me work and start it');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Show the options');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Do not call Claude Linear MCP');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('flap');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
@@ -200,6 +202,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('Typical flow (find work)');
       expect(claude).toContain('show the options');
       expect(claude).toContain('find me work and start it');
+      expect(claude).toContain('Never wait on Claude Linear MCP');
       expect(claude).toContain('Typical flow (review inbox)');
       expect(claude).toContain('list_prs(queue=review, limit=N)');
       expect(claude).toContain('force_stop: true');

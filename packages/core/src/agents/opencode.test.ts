@@ -1,4 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 
 const runMock = vi.fn();
 vi.mock('../git/run.js', () => ({
@@ -6,6 +9,7 @@ vi.mock('../git/run.js', () => ({
 }));
 
 import { opencodeAdapter } from './opencode.js';
+import * as orchMcpIsolation from './orch-mcp-isolation.js';
 
 const baseThread = {
   id: 't1',
@@ -27,9 +31,20 @@ const baseThread = {
   ref: 't1',
 };
 
+let dataDir: string | undefined;
+
 beforeEach(() => {
   runMock.mockReset();
   runMock.mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' });
+  dataDir = mkdtempSync(join(tmpdir(), 'sideboard-opencode-'));
+  vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+  vi.stubEnv('SIDEBOARD_SECRET_VAULT', 'plain');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  if (dataDir) rmSync(dataDir, { recursive: true, force: true });
+  dataDir = undefined;
 });
 
 describe('opencodeAdapter.buildTurn', () => {
@@ -77,6 +92,34 @@ describe('opencodeAdapter.buildTurn', () => {
     expect(parsed.mcp?.sideboard?.type).toBe('local');
     expect(parsed.mcp?.sideboard?.enabled).toBe(true);
     expect(parsed.mcp?.sideboard?.command?.length).toBeGreaterThan(0);
+  });
+
+  it('disables user OpenCode MCP on orchestration turns only', async () => {
+    const spy = vi
+      .spyOn(orchMcpIsolation, 'listUserOpencodeMcpNames')
+      .mockReturnValue(['linear']);
+    try {
+      const orch = await opencodeAdapter.buildTurn(
+        {
+          ...baseThread,
+          sourceType: 'orchestration',
+          repoPath: '__global__',
+        } as typeof baseThread,
+        { prompt: 'find work' },
+      );
+      const work = await opencodeAdapter.buildTurn(baseThread, { prompt: 'find work' });
+      const orchMcp = JSON.parse(orch.env!.OPENCODE_CONFIG_CONTENT!) as {
+        mcp: Record<string, { enabled?: boolean }>;
+      };
+      const workMcp = JSON.parse(work.env!.OPENCODE_CONFIG_CONTENT!) as {
+        mcp: Record<string, { enabled?: boolean }>;
+      };
+      expect(orchMcp.mcp.linear?.enabled).toBe(false);
+      expect(orchMcp.mcp.sideboard?.enabled).toBe(true);
+      expect(workMcp.mcp.linear).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

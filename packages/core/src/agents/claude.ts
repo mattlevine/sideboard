@@ -270,6 +270,61 @@ function claudeString(obj: Record<string, unknown>, key: string): string | undef
  * we treat that as the parent session, those events vanish and a nested
  * `system/init` steals `--resume` for the next turn.
  */
+type ClaudeMcpServerStatus = {
+  name: string;
+  status: string;
+};
+
+/**
+ * Claude Code `system/init` lists user + claude.ai MCP servers as `mcp_servers`
+ * (array or map). Statuses that are not a clean connect become a thinking line
+ * so a flapping Linear/Slack connector is visible instead of a silent hang.
+ */
+export function mcpStatusThinkingFromClaudeInit(
+  obj: Record<string, unknown>,
+): string | null {
+  const raw = obj.mcp_servers ?? obj.mcpServers;
+  const servers: ClaudeMcpServerStatus[] = [];
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const rec = item as Record<string, unknown>;
+      const name =
+        (typeof rec.name === 'string' && rec.name.trim()) ||
+        (typeof rec.server === 'string' && rec.server.trim()) ||
+        '';
+      const status =
+        (typeof rec.status === 'string' && rec.status.trim()) ||
+        (typeof rec.state === 'string' && rec.state.trim()) ||
+        '';
+      if (name) servers.push({ name, status: status || 'unknown' });
+    }
+  } else if (raw && typeof raw === 'object') {
+    for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (!name.trim()) continue;
+      if (typeof value === 'string' && value.trim()) {
+        servers.push({ name, status: value.trim() });
+        continue;
+      }
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const rec = value as Record<string, unknown>;
+        const status =
+          (typeof rec.status === 'string' && rec.status.trim()) ||
+          (typeof rec.state === 'string' && rec.state.trim()) ||
+          'unknown';
+        servers.push({ name, status });
+      }
+    }
+  }
+  const notable = servers.filter((s) => !isCleanMcpConnect(s.status));
+  if (notable.length === 0) return null;
+  return `MCP: ${notable.map((s) => `${s.name} ${s.status}`).join(', ')}`;
+}
+
+function isCleanMcpConnect(status: string): boolean {
+  return /^(connected|ok|ready|success)$/i.test(status.trim());
+}
+
 function eventsFromClaudeSystem(obj: Record<string, unknown>): AgentEvent | AgentEvent[] | null {
   const subtype = claudeString(obj, 'subtype') ?? '';
   const parentId = claudeParentToolUseId(obj);
@@ -277,7 +332,12 @@ function eventsFromClaudeSystem(obj: Record<string, unknown>): AgentEvent | Agen
   if (subtype === 'init') {
     if (parentId) return null;
     const sid = claudeString(obj, 'session_id');
-    return sid ? { type: 'session_id', data: sid } : null;
+    const mcpNote = mcpStatusThinkingFromClaudeInit(obj);
+    const events: AgentEvent[] = [];
+    if (sid) events.push({ type: 'session_id', data: sid });
+    if (mcpNote) events.push({ type: 'thinking', data: mcpNote, replace: true });
+    if (events.length === 0) return null;
+    return events.length === 1 ? events[0]! : events;
   }
 
   if (subtype === 'task_started') {
@@ -529,6 +589,12 @@ export const claudeAdapter: AgentAdapter = {
     const mcpConfigPath = writeMcpServersConfig(injectedServers);
     if (mcpConfigPath) {
       args.push('--mcp-config', mcpConfigPath);
+      // Coordinators already have Sideboard linear_* / list_issues. Merging
+      // ~/.claude + claude.ai Linear (HTTP) on the first turn is what hangs
+      // “find me work” while that connector flaps.
+      if (isOrchestrator) {
+        args.push('--strict-mcp-config');
+      }
     }
     if (chromeOn) {
       args.push('--chrome');
@@ -561,6 +627,9 @@ export const claudeAdapter: AgentAdapter = {
         CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:
           process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS ??
           String(CLAUDE_PRINT_BG_WAIT_CEILING_MS),
+        // `--strict-mcp-config` still fetches claude.ai connectors on some CLI
+        // builds (anthropics/claude-code#60252). Coordinators do not need them.
+        ...(isOrchestrator ? { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' } : {}),
       },
     };
   },

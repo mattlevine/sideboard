@@ -75,12 +75,27 @@ describe('cursorAdapter.buildTurn', () => {
     const cmd = await cursorAdapter.buildTurn(baseThread, { prompt: 'list threads' });
     const req = JSON.parse(cmd.stdin!) as {
       mcpServers?: Record<string, { type?: string; command: string; args?: string[] }>;
+      isolateAmbientMcp?: boolean;
     };
     expect(req.mcpServers?.sideboard).toBeTruthy();
     expect(req.mcpServers!.sideboard.type).toBe('stdio');
     expect(req.mcpServers!.sideboard.command).toBeTruthy();
     expect(req.mcpServers!.sideboard.command).not.toBe('/bin/sh');
     expect(JSON.stringify(req.mcpServers!.sideboard)).not.toContain('ELECTRON_RUN_AS_NODE');
+    expect(req.isolateAmbientMcp).toBeUndefined();
+  });
+
+  it('isolates orchestration Cursor from ~/.cursor/mcp.json', async () => {
+    const cmd = await cursorAdapter.buildTurn(
+      {
+        ...baseThread,
+        sourceType: 'orchestration',
+        repoPath: '__global__',
+      } as typeof baseThread,
+      { prompt: 'find work' },
+    );
+    const req = JSON.parse(cmd.stdin!) as { isolateAmbientMcp?: boolean };
+    expect(req.isolateAmbientMcp).toBe(true);
   });
 
   it('omits cachedPrefix on resumed Cursor sessions', async () => {

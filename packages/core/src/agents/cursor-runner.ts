@@ -153,7 +153,11 @@ async function main(): Promise<number> {
   });
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
   const store = localAgentStore(req.threadId);
-  const local = withCursorLocalHangGuards({ cwd: req.cwd, store });
+  const local = withCursorLocalHangGuards({
+    cwd: req.cwd,
+    store,
+    ...(req.isolateAmbientMcp ? { settingSources: [] as const } : {}),
+  });
   // Inline MCP is not persisted on resume — pass every turn (create + resume + send).
   const mcpServers =
     req.mcpServers && Object.keys(req.mcpServers).length > 0

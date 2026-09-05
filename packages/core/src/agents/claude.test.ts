@@ -157,6 +157,8 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).not.toContain('mcp__sideboard__slack_post');
     expect(allowed).not.toContain('mcp__sideboard__list_teams');
     expect(allowed).not.toContain('mcp__sideboard__*');
+    expect(cmd.args).not.toContain('--strict-mcp-config');
+    expect(cmd.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBeUndefined();
     const mcpIdx = cmd.args.indexOf('--mcp-config');
     expect(mcpIdx).toBeGreaterThan(-1);
     const cfgPath = cmd.args[mcpIdx + 1];
@@ -190,6 +192,8 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('Read');
     expect(cmd.args).not.toContain('--tools');
     expect(cmd.args).not.toContain('--disallowedTools');
+    expect(cmd.args).toContain('--strict-mcp-config');
+    expect(cmd.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBe('false');
     const mcpIdx = cmd.args.indexOf('--mcp-config');
     const cfg = JSON.parse(readFileSync(cmd.args[mcpIdx + 1]!, 'utf8')) as {
       mcpServers: { sideboard: { env?: Record<string, string> } };
@@ -214,6 +218,8 @@ describe('claudeAdapter.buildTurn', () => {
       .filter(Boolean);
     expect(allowed).toContain('mcp__sideboard__*');
     expect(allowed).toContain('Bash');
+    expect(cmd.args).toContain('--strict-mcp-config');
+    expect(cmd.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBe('false');
   });
 });
 
@@ -223,6 +229,54 @@ describe('claudeAdapter.parseEvent', () => {
       JSON.stringify({ type: 'system', subtype: 'init', session_id: 'sess-123' }),
     );
     expect(event).toEqual({ type: 'session_id', data: 'sess-123' });
+  });
+
+  it('surfaces failed MCP servers from system/init so a flap is not silent', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sess-123',
+          mcp_servers: [
+            { name: 'sideboard', status: 'connected' },
+            { name: 'linear', status: 'failed' },
+          ],
+        }),
+      ),
+    ).toEqual([
+      { type: 'session_id', data: 'sess-123' },
+      { type: 'thinking', data: 'MCP: linear failed', replace: true },
+    ]);
+  });
+
+  it('does not add MCP thinking when every listed server is connected', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sess-123',
+          mcp_servers: [{ name: 'sideboard', status: 'connected' }],
+        }),
+      ),
+    ).toEqual({ type: 'session_id', data: 'sess-123' });
+  });
+
+  it('reads map-shaped mcp_servers from system/init', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sess-123',
+          mcpServers: { linear: { status: 'pending' } },
+        }),
+      ),
+    ).toEqual([
+      { type: 'session_id', data: 'sess-123' },
+      { type: 'thinking', data: 'MCP: linear pending', replace: true },
+    ]);
   });
 
   it('extracts assistant text even when session_id is present', () => {

@@ -438,16 +438,11 @@ export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
  * OpenCode `OPENCODE_CONFIG_CONTENT` JSON fragment (merges over project/global config).
  * Uses the v1 `mcp.<name>` shape (`type` + `command` array + `enabled`) used by current CLI.
  */
-export function toOpencodeMcpConfigContent(servers: InjectedMcpServer[]): string {
-  const mcp: Record<
-    string,
-    {
-      type: 'local';
-      command: string[];
-      enabled: boolean;
-      environment?: Record<string, string>;
-    }
-  > = {};
+export function toOpencodeMcpConfigContent(
+  servers: InjectedMcpServer[],
+  opts?: { disableNames?: string[] },
+): string {
+  const mcp: Record<string, Record<string, unknown>> = {};
   for (const s of servers) {
     const env = mcpSpawnEnv(s.env);
     mcp[s.name] = {
@@ -456,6 +451,11 @@ export function toOpencodeMcpConfigContent(servers: InjectedMcpServer[]): string
       enabled: true,
       ...(env ? { environment: env } : {}),
     };
+  }
+  for (const name of opts?.disableNames ?? []) {
+    const key = name.trim();
+    if (!key || mcp[key]?.enabled === true) continue;
+    mcp[key] = { ...mcp[key], enabled: false };
   }
   return JSON.stringify({ mcp });
 }

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CODEX_PROMPT_ARG_MAX, codexAdapter } from './codex.js';
+import * as orchMcpIsolation from './orch-mcp-isolation.js';
 
 const baseThread = {
   id: 't1',
@@ -117,6 +118,25 @@ describe('codexAdapter.buildTurn', () => {
       { prompt: 'create a thread' },
     );
     expect(cmd.args[cmd.args.indexOf('--sandbox') + 1]).toBe('danger-full-access');
+  });
+
+  it('disables user Codex MCP servers on orchestration turns only', async () => {
+    const spy = vi
+      .spyOn(orchMcpIsolation, 'listUserCodexMcpNames')
+      .mockReturnValue(['linear']);
+    try {
+      const orch = await codexAdapter.buildTurn(
+        { ...baseThread, sourceType: 'orchestration' } as typeof baseThread & {
+          sourceType: 'orchestration';
+        },
+        { prompt: 'find work' },
+      );
+      const work = await codexAdapter.buildTurn(baseThread, { prompt: 'find work' });
+      expect(orch.args).toContain('mcp_servers.linear.enabled=false');
+      expect(work.args).not.toContain('mcp_servers.linear.enabled=false');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
