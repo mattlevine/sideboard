@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readThread, createEmptyThread, writeThread } from '../store/thread-store.js';
@@ -177,6 +177,35 @@ describe('Orchestrator queued-message editing', () => {
       partsCount: 0,
     });
     expect(readThread(thread.id)?.queue).toEqual([]);
+  });
+
+  it('prepends a job-continue prompt when a detached job is still running', () => {
+    const thread = seedThread([]);
+    const jobDir = join(thread.worktreePath, '.context', '.sideboard', 'detached-jobs', 'core-test');
+    mkdirSync(jobDir, { recursive: true });
+    writeFileSync(join(jobDir, 'pid'), `${process.pid}\n`);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      maybeEnqueueJobContinue: (id: string, chatText: string) => void;
+      jobContinueCount: Map<string, number>;
+    };
+    internal.maybeEnqueueJobContinue(thread.id, "I'll let you know when they're done.");
+    const after = readThread(thread.id)!;
+    expect(after.queue[0]).toMatch(/wait_for_job/);
+    expect(internal.jobContinueCount.get(thread.id)).toBe(1);
+  });
+
+  it('nudges once when the agent promised later with no running job', () => {
+    const thread = seedThread([]);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      maybeEnqueueJobContinue: (id: string, chatText: string) => void;
+      jobContinueNudged: Set<string>;
+    };
+    internal.maybeEnqueueJobContinue(thread.id, "I'll let you know when the tests are done.");
+    expect(readThread(thread.id)?.queue[0]).toMatch(/no detached job/i);
+    internal.maybeEnqueueJobContinue(thread.id, "I'll let you know when the tests are done.");
+    expect(readThread(thread.id)?.queue).toHaveLength(1);
   });
 
   it('keeps status running when a follow-up is queued during an in-flight turn', async () => {

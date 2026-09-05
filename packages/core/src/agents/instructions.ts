@@ -300,7 +300,8 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
     `Helper (same tool as \`scripts/detached-job.js\` when that file exists in the worktree): \`${invoke}\``,
     `- Start once: \`${invoke} start <id> -- <command> [args...]\` (cwd = this worktree). If JSON says already-running, do not start again.`,
     '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running` — the side column is the live view.',
-    `- Loop \`${invoke} wait <id>\` (returns in ~45s). stillRunning → present the same id with \`content=delta\` only → wait again. Do not resend the full log or HTML.`,
+    `- Loop Sideboard MCP \`wait_for_job\` with the same id (returns in ~45s). stillRunning → present the same id with \`content=delta\` only → wait_for_job again. Shell fallback: \`${invoke} wait <id>\`. Do not resend the full log or HTML.`,
+    '- Do not end the turn with “I’ll let you know when it’s done.” Stay in the loop until stillRunning is false.',
     '- ok → finish the task. failed → read the log, fix, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
   ].join('\n');
@@ -309,7 +310,7 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
 /** Short long-job line on every worktree turn (survives CLI resume). */
 export function formatLongRunningReminder(opts?: { scriptPath?: string | null }): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
-  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait, present_artifact type=log (delta). Do not ask the human to poll.`;
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait), present_artifact type=log (delta). Do not say you will let the user know later — stay in the turn.`;
 }
 
 /**

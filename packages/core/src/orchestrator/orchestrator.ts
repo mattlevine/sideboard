@@ -84,6 +84,11 @@ import {
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
 import { notifyParentOfChildHalt } from './child-halt.js';
+import {
+  listRunningDetachedJobs,
+  planJobContinue,
+  turnWatchedDetachedJob,
+} from '../mcp/wait-for-job.js';
 import { createThread } from '../threads/create.js';
 import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
@@ -278,6 +283,9 @@ export class Orchestrator {
    * finish or a user send so a later crash can recover again.
    */
   private readonly crashContinued = new Set<string>();
+  /** Auto-continues after a worktree turn ended while a detached job still runs. */
+  private readonly jobContinueCount = new Map<string, number>();
+  private readonly jobContinueNudged = new Set<string>();
   private maxConcurrent: number;
   private runningCount = 0;
 
@@ -666,6 +674,42 @@ export class Orchestrator {
     this.haltDrain.delete(threadId);
   }
 
+  /**
+   * Worktree agent ended the turn after “I’ll let you know” (or left a
+   * detached test/pack job running). Queue a continue so the chat does not
+   * go idle with nobody watching the log.
+   */
+  private maybeEnqueueJobContinue(
+    threadId: string,
+    chatText: string,
+    parts: { type?: string; name?: string; detail?: string; description?: string; input?: unknown }[] = [],
+  ): void {
+    if (this.haltDrain.has(threadId)) return;
+    const thread = readThread(threadId);
+    if (!thread || thread.status === 'archived') return;
+    const runningJobIds = listRunningDetachedJobs(thread.worktreePath ?? '');
+    const decision = planJobContinue({
+      runningJobIds,
+      chatText,
+      queueLength: thread.queue.length,
+      continueCount: this.jobContinueCount.get(threadId) ?? 0,
+      alreadyNudged: this.jobContinueNudged.has(threadId),
+      isOrchestrator: isOrchestratorThread(thread),
+      agent: thread.agent,
+      watchedJob: turnWatchedDetachedJob(parts),
+    });
+    if (decision.action === 'none') {
+      if (runningJobIds.length === 0) this.jobContinueCount.delete(threadId);
+      return;
+    }
+    if (decision.action === 'nudge') this.jobContinueNudged.add(threadId);
+    else this.jobContinueCount.set(threadId, (this.jobContinueCount.get(threadId) ?? 0) + 1);
+    const queue = [decision.prompt, ...thread.queue];
+    updateThread(threadId, { queue });
+    this.emit({ type: 'queue_changed', threadId, queue });
+    this.haltDrain.delete(threadId);
+  }
+
   getThreads(includeArchived = false): Thread[] {
     return listThreads({ includeArchived });
   }
@@ -797,6 +841,8 @@ export class Orchestrator {
       }
       const queue = [...current.queue, prompt];
       this.crashContinued.delete(thread.id);
+      this.jobContinueCount.delete(thread.id);
+      this.jobContinueNudged.delete(thread.id);
       this.haltDrain.delete(thread.id);
       const inFlight =
         this.activeTurns.has(thread.id) ||
@@ -1512,6 +1558,7 @@ export class Orchestrator {
         this.emit({ type: 'turn_finished', threadId, exitCode });
         if (exitCode === 0) {
           this.crashContinued.delete(threadId);
+          this.maybeEnqueueJobContinue(threadId, chatText, parts);
         } else {
           const blob = [chatText, detail].filter(Boolean).join('\n');
           void this.maybeHandleOrchestrationQuotaFailover(threadId, blob);

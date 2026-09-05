@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.158] - 2026-09-05
+
+### Added
+
+- Worktree agents get MCP `wait_for_job` (45s / `stillRunning`, same contract as `wait_for_turn`) so Claude can poll detached tests instead of ending the turn with “I’ll let you know.” If a turn still ends while a detached job is running — or the last text promises to report later with no job — Orchestrator queues a continue.
+
 ## [0.1.157] - 2026-09-05
 
 ### Added

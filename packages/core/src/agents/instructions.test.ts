@@ -61,10 +61,12 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/Long-running jobs/);
     expect(text).toContain('node "/abs/detached-job.js"');
     expect(text).toMatch(/start <id>/);
+    expect(text).toMatch(/wait_for_job/);
     expect(text).toMatch(/present_artifact/);
     expect(text).toMatch(/type=log/);
     expect(text).toMatch(/\/long-running/);
     expect(text).toMatch(/Do not ask the human to poll/);
+    expect(text).toMatch(/let you know/i);
     expect(text).toMatch(/\.context\/\.sideboard\/detached-jobs/);
   });
 });
@@ -75,8 +77,9 @@ describe('formatLongRunningReminder', () => {
       scriptPath: '/abs/detached-job.js',
     });
     expect(text).toContain('node "/abs/detached-job.js"');
+    expect(text).toMatch(/wait_for_job/);
     expect(text).toMatch(/present_artifact type=log/);
-    expect(text).toMatch(/Do not ask the human to poll/);
+    expect(text).toMatch(/let the user know later/);
   });
 });
 

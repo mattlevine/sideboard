@@ -11,7 +11,7 @@ export const LONG_RUNNING_SKILL_BODY = `# Long-running jobs
 
 A Sideboard or Cursor **worktree turn** SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted. \`block_until_ms: 0\` is not enough — the child stays in that group.
 
-Do **not** ask the human to check back. Detach, then **wait** in 45s slices (same idea as MCP \`wait_for_turn\`) until \`stillRunning\` is false.
+Do **not** ask the human to check back. Detach, then **wait** in 45s slices (MCP \`wait_for_job\`, same idea as \`wait_for_turn\`) until \`stillRunning\` is false. Do not end the turn with “I’ll let you know.”
 
 ## Tool
 
@@ -21,7 +21,8 @@ Use the helper from the Sideboard playbook — an absolute \`node "…" start\` 
 # Start (exits in ~1s; job survives this turn)
 node <detached-job.js> start <id> -- <command> [args...]
 
-# Wait — returns within ~45s even if the job is still going
+# Wait — prefer MCP wait_for_job (same 45s / stillRunning contract).
+# Shell fallback:
 node <detached-job.js> wait <id>
 
 # Block until the process exits (humans / a turn that will not be interrupted)
@@ -34,7 +35,7 @@ node <detached-job.js> status <id>
 
 Wait JSON:
 
-- \`stillRunning: true\` → exit 2 → **call wait again**. Progress is in \`progress\` / \`phase\`. Do not start a second job. Do not ping the user.
+- \`stillRunning: true\` → **call wait_for_job again** (or shell wait). Progress is in \`progress\` / \`phase\`. Do not start a second job. Do not ping the user.
 - \`ok: true\` → exit 0 → continue the rest of the task.
 - \`failed: true\` → exit 1 → read \`progress\`, fix, start **once**.
 
@@ -64,7 +65,7 @@ node <detached-job.js> wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
 
 1. \`start\` once. If JSON says \`already-running\`, do not start again.
 2. Immediately \`present_artifact\` \`type=log\` (same \`artifact_id\`, \`status=running\`) — the human should see **working** in the side column, not a “check back later” message.
-3. Loop \`wait\` (use \`--timeout-ms 15000\` for a livelier pane). After each slice, \`present_artifact\` the same id with \`content=delta\` only.
+3. Loop \`wait_for_job\` (or shell \`wait\`). After each slice, \`present_artifact\` the same id with \`content=delta\` only.
 4. On \`ok\`, present once more (\`status=ok\`, last \`delta\`) and finish the task. On \`failed\`, fix from the log.
 
 Never tell the user “say status when it’s done.” You wait.

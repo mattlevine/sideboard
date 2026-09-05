@@ -28,13 +28,14 @@ describe('sideboardMcpProfile', () => {
     );
   });
 
-  it('worktree MCP catalog is the five UI tools only', () => {
+  it('worktree MCP catalog is the UI tools plus wait_for_job', () => {
     expect([...WORKTREE_MCP_TOOLS]).toEqual([
       'present_artifact',
       'ask_user',
       'present_plan',
       'present_schema',
       'present_files',
+      'wait_for_job',
     ]);
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_threads');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_board');
