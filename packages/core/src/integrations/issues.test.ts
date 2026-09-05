@@ -134,6 +134,51 @@ describe('integrations / issues', () => {
     expect(result.viewer?.name).toBe('Grant');
   });
 
+  it('searches AbleTime without listing assigned tasks, and honors limit', async () => {
+    const { settings, issues } = await load();
+    settings.updateIntegrationsSettings({
+      abletimeAccessToken: 'apt_test',
+      issueSource: 'abletime',
+    });
+
+    const names: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)) as { params?: { name?: string } };
+        const name = body.params?.name ?? '';
+        names.push(name);
+        const payload =
+          name === 'orientation'
+            ? { viewer: { name: 'Grant' }, projects: [] }
+            : {
+                data: [
+                  { id: 't1', reference: 'CRM-1', title: 'Inbox one', state: 'todo' },
+                  { id: 't2', reference: 'CRM-2', title: 'Inbox two', state: 'todo' },
+                ],
+              };
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          text: async () =>
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              result: { content: [{ type: 'text', text: JSON.stringify(payload) }] },
+            }),
+        };
+      }),
+    );
+
+    const result = await issues.listIssues('/tmp/repo', { query: 'inbox', limit: 1 });
+    expect(result.source).toBe('abletime');
+    expect(names).toContain('search_tasks');
+    expect(names).toContain('orientation');
+    expect(names).not.toContain('list_tasks');
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]?.identifier).toBe('CRM-1');
+  });
+
   it('uses Linear when connected and preferred', async () => {
     const { settings, issues } = await load();
     settings.updateIntegrationsSettings({
@@ -246,6 +291,23 @@ describe('integrations / issues', () => {
     const result = await issues.listIssues('/tmp/repo', { assignee: 'unassigned' });
     expect(result.source).toBe('github');
     expect(result.issues).toEqual([]);
+    expect(gh).toHaveBeenCalled();
+  });
+
+  it('passes GitHub list limit to gh', async () => {
+    const { issues } = await load();
+    const gh = vi.spyOn(await import('../git/run.js'), 'gh').mockImplementation(async (args) => {
+      if (args[0] === 'api') {
+        return { stdout: 'octocat\n', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === 'issue') {
+        expect(args).toContain('--limit');
+        expect(args[args.indexOf('--limit') + 1]).toBe('41');
+        return { stdout: '[]', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    await issues.listIssues('/tmp/repo', { limit: 41 });
     expect(gh).toHaveBeenCalled();
   });
 });

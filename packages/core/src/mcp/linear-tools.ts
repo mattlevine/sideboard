@@ -8,12 +8,15 @@ import {
   listLinearTeams,
   updateLinearIssue,
 } from '../integrations/linear.js';
+import {
+  applyIssueListWindow,
+  clampMcpIssueLimit,
+  formatMcpIssueList,
+  mcpJson,
+} from './issue-list.js';
 
 function text(payload: unknown, isError = false) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
-    ...(isError ? { isError: true } : {}),
-  };
+  return mcpJson(payload, isError);
 }
 
 function fail(err: unknown) {
@@ -38,7 +41,7 @@ const prioritySchema = z
 export function registerLinearTools(server: McpServer): void {
   server.tool(
     'linear_list_teams',
-    'List Linear teams (id, key, name) and workflow states for the connected Account. Use team key (e.g. ENG) on linear_create_issue; use state name or type (started, completed) on create/update. Viewer id is for assignee=me.',
+    'List Linear teams (id, key, name) and workflow states. Use team key on create; state name or type on create/update.',
     {},
     async () => {
       try {
@@ -51,7 +54,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_search_issues',
-    'Search or list open Linear issues. Not limited to the current user — pass assignee=unassigned for issues with no owner, assignee=all (default when query is set) for anyone including unassigned, assignee=me for yours, or a user id / name. Optional query uses Linear search (title, identifier, description).',
+    'Search or list open Linear issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all (default with query), or a user id/name.',
     {
       query: z
         .string()
@@ -61,11 +64,32 @@ export function registerLinearTools(server: McpServer): void {
         .string()
         .optional()
         .describe('me, unassigned, all, a Linear user id, or a display name. Default: all when query is set, otherwise me.'),
-      limit: z.number().int().positive().max(250).optional(),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(250)
+        .optional()
+        .describe('Page size (default 40, max 250). Raise when truncated is true.'),
     },
     async ({ query, assignee, limit }) => {
       try {
-        return text(await listLinearIssuesFiltered({ query, assignee, limit }));
+        const page = clampMcpIssueLimit(limit);
+        const listed = await listLinearIssuesFiltered({
+          query,
+          assignee,
+          limit: page + 1,
+        });
+        const windowed = applyIssueListWindow(listed.issues, page);
+        return mcpJson(
+          formatMcpIssueList({
+            source: 'linear',
+            viewer: listed.viewer.name,
+            limit: page,
+            issues: windowed.items,
+            truncated: windowed.truncated,
+          }),
+        );
       } catch (err) {
         return fail(err);
       }
@@ -74,7 +98,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_get_issue',
-    'Get a Linear issue by uuid or identifier (ENG-123). Returns description, comments, relations (blocks/blockedBy/related/duplicate), parent/children, project, cycle, labels, and other metadata.',
+    'Get a Linear issue by uuid or identifier (ENG-123): description, comments, relations, parent/children.',
     { id: z.string() },
     async ({ id }) => {
       try {
@@ -87,7 +111,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_create_issue',
-    'Create a Linear issue. Call linear_list_teams first. team is id, key, or name. state is name, type (unstarted/started/completed/canceled/backlog), or id. assignee is "me" or a user id.',
+    'Create a Linear issue. Call linear_list_teams first. team is id/key/name; state is name/type/id; assignee is "me" or a user id.',
     {
       team: z.string(),
       title: z.string(),
@@ -107,7 +131,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_update_issue',
-    'Update a Linear issue (uuid or ENG-123). Pass at least one of title, description, state, assignee, priority. state is name, type, or id. assignee is "me", a user id, or null to unassign.',
+    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, and/or priority.',
     {
       id: z.string(),
       title: z.string().optional(),

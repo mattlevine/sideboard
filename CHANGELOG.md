@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- MCP `list_issues` / `linear_search_issues` return a compact first page (default 40, max 250) with `truncated`. Pass `query` and/or a higher `limit` to search beyond 40. Linear and AbleTime mutation tools register only when connected. `list_linear_issues` is removed.
+
 ### Fixed
 
 - Creating from a ticket, PR, or named branch that already has a live worktree reuses that checkout (including PR ↔ head-branch). The Create-from picker marks those rows Already open and does not allow a second worktree.

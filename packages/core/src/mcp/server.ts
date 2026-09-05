@@ -12,7 +12,6 @@ import {
   resolveRepoRoot,
 } from '../git/worktree.js';
 import { listIssues } from '../integrations/issues.js';
-import { listLinearIssues } from '../threads/create.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
@@ -26,8 +25,13 @@ import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
 import { registerSlackTools } from './slack-tools.js';
-import { registerAbleTimeTools } from './abletime-tools.js';
-import { registerLinearTools } from './linear-tools.js';
+import { registerConnectedIssueVendorTools } from './issue-vendor-tools.js';
+import {
+  applyIssueListWindow,
+  clampMcpIssueLimit,
+  formatMcpIssueList,
+  mcpJson,
+} from './issue-list.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { formatGhLandError } from '../git/gh-errors.js';
@@ -617,8 +621,7 @@ export async function startMcpServer(): Promise<void> {
 
   if (!worktreeProfile) {
   registerSlackTools(server);
-  registerLinearTools(server);
-  registerAbleTimeTools(server);
+  registerConnectedIssueVendorTools(server);
   registerScheduleTools(server);
   const { getCaffeinateHold, setCaffeinateHold } = await import(
     '../store/caffeinate-hold.js'
@@ -1566,7 +1569,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List or search issues from Sideboard Account connections (Linear, AbleTime MCP, or GitHub Issues; falls back to GitHub when the preferred tracker is not connected). Linear defaults to issues assigned to you; pass assignee=unassigned for no owner, assignee=all for everyone (including unassigned), or a user id / GitHub login. Optional query searches title/identifier. Linear/AbleTime are account-wide; GitHub Issues are scoped to repoPath from list_workspaces. Prefer linear_search_issues when Linear is connected and you need unassigned or other people\'s tickets. When AbleTime is the issue source and work has no ticket, call abletime_ensure_task (or create_thread from the default branch — Sideboard auto-creates a task to track against). Prefer list_board for Home columns. Then create_thread with sourceType=ticket.',
+    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Then create_thread with sourceType=ticket.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('Search title, identifier, or description'),
@@ -1574,24 +1577,28 @@ export async function startMcpServer(): Promise<void> {
         .string()
         .optional()
         .describe('me (Linear default), unassigned, all, a user id, or a GitHub login'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(250)
+        .optional()
+        .describe('Page size (default 40, max 250). Raise when truncated is true.'),
     },
-    async ({ repoPath, query, assignee }) => {
+    async ({ repoPath, query, assignee, limit }) => {
       const root = await resolveRepoRoot(repoPath);
-      const result = await listIssues(root, { query, assignee });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
-  );
-
-  server.tool(
-    'list_linear_issues',
-    'Deprecated: prefer list_issues. Lists assigned Linear issues via the chosen agent MCP connector',
-    {
-      agent: z.enum(['claude', 'codex', 'opencode']),
-      repoPath: z.string(),
-    },
-    async ({ agent, repoPath }) => {
-      const issues = await listLinearIssues(agent, repoPath);
-      return { content: [{ type: 'text', text: JSON.stringify(issues, null, 2) }] };
+      const page = clampMcpIssueLimit(limit);
+      const result = await listIssues(root, { query, assignee, limit: page + 1 });
+      const windowed = applyIssueListWindow(result.issues, page);
+      return mcpJson(
+        formatMcpIssueList({
+          source: result.source,
+          viewer: result.viewer?.name || result.viewer?.login,
+          limit: page,
+          issues: windowed.items,
+          truncated: windowed.truncated,
+        }),
+      );
     },
   );
   }
