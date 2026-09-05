@@ -40,11 +40,16 @@ describe('registerConnectedIssueVendorTools', () => {
     return { server, names };
   }
 
-  it('registers no vendor tools when Linear and AbleTime are disconnected', async () => {
+  it('registers GitHub issue tools when Linear and AbleTime are disconnected', async () => {
     const { vendor } = await load();
     const { server, names } = fakeServer();
     vendor.registerConnectedIssueVendorTools(server);
-    expect(names).toEqual([]);
+    expect(names).toContain('github_get_issue');
+    expect(names).toContain('github_comment');
+    expect(names).toContain('github_update_issue');
+    expect(names).toContain('github_create_issue');
+    expect(names).not.toContain('linear_search_issues');
+    expect(names).not.toContain('abletime_orientation');
   });
 
   it('registers Linear tools only when Linear is connected', async () => {
@@ -52,6 +57,7 @@ describe('registerConnectedIssueVendorTools', () => {
     settings.updateIntegrationsSettings({ linearApiKey: 'lin_api_test' });
     const { server, names } = fakeServer();
     vendor.registerConnectedIssueVendorTools(server);
+    expect(names).toContain('github_get_issue');
     expect(names).toContain('linear_search_issues');
     expect(names).toContain('linear_get_issue');
     expect(names).not.toContain('abletime_orientation');
@@ -62,8 +68,10 @@ describe('registerConnectedIssueVendorTools', () => {
     settings.updateIntegrationsSettings({ abletimeAccessToken: 'apt_test' });
     const { server, names } = fakeServer();
     vendor.registerConnectedIssueVendorTools(server);
+    expect(names).toContain('github_get_issue');
     expect(names).toContain('abletime_orientation');
     expect(names).toContain('abletime_ensure_task');
+    expect(names).toContain('abletime_comment');
     expect(names).not.toContain('linear_search_issues');
   });
 });

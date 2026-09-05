@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
+  commentAbleTimeTask,
   createAbleTimeTask,
   ensureAbleTimeTask,
   getAbleTimeOrientation,
@@ -9,6 +10,7 @@ import {
   listAbleTimeTasks,
   searchAbleTimeTasks,
   toAbleTimeIssueInfo,
+  updateAbleTimeTask,
 } from '../integrations/abletime.js';
 import { mcpJson } from './issue-list.js';
 
@@ -22,6 +24,18 @@ function fail(err: unknown) {
     true,
   );
 }
+
+export const ABLETIME_MCP_TOOL_NAMES = [
+  'abletime_orientation',
+  'abletime_list_projects',
+  'abletime_list_tasks',
+  'abletime_search_tasks',
+  'abletime_get_task',
+  'abletime_comment',
+  'abletime_update_task',
+  'abletime_create_task',
+  'abletime_ensure_task',
+] as const;
 
 /**
  * AbleTime tools on the Sideboard MCP server (Account personal access token).
@@ -89,11 +103,53 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_get_task',
-    'Get one AbleTime task by id or reference (e.g. CRM-232).',
+    'Get one AbleTime task by id or reference (e.g. CRM-232): description, state, comments. Re-fetch to read new comments.',
     { id: z.string() },
     async ({ id }) => {
       try {
-        return text(toAbleTimeIssueInfo(await getAbleTimeTask(id)));
+        const task = await getAbleTimeTask(id);
+        return text({
+          ...toAbleTimeIssueInfo(task),
+          description: task.description,
+          state: task.state,
+          comments: task.comments,
+        });
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.tool(
+    'abletime_comment',
+    'Add a markdown comment on an AbleTime task (id or CRM-232).',
+    { id: z.string(), body: z.string() },
+    async (args) => {
+      try {
+        return text(await commentAbleTimeTask(args));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.tool(
+    'abletime_update_task',
+    'Update an AbleTime task (id or CRM-232). Pass title, description, and/or state.',
+    {
+      id: z.string(),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      state: z.string().optional(),
+    },
+    async (args) => {
+      try {
+        const task = await updateAbleTimeTask(args);
+        return text({
+          ...toAbleTimeIssueInfo(task),
+          description: task.description,
+          state: task.state,
+        });
       } catch (err) {
         return fail(err);
       }
@@ -102,13 +158,17 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_create_task',
-    'Create an AbleTime task in a project. Call abletime_list_projects if you do not have a project id. New tasks start in todo (or backlog).',
+    'Create an AbleTime task in a project. Call abletime_list_projects if you do not have a project id. Pass parent (CRM-232) for a spin-off. New tasks start in todo (or backlog).',
     {
       title: z.string(),
       description: z.string().optional(),
       projectId: z.string().optional(),
       categoryId: z.string().optional(),
       state: z.enum(['backlog', 'todo']).optional(),
+      parent: z
+        .string()
+        .optional()
+        .describe('Parent task id or reference (CRM-232) for a spin-off.'),
     },
     async (args) => {
       try {

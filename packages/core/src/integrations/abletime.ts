@@ -18,6 +18,14 @@ const CLOSED_STATES = new Set([
   'closed',
 ]);
 
+export interface AbleTimeComment {
+  id?: string;
+  body: string;
+  url?: string;
+  createdAt?: string;
+  user?: string;
+}
+
 export interface AbleTimeTask {
   id: string;
   identifier: string;
@@ -29,6 +37,7 @@ export interface AbleTimeTask {
   categoryId?: string;
   assignee?: { id?: string; name: string };
   labels: string[];
+  comments: AbleTimeComment[];
 }
 
 export interface AbleTimeProject {
@@ -99,6 +108,30 @@ function labelsOf(record: Record<string, unknown>): string[] {
     .filter(Boolean);
 }
 
+function commentsOf(record: Record<string, unknown>): AbleTimeComment[] {
+  const raw = record.comments ?? record.notes ?? record.discussion;
+  const out: AbleTimeComment[] = [];
+  for (const item of asList(raw)) {
+    const rec = asRecord(item);
+    if (!rec) continue;
+    const body = firstString(rec, ['body', 'text', 'comment', 'content', 'message']);
+    if (!body) continue;
+    const user =
+      firstString(asRecord(rec.user) ?? asRecord(rec.author), ['name', 'display_name']) ||
+      firstString(rec, ['user_name', 'author']);
+    const comment: AbleTimeComment = { body };
+    const id = firstString(rec, ['id', 'comment_id']);
+    if (id) comment.id = id;
+    const url = firstString(rec, ['url', 'permalink']);
+    if (url) comment.url = url;
+    const createdAt = firstString(rec, ['created_at', 'createdAt', 'created']);
+    if (createdAt) comment.createdAt = createdAt;
+    if (user) comment.user = user;
+    out.push(comment);
+  }
+  return out;
+}
+
 function assigneeOf(record: Record<string, unknown>): AbleTimeTask['assignee'] {
   const nested = firstRecord(record, ['assignee', 'assigned_to', 'user', 'owner']);
   const name =
@@ -143,6 +176,7 @@ export function mapAbleTimeTask(raw: unknown, host?: string | null): AbleTimeTas
       undefined,
     assignee: assigneeOf(nested),
     labels: labelsOf(nested),
+    comments: commentsOf(nested),
   };
 }
 
@@ -284,6 +318,7 @@ export async function createAbleTimeTask(
     projectId?: string;
     categoryId?: string;
     state?: 'backlog' | 'todo';
+    parent?: string;
   },
   opts?: { token?: string | null; host?: string | null },
 ): Promise<AbleTimeTask> {
@@ -291,22 +326,90 @@ export async function createAbleTimeTask(
   if (!title) throw new Error('AbleTime task title is required');
   const project = await resolveAbleTimeProject(input.projectId, opts);
   const category = resolveAbleTimeCategory(project, input.categoryId);
+  const parent = input.parent?.trim();
+  const descriptionParts = [
+    parent ? `Spin-off of ${parent}.` : null,
+    input.description?.trim() || null,
+  ].filter(Boolean);
   const raw = await callAbleTimeTool(
     'create_task',
     {
       title,
-      description: input.description?.trim() || undefined,
+      description: descriptionParts.join('\n\n') || undefined,
       state: input.state ?? 'todo',
       project: project.id,
       project_id: project.id,
       category: category?.id,
       category_id: category?.id,
+      parent,
+      parent_id: parent,
+      related_task_id: parent,
     },
     opts,
   );
   const task = mapAbleTimeTask(raw, opts?.host);
   if (!task) throw new Error('AbleTime create_task returned no task');
   return task;
+}
+
+export async function commentAbleTimeTask(
+  input: { id: string; body: string },
+  opts?: { token?: string | null; host?: string | null },
+): Promise<{ id?: string; body: string }> {
+  const id = input.id.trim();
+  const body = input.body.trim();
+  if (!id) throw new Error('AbleTime task id is required');
+  if (!body) throw new Error('AbleTime comment body is required');
+  const raw = await callAbleTimeTool(
+    'create_comment',
+    { id, task_id: id, task: id, body, comment: body, text: body },
+    opts,
+  );
+  const rec = asRecord(raw);
+  return {
+    id: rec ? firstString(rec, ['id', 'comment_id']) || undefined : undefined,
+    body: rec ? firstString(rec, ['body', 'text', 'comment']) || body : body,
+  };
+}
+
+export async function updateAbleTimeTask(
+  input: { id: string; title?: string; description?: string; state?: string },
+  opts?: { token?: string | null; host?: string | null },
+): Promise<AbleTimeTask> {
+  const id = input.id.trim();
+  if (!id) throw new Error('AbleTime task id is required');
+  const title = input.title?.trim();
+  const description = input.description;
+  const state = input.state?.trim();
+  if (!title && description === undefined && !state) {
+    throw new Error('abletime_update_task needs at least one of title, description, state');
+  }
+  if (state) {
+    await callAbleTimeTool(
+      'set_task_state',
+      { id, task_id: id, task: id, state },
+      opts,
+    ).catch(async () => {
+      await callAbleTimeTool(
+        'update_task',
+        { id, task_id: id, title, description, state },
+        opts,
+      );
+    });
+  }
+  if (title || description !== undefined) {
+    await callAbleTimeTool(
+      'update_task',
+      {
+        id,
+        task_id: id,
+        ...(title ? { title } : {}),
+        ...(description !== undefined ? { description } : {}),
+      },
+      opts,
+    );
+  }
+  return getAbleTimeTask(id, opts);
 }
 
 async function resolveAbleTimeProject(

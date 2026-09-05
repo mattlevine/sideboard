@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { run } from '../git/run.js';
 import {
   claudeChromeEnabled,
+  isAbleTimeConnected,
+  isLinearConnected,
   resolveClaudeExecutable,
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
@@ -11,9 +13,9 @@ import { withEventParentId } from './message-parts.js';
 import {
   brightsyMcpAllowedTools,
   buildInjectedMcpServers,
-  SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS,
   SIDEBOARD_MCP_ALLOWED_TOOLS,
   shouldInjectBrightsyMcp,
+  sideboardWorktreeAllowedTools,
   writeMcpServersConfig,
 } from './injected-mcp.js';
 import { dropCachedPrefixOnResume, flattenTurnInput } from './turn-input.js';
@@ -565,7 +567,11 @@ export const claudeAdapter: AgentAdapter = {
       allowedTools = [
         ...BASE_ALLOWED_TOOLS,
         ...mcpAllowTools(servers),
-        ...SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS,
+        ...sideboardWorktreeAllowedTools({
+          github: true,
+          linear: isLinearConnected(),
+          abletime: isAbleTimeConnected(),
+        }),
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
       ];
     }

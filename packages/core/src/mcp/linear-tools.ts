@@ -34,6 +34,16 @@ const prioritySchema = z
   .optional()
   .describe('0 none, 1 urgent, 2 high, 3 medium, 4 low');
 
+/** Account Linear tools registered when Settings → Issues Linear is connected. */
+export const LINEAR_MCP_TOOL_NAMES = [
+  'linear_list_teams',
+  'linear_search_issues',
+  'linear_get_issue',
+  'linear_create_issue',
+  'linear_update_issue',
+  'linear_comment',
+] as const;
+
 /**
  * Linear ticket tools on the Sideboard MCP server (Account OAuth / API key).
  * Call linear_list_teams first when creating; pass ENG-123 or uuid as id.
@@ -111,7 +121,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_create_issue',
-    'Create a Linear issue. Call linear_list_teams first. team is id/key/name; state is name/type/id; assignee is "me" or a user id.',
+    'Create a Linear issue. Call linear_list_teams first. team is id/key/name; state is name/type/id; assignee is "me" or a user id. Pass parent (ENG-123 or uuid) to nest a spin-off under the current ticket.',
     {
       team: z.string(),
       title: z.string(),
@@ -119,6 +129,10 @@ export function registerLinearTools(server: McpServer): void {
       state: z.string().optional(),
       assignee: z.string().nullable().optional(),
       priority: prioritySchema,
+      parent: z
+        .string()
+        .optional()
+        .describe('Parent issue uuid or identifier (ENG-123) for a spin-off / sub-issue.'),
     },
     async (args) => {
       try {

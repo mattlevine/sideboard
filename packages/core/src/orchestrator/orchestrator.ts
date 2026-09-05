@@ -147,18 +147,27 @@ import {
 } from '../composer/context-compact.js';
 import {
   formatArtifactDirective,
+  formatIssueToolsDirective,
+  formatIssueToolsReminder,
   formatLongRunningDirective,
   formatLongRunningReminder,
   formatRenameBranchDirective,
   formatUiReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
+  issueTicketFromThread,
 } from '../agents/instructions.js';
 import {
   formatOptionalServicesDirective,
   formatOptionalServicesReminder,
 } from '../integrations/optional-services.js';
-import { loadAppSettings, type FollowUpBehavior } from '../store/app-settings.js';
+import {
+  isAbleTimeConnected,
+  isLinearConnected,
+  loadAppSettings,
+  resolveEffectiveIssueSource,
+  type FollowUpBehavior,
+} from '../store/app-settings.js';
 import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
 import {
   extractPresentedPlan,
@@ -1071,6 +1080,17 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatOptionalServicesReminder(loadAppSettings().integrations)
         : null;
+    const issueTicket = issueTicketFromThread(thread, resolveEffectiveIssueSource());
+    const issueToolsReminder =
+      thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
+        ? formatIssueToolsReminder({
+            linear: isLinearConnected(),
+            abletime: isAbleTimeConnected(),
+            github: true,
+            ticketId: issueTicket?.id,
+            ticketProvider: issueTicket?.provider,
+          })
+        : null;
     const slackReplyContext = formatSlackRepliesForTurn(
       pendingSlackExternalReplies(thread.messages),
     );
@@ -1079,6 +1099,7 @@ export class Orchestrator {
       orchestrationReminder,
       worktreeReminder,
       optionalServicesReminder,
+      issueToolsReminder,
       artifactReminder,
       longRunningReminder,
       slackReplyContext,
@@ -1130,6 +1151,17 @@ export class Orchestrator {
       isBrightsy || isOrchestration
         ? null
         : formatOptionalServicesDirective(loadAppSettings().integrations);
+    const freshIssueTicket = issueTicketFromThread(fresh, resolveEffectiveIssueSource());
+    const issueToolsDirective =
+      isBrightsy || isOrchestration
+        ? null
+        : formatIssueToolsDirective({
+            linear: isLinearConnected(),
+            abletime: isAbleTimeConnected(),
+            github: true,
+            ticketId: freshIssueTicket?.id,
+            ticketProvider: freshIssueTicket?.provider,
+          });
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     const renameBranchDirective =
       !isBrightsy && !isOrchestration && autoRenameBranchEnabled()
@@ -1180,6 +1212,7 @@ export class Orchestrator {
           coordinatorDirective,
           worktreeDirective,
           optionalServicesDirective,
+          issueToolsDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,
@@ -1346,6 +1379,7 @@ export class Orchestrator {
           coordinatorDirective,
           worktreeDirective,
           optionalServicesDirective,
+          issueToolsDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,

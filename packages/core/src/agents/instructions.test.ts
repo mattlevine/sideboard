@@ -10,8 +10,11 @@ import {
   formatProcessGuideDirective,
   formatRenameBranchDirective,
   formatUiReminder,
+  formatIssueToolsDirective,
+  formatIssueToolsReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
+  issueTicketFromThread,
   loadAgentInstructions,
   withAgentInstructions,
 } from './instructions.js';
@@ -104,6 +107,54 @@ describe('formatProcessGuideDirective', () => {
     expect(text).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
     expect(text).toMatch(/\.context\/review\.md/);
     expect(text).toMatch(/\.sideboard\/review\.md/);
+  });
+});
+
+describe('issueTicketFromThread', () => {
+  it('maps GitHub and keyed ticket refs', () => {
+    expect(issueTicketFromThread({ sourceType: 'ticket', sourceRef: '#12' })).toEqual({
+      id: '#12',
+      provider: 'github',
+    });
+    expect(
+      issueTicketFromThread({ sourceType: 'ticket', sourceRef: 'ENG-9' }, 'linear'),
+    ).toEqual({ id: 'ENG-9', provider: 'linear' });
+    expect(
+      issueTicketFromThread({ sourceType: 'ticket', sourceRef: 'CRM-232' }, 'abletime'),
+    ).toEqual({ id: 'CRM-232', provider: 'abletime' });
+    expect(issueTicketFromThread({ sourceType: 'branch', sourceRef: 'ENG-9' })).toBeNull();
+  });
+});
+
+describe('formatIssueToolsDirective', () => {
+  it('covers Linear, GitHub, and AbleTime Account tools', () => {
+    const text = formatIssueToolsDirective({
+      linear: true,
+      abletime: true,
+      ticketId: 'ENG-9',
+      ticketProvider: 'linear',
+    });
+    expect(text).toMatch(/linear_get_issue/);
+    expect(text).toMatch(/github_comment/);
+    expect(text).toMatch(/abletime_update_task/);
+    expect(text).toMatch(/vendor issue MCP/);
+    expect(text).toMatch(/ENG-9/);
+    expect(text).toMatch(/Do not ask the user to `claude mcp login`/);
+  });
+});
+
+describe('formatIssueToolsReminder', () => {
+  it('names connected Sideboard issue tools', () => {
+    const text = formatIssueToolsReminder({
+      linear: true,
+      abletime: false,
+      ticketId: '#4',
+      ticketProvider: 'github',
+    });
+    expect(text).toMatch(/linear_\*/);
+    expect(text).toMatch(/github_\*/);
+    expect(text).not.toMatch(/abletime_\*/);
+    expect(text).toMatch(/#4/);
   });
 });
 

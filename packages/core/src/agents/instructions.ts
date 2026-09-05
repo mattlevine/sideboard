@@ -6,7 +6,7 @@ import {
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
-import type { GithubGitAuthMode } from '../store/app-settings.js';
+import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
 import type { AgentKind, Thread } from '../types/thread.js';
 
 function normPath(p: string): string {
@@ -134,6 +134,129 @@ export function formatWorktreeDirective(
 /** Short isolation line on every worktree turn (survives CLI resume). */
 export function formatWorktreeReminder(): string {
   return 'Sideboard worktree: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push.';
+}
+
+const GITHUB_TICKET_REF = /^(?:#?\d+|gh-\d+)$/i;
+const KEYED_TICKET_REF =
+  /^(?:[A-Z][A-Z0-9]{0,9}-\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+export function issueTicketFromThread(
+  thread?: Pick<Thread, 'sourceType' | 'sourceRef'> | null,
+  preferredSource: IssueSource = 'github',
+): { id: string; provider: IssueSource } | null {
+  if (thread?.sourceType !== 'ticket') return null;
+  const ref = thread.sourceRef?.trim() ?? '';
+  if (!ref) return null;
+  if (/github\.com\/[^/]+\/[^/]+\/issues\/\d+/i.test(ref) || GITHUB_TICKET_REF.test(ref)) {
+    return { id: ref, provider: 'github' };
+  }
+  if (KEYED_TICKET_REF.test(ref)) {
+    return { id: ref, provider: preferredSource === 'github' ? 'linear' : preferredSource };
+  }
+  return { id: ref, provider: preferredSource };
+}
+
+/** @deprecated Use {@link issueTicketFromThread} */
+export function linearTicketIdFromThread(
+  thread?: Pick<Thread, 'sourceType' | 'sourceRef'> | null,
+): string | null {
+  const ticket = issueTicketFromThread(thread, 'linear');
+  return ticket?.provider === 'linear' ? ticket.id : null;
+}
+
+/**
+ * Fresh-session playbook: Account Linear / GitHub / AbleTime via Sideboard MCP.
+ * Vendor issue MCPs need a separate login and should be ignored.
+ */
+export function formatIssueToolsDirective(opts: {
+  linear: boolean;
+  abletime: boolean;
+  github?: boolean;
+  ticketId?: string | null;
+  ticketProvider?: IssueSource | null;
+}): string | null {
+  const github = opts.github !== false;
+  if (!opts.linear && !opts.abletime && !github) return null;
+  const lines = [
+    'Issue tracking (Settings → Issues / Git — already signed in):',
+    '- Use Sideboard `linear_*` / `github_*` / `abletime_*` tools. Do not call Claude Linear MCP, vendor GitHub MCP, or any other vendor issue MCP — those need a separate login and hang. If a vendor namespace shows needsAuth, ignore it and keep going with Sideboard tools.',
+  ];
+  if (opts.linear) {
+    lines.push(
+      '- Linear: `linear_get_issue` (comments), `linear_comment`, `linear_update_issue` (state), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
+    );
+  }
+  if (github) {
+    lines.push(
+      '- GitHub: `github_get_issue` (comments), `github_comment`, `github_update_issue` (state open|closed), `github_create_issue` (pass `parent` for spin-offs). Uses Account `gh`.',
+    );
+  }
+  if (opts.abletime) {
+    lines.push(
+      '- AbleTime: `abletime_get_task` (comments), `abletime_comment`, `abletime_update_task` (state), `abletime_create_task` (pass `parent` for spin-offs; `abletime_list_projects` if needed).',
+    );
+  }
+  lines.push(
+    '- Do not ask the user to `claude mcp login` for tickets. Reconnect the Account source in Settings → Issues (or Git for `gh`).',
+  );
+  const ticket = opts.ticketId?.trim();
+  if (ticket) {
+    const provider = opts.ticketProvider ?? 'linear';
+    lines.push(
+      `- This thread's ticket is \`${ticket}\` (${provider}). Use that id for get/comment/update; pass it as \`parent\` on spin-offs.`,
+    );
+  }
+  return lines.join('\n');
+}
+
+/** @deprecated Use {@link formatIssueToolsDirective} */
+export function formatLinearDirective(opts: {
+  connected: boolean;
+  ticketId?: string | null;
+}): string | null {
+  return formatIssueToolsDirective({
+    linear: opts.connected,
+    abletime: false,
+    github: false,
+    ticketId: opts.ticketId,
+    ticketProvider: 'linear',
+  });
+}
+
+/** Short resume reminder for Account issue tools. */
+export function formatIssueToolsReminder(opts: {
+  linear: boolean;
+  abletime: boolean;
+  github?: boolean;
+  ticketId?: string | null;
+  ticketProvider?: IssueSource | null;
+}): string | null {
+  const github = opts.github !== false;
+  if (!opts.linear && !opts.abletime && !github) return null;
+  const names = [
+    opts.linear ? 'linear_*' : null,
+    github ? 'github_*' : null,
+    opts.abletime ? 'abletime_*' : null,
+  ].filter(Boolean);
+  const ticket = opts.ticketId?.trim();
+  const ticketBit = ticket
+    ? ` This ticket: ${ticket}${opts.ticketProvider ? ` (${opts.ticketProvider})` : ''} — get/comment/update; create with parent for spin-offs.`
+    : ' get/comment/update/create (parent= for spin-offs).';
+  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit}`;
+}
+
+/** @deprecated Use {@link formatIssueToolsReminder} */
+export function formatLinearReminder(opts: {
+  connected: boolean;
+  ticketId?: string | null;
+}): string | null {
+  return formatIssueToolsReminder({
+    linear: opts.connected,
+    abletime: false,
+    github: false,
+    ticketId: opts.ticketId,
+    ticketProvider: 'linear',
+  });
 }
 
 /**

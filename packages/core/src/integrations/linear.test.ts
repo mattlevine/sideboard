@@ -277,6 +277,38 @@ describe('Linear GraphQL writes', () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
+  it('creates a spin-off with parentId resolved from the parent identifier', async () => {
+    await withAuth();
+    mockGraphql((query, variables) => {
+      if (query.includes('SideboardTeams')) {
+        return {
+          viewer: { id: 'user-1', name: 'Matt' },
+          teams: { nodes: [{ ...TEAM, states: { nodes: TEAM.states } }] },
+        };
+      }
+      if (query.includes('SideboardIssue') && !query.includes('Create')) {
+        return { issue: issueNode({ id: 'parent-1', identifier: 'ENG-9' }) };
+      }
+      if (query.includes('SideboardIssueCreate')) {
+        const input = variables.input as Record<string, unknown>;
+        expect(input.parentId).toBe('parent-1');
+        return {
+          issueCreate: {
+            success: true,
+            issue: issueNode({ title: 'Follow-up', identifier: 'ENG-11' }),
+          },
+        };
+      }
+      throw new Error(`unexpected query ${query.slice(0, 40)}`);
+    });
+    const issue = await createLinearIssue({
+      team: 'ENG',
+      title: 'Follow-up',
+      parent: 'ENG-9',
+    });
+    expect(issue.identifier).toBe('ENG-11');
+  });
+
   it('updates an issue by identifier and resolves state type', async () => {
     await withAuth();
     mockGraphql((query, variables) => {
