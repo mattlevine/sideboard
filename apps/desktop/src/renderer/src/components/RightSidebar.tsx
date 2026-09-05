@@ -20,7 +20,6 @@ import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
 import { StackMap } from './StackMap';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
-import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
 import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks, hasBranchBehindChecks, classifyMergeIssue, checksFromRuns, checksTabShortLabel } from '../lib/pr-format';
 import {
@@ -207,7 +206,6 @@ export function RightSidebar({
   const [prMenuOpen, setPrMenuOpen] = useState(false);
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [archiveConfirm, setArchiveConfirm] = useState<{ chatCount: number } | null>(null);
   const [mergeConfirm, setMergeConfirm] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
@@ -846,6 +844,25 @@ export function RightSidebar({
     }
   }
 
+  function archiveThisChat() {
+    void window.sideboard
+      .listWorktreeChats(thread.id)
+      .then((chats) => {
+        const removesWorktree = chats.length <= 1 && !thread.cowboy;
+        const title =
+          thread.title.trim() || thread.branchName.replace(/^thread\//, '');
+        const run = onArchiveThread
+          ? Promise.resolve(
+              onArchiveThread(thread.id, { title, removesWorktree }),
+            )
+          : window.sideboard.archiveThread(thread.id).then(onRefresh);
+        return run;
+      })
+      .catch((err: unknown) => {
+        window.alert(err instanceof Error ? err.message : String(err));
+      });
+  }
+
   async function confirmMergePr() {
     if (mergeBusy) return;
     setMergeBusy(true);
@@ -1331,12 +1348,7 @@ export function RightSidebar({
               type="button"
               className="primary btn-archive"
               title="Archive thread"
-              onClick={() => {
-                void window.sideboard
-                  .listWorktreeChats(thread.id)
-                  .then((chats) => setArchiveConfirm({ chatCount: chats.length }))
-                  .catch(alert);
-              }}
+              onClick={archiveThisChat}
             >
               <span className="btn-icon" aria-hidden>
                 ▤
@@ -1944,67 +1956,6 @@ export function RightSidebar({
             }
           }}
         />
-      )}
-
-      {archiveConfirm && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setArchiveConfirm(null)}
-        >
-          <div
-            className="modal create-modal merge-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="archive-chat-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="create-modal-content">
-              <h3 id="archive-chat-title" className="merge-modal-title">
-                Close chat tab?
-              </h3>
-              <p className="confirm-dialog-message">
-                {closeChatTabMessage(thread.title, archiveConfirm.chatCount)}
-              </p>
-              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => setArchiveConfirm(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    const removesWorktree =
-                      archiveConfirm.chatCount <= 1 && !thread.cowboy;
-                    const title =
-                      thread.title.trim() ||
-                      thread.branchName.replace(/^thread\//, '');
-                    setArchiveConfirm(null);
-                    const run = onArchiveThread
-                      ? Promise.resolve(
-                          onArchiveThread(thread.id, {
-                            title,
-                            removesWorktree,
-                          }),
-                        )
-                      : window.sideboard
-                          .archiveThread(thread.id)
-                          .then(onRefresh);
-                    void run.catch((err: unknown) => {
-                      window.alert(
-                        err instanceof Error ? err.message : String(err),
-                      );
-                    });
-                  }}
-                >
-                  Close tab
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </aside>
   );

@@ -101,7 +101,6 @@ import {
   snapshotComposerDrop,
 } from '../lib/composer-file-drop';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
-import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
 import {
   readRightColumnWidth,
@@ -330,11 +329,6 @@ export function ThreadPanel({
   const [acIndex, setAcIndex] = useState(0);
   const [acSuppressed, setAcSuppressed] = useState(false);
   const [cursor, setCursor] = useState(0);
-  const [closeConfirm, setCloseConfirm] = useState<{
-    id: string;
-    title: string;
-    chatCount: number;
-  } | null>(null);
   /** User dismissed the plan question panel for this tool id (show normal composer). */
   const [dismissedPlanQuestionsId, setDismissedPlanQuestionsId] = useState<string | null>(
     null,
@@ -1293,7 +1287,7 @@ export function ThreadPanel({
     const removesWorktree =
       chats.length <= 1 && !isGlobalThread(thread) && !thread.cowboy;
     const tab = chats.find((c) => c.id === id);
-    const title = tab?.title?.trim() || closeConfirm?.title || 'Untitled';
+    const title = tab?.title?.trim() || 'Untitled';
     if (onArchiveThread) {
       await onArchiveThread(id, { title, removesWorktree });
       return;
@@ -1709,58 +1703,11 @@ export function ThreadPanel({
         onCloseTab={(id) => {
           const tab = chats.find((c) => c.id === id);
           if (!tab) return;
-          setCloseConfirm({ id, title: tab.title, chatCount: chats.length });
+          void archiveChatTab(id).catch((err: unknown) => {
+            window.alert(err instanceof Error ? err.message : String(err));
+          });
         }}
       />
-
-      {closeConfirm && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setCloseConfirm(null)}
-        >
-          <div
-            className="modal create-modal merge-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="close-chat-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="create-modal-content">
-              <h3 id="close-chat-title" className="merge-modal-title">
-                Close chat tab?
-              </h3>
-              <p className="confirm-dialog-message">
-                {closeChatTabMessage(closeConfirm.title, closeConfirm.chatCount, {
-                  removesWorktree: !isGlobalThread(thread) && !thread.cowboy,
-                })}
-              </p>
-              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => setCloseConfirm(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    const { id } = closeConfirm;
-                    setCloseConfirm(null);
-                    void archiveChatTab(id).catch((err: unknown) => {
-                      window.alert(
-                        err instanceof Error ? err.message : String(err),
-                      );
-                    });
-                  }}
-                >
-                  Close tab
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {forkWorkspaceConfirm && (
         <div

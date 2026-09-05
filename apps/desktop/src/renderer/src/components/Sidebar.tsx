@@ -16,7 +16,6 @@ import {
   GLOBAL_WORKSPACE_ID,
   threadDisplayTitle,
 } from '../lib/global-workspace';
-import { closeChatTabMessage } from '../lib/close-chat-tab';
 import { classifyMergeIssue, prPillModifier, prPillStatusLabel } from '../lib/pr-format';
 import {
   isWorktreeUnread,
@@ -427,7 +426,7 @@ function WorktreeSidebarRow({
   archiving: boolean;
   unread: boolean;
   onSelect: (id: string, multi: boolean) => void;
-  /** When true, show the archive control (parent handles confirm + teardown). */
+  /** When true, show the archive control (parent handles teardown). */
   showArchive?: boolean;
   onRequestArchive: (chats: Thread[]) => void;
 }) {
@@ -587,19 +586,20 @@ export function Sidebar({
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState('');
-  const [archiveConfirm, setArchiveConfirm] = useState<{
-    threadId: string;
-    title: string;
-    chatCount: number;
-    /** When set, archive every id (orchestration group). */
-    threadIds?: string[];
-    removesWorktree?: boolean;
-  } | null>(null);
   const [removeConfirm, setRemoveConfirm] = useState<{
     path: string;
     name: string;
     threadCount: number;
   } | null>(null);
+
+  function runArchive(
+    ids: string[],
+    meta: { title: string; removesWorktree: boolean },
+  ) {
+    void Promise.resolve(onArchive?.(ids, meta)).catch((err: unknown) => {
+      window.alert(err instanceof Error ? err.message : String(err));
+    });
+  }
 
   const q = filter.trim().toLowerCase();
 
@@ -775,13 +775,13 @@ export function Sidebar({
                           aria-label="Archive orchestration chats"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setArchiveConfirm({
-                              threadId: primary.id,
-                              title: 'Orchestration',
-                              chatCount: globalThreads.length,
-                              threadIds: globalThreads.map((t) => t.id),
-                              removesWorktree: false,
-                            });
+                            runArchive(
+                              globalThreads.map((t) => t.id),
+                              {
+                                title: 'Orchestration',
+                                removesWorktree: false,
+                              },
+                            );
                           }}
                         >
                           ×
@@ -910,13 +910,13 @@ export function Sidebar({
                     onSelect={onSelect}
                     showArchive={Boolean(onArchive)}
                     onRequestArchive={(chats) =>
-                      setArchiveConfirm({
-                        threadId: primary.id,
-                        title: worktreeLabel,
-                        chatCount: chats.length,
-                        threadIds: chats.map((c) => c.id),
-                        removesWorktree: !primary.cowboy,
-                      })
+                      runArchive(
+                        chats.map((c) => c.id),
+                        {
+                          title: worktreeLabel,
+                          removesWorktree: !primary.cowboy,
+                        },
+                      )
                     }
                   />
                 </div>
@@ -926,69 +926,6 @@ export function Sidebar({
         ))}
         </div>
       </div>
-
-      {archiveConfirm && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setArchiveConfirm(null)}
-        >
-          <div
-            className="modal create-modal merge-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="archive-worktree-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="create-modal-content">
-              <h3 id="archive-worktree-title" className="merge-modal-title">
-                {archiveConfirm.removesWorktree === false
-                  ? archiveConfirm.title === 'Orchestration'
-                    ? 'Archive orchestration?'
-                    : 'Archive cowboy chat?'
-                  : 'Archive worktree?'}
-              </h3>
-              <p className="confirm-dialog-message">
-                {closeChatTabMessage(archiveConfirm.title, archiveConfirm.chatCount, {
-                  removesWorktree: archiveConfirm.removesWorktree !== false,
-                })}
-              </p>
-              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => setArchiveConfirm(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    const ids = archiveConfirm.threadIds?.length
-                      ? archiveConfirm.threadIds
-                      : [archiveConfirm.threadId];
-                    const meta = {
-                      title: archiveConfirm.title,
-                      removesWorktree: archiveConfirm.removesWorktree !== false,
-                    };
-                    // Close immediately — progress moves to the chat empty pane
-                    // (same non-blocking pattern as worktree create).
-                    setArchiveConfirm(null);
-                    void Promise.resolve(onArchive?.(ids, meta)).catch(
-                      (err: unknown) => {
-                        window.alert(
-                          err instanceof Error ? err.message : String(err),
-                        );
-                      },
-                    );
-                  }}
-                >
-                  Archive
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {removeConfirm && onRemoveWorkspace && (
         <div
