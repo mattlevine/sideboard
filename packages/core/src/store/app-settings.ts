@@ -7,7 +7,8 @@ import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-
 import { stripNestedElectronEnv } from '../hook/nested-electron-env.js';
 import {
   normalizeAccountRoles,
-  resolveAccountProfile,
+  normalizeProfileNotes,
+  resolveViewerProfile,
   type AccountRole,
 } from './account-profile.js';
 import { appDataDir } from './paths.js';
@@ -52,10 +53,22 @@ export interface DefaultsAppSettings {
    * Roles on this Mac (Settings → Agents). Multi-select: check Engineering /
    * Design / Product and/or add more slugs. Never a combined `both` value.
    * Used so “tickets to work on” / “PRs to review” follow the right queues.
+   * Project overrides live in {@link AppSettings.projects}.
    */
   roles?: AccountRole[];
   /** @deprecated Folded into {@link DefaultsAppSettings.roles} on read. */
   role?: AccountRole;
+  /**
+   * How orchestration finds tickets and review PRs when a project has no notes.
+   * Project notes (Settings → Projects) add to this.
+   */
+  notes?: string;
+}
+
+/** Per-repo role / notes override (Settings → Projects). Empty roles inherit account. */
+export interface ProjectProfileSettings {
+  roles?: AccountRole[];
+  notes?: string;
 }
 
 /** Claude Code harness options (executable override + Chrome). */
@@ -310,6 +323,11 @@ export interface AppSettings {
   integrations: IntegrationsSettings;
   /** Default agent + model for new chats (Settings → Agents). */
   defaults: DefaultsAppSettings;
+  /**
+   * Per-workspace viewer profile (Settings → Projects), keyed by repo path.
+   * Roles override account when set; notes add to account notes.
+   */
+  projects: Record<string, ProjectProfileSettings>;
   /** Power-user / Conductor-style advanced preferences. */
   advanced: AdvancedAppSettings;
 }
@@ -642,7 +660,54 @@ function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   }
   const roles = normalizeAccountRoles(source.roles, source.role);
   if (roles.length) out.roles = roles;
+  const notes = normalizeProfileNotes(source.notes);
+  if (notes) out.notes = notes;
   return out;
+}
+
+function profileRepoKey(path: string): string {
+  return path.trim().replace(/\/+$/, '');
+}
+
+function normalizeProjectProfile(raw: unknown): ProjectProfileSettings | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const source = raw as Record<string, unknown>;
+  const out: ProjectProfileSettings = {};
+  const roles = normalizeAccountRoles(source.roles, source.role);
+  if (roles.length) out.roles = roles;
+  const notes = normalizeProfileNotes(source.notes);
+  if (notes) out.notes = notes;
+  return out.roles || out.notes ? out : undefined;
+}
+
+function normalizeProjects(raw: unknown): Record<string, ProjectProfileSettings> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, ProjectProfileSettings> = {};
+  for (const [path, value] of Object.entries(raw as Record<string, unknown>)) {
+    const key = profileRepoKey(path);
+    if (!key) continue;
+    const profile = normalizeProjectProfile(value);
+    if (profile) out[key] = profile;
+  }
+  return out;
+}
+
+/** Match a repo or worktree path to a stored project profile key. */
+export function findProjectProfileKey(
+  projects: Record<string, ProjectProfileSettings>,
+  repoPath?: string | null,
+): string | undefined {
+  const want = profileRepoKey(repoPath ?? '');
+  if (!want) return undefined;
+  if (projects[want]) return want;
+  for (const key of Object.keys(projects)) {
+    const stored = profileRepoKey(key);
+    if (!stored) continue;
+    if (stored === want || want.startsWith(`${stored}/`) || stored.startsWith(`${want}/`)) {
+      return key;
+    }
+  }
+  return undefined;
 }
 
 function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
@@ -728,6 +793,7 @@ function normalizeSettings(raw: unknown): AppSettings {
   let brightsy: BrightsyHarnessSettings = {};
   let integrations: IntegrationsSettings = {};
   let defaults: DefaultsAppSettings = {};
+  let projects: Record<string, ProjectProfileSettings> = {};
   let advanced: AdvancedAppSettings = {};
   if (raw && typeof raw === 'object') {
     if ('environment' in raw) {
@@ -760,6 +826,9 @@ function normalizeSettings(raw: unknown): AppSettings {
     if ('defaults' in raw) {
       defaults = normalizeDefaults((raw as { defaults?: unknown }).defaults);
     }
+    if ('projects' in raw) {
+      projects = normalizeProjects((raw as { projects?: unknown }).projects);
+    }
     if ('advanced' in raw) {
       advanced = normalizeAdvanced((raw as { advanced?: unknown }).advanced);
     }
@@ -772,6 +841,7 @@ function normalizeSettings(raw: unknown): AppSettings {
     brightsy,
     integrations,
     defaults,
+    projects,
     advanced,
   };
 }
@@ -784,6 +854,7 @@ const EMPTY_SETTINGS: AppSettings = {
   brightsy: {},
   integrations: {},
   defaults: {},
+  projects: {},
   advanced: {},
 };
 
@@ -1243,6 +1314,7 @@ export function updateDefaultsSettings(
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
     roles?: AccountRole[] | null;
+    notes?: string | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -1282,7 +1354,37 @@ export function updateDefaultsSettings(
     else defaults.roles = roles;
     delete defaults.role;
   }
+  if ('notes' in patch) {
+    const notes = normalizeProfileNotes(patch.notes);
+    if (!notes) delete defaults.notes;
+    else defaults.notes = notes;
+  }
   return saveAppSettings({ ...current, defaults });
+}
+
+export function updateProjectProfileSettings(
+  repoPath: string,
+  patch: { roles?: AccountRole[] | null; notes?: string | null },
+): AppSettings {
+  const current = loadAppSettings();
+  const key = profileRepoKey(repoPath);
+  if (!key) return current;
+  const projects = { ...current.projects };
+  const existing = projects[key] ?? {};
+  const next: ProjectProfileSettings = { ...existing };
+  if ('roles' in patch) {
+    const roles = normalizeAccountRoles(patch.roles);
+    if (!roles.length) delete next.roles;
+    else next.roles = roles;
+  }
+  if ('notes' in patch) {
+    const notes = normalizeProfileNotes(patch.notes);
+    if (!notes) delete next.notes;
+    else next.notes = notes;
+  }
+  if (!next.roles?.length && !next.notes) delete projects[key];
+  else projects[key] = next;
+  return saveAppSettings({ ...current, projects });
 }
 
 /** Default agent for Create / new chats (claude when unset). */
@@ -1320,21 +1422,36 @@ export {
   ACCOUNT_ROLE_LABELS,
   ACCOUNT_ROLE_MAX,
   ACCOUNT_ROLE_PRESETS,
+  PROFILE_NOTES_MAX,
   accountRoleLabel,
   formatAccountProfilePlaybookLine,
+  formatProjectProfilePlaybookLines,
+  formatWorkspaceProfileSuffix,
   preferTeamsForRole,
   resolveAccountProfile,
+  resolveViewerProfile,
   reviewTeamHintsForRoles,
   type AccountRole,
   type AccountRolePreset,
   type AccountProfile,
   type ResolvedAccountProfile,
+  type ResolvedViewerProfile,
+  type ViewerProfile,
 } from './account-profile.js';
 
 export function resolveAccountProfileFromSettings(
   settings: AppSettings = loadAppSettings(),
 ) {
-  return resolveAccountProfile(settings.defaults);
+  return resolveViewerProfile(settings.defaults);
+}
+
+export function resolveViewerProfileForRepo(
+  repoPath?: string | null,
+  settings: AppSettings = loadAppSettings(),
+) {
+  const key = findProjectProfileKey(settings.projects, repoPath);
+  const project = key ? settings.projects[key] : undefined;
+  return resolveViewerProfile(settings.defaults, project);
 }
 
 export function resolveThreadDefaults(

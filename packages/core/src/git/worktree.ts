@@ -44,7 +44,8 @@ import { withRepoGitLock } from './repo-git-lock.js';
 import {
   getGithubGitAuthMode,
   preferTeamsForRole,
-  resolveAccountProfileFromSettings,
+  resolveViewerProfile,
+  resolveViewerProfileForRepo,
   type GithubGitAuthMode,
 } from '../store/app-settings.js';
 import {
@@ -399,7 +400,12 @@ export async function listPrs(
   const reviewerKey = (resolved.reviewer ?? '').trim().toLowerCase();
   const needsUnclaimed =
     reviewerKey === 'unassigned' || reviewerKey === 'none' || reviewerKey === 'null';
-  const profile = resolveAccountProfileFromSettings();
+  let profile;
+  try {
+    profile = resolveViewerProfileForRepo(repoPath);
+  } catch {
+    profile = resolveViewerProfile();
+  }
   const fetchedTeams = needsUnclaimed
     ? await listGithubViewerTeamSlugs(repoPath).catch(() => [])
     : [];

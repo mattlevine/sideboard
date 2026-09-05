@@ -65,9 +65,12 @@ describe('app settings', () => {
     mod.saveAppSettings({
       environment: { CURSOR_API_KEY: 'from-settings', EXTRA: 'yes' },
       claude: {},
+      codex: {},
+      opencode: {},
       brightsy: {},
       integrations: {},
       defaults: {},
+      projects: {},
       advanced: {},
     });
     const target: NodeJS.ProcessEnv = { CURSOR_API_KEY: 'from-shell' };
@@ -87,6 +90,7 @@ describe('app settings', () => {
       brightsy: {},
       integrations: {},
       defaults: {},
+      projects: {},
       advanced: {},
     });
   });
@@ -380,6 +384,43 @@ describe('app settings', () => {
 
     const cleared = mod.updateDefaultsSettings({ roles: [] });
     expect(cleared.defaults.roles).toBeUndefined();
+  });
+
+  it('round-trips account notes and per-project profile overrides', async () => {
+    const mod = await load();
+    const withNotes = mod.updateDefaultsSettings({
+      roles: ['engineering'],
+      notes: '  Unassigned billing tickets; eng-review PRs  ',
+    });
+    expect(withNotes.defaults.notes).toBe('Unassigned billing tickets; eng-review PRs');
+
+    const project = mod.updateProjectProfileSettings('/Users/me/design-app', {
+      roles: ['design', 'both'],
+      notes: 'design-review label on this repo',
+    });
+    expect(project.projects['/Users/me/design-app']).toEqual({
+      roles: ['design'],
+      notes: 'design-review label on this repo',
+    });
+
+    const inherited = mod.resolveViewerProfileForRepo('/Users/me/other');
+    expect(inherited.roles).toEqual(['engineering']);
+    expect(inherited.rolesFromProject).toBe(false);
+    expect(inherited.notes).toBe('Unassigned billing tickets; eng-review PRs');
+
+    const overridden = mod.resolveViewerProfileForRepo(
+      '/Users/me/design-app/worktrees/foo',
+    );
+    expect(overridden.roles).toEqual(['design']);
+    expect(overridden.rolesFromProject).toBe(true);
+    expect(overridden.notes).toContain('Unassigned billing');
+    expect(overridden.notes).toContain('design-review');
+
+    const clearedProject = mod.updateProjectProfileSettings('/Users/me/design-app', {
+      roles: [],
+      notes: '',
+    });
+    expect(clearedProject.projects['/Users/me/design-app']).toBeUndefined();
   });
 
   it('round-trips Advanced preferences with Conductor-like defaults', async () => {

@@ -34,6 +34,11 @@ import {
 } from './issue-list.js';
 import { formatMcpPrList } from './pr-list.js';
 import { resolveListPrsOptions } from '../git/list-prs.js';
+import {
+  formatWorkspaceProfileSuffix,
+  resolveViewerProfile,
+  resolveViewerProfileForRepo,
+} from '../store/app-settings.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { formatGhLandError } from '../git/gh-errors.js';
@@ -256,16 +261,23 @@ export async function startMcpServer(): Promise<void> {
   if (!worktreeProfile) {
   server.tool(
     'list_workspaces',
-    'List registered Sideboard workspaces (repos). Each line is name, path, and github:owner/repo when resolvable — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread.',
+    'List registered Sideboard workspaces (repos). Each line is name, path, github:owner/repo when resolvable, and viewer roles/notes when set — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread. Roles and notes (Settings → Agents / Projects) say which tickets and review PRs belong to the user.',
     {},
     async () => {
       const workspaces = orch.listWorkspaces();
       const lines = await Promise.all(
         workspaces.map(async (w) => {
           const slug = await resolveGithubRepoSlug(w.path).catch(() => null);
+          let profile;
+          try {
+            profile = resolveViewerProfileForRepo(w.path);
+          } catch {
+            profile = resolveViewerProfile();
+          }
+          const suffix = formatWorkspaceProfileSuffix(profile);
           return slug
-            ? `${w.name}  ${w.path}  github:${slug}`
-            : `${w.name}  ${w.path}`;
+            ? `${w.name}  ${w.path}  github:${slug}${suffix}`
+            : `${w.name}  ${w.path}${suffix}`;
         }),
       );
       return {
@@ -1424,7 +1436,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_prs',
-    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_workspaces. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled eng-review with no individual user reviewer. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_thread with sourceType=pr.',
+    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_workspaces. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled eng-review with no individual user reviewer. Prefer teams that match Settings → Agents / Projects roles for this repo. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_thread with sourceType=pr.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('GitHub search tokens (title, draft:true, …)'),
@@ -1612,7 +1624,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Then create_thread with sourceType=ticket.',
+    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Then create_thread with sourceType=ticket.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('Search title, identifier, or description'),

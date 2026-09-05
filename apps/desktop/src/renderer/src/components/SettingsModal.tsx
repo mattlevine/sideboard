@@ -11,6 +11,7 @@ import type {
   PublicAppSettings,
   ThinkingEffort,
   Thread,
+  Workspace,
 } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
@@ -25,6 +26,7 @@ import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
 
 export type SettingsNavId =
   | 'agents'
+  | 'projects'
   | 'git'
   | 'issues'
   | 'remote'
@@ -35,6 +37,7 @@ export type SettingsNavId =
   | 'history';
 
 const SETTINGS_NAV_TITLES: Record<Exclude<SettingsNavId, 'agents'>, string> = {
+  projects: 'Projects',
   git: 'Git',
   issues: 'Issues',
   remote: 'Remote',
@@ -85,6 +88,7 @@ function emptyAppSettings(): PublicAppSettings {
     brightsy: {},
     integrations: emptyPublicIntegrations(),
     defaults: {},
+    projects: {},
     advanced: {},
   };
 }
@@ -108,6 +112,7 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
       ...next.integrations,
     },
     defaults: next.defaults ?? {},
+    projects: next.projects ?? {},
     advanced: next.advanced ?? {},
   };
 }
@@ -138,6 +143,201 @@ function accountRoleChipLabel(role: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function RolePicker({
+  selected,
+  disabled,
+  onChange,
+}: {
+  selected: string[];
+  disabled?: boolean;
+  onChange: (roles: string[]) => void;
+}) {
+  const extraRoles = selected.filter((role) => !ACCOUNT_ROLE_PRESET_VALUES.has(role));
+  return (
+    <>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.85rem',
+          marginTop: '0.65rem',
+        }}
+      >
+        {ACCOUNT_ROLE_OPTIONS.map((opt) => {
+          const checked = selected.includes(opt.value);
+          return (
+            <label
+              key={opt.value}
+              className="settings-hint"
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={disabled}
+                onChange={() => {
+                  onChange(
+                    checked
+                      ? selected.filter((role) => role !== opt.value)
+                      : [...selected, opt.value],
+                  );
+                }}
+              />
+              {opt.label}
+            </label>
+          );
+        })}
+      </div>
+      {extraRoles.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.4rem',
+            marginTop: '0.65rem',
+          }}
+        >
+          {extraRoles.map((role) => (
+            <span
+              key={role}
+              className="settings-hint"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '2px 8px',
+                borderRadius: 999,
+                border: '1px solid color-mix(in srgb, var(--sb-fg, #1a1a1a) 14%, transparent)',
+              }}
+            >
+              {accountRoleChipLabel(role)}
+              <button
+                type="button"
+                className="ghost"
+                disabled={disabled}
+                aria-label={`Remove ${accountRoleChipLabel(role)}`}
+                style={{ padding: 0, minWidth: 0, lineHeight: 1 }}
+                onClick={() => onChange(selected.filter((item) => item !== role))}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function ProjectProfileCard({
+  workspace,
+  accountRoles,
+  projectRoles,
+  notesDraft,
+  busy,
+  onRolesChange,
+  onInheritAccount,
+  onNotesChange,
+  onNotesFocus,
+  onNotesBlur,
+}: {
+  workspace: Workspace;
+  accountRoles: string[];
+  projectRoles: string[];
+  notesDraft: string;
+  busy?: boolean;
+  onRolesChange: (roles: string[]) => void;
+  onInheritAccount: () => void;
+  onNotesChange: (notes: string) => void;
+  onNotesFocus: () => void;
+  onNotesBlur: () => void;
+}) {
+  const [roleDraft, setRoleDraft] = useState('');
+  const inherited = projectRoles.length === 0;
+  const shownRoles = inherited ? accountRoles : projectRoles;
+
+  return (
+    <div className="settings-section settings-section-card">
+      <div className="settings-section-title">{workspace.name}</div>
+      <p className="settings-hint">{workspace.path}</p>
+      <p className="settings-hint" style={{ marginTop: 8 }}>
+        {inherited
+          ? accountRoles.length
+            ? `Using account roles (${accountRoles.map(accountRoleChipLabel).join(', ')}). Checking a role overrides for this project.`
+            : 'Using account roles (none set). Check a role to override for this project.'
+          : 'These roles override account roles for this project.'}
+      </p>
+      <RolePicker
+        selected={shownRoles}
+        disabled={busy}
+        onChange={(next) => {
+          if (inherited) {
+            const toggled = next.filter((role) => !accountRoles.includes(role));
+            const removed = accountRoles.filter((role) => !next.includes(role));
+            onRolesChange(
+              [...accountRoles.filter((role) => !removed.includes(role)), ...toggled],
+            );
+            return;
+          }
+          onRolesChange(next);
+        }}
+      />
+      <div className="settings-key-row" style={{ marginTop: '0.65rem' }}>
+        <input
+          placeholder="Add another role"
+          value={roleDraft}
+          disabled={busy}
+          onChange={(e) => setRoleDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const slug = slugAccountRole(roleDraft);
+            if (!slug || slug.length < 2 || slug === 'both') return;
+            if (!shownRoles.includes(slug)) onRolesChange([...shownRoles, slug]);
+            setRoleDraft('');
+          }}
+        />
+        <button
+          type="button"
+          className="primary"
+          disabled={
+            busy ||
+            slugAccountRole(roleDraft).length < 2 ||
+            slugAccountRole(roleDraft) === 'both'
+          }
+          onClick={() => {
+            const slug = slugAccountRole(roleDraft);
+            if (!slug || slug.length < 2 || slug === 'both') return;
+            if (!shownRoles.includes(slug)) onRolesChange([...shownRoles, slug]);
+            setRoleDraft('');
+          }}
+        >
+          Add
+        </button>
+        {!inherited && (
+          <button type="button" className="ghost" disabled={busy} onClick={onInheritAccount}>
+            Use account roles
+          </button>
+        )}
+      </div>
+      <label className="settings-field" style={{ marginTop: '0.85rem' }}>
+        How to find work on this project
+        <textarea
+          className="settings-history-search"
+          rows={3}
+          maxLength={2000}
+          placeholder="Adds to account notes — tickets and review queues for this repo"
+          value={notesDraft}
+          disabled={busy}
+          onFocus={onNotesFocus}
+          onChange={(e) => onNotesChange(e.target.value)}
+          onBlur={onNotesBlur}
+        />
+      </label>
+    </div>
+  );
 }
 
 const DEFAULT_AGENT_LABELS: Record<AgentKind, string> = {
@@ -277,21 +477,41 @@ export function SettingsModal({
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
   const [roleDraft, setRoleDraft] = useState('');
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [accountNotesDraft, setAccountNotesDraft] = useState('');
+  const [projectNotesDrafts, setProjectNotesDrafts] = useState<Record<string, string>>({});
+  const accountNotesFocused = useRef(false);
+  const projectNotesFocused = useRef<string | null>(null);
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
   const [setupLog, setSetupLog] = useState<string | null>(null);
   const loginAbortRef = useRef<AbortController | null>(null);
 
   async function reload() {
-    const [s, agents, session] = await Promise.all([
+    const [s, agents, session, listed] = await Promise.all([
       window.sideboard.getAppSettings(),
       window.sideboard.detectAgents(),
       window.sideboard.getBrightsySession().catch(() => null),
+      window.sideboard.listWorkspaces().catch(() => [] as Workspace[]),
     ]);
     const next = normalizeSettings(s);
     setSettings(next);
     setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 5));
     setStatuses(agents);
     setBrightsySession(session);
+    setWorkspaces(listed);
+    if (!accountNotesFocused.current) {
+      setAccountNotesDraft(next.defaults?.notes ?? '');
+    }
+    setProjectNotesDrafts((prev) => {
+      const drafts: Record<string, string> = {};
+      for (const ws of listed) {
+        drafts[ws.path] =
+          projectNotesFocused.current === ws.path
+            ? (prev[ws.path] ?? next.projects?.[ws.path]?.notes ?? '')
+            : (next.projects?.[ws.path]?.notes ?? '');
+      }
+      return drafts;
+    });
   }
 
   useEffect(() => {
@@ -490,6 +710,9 @@ export function SettingsModal({
     const normalized = normalizeSettings(next);
     setSettings(normalized);
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 5));
+    if (!accountNotesFocused.current) {
+      setAccountNotesDraft(normalized.defaults?.notes ?? '');
+    }
     onSettingsChange?.(normalized);
   }
 
@@ -498,12 +721,35 @@ export function SettingsModal({
     model?: string | null;
     effort?: ThinkingEffort | null;
     roles?: AccountRole[] | null;
+    notes?: string | null;
   }) {
     setBusy(true);
     setError(null);
     try {
       const next = await window.sideboard.updateDefaultsSettings(patch);
       applySettings(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveProjectPatch(
+    repoPath: string,
+    patch: { roles?: AccountRole[] | null; notes?: string | null },
+  ) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await window.sideboard.updateProjectProfileSettings(repoPath, patch);
+      applySettings(next);
+      if (projectNotesFocused.current !== repoPath) {
+        setProjectNotesDrafts((prev) => ({
+          ...prev,
+          [repoPath]: next.projects?.[repoPath]?.notes ?? '',
+        }));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -543,7 +789,6 @@ export function SettingsModal({
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
   const selectedRoles = settings.defaults?.roles ?? [];
-  const extraRoles = selectedRoles.filter((role) => !ACCOUNT_ROLE_PRESET_VALUES.has(role));
 
   const filteredArchived = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
@@ -604,6 +849,16 @@ export function SettingsModal({
                 })}
               </div>
             )}
+            <button
+              type="button"
+              className={`settings-nav-btn${nav === 'projects' ? ' active' : ''}`}
+              onClick={() => {
+                setNav('projects');
+                setAgentPanel(null);
+              }}
+            >
+              Projects
+            </button>
             <button
               type="button"
               className={`settings-nav-btn${nav === 'git' ? ' active' : ''}`}
@@ -702,6 +957,45 @@ export function SettingsModal({
 
             {error && <div className="settings-error">{error}</div>}
 
+            {nav === 'projects' && (
+              <div className="settings-body">
+                <p className="settings-lead">
+                  Per-project roles and notes for finding tickets and review PRs. Empty roles
+                  inherit Settings → Agents. Notes here add to account notes.
+                </p>
+                {workspaces.length === 0 ? (
+                  <p className="settings-hint">
+                    No registered projects yet. Add a workspace from Home or Create.
+                  </p>
+                ) : (
+                  workspaces.map((ws) => (
+                    <ProjectProfileCard
+                      key={ws.path}
+                      workspace={ws}
+                      accountRoles={selectedRoles}
+                      projectRoles={settings.projects?.[ws.path]?.roles ?? []}
+                      notesDraft={projectNotesDrafts[ws.path] ?? ''}
+                      busy={busy}
+                      onRolesChange={(roles) => void saveProjectPatch(ws.path, { roles })}
+                      onInheritAccount={() => void saveProjectPatch(ws.path, { roles: [] })}
+                      onNotesChange={(notes) =>
+                        setProjectNotesDrafts((prev) => ({ ...prev, [ws.path]: notes }))
+                      }
+                      onNotesFocus={() => {
+                        projectNotesFocused.current = ws.path;
+                      }}
+                      onNotesBlur={() => {
+                        projectNotesFocused.current = null;
+                        const next = (projectNotesDrafts[ws.path] ?? '').trim();
+                        if (next === (settings.projects?.[ws.path]?.notes ?? '')) return;
+                        void saveProjectPatch(ws.path, { notes: next || null });
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+
             {nav === 'git' && (
               <GitSettings
                 settings={settings}
@@ -745,8 +1039,8 @@ export function SettingsModal({
             {nav === 'agents' && !activeAgent && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Default agent for new chats, then the harnesses. Credentials set here also appear
-                  under Environment and are injected into agent runs.
+                  Default agent for new chats, then your roles and how to find work. Credentials
+                  set here also appear under Environment and are injected into agent runs.
                 </p>
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
@@ -773,83 +1067,16 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Your roles</div>
                   <p className="settings-hint">
-                    Used when you ask for tickets to work on or PRs to review. Check every role
-                    that applies, or add another — Engineering and Design together is fine; there
-                    is no “both” option. Recommendations follow those team queues.
+                    Default for every project when you ask to find work or reviews. Check every
+                    role that applies, or add another — Engineering and Design together is fine;
+                    there is no “both” option. A project can override these under Settings →
+                    Projects.
                   </p>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '0.85rem',
-                      marginTop: '0.65rem',
-                    }}
-                  >
-                    {ACCOUNT_ROLE_OPTIONS.map((opt) => {
-                      const checked = selectedRoles.includes(opt.value);
-                      return (
-                        <label
-                          key={opt.value}
-                          className="settings-hint"
-                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={busy}
-                            onChange={() => {
-                              const next = checked
-                                ? selectedRoles.filter((role) => role !== opt.value)
-                                : [...selectedRoles, opt.value];
-                              void saveDefaultsPatch({ roles: next });
-                            }}
-                          />
-                          {opt.label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {extraRoles.length > 0 && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '0.4rem',
-                        marginTop: '0.65rem',
-                      }}
-                    >
-                      {extraRoles.map((role) => (
-                        <span
-                          key={role}
-                          className="settings-hint"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            border: '1px solid color-mix(in srgb, var(--sb-fg, #1a1a1a) 14%, transparent)',
-                          }}
-                        >
-                          {accountRoleChipLabel(role)}
-                          <button
-                            type="button"
-                            className="ghost"
-                            disabled={busy}
-                            aria-label={`Remove ${accountRoleChipLabel(role)}`}
-                            style={{ padding: 0, minWidth: 0, lineHeight: 1 }}
-                            onClick={() => {
-                              void saveDefaultsPatch({
-                                roles: selectedRoles.filter((item) => item !== role),
-                              });
-                            }}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <RolePicker
+                    selected={selectedRoles}
+                    disabled={busy}
+                    onChange={(roles) => void saveDefaultsPatch({ roles })}
+                  />
                   <div className="settings-key-row" style={{ marginTop: '0.65rem' }}>
                     <input
                       id="account-role-add"
@@ -888,6 +1115,27 @@ export function SettingsModal({
                       Add
                     </button>
                   </div>
+                  <label className="settings-field" style={{ marginTop: '0.85rem' }}>
+                    How to find your work
+                    <textarea
+                      className="settings-history-search"
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Tickets to pick up (assignee, labels, boards) and PR queues to review"
+                      value={accountNotesDraft}
+                      disabled={busy}
+                      onFocus={() => {
+                        accountNotesFocused.current = true;
+                      }}
+                      onChange={(e) => setAccountNotesDraft(e.target.value)}
+                      onBlur={() => {
+                        accountNotesFocused.current = false;
+                        const next = accountNotesDraft.trim();
+                        if (next === (settings.defaults?.notes ?? '')) return;
+                        void saveDefaultsPatch({ notes: next || null });
+                      }}
+                    />
+                  </label>
                 </div>
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Follow-up behavior</div>

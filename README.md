@@ -312,7 +312,8 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 
 | Panel | What |
 |-------|------|
-| **Agents** | Default agent, model, and effort; your roles (check one or more of Engineering, Design, Product, or add another) for ticket and PR recommendations; then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Agents** | Default agent, model, and effort; your roles and notes (how to find tickets and review PRs); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Projects** | Per-repo role overrides and notes (empty roles inherit Agents) |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |
 | **Remote** | Slack — remote-control this Mac |

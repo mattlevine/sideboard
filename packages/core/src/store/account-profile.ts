@@ -10,6 +10,8 @@ export const ACCOUNT_ROLES = ACCOUNT_ROLE_PRESETS;
 
 export const ACCOUNT_ROLE_MAX = 16;
 
+export const PROFILE_NOTES_MAX = 2000;
+
 export const ACCOUNT_ROLE_LABELS: Record<string, string> = {
   engineering: 'Engineering',
   design: 'Design',
@@ -17,19 +19,37 @@ export const ACCOUNT_ROLE_LABELS: Record<string, string> = {
   qa: 'QA',
 };
 
-export interface AccountProfile {
+/** Roles + freeform notes for finding tickets / review PRs. */
+export interface ViewerProfile {
   /** One or more roles — never a combined `both` value. */
   roles?: AccountRole[];
   /** Legacy single role — folded into `roles` when reading. */
   role?: AccountRole;
+  /**
+   * How to find tickets to work on and PRs to review (labels, teams, assignee
+   * rules). Account notes apply everywhere; project notes add for that repo.
+   */
+  notes?: string;
 }
 
-export interface ResolvedAccountProfile {
+/** @deprecated Use {@link ViewerProfile}. */
+export type AccountProfile = ViewerProfile;
+
+export interface ResolvedViewerProfile {
   roles: AccountRole[];
   roleLabels: string[];
   /** Team slugs to prefer when listing unclaimed review PRs. */
   reviewTeamHints: string[];
+  /** Account notes, then project notes, joined when both exist. */
+  notes: string;
+  accountNotes: string;
+  projectNotes: string;
+  /** True when this repo set its own roles (does not inherit account). */
+  rolesFromProject: boolean;
 }
+
+/** @deprecated Use {@link ResolvedViewerProfile}. */
+export type ResolvedAccountProfile = ResolvedViewerProfile;
 
 const ROLE_TEAM_HINTS: Record<string, string[]> = {
   engineering: ['engineering-team', 'engineering', 'eng-team'],
@@ -82,6 +102,11 @@ export function normalizeAccountRoles(
   return out;
 }
 
+export function normalizeProfileNotes(value?: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\r\n/g, '\n').trim().slice(0, PROFILE_NOTES_MAX);
+}
+
 export function reviewTeamHintsForRoles(roles: AccountRole[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -104,12 +129,33 @@ function teamHintsForCustomRole(role: string): string[] {
   return [`${slug}-team`, slug];
 }
 
-export function resolveAccountProfile(input?: AccountProfile | null): ResolvedAccountProfile {
-  const roles = normalizeAccountRoles(input?.roles, input?.role);
+export function resolveAccountProfile(input?: ViewerProfile | null): ResolvedViewerProfile {
+  return resolveViewerProfile(input);
+}
+
+/**
+ * Account defaults, with optional per-project overrides.
+ * Project roles replace account roles when set; notes stack (account then project).
+ */
+export function resolveViewerProfile(
+  account?: ViewerProfile | null,
+  project?: ViewerProfile | null,
+): ResolvedViewerProfile {
+  const accountRoles = normalizeAccountRoles(account?.roles, account?.role);
+  const projectRoles = normalizeAccountRoles(project?.roles, project?.role);
+  const rolesFromProject = projectRoles.length > 0;
+  const roles = rolesFromProject ? projectRoles : accountRoles;
+  const accountNotes = normalizeProfileNotes(account?.notes);
+  const projectNotes = normalizeProfileNotes(project?.notes);
+  const notes = [accountNotes, projectNotes].filter(Boolean).join('\n');
   return {
     roles,
     roleLabels: roles.map((role) => accountRoleLabel(role)),
     reviewTeamHints: reviewTeamHintsForRoles(roles),
+    notes,
+    accountNotes,
+    projectNotes,
+    rolesFromProject,
   };
 }
 
@@ -131,11 +177,56 @@ export function preferTeamsForRole(viewerTeams: string[], hints: string[]): stri
   return matched.length ? matched : teams;
 }
 
-/** One playbook / reminder line, or empty when no roles are selected. */
-export function formatAccountProfilePlaybookLine(profile: ResolvedAccountProfile): string {
-  if (profile.roleLabels.length === 0) return '';
+function compactNotes(notes: string, max = 160): string {
+  const oneLine = notes.replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= max) return oneLine;
+  return `${oneLine.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** One playbook / reminder line, or empty when nothing is set. */
+export function formatAccountProfilePlaybookLine(profile: ResolvedViewerProfile): string {
+  if (profile.roleLabels.length === 0 && !profile.notes) return '';
+  const parts: string[] = [];
+  if (profile.roleLabels.length) {
+    parts.push(
+      `roles ${profile.roleLabels.join(', ')} (tickets to work on / PRs to review; prefer those teams)`,
+    );
+  }
+  if (profile.notes) {
+    parts.push(`notes: ${compactNotes(profile.notes)}`);
+  }
   return (
-    `- Account roles (tickets to work on / PRs to review): ${profile.roleLabels.join(', ')}. ` +
-    `Prefer those teams' tickets and PRs. A team review request is not a claim — only an individual reviewer is.`
+    `- Viewer profile: ${parts.join('. ')}. ` +
+    `A team review request is not a claim — only an individual reviewer is. ` +
+    `When they ask to find work, use these notes with list_issues (tickets) and list_prs(queue=review) (reviews), then create_thread and start the work.`
   );
+}
+
+/** Compact per-project overrides for the fleet playbook (empty when none). */
+export function formatProjectProfilePlaybookLines(
+  projects: Array<{ name: string; notes?: string; roleLabels?: string[] }>,
+): string {
+  const lines = projects
+    .map((project) => {
+      const roles = (project.roleLabels ?? []).filter(Boolean);
+      const notes = normalizeProfileNotes(project.notes);
+      if (!roles.length && !notes) return '';
+      const bits: string[] = [];
+      if (roles.length) bits.push(`roles ${roles.join(', ')}`);
+      if (notes) bits.push(compactNotes(notes, 120));
+      return `- ${project.name}: ${bits.join('. ')}`;
+    })
+    .filter(Boolean);
+  if (!lines.length) return '';
+  return ['Project overrides (Settings → Projects; empty roles inherit account):', ...lines].join(
+    '\n',
+  );
+}
+
+/** Suffix for list_workspaces / inventory lines (resolved roles + project notes). */
+export function formatWorkspaceProfileSuffix(profile: ResolvedViewerProfile): string {
+  const bits: string[] = [];
+  if (profile.roles.length) bits.push(`roles:${profile.roles.join(',')}`);
+  if (profile.projectNotes) bits.push(`notes:${compactNotes(profile.projectNotes, 80)}`);
+  return bits.length ? `  ${bits.join('  ')}` : '';
 }
