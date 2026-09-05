@@ -312,7 +312,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 
 | Panel | What |
 |-------|------|
-| **Agents** | Default agent, model, and effort for new chats, then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Agents** | Default agent, model, and effort; your roles (Engineering and/or Design) for ticket and PR recommendations; then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |
 | **Remote** | Slack — remote-control this Mac |

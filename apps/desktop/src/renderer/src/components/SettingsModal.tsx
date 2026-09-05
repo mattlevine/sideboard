@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  AccountRole,
   AdvancedAppSettings,
   AgentKind,
   AgentSetupActionResult,
@@ -110,6 +111,12 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
     advanced: next.advanced ?? {},
   };
 }
+
+const ACCOUNT_ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
+  { value: 'engineering', label: 'Engineering' },
+  { value: 'design', label: 'Design' },
+  { value: 'product', label: 'Product' },
+];
 
 const DEFAULT_AGENT_LABELS: Record<AgentKind, string> = {
   claude: 'Claude',
@@ -467,6 +474,7 @@ export function SettingsModal({
     agent?: AgentKind | null;
     model?: string | null;
     effort?: ThinkingEffort | null;
+    roles?: AccountRole[] | null;
   }) {
     setBusy(true);
     setError(null);
@@ -511,6 +519,7 @@ export function SettingsModal({
   const defaultAgent: AgentKind = settings.defaults?.agent ?? 'claude';
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
+  const selectedRoles = settings.defaults?.roles ?? [];
 
   const filteredArchived = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
@@ -735,6 +744,45 @@ export function SettingsModal({
                     >
                       Change
                     </button>
+                  </div>
+                </div>
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Your roles</div>
+                  <p className="settings-hint">
+                    Used when you ask for tickets to work on or PRs to review. Pick Engineering,
+                    Design, or both — recommendations follow those team queues.
+                  </p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.85rem',
+                      marginTop: '0.65rem',
+                    }}
+                  >
+                    {ACCOUNT_ROLE_OPTIONS.map((opt) => {
+                      const checked = selectedRoles.includes(opt.value);
+                      return (
+                        <label
+                          key={opt.value}
+                          className="settings-hint"
+                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={busy}
+                            onChange={() => {
+                              const next = checked
+                                ? selectedRoles.filter((role) => role !== opt.value)
+                                : [...selectedRoles, opt.value];
+                              void saveDefaultsPatch({ roles: next });
+                            }}
+                          />
+                          {opt.label}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="settings-section settings-section-card">

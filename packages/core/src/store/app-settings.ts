@@ -5,6 +5,11 @@ import { join } from 'node:path';
 import type { AgentKind } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { stripNestedElectronEnv } from '../hook/nested-electron-env.js';
+import {
+  normalizeAccountRoles,
+  resolveAccountProfile,
+  type AccountRole,
+} from './account-profile.js';
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
 import { loadSecretVault, saveSecretVault } from './secret-vault.js';
@@ -43,6 +48,14 @@ export interface DefaultsAppSettings {
    * Independent of {@link DefaultsAppSettings.effort}.
    */
   fast?: boolean;
+  /**
+   * Roles on this Mac (Settings → Agents). One or more of Engineering /
+   * Design / Product — used so “tickets to work on” / “PRs to review”
+   * follow the right team queues.
+   */
+  roles?: AccountRole[];
+  /** @deprecated Folded into {@link DefaultsAppSettings.roles} on read. */
+  role?: AccountRole;
 }
 
 /** Claude Code harness options (executable override + Chrome). */
@@ -627,6 +640,8 @@ function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   if (typeof source.fast === 'boolean') {
     out.fast = source.fast;
   }
+  const roles = normalizeAccountRoles(source.roles, source.role);
+  if (roles.length) out.roles = roles;
   return out;
 }
 
@@ -1227,6 +1242,7 @@ export function updateDefaultsSettings(
     /** Effort level, or Conductor's `normal` (stored as medium). */
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
+    roles?: AccountRole[] | null;
   },
 ): AppSettings {
   const current = loadAppSettings();
@@ -1259,6 +1275,12 @@ export function updateDefaultsSettings(
     } else {
       defaults.fast = Boolean(patch.fast);
     }
+  }
+  if ('roles' in patch) {
+    const roles = normalizeAccountRoles(patch.roles);
+    if (!roles.length) delete defaults.roles;
+    else defaults.roles = roles;
+    delete defaults.role;
   }
   return saveAppSettings({ ...current, defaults });
 }
@@ -1293,6 +1315,24 @@ export function getDefaultFast(
 }
 
 /** Resolved Create / new-chat agent + model + thinking defaults. */
+export {
+  ACCOUNT_ROLES,
+  ACCOUNT_ROLE_LABELS,
+  formatAccountProfilePlaybookLine,
+  preferTeamsForRole,
+  resolveAccountProfile,
+  reviewTeamHintsForRoles,
+  type AccountRole,
+  type AccountProfile,
+  type ResolvedAccountProfile,
+} from './account-profile.js';
+
+export function resolveAccountProfileFromSettings(
+  settings: AppSettings = loadAppSettings(),
+) {
+  return resolveAccountProfile(settings.defaults);
+}
+
 export function resolveThreadDefaults(
   settings: AppSettings = loadAppSettings(),
 ): { agent: AgentKind; model: string | null; effort: ThinkingEffort; fast: boolean } {

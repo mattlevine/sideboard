@@ -364,6 +364,21 @@ describe('app settings', () => {
     expect(mod.getDefaultEffort()).toBe('high');
   });
 
+  it('round-trips account roles', async () => {
+    const mod = await load();
+    expect(mod.resolveAccountProfileFromSettings().roles).toEqual([]);
+
+    const saved = mod.updateDefaultsSettings({ roles: ['engineering', 'design'] });
+    expect(saved.defaults.roles).toEqual(['engineering', 'design']);
+    expect(mod.resolveAccountProfileFromSettings().roleLabels).toEqual([
+      'Engineering',
+      'Design',
+    ]);
+
+    const cleared = mod.updateDefaultsSettings({ roles: [] });
+    expect(cleared.defaults.roles).toBeUndefined();
+  });
+
   it('round-trips Advanced preferences with Conductor-like defaults', async () => {
     const mod = await load();
     expect(mod.autoRenameBranchEnabled()).toBe(true);

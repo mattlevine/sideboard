@@ -27,6 +27,7 @@ import type {
 } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
+  AccountRole,
   AdvancedAppSettings,
   AppSettings,
   PublicAppSettings,
@@ -179,6 +180,7 @@ export interface IpcApi {
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
+    roles?: AccountRole[] | null;
   }): Promise<PublicAppSettings>;
   /** Machine-global GitHub status via `gh`. */
   getGitHubStatus(): Promise<GitHubStatus>;

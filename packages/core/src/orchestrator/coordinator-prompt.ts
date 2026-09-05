@@ -1,7 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveGithubRepoSlug } from '../git/worktree.js';
-import { resolveThreadDefaults } from '../store/app-settings.js';
+import {
+  formatAccountProfilePlaybookLine,
+  resolveAccountProfileFromSettings,
+  resolveThreadDefaults,
+} from '../store/app-settings.js';
 import { globalAgentCwd, sideboardReposDir } from '../store/paths.js';
 import type { Workspace } from '../store/workspaces.js';
 
@@ -55,7 +59,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Discover:',
   '- list_workspaces — registered repos (path + github slug when known)',
   '- list_board — Home Kanban of worktrees (New / Draft / Review / Merged; one card per checkout). Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind, column, limit.',
-  '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces. Review is PRs (the surface for assigned ticket work), not the tickets: "Get me N tickets to review" → list_prs(queue=review, limit=N) then create_thread sourceType=pr. That is open non-draft PRs labeled eng-review with no individual user reviewer yet. A team request (engineering-team) is not a claim — the viewer is on that team and can pick it up; claimed means an individual account is the reviewer. Bots ignored. queue=mine is review-requested:@me; queue=approved|changes uses those labels. Also: state, label, reviewer=me|unassigned|login, query, limit default 40 max 250; raise limit or tighten when truncated. list_issues (query, assignee=me|unassigned|all|user, limit default 40 max 250) lists Linear, AbleTime, or GitHub tickets — do not use it for that review-inbox ask.',
+  '- list_branches / list_prs / list_issues — pass repoPath from list_workspaces. Review is PRs (the surface for assigned ticket work), not the tickets: "Get me N tickets to review" → list_prs(queue=review, limit=N) then create_thread sourceType=pr. That is open non-draft PRs labeled eng-review with no individual user reviewer yet. A team request (engineering-team) is not a claim — the viewer is on that team and can pick it up; claimed means an individual account is the reviewer. Bots ignored. Prefer teams that match Settings → Agents roles (Engineering and/or Design, etc.). queue=mine is review-requested:@me; queue=approved|changes uses those labels. Also: state, label, reviewer=me|unassigned|login, query, limit default 40 max 250; raise limit or tighten when truncated. list_issues (query, assignee=me|unassigned|all|user, limit default 40 max 250) lists Linear, AbleTime, or GitHub tickets — do not use it for that review-inbox ask. When they ask for tickets to work on, prefer ones that match their account roles.',
   '- linear_* (when Linear is connected) — list_teams for team key/states; get/create/update/comment with ENG-123. Scope errors: reconnect Linear in Account settings.',
   '- abletime_* (when AbleTime is connected) — orientation first; ensure_task when work has no ticket (or create_thread from the default branch auto-creates one).',
   '- list_teams / slack_list_channels / slack_list_users / slack_search / slack_read / slack_post / slack_replies — Slack workspaces from Settings → Remote; pass team_id from list_teams',
@@ -116,6 +120,10 @@ function accountDefaultsPlaybookLine(): string {
   return `- Account defaults for create_thread (omit agent/model to use these): agent=${d.agent}, model=${model}, effort=${d.effort}`;
 }
 
+function accountRolePlaybookLine(): string {
+  return formatAccountProfilePlaybookLine(resolveAccountProfileFromSettings());
+}
+
 /**
  * Short identity block prepended to every orchestration turn prompt.
  * Survives Claude `--resume` (which drops cachedPrefix). Fleet playbook lives
@@ -133,6 +141,7 @@ export function coordinatorTurnReminder(opts: {
     `- YOUR orchestration thread id is ${opts.parentId} — pass parentThreadId="${opts.parentId}" on create_thread, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
+    accountRolePlaybookLine() || null,
     '- Status: list_board (worktree Kanban: New → Draft → Review → Merged) or list_threads. Link chats as `[Title](sideboard://thread/<id>)`. Merge only if the user asked. If a child is stopped/error/broken, it did not finish — resume or tell the user.',
   ]
     .filter(Boolean)
@@ -194,7 +203,7 @@ export function ensureGlobalCoordinatorCwd(opts?: {
     '',
     COORDINATOR_TOOL_PLAYBOOK,
     '',
-    accountDefaultsPlaybookLine(),
+    [accountDefaultsPlaybookLine(), accountRolePlaybookLine()].filter(Boolean).join('\n'),
     '',
     coordinatorGreenfieldPlaybook(reposDir),
     '',

@@ -137,6 +137,7 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('list_prs(queue=review, limit=N)');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not use it for that review-inbox ask');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('engineering-team');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Settings → Agents roles');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('eng-review');
   });
 
