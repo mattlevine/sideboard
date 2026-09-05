@@ -9,7 +9,7 @@ const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
  * A 200-issue list that also pulls `team.states` / `comments` / `relations`
  * exceeds the 10k/query cap (`Query too complex`). List only the fields
  * Home / Create-from need; fetch comments, relations, and the rest of the
- * metadata on single-issue get/create/update.
+ * metadata on single-issue get. Workflow states live on `linear_list_teams`.
  */
 const LIST_ISSUE_FIELDS = `
   id
@@ -45,7 +45,7 @@ const ISSUE_FIELDS = `
   state { id name type }
   assignee { id name }
   creator { id name }
-  team { id key name states(first: 50) { nodes { id name type } } }
+  team { id key name }
   labels(first: 50) { nodes { name } }
   cycle { name number startsAt endsAt completedAt }
   project { id name }
@@ -836,7 +836,9 @@ export async function updateLinearIssue(
   }
   if (input.state?.trim()) {
     const existing = await getLinearIssue(issueId, opts);
-    const team = existing.team;
+    const { teams } = await listLinearTeams(opts);
+    const teamRef = existing.team?.key || existing.team?.id;
+    const team = teamRef ? resolveLinearTeam(teams, teamRef) : undefined;
     if (!team?.states.length) {
       throw new Error(`Linear issue ${existing.identifier} has no workflow states to resolve "${input.state}"`);
     }

@@ -9,6 +9,7 @@ import {
 } from '../store/app-settings.js';
 import type { IssueInfo } from '../types/thread.js';
 import {
+  getAbleTimeOrientation,
   listAbleTimeAssignedIssues,
   searchAbleTimeTasks,
   toAbleTimeIssueInfo,
@@ -41,6 +42,12 @@ export interface ListIssuesResult {
 
 function assigneeKey(assignee?: string | null): string {
   return (assignee ?? '').trim().toLowerCase();
+}
+
+function takeIssuePage(issues: IssueInfo[], limit?: number): IssueInfo[] {
+  if (limit == null) return issues;
+  const n = Math.max(1, Math.min(1000, Math.floor(limit)));
+  return issues.slice(0, n);
 }
 
 export function issueMatchesAssignee(
@@ -181,13 +188,35 @@ export async function listIssues(
   }
 
   if (source === 'abletime') {
-    const [listed, searched] = await Promise.all([
-      listAbleTimeAssignedIssues(),
-      query ? searchAbleTimeTasks(query) : Promise.resolve(null),
-    ]);
+    if (query) {
+      const [searched, orientation] = await Promise.all([
+        searchAbleTimeTasks(query),
+        getAbleTimeOrientation().catch(() => null),
+      ]);
+      const viewerName = orientation?.viewer.name ?? orientation?.viewer.id ?? '';
+      const issues = takeIssuePage(
+        searched
+          .map(toAbleTimeIssueInfo)
+          .filter((issue) => issueMatchesAssignee(issue, assignee, viewerName)),
+        opts?.limit,
+      );
+      return {
+        source,
+        preferredSource,
+        linearConnected,
+        abletimeConnected,
+        issues,
+        viewer: {
+          login: orientation?.viewer.name,
+          name: orientation?.viewer.name,
+        },
+      };
+    }
+    const listed = await listAbleTimeAssignedIssues();
     const viewerName = listed.viewer.name ?? listed.viewer.id ?? '';
-    const issues = (searched ? searched.map(toAbleTimeIssueInfo) : listed.issues).filter(
-      (issue) => issueMatchesAssignee(issue, assignee, viewerName),
+    const issues = takeIssuePage(
+      listed.issues.filter((issue) => issueMatchesAssignee(issue, assignee, viewerName)),
+      opts?.limit,
     );
     return {
       source,

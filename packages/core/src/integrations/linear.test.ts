@@ -294,8 +294,14 @@ describe('Linear GraphQL writes', () => {
           },
         };
       }
+      if (query.includes('SideboardTeams')) {
+        return {
+          viewer: { id: 'user-1', name: 'Matt' },
+          teams: { nodes: [{ ...TEAM, states: { nodes: TEAM.states } }] },
+        };
+      }
       if (query.includes('SideboardIssue')) {
-        return { issue: issueNode() };
+        return { issue: issueNode({ team: { id: TEAM.id, key: TEAM.key, name: TEAM.name } }) };
       }
       throw new Error(`unexpected query ${query.slice(0, 80)}`);
     });
@@ -360,7 +366,8 @@ describe('Linear GraphQL writes', () => {
     const query = String(
       JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}')).query ?? '',
     );
-    expect(query).toMatch(/states\s*\(\s*first:\s*50\s*\)/);
+    expect(query).not.toMatch(/states\s*\(\s*first:/);
+    expect(query).toContain('team {');
     expect(query).toContain('description');
     expect(query).toMatch(/comments\s*\(\s*first:\s*50\s*\)/);
     expect(query).toMatch(/relations\s*\(\s*first:\s*25\s*\)/);

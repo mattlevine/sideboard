@@ -10,12 +10,10 @@ import {
   searchAbleTimeTasks,
   toAbleTimeIssueInfo,
 } from '../integrations/abletime.js';
+import { mcpJson } from './issue-list.js';
 
 function text(payload: unknown, isError = false) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
-    ...(isError ? { isError: true } : {}),
-  };
+  return mcpJson(payload, isError);
 }
 
 function fail(err: unknown) {
@@ -32,7 +30,7 @@ function fail(err: unknown) {
 export function registerAbleTimeTools(server: McpServer): void {
   server.tool(
     'abletime_orientation',
-    'Call first when using AbleTime. Returns who the Account token is, open drafts, active tasks, and current projects. Requires Agent access (MCP) enabled in AbleTime.',
+    'Call first when using AbleTime. Returns viewer, active tasks, and projects.',
     {},
     async () => {
       try {
@@ -50,7 +48,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_list_projects',
-    'List AbleTime projects (and categories) the Account token can see. Use a project id on abletime_create_task / abletime_ensure_task.',
+    'List AbleTime projects (and categories). Use a project id on create/ensure.',
     {},
     async () => {
       try {
@@ -123,7 +121,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_ensure_task',
-    'Find an open AbleTime task for this work, or create one to track against. Matches identifier or exact title before creating. Prefer this when starting work that has no ticket yet, then create_thread with sourceType=ticket and the returned identifier.',
+    'Find or create an AbleTime task for this work, then create_thread with sourceType=ticket.',
     {
       title: z.string(),
       description: z.string().optional(),
