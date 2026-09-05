@@ -5,7 +5,6 @@ import {
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
-import { archiveWorktreeMessage } from '../lib/close-chat-tab';
 import {
   BOARD_COLUMN_DEFS,
   BOARD_PAGE_SIZE,
@@ -99,13 +98,6 @@ export function GlobalBoard({
   leftSidebarToggle,
 }: Props) {
   const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
-  const [archiveConfirm, setArchiveConfirm] = useState<{
-    threadIds: string[];
-    title: string;
-    chatCount: number;
-    removesWorktree: boolean;
-    cowboy: boolean;
-  } | null>(null);
 
   const worktrees = useMemo(
     () =>
@@ -154,12 +146,13 @@ export function GlobalBoard({
   function requestArchive(group: Thread[]) {
     const primary = group[0];
     if (!primary) return;
-    setArchiveConfirm({
-      threadIds: group.map((t) => t.id),
-      title: worktreeDisplayLabelForGroup(group),
-      chatCount: group.length,
-      removesWorktree: !primary.cowboy,
-      cowboy: Boolean(primary.cowboy),
+    void Promise.resolve(
+      onArchive(group.map((t) => t.id), {
+        title: worktreeDisplayLabelForGroup(group),
+        removesWorktree: !primary.cowboy,
+      }),
+    ).catch((err: unknown) => {
+      window.alert(err instanceof Error ? err.message : String(err));
     });
   }
 
@@ -274,54 +267,6 @@ export function GlobalBoard({
               <button type="button" className="primary" onClick={onAddToBoard}>
                 Add to Board
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {archiveConfirm && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setArchiveConfirm(null)}
-        >
-          <div
-            className="modal create-modal merge-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="archive-board-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="create-modal-content">
-              <h3 id="archive-board-title" className="merge-modal-title">
-                {archiveConfirm.cowboy && !archiveConfirm.removesWorktree
-                  ? 'Archive cowboy worktree?'
-                  : 'Archive worktree?'}
-              </h3>
-              <p className="confirm-dialog-message">
-                {archiveWorktreeMessage(archiveConfirm.title, archiveConfirm.chatCount, {
-                  removesWorktree: archiveConfirm.removesWorktree,
-                  cowboy: archiveConfirm.cowboy,
-                })}
-              </p>
-              <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 0 }}>
-                <button type="button" onClick={() => setArchiveConfirm(null)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    const { threadIds, title, removesWorktree } = archiveConfirm;
-                    setArchiveConfirm(null);
-                    void Promise.resolve(
-                      onArchive(threadIds, { title, removesWorktree }),
-                    ).catch((err: unknown) => {
-                      window.alert(err instanceof Error ? err.message : String(err));
-                    });
-                  }}
-                >
-                  Archive worktree
-                </button>
-              </div>
             </div>
           </div>
         </div>
