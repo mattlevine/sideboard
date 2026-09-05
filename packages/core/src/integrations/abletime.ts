@@ -110,24 +110,26 @@ function labelsOf(record: Record<string, unknown>): string[] {
 
 function commentsOf(record: Record<string, unknown>): AbleTimeComment[] {
   const raw = record.comments ?? record.notes ?? record.discussion;
-  return asList(raw)
-    .map((item) => {
-      const rec = asRecord(item);
-      if (!rec) return null;
-      const body = firstString(rec, ['body', 'text', 'comment', 'content', 'message']);
-      if (!body) return null;
-      const user =
-        firstString(asRecord(rec.user) ?? asRecord(rec.author), ['name', 'display_name']) ||
-        firstString(rec, ['user_name', 'author']);
-      return {
-        id: firstString(rec, ['id', 'comment_id']) || undefined,
-        body,
-        url: firstString(rec, ['url', 'permalink']) || undefined,
-        createdAt: firstString(rec, ['created_at', 'createdAt', 'created']) || undefined,
-        user: user || undefined,
-      };
-    })
-    .filter((item): item is AbleTimeComment => Boolean(item));
+  const out: AbleTimeComment[] = [];
+  for (const item of asList(raw)) {
+    const rec = asRecord(item);
+    if (!rec) continue;
+    const body = firstString(rec, ['body', 'text', 'comment', 'content', 'message']);
+    if (!body) continue;
+    const user =
+      firstString(asRecord(rec.user) ?? asRecord(rec.author), ['name', 'display_name']) ||
+      firstString(rec, ['user_name', 'author']);
+    const comment: AbleTimeComment = { body };
+    const id = firstString(rec, ['id', 'comment_id']);
+    if (id) comment.id = id;
+    const url = firstString(rec, ['url', 'permalink']);
+    if (url) comment.url = url;
+    const createdAt = firstString(rec, ['created_at', 'createdAt', 'created']);
+    if (createdAt) comment.createdAt = createdAt;
+    if (user) comment.user = user;
+    out.push(comment);
+  }
+  return out;
 }
 
 function assigneeOf(record: Record<string, unknown>): AbleTimeTask['assignee'] {
