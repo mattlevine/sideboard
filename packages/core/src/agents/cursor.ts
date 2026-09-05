@@ -182,6 +182,7 @@ export const cursorAdapter: AgentAdapter = {
       fast: thread.fast,
       planMode: thread.planMode,
       apiKey,
+      ...(isOrchestrator ? { isolateAmbientMcp: true } : {}),
       ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
     };
 

@@ -140,6 +140,11 @@ describe('injected-mcp', () => {
     expect(oc.mcp.sideboard.environment?.NODE_OPTIONS).toMatch(
       /--max-old-space-size=8192/,
     );
+    const ocDisabled = JSON.parse(
+      toOpencodeMcpConfigContent(servers, { disableNames: ['linear', 'sideboard'] }),
+    ) as { mcp: Record<string, { enabled?: boolean }> };
+    expect(ocDisabled.mcp.linear?.enabled).toBe(false);
+    expect(ocDisabled.mcp.sideboard?.enabled).toBe(true);
 
     const claudeCfgPath = writeMcpServersConfig(servers);
     expect(claudeCfgPath).toBeTruthy();

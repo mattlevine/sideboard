@@ -132,6 +132,8 @@ Desktop pack: `stage-cursor-runtime.js` must resolve `@cursor/sdk` from `package
 
 Cursor transport retry (`retryOnceOnRetryableCursorError`, `CursorAgentError.isRetryable`) is runner-only. Claude / Codex / OpenCode / Brightsy shell out; their CLIs already retry (`system/api_retry`, `reconnecting...`). Do not wrap `buildTurn` / `execa` in that same create/resume/send retry.
 
+Orchestration turns isolate vendor MCP so user / claude.ai Linear cannot hang the first find-work turn: Claude `--strict-mcp-config` + `ENABLE_CLAUDEAI_MCP_SERVERS=false`; Codex `-c mcp_servers.<name>.enabled=false` for user servers; OpenCode `enabled: false` in `OPENCODE_CONFIG_CONTENT`; Cursor `settingSources: []` (inline Sideboard MCP still applies). Tickets go through Sideboard `list_issues` / `linear_*`. Do not drop that isolation to “restore” Linear MCP on coordinators. Worktree agents still merge the user’s MCP list. Brightsy has no local MCP injection.
+
 ## Cost / usage fields
 
 Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` (or a delta) when summing.

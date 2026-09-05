@@ -13,6 +13,11 @@ import {
   shouldInjectBrightsyMcp,
   toCodexMcpConfigArgs,
 } from './injected-mcp.js';
+import {
+  listUserCodexMcpNames,
+  toCodexDisableUserMcpArgs,
+  userMcpNamesToDisable,
+} from './orch-mcp-isolation.js';
 import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import { permissionMode } from './types.js';
@@ -238,7 +243,17 @@ export const codexAdapter: AgentAdapter = {
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
-    const mcpOverrides = toCodexMcpConfigArgs(injected);
+    const mcpOverrides = [
+      ...toCodexMcpConfigArgs(injected),
+      ...(isOrchestrator
+        ? toCodexDisableUserMcpArgs(
+            userMcpNamesToDisable({
+              injectedNames: injected.map((s) => s.name),
+              names: listUserCodexMcpNames(),
+            }),
+          )
+        : []),
+    ];
     // Options must come before the prompt / `resume` subcommand. `codex exec resume`
     // does not accept `--cd` / `--sandbox` after SESSION_ID PROMPT (Codex ≥0.147).
     const execOpts = [

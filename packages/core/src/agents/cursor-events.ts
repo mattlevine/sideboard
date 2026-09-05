@@ -15,6 +15,11 @@ export type CursorTurnRequest = {
   planMode?: boolean;
   apiKey?: string;
   /**
+   * Orchestration: skip ~/.cursor/mcp.json and project MCP (Linear, …).
+   * Inline {@link CursorTurnRequest.mcpServers} still apply.
+   */
+  isolateAmbientMcp?: boolean;
+  /**
    * Inline MCP servers for this turn (Sideboard / Brightsy).
    * Must be passed on create and resume — Cursor does not persist them.
    */

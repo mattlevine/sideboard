@@ -20,7 +20,10 @@ export type {
   BrightsyChatTargets,
   BrightsyTeamTargets,
 } from './brightsy-targets.js';
-export { claudeAdapter } from './claude.js';
+export {
+  claudeAdapter,
+  mcpStatusThinkingFromClaudeInit,
+} from './claude.js';
 export { codexAdapter, listCodexModels } from './codex.js';
 export { cursorAdapter } from './cursor.js';
 export {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.156] - 2026-09-05
+
+### Fixed
+
+- Orchestration turns no longer wait on the user’s Linear (or other vendor) MCP. Claude uses `--strict-mcp-config` plus `ENABLE_CLAUDEAI_MCP_SERVERS=false`. Codex `-c` disables user `mcp_servers` from `~/.codex/config.toml`. OpenCode sets those names `enabled: false` in `OPENCODE_CONFIG_CONTENT`. Cursor skips ambient `~/.cursor/mcp.json` (`settingSources: []`). Find-work uses Sideboard `list_issues` / `linear_*`. Failed Claude MCP servers on `system/init` show as thinking. A follow-up still steers (default) and continues the request. Worktree agents still merge the user’s MCP list. Brightsy has no local MCP injection.
+
 ## [0.1.155] - 2026-09-05
 
 ### Changed

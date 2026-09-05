@@ -202,6 +202,10 @@ export {
   userCursorMcpConfigPath,
 } from './agents/user-mcp-config.js';
 export {
+  isInjectedOrchMcpName,
+  userMcpNamesToDisable,
+} from './agents/orch-mcp-isolation.js';
+export {
   listSlackWorkspaces,
   connectSlackToken,
   disconnectSlackWorkspace,

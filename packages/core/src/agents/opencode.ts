@@ -10,6 +10,10 @@ import {
   shouldInjectBrightsyMcp,
   toOpencodeMcpConfigContent,
 } from './injected-mcp.js';
+import {
+  listUserOpencodeMcpNames,
+  userMcpNamesToDisable,
+} from './orch-mcp-isolation.js';
 import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
@@ -222,8 +226,16 @@ export const opencodeAdapter: AgentAdapter = {
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
+    const disableNames = isOrchestrator
+      ? userMcpNamesToDisable({
+          injectedNames: injected.map((s) => s.name),
+          names: listUserOpencodeMcpNames(),
+        })
+      : [];
     const mcpContent =
-      injected.length > 0 ? toOpencodeMcpConfigContent(injected) : null;
+      injected.length > 0 || disableNames.length > 0
+        ? toOpencodeMcpConfigContent(injected, { disableNames })
+        : null;
     return {
       file: resolveAgentExecutable('opencode'),
       args,
