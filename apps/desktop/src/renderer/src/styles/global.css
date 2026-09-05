@@ -6877,6 +6877,17 @@ button.worktree-hover-card-title:hover {
   background: #c4a484;
 }
 
+.lower-tabs.right-tabs .lower-tabs-scroll > button.is-live::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #6fbf73;
+  vertical-align: middle;
+}
+
 .lower-tab-actions {
   margin-left: 0;
   display: flex;

@@ -350,12 +350,21 @@ export function ThreadPanel({
 
   useEffect(() => {
     setSetupRunning(false);
+    let cancelled = false;
+    if (typeof window.sideboard.getSetupLog === 'function') {
+      void window.sideboard.getSetupLog(thread.id).then((snap) => {
+        if (!cancelled && snap.running) setSetupRunning(true);
+      });
+    }
     const off = window.sideboard.onEvent((event) => {
       if (!('threadId' in event) || event.threadId !== thread.id) return;
       if (event.type === 'setup_started') setSetupRunning(true);
       if (event.type === 'setup_finished') setSetupRunning(false);
     });
-    return off;
+    return () => {
+      cancelled = true;
+      off();
+    };
   }, [thread.id]);
   const rightPane =
     rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??

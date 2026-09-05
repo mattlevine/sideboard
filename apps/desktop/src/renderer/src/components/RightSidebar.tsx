@@ -137,6 +137,16 @@ function mergeDiffResult(prev: DiffResult | null, next: DiffResult): DiffResult 
   return diffFilesEqual(prev.files, next.files) ? { ...next, files: prev.files } : next;
 }
 
+/** Combine a persisted setup snapshot with lines that arrived while it loaded. */
+function mergeSetupOutput(prev: string, incoming: string): string {
+  if (!prev) return incoming;
+  if (!incoming) return prev;
+  if (prev === incoming) return prev;
+  if (prev.startsWith(incoming) || prev.endsWith(incoming)) return prev;
+  if (incoming.startsWith(prev) || incoming.endsWith(prev)) return incoming;
+  return incoming.length >= prev.length ? incoming : prev;
+}
+
 function sameWorktreePath(a: string, b: string): boolean {
   const norm = (p: string) => p.replace(/\/$/, '');
   return norm(a) === norm(b);
@@ -183,7 +193,9 @@ export function RightSidebar({
     x: number;
     y: number;
   } | null>(null);
-  const [lower, setLower] = useState<LowerTab>('run');
+  const [lower, setLower] = useState<LowerTab>(() =>
+    !thread.cowboy && thread.messages.length === 0 ? 'setup' : 'run',
+  );
   const [diff, setDiff] = useState<DiffResult | null>(null);
   /** True after the includeMeta pass — first paint reports unpushed: 0. */
   const [gitMetaReady, setGitMetaReady] = useState(false);
@@ -201,6 +213,7 @@ export function RightSidebar({
   const [setupRunning, setSetupRunning] = useState(false);
   const [agentSetupBusy, setAgentSetupBusy] = useState(false);
   const setupOutputRef = useRef<HTMLPreElement>(null);
+  const liveSetupRef = useRef(false);
   const [runScripts, setRunScripts] = useState<RunScriptInfo[]>([]);
   const [runLogs, setRunLogs] = useState<Record<string, string>>({});
   const [prMenuOpen, setPrMenuOpen] = useState(false);
@@ -273,18 +286,41 @@ export function RightSidebar({
   }, [thread.worktreePath, thread.repoPath, thread.updatedAt, thread.id, reloadRunScripts]);
 
   useEffect(() => {
+    liveSetupRef.current = false;
+    setSetupOutput('');
+    setSetupRunning(false);
+    if (typeof window.sideboard.getSetupLog !== 'function') return;
+    let cancelled = false;
+    void window.sideboard.getSetupLog(thread.id).then((snap) => {
+      if (cancelled) return;
+      setSetupOutput((prev) => mergeSetupOutput(prev, snap.output));
+      if (!liveSetupRef.current) {
+        setSetupRunning(snap.running);
+        if (snap.running) setLower('setup');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [thread.id]);
+
+  useEffect(() => {
     const off = window.sideboard.onEvent((event) => {
       if (event.type === 'setup_started') {
         if (event.threadId !== thread.id) return;
+        liveSetupRef.current = true;
         setSetupOutput('');
         setSetupRunning(true);
+        setLower('setup');
       }
       if (event.type === 'setup_output') {
         if (event.threadId !== thread.id) return;
+        liveSetupRef.current = true;
         setSetupOutput((prev) => (prev ? `${prev}\n${event.line}` : event.line));
       }
       if (event.type === 'setup_finished') {
         if (event.threadId !== thread.id) return;
+        liveSetupRef.current = true;
         setSetupRunning(false);
         void window.sideboard
           .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
@@ -1643,7 +1679,7 @@ export function RightSidebar({
           <div className="lower-tabs-scroll">
             <button
               type="button"
-              className={lower === 'setup' ? 'active' : ''}
+              className={`${lower === 'setup' ? 'active' : ''}${setupRunning ? ' is-live' : ''}`}
               onClick={() => setLower('setup')}
             >
               Setup

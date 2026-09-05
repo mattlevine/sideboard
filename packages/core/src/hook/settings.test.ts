@@ -128,6 +128,25 @@ describe('getRepoSetupInfo', () => {
     expect(getRepoSetupInfo(wt, repo).configLabel).toBe('.sideboard/settings.toml (worktree)');
   });
 
+  it('inherits setup from the main repo when the worktree toml omits it', () => {
+    const repo = mkdtempSync(join(tmpdir(), 'sideboard-repo-inherit-'));
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-wt-inherit-'));
+    mkdirSync(join(repo, '.sideboard'));
+    mkdirSync(join(wt, '.conductor'));
+    writeFileSync(
+      join(repo, '.sideboard', 'settings.toml'),
+      `[scripts]\nsetup = "pnpm install"\n`,
+    );
+    writeFileSync(
+      join(wt, '.conductor', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "pnpm dev"\ndefault = true\n`,
+    );
+
+    expect(loadWorkspaceSettings(wt, repo)?.setup).toBe('pnpm install');
+    expect(loadWorkspaceSettings(wt, repo)?.runScripts[0]?.command).toBe('pnpm dev');
+    expect(getRepoSetupInfo(wt, repo).hasSetupScript).toBe(true);
+  });
+
   it('falls back to main repo when worktree has no config', () => {
     const repo = mkdtempSync(join(tmpdir(), 'sideboard-repo-'));
     const wt = mkdtempSync(join(tmpdir(), 'sideboard-wt-'));

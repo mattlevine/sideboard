@@ -226,6 +226,7 @@ const api: IpcApi = {
     ipcRenderer.invoke('hasConductorHook', worktreePath, repoPath),
   getRepoSetupInfo: (worktreePath, repoPath) =>
     ipcRenderer.invoke('getRepoSetupInfo', worktreePath, repoPath),
+  getSetupLog: (threadRef) => ipcRenderer.invoke('getSetupLog', threadRef),
   runSetup: (threadRef) => ipcRenderer.invoke('runSetup', threadRef),
   openExternal: (url) => ipcRenderer.invoke('openExternal', url),
   publishArtifactPreview: (id, html) =>

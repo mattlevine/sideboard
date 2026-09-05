@@ -356,6 +356,9 @@ export async function runSetupScript(
   const settings = loadWorkspaceSettings(worktreePath, repoPath);
   if (!settings?.setup) return { ran: false, exitCode: null, source: null };
 
+  const source = workspaceSettingsSourceLabel(worktreePath, repoPath);
+  onLine?.(`[setup] ${source ?? 'settings.toml'}`);
+
   const handle = await spawnWorkspaceScript(settings.setup, {
     worktreePath,
     repoPath,
@@ -367,7 +370,7 @@ export async function runSetupScript(
   return {
     ran: true,
     exitCode,
-    source: workspaceSettingsSourceLabel(worktreePath, repoPath),
+    source,
     kill: handle.kill,
   };
 }

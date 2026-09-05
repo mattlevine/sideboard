@@ -291,8 +291,9 @@ export function loadRepoSettings(repoPath: string): RepoSettings | null {
  * Settings for a thread workspace.
  *
  * Scripts always run with cwd = worktree (not the main repo). Config resolution
- * matches Conductor:
- * 1. Committed `settings.toml` from the worktree (branch snapshot), else main repo
+ * matches Conductor, with inheritance so a worktree snapshot that only defines
+ * run scripts still picks up `[scripts] setup` from the main checkout:
+ * 1. Committed `settings.toml` from the main repo, then worktree overrides
  * 2. Overlay main-repo `settings.local.toml` (machine-local, applies to all workspaces)
  * 3. Overlay worktree `settings.local.toml` if present
  */
@@ -310,8 +311,9 @@ export function loadWorkspaceSettings(
   const repoToml =
     repoPath && repoFamily ? loadCommittedToml(repoPath, repoFamily) : null;
 
-  // Base = worktree committed config, else main repo committed config.
-  let merged: ParsedSettings | null = wtToml ?? repoToml;
+  // Worktree wins on conflict; missing setup / run keys inherit from the repo
+  // (including across `.sideboard` vs `.conductor` families).
+  let merged: ParsedSettings | null = mergeSettings(repoToml, wtToml);
 
   // Conductor: project overrides on the main checkout apply to every workspace.
   if (repoPath && normPath(repoPath) !== normPath(worktreePath)) {

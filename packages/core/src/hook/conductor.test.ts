@@ -136,6 +136,26 @@ describe('runConventionSetup / runWorkspaceSetup', () => {
     expect(lines.join('\n')).toContain('ran-setup');
   });
 
+  it('runs main-repo settings.toml setup when the worktree only has run scripts', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'sideboard-setup-repo-'));
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-setup-wt-'));
+    mkdirSync(join(repo, '.sideboard'));
+    mkdirSync(join(wt, '.conductor'));
+    writeFileSync(
+      join(repo, '.sideboard', 'settings.toml'),
+      `[scripts]\nsetup = "echo inherited-setup"\n`,
+    );
+    writeFileSync(
+      join(wt, '.conductor', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "echo dev"\n`,
+    );
+    const lines: string[] = [];
+    const result = await runWorkspaceSetup(repo, wt, (l) => lines.push(l));
+    expect(result.ran).toBe(true);
+    expect(result.exitCode).toBe(0);
+    expect(lines.join('\n')).toContain('inherited-setup');
+  });
+
   it('prefers settings.toml setup over a conventional script', async () => {
     const wt = mkdtempSync(join(tmpdir(), 'sideboard-run-ws-'));
     mkdirSync(join(wt, 'script'));
@@ -150,6 +170,7 @@ describe('runConventionSetup / runWorkspaceSetup', () => {
     expect(result.ran).toBe(true);
     expect(result.exitCode).toBe(0);
     expect(result.source).toContain('settings.toml');
+    expect(lines.join('\n')).toContain('[setup]');
     expect(lines.join('\n')).toContain('from-toml');
     expect(lines.join('\n')).not.toContain('from-convention');
   });
