@@ -45,6 +45,7 @@ export type { AgentGitAction } from './git/agent-git-actions.js';
 export * from './integrations/github.js';
 export * from './integrations/linear.js';
 export * from './integrations/linear-oauth.js';
+export * from './integrations/github-issues.js';
 export * from './integrations/abletime.js';
 export * from './integrations/abletime-mcp.js';
 export * from './integrations/issues.js';
@@ -113,6 +114,9 @@ export {
   sideboardMcpProfile,
   SIDEBOARD_MCP_PROFILE_ENV,
   WORKTREE_MCP_TOOLS,
+  WORKTREE_LINEAR_MCP_TOOLS,
+  WORKTREE_GITHUB_MCP_TOOLS,
+  WORKTREE_ABLETIME_MCP_TOOLS,
 } from './mcp/profile.js';
 export type { SideboardMcpProfile } from './mcp/profile.js';
 export type { IpcApi, CloudConnectStatus, SlackListenStatus } from './ipc/types.js';

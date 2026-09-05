@@ -175,6 +175,8 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Show the options');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Do not call Claude Linear MCP');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('flap');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('github_*');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('abletime_*');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {

@@ -5,11 +5,15 @@ import { CLAUDE_PROMPT_ARG_MAX, claudeAdapter } from './claude.js';
 const claudeSettings = {
   executablePath: undefined as string | undefined,
   chromeEnabled: false,
+  linearConnected: false,
+  abletimeConnected: false,
 };
 
 vi.mock('../store/app-settings.js', () => ({
   resolveClaudeExecutable: () => claudeSettings.executablePath || 'claude',
   claudeChromeEnabled: () => Boolean(claudeSettings.chromeEnabled),
+  isLinearConnected: () => Boolean(claudeSettings.linearConnected),
+  isAbleTimeConnected: () => Boolean(claudeSettings.abletimeConnected),
   loadAppSettings: () => ({
     environment: {},
     claude: {
@@ -36,6 +40,8 @@ vi.mock('../git/run.js', () => ({
 beforeEach(() => {
   claudeSettings.executablePath = undefined;
   claudeSettings.chromeEnabled = false;
+  claudeSettings.linearConnected = false;
+  claudeSettings.abletimeConnected = false;
 });
 
 describe('claudeAdapter.buildTurn', () => {
@@ -154,6 +160,9 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__present_files');
     expect(allowed).toContain('mcp__sideboard__ask_user');
     expect(allowed).toContain('mcp__sideboard__present_plan');
+    expect(allowed).toContain('mcp__sideboard__github_*');
+    expect(allowed).not.toContain('mcp__sideboard__linear_*');
+    expect(allowed).not.toContain('mcp__sideboard__abletime_*');
     expect(allowed).not.toContain('mcp__sideboard__slack_post');
     expect(allowed).not.toContain('mcp__sideboard__list_teams');
     expect(allowed).not.toContain('mcp__sideboard__*');
@@ -171,6 +180,18 @@ describe('claudeAdapter.buildTurn', () => {
       (n) => n === 'brightsy' || n.startsWith('brightsy_'),
     );
     expect(brightsyServers).toEqual([]);
+  });
+
+  it('auto-approves Account Linear and AbleTime tools when those sources are connected', async () => {
+    claudeSettings.linearConnected = true;
+    claudeSettings.abletimeConnected = true;
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'comment on the ticket' });
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__sideboard__github_*');
+    expect(allowed).toContain('mcp__sideboard__linear_*');
+    expect(allowed).toContain('mcp__sideboard__abletime_*');
   });
 
   it('orchestrator turns get Sideboard MCP plus Bash/Read (fleet oversight)', async () => {

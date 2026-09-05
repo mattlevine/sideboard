@@ -254,9 +254,13 @@ export async function startMcpServer(): Promise<void> {
     name: 'sideboard',
     version: '0.1.0',
   });
-  // Worktree profile: present_* / ask_user only. Fleet list_*, Slack, Linear,
-  // and create/send/wait live on orchestration (tools are the cached prefix).
+  // Worktree profile: present_* / ask_user + Account issue tools (GitHub /
+  // Linear / AbleTime). Fleet list_*, Slack, and create/send/wait stay on
+  // orchestration (tools are the cached prefix).
   const worktreeProfile = sideboardMcpProfile() === 'worktree';
+  if (worktreeProfile) {
+    registerConnectedIssueVendorTools(server);
+  }
 
   if (!worktreeProfile) {
   server.tool(

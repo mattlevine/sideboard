@@ -781,6 +781,7 @@ export async function createLinearIssue(
     state?: string;
     assignee?: string | null;
     priority?: number;
+    parent?: string;
   },
   opts?: { apiKey?: string | null },
 ): Promise<LinearIssue> {
@@ -796,6 +797,11 @@ export async function createLinearIssue(
   if (description) mutationInput.description = description;
   if (input.state?.trim()) {
     mutationInput.stateId = resolveLinearState(team, input.state).id;
+  }
+  const parentRef = input.parent?.trim();
+  if (parentRef) {
+    const parent = await getLinearIssue(parentRef, opts);
+    mutationInput.parentId = parent.id;
   }
   const assignee = input.assignee === undefined ? undefined : input.assignee?.trim() || null;
   if (assignee === 'me') mutationInput.assigneeId = viewer.id;

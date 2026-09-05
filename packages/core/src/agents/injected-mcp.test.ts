@@ -27,7 +27,8 @@ describe('injected-mcp', () => {
   });
 
   it('worktree Claude allow-list is UI tools only (no Slack/Linear/list_*)', async () => {
-    const { SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS } = await import('./injected-mcp.js');
+    const { SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS, sideboardWorktreeAllowedTools } =
+      await import('./injected-mcp.js');
     expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS).toEqual([
       'mcp__sideboard__present_artifact',
       'mcp__sideboard__present_schema',
@@ -36,6 +37,15 @@ describe('injected-mcp', () => {
       'mcp__sideboard__present_plan',
     ]);
     expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.join(' ')).not.toMatch(/slack|list_teams/i);
+    expect(sideboardWorktreeAllowedTools()).toContain('mcp__sideboard__github_*');
+    expect(sideboardWorktreeAllowedTools()).not.toContain('mcp__sideboard__linear_*');
+    expect(sideboardWorktreeAllowedTools({ linear: true, abletime: true })).toEqual(
+      expect.arrayContaining([
+        'mcp__sideboard__github_*',
+        'mcp__sideboard__linear_*',
+        'mcp__sideboard__abletime_*',
+      ]),
+    );
   });
 
   it('builds allow tools per server name', () => {

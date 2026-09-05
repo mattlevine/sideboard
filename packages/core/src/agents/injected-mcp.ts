@@ -42,7 +42,7 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
 
 /**
  * Worktree Claude turns: auto-approve the UI tools that the worktree MCP
- * profile actually registers (present_* / ask_user). Slack/Linear/list_* are
+ * profile always registers (present_* / ask_user). Slack / list_* stay
  * orchestration-only so they stay out of the cached tools prefix.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
@@ -52,6 +52,24 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__ask_user',
   'mcp__sideboard__present_plan',
 ] as const;
+
+/** Account issue tools on the worktree MCP profile. */
+export const SIDEBOARD_GITHUB_MCP_ALLOWED_TOOLS = ['mcp__sideboard__github_*'] as const;
+export const SIDEBOARD_LINEAR_MCP_ALLOWED_TOOLS = ['mcp__sideboard__linear_*'] as const;
+export const SIDEBOARD_ABLETIME_MCP_ALLOWED_TOOLS = ['mcp__sideboard__abletime_*'] as const;
+
+/** Worktree Claude --allowedTools: UI tools + connected Account issue trackers. */
+export function sideboardWorktreeAllowedTools(opts?: {
+  github?: boolean;
+  linear?: boolean;
+  abletime?: boolean;
+}): string[] {
+  const out = [...SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS];
+  if (opts?.github !== false) out.push(...SIDEBOARD_GITHUB_MCP_ALLOWED_TOOLS);
+  if (opts?.linear) out.push(...SIDEBOARD_LINEAR_MCP_ALLOWED_TOOLS);
+  if (opts?.abletime) out.push(...SIDEBOARD_ABLETIME_MCP_ALLOWED_TOOLS);
+  return out;
+}
 
 /** Legacy single-server allow list (CLI ~/.brightsy fallback). */
 export const BRIGHTSY_MCP_ALLOWED_TOOLS = [

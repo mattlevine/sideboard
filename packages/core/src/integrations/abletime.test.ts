@@ -3,9 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  commentAbleTimeTask,
+  createAbleTimeTask,
   ensureAbleTimeTask,
   mapAbleTimeTask,
   toAbleTimeIssueInfo,
+  updateAbleTimeTask,
 } from './abletime.js';
 import {
   abletimeMcpUrl,
@@ -46,7 +49,17 @@ describe('abletime helpers', () => {
       state: 'todo',
       labels: ['bug'],
       assignee: { name: 'Grant' },
+      comments: [],
     });
+    const withComments = mapAbleTimeTask({
+      id: '01TASK',
+      reference: 'CRM-232',
+      title: 'Fix login',
+      comments: [{ id: 'c1', body: 'Looks good', user: { name: 'Ada' } }],
+    });
+    expect(withComments?.comments).toEqual([
+      expect.objectContaining({ id: 'c1', body: 'Looks good', user: 'Ada' }),
+    ]);
     expect(toAbleTimeIssueInfo(task!)).toMatchObject({
       identifier: 'CRM-232',
       provider: 'abletime',
@@ -153,6 +166,37 @@ describe('ensureAbleTimeTask', () => {
     );
     expect(task.created).toBe(true);
     expect(task.identifier).toBe('CRM-240');
+  });
+
+  it('comments, updates state, and creates a spin-off with parent', async () => {
+    const fetchMock = mockTools({
+      create_comment: { id: 'c1', body: 'Shipped' },
+      set_task_state: { id: 't1', state: 'done' },
+      update_task: { id: 't1', reference: 'CRM-232', title: 'Fix login', state: 'done' },
+      get_task: { id: 't1', reference: 'CRM-232', title: 'Fix login', state: 'done' },
+      orientation: { projects: [{ id: 'p1', name: 'Acme', categories: [] }] },
+      create_task: { id: 't3', reference: 'CRM-241', title: 'Follow-up', state: 'todo' },
+    });
+    const comment = await commentAbleTimeTask(
+      { id: 'CRM-232', body: 'Shipped' },
+      { token: 'apt_test' },
+    );
+    expect(comment.body).toBe('Shipped');
+    const updated = await updateAbleTimeTask(
+      { id: 'CRM-232', state: 'done' },
+      { token: 'apt_test' },
+    );
+    expect(updated.state).toBe('done');
+    const spin = await createAbleTimeTask(
+      { title: 'Follow-up', parent: 'CRM-232' },
+      { token: 'apt_test' },
+    );
+    expect(spin.identifier).toBe('CRM-241');
+    const createCall = fetchMock.mock.calls
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+      .find((body) => body.params?.name === 'create_task');
+    expect(createCall.params.arguments.parent).toBe('CRM-232');
+    expect(createCall.params.arguments.description).toMatch(/Spin-off of CRM-232/);
   });
 });
 
