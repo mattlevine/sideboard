@@ -312,8 +312,8 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 
 | Panel | What |
 |-------|------|
-| **Agents** | Default agent, model, and effort; your roles and notes (how to find tickets and review PRs); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
-| **Projects** | Per-repo role overrides and notes (empty roles inherit Agents) |
+| **Agents** | Default agent, model, and effort; **Your roles** (Engineering, Design, Product, or extras) and notes for how to find tickets and review PRs; then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Projects** | Per-repo role overrides and notes (empty roles inherit Agents; project notes stack on account notes) |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |
 | **Remote** | Slack — remote-control this Mac |
@@ -322,6 +322,8 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Schedules** | Local jobs that wake an orchestration chat |
 | **Advanced** | Cowboy mode, caffeinate, show cost, Brightsy MCP inject |
 | **History** | Archived chats |
+
+Ask the orchestrator **find me some work** to list matching tickets (`list_issues`) and review PRs (`list_prs queue=review`) from that profile. **Find me work and start it** lists, then creates the worktrees. Same split for reviews. You should not have to re-explain the queue in every chat.
 
 ## Git
 
