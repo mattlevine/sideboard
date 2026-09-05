@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.154/Sideboard-0.1.154-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.155/Sideboard-0.1.155-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -323,7 +323,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Advanced** | Cowboy mode, caffeinate, show cost, Brightsy MCP inject |
 | **History** | Archived chats |
 
-Ask the orchestrator **find me some work** to list matching tickets (`list_issues`) and review PRs (`list_prs queue=review`) from that profile. **Find me work and start it** lists, then creates the worktrees. Same split for reviews. You should not have to re-explain the queue in every chat.
+Ask the orchestrator **find me some work** to list matching tickets (`list_issues`) and review PRs (`list_prs queue=review`) from that profile. **Find me work and start it** lists, then creates the worktrees. Same split for reviews. The orchestrator stays contextually aware of that profile in every chat.
 
 ## Git
 
