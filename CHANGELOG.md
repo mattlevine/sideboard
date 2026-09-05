@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Worktree agents can read comments, add comments, update status, and create spin-off issues on Linear, GitHub, and AbleTime using Sideboard Account tools (`linear_*`, `github_*`, `abletime_*`). Vendor issue MCPs that show needsAuth are ignored.
 
+### Fixed
+
+- Core dts build accepts the worktree `github_*` / `linear_*` / `abletime_*` allow-list (`string[]`, not the UI-tool literal union).
+
 ## [0.1.156] - 2026-09-05
 
 ### Fixed
