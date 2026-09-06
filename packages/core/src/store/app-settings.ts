@@ -693,14 +693,21 @@ export function findProjectProfileKey(
   const want = profileRepoKey(repoPath ?? '');
   if (!want) return undefined;
   if (projects[want]) return want;
+  let best: string | undefined;
+  let bestLen = 0;
   for (const key of Object.keys(projects)) {
     const stored = profileRepoKey(key);
     if (!stored) continue;
-    if (stored === want || want.startsWith(`${stored}/`) || stored.startsWith(`${want}/`)) {
-      return key;
+    // Exact or descendant (worktree). A parent of a stored key must not match —
+    // `/Users/me` would otherwise overwrite the first project's context.
+    if (stored === want || want.startsWith(`${stored}/`)) {
+      if (stored.length > bestLen) {
+        best = key;
+        bestLen = stored.length;
+      }
     }
   }
-  return undefined;
+  return best;
 }
 
 function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
