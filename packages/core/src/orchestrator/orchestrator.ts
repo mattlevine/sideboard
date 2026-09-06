@@ -167,10 +167,13 @@ import {
   formatOptionalServicesReminder,
 } from '../integrations/optional-services.js';
 import {
+  formatViewerContextDirective,
+  formatViewerContextReminder,
   isAbleTimeConnected,
   isLinearConnected,
   loadAppSettings,
   resolveEffectiveIssueSource,
+  resolveViewerProfileForRepo,
   type FollowUpBehavior,
 } from '../store/app-settings.js';
 import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
@@ -1137,6 +1140,10 @@ export class Orchestrator {
             ticketProvider: issueTicket?.provider,
           })
         : null;
+    const viewerContextReminder =
+      thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
+        ? formatViewerContextReminder()
+        : null;
     const slackReplyContext = formatSlackRepliesForTurn(
       pendingSlackExternalReplies(thread.messages),
     );
@@ -1146,6 +1153,7 @@ export class Orchestrator {
       worktreeReminder,
       optionalServicesReminder,
       issueToolsReminder,
+      viewerContextReminder,
       artifactReminder,
       longRunningReminder,
       slackReplyContext,
@@ -1208,6 +1216,18 @@ export class Orchestrator {
             ticketId: freshIssueTicket?.id,
             ticketProvider: freshIssueTicket?.provider,
           });
+    let viewerContextDirective: string | null = null;
+    if (!isBrightsy && !isOrchestration) {
+      try {
+        viewerContextDirective = formatViewerContextDirective(
+          resolveViewerProfileForRepo(fresh.repoPath || fresh.worktreePath),
+        );
+      } catch {
+        viewerContextDirective = formatViewerContextDirective(
+          resolveViewerProfileForRepo(),
+        );
+      }
+    }
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     const renameBranchDirective =
       !isBrightsy && !isOrchestration && autoRenameBranchEnabled()
@@ -1259,6 +1279,7 @@ export class Orchestrator {
           worktreeDirective,
           optionalServicesDirective,
           issueToolsDirective,
+          viewerContextDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,
@@ -1426,6 +1447,7 @@ export class Orchestrator {
           worktreeDirective,
           optionalServicesDirective,
           issueToolsDirective,
+          viewerContextDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,

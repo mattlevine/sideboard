@@ -368,59 +368,75 @@ describe('app settings', () => {
     expect(mod.getDefaultEffort()).toBe('high');
   });
 
-  it('round-trips account roles', async () => {
+  it('folds leftover account roles into notes and drops the roles field', async () => {
     const mod = await load();
-    expect(mod.resolveAccountProfileFromSettings().roles).toEqual([]);
+    expect(mod.resolveAccountProfileFromSettings().accountNotes).toBe('');
 
     const saved = mod.updateDefaultsSettings({
-      roles: ['engineering', 'design', 'both', 'QA'],
+      notes: 'Roles: Engineering, Design, QA',
     });
-    expect(saved.defaults.roles).toEqual(['engineering', 'design', 'qa']);
-    expect(mod.resolveAccountProfileFromSettings().roleLabels).toEqual([
-      'Engineering',
-      'Design',
-      'QA',
-    ]);
+    expect(saved.defaults.roles).toBeUndefined();
+    expect(saved.defaults.notes).toBe('Roles: Engineering, Design, QA');
+    expect(mod.resolveAccountProfileFromSettings().accountNotes).toBe(
+      'Roles: Engineering, Design, QA',
+    );
 
-    const cleared = mod.updateDefaultsSettings({ roles: [] });
-    expect(cleared.defaults.roles).toBeUndefined();
+    const cleared = mod.updateDefaultsSettings({ notes: '' });
+    expect(cleared.defaults.notes).toBeUndefined();
   });
 
-  it('round-trips account notes and per-project profile overrides', async () => {
+  it('round-trips account notes and per-project context', async () => {
     const mod = await load();
     const withNotes = mod.updateDefaultsSettings({
-      roles: ['engineering'],
       notes: '  Unassigned billing tickets; eng-review PRs  ',
     });
     expect(withNotes.defaults.notes).toBe('Unassigned billing tickets; eng-review PRs');
 
     const project = mod.updateProjectProfileSettings('/Users/me/design-app', {
-      roles: ['design', 'both'],
       notes: 'design-review label on this repo',
     });
     expect(project.projects['/Users/me/design-app']).toEqual({
-      roles: ['design'],
       notes: 'design-review label on this repo',
     });
 
     const inherited = mod.resolveViewerProfileForRepo('/Users/me/other');
-    expect(inherited.roles).toEqual(['engineering']);
-    expect(inherited.rolesFromProject).toBe(false);
+    expect(inherited.accountNotes).toBe('Unassigned billing tickets; eng-review PRs');
+    expect(inherited.projectNotes).toBe('');
     expect(inherited.notes).toBe('Unassigned billing tickets; eng-review PRs');
 
     const overridden = mod.resolveViewerProfileForRepo(
       '/Users/me/design-app/worktrees/foo',
     );
-    expect(overridden.roles).toEqual(['design']);
-    expect(overridden.rolesFromProject).toBe(true);
     expect(overridden.notes).toContain('Unassigned billing');
     expect(overridden.notes).toContain('design-review');
 
     const clearedProject = mod.updateProjectProfileSettings('/Users/me/design-app', {
-      roles: [],
       notes: '',
     });
     expect(clearedProject.projects['/Users/me/design-app']).toBeUndefined();
+  });
+
+  it('folds leftover roles from disk into notes on read', async () => {
+    const mod = await load();
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const { dirname } = await import('node:path');
+    const path = mod.appSettingsPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({
+        defaults: { roles: ['engineering'], notes: 'assignee=me' },
+        projects: {
+          '/Users/me/design-app': { roles: ['design'], notes: 'design-review' },
+        },
+      }),
+    );
+    const settings = mod.loadAppSettings();
+    expect(settings.defaults.roles).toBeUndefined();
+    expect(settings.defaults.notes).toBe('Roles: Engineering. assignee=me');
+    expect(settings.projects['/Users/me/design-app']).toEqual({
+      notes: 'Roles: Design. design-review',
+    });
   });
 
   it('round-trips Advanced preferences with Conductor-like defaults', async () => {

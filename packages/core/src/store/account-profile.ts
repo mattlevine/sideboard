@@ -1,64 +1,42 @@
-/** Built-in role slugs shown as Settings checkboxes. More can be added in the UI. */
-export const ACCOUNT_ROLE_PRESETS = ['engineering', 'design', 'product'] as const;
-export type AccountRolePreset = (typeof ACCOUNT_ROLE_PRESETS)[number];
-
-/** Any kebab-case role slug (presets plus user-added). Never the combined `both`. */
-export type AccountRole = string;
-
-/** Coded presets — extra roles are freeform slugs. */
-export const ACCOUNT_ROLES = ACCOUNT_ROLE_PRESETS;
-
-export const ACCOUNT_ROLE_MAX = 16;
-
+/** Freeform account / project context for finding tickets and review PRs. */
 export const PROFILE_NOTES_MAX = 2000;
 
-export const ACCOUNT_ROLE_LABELS: Record<string, string> = {
+/** Leftover checkbox slugs folded into notes on read. Never a combined `both`. */
+const LEGACY_ROLE_LABELS: Record<string, string> = {
   engineering: 'Engineering',
   design: 'Design',
   product: 'Product',
   qa: 'QA',
 };
 
-/** Roles + freeform notes for finding tickets / review PRs. */
 export interface ViewerProfile {
-  /** One or more roles — never a combined `both` value. */
-  roles?: AccountRole[];
-  /** Legacy single role — folded into `roles` when reading. */
-  role?: AccountRole;
   /**
-   * How to find tickets to work on and PRs to review (labels, teams, assignee
-   * rules). Account notes apply everywhere; project notes add for that repo.
+   * How to find tickets and PRs to review. Account context applies everywhere;
+   * project context adds for that repo. Roles belong in this text, not a
+   * separate field.
    */
   notes?: string;
+  /** @deprecated Folded into {@link ViewerProfile.notes} on read. */
+  roles?: string[];
+  /** @deprecated Folded into {@link ViewerProfile.notes} on read. */
+  role?: string;
 }
 
 /** @deprecated Use {@link ViewerProfile}. */
 export type AccountProfile = ViewerProfile;
 
 export interface ResolvedViewerProfile {
-  roles: AccountRole[];
-  roleLabels: string[];
-  /** Team slugs to prefer when listing unclaimed review PRs. */
-  reviewTeamHints: string[];
-  /** Account notes, then project notes, joined when both exist. */
+  /** Account context, then project context, joined when both exist. */
   notes: string;
   accountNotes: string;
   projectNotes: string;
-  /** True when this repo set its own roles (does not inherit account). */
-  rolesFromProject: boolean;
 }
 
 /** @deprecated Use {@link ResolvedViewerProfile}. */
 export type ResolvedAccountProfile = ResolvedViewerProfile;
 
-const ROLE_TEAM_HINTS: Record<string, string[]> = {
-  engineering: ['engineering-team', 'engineering', 'eng-team'],
-  design: ['design-team', 'design'],
-  product: ['product-team', 'product'],
-};
-
-export function accountRoleLabel(role: string): string {
-  const known = ACCOUNT_ROLE_LABELS[role];
+function legacyRoleLabel(role: string): string {
+  const known = LEGACY_ROLE_LABELS[role];
   if (known) return known;
   return role
     .split('-')
@@ -67,7 +45,7 @@ export function accountRoleLabel(role: string): string {
     .join(' ');
 }
 
-export function normalizeAccountRole(value?: string | null): AccountRole | undefined {
+function normalizeLegacyRole(value?: string | null): string | undefined {
   const key = (value ?? '')
     .trim()
     .toLowerCase()
@@ -80,22 +58,15 @@ export function normalizeAccountRole(value?: string | null): AccountRole | undef
   return key;
 }
 
-export function isAccountRole(value: string | null | undefined): value is AccountRole {
-  return Boolean(normalizeAccountRole(value));
-}
-
-export function normalizeAccountRoles(
-  roles?: unknown,
-  legacyRole?: unknown,
-): AccountRole[] {
+function legacyRoleLabels(roles?: unknown, legacyRole?: unknown): string[] {
   const raw = Array.isArray(roles) ? roles : [];
-  const out: AccountRole[] = [];
+  const out: string[] = [];
   const seen = new Set<string>();
   const push = (value: unknown) => {
-    const role = normalizeAccountRole(typeof value === 'string' ? value : '');
-    if (!role || seen.has(role) || out.length >= ACCOUNT_ROLE_MAX) return;
+    const role = normalizeLegacyRole(typeof value === 'string' ? value : '');
+    if (!role || seen.has(role) || out.length >= 16) return;
     seen.add(role);
-    out.push(role);
+    out.push(legacyRoleLabel(role));
   };
   for (const item of raw) push(item);
   if (out.length === 0) push(legacyRole);
@@ -107,26 +78,21 @@ export function normalizeProfileNotes(value?: unknown): string {
   return value.replace(/\r\n/g, '\n').trim().slice(0, PROFILE_NOTES_MAX);
 }
 
-export function reviewTeamHintsForRoles(roles: AccountRole[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const role of roles) {
-    const hints = ROLE_TEAM_HINTS[role] ?? teamHintsForCustomRole(role);
-    for (const hint of hints) {
-      const key = hint.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(hint);
-    }
-  }
-  return out;
-}
-
-function teamHintsForCustomRole(role: string): string[] {
-  const slug = role.trim().toLowerCase();
-  if (!slug) return [];
-  if (slug.endsWith('-team') || slug.endsWith('-squad')) return [slug];
-  return [`${slug}-team`, slug];
+/**
+ * Fold leftover Settings role checkboxes into the context textarea once.
+ * Skips when notes already start with `Roles:` so a second read does not stack.
+ */
+export function foldLegacyRolesIntoNotes(
+  roles?: unknown,
+  legacyRole?: unknown,
+  notes?: unknown,
+): string {
+  const text = normalizeProfileNotes(notes);
+  const labels = legacyRoleLabels(roles, legacyRole);
+  if (!labels.length) return text;
+  if (text.toLowerCase().startsWith('roles:')) return text;
+  const prefix = `Roles: ${labels.join(', ')}`;
+  return text ? `${prefix}. ${text}` : prefix;
 }
 
 export function resolveAccountProfile(input?: ViewerProfile | null): ResolvedViewerProfile {
@@ -134,47 +100,29 @@ export function resolveAccountProfile(input?: ViewerProfile | null): ResolvedVie
 }
 
 /**
- * Account defaults, with optional per-project overrides.
- * Project roles replace account roles when set; notes stack (account then project).
+ * Account defaults, with optional per-project additions.
+ * Project context stacks after account context. Leftover role checkboxes
+ * fold into each side's notes.
  */
 export function resolveViewerProfile(
   account?: ViewerProfile | null,
   project?: ViewerProfile | null,
 ): ResolvedViewerProfile {
-  const accountRoles = normalizeAccountRoles(account?.roles, account?.role);
-  const projectRoles = normalizeAccountRoles(project?.roles, project?.role);
-  const rolesFromProject = projectRoles.length > 0;
-  const roles = rolesFromProject ? projectRoles : accountRoles;
-  const accountNotes = normalizeProfileNotes(account?.notes);
-  const projectNotes = normalizeProfileNotes(project?.notes);
-  const notes = [accountNotes, projectNotes].filter(Boolean).join('\n');
+  const accountNotes = foldLegacyRolesIntoNotes(
+    account?.roles,
+    account?.role,
+    account?.notes,
+  );
+  const projectNotes = foldLegacyRolesIntoNotes(
+    project?.roles,
+    project?.role,
+    project?.notes,
+  );
   return {
-    roles,
-    roleLabels: roles.map((role) => accountRoleLabel(role)),
-    reviewTeamHints: reviewTeamHintsForRoles(roles),
-    notes,
+    notes: [accountNotes, projectNotes].filter(Boolean).join('\n'),
     accountNotes,
     projectNotes,
-    rolesFromProject,
   };
-}
-
-/**
- * Prefer GitHub teams that match the selected account roles. Engineering +
- * Design on both `engineering-team` and `design-team` keeps both lists;
- * Engineering-only drops design-team.
- */
-export function preferTeamsForRole(viewerTeams: string[], hints: string[]): string[] {
-  const teams = viewerTeams.map((t) => t.trim()).filter(Boolean);
-  const want = hints.map((t) => t.trim()).filter(Boolean);
-  if (!want.length) return teams;
-  if (!teams.length) return want;
-  const hintKeys = want.map((t) => t.toLowerCase());
-  const matched = teams.filter((team) => {
-    const key = team.toLowerCase();
-    return hintKeys.some((hint) => key === hint || key.includes(hint) || hint.includes(key));
-  });
-  return matched.length ? matched : teams;
 }
 
 function compactNotes(notes: string, max = 160): string {
@@ -185,48 +133,51 @@ function compactNotes(notes: string, max = 160): string {
 
 /** One playbook / reminder line, or empty when nothing is set. */
 export function formatAccountProfilePlaybookLine(profile: ResolvedViewerProfile): string {
-  if (profile.roleLabels.length === 0 && !profile.notes) return '';
-  const parts: string[] = [];
-  if (profile.roleLabels.length) {
-    parts.push(
-      `roles ${profile.roleLabels.join(', ')} (tickets to work on / PRs to review; prefer those teams)`,
-    );
-  }
-  if (profile.notes) {
-    parts.push(`notes: ${compactNotes(profile.notes)}`);
-  }
+  if (!profile.accountNotes) return '';
   return (
-    `- Viewer profile: ${parts.join('. ')}. ` +
-    `A team review request is not a claim — only an individual reviewer is. ` +
-    `When they ask to find work, use these notes with list_issues (tickets) and list_prs(queue=review) (reviews) and show the options. Only create_thread and start when they also asked to start.`
+    `- Account context (Settings → Agents): ${compactNotes(profile.accountNotes)}. ` +
+    `When they ask to find work, use this with list_issues (tickets) and list_prs(queue=review) (reviews) and show the options. Only create_thread and start when they also asked to start. ` +
+    `To change it, show the proposed text, ask_user (Save this context / Do not save), wait, then update_viewer_context(scope=account, confirmed=true).`
   );
 }
 
-/** Compact per-project overrides for the fleet playbook (empty when none). */
+/** Compact per-project context for the fleet playbook (empty when none). */
 export function formatProjectProfilePlaybookLines(
-  projects: Array<{ name: string; notes?: string; roleLabels?: string[] }>,
+  projects: Array<{ name: string; notes?: string }>,
 ): string {
   const lines = projects
     .map((project) => {
-      const roles = (project.roleLabels ?? []).filter(Boolean);
       const notes = normalizeProfileNotes(project.notes);
-      if (!roles.length && !notes) return '';
-      const bits: string[] = [];
-      if (roles.length) bits.push(`roles ${roles.join(', ')}`);
-      if (notes) bits.push(compactNotes(notes, 120));
-      return `- ${project.name}: ${bits.join('. ')}`;
+      if (!notes) return '';
+      return `- ${project.name}: ${compactNotes(notes, 120)}`;
     })
     .filter(Boolean);
   if (!lines.length) return '';
-  return ['Project overrides (Settings → Projects; empty roles inherit account):', ...lines].join(
-    '\n',
-  );
+  return [
+    'Project context (Settings → Projects; adds to account context):',
+    ...lines,
+  ].join('\n');
 }
 
-/** Suffix for list_workspaces / inventory lines (resolved roles + project notes). */
+/** Suffix for list_workspaces / inventory lines (project context only). */
 export function formatWorkspaceProfileSuffix(profile: ResolvedViewerProfile): string {
-  const bits: string[] = [];
-  if (profile.roles.length) bits.push(`roles:${profile.roles.join(',')}`);
-  if (profile.projectNotes) bits.push(`notes:${compactNotes(profile.projectNotes, 80)}`);
-  return bits.length ? `  ${bits.join('  ')}` : '';
+  if (!profile.projectNotes) return '';
+  return `  context:${compactNotes(profile.projectNotes, 80)}`;
+}
+
+/** First-turn worktree block with current context + how to update it. */
+export function formatViewerContextDirective(profile: ResolvedViewerProfile): string {
+  const account = profile.accountNotes || '(empty)';
+  const project = profile.projectNotes || '(empty — account context applies)';
+  return [
+    'Viewer context (Settings → Agents / Projects) — how to find this user’s tickets and review PRs:',
+    `- Account: ${compactNotes(profile.accountNotes || account, 240)}`,
+    `- This project: ${compactNotes(profile.projectNotes || project, 240)}`,
+    'To change these, show the proposed text in chat, call ask_user (Save this context / Do not save), wait for the answer, then update_viewer_context with confirmed=true. Never write context without confirmation. get_viewer_context reads the current values.',
+  ].join('\n');
+}
+
+/** Short resume reminder — do not dump the full notes every turn. */
+export function formatViewerContextReminder(): string {
+  return 'Viewer context: get_viewer_context to read; update_viewer_context only after ask_user confirms (Save this context / Do not save).';
 }

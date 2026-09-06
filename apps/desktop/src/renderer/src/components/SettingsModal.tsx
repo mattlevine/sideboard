@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  AccountRole,
   AdvancedAppSettings,
   AgentKind,
   AgentSetupActionResult,
@@ -117,218 +116,32 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
   };
 }
 
-const ACCOUNT_ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
-  { value: 'engineering', label: 'Engineering' },
-  { value: 'design', label: 'Design' },
-  { value: 'product', label: 'Product' },
-];
-
-const ACCOUNT_ROLE_PRESET_VALUES = new Set(ACCOUNT_ROLE_OPTIONS.map((opt) => opt.value));
-
-function slugAccountRole(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[_\s]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .replace(/[^a-z0-9-]/g, '');
-}
-
-function accountRoleChipLabel(role: string): string {
-  const known = ACCOUNT_ROLE_OPTIONS.find((opt) => opt.value === role);
-  if (known) return known.label;
-  return role
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function RolePicker({
-  selected,
-  disabled,
-  onChange,
-}: {
-  selected: string[];
-  disabled?: boolean;
-  onChange: (roles: string[]) => void;
-}) {
-  const extraRoles = selected.filter((role) => !ACCOUNT_ROLE_PRESET_VALUES.has(role));
-  return (
-    <>
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '0.85rem',
-          marginTop: '0.65rem',
-        }}
-      >
-        {ACCOUNT_ROLE_OPTIONS.map((opt) => {
-          const checked = selected.includes(opt.value);
-          return (
-            <label
-              key={opt.value}
-              className="settings-hint"
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={disabled}
-                onChange={() => {
-                  onChange(
-                    checked
-                      ? selected.filter((role) => role !== opt.value)
-                      : [...selected, opt.value],
-                  );
-                }}
-              />
-              {opt.label}
-            </label>
-          );
-        })}
-      </div>
-      {extraRoles.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0.4rem',
-            marginTop: '0.65rem',
-          }}
-        >
-          {extraRoles.map((role) => (
-            <span
-              key={role}
-              className="settings-hint"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '2px 8px',
-                borderRadius: 999,
-                border: '1px solid color-mix(in srgb, var(--sb-fg, #1a1a1a) 14%, transparent)',
-              }}
-            >
-              {accountRoleChipLabel(role)}
-              <button
-                type="button"
-                className="ghost"
-                disabled={disabled}
-                aria-label={`Remove ${accountRoleChipLabel(role)}`}
-                style={{ padding: 0, minWidth: 0, lineHeight: 1 }}
-                onClick={() => onChange(selected.filter((item) => item !== role))}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
-
 function ProjectProfileCard({
   workspace,
-  accountRoles,
-  projectRoles,
   notesDraft,
   busy,
-  onRolesChange,
-  onInheritAccount,
   onNotesChange,
   onNotesFocus,
   onNotesBlur,
 }: {
   workspace: Workspace;
-  accountRoles: string[];
-  projectRoles: string[];
   notesDraft: string;
   busy?: boolean;
-  onRolesChange: (roles: string[]) => void;
-  onInheritAccount: () => void;
   onNotesChange: (notes: string) => void;
   onNotesFocus: () => void;
   onNotesBlur: () => void;
 }) {
-  const [roleDraft, setRoleDraft] = useState('');
-  const inherited = projectRoles.length === 0;
-  const shownRoles = inherited ? accountRoles : projectRoles;
-
   return (
     <div className="settings-section settings-section-card">
       <div className="settings-section-title">{workspace.name}</div>
       <p className="settings-hint">{workspace.path}</p>
-      <p className="settings-hint" style={{ marginTop: 8 }}>
-        {inherited
-          ? accountRoles.length
-            ? `Using account roles (${accountRoles.map(accountRoleChipLabel).join(', ')}). Checking a role overrides for this project.`
-            : 'Using account roles (none set). Check a role to override for this project.'
-          : 'These roles override account roles for this project.'}
-      </p>
-      <RolePicker
-        selected={shownRoles}
-        disabled={busy}
-        onChange={(next) => {
-          if (inherited) {
-            const toggled = next.filter((role) => !accountRoles.includes(role));
-            const removed = accountRoles.filter((role) => !next.includes(role));
-            onRolesChange(
-              [...accountRoles.filter((role) => !removed.includes(role)), ...toggled],
-            );
-            return;
-          }
-          onRolesChange(next);
-        }}
-      />
-      <div className="settings-key-row" style={{ marginTop: '0.65rem' }}>
-        <input
-          placeholder="Add another role"
-          value={roleDraft}
-          disabled={busy}
-          onChange={(e) => setRoleDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            const slug = slugAccountRole(roleDraft);
-            if (!slug || slug.length < 2 || slug === 'both') return;
-            if (!shownRoles.includes(slug)) onRolesChange([...shownRoles, slug]);
-            setRoleDraft('');
-          }}
-        />
-        <button
-          type="button"
-          className="primary"
-          disabled={
-            busy ||
-            slugAccountRole(roleDraft).length < 2 ||
-            slugAccountRole(roleDraft) === 'both'
-          }
-          onClick={() => {
-            const slug = slugAccountRole(roleDraft);
-            if (!slug || slug.length < 2 || slug === 'both') return;
-            if (!shownRoles.includes(slug)) onRolesChange([...shownRoles, slug]);
-            setRoleDraft('');
-          }}
-        >
-          Add
-        </button>
-        {!inherited && (
-          <button type="button" className="ghost" disabled={busy} onClick={onInheritAccount}>
-            Use account roles
-          </button>
-        )}
-      </div>
       <label className="settings-field" style={{ marginTop: '0.85rem' }}>
-        How to find work on this project
+        Project context
         <textarea
           className="settings-history-search"
           rows={3}
           maxLength={2000}
-          placeholder="Adds to account notes — tickets and review queues for this repo"
+          placeholder="Adds to account context — roles, tickets, and review queues for this repo"
           value={notesDraft}
           disabled={busy}
           onFocus={onNotesFocus}
@@ -476,7 +289,6 @@ export function SettingsModal({
   const [systemCliPath, setSystemCliPath] = useState<string | null>(null);
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
-  const [roleDraft, setRoleDraft] = useState('');
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [accountNotesDraft, setAccountNotesDraft] = useState('');
   const [projectNotesDrafts, setProjectNotesDrafts] = useState<Record<string, string>>({});
@@ -720,7 +532,6 @@ export function SettingsModal({
     agent?: AgentKind | null;
     model?: string | null;
     effort?: ThinkingEffort | null;
-    roles?: AccountRole[] | null;
     notes?: string | null;
   }) {
     setBusy(true);
@@ -737,7 +548,7 @@ export function SettingsModal({
 
   async function saveProjectPatch(
     repoPath: string,
-    patch: { roles?: AccountRole[] | null; notes?: string | null },
+    patch: { notes?: string | null },
   ) {
     setBusy(true);
     setError(null);
@@ -788,8 +599,6 @@ export function SettingsModal({
   const defaultAgent: AgentKind = settings.defaults?.agent ?? 'claude';
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
-  const selectedRoles = settings.defaults?.roles ?? [];
-
   const filteredArchived = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
     const list = [...archived].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -960,8 +769,8 @@ export function SettingsModal({
             {nav === 'projects' && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Per-project roles and notes for finding tickets and review PRs. Empty roles
-                  inherit Settings → Agents. Notes here add to account notes.
+                  Per-project context for finding tickets and review PRs. Adds to Settings →
+                  Agents. Agents may propose updates; they ask you to confirm first.
                 </p>
                 {workspaces.length === 0 ? (
                   <p className="settings-hint">
@@ -972,12 +781,8 @@ export function SettingsModal({
                     <ProjectProfileCard
                       key={ws.path}
                       workspace={ws}
-                      accountRoles={selectedRoles}
-                      projectRoles={settings.projects?.[ws.path]?.roles ?? []}
                       notesDraft={projectNotesDrafts[ws.path] ?? ''}
                       busy={busy}
-                      onRolesChange={(roles) => void saveProjectPatch(ws.path, { roles })}
-                      onInheritAccount={() => void saveProjectPatch(ws.path, { roles: [] })}
                       onNotesChange={(notes) =>
                         setProjectNotesDrafts((prev) => ({ ...prev, [ws.path]: notes }))
                       }
@@ -1039,7 +844,7 @@ export function SettingsModal({
             {nav === 'agents' && !activeAgent && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Default agent for new chats, then your roles and how to find work. Credentials
+                  Default agent for new chats, then account context for finding work. Credentials
                   set here also appear under Environment and are injected into agent runs.
                 </p>
                 <div className="settings-section settings-section-card">
@@ -1065,77 +870,32 @@ export function SettingsModal({
                   </div>
                 </div>
                 <div className="settings-section settings-section-card">
-                  <div className="settings-section-title">Your roles</div>
+                  <div className="settings-section-title">Account context</div>
                   <p className="settings-hint">
-                    Default for every project when you ask to find work or reviews. Check every
-                    role that applies, or add another — Engineering and Design together is fine;
-                    there is no “both” option. A project can override these under Settings →
-                    Projects.
+                    How agents find your tickets and review PRs — roles, assignee rules, labels,
+                    boards. A project can add more under Settings → Projects. Agents may propose
+                    updates here; they ask you to confirm first.
                   </p>
-                  <RolePicker
-                    selected={selectedRoles}
+                  <textarea
+                    className="settings-history-search"
+                    rows={4}
+                    maxLength={2000}
+                    aria-label="Account context"
+                    placeholder="Engineering and design. Unassigned billing tickets; eng-review PRs"
+                    value={accountNotesDraft}
                     disabled={busy}
-                    onChange={(roles) => void saveDefaultsPatch({ roles })}
+                    onFocus={() => {
+                      accountNotesFocused.current = true;
+                    }}
+                    onChange={(e) => setAccountNotesDraft(e.target.value)}
+                    onBlur={() => {
+                      accountNotesFocused.current = false;
+                      const next = accountNotesDraft.trim();
+                      if (next === (settings.defaults?.notes ?? '')) return;
+                      void saveDefaultsPatch({ notes: next || null });
+                    }}
+                    style={{ marginTop: '0.65rem' }}
                   />
-                  <div className="settings-key-row" style={{ marginTop: '0.65rem' }}>
-                    <input
-                      id="account-role-add"
-                      placeholder="Add another role (QA, data, …)"
-                      value={roleDraft}
-                      disabled={busy}
-                      onChange={(e) => setRoleDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'Enter') return;
-                        e.preventDefault();
-                        const slug = slugAccountRole(roleDraft);
-                        if (!slug || slug.length < 2 || slug === 'both') return;
-                        if (!selectedRoles.includes(slug)) {
-                          void saveDefaultsPatch({ roles: [...selectedRoles, slug] });
-                        }
-                        setRoleDraft('');
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={
-                        busy ||
-                        slugAccountRole(roleDraft).length < 2 ||
-                        slugAccountRole(roleDraft) === 'both'
-                      }
-                      onClick={() => {
-                        const slug = slugAccountRole(roleDraft);
-                        if (!slug || slug.length < 2 || slug === 'both') return;
-                        if (!selectedRoles.includes(slug)) {
-                          void saveDefaultsPatch({ roles: [...selectedRoles, slug] });
-                        }
-                        setRoleDraft('');
-                      }}
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <label className="settings-field" style={{ marginTop: '0.85rem' }}>
-                    How to find your work
-                    <textarea
-                      className="settings-history-search"
-                      rows={3}
-                      maxLength={2000}
-                      placeholder="Tickets to pick up (assignee, labels, boards) and PR queues to review"
-                      value={accountNotesDraft}
-                      disabled={busy}
-                      onFocus={() => {
-                        accountNotesFocused.current = true;
-                      }}
-                      onChange={(e) => setAccountNotesDraft(e.target.value)}
-                      onBlur={() => {
-                        accountNotesFocused.current = false;
-                        const next = accountNotesDraft.trim();
-                        if (next === (settings.defaults?.notes ?? '')) return;
-                        void saveDefaultsPatch({ notes: next || null });
-                      }}
-                    />
-                  </label>
                 </div>
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Follow-up behavior</div>

@@ -27,6 +27,7 @@ import { readTurnLive } from '../store/turn-live.js';
 import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
 import { registerSlackTools } from './slack-tools.js';
 import { registerConnectedIssueVendorTools } from './issue-vendor-tools.js';
+import { registerViewerContextTools } from './viewer-context-tools.js';
 import {
   applyIssueListWindow,
   clampMcpIssueLimit,
@@ -255,10 +256,11 @@ export async function startMcpServer(): Promise<void> {
     name: 'sideboard',
     version: '0.1.0',
   });
-  // Worktree profile: present_* / ask_user / wait_for_job + Account issue
-  // tools (GitHub / Linear / AbleTime). Fleet list_*, Slack, and create/send
-  // stay on orchestration (tools are the cached prefix).
+  // Worktree profile: present_* / ask_user / wait_for_job / viewer context +
+  // Account issue tools (GitHub / Linear / AbleTime). Fleet list_*, Slack,
+  // and create/send stay on orchestration (tools are the cached prefix).
   const worktreeProfile = sideboardMcpProfile() === 'worktree';
+  registerViewerContextTools(server);
   if (worktreeProfile) {
     registerConnectedIssueVendorTools(server);
   }
@@ -266,7 +268,7 @@ export async function startMcpServer(): Promise<void> {
   if (!worktreeProfile) {
   server.tool(
     'list_workspaces',
-    'List registered Sideboard workspaces (repos). Each line is name, path, github:owner/repo when resolvable, and viewer roles/notes when set — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread. Roles and notes (Settings → Agents / Projects) say which tickets and review PRs belong to the user.',
+    'List registered Sideboard workspaces (repos). Each line is name, path, github:owner/repo when resolvable, and project context when set — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread. Account / project context (Settings → Agents / Projects) says which tickets and review PRs belong to the user.',
     {},
     async () => {
       const workspaces = orch.listWorkspaces();

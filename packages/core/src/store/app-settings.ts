@@ -6,10 +6,9 @@ import type { AgentKind } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { stripNestedElectronEnv } from '../hook/nested-electron-env.js';
 import {
-  normalizeAccountRoles,
+  foldLegacyRolesIntoNotes,
   normalizeProfileNotes,
   resolveViewerProfile,
-  type AccountRole,
 } from './account-profile.js';
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
@@ -50,25 +49,23 @@ export interface DefaultsAppSettings {
    */
   fast?: boolean;
   /**
-   * Roles on this Mac (Settings → Agents). Multi-select: check Engineering /
-   * Design / Product and/or add more slugs. Never a combined `both` value.
-   * Used so “tickets to work on” / “PRs to review” follow the right queues.
-   * Project overrides live in {@link AppSettings.projects}.
-   */
-  roles?: AccountRole[];
-  /** @deprecated Folded into {@link DefaultsAppSettings.roles} on read. */
-  role?: AccountRole;
-  /**
-   * How orchestration finds tickets and review PRs when a project has no notes.
-   * Project notes (Settings → Projects) add to this.
+   * Account context (Settings → Agents): roles, tickets, review queues.
+   * Project context (Settings → Projects) adds for that repo.
    */
   notes?: string;
+  /** @deprecated Folded into {@link DefaultsAppSettings.notes} on read. */
+  roles?: string[];
+  /** @deprecated Folded into {@link DefaultsAppSettings.notes} on read. */
+  role?: string;
 }
 
-/** Per-repo role / notes override (Settings → Projects). Empty roles inherit account. */
+/** Per-repo context (Settings → Projects). Adds to account context. */
 export interface ProjectProfileSettings {
-  roles?: AccountRole[];
   notes?: string;
+  /** @deprecated Folded into {@link ProjectProfileSettings.notes} on read. */
+  roles?: string[];
+  /** @deprecated Folded into {@link ProjectProfileSettings.notes} on read. */
+  role?: string;
 }
 
 /** Claude Code harness options (executable override + Chrome). */
@@ -324,8 +321,8 @@ export interface AppSettings {
   /** Default agent + model for new chats (Settings → Agents). */
   defaults: DefaultsAppSettings;
   /**
-   * Per-workspace viewer profile (Settings → Projects), keyed by repo path.
-   * Roles override account when set; notes add to account notes.
+   * Per-workspace viewer context (Settings → Projects), keyed by repo path.
+   * Notes add to account context (Settings → Agents).
    */
   projects: Record<string, ProjectProfileSettings>;
   /** Power-user / Conductor-style advanced preferences. */
@@ -658,9 +655,7 @@ function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   if (typeof source.fast === 'boolean') {
     out.fast = source.fast;
   }
-  const roles = normalizeAccountRoles(source.roles, source.role);
-  if (roles.length) out.roles = roles;
-  const notes = normalizeProfileNotes(source.notes);
+  const notes = foldLegacyRolesIntoNotes(source.roles, source.role, source.notes);
   if (notes) out.notes = notes;
   return out;
 }
@@ -673,11 +668,9 @@ function normalizeProjectProfile(raw: unknown): ProjectProfileSettings | undefin
   if (!raw || typeof raw !== 'object') return undefined;
   const source = raw as Record<string, unknown>;
   const out: ProjectProfileSettings = {};
-  const roles = normalizeAccountRoles(source.roles, source.role);
-  if (roles.length) out.roles = roles;
-  const notes = normalizeProfileNotes(source.notes);
+  const notes = foldLegacyRolesIntoNotes(source.roles, source.role, source.notes);
   if (notes) out.notes = notes;
-  return out.roles || out.notes ? out : undefined;
+  return out.notes ? out : undefined;
 }
 
 function normalizeProjects(raw: unknown): Record<string, ProjectProfileSettings> {
@@ -1313,7 +1306,6 @@ export function updateDefaultsSettings(
     /** Effort level, or Conductor's `normal` (stored as medium). */
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
-    roles?: AccountRole[] | null;
     notes?: string | null;
   },
 ): AppSettings {
@@ -1348,23 +1340,19 @@ export function updateDefaultsSettings(
       defaults.fast = Boolean(patch.fast);
     }
   }
-  if ('roles' in patch) {
-    const roles = normalizeAccountRoles(patch.roles);
-    if (!roles.length) delete defaults.roles;
-    else defaults.roles = roles;
-    delete defaults.role;
-  }
   if ('notes' in patch) {
     const notes = normalizeProfileNotes(patch.notes);
     if (!notes) delete defaults.notes;
     else defaults.notes = notes;
   }
+  delete defaults.roles;
+  delete defaults.role;
   return saveAppSettings({ ...current, defaults });
 }
 
 export function updateProjectProfileSettings(
   repoPath: string,
-  patch: { roles?: AccountRole[] | null; notes?: string | null },
+  patch: { notes?: string | null },
 ): AppSettings {
   const current = loadAppSettings();
   const key = profileRepoKey(repoPath);
@@ -1372,17 +1360,14 @@ export function updateProjectProfileSettings(
   const projects = { ...current.projects };
   const existing = projects[key] ?? {};
   const next: ProjectProfileSettings = { ...existing };
-  if ('roles' in patch) {
-    const roles = normalizeAccountRoles(patch.roles);
-    if (!roles.length) delete next.roles;
-    else next.roles = roles;
-  }
   if ('notes' in patch) {
     const notes = normalizeProfileNotes(patch.notes);
     if (!notes) delete next.notes;
     else next.notes = notes;
   }
-  if (!next.roles?.length && !next.notes) delete projects[key];
+  delete next.roles;
+  delete next.role;
+  if (!next.notes) delete projects[key];
   else projects[key] = next;
   return saveAppSettings({ ...current, projects });
 }
@@ -1418,21 +1403,15 @@ export function getDefaultFast(
 
 /** Resolved Create / new-chat agent + model + thinking defaults. */
 export {
-  ACCOUNT_ROLES,
-  ACCOUNT_ROLE_LABELS,
-  ACCOUNT_ROLE_MAX,
-  ACCOUNT_ROLE_PRESETS,
   PROFILE_NOTES_MAX,
-  accountRoleLabel,
+  foldLegacyRolesIntoNotes,
   formatAccountProfilePlaybookLine,
   formatProjectProfilePlaybookLines,
+  formatViewerContextDirective,
+  formatViewerContextReminder,
   formatWorkspaceProfileSuffix,
-  preferTeamsForRole,
   resolveAccountProfile,
   resolveViewerProfile,
-  reviewTeamHintsForRoles,
-  type AccountRole,
-  type AccountRolePreset,
   type AccountProfile,
   type ResolvedAccountProfile,
   type ResolvedViewerProfile,
@@ -1452,6 +1431,89 @@ export function resolveViewerProfileForRepo(
   const key = findProjectProfileKey(settings.projects, repoPath);
   const project = key ? settings.projects[key] : undefined;
   return resolveViewerProfile(settings.defaults, project);
+}
+
+export function readViewerContext(repoPath?: string | null) {
+  const settings = loadAppSettings();
+  const key = findProjectProfileKey(settings.projects, repoPath);
+  const resolved = resolveViewerProfile(
+    settings.defaults,
+    key ? settings.projects[key] : undefined,
+  );
+  return {
+    account: resolved.accountNotes,
+    project: resolved.projectNotes,
+    combined: resolved.notes,
+    repoPath: key ?? (repoPath?.trim() ? profileRepoKey(repoPath) : null),
+  };
+}
+
+export type ViewerContextWriteResult =
+  | {
+      ok: true;
+      scope: 'account' | 'project';
+      context: string;
+      repoPath?: string | null;
+    }
+  | {
+      ok: false;
+      error: string;
+      message: string;
+      current: string;
+      proposed: string;
+    };
+
+const CONFIRM_ACCOUNT =
+  'Show the user the proposed account context, call ask_user (Save this context / Do not save), wait for their answer, then retry with confirmed=true.';
+const CONFIRM_PROJECT =
+  'Show the user the proposed project context, call ask_user (Save this context / Do not save), wait for their answer, then retry with confirmed=true.';
+
+export function writeViewerContext(input: {
+  scope: 'account' | 'project';
+  context: string;
+  repoPath?: string | null;
+  confirmed: boolean;
+}): ViewerContextWriteResult {
+  const proposed = normalizeProfileNotes(input.context);
+  if (input.scope === 'project') {
+    const settings = loadAppSettings();
+    const key =
+      findProjectProfileKey(settings.projects, input.repoPath) ??
+      profileRepoKey(input.repoPath ?? '');
+    if (!key) {
+      return {
+        ok: false,
+        error: 'repoPath required',
+        message: 'Pass repoPath (or run from a registered worktree) when updating project context.',
+        current: '',
+        proposed,
+      };
+    }
+    const current = resolveViewerProfileForRepo(key, settings).projectNotes;
+    if (!input.confirmed) {
+      return {
+        ok: false,
+        error: 'Confirmation required',
+        message: CONFIRM_PROJECT,
+        current,
+        proposed,
+      };
+    }
+    updateProjectProfileSettings(key, { notes: proposed || null });
+    return { ok: true, scope: 'project', context: proposed, repoPath: key };
+  }
+  const current = resolveAccountProfileFromSettings().accountNotes;
+  if (!input.confirmed) {
+    return {
+      ok: false,
+      error: 'Confirmation required',
+      message: CONFIRM_ACCOUNT,
+      current,
+      proposed,
+    };
+  }
+  updateDefaultsSettings({ notes: proposed || null });
+  return { ok: true, scope: 'account', context: proposed };
 }
 
 export function resolveThreadDefaults(

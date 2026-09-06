@@ -36,6 +36,8 @@ describe('sideboardMcpProfile', () => {
       'present_schema',
       'present_files',
       'wait_for_job',
+      'get_viewer_context',
+      'update_viewer_context',
     ]);
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_threads');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_board');

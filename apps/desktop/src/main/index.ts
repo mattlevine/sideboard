@@ -961,7 +961,7 @@ function registerIpc(): void {
     (
       _e,
       repoPath: string,
-      patch: { roles?: string[] | null; notes?: string | null },
+      patch: { notes?: string | null },
     ) => toPublicAppSettings(updateProjectProfileSettings(repoPath, patch)),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
