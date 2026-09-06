@@ -118,11 +118,11 @@ args = ["mcp"]</pre>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Agents</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Default agent, model, and effort for new chats; <strong>Your roles</strong> (Engineering, Design, Product, or extras you add) and notes for how to find tickets and review PRs; then harness setup for Claude, Codex, OpenCode, Cursor, and Brightsy.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Default agent, model, and effort for new chats; <strong>Account context</strong> (roles, tickets, and review queues as freeform text); then harness setup for Claude, Codex, OpenCode, Cursor, and Brightsy.</p>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Projects</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Per-repo role overrides and notes. Empty roles inherit Settings → Agents. Project notes stack on account notes.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Per-repo context that adds to Settings → Agents. Agents can update account or project context after you confirm.</p>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Git</h4>
@@ -153,7 +153,7 @@ args = ["mcp"]</pre>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:24px">
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">“Find me some work”</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Lists options only. Tickets via <code style="color:#8cc8f5">list_issues</code> (query + assignee from your notes). Reviews via <code style="color:#8cc8f5">list_prs queue=review</code> — open non-draft PRs labeled <code style="color:#8cc8f5">eng-review</code> with no individual reviewer, preferring teams that match your roles. Does not create worktrees.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Lists options only. Tickets via <code style="color:#8cc8f5">list_issues</code> (query + assignee from your context). Reviews via <code style="color:#8cc8f5">list_prs queue=review</code> — open non-draft PRs labeled <code style="color:#8cc8f5">eng-review</code> with no individual reviewer, preferring teams that match that context. Does not create worktrees.</p>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">“Find me work and start it”</h4>
@@ -178,11 +178,11 @@ sideboard schedule run &lt;id&gt;</pre>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px">
 <a href="#settings" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Settings</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Agents (roles + notes), Projects, Git, Issues, Remote, and Connectors — connections live here, not in per-agent MCP.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Agents (account context), Projects, Git, Issues, Remote, and Connectors — connections live here, not in per-agent MCP.</p>
 </a>
 <a href="#find-work" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Find work</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Roles and notes so the orchestrator is contextually aware when listing tickets and review PRs — or starting them.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Account and project context so the orchestrator is aware when listing tickets and review PRs — or starting them. Agents can update that text after you confirm.</p>
 </a>
 <a href="#schedules" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Schedules</h4>

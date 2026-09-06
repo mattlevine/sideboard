@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.158/Sideboard-0.1.158-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.159/Sideboard-0.1.159-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -312,8 +312,8 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 
 | Panel | What |
 |-------|------|
-| **Agents** | Default agent, model, and effort; **Your roles** (Engineering, Design, Product, or extras) and notes for how to find tickets and review PRs; then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
-| **Projects** | Per-repo role overrides and notes (empty roles inherit Agents; project notes stack on account notes) |
+| **Agents** | Default agent, model, and effort; **Account context** (roles, tickets, review queues as freeform text); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Projects** | Per-repo context that adds to account context. Agents can update either after you confirm. |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |
 | **Remote** | Slack — remote-control this Mac |

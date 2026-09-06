@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.159] - 2026-09-06
+
+### Changed
+
+- Account and project **roles** are no longer a separate Settings control. Write roles into **Account context** (Settings → Agents) and **Project context** (Settings → Projects). Leftover checkbox roles fold into that text on read.
+- Orchestration and worktree agents can update that context via `get_viewer_context` / `update_viewer_context` after `ask_user` confirms. Project updates from orchestration require `repoPath` from `list_workspaces`.
+
 ## [0.1.158] - 2026-09-05
 
 ### Added

@@ -53,13 +53,12 @@ describe('coordinator-prompt', () => {
     );
   });
 
-  it('appends viewer roles and project notes on workspace inventory lines', async () => {
+  it('appends project context on workspace inventory lines', async () => {
     const { updateDefaultsSettings, updateProjectProfileSettings } = await import(
       '../store/app-settings.js'
     );
-    updateDefaultsSettings({ roles: ['engineering'], notes: 'assignee=me' });
+    updateDefaultsSettings({ notes: 'assignee=me' });
     updateProjectProfileSettings('/Users/me/sideboard', {
-      roles: ['design'],
       notes: 'design-review only',
     });
     expect(
@@ -71,7 +70,7 @@ describe('coordinator-prompt', () => {
           githubSlug: 'acme/sideboard',
         },
       ]),
-    ).toContain('roles:design');
+    ).toContain('context:design-review only');
     expect(
       formatWorkspaceInventory([
         {
@@ -168,9 +167,13 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('list_prs(queue=review, limit=N)');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not use it for that review-inbox ask');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('engineering-team');
-    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Settings → Agents / Projects roles');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Settings → Agents / Projects context');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('eng-review');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Find work:');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('update_viewer_context');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('scope=project');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('repoPath from list_workspaces');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('confirmed=true');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('find me work and start it');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Show the options');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Do not call Claude Linear MCP');

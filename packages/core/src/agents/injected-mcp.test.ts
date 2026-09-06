@@ -36,6 +36,8 @@ describe('injected-mcp', () => {
       'mcp__sideboard__ask_user',
       'mcp__sideboard__present_plan',
       'mcp__sideboard__wait_for_job',
+      'mcp__sideboard__get_viewer_context',
+      'mcp__sideboard__update_viewer_context',
     ]);
     expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.join(' ')).not.toMatch(/slack|list_teams/i);
     expect(sideboardWorktreeAllowedTools()).toContain('mcp__sideboard__github_*');
