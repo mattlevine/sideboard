@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.160] - 2026-09-06
+
+### Fixed
+
+- Project context no longer matches a parent directory to a registered child workspace. `/Users/me` cannot read or overwrite `/Users/me/design-app`. Nested worktrees still map to the longest registered root.
+
 ## [0.1.159] - 2026-09-06
 
 ### Changed
