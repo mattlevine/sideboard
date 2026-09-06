@@ -416,6 +416,27 @@ describe('app settings', () => {
     expect(clearedProject.projects['/Users/me/design-app']).toBeUndefined();
   });
 
+  it('does not resolve a parent path to another project profile', async () => {
+    const mod = await load();
+    mod.updateProjectProfileSettings('/Users/me/alpha-app', {
+      notes: 'alpha only',
+    });
+    mod.updateProjectProfileSettings('/Users/me/design-app', {
+      notes: 'design only',
+    });
+    expect(mod.findProjectProfileKey(mod.loadAppSettings().projects, '/Users/me')).toBeUndefined();
+    expect(
+      mod.findProjectProfileKey(mod.loadAppSettings().projects, '/Users/me/design'),
+    ).toBeUndefined();
+    expect(mod.resolveViewerProfileForRepo('/Users/me').projectNotes).toBe('');
+    expect(
+      mod.findProjectProfileKey(
+        mod.loadAppSettings().projects,
+        '/Users/me/design-app/worktrees/foo',
+      ),
+    ).toBe('/Users/me/design-app');
+  });
+
   it('folds leftover roles from disk into notes on read', async () => {
     const mod = await load();
     const { mkdirSync, writeFileSync } = await import('node:fs');

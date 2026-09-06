@@ -16,11 +16,16 @@ function text(payload: unknown, isError = false) {
 export function matchRegisteredWorkspace(repoPath?: string | null): string | null {
   const hint = (repoPath ?? '').trim().replace(/\/+$/, '');
   if (!hint) return null;
-  const match = listWorkspaces().find((w) => {
+  let best: string | null = null;
+  for (const w of listWorkspaces()) {
     const stored = w.path.replace(/\/+$/, '');
-    return stored === hint || hint.startsWith(`${stored}/`) || stored.startsWith(`${hint}/`);
-  });
-  return match?.path.replace(/\/+$/, '') ?? null;
+    // Exact or descendant (worktree). Do not match a parent of a registered repo —
+    // `/Users/me` must not pick the first workspace under it.
+    if (stored === hint || hint.startsWith(`${stored}/`)) {
+      if (!best || stored.length > best.length) best = stored;
+    }
+  }
+  return best;
 }
 
 async function resolveProjectRepoPath(repoPath?: string): Promise<string | null> {

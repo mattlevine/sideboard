@@ -114,4 +114,28 @@ describe('viewer context read/write', () => {
     expect(matchRegisteredWorkspace(dataDir)).toBeNull();
     expect(matchRegisteredWorkspace('')).toBeNull();
   });
+
+  it('does not treat a parent path as a workspace match', () => {
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(
+      join(dataDir, 'workspaces.json'),
+      JSON.stringify([
+        {
+          path: '/Users/me/alpha-app',
+          name: 'alpha-app',
+          addedAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          path: '/Users/me/design-app',
+          name: 'design-app',
+          addedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]),
+    );
+    expect(matchRegisteredWorkspace('/Users/me')).toBeNull();
+    expect(matchRegisteredWorkspace('/Users/me/design')).toBeNull();
+    expect(matchRegisteredWorkspace('/Users/me/design-app')).toBe(
+      '/Users/me/design-app',
+    );
+  });
 });
