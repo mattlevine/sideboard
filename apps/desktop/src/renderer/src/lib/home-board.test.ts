@@ -7,6 +7,7 @@ import {
   boardPrKey,
   classifyThreadColumn,
   compactPreview,
+  markdownPreviewSource,
   dedupeBoardIssues,
   dedupeBoardPrs,
   haystackMatches,
@@ -381,5 +382,8 @@ describe('board search and paging', () => {
       hidden: 55,
     });
     expect(compactPreview('one\n\ntwo   three', 8)).toBe('one two…');
+    expect(markdownPreviewSource('**mattlevine/brightsy-ai** has **one open PR**.')).toBe(
+      '**mattlevine/brightsy-ai** has **one open PR**.',
+    );
   });
 });

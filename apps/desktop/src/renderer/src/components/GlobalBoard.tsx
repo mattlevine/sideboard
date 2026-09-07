@@ -11,6 +11,7 @@ import {
   BOARD_PAGE_SIZE,
   classifyWorktreeColumn,
   compactPreview,
+  markdownPreviewSource,
   DEFAULT_WORKTREE_SORT,
   latestVisibleMessageText,
   groupHomeBoardWorktrees,
@@ -29,6 +30,7 @@ import {
 import { useLiveThread } from '../lib/live-paint-context';
 import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { FleetActivityBar } from './FleetActivityBar';
+import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 
 interface Props {
@@ -422,8 +424,12 @@ function ChatCard({
   onRefresh: () => void;
 }) {
   const live = useLiveThread(t.id);
-  const { text: previewText } = previewForThread(t, live.parts);
-  const preview = previewText ? compactPreview(previewText) : '';
+  const { text: previewText, markdown: previewIsMarkdown } = previewForThread(t, live.parts);
+  const preview = previewText
+    ? previewIsMarkdown
+      ? markdownPreviewSource(previewText)
+      : compactPreview(previewText)
+    : '';
   const canStop = t.status === 'running' || t.status === 'queued';
   return (
     <div
@@ -459,7 +465,18 @@ function ChatCard({
         </div>
       </div>
       {preview ? (
-        <div className="board-preview board-preview-compact">{preview}</div>
+        <div className="board-preview board-preview-compact">
+          {previewIsMarkdown ? (
+            <MarkdownMessage
+              text={preview}
+              className="md md-compact"
+              expandImages={false}
+              onThreadLinkClick={onOpenThread}
+            />
+          ) : (
+            preview
+          )}
+        </div>
       ) : null}
       {canStop && (
         <div className="board-row-actions">

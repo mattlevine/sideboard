@@ -878,6 +878,17 @@ export function compactPreview(text: string, max = 140): string {
   return `${flat.slice(0, Math.max(1, max - 1))}…`;
 }
 
+/** Enough markdown for a 2-line card without flattening `**` / lists. */
+export function markdownPreviewSource(text: string, max = 480): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const slice = trimmed.slice(0, max);
+  const nl = slice.lastIndexOf('\n');
+  if (nl > 40) return slice.slice(0, nl);
+  const sp = slice.lastIndexOf(' ');
+  return sp > 40 ? slice.slice(0, sp) : slice;
+}
+
 /**
  * Text for a Home kanban card: the latest user/assistant *message*, not the
  * start of the in-flight turn (thinking / first narration / concatenated stdout).

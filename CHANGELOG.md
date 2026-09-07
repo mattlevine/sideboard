@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Home kanban card previews render markdown (bold, links, lists) instead of showing raw `**` markers.
+
 ## [0.1.162] - 2026-09-07
 
 ### Added
