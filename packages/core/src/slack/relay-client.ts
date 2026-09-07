@@ -31,7 +31,12 @@ export interface SlackRelayClientOptions {
   /** Tests: override keepalive cadence. */
   pingIntervalMs?: number;
   pongTimeoutMs?: number;
+  /** Tests: override the legacy-relay claim fallback delay. */
+  claimFallbackMs?: number;
 }
+
+/** Handle an event anyway if a legacy relay never answers the claim. */
+const CLAIM_FALLBACK_MS = 400;
 
 const BACKOFF_START_MS = 1_000;
 const BACKOFF_MAX_MS = 30_000;
@@ -119,6 +124,22 @@ function connectSession(
   return new Promise((resolve, reject) => {
     let settled = false;
     const pending = new Map<string, SlackInboundMessage>();
+    /**
+     * Legacy relays never answer claims, so unanswered claims fall back to
+     * handling after a delay. Once this relay answers any claim, trust claim
+     * responses only — a late claim_denied must not race the fallback into
+     * handling the same event on two Macs.
+     */
+    let relayAnswersClaims = false;
+    const fallbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const clearFallbackTimers = () => {
+      for (const timer of fallbackTimers.values()) clearTimeout(timer);
+      fallbackTimers.clear();
+    };
+    const markClaimsAnswered = () => {
+      relayAnswersClaims = true;
+      clearFallbackTimers();
+    };
     const allowedUsers = new Set(
       opts.workspaces.map((w) => `${w.teamId.trim()}:${w.userId.trim()}`),
     );
@@ -136,6 +157,7 @@ function connectSession(
       if (settled) return;
       settled = true;
       pending.clear();
+      clearFallbackTimers();
       stopKeepalive();
       opts.signal?.removeEventListener('abort', onAbort);
       if (err) reject(err);
@@ -226,24 +248,31 @@ function connectSession(
         }
         pending.set(msg.eventId, msg.message);
         send(ws, { type: 'claim', eventId: msg.eventId });
-        // Older relays never answer claim_ok. Handle the event if no reply arrives.
-        const eventId = msg.eventId;
-        setTimeout(() => {
-          const inbound = pending.get(eventId);
-          if (!inbound) return;
-          pending.delete(eventId);
-          void Promise.resolve(opts.onEvent(inbound)).catch((err) => {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            log(`event error: ${errMsg}`);
-          });
-        }, 400);
+        // Older relays never answer claim_ok. Handle the event if no reply
+        // arrives — but only until this relay proves it answers claims.
+        if (!relayAnswersClaims) {
+          const eventId = msg.eventId;
+          const timer = setTimeout(() => {
+            fallbackTimers.delete(eventId);
+            const inbound = pending.get(eventId);
+            if (!inbound) return;
+            pending.delete(eventId);
+            void Promise.resolve(opts.onEvent(inbound)).catch((err) => {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              log(`event error: ${errMsg}`);
+            });
+          }, opts.claimFallbackMs ?? CLAIM_FALLBACK_MS);
+          fallbackTimers.set(eventId, timer);
+        }
         return;
       }
       if (msg.type === 'claim_denied') {
+        markClaimsAnswered();
         pending.delete(msg.eventId);
         return;
       }
       if (msg.type === 'claim_ok') {
+        markClaimsAnswered();
         const inbound = pending.get(msg.eventId);
         pending.delete(msg.eventId);
         if (!inbound) return;
