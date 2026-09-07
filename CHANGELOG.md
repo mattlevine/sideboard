@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Creating a worktree from a ticket with no extra composer text starts the first turn as “Resolve this issue.” Orchestration `create_thread` / `start_board_card` still wait for `send_to_thread`.
+
 ## [0.1.161] - 2026-09-07
 
 ### Changed

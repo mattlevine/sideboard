@@ -5,6 +5,7 @@ import type {
   ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
+import { resolveCreateFirstPrompt } from '@sideboard/implied-first-prompt';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import {
   ComposerAttachmentChips,
@@ -373,7 +374,15 @@ export function CreateModal({
       : null;
     const firstPrompt =
       mode === 'orchestration' ? goal.trim() : prompt.trim();
-    const hasPrompt = Boolean(firstPrompt);
+    const hasPrompt = Boolean(
+      firstPrompt ||
+        (mode !== 'orchestration' &&
+          !cowboy &&
+          resolveCreateFirstPrompt({
+            sourceType: selection?.kind === 'ticket' ? 'ticket' : 'branch',
+            prompt: firstPrompt,
+          })),
+    );
 
     // Move progress into the chat empty state instead of blocking the modal,
     // unless "create more" keeps the dialog open.
@@ -737,7 +746,9 @@ export function CreateModal({
                 ? 'Coordination goal across threads…'
                 : cowboy
                   ? 'What are you changing on main?'
-                  : 'What do you want to work on?'
+                  : selection?.kind === 'ticket'
+                    ? 'Optional — leave blank to resolve the issue'
+                    : 'What do you want to work on?'
             }
             onPaste={(e) => {
               if (busy) return;
