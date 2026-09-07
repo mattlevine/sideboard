@@ -31,6 +31,7 @@
       "@sideboard/review-request-template": ["../../packages/core/src/review/review-request-template.ts"],
       "@sideboard/issue-source-labels": ["../../packages/core/src/store/issue-source-labels.ts"],
       "@sideboard/home-board": ["../../packages/core/src/board/home-board.ts"],
+      "@sideboard/implied-first-prompt": ["../../packages/core/src/threads/implied-first-prompt.ts"],
       "@brightsy/ui-context": ["./node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx"]
     }
   },

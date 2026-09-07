@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAgentEvent,
   isInternalAgentStatusText,
+  lastAssistantMessageText,
   liveActivitySummary,
   toolActivityLine,
   partsToAssistantText,
@@ -449,6 +450,28 @@ describe('toolActivityLine', () => {
         },
       ]),
     ).toBeNull();
+  });
+});
+
+describe('lastAssistantMessageText', () => {
+  it('returns the last top-level text part, not the first turn narration', () => {
+    expect(
+      lastAssistantMessageText([
+        { type: 'text', text: 'I will inspect the board next.' },
+        { type: 'tool', id: 't1', name: 'Grep', status: 'done' },
+        { type: 'text', text: 'Kanban cards now show the latest message.' },
+      ]),
+    ).toBe('Kanban cards now show the latest message.');
+  });
+
+  it('skips nested subagent text and gate chatter', () => {
+    expect(
+      lastAssistantMessageText([
+        { type: 'text', text: 'Parent reply.', parentId: 'agent-1' },
+        { type: 'text', text: 'Agent is running. Waiting for gate to pass.' },
+        { type: 'text', text: 'Ready to review.' },
+      ]),
+    ).toBe('Ready to review.');
   });
 });
 

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentStatus,
   Thread,
   ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
+import { resolveCreateFirstPrompt } from '@sideboard/implied-first-prompt';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import {
   ComposerAttachmentChips,
@@ -27,6 +28,8 @@ import {
 import { attachmentsFromLargePaste } from '../lib/paste-attachment';
 import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
 import { loadThreadDefaults } from '../lib/thread-defaults';
+import { createModalHasDraft } from '../lib/create-modal-draft';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type Mode = 'create' | 'orchestration';
 
@@ -175,6 +178,7 @@ export function CreateModal({
   const [busy, setBusy] = useState(false);
   const [createDragOver, setCreateDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const repoBtnRef = useRef<HTMLButtonElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
@@ -300,6 +304,29 @@ export function CreateModal({
     setPickerOpen(false);
   }, [repoPath]);
 
+  const hasDraft = createModalHasDraft({
+    mode,
+    prompt,
+    goal,
+    attachmentCount: attachments.length,
+    hasSelection: Boolean(selection),
+  });
+
+  const requestClose = useCallback(
+    (fromBackdrop = false) => {
+      if (busy) return;
+      if (pickerOpen || repoMenuOpen || moreMenuOpen) return;
+      if (!hasDraft) {
+        onClose();
+        return;
+      }
+      // Accidental click on the dimmed chrome must not wipe the composer.
+      if (fromBackdrop) return;
+      setDiscardOpen(true);
+    },
+    [busy, hasDraft, moreMenuOpen, onClose, pickerOpen, repoMenuOpen],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u') {
@@ -307,11 +334,17 @@ export function CreateModal({
         void window.sideboard.pickFiles().then((files) => {
           if (files.length) setAttachments((prev) => [...prev, ...files]);
         });
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (pickerOpen || repoMenuOpen || moreMenuOpen || discardOpen) return;
+        e.preventDefault();
+        requestClose();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [discardOpen, moreMenuOpen, pickerOpen, repoMenuOpen, requestClose]);
 
   const agentStatus = statuses.find((s) => s.agent === options.agent);
   const agentOk = Boolean(agentStatus?.installed && agentStatus.authenticated);
@@ -373,7 +406,15 @@ export function CreateModal({
       : null;
     const firstPrompt =
       mode === 'orchestration' ? goal.trim() : prompt.trim();
-    const hasPrompt = Boolean(firstPrompt);
+    const hasPrompt = Boolean(
+      firstPrompt ||
+        (mode !== 'orchestration' &&
+          !cowboy &&
+          resolveCreateFirstPrompt({
+            sourceType: selection?.kind === 'ticket' ? 'ticket' : 'branch',
+            prompt: firstPrompt,
+          })),
+    );
 
     // Move progress into the chat empty state instead of blocking the modal,
     // unless "create more" keeps the dialog open.
@@ -503,11 +544,10 @@ export function CreateModal({
   }
 
   return (
+    <>
     <div
       className="modal-backdrop"
-      onClick={() => {
-        if (!busy) onClose();
-      }}
+      onClick={() => requestClose(true)}
     >
       <div
         className={`modal create-modal${busy ? ' is-creating' : ''}${createDragOver ? ' drag-over' : ''}`}
@@ -700,6 +740,16 @@ export function CreateModal({
               </span>
               <span className="create-from-chevron">▾</span>
             </button>
+            <button
+              type="button"
+              className="create-icon-btn"
+              title="Close"
+              aria-label="Close"
+              disabled={busy}
+              onClick={() => requestClose()}
+            >
+              ×
+            </button>
           </div>
         </div>
 
@@ -737,7 +787,9 @@ export function CreateModal({
                 ? 'Coordination goal across threads…'
                 : cowboy
                   ? 'What are you changing on main?'
-                  : 'What do you want to work on?'
+                  : selection?.kind === 'ticket'
+                    ? 'Optional — leave blank to resolve the issue'
+                    : 'What do you want to work on?'
             }
             onPaste={(e) => {
               if (busy) return;
@@ -838,5 +890,19 @@ export function CreateModal({
         onOpenIssues={onOpenIssues}
       />
     </div>
+    {discardOpen ? (
+      <ConfirmDialog
+        title="Discard draft?"
+        message="This composer has text, files, or a selected issue. Close and lose it?"
+        confirmLabel="Discard"
+        cancelLabel="Keep writing"
+        onCancel={() => setDiscardOpen(false)}
+        onConfirm={() => {
+          setDiscardOpen(false);
+          onClose();
+        }}
+      />
+    ) : null}
+    </>
   );
 }

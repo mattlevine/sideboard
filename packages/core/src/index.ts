@@ -80,6 +80,7 @@ export * from './composer/context-compact.js';
 export * from './composer/summarize.js';
 export * from './land/land.js';
 export * from './threads/create.js';
+export * from './threads/implied-first-prompt.js';
 export * from './threads/cowboy.js';
 export * from './threads/chat-tabs.js';
 export * from './threads/fork-worktree.js';

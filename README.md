@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.161/Sideboard-0.1.161-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.162/Sideboard-0.1.162-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -486,7 +486,7 @@ Worktrees live **outside** the repo (Conductor-style):
 ~/sideboard/workspaces/<repo-slug>/<soccer-team>/
 ```
 
-New threads pick an unused famous soccer team (e.g. `liverpool`, `ajax`) for the worktree directory and a placeholder `thread/<team>` branch — same idea as Conductor’s city nicknames. On the first agent turn, Sideboard asks the agent to rename the branch to match the task; the sidebar then shows the PR title (if any) or that branch name.
+New threads pick an unused famous soccer team (e.g. `liverpool`, `ajax`) for the worktree directory and a placeholder `thread/<team>` branch — same idea as Conductor’s city nicknames. On the first agent turn, Sideboard asks the agent to rename the branch to match the task; the sidebar then shows the PR title (if any) or that branch name. Create-from-ticket with an empty message (or `sideboard new --from ticket:…` without a prompt) starts that first turn as **Resolve this issue.** Orchestration children still wait for `send_to_thread`.
 
 **Cowboy mode** skips the extra worktree: the chat runs in the registered project folder, which must already be on the default branch. Enable **Settings → Advanced → Cowboy mode** (off by default), then pick Cowboy from New chat → ⋯. CLI `--cowboy` and MCP `create_thread cowboy=true` also require that setting. Land is commit+push to that branch (no PR). Archiving the chat does not delete the project folder.
 

@@ -631,6 +631,23 @@ export function partsToAssistantText(parts: MessagePart[]): string {
 }
 
 /**
+ * Latest top-level assistant message (not thinking, not nested subagent text,
+ * not the concatenated turn). Board cards want this so they show the start of
+ * the current bubble instead of the first tokens of the turn.
+ */
+export function lastAssistantMessageText(parts: MessagePart[] | undefined): string {
+  if (!parts?.length) return '';
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (!p || p.type !== 'text' || messagePartParentId(p)) continue;
+    const text = p.text.trim();
+    if (!text || isInternalAgentStatusText(text)) continue;
+    return text;
+  }
+  return '';
+}
+
+/**
  * Strip Brightsy CLI NDJSON control events that accidentally landed in transcript
  * text (`tool_use` / `tool_result` / …). Matches one or more concatenated objects.
  */

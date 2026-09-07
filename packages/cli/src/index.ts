@@ -140,7 +140,9 @@ async function main(): Promise<void> {
 
   program
     .command('new')
-    .description('Create a thread from branch, PR, or Linear ticket')
+    .description(
+      'Create a thread from branch, PR, or ticket (empty ticket prompt starts “Resolve this issue.”)',
+    )
     .requiredOption('--from <spec>', 'branch:<name>|pr:<n>|ticket:<key>')
     .requiredOption('--agent <agent>', 'claude|codex|opencode|brightsy|cursor')
     .option('--repo <path>', 'repo path', process.cwd())

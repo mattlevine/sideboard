@@ -26,6 +26,7 @@ export default defineConfig({
       '@sideboard/review-request-template': core('review/review-request-template.ts'),
       '@sideboard/issue-source-labels': core('store/issue-source-labels.ts'),
       '@sideboard/home-board': core('board/home-board.ts'),
+      '@sideboard/implied-first-prompt': core('threads/implied-first-prompt.ts'),
     },
   },
 });

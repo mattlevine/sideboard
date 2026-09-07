@@ -100,6 +100,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/board/home-board.ts',
         ),
+        '@sideboard/implied-first-prompt': resolve(
+          __dirname,
+          '../../packages/core/src/threads/implied-first-prompt.ts',
+        ),
 
       },
     },

@@ -590,7 +590,10 @@ export interface CreateThreadInput {
   attachments?: ThreadAttachment[];
   title?: string;
   parentThreadId?: string | null;
-  /** Optional first prompt — queued after the thread is created (Conductor-style). */
+  /**
+   * Optional first prompt — queued after the thread is created (Conductor-style).
+   * Ticket creates with no prompt (and no orchestration parent) imply “Resolve this issue.”
+   */
   prompt?: string;
   /**
    * Use the project checkout on the default branch (no isolated worktree).

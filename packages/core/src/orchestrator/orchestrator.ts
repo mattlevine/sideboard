@@ -90,6 +90,7 @@ import {
   turnWatchedDetachedJob,
 } from '../mcp/wait-for-job.js';
 import { createThread } from '../threads/create.js';
+import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 import {
@@ -726,10 +727,18 @@ export class Orchestrator {
       listThreads({ includeArchived: false }).map((t) => t.id),
     );
     const thread = await createThread(input);
-    if (prior.has(thread.id)) {
-      if (input.prompt?.trim()) {
+    const reused = prior.has(thread.id);
+    const prompt = resolveCreateFirstPrompt({
+      sourceType: input.sourceType,
+      prompt: input.prompt,
+      parentThreadId: input.parentThreadId ?? thread.parentThreadId,
+      reused,
+      hasUserMessages: thread.messages.some((m) => m.role === 'user'),
+    });
+    if (reused) {
+      if (prompt) {
         try {
-          await this.send(thread.id, input.prompt.trim());
+          await this.send(thread.id, prompt);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           updateThread(thread.id, {
@@ -743,7 +752,7 @@ export class Orchestrator {
 
     // Return as soon as the worktree exists so the chat UI can open. Setup
     // runs in the background in parallel with the first prompt.
-    void this.finishCreateThread(thread.id, input.prompt?.trim() || undefined);
+    void this.finishCreateThread(thread.id, prompt);
 
     return thread;
   }
