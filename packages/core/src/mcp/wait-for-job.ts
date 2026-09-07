@@ -1,9 +1,17 @@
 /**
- * Worktree wait for a detached long job (tests, pack, deploy).
+ * Worktree wait/stop for a detached long job (tests, pack, deploy, CLI).
  * Same 45s / stillRunning contract as wait_for_turn so Claude loops
- * instead of ending the turn with "I'll let you know."
+ * instead of ending the turn with "I'll let you know." stopDetachedJob
+ * is for hangs / wrong output — not a healthy pack that is making progress.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   DETACHED_JOBS_DIR,
@@ -15,7 +23,9 @@ export const MCP_WAIT_FOR_JOB_MAX_MS = 45_000;
 export const MAX_JOB_CONTINUES = 8;
 
 export const MCP_WAIT_JOB_STILL_RUNNING_HINT =
-  'Job is still running. present_artifact type=log with the same artifact_id and content=delta (new lines only). Then call wait_for_job again. Do not end the turn or tell the user you will let them know later.';
+  'Job is still running. present_artifact type=log with the same artifact_id and content=delta (new lines only). Then call wait_for_job again. If it is hanging, producing no useful output, or doing the wrong thing, call stop_job (same id) instead of looping forever. Do not end the turn or tell the user you will let them know later.';
+export const MCP_STOP_JOB_HINT =
+  'Stopped. present_artifact type=log with status=failed and the last delta. Do not wait again unless you start a new command.';
 
 const JOB_ID_RE = /^[a-zA-Z0-9._-]{1,64}$/;
 
@@ -32,6 +42,13 @@ export type WaitForJobResult = {
   delta: string;
   progress: string;
   hint?: string;
+  stopped?: boolean;
+  stopReason?: string;
+};
+
+export type StopJobResult = WaitForJobResult & {
+  stopped: boolean;
+  reason: 'stopped' | 'not-found' | 'not-running' | 'still-running';
 };
 
 export type JobContinueDecision =
@@ -121,6 +138,7 @@ export function formatJobStillRunningContinuePrompt(jobIds: string[]): string {
   return [
     `Detached job still running: ${ids}.`,
     'Do not end this turn. Loop wait_for_job (same id) and present_artifact type=log with content=delta until stillRunning is false.',
+    'If the job is hanging or doing the wrong thing, call stop_job (same id) instead of looping forever.',
     'Then report the result. Do not tell the user you will let them know later.',
   ].join(' ');
 }
@@ -145,7 +163,7 @@ export function turnWatchedDetachedJob(
 ): boolean {
   return parts.some((p) => {
     if (p.type !== 'tool') return false;
-    if (/wait_for_job$/i.test(p.name ?? '')) return true;
+    if (/wait_for_job$/i.test(p.name ?? '') || /stop_job$/i.test(p.name ?? '')) return true;
     const blob = [p.name, p.detail, p.description, p.input ? JSON.stringify(p.input) : '']
       .filter(Boolean)
       .join(' ');
@@ -302,4 +320,114 @@ export async function waitForDetachedJob(
   }
   snap = snapshotJob(dir);
   return toResult(jobId, snap);
+}
+
+function killProcessTree(pid: number, signal: NodeJS.Signals): void {
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      /* fall through to the wrap pid */
+    }
+  }
+  try {
+    process.kill(pid, signal);
+  } catch {
+    /* already dead */
+  }
+}
+
+function appendJobLog(logFile: string, line: string): void {
+  try {
+    mkdirSync(dirname(logFile), { recursive: true });
+    const body = line.endsWith('\n') ? line : `${line}\n`;
+    appendFileSync(logFile, body);
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
+ * Stop a detached job the agent decided is hanging or doing the wrong thing.
+ * SIGTERM the process group, then SIGKILL after a short grace.
+ */
+export async function stopDetachedJob(
+  cwd: string,
+  id: string,
+  opts?: {
+    reason?: string;
+    graceMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+  },
+): Promise<StopJobResult> {
+  const jobId = sanitizeDetachedJobId(id);
+  const root = cwd.trim() || process.cwd();
+  const dir = resolveJobDir(root, jobId);
+  const sleep = opts?.sleep ?? sleepMs;
+  const why = opts?.reason?.trim() ?? '';
+
+  if (!existsSync(dir)) {
+    return {
+      stillRunning: false,
+      ok: false,
+      failed: true,
+      status: 'failed',
+      id: jobId,
+      delta: '',
+      progress: 'No detached job. Start one first.',
+      hint: 'Start with detached-job.js start <id> -- <command>, then wait_for_job or stop_job.',
+      stopped: false,
+      reason: 'not-found',
+    };
+  }
+
+  let snap = snapshotJob(dir);
+  if (!snap.running) {
+    const result = toResult(jobId, snap);
+    return {
+      ...result,
+      stopped: false,
+      reason: 'not-running',
+      hint: 'That job is already finished. Read the log; do not wait again unless you start a new command.',
+    };
+  }
+
+  appendJobLog(snap.log, `$ stop${why ? `: ${why}` : ''}`);
+  if (snap.pid != null) killProcessTree(snap.pid, 'SIGTERM');
+  const graceMs = Number.isFinite(opts?.graceMs)
+    ? Math.max(50, opts!.graceMs!)
+    : 2_000;
+  const deadline = Date.now() + graceMs;
+  while (Date.now() < deadline && snap.pid != null && jobAlive(snap.pid)) {
+    await sleep(Math.min(100, Math.max(20, deadline - Date.now())));
+    snap = snapshotJob(dir);
+  }
+  if (snap.pid != null && jobAlive(snap.pid)) {
+    killProcessTree(snap.pid, 'SIGKILL');
+    await sleep(100);
+  }
+  const exitFile = join(dir, 'exit');
+  if (!existsSync(exitFile)) {
+    try {
+      writeFileSync(exitFile, '1\n');
+    } catch {
+      /* best-effort */
+    }
+  }
+  snap = snapshotJob(dir);
+  const result = toResult(jobId, snap, { failed: true });
+  const stopped = !snap.running;
+  return {
+    ...result,
+    stillRunning: snap.running,
+    ok: false,
+    failed: true,
+    status: snap.running ? 'running' : 'failed',
+    stopped,
+    reason: stopped ? 'stopped' : 'still-running',
+    stopReason: why || undefined,
+    hint: stopped ? MCP_STOP_JOB_HINT : MCP_WAIT_JOB_STILL_RUNNING_HINT,
+  };
 }

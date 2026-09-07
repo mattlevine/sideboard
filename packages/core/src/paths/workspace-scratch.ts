@@ -4,8 +4,11 @@
  * Process guides live in `.claude/skills/` only when the repo already has them.
  */
 
-/** Preferred local attachments root (plan, drops, review seed). */
+/** Preferred local attachments root (plan, drops, review seed). Not CLI dumps. */
 export const ATTACHMENTS_DIR = '.context/attachments';
+
+/** Connector CLI / HTTP dumps (flat worktree scratch; not composer drops). */
+export const CLI_DIR = '.context/cli';
 
 /** Detached long-job state (logs, pid, ui). */
 export const DETACHED_JOBS_DIR = '.context/.sideboard/detached-jobs';
@@ -34,6 +37,8 @@ export function isWorkspaceScratchPath(relativePath: string): boolean {
   return (
     p === ATTACHMENTS_DIR ||
     p.startsWith(`${ATTACHMENTS_DIR}/`) ||
+    p === CLI_DIR ||
+    p.startsWith(`${CLI_DIR}/`) ||
     p === LEGACY_ATTACHMENTS_DIR ||
     p.startsWith(`${LEGACY_ATTACHMENTS_DIR}/`) ||
     p === '.sideboard' ||

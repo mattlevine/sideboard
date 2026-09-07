@@ -10,7 +10,7 @@ Desktop Settings splits connections by job. Slack is remote control. Linear and 
 | **Settings → Remote** | Slack workspaces, this Mac’s name, Listen / Relay |
 | **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
-Connections are owned by Sideboard, not per-agent MCP. Optional connector tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`) or the PostHog HTTP API. Do not add vendor MCPs.
+Connections are owned by Sideboard, not per-agent MCP. Optional connector tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`) or the PostHog HTTP API. Write CLI/HTTP dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
 
 Same Slack steps as the [README](../README.md#slack). Linear / AbleTime: [README — Linear](../README.md#linear) and [AbleTime](../README.md#abletime). Connectors: [README — Connectors](../README.md#connectors).
 

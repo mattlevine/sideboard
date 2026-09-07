@@ -67,6 +67,8 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/\/long-running/);
     expect(text).toMatch(/Do not ask the human to poll/);
     expect(text).toMatch(/let you know/i);
+    expect(text).toMatch(/stop_job/);
+    expect(text).toMatch(/hanging|wrong thing/);
     expect(text).toMatch(/\.context\/\.sideboard\/detached-jobs/);
   });
 });
@@ -79,6 +81,7 @@ describe('formatLongRunningReminder', () => {
     expect(text).toContain('node "/abs/detached-job.js"');
     expect(text).toMatch(/wait_for_job/);
     expect(text).toMatch(/present_artifact type=log/);
+    expect(text).toMatch(/stop_job/);
     expect(text).toMatch(/let the user know later/);
   });
 });
@@ -100,6 +103,7 @@ describe('formatProcessGuideDirective', () => {
     const text = formatProcessGuideDirective();
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
     expect(text).toMatch(/\/long-running/);
+    expect(text).toMatch(/stop_job/);
     expect(text).toMatch(/graph-engineering/);
     expect(text).toMatch(/\/graph-engineering/);
     expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);

@@ -23,6 +23,7 @@ describe('isSideboardScratchPath', () => {
     expect(
       isSideboardScratchPath('.context/.sideboard/detached-jobs/x/log'),
     ).toBe(true);
+    expect(isSideboardScratchPath('.context/cli/vercel.json')).toBe(true);
     expect(isSideboardScratchPath('.claude/skills/review/SKILL.md')).toBe(false);
     expect(isSideboardScratchPath('apps/web/lib/foo.ts')).toBe(false);
   });

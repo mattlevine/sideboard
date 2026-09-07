@@ -39,8 +39,17 @@ describe('optional services', () => {
     expect(text).toMatch(/Do not add a Vercel MCP/);
     expect(text).toMatch(/Do not ask the user to install a vendor MCP/);
     expect(text).toMatch(/Install CLI from Settings → Connectors/);
+    expect(text).toMatch(/Never put raw `--json`/);
+    expect(text).toMatch(/Claude \/ Cursor \/ Codex \/ OpenCode/);
+    expect(text).toMatch(/cursor-runtime|importas e from/);
+    expect(text).toMatch(/Write output to `\.context\/cli\/`/);
+    expect(text).toMatch(/not `\.context\/attachments\/`/);
+    expect(text).toMatch(/stop_job/);
     expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
       /Do not add vendor MCPs/,
+    );
+    expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
+      /Write output to `\.context\/cli\/`/,
     );
   });
 

@@ -278,7 +278,7 @@ export function formatPrGateDirective(): string {
 export function formatProcessGuideDirective(): string {
   return [
     'Process guides (recurring work only):',
-    '- Long jobs (pack, test, deploy, anything that may run more than ~30s): Sideboard always provides `/long-running`. Detach and wait — do not ask the human to poll.',
+    '- Long jobs (pack, test, deploy, anything that may run more than ~30s): Sideboard always provides `/long-running`. Detach and wait; `stop_job` if hanging or wrong. Do not ask the human to poll.',
     '- If `.claude/skills/graph-engineering/SKILL.md` exists, follow it (`/graph-engineering`) for migrations, ports, batch fixes, and other fan-out. Judge first; state on disk; grow the rulebook; do not patch around it.',
     '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill). Sideboard `/name`, Claude Code, and `attach` all load that path. Do not leave the method only in chat.',
     '- Merge-readiness notes: if `.claude/skills/review/SKILL.md` already exists, edit it. Otherwise write them to `.context/review.md` (copied from `.sideboard/review.md` when that file exists). Do not create a review skill.',
@@ -301,8 +301,9 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
     `- Start once: \`${invoke} start <id> -- <command> [args...]\` (cwd = this worktree). If JSON says already-running, do not start again.`,
     '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running` — the side column is the live view.',
     `- Loop Sideboard MCP \`wait_for_job\` with the same id (returns in ~45s). stillRunning → present the same id with \`content=delta\` only → wait_for_job again. Shell fallback: \`${invoke} wait <id>\`. Do not resend the full log or HTML.`,
-    '- Do not end the turn with “I’ll let you know when it’s done.” Stay in the loop until stillRunning is false.',
-    '- ok → finish the task. failed → read the log, fix, start once.',
+    `- If it is hanging, producing no useful output, or doing the wrong thing: MCP \`stop_job\` (same id, optional reason) or \`${invoke} stop <id>\`. Do not loop forever. Do not stop a pack/test/deploy that is clearly making progress.`,
+    '- Do not end the turn with “I’ll let you know when it’s done.” Stay in the loop until stillRunning is false (or you stopped it).',
+    '- ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
   ].join('\n');
 }
@@ -310,7 +311,7 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
 /** Short long-job line on every worktree turn (survives CLI resume). */
 export function formatLongRunningReminder(opts?: { scriptPath?: string | null }): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
-  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait), present_artifact type=log (delta). Do not say you will let the user know later — stay in the turn.`;
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait), present_artifact type=log (delta). stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn.`;
 }
 
 /**

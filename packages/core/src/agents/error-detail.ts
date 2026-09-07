@@ -105,8 +105,48 @@ function looksLikeMinifiedJsDump(line: string): boolean {
     /\(0,[A-Za-z$]\.\w+\)/.test(line) ||
     /CURSOR_RIPGREP_PATH/.test(line) ||
     /findFilesWithRipgrep/.test(line) ||
-    /@cursor\/sdk\/dist\//.test(line)
+    /@cursor\/sdk\/dist\//.test(line) ||
+    looksLikeCursorSdkSourceDump(line)
   );
+}
+
+/**
+ * Huge tool-result crash: the packaged SDK ESM bundle is printed into chat
+ * (`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then `importas e from"@bufbuild/protobuf"`).
+ */
+export function looksLikeCursorSdkSourceDump(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 120) return false;
+  return (
+    /cursor-runtime\/node_modules\/@cursor\/sdk/.test(t) ||
+    /importas [a-z] from"@bufbuild\/protobuf"/.test(t) ||
+    /file:\/\/[^\s]*@cursor\/sdk\/dist\/esm\/index\.js/.test(t)
+  );
+}
+
+/**
+ * Packaged Cursor SDK / long minified-bundle dump leaked into chat or a tool chip.
+ * Ordinary large JSON (package-lock, fixtures, bounded CLI logs) is not a crash.
+ */
+export function looksLikeHugeToolResultDump(text: string): boolean {
+  if (looksLikeCursorSdkSourceDump(text)) return true;
+  const t = text.trim();
+  if (t.length < 4_000) return false;
+  return looksLikeMinifiedJsDump(t);
+}
+
+/** Store a short slice (or a one-line hint) instead of megabytes of CLI JSON. */
+export function clipToolResultForStore(
+  content: string | undefined | null,
+): string | undefined {
+  if (content == null) return undefined;
+  if (looksLikeCursorSdkSourceDump(content) || looksLikeMinifiedJsDump(content)) {
+    return `${HUGE_TOOL_RESULT_SUMMARY} (${content.length} chars omitted)`;
+  }
+  if (content.length <= TOOL_RESULT_STORE_MAX_CHARS) return content;
+  const head = 5_000;
+  const tail = 2_000;
+  return `${content.slice(0, head)}\n\n…(truncated ${content.length} chars — write output to .context/cli/ and read a slice)\n\n${content.slice(-tail)}`;
 }
 
 function looksLikeNestedElectronCrash(line: string): boolean {
@@ -147,6 +187,13 @@ const V8_OOM_SUMMARY =
 
 const MINIFIED_DUMP_SUMMARY =
   'Cursor local agent crashed during startup (truncated crash dump)';
+
+/** Shared across Claude / Cursor / Codex / OpenCode / Brightsy. */
+export const HUGE_TOOL_RESULT_SUMMARY =
+  'Agent crashed mid-turn after a huge tool result. Write CLI/HTTP output to .context/cli/ and read a slice — never dump raw --json/--expand into the tool result.';
+
+/** Cap stored tool-chip results so any agent’s transcript stays small. */
+export const TOOL_RESULT_STORE_MAX_CHARS = 8_000;
 
 function clipStderr(text: string, maxChars: number): string {
   const trimmed = text.trim();
@@ -192,6 +239,9 @@ export function summarizeTurnStderr(tail: string[], maxChars = 500): string {
     .reverse()
     .find((line) => /cannot find (?:package|module)/i.test(line));
   if (moduleMissing) return clipStderr(moduleMissing, maxChars);
+  if (tail.some(looksLikeHugeToolResultDump)) {
+    return HUGE_TOOL_RESULT_SUMMARY;
+  }
   const useful = tail.filter((line) => !looksLikeMinifiedJsDump(line));
   if (useful.length === 0 && tail.some(looksLikeMinifiedJsDump)) {
     return MINIFIED_DUMP_SUMMARY;
@@ -235,11 +285,12 @@ export function looksLikeRetryableRunnerCrash(text: string): boolean {
   if (looksLikeAgentFailureMessage(text)) return false;
   if (looksLikeInvalidAgentSession(text)) return false;
   if (looksLikeV8Oom(text)) return false;
+  if (looksLikeHugeToolResultDump(text)) return true;
   const lower = text.trim().toLowerCase();
   if (/cannot find (?:package|module)|err_module_not_found/.test(lower)) return false;
   if (!lower) return true;
   return (
-    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|cursor runner crashed in node|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|connection stalled|network request failed|cursor startup failed:.+\(retryable\)|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
+    /uv_run|spineventloopinternal|libuv|homebrew node \+ shared libuv|cursor runner crashed in node|hascustomhostobject|electroninitializeicuandstartnode|nested chromium|truncated crash dump|huge tool result|cursor sdk crashed mid-turn|connection stalled|network request failed|cursor startup failed:.+\(retryable\)|sig(?:segv|abrt|ill)|segmentation fault|illegal instruction|fatal error/.test(
       lower,
     )
   );
@@ -282,6 +333,7 @@ export function looksLikeAgentFailureMessage(text: string): boolean {
 export function fallbackTurnFailDetail(assistantText: string): string {
   const t = assistantText.trim();
   if (!t) return '';
+  if (looksLikeHugeToolResultDump(t)) return HUGE_TOOL_RESULT_SUMMARY;
   if (looksLikeAgentFailureMessage(t)) return t;
   // Short single-line system replies are better than a bare exit code.
   if (t.length <= 400 && !/\n\n/.test(t)) return t;
@@ -337,6 +389,9 @@ export function humanizeAgentFailDetail(detail: string): string {
   if (/uv_run|spineventloopinternal|uv__io_poll|cursor runner crashed in node/i.test(lower)) {
     return /retry the turn/i.test(raw) ? raw : BUNDLED_NODE_CRASH_SUMMARY;
   }
+  if (looksLikeHugeToolResultDump(raw) || /huge tool result|cursor sdk crashed mid-turn/.test(lower)) {
+    return HUGE_TOOL_RESULT_SUMMARY;
+  }
   if (/corrupt local agent checkpoint|missing root blob|truncated crash dump/.test(lower)) {
     return `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
   }
@@ -366,6 +421,9 @@ export function turnFailChatText(opts: {
 }): string {
   const chat = opts.assistantText.trim();
   if (opts.exitCode === 0) return chat;
+  if (looksLikeHugeToolResultDump(chat)) {
+    return HUGE_TOOL_RESULT_SUMMARY;
+  }
   const detail = opts.detail.trim();
   const fail = detail
     ? humanizeAgentFailDetail(detail)

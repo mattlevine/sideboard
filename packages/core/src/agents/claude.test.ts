@@ -161,6 +161,7 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__ask_user');
     expect(allowed).toContain('mcp__sideboard__present_plan');
     expect(allowed).toContain('mcp__sideboard__wait_for_job');
+    expect(allowed).toContain('mcp__sideboard__stop_job');
     expect(allowed).toContain('mcp__sideboard__get_viewer_context');
     expect(allowed).toContain('mcp__sideboard__update_viewer_context');
     expect(allowed).toContain('mcp__sideboard__github_*');
