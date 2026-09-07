@@ -158,7 +158,7 @@ export function clipToolResultForStore(
   if (content.length <= TOOL_RESULT_STORE_MAX_CHARS) return content;
   const head = 5_000;
   const tail = 2_000;
-  return `${content.slice(0, head)}\n\n…(truncated ${content.length} chars — write output to a file and read a slice)\n\n${content.slice(-tail)}`;
+  return `${content.slice(0, head)}\n\n…(truncated ${content.length} chars — write output to .context/attachments/ and read a slice)\n\n${content.slice(-tail)}`;
 }
 
 function looksLikeNestedElectronCrash(line: string): boolean {
@@ -202,7 +202,7 @@ const MINIFIED_DUMP_SUMMARY =
 
 /** Shared across Claude / Cursor / Codex / OpenCode / Brightsy. */
 export const HUGE_TOOL_RESULT_SUMMARY =
-  'Agent crashed mid-turn after a huge tool result. Write CLI/HTTP output to a file and read a slice — never dump raw --json/--expand into the tool result.';
+  'Agent crashed mid-turn after a huge tool result. Write CLI/HTTP output to .context/attachments/ and read a slice — never dump raw --json/--expand into the tool result.';
 
 /** Cap stored tool-chip results so any agent’s transcript stays small. */
 export const TOOL_RESULT_STORE_MAX_CHARS = 8_000;

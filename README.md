@@ -432,7 +432,7 @@ More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 | PostHog | `POSTHOG_PERSONAL_API_KEY`, optional `POSTHOG_HOST` | HTTP API (no first-class CLI) |
 | Sentry | `SENTRY_AUTH_TOKEN`, optional `SENTRY_URL` | `sentry-cli` |
 
-Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supabase`, or `sentry-cli` is missing, **Install CLI** runs `npm i -g` (opens Terminal if npm needs sudo). Sideboard does not auto-install on Connect. Slack is **Settings → Remote**, not here.
+Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supabase`, or `sentry-cli` is missing, **Install CLI** runs `npm i -g` (opens Terminal if npm needs sudo). Sideboard does not auto-install on Connect. Agents write CLI/HTTP dumps to `.context/attachments/` (local scratch, like composer file attachments) and read a slice — never raw `--json` / `--expand` into the tool result. Slack is **Settings → Remote**, not here.
 
 ## Scheduled orchestration
 

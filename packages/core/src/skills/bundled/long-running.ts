@@ -75,7 +75,7 @@ Never tell the user “say status when it’s done.” You wait — unless you d
 
 ## Connector CLIs (Vercel, Supabase, Sentry, PostHog)
 
-Huge \`--json\` / \`--expand\` dumps crash any worktree agent mid-turn (Claude / Cursor / Codex / OpenCode). On Cursor the chat shows the packaged bundle (\`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js\` then minified \`importas e from"@bufbuild/protobuf"\`). Write CLI/HTTP output to a file, then read a slice. Tight window first; one query at a time; \`jq\` only the fields you need. After the error line, stop fetching. If a raw shell is still going at ~40s with empty output, detach or \`stop_job\` — piping to \`head\` does not help.
+Huge \`--json\` / \`--expand\` dumps crash any worktree agent mid-turn (Claude / Cursor / Codex / OpenCode). On Cursor the chat shows the packaged bundle (\`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js\` then minified \`importas e from"@bufbuild/protobuf"\`). Write CLI/HTTP output to \`.context/attachments/\` (same local scratch as file attachments), then read a slice. Tight window first; one query at a time; \`jq\` only the fields you need. After the error line, stop fetching. If a raw shell is still going at ~40s with empty output, detach or \`stop_job\` — piping to \`head\` does not help.
 
 ## PR checks (only if a goal is given)
 

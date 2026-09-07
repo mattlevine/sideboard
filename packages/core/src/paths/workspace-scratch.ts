@@ -4,7 +4,7 @@
  * Process guides live in `.claude/skills/` only when the repo already has them.
  */
 
-/** Preferred local attachments root (plan, drops, review seed). */
+/** Preferred local attachments root (plan, drops, review seed, connector CLI dumps). */
 export const ATTACHMENTS_DIR = '.context/attachments';
 
 /** Detached long-job state (logs, pid, ui). */
