@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.160/Sideboard-0.1.160-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.161/Sideboard-0.1.161-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -293,7 +293,7 @@ Add to `~/.config/opencode/opencode.jsonc` (or a project `opencode.jsonc`) under
 Once connected, agents get tools to:
 
 - **Discover** — `list_board` (worktree Kanban: New → Draft → Review → Merged; `create_thread` adds a worktree), `list_workspaces` (path + GitHub slug), `list_branches` / `list_prs` (`queue=review` for the unclaimed `eng-review` inbox — PRs for assigned ticket work; a team like `engineering-team` is not a claim; also `state`, `label`, `reviewer` = `me` / `unassigned` / login) / `list_issues` (Linear, AbleTime MCP, or GitHub), `list_threads`
-- **Linear tickets** — `linear_list_teams`, `linear_search_issues` / `list_issues` (`query`, `assignee` = `me` / `unassigned` / `all` / user, `limit` default 40 max 250; raise `limit` or tighten `query` when `truncated`), `linear_get_issue`, `linear_create_issue`, `linear_update_issue`, `linear_comment` (Settings → Issues OAuth; reconnect if you connected before write access). Linear / AbleTime mutation tools register only when that account is connected.
+- **Linear tickets** — `linear_list_teams`, `linear_search_issues` / `list_issues` (`query`, `assignee` = `me` / `unassigned` / `all` / user, `limit` default 40 max 250; raise `limit` or tighten `query` when `truncated`), `linear_get_issue` (default SmartCrusher-style crush on redundant comments / huge pasted bodies; small unique tickets pass through; `include=full` for the uncompressed vendor payload), `linear_create_issue`, `linear_update_issue`, `linear_comment` (Settings → Issues OAuth; reconnect if you connected before write access). Linear / AbleTime mutation tools register only when that account is connected.
 - **AbleTime tickets** — `abletime_orientation`, `abletime_list_projects`, `abletime_list_tasks`, `abletime_search_tasks`, `abletime_get_task`, `abletime_create_task`, `abletime_ensure_task` (Settings → Issues personal access token → hosted MCP). When AbleTime is the preferred issue source, starting work without a ticket auto-creates one to track against.
 - **Workspaces** — `add_workspace` / `remove_workspace`
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids). A ticket, PR, or named branch may have only one live worktree — `create_thread` returns that thread (`alreadyStarted`) instead of a second checkout; default-branch create still opens a new isolated worktree. `wait_for_turn` returns within ~45s with `stillRunning` + live `progress` while the child is still working — call it again; do not assume a hang. `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` accepts optional `force_stop` to interrupt+replace; `archive_thread`, `restore_thread`

@@ -183,17 +183,17 @@ export function formatIssueToolsDirective(opts: {
   ];
   if (opts.linear) {
     lines.push(
-      '- Linear: `linear_get_issue` (comments), `linear_comment`, `linear_update_issue` (state), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
+      '- Linear: `linear_get_issue` (comments; pass `include=full` if crush.truncated), `linear_comment`, `linear_update_issue` (state), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
     );
   }
   if (github) {
     lines.push(
-      '- GitHub: `github_get_issue` (comments), `github_comment`, `github_update_issue` (state open|closed), `github_create_issue` (pass `parent` for spin-offs). Uses Account `gh`.',
+      '- GitHub: `github_get_issue` (comments; pass `include=full` if crush.truncated), `github_comment`, `github_update_issue` (state open|closed), `github_create_issue` (pass `parent` for spin-offs). Uses Account `gh`.',
     );
   }
   if (opts.abletime) {
     lines.push(
-      '- AbleTime: `abletime_get_task` (comments), `abletime_comment`, `abletime_update_task` (state), `abletime_create_task` (pass `parent` for spin-offs; `abletime_list_projects` if needed).',
+      '- AbleTime: `abletime_get_task` (comments; pass `include=full` if crush.truncated), `abletime_comment`, `abletime_update_task` (state), `abletime_create_task` (pass `parent` for spin-offs; `abletime_list_projects` if needed).',
     );
   }
   lines.push(

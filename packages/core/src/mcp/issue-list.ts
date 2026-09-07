@@ -66,7 +66,7 @@ export function formatMcpIssueList(input: {
   };
 }
 
-/** Compact JSON for MCP tool results (no pretty-print whitespace). */
+/** Compact JSON for MCP tool results (no pretty-print whitespace). Chat inspector re-indents. */
 export function mcpJson(payload: unknown, isError = false) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

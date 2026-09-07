@@ -74,4 +74,10 @@ describe('mcp issue-list', () => {
     expect(listed.issues[0]).not.toHaveProperty('url');
     expect(mcpJson(listed).content[0]?.text).not.toContain('\n');
   });
+
+  it('encodes compact JSON (no pretty-print indent)', () => {
+    const out = mcpJson({ a: 1, nest: { b: 2 } }, true);
+    expect(out.content[0]?.text).toBe('{"a":1,"nest":{"b":2}}');
+    expect(out.isError).toBe(true);
+  });
 });

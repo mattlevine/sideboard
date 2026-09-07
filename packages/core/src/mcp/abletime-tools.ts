@@ -13,6 +13,7 @@ import {
   updateAbleTimeTask,
 } from '../integrations/abletime.js';
 import { mcpJson } from './issue-list.js';
+import { formatAbleTimeTaskPayload, mcpIssueIncludeSchema } from './issue-payload.js';
 
 function text(payload: unknown, isError = false) {
   return mcpJson(payload, isError);
@@ -103,17 +104,11 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_get_task',
-    'Get one AbleTime task by id or reference (e.g. CRM-232): description, state, comments. Re-fetch to read new comments.',
-    { id: z.string() },
-    async ({ id }) => {
+    'Get one AbleTime task by id or reference (e.g. CRM-232): description, state, comments. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload.',
+    { id: z.string(), include: mcpIssueIncludeSchema },
+    async ({ id, include }) => {
       try {
-        const task = await getAbleTimeTask(id);
-        return text({
-          ...toAbleTimeIssueInfo(task),
-          description: task.description,
-          state: task.state,
-          comments: task.comments,
-        });
+        return text(formatAbleTimeTaskPayload(await getAbleTimeTask(id), include));
       } catch (err) {
         return fail(err);
       }
