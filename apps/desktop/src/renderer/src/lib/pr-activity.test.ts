@@ -10,6 +10,7 @@ import {
   relativePrTime,
   reviewStateLabel,
   rewriteDeadBadgeUrl,
+  stripHtmlComments,
   unwrapIndentedHtml,
 } from './pr-activity';
 
@@ -122,6 +123,13 @@ describe('rewriteDeadBadgeUrl', () => {
   });
 });
 
+describe('stripHtmlComments', () => {
+  it('removes GitHub bot HTML comments', () => {
+    expect(stripHtmlComments('<!-- BUGBOT_REVIEW -->\nHello')).toBe('\nHello');
+    expect(stripHtmlComments('Hi\n<!-- BUGBOT_FIX_ALL -->\nBye')).toBe('Hi\n\nBye');
+  });
+});
+
 describe('htmlFragmentsToMarkdown', () => {
   it('turns Vercel picture badges into markdown images', () => {
     const raw = [
@@ -169,6 +177,37 @@ describe('preparePrCommentBody', () => {
       mode: 'markdown',
       text: 'Hello\n\n[![badge](https://example.com/a.png)](https://example.com)',
     });
+  });
+
+  it('hides Bugbot HTML comments that would otherwise render as text', () => {
+    const body = [
+      '<!-- BUGBOT_REVIEW -->',
+      'Cursor Bugbot has reviewed your changes and found 1 potential issue.',
+      '',
+      '<!-- BUGBOT_FIX_ALL -->',
+      '<a href="https://cursor.com/agents?fix=1">Fix in Cursor</a>',
+    ].join('\n');
+    const prepared = preparePrCommentBody(body);
+    expect(prepared.mode).toBe('markdown');
+    if (prepared.mode === 'markdown') {
+      expect(prepared.text).toContain('Cursor Bugbot has reviewed your changes');
+      expect(prepared.text).toContain('[Fix in Cursor](https://cursor.com/agents?fix=1)');
+      expect(prepared.text).not.toContain('<!--');
+      expect(prepared.text).not.toContain('BUGBOT_REVIEW');
+      expect(prepared.text).not.toContain('BUGBOT_FIX_ALL');
+    }
+  });
+
+  it('strips HTML comments from sanitized table comments', () => {
+    const prepared = preparePrCommentBody(
+      '<!-- BUGBOT_REVIEW -->\n    <table><tr><td>cell</td></tr></table>',
+    );
+    expect(prepared.mode).toBe('html');
+    if (prepared.mode === 'html') {
+      expect(prepared.html).toContain('<table>');
+      expect(prepared.html).not.toContain('<!--');
+      expect(prepared.html).not.toContain('BUGBOT_REVIEW');
+    }
   });
 
   it('keeps GitHub markdown image-links pointed at the PR', () => {

@@ -176,6 +176,11 @@ function safeUrl(raw: string | null | undefined): string | null {
   return null;
 }
 
+/** HTML comments are invisible on GitHub but show as text in react-markdown. */
+export function stripHtmlComments(text: string): string {
+  return text.replace(/<!--[\s\S]*?-->/g, '');
+}
+
 /** GitHub bot comments indent HTML, which markdown treats as a fenced code block. */
 export function unwrapIndentedHtml(text: string): string {
   const lines = text.split('\n');
@@ -223,7 +228,7 @@ function mdImage(src: string, alt: string, href?: string | null): string {
 
 /** Turn GitHub/Vercel HTML fragments into markdown so the local PR page can render them. */
 export function htmlFragmentsToMarkdown(text: string): string {
-  let s = unwrapIndentedHtml(text);
+  let s = stripHtmlComments(unwrapIndentedHtml(text));
   s = s.replace(
     /<a\b([^>]*)>([\s\S]*?)<\/a>/gi,
     (full, attrs: string, inner: string) => {
@@ -256,7 +261,7 @@ export function htmlFragmentsToMarkdown(text: string): string {
 }
 
 export function sanitizePrHtml(html: string): string {
-  let s = unwrapIndentedHtml(html);
+  let s = stripHtmlComments(unwrapIndentedHtml(html));
   s = s.replace(/<script\b[\s\S]*?<\/script>/gi, '');
   s = s.replace(/<style\b[\s\S]*?<\/style>/gi, '');
   s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
@@ -312,7 +317,7 @@ export type PreparedPrComment =
   | { mode: 'html'; html: string };
 
 export function preparePrCommentBody(text: string): PreparedPrComment {
-  const unwrapped = unwrapIndentedHtml(text);
+  const unwrapped = stripHtmlComments(unwrapIndentedHtml(text));
   if (/<table\b/i.test(unwrapped)) {
     return { mode: 'html', html: sanitizePrHtml(unwrapped) };
   }
