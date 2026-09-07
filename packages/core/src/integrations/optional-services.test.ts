@@ -42,14 +42,14 @@ describe('optional services', () => {
     expect(text).toMatch(/Never put raw `--json`/);
     expect(text).toMatch(/Claude \/ Cursor \/ Codex \/ OpenCode/);
     expect(text).toMatch(/cursor-runtime|importas e from/);
-    expect(text).toMatch(/Write output to `\.context\/attachments\/`/);
-    expect(text).toMatch(/same local scratch as file attachments/);
+    expect(text).toMatch(/Write output to `\.context\/cli\/`/);
+    expect(text).toMatch(/not `\.context\/attachments\/`/);
     expect(text).toMatch(/stop_job/);
     expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
       /Do not add vendor MCPs/,
     );
     expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
-      /Write output to `\.context\/attachments\/`/,
+      /Write output to `\.context\/cli\/`/,
     );
   });
 

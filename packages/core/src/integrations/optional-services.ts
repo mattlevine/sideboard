@@ -338,7 +338,7 @@ export function formatOptionalServicesDirective(
     '- Never put raw `--json` / `--expand` / huge dumps in the tool result. That crashes any worktree agent mid-turn (Claude / Cursor / Codex / OpenCode). Cursor chat fills with `file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then minified `importas e from"@bufbuild/protobuf"`.',
   );
   lines.push(
-    '- Write output to `.context/attachments/` (same local scratch as file attachments), then read a slice. Tight window first (`--limit`, recent `--since` / last N events); raise only if empty.',
+    '- Write output to `.context/cli/` (worktree scratch; not `.context/attachments/`). Then read a slice. Tight window first (`--limit`, recent `--since` / last N events); raise only if empty.',
   );
   lines.push(
     '- Filter (`jq`) to the fields you need (timestamp, path, status, message) — not the full request object.',
@@ -357,5 +357,5 @@ export function formatOptionalServicesReminder(
   integrations: IntegrationsSettings,
 ): string | null {
   if (connectedOptionalServices(integrations).length === 0) return null;
-  return 'Settings → Connectors: official CLIs / PostHog HTTP with injected env. Write output to `.context/attachments/` (same scratch as file attachments) and read a slice — never dump raw --json/--expand into the tool result (any agent). stop_job if a fetch hangs. Do not add vendor MCPs.';
+  return 'Settings → Connectors: official CLIs / PostHog HTTP with injected env. Write output to `.context/cli/` (not `.context/attachments/`) and read a slice — never dump raw --json/--expand into the tool result (any agent). stop_job if a fetch hangs. Do not add vendor MCPs.';
 }
