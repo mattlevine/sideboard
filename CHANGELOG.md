@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Home kanban cards preview the start of the latest chat message (the current assistant bubble, or the last user/agent message) instead of the first tokens of the in-flight turn.
+- Clicking outside the new-worktree / orchestration modal no longer discards a typed draft. Escape or the close button asks before throwing it away.
 
 ## [0.1.161] - 2026-09-07
 
