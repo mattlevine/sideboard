@@ -125,26 +125,14 @@ export function looksLikeCursorSdkSourceDump(text: string): boolean {
 }
 
 /**
- * Huge CLI/HTTP dump leaked into chat or a tool chip — any agent.
- * Cursor’s signature is the packaged SDK bundle; others often dump raw JSON.
+ * Packaged Cursor SDK / long minified-bundle dump leaked into chat or a tool chip.
+ * Ordinary large JSON (package-lock, fixtures, bounded CLI logs) is not a crash.
  */
 export function looksLikeHugeToolResultDump(text: string): boolean {
   if (looksLikeCursorSdkSourceDump(text)) return true;
   const t = text.trim();
   if (t.length < 4_000) return false;
-  if (looksLikeMinifiedJsDump(t)) return true;
-  const first = t[0];
-  if ((first === '{' || first === '[') && t.length >= TOOL_RESULT_STORE_MAX_CHARS) {
-    return true;
-  }
-  const lines = t.split('\n');
-  if (lines.length < 80) return false;
-  let jsonLines = 0;
-  for (const line of lines) {
-    const s = line.trim();
-    if (s.startsWith('{') || s.startsWith('[')) jsonLines++;
-  }
-  return jsonLines >= 60;
+  return looksLikeMinifiedJsDump(t);
 }
 
 /** Store a short slice (or a one-line hint) instead of megabytes of CLI JSON. */
@@ -152,7 +140,7 @@ export function clipToolResultForStore(
   content: string | undefined | null,
 ): string | undefined {
   if (content == null) return undefined;
-  if (looksLikeHugeToolResultDump(content)) {
+  if (looksLikeCursorSdkSourceDump(content) || looksLikeMinifiedJsDump(content)) {
     return `${HUGE_TOOL_RESULT_SUMMARY} (${content.length} chars omitted)`;
   }
   if (content.length <= TOOL_RESULT_STORE_MAX_CHARS) return content;
@@ -432,10 +420,10 @@ export function turnFailChatText(opts: {
   detail: string;
 }): string {
   const chat = opts.assistantText.trim();
+  if (opts.exitCode === 0) return chat;
   if (looksLikeHugeToolResultDump(chat)) {
     return HUGE_TOOL_RESULT_SUMMARY;
   }
-  if (opts.exitCode === 0) return chat;
   const detail = opts.detail.trim();
   const fail = detail
     ? humanizeAgentFailDetail(detail)

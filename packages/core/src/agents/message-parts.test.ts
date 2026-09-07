@@ -258,8 +258,9 @@ describe('applyAgentEvent', () => {
       content,
     });
     const result = (parts[0] as { result?: string }).result ?? '';
-    expect(result.length).toBeLessThan(400);
-    expect(result).toMatch(/huge tool result/i);
+    expect(result.length).toBeLessThan(content.length);
+    expect(result).toMatch(/truncated/);
+    expect(result).not.toMatch(/crashed mid-turn|huge tool result/i);
   });
 });
 
