@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.163] - 2026-09-07
+
+### Fixed
+
+- Home kanban card previews render markdown (bold, links, lists) instead of showing raw `**` markers.
+- Slack Listen claim fallback no longer races a late `claim_denied` into a second inbound turn on another Mac.
+
 ## [0.1.162] - 2026-09-07
 
 ### Added

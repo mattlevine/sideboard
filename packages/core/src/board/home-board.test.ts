@@ -13,6 +13,7 @@ import {
   DEFAULT_WORKTREE_SORT,
   isHomeBoardThread,
   compactPreview,
+  markdownPreviewSource,
   latestVisibleMessageText,
   dedupeBoardIssues,
   dedupeBoardPrs,
@@ -552,6 +553,10 @@ describe('board search and paging', () => {
       hidden: 55,
     });
     expect(compactPreview('one\n\ntwo   three', 8)).toBe('one two…');
+    expect(markdownPreviewSource('**mattlevine/brightsy-ai** has **one open PR**.')).toBe(
+      '**mattlevine/brightsy-ai** has **one open PR**.',
+    );
+    expect(markdownPreviewSource(`${'a'.repeat(50)}\n**bold** stays`, 60)).toBe('a'.repeat(50));
   });
 });
 

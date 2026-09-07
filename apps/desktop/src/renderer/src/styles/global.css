@@ -9876,7 +9876,16 @@ body:has(.update-banner) .team-toast-stack {
   font-weight: 400;
 }
 
-.board-preview .md-compact pre {
+.board-preview .md-compact p:last-child,
+.board-preview .md-compact ul:last-child,
+.board-preview .md-compact ol:last-child {
+  margin-bottom: 0;
+}
+
+.board-preview .md-compact pre,
+.board-preview .md-compact img,
+.board-preview .md-compact table,
+.board-preview .md-compact .md-codeblock {
   display: none;
 }
 

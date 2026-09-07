@@ -98,3 +98,121 @@ describe('runSlackRelayClient keepalive', () => {
     await done;
   });
 });
+
+describe('runSlackRelayClient claims', () => {
+  const controllers: AbortController[] = [];
+
+  afterEach(() => {
+    for (const ac of controllers.splice(0)) ac.abort();
+  });
+
+  function eventFrame(eventId: string, text: string): string {
+    return JSON.stringify({
+      type: 'event',
+      eventId,
+      message: {
+        teamId: 'T1',
+        userId: 'U1',
+        channelId: 'D1',
+        ts: `${eventId}.000100`,
+        text,
+        kind: 'dm',
+      },
+    });
+  }
+
+  function startClient(opts: {
+    FakeWs: ReturnType<typeof fakeRelayWs>['FakeWs'];
+    onEvent: (msg: { text: string }) => void;
+  }) {
+    const ac = new AbortController();
+    controllers.push(ac);
+    const done = runSlackRelayClient({
+      url: 'wss://relay.example/slack/desktop',
+      deviceId: 'dev1',
+      deviceLabel: 'Work',
+      workspaces: [workspace],
+      signal: ac.signal,
+      pingIntervalMs: 60_000,
+      pongTimeoutMs: 60_000,
+      claimFallbackMs: 30,
+      WebSocketImpl: opts.FakeWs,
+      onEvent: opts.onEvent,
+    });
+    return { ac, done };
+  }
+
+  it('handles unanswered claims after the fallback delay (legacy relay)', async () => {
+    const { FakeWs, sent, listeners } = fakeRelayWs();
+    const handled: string[] = [];
+    const { ac, done } = startClient({
+      FakeWs,
+      onEvent: (msg) => {
+        handled.push(msg.text);
+      },
+    });
+    await vi.waitFor(() => {
+      expect(listeners.get('message')?.length).toBeGreaterThan(0);
+    });
+    listeners.get('message')?.[0]?.({ data: eventFrame('e1', 'hello') });
+    await vi.waitFor(() => {
+      expect(sent.some((row) => row.includes('"type":"claim"'))).toBe(true);
+      expect(handled).toEqual(['hello']);
+    });
+    ac.abort();
+    await done;
+  });
+
+  it('does not double-handle when claim_denied arrives after the fallback delay', async () => {
+    const { FakeWs, listeners } = fakeRelayWs();
+    const handled: string[] = [];
+    const { ac, done } = startClient({
+      FakeWs,
+      onEvent: (msg) => {
+        handled.push(msg.text);
+      },
+    });
+    await vi.waitFor(() => {
+      expect(listeners.get('message')?.length).toBeGreaterThan(0);
+    });
+    const emit = (data: string) => listeners.get('message')?.[0]?.({ data });
+
+    // Relay proves it answers claims: this Mac wins the first event.
+    emit(eventFrame('e1', 'first'));
+    emit(JSON.stringify({ type: 'claim_ok', eventId: 'e1' }));
+    await vi.waitFor(() => {
+      expect(handled).toEqual(['first']);
+    });
+
+    // Another Mac wins the second event; claim_denied arrives after the
+    // (now disarmed) fallback delay would have fired.
+    emit(eventFrame('e2', 'second'));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    emit(JSON.stringify({ type: 'claim_denied', eventId: 'e2' }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(handled).toEqual(['first']);
+    ac.abort();
+    await done;
+  });
+
+  it('claim_denied on the first event disarms the pending fallback', async () => {
+    const { FakeWs, listeners } = fakeRelayWs();
+    const handled: string[] = [];
+    const { ac, done } = startClient({
+      FakeWs,
+      onEvent: (msg) => {
+        handled.push(msg.text);
+      },
+    });
+    await vi.waitFor(() => {
+      expect(listeners.get('message')?.length).toBeGreaterThan(0);
+    });
+    const emit = (data: string) => listeners.get('message')?.[0]?.({ data });
+    emit(eventFrame('e1', 'other mac won'));
+    emit(JSON.stringify({ type: 'claim_denied', eventId: 'e1' }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(handled).toEqual([]);
+    ac.abort();
+    await done;
+  });
+});
