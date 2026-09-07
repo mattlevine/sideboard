@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { wrapReactArtifactHtml, type ChatArtifact } from '../lib/artifacts';
+import { artifactSourcePath, resolveCodeLanguage } from '../lib/language';
 import { CodeView } from './CodeView';
 import { DocumentPreviewModeToggle } from './DocumentPreview';
 import { MarkdownMessage } from './MarkdownMessage';
@@ -36,45 +37,9 @@ function logStatusLabel(status: ChatArtifact['status']): string {
   return status ?? '';
 }
 
-const ARTIFACT_LANG_EXT: Record<string, string> = {
-  html: 'html',
-  htm: 'html',
-  xhtml: 'html',
-  svg: 'html',
-  markdown: 'md',
-  md: 'md',
-  mdx: 'md',
-  typescript: 'ts',
-  ts: 'ts',
-  tsx: 'tsx',
-  javascript: 'js',
-  js: 'js',
-  mjs: 'js',
-  cjs: 'js',
-  jsx: 'jsx',
-  react: 'jsx',
-  log: 'log',
-  console: 'log',
-  python: 'py',
-  py: 'py',
-  json: 'json',
-  jsonc: 'json',
-  css: 'css',
-  scss: 'scss',
-  less: 'less',
-  yaml: 'yml',
-  yml: 'yml',
-  shell: 'sh',
-  bash: 'sh',
-  sh: 'sh',
-  zsh: 'sh',
-};
-
 /** Synthetic path so CodeView / Monaco can pick a language from the fence. */
 function artifactCodePath(artifact: ChatArtifact): string {
-  const raw = (artifact.language || artifact.kind || 'txt').toLowerCase();
-  const ext = ARTIFACT_LANG_EXT[raw] ?? (/^[a-z0-9_+-]+$/.test(raw) ? raw : 'txt');
-  return `artifact.${ext}`;
+  return artifactSourcePath(artifact.language || artifact.kind || '', artifact.content);
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -226,7 +191,11 @@ export function ArtifactPane({
     const el = logPreRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [isLogPreview, artifact.content]);
-  const codePath = useMemo(() => artifactCodePath(artifact), [artifact.kind, artifact.language]);
+  const codePath = useMemo(() => artifactCodePath(artifact), [artifact.content, artifact.kind, artifact.language]);
+  const codeLanguage = useMemo(
+    () => resolveCodeLanguage(artifact.language || artifact.kind || '', artifact.content),
+    [artifact.content, artifact.kind, artifact.language],
+  );
 
   // Let the preloader paint before mounting Monaco / markdown.
   useEffect(() => {
@@ -250,8 +219,9 @@ export function ArtifactPane({
 
   const codeView = bodyReady ? (
     <CodeView
-      className="artifact-pane-codeview"
+      className="artifact-pane-codeview code-view"
       path={codePath}
+      language={codeLanguage}
       value={artifact.content}
       readOnly
       modelNonce={`artifact-${artifact.id}`}

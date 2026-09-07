@@ -64,6 +64,89 @@ const FILENAME_LANGUAGE_MAP: Record<string, string> = {
   'composer.json': 'json',
 };
 
+/** Fence / tool language names → Monaco language id. */
+const LANGUAGE_NAME_MAP: Record<string, string> = {
+  ...EXTENSION_LANGUAGE_MAP,
+  typescript: 'typescript',
+  javascript: 'javascript',
+  python: 'python',
+  ruby: 'ruby',
+  rust: 'rust',
+  java: 'java',
+  csharp: 'csharp',
+  cpp: 'cpp',
+  php: 'php',
+  swift: 'swift',
+  kotlin: 'kotlin',
+  scala: 'scala',
+  json: 'json',
+  yaml: 'yaml',
+  xml: 'xml',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  markdown: 'markdown',
+  sql: 'sql',
+  shell: 'shell',
+  bash: 'shell',
+  zsh: 'shell',
+  powershell: 'powershell',
+  graphql: 'graphql',
+  dockerfile: 'dockerfile',
+  makefile: 'makefile',
+  ini: 'ini',
+  toml: 'ini',
+  react: 'typescript',
+  node: 'javascript',
+};
+
+/** Labels that are not a real language — sniff the source instead. */
+const GENERIC_LANGUAGE_LABELS = new Set([
+  'code',
+  'text',
+  'plain',
+  'plaintext',
+  'source',
+  'src',
+  'txt',
+]);
+
+const MONACO_LANGUAGE_EXT: Record<string, string> = {
+  typescript: 'ts',
+  javascript: 'js',
+  python: 'py',
+  ruby: 'rb',
+  rust: 'rs',
+  java: 'java',
+  csharp: 'cs',
+  cpp: 'cpp',
+  c: 'c',
+  php: 'php',
+  swift: 'swift',
+  kotlin: 'kt',
+  scala: 'scala',
+  json: 'json',
+  yaml: 'yml',
+  xml: 'xml',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  markdown: 'md',
+  sql: 'sql',
+  shell: 'sh',
+  powershell: 'ps1',
+  graphql: 'graphql',
+  dockerfile: 'dockerfile',
+  makefile: 'makefile',
+  ini: 'ini',
+};
+
+function isGenericLanguageLabel(raw: string): boolean {
+  return !raw || GENERIC_LANGUAGE_LABELS.has(raw) || /^\d+$/.test(raw);
+}
+
 export function detectLanguage(filePath: string): string {
   const base = filePath.split('/').pop()?.toLowerCase() || '';
   if (FILENAME_LANGUAGE_MAP[base]) return FILENAME_LANGUAGE_MAP[base];
@@ -71,6 +154,85 @@ export function detectLanguage(filePath: string): string {
   if (ext && EXTENSION_LANGUAGE_MAP[ext]) return EXTENSION_LANGUAGE_MAP[ext];
   if (base === 'dockerfile' || base.startsWith('dockerfile.')) return 'dockerfile';
   return 'plaintext';
+}
+
+/** Guess a Monaco language id from source when the fence/tool label is missing or generic. */
+export function inferLanguageFromContent(content: string): string | null {
+  const sample = content.slice(0, 8000);
+  const trimmed = sample.trim();
+  if (!trimmed) return null;
+
+  if (/^<!doctype html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) return 'html';
+  if (/^<svg[\s>]/i.test(trimmed)) return 'html';
+
+  if (
+    (trimmed.startsWith('{') && trimmed.includes('}')) ||
+    (trimmed.startsWith('[') && trimmed.includes(']'))
+  ) {
+    try {
+      JSON.parse(trimmed);
+      return 'json';
+    } catch {
+      /* not JSON */
+    }
+  }
+
+  if (
+    /\b(interface|implements|enum|namespace|declare|satisfies)\b/.test(sample) ||
+    /\bas const\b/.test(sample) ||
+    /:\s*(unknown|string|number|boolean|void|undefined|null|never|any|Record|Promise|Readonly)\b/.test(
+      sample,
+    )
+  ) {
+    return 'typescript';
+  }
+
+  if (/^\s*(async\s+)?def\s+\w+/m.test(sample)) return 'python';
+
+  if (
+    /^\s*fn\s+\w+/m.test(sample) &&
+    /\b(let\s+mut|impl|pub\s+(fn|struct|enum))\b/.test(sample)
+  ) {
+    return 'rust';
+  }
+
+  if (/^\s*package\s+\w+/m.test(sample) && /^\s*func\s+/m.test(sample)) return 'go';
+
+  if (
+    /\b(import|export)\s+/.test(sample) ||
+    /\b(async\s+)?function\b/.test(sample) ||
+    /\b(const|let|var)\s+\w+\s*=/.test(sample)
+  ) {
+    return 'javascript';
+  }
+
+  return null;
+}
+
+/**
+ * Map a fence/tool language label (and optional source) to a Monaco language id.
+ * Unrecognized labels such as `code` or `69` fall back to content sniffing.
+ */
+export function resolveCodeLanguage(label: string, content?: string): string {
+  const raw = (label || '').trim().toLowerCase();
+  if (!isGenericLanguageLabel(raw)) {
+    if (LANGUAGE_NAME_MAP[raw]) return LANGUAGE_NAME_MAP[raw];
+    if (raw.includes('.') || raw.includes('/')) {
+      const fromPath = detectLanguage(raw);
+      if (fromPath !== 'plaintext') return fromPath;
+    }
+  }
+  if (content) {
+    const inferred = inferLanguageFromContent(content);
+    if (inferred) return inferred;
+  }
+  return 'plaintext';
+}
+
+/** Synthetic path so Monaco can also infer language from the extension. */
+export function artifactSourcePath(label: string, content?: string): string {
+  const language = resolveCodeLanguage(label, content);
+  return `artifact.${MONACO_LANGUAGE_EXT[language] ?? 'txt'}`;
 }
 
 /** Keep in sync with core `diff/diff.ts` IMAGE_EXTENSIONS. */

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { documentPreviewKind, imageMimeType, isImagePath } from './language';
+import {
+  artifactSourcePath,
+  documentPreviewKind,
+  imageMimeType,
+  inferLanguageFromContent,
+  isImagePath,
+  resolveCodeLanguage,
+} from './language';
 
 describe('image preview helpers', () => {
   it('detects image extensions', () => {
@@ -19,5 +26,36 @@ describe('image preview helpers', () => {
     expect(documentPreviewKind('notes.md')).toBe('markdown');
     expect(documentPreviewKind('index.html')).toBe('html');
     expect(documentPreviewKind('app.ts')).toBeNull();
+  });
+});
+
+const TS_SNIPPET = `/** Compact JSON for MCP tool results (no pretty-print whitespace). */
+export function mcpJson(payload: unknown, isError = false) {
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+    ...(isError ? { isError: true } : {}),
+  };
+}
+`;
+
+describe('resolveCodeLanguage', () => {
+  it('maps fence language names and extensions', () => {
+    expect(resolveCodeLanguage('typescript')).toBe('typescript');
+    expect(resolveCodeLanguage('ts')).toBe('typescript');
+    expect(resolveCodeLanguage('python')).toBe('python');
+    expect(resolveCodeLanguage('rs')).toBe('rust');
+    expect(resolveCodeLanguage('artifact.ts')).toBe('typescript');
+  });
+
+  it('sniffs TypeScript when the label is generic or numeric', () => {
+    expect(inferLanguageFromContent(TS_SNIPPET)).toBe('typescript');
+    expect(resolveCodeLanguage('code', TS_SNIPPET)).toBe('typescript');
+    expect(resolveCodeLanguage('69', TS_SNIPPET)).toBe('typescript');
+    expect(resolveCodeLanguage('', TS_SNIPPET)).toBe('typescript');
+    expect(artifactSourcePath('69', TS_SNIPPET)).toBe('artifact.ts');
+  });
+
+  it('does not override a real language with sniffing', () => {
+    expect(resolveCodeLanguage('python', TS_SNIPPET)).toBe('python');
   });
 });
