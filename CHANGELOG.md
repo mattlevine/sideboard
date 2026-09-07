@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.164] - 2026-09-07
+
 ### Added
 
 - Worktree agents can `stop_job` (and `detached-job.js stop`) when a detached command hangs, buffers forever, or is doing the wrong thing. They are told not to stop a pack/test/deploy that is clearly making progress.
