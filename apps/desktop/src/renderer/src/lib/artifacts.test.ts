@@ -38,6 +38,34 @@ describe('extractFenceArtifacts', () => {
     expect(extractFenceArtifacts('```html\n<p>x</p>\n```')).toHaveLength(0);
   });
 
+  it('extracts substantial TypeScript fences as code artifacts', () => {
+    const src = `export function mcpJson(payload: unknown, isError = false) {
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+    ...(isError ? { isError: true } : {}),
+  };
+}
+${'// keep it over the promotion threshold\n'.repeat(8)}`;
+    const arts = extractFenceArtifacts(`\`\`\`typescript\n${src}\n\`\`\``);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.kind).toBe('code');
+    expect(arts[0]!.language).toBe('typescript');
+  });
+
+  it('sniffs TypeScript when the fence language is a generic label', () => {
+    const src = `export function mcpJson(payload: unknown, isError = false) {
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+    ...(isError ? { isError: true } : {}),
+  };
+}
+${'// keep it over the promotion threshold\n'.repeat(8)}`;
+    const arts = extractFenceArtifacts(`\`\`\`69\n${src}\n\`\`\``);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.kind).toBe('code');
+    expect(arts[0]!.language).toBe('typescript');
+  });
+
   it('extracts markdown documents', () => {
     const md = `# Spec\n\n${'Paragraph. '.repeat(20)}`;
     const text = `\`\`\`markdown\n${md}\n\`\`\``;
@@ -94,6 +122,31 @@ describe('extractToolArtifacts', () => {
     expect(arts[0]!.title).toBe('Updated');
     expect(arts[0]!.kind).toBe('markdown');
   });
+  it('treats present_artifact type=code as a code artifact', () => {
+    const src = `export function mcpJson(payload: unknown, isError = false) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
+}
+${'// padding so the fence minimum does not reject this\n'.repeat(6)}`;
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't-code',
+        name: 'present_artifact',
+        status: 'done',
+        input: {
+          artifact_id: 'c1',
+          type: 'code',
+          title: 'mcpJson',
+          content: src,
+        },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.kind).toBe('code');
+    expect(arts[0]!.language).toBe('typescript');
+  });
+
   it('reads present_artifact (incl. mcp__sideboard__ prefix)', () => {
     const parts: MessagePart[] = [
       {
