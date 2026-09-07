@@ -1,4 +1,5 @@
 import type { MessagePart } from '@sideboard-ai/core';
+import { resolveCodeLanguage } from './language';
 
 export type ArtifactKind = 'html' | 'markdown' | 'svg' | 'react' | 'code' | 'log';
 export type ArtifactLogStatus = 'running' | 'ok' | 'failed' | 'idle';
@@ -216,7 +217,10 @@ export function extractFenceArtifacts(
       index += 1;
       continue;
     }
-    const lang = languageLabel(kind, language);
+    const lang =
+      kind === 'code'
+        ? resolveCodeLanguage(languageLabel(kind, language), content)
+        : languageLabel(kind, language);
     const title = titleFromContent(
       kind,
       content,
@@ -260,6 +264,41 @@ function contentFromUnknown(value: unknown): string | undefined {
   );
 }
 
+const CODE_TYPE_LANGS = new Set([
+  'code',
+  'typescript',
+  'ts',
+  'tsx',
+  'javascript',
+  'js',
+  'jsx',
+  'python',
+  'py',
+  'ruby',
+  'rb',
+  'rust',
+  'rs',
+  'go',
+  'java',
+  'c',
+  'cpp',
+  'csharp',
+  'cs',
+  'php',
+  'swift',
+  'kotlin',
+  'scala',
+  'json',
+  'css',
+  'scss',
+  'less',
+  'sql',
+  'graphql',
+  'shell',
+  'bash',
+  'sh',
+]);
+
 function kindFromArtifactType(type: string | undefined, content: string): ArtifactKind {
   const t = (type ?? '').toLowerCase();
   if (t === 'log' || t === 'stream' || t === 'console') return 'log';
@@ -267,6 +306,7 @@ function kindFromArtifactType(type: string | undefined, content: string): Artifa
   if (t.includes('markdown') || t === 'md') return 'markdown';
   if (t.includes('react') || t.includes('jsx') || t.includes('tsx')) return 'react';
   if (t.includes('html') || t.includes('page')) return 'html';
+  if (CODE_TYPE_LANGS.has(t)) return 'code';
   if (looksLikeHtmlDocument(content)) {
     return content.trim().toLowerCase().startsWith('<svg') ? 'svg' : 'html';
   }
@@ -385,7 +425,10 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
       id: `tool-${artifactId}`,
       title,
       kind,
-      language: languageLabel(kind, type ?? ''),
+      language:
+        kind === 'code'
+          ? resolveCodeLanguage(languageLabel(kind, type ?? ''), content)
+          : languageLabel(kind, type ?? ''),
       content,
       source: 'tool',
       status: parseLogStatus(wrapped?.status) ?? parseLogStatus(input?.status),

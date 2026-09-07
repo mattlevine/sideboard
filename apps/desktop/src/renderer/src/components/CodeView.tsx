@@ -21,6 +21,8 @@ void shutdownTsDiagnostics();
 interface Props {
   path: string;
   value: string;
+  /** Override path-based detection (artifact fences often have a language, not a file). */
+  language?: string;
   /** Absolute worktree root (reserved; import resolution is currently off). */
   worktreePath?: string;
   className?: string;
@@ -44,6 +46,7 @@ interface Props {
 export function CodeView({
   path,
   value,
+  language: languageOverride,
   worktreePath,
   className,
   readOnly = false,
@@ -54,7 +57,7 @@ export function CodeView({
   onChange,
   onAddReference,
 }: Props) {
-  const language = detectLanguage(path);
+  const language = languageOverride || detectLanguage(path);
   const absPath =
     worktreePath && path ? joinWorktreePath(worktreePath, path) : path;
   // Unique model URI — never use `#` (Monaco treats it as a URI fragment and
@@ -86,6 +89,14 @@ export function CodeView({
   }, [path]);
 
   useEffect(() => {
+    const model = editorRef.current?.getModel();
+    if (!model || !language) return;
+    if (model.getLanguageId() !== language) {
+      monaco.editor.setModelLanguage(model, language);
+    }
+  }, [language]);
+
+  useEffect(() => {
     if (!refAction) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -115,7 +126,12 @@ export function CodeView({
     clearAllMonacoDiagnostics(monacoApi);
 
     const model = editor.getModel();
-    if (model) clearMonacoWorkerMarkers(monacoApi, model);
+    if (model) {
+      clearMonacoWorkerMarkers(monacoApi, model);
+      if (language && model.getLanguageId() !== language) {
+        monacoApi.editor.setModelLanguage(model, language);
+      }
+    }
 
     const syncReferenceAction = (show: boolean) => {
       if (!onAddReferenceRef.current) {
