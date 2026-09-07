@@ -1,8 +1,12 @@
 import {
+  isInternalAgentStatusText,
+  lastAssistantMessageText,
+} from '../agents/message-parts.js';
+import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
-import type { IssueInfo, PrInfo, Thread } from '../types/thread.js';
+import type { IssueInfo, MessagePart, PrInfo, Thread, ThreadMessage } from '../types/thread.js';
 
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
 const GLOBAL_WORKSPACE_ID = '__global__';
@@ -872,6 +876,34 @@ export function compactPreview(text: string, max = 140): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   if (flat.length <= max) return flat;
   return `${flat.slice(0, Math.max(1, max - 1))}…`;
+}
+
+/**
+ * Text for a Home kanban card: the latest user/assistant *message*, not the
+ * start of the in-flight turn (thinking / first narration / concatenated stdout).
+ */
+export function latestVisibleMessageText(
+  messages: ThreadMessage[] | undefined,
+  liveParts?: MessagePart[],
+): string {
+  const live = lastAssistantMessageText(liveParts);
+  if (live) return live;
+  if (!messages?.length) return '';
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (!m) continue;
+    if (m.role === 'agent') {
+      const fromParts = lastAssistantMessageText(m.parts);
+      const text = (fromParts || m.text || '').trim();
+      if (text && !isInternalAgentStatusText(text)) return text;
+      continue;
+    }
+    if (m.role === 'user') {
+      const text = m.text?.trim();
+      if (text) return text;
+    }
+  }
+  return '';
 }
 
 export type HomeBoardTicketCard = {

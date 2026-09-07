@@ -7,6 +7,7 @@ import {
 import {
   DEFAULT_WORKTREE_SORT,
   groupHomeBoardWorktrees,
+  latestVisibleMessageText,
   worktreeBoardStatus,
   type WorktreeSortMode,
 } from '@sideboard/home-board';
@@ -160,11 +161,9 @@ function previewSnippet(thread: Thread): string {
   ) {
     return thread.lastError.trim();
   }
-  const last = [...thread.messages].reverse().find(
-    (m) => m.role === 'agent' || m.role === 'user',
-  );
-  if (last?.text?.trim()) {
-    const t = last.text.trim().replace(/\s+/g, ' ');
+  const last = latestVisibleMessageText(thread.messages);
+  if (last) {
+    const t = last.replace(/\s+/g, ' ');
     return t.length > 120 ? `${t.slice(0, 117)}…` : t;
   }
   if (thread.branchName?.trim()) return thread.branchName;

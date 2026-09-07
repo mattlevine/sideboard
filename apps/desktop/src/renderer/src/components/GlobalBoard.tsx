@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import type { OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
+import type { MessagePart, OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
 import { isSetupLastError } from '../lib/pane-progress';
 import {
   normalizeWorktreePath,
@@ -12,6 +12,7 @@ import {
   classifyWorktreeColumn,
   compactPreview,
   DEFAULT_WORKTREE_SORT,
+  latestVisibleMessageText,
   groupHomeBoardWorktrees,
   isHomeBoardThread,
   visiblePage,
@@ -63,9 +64,8 @@ function relativeTime(iso: string, now = Date.now()): string {
 
 function previewForThread(
   t: Thread,
-  live: string | undefined,
+  liveParts: MessagePart[] | undefined,
 ): { text: string; markdown: boolean } {
-  if (live) return { text: live, markdown: true };
   if (
     t.lastError &&
     t.status !== 'running' &&
@@ -74,10 +74,8 @@ function previewForThread(
   ) {
     return { text: t.lastError, markdown: false };
   }
-  const last = t.messages[t.messages.length - 1];
-  if (last?.role === 'agent' || last?.role === 'user') {
-    return { text: last.text, markdown: last.role === 'agent' };
-  }
+  const text = latestVisibleMessageText(t.messages, liveParts);
+  if (text) return { text, markdown: true };
   if (t.sourceRef?.trim() && t.sourceRef !== CLOUD_ORCHESTRATOR_GOAL) {
     return { text: t.sourceRef, markdown: false };
   }
@@ -424,7 +422,7 @@ function ChatCard({
   onRefresh: () => void;
 }) {
   const live = useLiveThread(t.id);
-  const { text: previewText } = previewForThread(t, live.output || undefined);
+  const { text: previewText } = previewForThread(t, live.parts);
   const preview = previewText ? compactPreview(previewText) : '';
   const canStop = t.status === 'running' || t.status === 'queued';
   return (

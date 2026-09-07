@@ -13,6 +13,7 @@ import {
   DEFAULT_WORKTREE_SORT,
   isHomeBoardThread,
   compactPreview,
+  latestVisibleMessageText,
   dedupeBoardIssues,
   dedupeBoardPrs,
   defaultTicketScope,
@@ -551,6 +552,47 @@ describe('board search and paging', () => {
       hidden: 55,
     });
     expect(compactPreview('one\n\ntwo   three', 8)).toBe('one two…');
+  });
+});
+
+describe('latestVisibleMessageText', () => {
+  it('prefers the latest live assistant message over earlier turn text', () => {
+    expect(
+      latestVisibleMessageText(
+        [{ role: 'user', text: 'fix the board', ts: '1' }],
+        [
+          { type: 'text', text: 'I will look at GlobalBoard first.' },
+          { type: 'tool', id: '1', name: 'Read', status: 'running' },
+          { type: 'text', text: 'Cards now preview the latest message.' },
+        ],
+      ),
+    ).toBe('Cards now preview the latest message.');
+  });
+
+  it('falls back to the last persisted user message while the turn has no text yet', () => {
+    expect(
+      latestVisibleMessageText(
+        [{ role: 'user', text: 'Resolve this issue.', ts: '1' }],
+        [{ type: 'thinking', text: 'planning…' }],
+      ),
+    ).toBe('Resolve this issue.');
+  });
+
+  it('uses the last text part of a finished agent turn', () => {
+    expect(
+      latestVisibleMessageText([
+        { role: 'user', text: 'fix preview', ts: '1' },
+        {
+          role: 'agent',
+          text: 'I will inspect the board.\n\nDone — cards show the latest message.',
+          parts: [
+            { type: 'text', text: 'I will inspect the board.' },
+            { type: 'text', text: 'Done — cards show the latest message.' },
+          ],
+          ts: '2',
+        },
+      ]),
+    ).toBe('Done — cards show the latest message.');
   });
 });
 
