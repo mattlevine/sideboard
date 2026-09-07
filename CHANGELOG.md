@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.161] - 2026-09-07
+
 ### Changed
 
 - `linear_get_issue`, `github_get_issue`, and `abletime_get_task` apply SmartCrusher-style crush on the default path: small unique tickets pass through; duplicate comments are dropped; huge pasted bodies keep head, tail, and error blocks. Pass `include=full` to re-fetch the uncompressed vendor payload. Linear get no longer embeds `team.states` (use `linear_list_teams`).
