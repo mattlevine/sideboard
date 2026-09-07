@@ -16,12 +16,10 @@ import {
   requireSlackWorkspace,
   slackTokenFor,
 } from '../slack/workspaces.js';
+import { mcpJson } from './issue-list.js';
 
 function text(payload: unknown, isError = false) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
-    ...(isError ? { isError: true } : {}),
-  };
+  return mcpJson(payload, isError);
 }
 
 function fail(err: unknown) {

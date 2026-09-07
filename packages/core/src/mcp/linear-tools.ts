@@ -14,6 +14,7 @@ import {
   formatMcpIssueList,
   mcpJson,
 } from './issue-list.js';
+import { formatLinearIssuePayload, mcpIssueIncludeSchema } from './issue-payload.js';
 
 function text(payload: unknown, isError = false) {
   return mcpJson(payload, isError);
@@ -108,11 +109,11 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_get_issue',
-    'Get a Linear issue by uuid or identifier (ENG-123): description, comments, relations, parent/children.',
-    { id: z.string() },
-    async ({ id }) => {
+    'Get a Linear issue by uuid or identifier (ENG-123): description, comments, relations, parent/children. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload.',
+    { id: z.string(), include: mcpIssueIncludeSchema },
+    async ({ id, include }) => {
       try {
-        return text(await getLinearIssue(id));
+        return text(formatLinearIssuePayload(await getLinearIssue(id), include));
       } catch (err) {
         return fail(err);
       }

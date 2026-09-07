@@ -7,6 +7,7 @@ import {
   updateGitHubIssue,
 } from '../integrations/github-issues.js';
 import { mcpJson } from './issue-list.js';
+import { formatGitHubIssuePayload, mcpIssueIncludeSchema } from './issue-payload.js';
 
 function text(payload: unknown, isError = false) {
   return mcpJson(payload, isError);
@@ -37,11 +38,11 @@ export const GITHUB_ISSUE_MCP_TOOL_NAMES = [
 export function registerGithubIssueTools(server: McpServer): void {
   server.tool(
     'github_get_issue',
-    'Get a GitHub issue (#123 or URL): body, comments, state. Re-fetch to read new comments. Uses Account gh.',
-    { id: z.string(), repoPath: repoPathSchema },
-    async ({ id, repoPath }) => {
+    'Get a GitHub issue (#123 or URL): body, comments, state. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. Uses Account gh.',
+    { id: z.string(), include: mcpIssueIncludeSchema, repoPath: repoPathSchema },
+    async ({ id, include, repoPath }) => {
       try {
-        return text(await getGitHubIssue(id, { repoPath }));
+        return text(formatGitHubIssuePayload(await getGitHubIssue(id, { repoPath }), include));
       } catch (err) {
         return fail(err);
       }

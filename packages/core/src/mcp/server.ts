@@ -360,24 +360,13 @@ export async function startMcpServer(): Promise<void> {
         limit,
         workspaceName: (path) => names.get(path) ?? '',
       });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                columns: snap.columns,
-                hidden: snap.hidden,
-                totals: snap.totals,
-                columnDefs: BOARD_COLUMN_DEFS,
-                hint: HOME_BOARD_AGENT_HINT,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return mcpJson({
+        columns: snap.columns,
+        hidden: snap.hidden,
+        totals: snap.totals,
+        columnDefs: BOARD_COLUMN_DEFS,
+        hint: HOME_BOARD_AGENT_HINT,
+      });
     },
   );
 
@@ -423,7 +412,7 @@ export async function startMcpServer(): Promise<void> {
         usage: spend.usage,
         lastTurnUsage: spend.lastTurnUsage,
       };
-      return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
+      return mcpJson(summary);
     },
   );
   }
@@ -476,7 +465,7 @@ export async function startMcpServer(): Promise<void> {
             ? 'Log accepted. Same artifact_id appends; send only new lines next time.'
             : 'Artifact accepted. Sideboard desktop opens it in the side column beside chat.',
       };
-      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+      return mcpJson(payload);
     },
   );
 
@@ -523,7 +512,7 @@ export async function startMcpServer(): Promise<void> {
         message:
           'Questions shown in Sideboard’s composer. Wait for the user’s next message with their answers before continuing.',
       };
-      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+      return mcpJson(payload);
     },
   );
 
@@ -559,7 +548,7 @@ export async function startMcpServer(): Promise<void> {
         message:
           'Plan saved to .context/attachments/plan.md and shown in Sideboard chat for approval.',
       };
-      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+      return mcpJson(payload);
     },
   );
 
@@ -607,7 +596,7 @@ export async function startMcpServer(): Promise<void> {
         message:
           'Schema pane accepted. Sideboard desktop opens the CMS column beside chat.',
       };
-      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+      return mcpJson(payload);
     },
   );
 
@@ -636,7 +625,7 @@ export async function startMcpServer(): Promise<void> {
         message:
           'Files pane accepted. Sideboard desktop opens the Files column beside chat.',
       };
-      return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+      return mcpJson(payload);
     },
   );
 
@@ -653,7 +642,7 @@ export async function startMcpServer(): Promise<void> {
       const result = await waitForDetachedJob(process.cwd(), id, {
         timeoutMs: mcpWaitForJobTimeoutMs(timeoutMs),
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      return mcpJson(result);
     },
   );
 
@@ -682,37 +671,25 @@ export async function startMcpServer(): Promise<void> {
       const threadId = process.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || null;
       const state = setCaffeinateHold(enabled, { threadId });
       if (enabled && !state.held) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                ...state,
-                ok: false,
-                message:
-                  state.platform === 'darwin'
-                    ? 'Could not start caffeinate.'
-                    : 'Caffeinate is macOS only.',
-              }),
-            },
-          ],
-          isError: true,
-        };
-      }
-      return {
-        content: [
+        return mcpJson(
           {
-            type: 'text',
-            text: JSON.stringify({
-              ...getCaffeinateHold(),
-              ok: true,
-              message: state.held
-                ? 'Mac will stay awake until you call set_caffeinate with enabled=false, the user says they are done, or this orchestration chat is closed.'
-                : 'Caffeinate hold released. The Mac can sleep (unless Settings caffeinate toggles are on).',
-            }),
+            ...state,
+            ok: false,
+            message:
+              state.platform === 'darwin'
+                ? 'Could not start caffeinate.'
+                : 'Caffeinate is macOS only.',
           },
-        ],
-      };
+          true,
+        );
+      }
+      return mcpJson({
+        ...getCaffeinateHold(),
+        ok: true,
+        message: state.held
+          ? 'Mac will stay awake until you call set_caffeinate with enabled=false, the user says they are done, or this orchestration chat is closed.'
+          : 'Caffeinate hold released. The Mac can sleep (unless Settings caffeinate toggles are on).',
+      });
     },
   );
 
@@ -783,20 +760,13 @@ export async function startMcpServer(): Promise<void> {
         })),
       );
       if (existing) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                alreadyStarted: true,
-                id: existing.id,
-                title: existing.title,
-                status: existing.status,
-                link: `sideboard://thread/${existing.id}`,
-              }),
-            },
-          ],
-        };
+        return mcpJson({
+          alreadyStarted: true,
+          id: existing.id,
+          title: existing.title,
+          status: existing.status,
+          link: `sideboard://thread/${existing.id}`,
+        });
       }
 
       const workspaces = orch.listWorkspaces();
@@ -891,19 +861,12 @@ export async function startMcpServer(): Promise<void> {
         }
       }
       const thread = await orch.send(ref, prompt);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: thread.id,
-              status: thread.status,
-              queueLength: thread.queue.length,
-              forceStopped: Boolean(force_stop),
-            }),
-          },
-        ],
-      };
+      return mcpJson({
+        id: thread.id,
+        status: thread.status,
+        queueLength: thread.queue.length,
+        forceStopped: Boolean(force_stop),
+      });
     },
   );
 
@@ -919,26 +882,19 @@ export async function startMcpServer(): Promise<void> {
         resolveIfStillRunning: true,
       });
       const result = orch.getTurnResult(thread.id);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: thread.id,
-              status: result.status,
-              text: result.text,
-              lastError: result.lastError,
-              stillRunning: result.stillRunning,
-              progress: result.progress,
-              lastActivityAt: result.lastActivityAt,
-              hint: result.stillRunning
-                ? mcpWaitStillRunningHint(result.status)
-                : mcpWaitFinishedHint(result.status),
-              incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
-            }),
-          },
-        ],
-      };
+      return mcpJson({
+        id: thread.id,
+        status: result.status,
+        text: result.text,
+        lastError: result.lastError,
+        stillRunning: result.stillRunning,
+        progress: result.progress,
+        lastActivityAt: result.lastActivityAt,
+        hint: result.stillRunning
+          ? mcpWaitStillRunningHint(result.status)
+          : mcpWaitFinishedHint(result.status),
+        incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
+      });
     },
   );
 
@@ -948,20 +904,13 @@ export async function startMcpServer(): Promise<void> {
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              ...result,
-              hint: result.stillRunning
-                ? mcpWaitStillRunningHint(result.status)
-                : mcpWaitFinishedHint(result.status),
-              incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
-            }),
-          },
-        ],
-      };
+      return mcpJson({
+        ...result,
+        hint: result.stillRunning
+          ? mcpWaitStillRunningHint(result.status)
+          : mcpWaitFinishedHint(result.status),
+        incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
+      });
     },
   );
 
@@ -983,18 +932,11 @@ export async function startMcpServer(): Promise<void> {
       const clearQueue = force !== false;
       const hadQueued = t.queue.length > 0;
       const stopped = orch.stop(ref, { clearQueue, notifyParent: false });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: stopped.id,
-              status: stopped.status,
-              clearedQueue: clearQueue && hadQueued,
-            }),
-          },
-        ],
-      };
+      return mcpJson({
+        id: stopped.id,
+        status: stopped.status,
+        clearedQueue: clearQueue && hadQueued,
+      });
     },
   );
 
@@ -1018,17 +960,10 @@ export async function startMcpServer(): Promise<void> {
         };
       }
       const archived = await orch.archive(ref);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: archived.id,
-              status: archived.status,
-            }),
-          },
-        ],
-      };
+      return mcpJson({
+        id: archived.id,
+        status: archived.status,
+      });
     },
   );
 
@@ -1039,18 +974,11 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref }) => {
       try {
         const restored = await orch.restore(ref);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                id: restored.id,
-                status: restored.status,
-                worktreePath: restored.worktreePath,
-              }),
-            },
-          ],
-        };
+        return mcpJson({
+          id: restored.id,
+          status: restored.status,
+          worktreePath: restored.worktreePath,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: message }], isError: true };
@@ -1067,17 +995,10 @@ export async function startMcpServer(): Promise<void> {
     },
     async ({ ref, maxFiles }) => {
       const summary = await orch.diffSummary(ref);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              ...summary,
-              files: summary.files.slice(0, maxFiles ?? 10),
-            }),
-          },
-        ],
-      };
+      return mcpJson({
+        ...summary,
+        files: summary.files.slice(0, maxFiles ?? 10),
+      });
     },
   );
 
@@ -1088,9 +1009,7 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref }) => {
       try {
         const checks = await orch.getPrChecks(ref);
-        return {
-          content: [{ type: 'text', text: JSON.stringify(checks) }],
-        };
+        return mcpJson(checks);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: message }], isError: true };
@@ -1106,20 +1025,13 @@ export async function startMcpServer(): Promise<void> {
       try {
         const tab = await orch.requestReview(ref);
         const from = orch.getThread(ref);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                id: tab.id,
-                title: tab.title,
-                status: tab.status,
-                fromThreadId: from?.id ?? ref,
-                link: `sideboard://thread/${tab.id}`,
-              }),
-            },
-          ],
-        };
+        return mcpJson({
+          id: tab.id,
+          title: tab.title,
+          status: tab.status,
+          fromThreadId: from?.id ?? ref,
+          link: `sideboard://thread/${tab.id}`,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: message }], isError: true };
@@ -1141,43 +1053,27 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref, action }) => {
       try {
         const thread = await orch.askGit(ref, action);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                id: thread.id,
-                status: thread.status,
-                queueLength: thread.queue.length,
-                action,
-                link: `sideboard://thread/${thread.id}`,
-              }),
-            },
-          ],
-        };
+        return mcpJson({
+          id: thread.id,
+          status: thread.status,
+          queueLength: thread.queue.length,
+          action,
+          link: `sideboard://thread/${thread.id}`,
+        });
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err);
         const message = formatGhLandError(raw);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  error: true,
-                  action,
-                  lastError: message,
-                  hint: /body is too long/i.test(message)
-                    ? 'Branch is already pushed. send_to_thread so the worktree agent runs gh pr create --draft -R <origin> --body-file <short.md>. Keep the description short.'
-                    : undefined,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return mcpJson(
+          {
+            error: true,
+            action,
+            lastError: message,
+            hint: /body is too long/i.test(message)
+              ? 'Branch is already pushed. send_to_thread so the worktree agent runs gh pr create --draft -R <origin> --body-file <short.md>. Keep the description short.'
+              : undefined,
+          },
+          true,
+        );
       }
     },
   );
@@ -1193,9 +1089,7 @@ export async function startMcpServer(): Promise<void> {
     async ({ agent }) => {
       try {
         const catalogs = await listModelsForAgent(agent);
-        return {
-          content: [{ type: 'text', text: JSON.stringify(catalogs, null, 2) }],
-        };
+        return mcpJson(catalogs);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: message }], isError: true };
@@ -1231,24 +1125,17 @@ export async function startMcpServer(): Promise<void> {
           model,
           title,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                id: thread.id,
-                title: thread.title,
-                status: thread.status,
-                agent: thread.agent,
-                model: thread.model,
-                branchName: thread.branchName,
-                worktreePath: thread.worktreePath,
-                fromThreadId: source?.id ?? ref,
-                link: `sideboard://thread/${thread.id}`,
-              }),
-            },
-          ],
-        };
+        return mcpJson({
+          id: thread.id,
+          title: thread.title,
+          status: thread.status,
+          agent: thread.agent,
+          model: thread.model,
+          branchName: thread.branchName,
+          worktreePath: thread.worktreePath,
+          fromThreadId: source?.id ?? ref,
+          link: `sideboard://thread/${thread.id}`,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: message }], isError: true };
@@ -1289,24 +1176,17 @@ export async function startMcpServer(): Promise<void> {
           model,
           title,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                id: tab.id,
-                title: tab.title,
-                status: tab.status,
-                agent: tab.agent,
-                model: tab.model,
-                sourceType: tab.sourceType,
-                worktreePath: tab.worktreePath,
-                fromThreadId: source.id,
-                link: `sideboard://thread/${tab.id}`,
-              }),
-            },
-          ],
-        };
+        return mcpJson({
+          id: tab.id,
+          title: tab.title,
+          status: tab.status,
+          agent: tab.agent,
+          model: tab.model,
+          sourceType: tab.sourceType,
+          worktreePath: tab.worktreePath,
+          fromThreadId: source.id,
+          link: `sideboard://thread/${tab.id}`,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: message }], isError: true };
@@ -1323,19 +1203,12 @@ export async function startMcpServer(): Promise<void> {
     },
     async ({ ref, name }) => {
       const result = await orch.startDev(ref, name);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              port: result.port,
-              scriptName: result.scriptName,
-              ports: result.ports,
-              url: `http://localhost:${result.port}`,
-            }),
-          },
-        ],
-      };
+      return mcpJson({
+        port: result.port,
+        scriptName: result.scriptName,
+        ports: result.ports,
+        url: `http://localhost:${result.port}`,
+      });
     },
   );
 
@@ -1346,14 +1219,7 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref }) => {
       const scripts = orch.listThreadRunScripts(ref);
       const active = orch.getActiveRuns(ref);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ scripts, active }, null, 2),
-          },
-        ],
-      };
+      return mcpJson({ scripts, active });
     },
   );
 
@@ -1376,9 +1242,7 @@ export async function startMcpServer(): Promise<void> {
     { ref: z.string() },
     async ({ ref }) => {
       const result = await orch.runSetup(ref);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result) }],
-      };
+      return mcpJson(result);
     },
   );
 
@@ -1388,7 +1252,7 @@ export async function startMcpServer(): Promise<void> {
     { repoPath: z.string() },
     async ({ repoPath }) => {
       const ws = await orch.addWorkspace(repoPath);
-      return { content: [{ type: 'text', text: JSON.stringify(ws) }] };
+      return mcpJson(ws);
     },
   );
 
@@ -1415,23 +1279,14 @@ export async function startMcpServer(): Promise<void> {
     },
     async (args) => {
       const threads = await orch.bestOfN(args);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              threads.map((t) => ({
-                id: t.id,
-                agent: t.agent,
-                branchName: t.branchName,
-                worktreePath: t.worktreePath,
-              })),
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return mcpJson(
+        threads.map((t) => ({
+          id: t.id,
+          agent: t.agent,
+          branchName: t.branchName,
+          worktreePath: t.worktreePath,
+        })),
+      );
     },
   );
 
@@ -1528,9 +1383,7 @@ export async function startMcpServer(): Promise<void> {
     { ref: z.string() },
     async ({ ref }) => {
       const stack = await orch.getPrStack(ref);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(stack, null, 2) }],
-      };
+      return mcpJson(stack);
     },
   );
 
@@ -1543,30 +1396,19 @@ export async function startMcpServer(): Promise<void> {
     },
     async ({ ref, layer }) => {
       const result = await orch.openPrStackLayers(ref, { layer });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                stackNumber: result.stack.stackNumber,
-                trunk: result.stack.trunk,
-                threads: result.threads.map((t) => ({
-                  id: t.id,
-                  title: t.title,
-                  branchName: t.branchName,
-                  stackLayer: t.stackLayer,
-                  worktreePath: t.worktreePath,
-                  prUrl: t.prUrl,
-                  link: `sideboard://thread/${t.id}`,
-                })),
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return mcpJson({
+        stackNumber: result.stack.stackNumber,
+        trunk: result.stack.trunk,
+        threads: result.threads.map((t) => ({
+          id: t.id,
+          title: t.title,
+          branchName: t.branchName,
+          stackLayer: t.stackLayer,
+          worktreePath: t.worktreePath,
+          prUrl: t.prUrl,
+          link: `sideboard://thread/${t.id}`,
+        })),
+      });
     },
   );
 
@@ -1580,25 +1422,14 @@ export async function startMcpServer(): Promise<void> {
     },
     async ({ ref, branchName, title }) => {
       const result = await orch.addStackLayer(ref, branchName, { title });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                id: result.thread.id,
-                title: result.thread.title,
-                branchName: result.thread.branchName,
-                stackLayer: result.thread.stackLayer,
-                worktreePath: result.thread.worktreePath,
-                link: `sideboard://thread/${result.thread.id}`,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return mcpJson({
+        id: result.thread.id,
+        title: result.thread.title,
+        branchName: result.thread.branchName,
+        stackLayer: result.thread.stackLayer,
+        worktreePath: result.thread.worktreePath,
+        link: `sideboard://thread/${result.thread.id}`,
+      });
     },
   );
 
@@ -1620,29 +1451,18 @@ export async function startMcpServer(): Promise<void> {
         base: args.base,
         title: args.title,
       });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                stackNumber: result.stack.stackNumber,
-                trunk: result.stack.trunk,
-                threads: result.threads.map((t) => ({
-                  id: t.id,
-                  title: t.title,
-                  branchName: t.branchName,
-                  stackLayer: t.stackLayer,
-                  worktreePath: t.worktreePath,
-                  link: `sideboard://thread/${t.id}`,
-                })),
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return mcpJson({
+        stackNumber: result.stack.stackNumber,
+        trunk: result.stack.trunk,
+        threads: result.threads.map((t) => ({
+          id: t.id,
+          title: t.title,
+          branchName: t.branchName,
+          stackLayer: t.stackLayer,
+          worktreePath: t.worktreePath,
+          link: `sideboard://thread/${t.id}`,
+        })),
+      });
     },
   );
 
