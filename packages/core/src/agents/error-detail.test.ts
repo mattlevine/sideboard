@@ -6,6 +6,9 @@ import {
   formatTurnExitError,
   humanizeAgentFailDetail,
   looksLikeAgentFailureMessage,
+  clipToolResultForStore,
+  looksLikeCursorSdkSourceDump,
+  looksLikeHugeToolResultDump,
   looksLikeInvalidAgentSession,
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
@@ -327,6 +330,40 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
       `ce.now();yield Promise.all([(0,D.ly)(r.apiKey),(0,D.mU)(r.apiKey)]),u=performance.now()-e}const k=r.workingDirectory||process.cwd();const C="rg",M=process.env.CURSOR_RIPGREP_PATH;${'x'.repeat(80)}`,
     );
     expect(summarizeTurnStderr(tail)).toMatch(/truncated crash dump/i);
+  });
+
+  it('replaces a cursor-runtime SDK source dump (huge tool result) with a short hint', () => {
+    const dump =
+      'file:///Applications/Sideboard.app/Contents/Resources/cursor-runtime/node_modules/@cursor/sdk/dist/esm/index.js:1 importas e from"@bufbuild/protobuf";importas t from"@connectrpc/connect";importas n from"assert";importas r from"buffer";importas s from"crypto";importas o from"events";importas i from"fs";importas a from"node:assert";importas l from"node:async_hooks";importas u from"node:buffer";importas m from"node:child_process";importas c from"node:constants";import*as d from"node:cry';
+    expect(looksLikeCursorSdkSourceDump(dump)).toBe(true);
+    const tail: string[] = [];
+    pushTurnStderr(tail, dump);
+    expect(summarizeTurnStderr(tail)).toMatch(/huge tool result/i);
+    expect(summarizeTurnStderr(tail)).not.toMatch(/importas e from/);
+    expect(fallbackTurnFailDetail(dump)).toMatch(/huge tool result/i);
+    expect(
+      turnFailChatText({ exitCode: 1, assistantText: dump, detail: '' }),
+    ).toMatch(/huge tool result/i);
+    expect(
+      turnFailChatText({ exitCode: 1, assistantText: dump, detail: '' }),
+    ).not.toMatch(/importas e from|bufbuild/);
+    expect(looksLikeRetryableRunnerCrash(dump)).toBe(true);
+  });
+
+  it('treats a huge JSON CLI dump as a tool-result crash for any agent', () => {
+    const json = `[${Array.from({ length: 200 }, (_, i) => `{"timestamp":"${i}","message":"${'x'.repeat(80)}"}`).join(',')}]`;
+    expect(looksLikeHugeToolResultDump(json)).toBe(true);
+    expect(looksLikeCursorSdkSourceDump(json)).toBe(false);
+    expect(clipToolResultForStore(json)).toMatch(/huge tool result/i);
+    expect(clipToolResultForStore(json)?.length).toBeLessThan(400);
+    expect(fallbackTurnFailDetail(json)).toMatch(/huge tool result/i);
+    expect(
+      turnFailChatText({ exitCode: 1, assistantText: json, detail: '' }),
+    ).toMatch(/huge tool result/i);
+  });
+
+  it('keeps a small tool result intact', () => {
+    expect(clipToolResultForStore('{"ok":true}')).toBe('{"ok":true}');
   });
 
   it('summarizes Cursor findFilesWithRipgrep / resource_exhausted instead of asar stacks', () => {

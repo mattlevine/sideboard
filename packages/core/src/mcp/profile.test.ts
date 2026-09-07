@@ -28,7 +28,7 @@ describe('sideboardMcpProfile', () => {
     );
   });
 
-  it('worktree MCP catalog is the UI tools plus wait_for_job', () => {
+  it('worktree MCP catalog is the UI tools plus wait_for_job and stop_job', () => {
     expect([...WORKTREE_MCP_TOOLS]).toEqual([
       'present_artifact',
       'ask_user',
@@ -36,6 +36,7 @@ describe('sideboardMcpProfile', () => {
       'present_schema',
       'present_files',
       'wait_for_job',
+      'stop_job',
       'get_viewer_context',
       'update_viewer_context',
     ]);

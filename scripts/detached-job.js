@@ -7,6 +7,7 @@
  *   node scripts/detached-job.js start <id> -- <command> [args...]
  *   node scripts/detached-job.js wait <id>
  *   node scripts/detached-job.js wait <id> --until-done
+ *   node scripts/detached-job.js stop <id> [--reason TEXT]
  *   node scripts/detached-job.js status <id>
  *   node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]
  *   node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
@@ -25,7 +26,10 @@ const WAIT_SLICE_MS = 45_000;
 const WAIT_POLL_MS = 2_000;
 const WAIT_UNTIL_DONE_MS = 90 * 60 * 1000;
 const WAIT_STILL_RUNNING_HINT =
-  'Job is still running. present_artifact type=log with the same artifact_id and content=delta (new lines only). Then call wait again. Do not resend HTML or the full log. Do not ask the user to check status, and do not start a second job with the same id.';
+  'Job is still running. present_artifact type=log with the same artifact_id and content=delta (new lines only). Then call wait again. If it is hanging, producing no useful output, or doing the wrong thing, stop it (`stop <id>` / MCP stop_job) instead of looping forever. Do not resend HTML or the full log. Do not ask the user to check status, and do not start a second job with the same id.';
+const STOP_HINT =
+  'Stopped. present_artifact type=log with status=failed and the last delta. Do not wait again unless you start a new command.';
+const STOP_GRACE_MS = 2_000;
 
 function repoRootFrom(cwd = process.cwd()) {
   return cwd;
@@ -400,6 +404,83 @@ async function waitSnapshot(getSnap, timeoutMs) {
   return { ...snap, stillRunning: snap.running || !snap.ok };
 }
 
+function appendLogLine(logFile, line) {
+  if (!logFile) return;
+  try {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.appendFileSync(logFile, line.endsWith('\n') ? line : `${line}\n`);
+  } catch {
+    /* best-effort */
+  }
+}
+
+function killProcessTree(pid, signal) {
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      /* fall through to the wrap pid */
+    }
+  }
+  try {
+    process.kill(pid, signal);
+  } catch {
+    /* already dead */
+  }
+}
+
+/**
+ * Stop a detached job the agent decided is hanging or doing the wrong thing.
+ * SIGTERM the process group (wrap + CLI + grandchildren), then SIGKILL.
+ */
+async function stopJob(root, id, opts = {}) {
+  const p = jobPaths(root, id);
+  if (!fs.existsSync(p.dir)) {
+    return {
+      stopped: false,
+      reason: 'not-found',
+      id,
+      hint: 'No detached job with that id. Start one first, or pick the id from wait/status.',
+    };
+  }
+  const snap = snapshotFromJobPaths(p);
+  const why = typeof opts.reason === 'string' ? opts.reason.trim() : '';
+  if (!snap.running) {
+    return {
+      stopped: false,
+      reason: 'not-running',
+      id,
+      snapshot: snap,
+      hint: 'That job is already finished. Read the log; do not wait again unless you start a new command.',
+    };
+  }
+  appendLogLine(p.log, `$ stop${why ? `: ${why}` : ''}`);
+  killProcessTree(snap.pid, 'SIGTERM');
+  const graceMs = Number.isFinite(opts.graceMs) ? Math.max(50, opts.graceMs) : STOP_GRACE_MS;
+  const deadline = Date.now() + graceMs;
+  while (Date.now() < deadline && isAlive(snap.pid)) {
+    await sleep(100);
+  }
+  if (isAlive(snap.pid)) {
+    killProcessTree(snap.pid, 'SIGKILL');
+    await sleep(100);
+  }
+  if (!fs.existsSync(p.exit)) {
+    fs.writeFileSync(p.exit, '1\n');
+  }
+  const after = snapshotFromJobPaths(p);
+  writeJobUi(after, { id, title: opts.title || id, out: p.ui });
+  return {
+    stopped: !after.running,
+    reason: after.running ? 'still-running' : 'stopped',
+    id,
+    snapshot: after,
+    hint: STOP_HINT,
+  };
+}
+
 function startJob(root, id, command, opts = {}) {
   const modern = jobPathsAt(root, id, 'modern');
   const legacy = jobPathsAt(root, id, 'legacy');
@@ -487,6 +568,7 @@ function parseArgs(argv) {
   const okIdx = args.indexOf('--ok-pattern');
   const titleIdx = args.indexOf('--title');
   const outIdx = args.indexOf('--out');
+  const reasonIdx = args.indexOf('--reason');
   const dash = args.indexOf('--');
   const cmd = args[0];
   const id = args[1] && !args[1].startsWith('-') ? args[1] : null;
@@ -500,6 +582,7 @@ function parseArgs(argv) {
     okPattern: okIdx >= 0 ? args[okIdx + 1] : null,
     title: titleIdx >= 0 ? args[titleIdx + 1] : null,
     out: outIdx >= 0 ? args[outIdx + 1] : null,
+    reason: reasonIdx >= 0 ? args[reasonIdx + 1] : null,
     command: dash >= 0 ? args.slice(dash + 1) : [],
   };
 }
@@ -522,6 +605,36 @@ async function main(argv = process.argv) {
     const result = startJob(root, parsed.id, parsed.command, { title: parsed.title });
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.started || result.reason === 'already-running' ? 0 : 1);
+  }
+  if (parsed.cmd === 'stop') {
+    if (!parsed.id) {
+      console.error('Usage: node scripts/detached-job.js stop <id> [--reason TEXT]');
+      process.exit(1);
+    }
+    const result = await stopJob(root, parsed.id, {
+      reason: parsed.reason,
+      title: parsed.title,
+    });
+    const snap = result.snapshot;
+    console.log(
+      JSON.stringify(
+        {
+          stopped: Boolean(result.stopped),
+          reason: result.reason,
+          id: result.id,
+          stillRunning: Boolean(snap?.stillRunning || snap?.running),
+          ok: false,
+          failed: true,
+          status: result.stopped ? 'failed' : snap?.ok ? 'ok' : 'idle',
+          pid: snap?.pid,
+          exitCode: snap?.exitCode ?? undefined,
+          hint: result.hint,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(result.stopped || result.reason === 'not-running' ? 0 : 1);
   }
   if (parsed.cmd === 'status' || parsed.cmd === 'wait' || parsed.cmd === 'ui') {
     let getSnap;
@@ -564,6 +677,7 @@ async function main(argv = process.argv) {
   node scripts/detached-job.js start <id> -- <command>...
   node scripts/detached-job.js wait <id>
   node scripts/detached-job.js wait <id> --until-done
+  node scripts/detached-job.js stop <id> [--reason TEXT]
   node scripts/detached-job.js status <id>
   node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]`);
   process.exit(1);
@@ -583,6 +697,7 @@ module.exports = {
   snapshotFromPaths,
   snapshotJob,
   startJob,
+  stopJob,
   waitSnapshot,
   parseArgs,
   collectStream,

@@ -12,7 +12,9 @@ const {
   jobPathsAt,
   resolveJobKind,
   startJob,
+  stopJob,
   snapshotFromPaths,
+  snapshotJob,
   waitSnapshot,
   inferPhase,
   escapeHtml,
@@ -52,6 +54,33 @@ describe('jobPaths', () => {
     const gi = path.join(root, '.context', '.sideboard', '.gitignore');
     assert.equal(fs.existsSync(gi), true);
     assert.match(fs.readFileSync(gi, 'utf8'), /\*/);
+  });
+});
+
+describe('stopJob', () => {
+  it('kills a running sleep and writes an exit file', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-stop-'));
+    const started = startJob(root, 'hang', ['sleep', '60']);
+    assert.equal(started.started, true);
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline && !snapshotJob(root, 'hang').running) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    assert.equal(snapshotJob(root, 'hang').running, true);
+    const result = await stopJob(root, 'hang', { reason: 'no progress', graceMs: 800 });
+    assert.equal(result.stopped, true);
+    assert.equal(result.reason, 'stopped');
+    const after = snapshotJob(root, 'hang');
+    assert.equal(after.running, false);
+    assert.match(fs.readFileSync(after.log, 'utf8'), /\$ stop: no progress/);
+    assert.equal(fs.existsSync(path.join(path.dirname(after.log), 'exit')), true);
+  });
+
+  it('is a no-op when the id has no running job', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-stop-miss-'));
+    const missing = await stopJob(root, 'gone');
+    assert.equal(missing.stopped, false);
+    assert.equal(missing.reason, 'not-found');
   });
 });
 

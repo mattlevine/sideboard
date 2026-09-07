@@ -28,6 +28,7 @@ node <detached-job.js> wait <id>
 # Block until the process exits (humans / a turn that will not be interrupted)
 node <detached-job.js> wait <id> --until-done
 
+node <detached-job.js> stop <id> [--reason TEXT]
 node <detached-job.js> status <id>
 \`\`\`
 
@@ -35,9 +36,10 @@ node <detached-job.js> status <id>
 
 Wait JSON:
 
-- \`stillRunning: true\` → **call wait_for_job again** (or shell wait). Progress is in \`progress\` / \`phase\`. Do not start a second job. Do not ping the user.
+- \`stillRunning: true\` → **call wait_for_job again** (or shell wait). Progress is in \`progress\` / \`phase\`. Do not start a second job. Do not ping the user. If it is hanging, producing no useful output, or doing the wrong thing, call MCP \`stop_job\` (or shell \`stop\`) instead of looping forever.
 - \`ok: true\` → exit 0 → continue the rest of the task.
 - \`failed: true\` → exit 1 → read \`progress\`, fix, start **once**.
+- \`stopped: true\` → you ended it. Present the last delta (\`status=failed\`) and decide the next step.
 
 ## Sideboard UI (append-only log)
 
@@ -67,8 +69,13 @@ node <detached-job.js> wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
 2. Immediately \`present_artifact\` \`type=log\` (same \`artifact_id\`, \`status=running\`) — the human should see **working** in the side column, not a “check back later” message.
 3. Loop \`wait_for_job\` (or shell \`wait\`). After each slice, \`present_artifact\` the same id with \`content=delta\` only.
 4. On \`ok\`, present once more (\`status=ok\`, last \`delta\`) and finish the task. On \`failed\`, fix from the log.
+5. **Stop** when the job is hanging, buffering forever, watching the wrong thing, or you already have the answer. MCP \`stop_job\` (same id, optional \`reason\`) or \`detached-job.js stop <id>\`. Do **not** stop a pack/test/deploy that is clearly making progress.
 
-Never tell the user “say status when it’s done.” You wait.
+Never tell the user “say status when it’s done.” You wait — unless you decided to stop.
+
+## Connector CLIs (Vercel, Supabase, Sentry, PostHog)
+
+Huge \`--json\` / \`--expand\` dumps crash any worktree agent mid-turn (Claude / Cursor / Codex / OpenCode). On Cursor the chat shows the packaged bundle (\`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js\` then minified \`importas e from"@bufbuild/protobuf"\`). Write CLI/HTTP output to a file, then read a slice. Tight window first; one query at a time; \`jq\` only the fields you need. After the error line, stop fetching. If a raw shell is still going at ~40s with empty output, detach or \`stop_job\` — piping to \`head\` does not help.
 
 ## PR checks (only if a goal is given)
 

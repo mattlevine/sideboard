@@ -21,7 +21,11 @@ import {
   mcpWaitStillRunningHint,
   mcpWaitForTurnTimeoutMs,
 } from './wait-for-turn.js';
-import { mcpWaitForJobTimeoutMs, waitForDetachedJob } from './wait-for-job.js';
+import {
+  mcpWaitForJobTimeoutMs,
+  stopDetachedJob,
+  waitForDetachedJob,
+} from './wait-for-job.js';
 import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
@@ -256,9 +260,10 @@ export async function startMcpServer(): Promise<void> {
     name: 'sideboard',
     version: '0.1.0',
   });
-  // Worktree profile: present_* / ask_user / wait_for_job / viewer context +
-  // Account issue tools (GitHub / Linear / AbleTime). Fleet list_*, Slack,
-  // and create/send stay on orchestration (tools are the cached prefix).
+  // Worktree profile: present_* / ask_user / wait_for_job / stop_job /
+  // viewer context + Account issue tools (GitHub / Linear / AbleTime).
+  // Fleet list_*, Slack, and create/send stay on orchestration (tools
+  // are the cached prefix).
   const worktreeProfile = sideboardMcpProfile() === 'worktree';
   registerViewerContextTools(server);
   if (worktreeProfile) {
@@ -631,7 +636,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_job',
-    'Wait on a detached long job (tests, pack, deploy) started with detached-job.js. MCP clients kill tools around 60s, so this returns within 45s. stillRunning is the source of truth — if true, present_artifact type=log with content=delta (same artifact_id) and call wait_for_job again. Do not end the turn or tell the user you will let them know later. If false, ok/failed is the result.',
+    'Wait on a detached long job (tests, pack, deploy, connector CLI) started with detached-job.js. MCP clients kill tools around 60s, so this returns within 45s. stillRunning is the source of truth — if true, present_artifact type=log with content=delta (same artifact_id) and call wait_for_job again. If the job is hanging, producing no useful output, or doing the wrong thing, call stop_job instead of looping forever. Do not end the turn or tell the user you will let them know later. If false, ok/failed is the result.',
     {
       id: z
         .string()
@@ -642,6 +647,24 @@ export async function startMcpServer(): Promise<void> {
       const result = await waitForDetachedJob(process.cwd(), id, {
         timeoutMs: mcpWaitForJobTimeoutMs(timeoutMs),
       });
+      return mcpJson(result);
+    },
+  );
+
+  server.tool(
+    'stop_job',
+    'Stop a detached job you started with detached-job.js when it is hanging, producing no useful output, buffering forever, or doing the wrong thing (wrong project, infinite watch, huge dump). Do not stop a pack/test/deploy that is clearly making progress. After stop, present_artifact type=log with status=failed and the last delta, then decide the next step.',
+    {
+      id: z
+        .string()
+        .describe('Detached job id (same kebab-case id passed to detached-job.js start)'),
+      reason: z
+        .string()
+        .optional()
+        .describe('Why you are stopping (hanging, no progress, wrong output, already have the error)'),
+    },
+    async ({ id, reason }) => {
+      const result = await stopDetachedJob(process.cwd(), id, { reason });
       return mcpJson(result);
     },
   );

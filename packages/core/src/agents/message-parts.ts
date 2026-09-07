@@ -1,4 +1,5 @@
 import type { AgentEvent, MessagePart } from '../types/thread.js';
+import { clipToolResultForStore } from './error-detail.js';
 
 function asRecord(input: unknown): Record<string, unknown> | undefined {
   if (input && typeof input === 'object' && !Array.isArray(input)) {
@@ -96,6 +97,9 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   }
   if (/wait_for_job$/i.test(name)) {
     return str(input?.id) ? `Wait for ${str(input?.id)}` : 'Wait for job';
+  }
+  if (/stop_job$/i.test(name)) {
+    return str(input?.id) ? `Stop ${str(input?.id)}` : 'Stop job';
   }
   if (isSubagentToolName(name)) {
     const desc = str(input?.description);
@@ -567,7 +571,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
             name: 'tool',
             description: 'tool',
             status: event.isError ? ('error' as const) : ('running' as const),
-            result: event.content,
+            result: clipToolResultForStore(event.content),
             ...(event.parentId ? { parentId: event.parentId } : {}),
           }),
         ];
@@ -578,7 +582,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         return withPartTimes(
           {
             ...p,
-            result: event.content ?? p.result,
+            result: clipToolResultForStore(event.content) ?? p.result,
           },
           p,
         );
@@ -594,7 +598,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
           name: 'tool',
           description: 'tool',
           status: event.isError ? ('error' as const) : ('done' as const),
-          result: event.content,
+          result: clipToolResultForStore(event.content),
           ...(event.parentId ? { parentId: event.parentId } : {}),
           ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
           ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
@@ -607,7 +611,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         {
           ...p,
           status: event.isError ? ('error' as const) : ('done' as const),
-          result: event.content,
+          result: clipToolResultForStore(event.content),
           ...(fromResult.additions != null ? { additions: fromResult.additions } : {}),
           ...(fromResult.deletions != null ? { deletions: fromResult.deletions } : {}),
         },

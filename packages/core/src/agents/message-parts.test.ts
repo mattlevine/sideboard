@@ -249,6 +249,18 @@ describe('applyAgentEvent', () => {
     });
     expect(parts[0]).toMatchObject({ status: 'done', result: 'bundling…\ndone\n' });
   });
+
+  it('clips a huge JSON tool result so any agent transcript stays small', () => {
+    const content = `[${Array.from({ length: 200 }, (_, i) => `{"timestamp":"${i}","message":"${'x'.repeat(80)}"}`).join(',')}]`;
+    const parts = applyAgentEvent([], {
+      type: 'tool_result',
+      id: 'logs',
+      content,
+    });
+    const result = (parts[0] as { result?: string }).result ?? '';
+    expect(result.length).toBeLessThan(400);
+    expect(result).toMatch(/huge tool result/i);
+  });
 });
 
 describe('toolDetail', () => {
@@ -324,6 +336,8 @@ describe('visibleToolRowDetail', () => {
       }),
     ).toBe('scan auth · 4 tools · 12s');
     expect(toolDescription('TaskOutput', { task_id: 'task_1' })).toBe('Wait for task_1');
+    expect(toolDescription('wait_for_job', { id: 'hang' })).toBe('Wait for hang');
+    expect(toolDescription('stop_job', { id: 'hang' })).toBe('Stop hang');
   });
 });
 

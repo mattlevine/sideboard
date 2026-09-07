@@ -221,6 +221,9 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('Sideboard MCP');
       expect(claude).toMatch(/Prefer official CLIs/);
       expect(claude).toMatch(/Do not add vendor MCPs/);
+      expect(claude).toMatch(/stop_job/);
+      expect(claude).toMatch(/write CLI output to a file/);
+      expect(claude).toMatch(/Claude \/ Cursor \/ Codex \/ OpenCode/);
       expect(claude).toContain('ask_user');
       expect(claude).toMatch(/status stopped or broken/);
       expect(claude).toContain('.claude/skills/');

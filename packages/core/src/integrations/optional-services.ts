@@ -331,6 +331,24 @@ export function formatOptionalServicesDirective(
   lines.push(
     'If a CLI is missing, say so or use the HTTP API with the same token. The user can Install CLI from Settings → Connectors. Do not ask the user to install a vendor MCP.',
   );
+  lines.push(
+    'Safe CLI / HTTP (every connector — `vercel logs`, Supabase inspect, `sentry-cli`, PostHog API):',
+  );
+  lines.push(
+    '- Never put raw `--json` / `--expand` / huge dumps in the tool result. That crashes any worktree agent mid-turn (Claude / Cursor / Codex / OpenCode). Cursor chat fills with `file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then minified `importas e from"@bufbuild/protobuf"`.',
+  );
+  lines.push(
+    '- Write output to a file, then read a slice. Tight window first (`--limit`, recent `--since` / last N events); raise only if empty.',
+  );
+  lines.push(
+    '- Filter (`jq`) to the fields you need (timestamp, path, status, message) — not the full request object.',
+  );
+  lines.push(
+    '- One query at a time. After you have the error line, stop fetching. Piping to `head` does not help — the CLI still buffers until you kill it.',
+  );
+  lines.push(
+    '- If a call is still running at ~40s with no useful output, stop waiting on the raw shell; detach (`/long-running`) or `stop_job` if it is hanging / doing the wrong thing.',
+  );
   return lines.join('\n');
 }
 
@@ -339,5 +357,5 @@ export function formatOptionalServicesReminder(
   integrations: IntegrationsSettings,
 ): string | null {
   if (connectedOptionalServices(integrations).length === 0) return null;
-  return 'Settings → Connectors: prefer official CLIs (`vercel`, `supabase`, `sentry-cli`) or the PostHog HTTP API with injected env. Do not add vendor MCPs.';
+  return 'Settings → Connectors: official CLIs / PostHog HTTP with injected env. Write output to a file and read a slice — never dump raw --json/--expand into the tool result (any agent). stop_job if a fetch hangs. Do not add vendor MCPs.';
 }

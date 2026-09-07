@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +10,7 @@ import {
   listRunningDetachedJobs,
   looksLikeDeferredDonePromise,
   planJobContinue,
+  stopDetachedJob,
   waitForDetachedJob,
 } from './wait-for-job.js';
 
@@ -135,5 +137,33 @@ describe('waitForDetachedJob / listRunningDetachedJobs', () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'pid'), `${process.pid}\n`);
     expect(listRunningDetachedJobs(root)).toEqual(['core-test']);
+  });
+
+  it('stopDetachedJob kills a live sleep and marks failed', async () => {
+    const root = join(tmpdir(), `sb-job-stop-${Date.now()}`);
+    const dir = join(root, DETACHED_JOBS_DIR, 'hang');
+    mkdirSync(dir, { recursive: true });
+    const child = spawn('sleep', ['60'], { detached: true, stdio: 'ignore' });
+    child.unref();
+    writeFileSync(join(dir, 'pid'), `${child.pid}\n`);
+    writeFileSync(join(dir, 'log'), 'waiting\n');
+    const result = await stopDetachedJob(root, 'hang', {
+      reason: 'no progress',
+      graceMs: 800,
+    });
+    expect(result.stopped).toBe(true);
+    expect(result.reason).toBe('stopped');
+    expect(result.failed).toBe(true);
+    expect(result.stillRunning).toBe(false);
+    expect(result.stopReason).toBe('no progress');
+    expect(result.progress).toMatch(/\$ stop: no progress/);
+  });
+
+  it('stopDetachedJob is a no-op when the id is missing', async () => {
+    const root = join(tmpdir(), `sb-job-stop-miss-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+    const result = await stopDetachedJob(root, 'gone');
+    expect(result.stopped).toBe(false);
+    expect(result.reason).toBe('not-found');
   });
 });

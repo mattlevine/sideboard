@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Worktree agents can `stop_job` (and `detached-job.js stop`) when a detached command hangs, buffers forever, or is doing the wrong thing. They are told not to stop a pack/test/deploy that is clearly making progress.
+
+### Changed
+
+- Connector playbook (Vercel, Supabase, Sentry, PostHog) tells agents to write CLI/HTTP output to a file and read a slice instead of dumping raw `--json` / `--expand` into the tool result (that crashed the Cursor SDK). One query at a time; `stop_job` if a fetch hangs.
+- A huge tool-result crash (Cursor SDK bundle dump, or megabytes of CLI JSON from Claude / Codex / OpenCode) is replaced with a short hint. Stored tool-chip results are clipped for every agent.
+
 ## [0.1.163] - 2026-09-07
 
 ### Fixed

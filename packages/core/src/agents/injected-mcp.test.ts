@@ -36,6 +36,7 @@ describe('injected-mcp', () => {
       'mcp__sideboard__ask_user',
       'mcp__sideboard__present_plan',
       'mcp__sideboard__wait_for_job',
+      'mcp__sideboard__stop_job',
       'mcp__sideboard__get_viewer_context',
       'mcp__sideboard__update_viewer_context',
     ]);
