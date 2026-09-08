@@ -18,7 +18,7 @@ import {
   sideboardWorktreeAllowedTools,
   writeMcpServersConfig,
 } from './injected-mcp.js';
-import { dropCachedPrefixOnResume, flattenTurnInput } from './turn-input.js';
+import { dropCachedPrefixOnResume, splitTurnInputForSystemPrompt } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 import { permissionMode } from './types.js';
 
@@ -525,7 +525,9 @@ export const claudeAdapter: AgentAdapter = {
     // Resumed sessions already carry history via --resume; a prefix here only
     // bloats the user message and can push Claude Code past 4 cache breakpoints.
     const effective = dropCachedPrefixOnResume(input, sessionId);
-    const promptText = flattenTurnInput(effective);
+    // Per-turn reminders ride on --append-system-prompt: one cached system block
+    // instead of ~400 tokens added to the conversation history every turn.
+    const { promptText, systemPrompt } = splitTurnInputForSystemPrompt(effective);
     const useStdin = promptText.length > CLAUDE_PROMPT_ARG_MAX;
 
     if (process.env.SIDEBOARD_DEBUG_CLAUDE_TURN === '1') {
@@ -592,6 +594,9 @@ export const claudeAdapter: AgentAdapter = {
       '--permission-mode',
       mode.claude,
     ];
+    if (systemPrompt) {
+      args.push('--append-system-prompt', systemPrompt);
+    }
     const mcpConfigPath = writeMcpServersConfig(injectedServers);
     if (mcpConfigPath) {
       args.push('--mcp-config', mcpConfigPath);

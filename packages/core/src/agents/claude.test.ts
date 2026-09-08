@@ -97,6 +97,29 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cmd.args).toContain('sess-abc');
   });
 
+  it('sends per-turn reminders via --append-system-prompt, never in -p', async () => {
+    const fresh = await claudeAdapter.buildTurn(baseThread, {
+      cachedPrefix: 'playbook',
+      prompt: 'first',
+      systemPrompt: 'stay in the worktree',
+    });
+    expect(fresh.args[fresh.args.indexOf('--append-system-prompt') + 1]).toBe(
+      'stay in the worktree',
+    );
+    expect(fresh.args[1]).not.toContain('stay in the worktree');
+    expect(fresh.args[1]).toContain('playbook');
+
+    const resumed = await claudeAdapter.buildTurn(
+      { ...baseThread, sessionId: 'sess-abc' },
+      { cachedPrefix: 'gone', prompt: 'next', systemPrompt: 'stay in the worktree' },
+    );
+    expect(resumed.args[1]).toBe('next');
+    expect(resumed.args).toContain('--append-system-prompt');
+
+    const bare = await claudeAdapter.buildTurn(baseThread, { prompt: 'no reminders' });
+    expect(bare.args).not.toContain('--append-system-prompt');
+  });
+
   it('uses text stdin for oversized prompts', async () => {
     const big = 'x'.repeat(CLAUDE_PROMPT_ARG_MAX + 1);
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: big });

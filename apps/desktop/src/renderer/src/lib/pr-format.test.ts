@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { PrCheckRun } from '@sideboard-ai/core';
 import {
+  checkStatusLabel,
   classifyMergeIssue,
   formatReviewDecision,
   hasBranchBehindChecks,
   hasMergeConflictChecks,
+  isPrApproved,
   prPillModifier,
   prPillStatusLabel,
   checksFromRuns,
@@ -16,8 +18,19 @@ describe('formatReviewDecision', () => {
   it('maps GitHub reviewDecision values', () => {
     expect(formatReviewDecision('REVIEW_REQUIRED')).toBe('Needs approval');
     expect(formatReviewDecision('APPROVED')).toBe('Approved');
-    expect(formatReviewDecision('CHANGES_REQUESTED')).toBe('Rejected');
+    expect(formatReviewDecision('CHANGES_REQUESTED')).toBe('Changes requested');
     expect(formatReviewDecision(null)).toBeNull();
+    expect(isPrApproved('APPROVED')).toBe(true);
+    expect(isPrApproved('REVIEW_REQUIRED')).toBe(false);
+    expect(isPrApproved(null)).toBe(false);
+  });
+});
+
+describe('checkStatusLabel', () => {
+  it('labels a CHANGES_REQUESTED review gate as Changes requested', () => {
+    expect(
+      checkStatusLabel({ kind: 'review', state: 'CHANGES_REQUESTED', bucket: 'fail' }),
+    ).toBe('Changes requested');
   });
 });
 
@@ -108,6 +121,14 @@ describe('pr pill status', () => {
         merged: false,
         closed: false,
         draft: false,
+        reviewDecision: 'CHANGES_REQUESTED',
+      }),
+    ).toBe('Changes requested');
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: false,
         reviewDecision: 'REVIEW_REQUIRED',
       }),
     ).toBe('Needs approval');
@@ -126,7 +147,15 @@ describe('pr pill status', () => {
         draft: false,
         reviewDecision: null,
       }),
-    ).toBe('Open');
+    ).toBe('Needs approval');
+    expect(
+      prPillModifier({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: null,
+      }),
+    ).toBe('needs-approval');
     expect(
       prPillModifier({
         merged: false,
@@ -143,19 +172,28 @@ describe('pr pill status', () => {
         merged: false,
         closed: false,
         draft: false,
-        reviewDecision: null,
+        reviewDecision: 'APPROVED',
         checksPassed: true,
       }),
-    ).toBe('Checks passing');
+    ).toBe('Approved');
     expect(
       prPillModifier({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: 'APPROVED',
+        checksPassed: true,
+      }),
+    ).toBe('approved');
+    expect(
+      prPillStatusLabel({
         merged: false,
         closed: false,
         draft: false,
         reviewDecision: null,
         checksPassed: true,
       }),
-    ).toBe('approved');
+    ).toBe('Needs approval');
     expect(
       prPillStatusLabel({
         merged: false,

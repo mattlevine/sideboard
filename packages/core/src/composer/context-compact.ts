@@ -125,56 +125,120 @@ function formatToolPart(
  */
 export function formatMessagesAsTranscript(
   messages: ThreadMessage[],
-  opts?: { tools?: TranscriptToolDetail },
+  opts?: { tools?: TranscriptToolDetail; thinking?: boolean },
 ): string {
   const tools = opts?.tools ?? 'full';
-  const blocks: string[] = [];
-  for (const m of messages) {
-    if (m.role === 'summary') {
-      blocks.push(`## Prior summary\n${m.text}`);
-      continue;
-    }
-    if (m.role === 'user') {
-      blocks.push(`### User\n${m.text}`);
-      continue;
-    }
-    const bits: string[] = [];
-    if (m.text?.trim()) {
-      bits.push(`### Agent\n${m.text}`);
-    } else {
-      bits.push('### Agent');
-    }
-    const thinking = (m.parts ?? []).filter((p) => p.type === 'thinking');
-    for (const th of thinking) {
+  const thinking = opts?.thinking ?? true;
+  return messages.map((m) => formatMessageBlock(m, { tools, thinking })).join('\n\n');
+}
+
+/** One transcript block for a stored message. */
+function formatMessageBlock(
+  m: ThreadMessage,
+  opts: { tools: TranscriptToolDetail; thinking: boolean },
+): string {
+  if (m.role === 'summary') return `## Prior summary\n${m.text}`;
+  if (m.role === 'user') return `### User\n${m.text}`;
+  const bits: string[] = [];
+  if (m.text?.trim()) {
+    bits.push(`### Agent\n${m.text}`);
+  } else {
+    bits.push('### Agent');
+  }
+  if (opts.thinking) {
+    for (const th of m.parts ?? []) {
       if (th.type !== 'thinking' || !th.text.trim()) continue;
       bits.push('Thinking:');
       bits.push(th.text);
     }
-    const toolParts = (m.parts ?? []).filter(
-      (p): p is Extract<MessagePart, { type: 'tool' }> => p.type === 'tool',
-    );
-    if (tools !== 'none' && toolParts.length > 0) {
-      if (tools === 'summary') bits.push('Tools:');
-      for (const t of toolParts) {
-        bits.push(formatToolPart(t, tools));
-      }
-    }
-    blocks.push(bits.join('\n'));
   }
-  return blocks.join('\n\n');
+  const toolParts = (m.parts ?? []).filter(
+    (p): p is Extract<MessagePart, { type: 'tool' }> => p.type === 'tool',
+  );
+  if (opts.tools !== 'none' && toolParts.length > 0) {
+    if (opts.tools === 'summary') bits.push('Tools:');
+    for (const t of toolParts) {
+      bits.push(formatToolPart(t, opts.tools));
+    }
+  }
+  return bits.join('\n');
+}
+
+/**
+ * Seed budget (chars) for a fresh agent session. The store compacts at
+ * {@link CONTEXT_COMPACT_CHARS} (~100k tokens); re-sending that much as one
+ * user message on every session reset is the single largest token cost, and
+ * older tool dumps add nothing the agent cannot re-read from the worktree.
+ */
+export const SEED_MAX_CHARS = 60_000;
+/** Trailing messages that keep full tool input/result in the seed. */
+export const SEED_FULL_TOOL_MESSAGES = 6;
+
+export interface SessionSeedOptions {
+  /** Tool detail for the last {@link fullToolMessages} messages (default full). */
+  tools?: TranscriptToolDetail;
+  /** How many trailing messages get `tools`; older ones get one-line labels. */
+  fullToolMessages?: number;
+  /** Char budget for the transcript body (oldest blocks are dropped first). */
+  maxChars?: number;
 }
 
 /**
  * Seed prompt for a fresh agent session (no --resume).
- * Includes summary + recent turns with full tool use data so continuity is not lost.
+ * Prior summaries always survive. The last few turns keep full tool data so
+ * continuity is not lost; older turns keep one-line tool labels; thinking is
+ * never replayed. When the body still exceeds `maxChars`, the oldest
+ * non-summary blocks are dropped and a marker notes how many.
  * Pass `tools: 'none'` for hosts that choke on tool-heavy seeds (e.g. Brightsy).
  */
 export function buildSessionSeed(
   messages: ThreadMessage[],
-  opts?: { tools?: TranscriptToolDetail },
+  opts?: SessionSeedOptions,
 ): string | null {
   if (messages.length === 0) return null;
-  const body = formatMessagesAsTranscript(messages, { tools: opts?.tools ?? 'full' });
+  const tools = opts?.tools ?? 'full';
+  const fullCount = opts?.fullToolMessages ?? SEED_FULL_TOOL_MESSAGES;
+  const maxChars = opts?.maxChars ?? SEED_MAX_CHARS;
+  const olderTools: TranscriptToolDetail = tools === 'none' ? 'none' : 'summary';
+  const fullFrom = Math.max(0, messages.length - fullCount);
+  const blocks = messages.map((m, i) =>
+    formatMessageBlock(m, {
+      tools: i >= fullFrom ? tools : olderTools,
+      thinking: false,
+    }),
+  );
+
+  // Keep summaries + newest blocks within budget; drop oldest others first.
+  const keep = new Array<boolean>(blocks.length).fill(false);
+  let used = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    if (messages[i]!.role === 'summary') {
+      keep[i] = true;
+      used += blocks[i]!.length + 2;
+    }
+  }
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (keep[i]) continue;
+    const next = used + blocks[i]!.length + 2;
+    if (next > maxChars && used > 0) break;
+    keep[i] = true;
+    used = next;
+  }
+  const dropped = keep.filter((k) => !k).length;
+  const kept: string[] = [];
+  let markerPlaced = false;
+  for (let i = 0; i < blocks.length; i++) {
+    if (!keep[i]) continue;
+    if (dropped > 0 && !markerPlaced && messages[i]!.role !== 'summary') {
+      kept.push(`_(${dropped} older message${dropped === 1 ? '' : 's'} omitted for length)_`);
+      markerPlaced = true;
+    }
+    kept.push(blocks[i]!);
+  }
+  if (dropped > 0 && !markerPlaced) {
+    kept.push(`_(${dropped} older message${dropped === 1 ? '' : 's'} omitted for length)_`);
+  }
+  const body = kept.join('\n\n');
   if (!body.trim()) return null;
   return [
     'Sideboard conversation context (restored after compaction or a new session):',
@@ -273,7 +337,7 @@ export function messagesSinceLastBrightsyContextSummary(
 export function buildBrightsySessionSeed(messages: ThreadMessage[]): string | null {
   const match = findLastBrightsyContextSummary(messages);
   const tail = match ? messages.slice(match.index + 1) : messages;
-  const body = formatMessagesAsTranscript(tail, { tools: 'none' });
+  const body = formatMessagesAsTranscript(tail, { tools: 'none', thinking: false });
   if (!match && !body.trim()) return null;
   const blocks = [
     'Sideboard conversation context (restored after compaction or a new session):',

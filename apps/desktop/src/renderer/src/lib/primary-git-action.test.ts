@@ -53,12 +53,13 @@ describe('primaryGitAction', () => {
     ).toBe('commit-push');
   });
 
-  it('merges a clean open (non-draft) PR', () => {
-    expect(primaryGitAction(open)).toBe('merge');
+  it('merges a clean open PR only after it is approved', () => {
+    expect(primaryGitAction({ ...open, reviewDecision: 'APPROVED' })).toBe('merge');
     expect(primaryGitLabel('merge')).toBe('Merge');
   });
 
-  it('does not offer Merge while a required review is outstanding', () => {
+  it('does not offer Merge while approval is outstanding', () => {
+    expect(primaryGitAction(open)).toBe('needs-approval');
     expect(primaryGitAction({ ...open, reviewDecision: 'REVIEW_REQUIRED' })).toBe(
       'needs-approval',
     );
@@ -67,7 +68,7 @@ describe('primaryGitAction', () => {
     expect(
       primaryGitAction({ ...open, reviewDecision: 'CHANGES_REQUESTED' }),
     ).toBe('changes-requested');
-    expect(primaryGitLabel('changes-requested')).toBe('Rejected');
+    expect(primaryGitLabel('changes-requested')).toBe('Changes requested');
   });
 
   it('keeps update / commit ahead of a missing approval', () => {
@@ -104,8 +105,11 @@ describe('primaryGitAction', () => {
   it('does not offer Merge while CI is red or still running', () => {
     expect(primaryGitAction({ ...open, checksFailed: true })).toBe('checks-failing');
     expect(primaryGitLabel('checks-failing')).toBe('Checks failing');
-    expect(primaryGitAction({ ...open, checksPending: true })).toBe('checks-pending');
+    expect(
+      primaryGitAction({ ...open, reviewDecision: 'APPROVED', checksPending: true }),
+    ).toBe('checks-pending');
     expect(primaryGitLabel('checks-pending')).toBe('Checks pending');
+    expect(primaryGitAction({ ...open, checksPending: true })).toBe('needs-approval');
     expect(
       primaryGitAction({
         ...open,

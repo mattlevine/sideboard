@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -15,8 +15,7 @@ import {
   formatWorktreeDirective,
   formatWorktreeReminder,
   issueTicketFromThread,
-  loadAgentInstructions,
-  withAgentInstructions,
+  mentionsPrGoal,
 } from './instructions.js';
 
 describe('formatArtifactDirective', () => {
@@ -28,10 +27,11 @@ describe('formatArtifactDirective', () => {
     expect(text).toMatch(/ask_user/);
     expect(text).toMatch(/blocked on choosing|concrete options/i);
     expect(text).toMatch(/hello|greetings/i);
-    expect(text).toMatch(/```html/);
+    expect(text).toMatch(/tagged `html`/);
+    expect(text.length).toBeLessThan(1_600);
     expect(text).toMatch(/type=log/);
     expect(text).toMatch(/new lines only|append/i);
-    expect(text).toMatch(/Never say artifacts, CMS UI, or the Files column are unavailable/i);
+    expect(text).toMatch(/never say artifacts, the CMS UI, or the Files column are unavailable/i);
     expect(text).toMatch(/Do not unprompted-duplicate|markdown table/i);
     expect(text).toMatch(/editable|asks for an editable/i);
   });
@@ -65,8 +65,8 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/present_artifact/);
     expect(text).toMatch(/type=log/);
     expect(text).toMatch(/\/long-running/);
-    expect(text).toMatch(/Do not ask the human to poll/);
-    expect(text).toMatch(/let you know/i);
+    expect(text).toMatch(/never ask the human to poll/);
+    expect(text).toMatch(/Stay in the loop/i);
     expect(text).toMatch(/stop_job/);
     expect(text).toMatch(/hanging|wrong thing/);
     expect(text).toMatch(/\.context\/\.sideboard\/detached-jobs/);
@@ -102,18 +102,38 @@ describe('formatProcessGuideDirective', () => {
   it('sends new skills to .claude/skills so native agents see them', () => {
     const text = formatProcessGuideDirective();
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
-    expect(text).toMatch(/\/long-running/);
-    expect(text).toMatch(/stop_job/);
-    expect(text).toMatch(/graph-engineering/);
-    expect(text).toMatch(/\/graph-engineering/);
-    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);
+    expect(text).toMatch(/Not under `\.sideboard\/skills\/`/);
     expect(text).toMatch(/Do not create a review skill/);
-    expect(text).toMatch(/that folder only/);
     expect(text).toMatch(/attach/);
     expect(text).toMatch(/AGENTS\.md/);
-    expect(text).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
     expect(text).toMatch(/\.context\/review\.md/);
     expect(text).toMatch(/\.sideboard\/review\.md/);
+    // Skill-specific lines only when the worktree has those skills.
+    expect(text).not.toMatch(/graph-engineering/);
+    expect(text).not.toMatch(/\.claude\/skills\/review\/SKILL\.md/);
+  });
+
+  it('mentions graph-engineering and the review skill only when the worktree has them', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sb-guide-'));
+    mkdirSync(join(root, '.claude/skills/graph-engineering'), { recursive: true });
+    writeFileSync(join(root, '.claude/skills/graph-engineering/SKILL.md'), '# g');
+    mkdirSync(join(root, '.claude/skills/review'), { recursive: true });
+    writeFileSync(join(root, '.claude/skills/review/SKILL.md'), '# r');
+    const text = formatProcessGuideDirective({ worktreePath: root });
+    expect(text).toMatch(/\/graph-engineering/);
+    expect(text).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
+    expect(text).not.toMatch(/\.context\/review\.md/);
+  });
+});
+
+describe('mentionsPrGoal', () => {
+  it('detects PR goals that need the watch-fix-push playbook', () => {
+    expect(mentionsPrGoal('Commit, push, and get Greptile 5/5')).toBe(true);
+    expect(mentionsPrGoal('keep going until CI is green')).toBe(true);
+    expect(mentionsPrGoal('Fix CI: lint.')).toBe(true);
+    expect(mentionsPrGoal('loop until checks pass')).toBe(true);
+    expect(mentionsPrGoal('Commit and push.')).toBe(false);
+    expect(mentionsPrGoal('rename the button')).toBe(false);
   });
 });
 
@@ -190,7 +210,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/do NOT edit/i);
     expect(text).toMatch(/Stay inside the worktree/i);
     expect(text).toMatch(/Worktree folder nickname/i);
-    expect(text).toMatch(/soccer-team worktree nickname/i);
+    expect(text).toMatch(/never the worktree nickname/i);
     expect(text).toMatch(/gh pr create --draft -R/i);
   });
 
@@ -205,8 +225,7 @@ describe('formatWorktreeDirective', () => {
     );
     expect(text).toContain('gh pr create --draft -R mattlevine/storycycle-ai');
     expect(text).toMatch(/body-file/);
-    expect(text).toMatch(/65,536/);
-    expect(text).toMatch(/upstream instead of origin/i);
+    expect(text).toMatch(/may target upstream/i);
     expect(text).toMatch(/git push -u origin HEAD/i);
     expect(text).toMatch(/Keychain/);
     expect(text).toMatch(/already authenticate/);
@@ -214,21 +233,19 @@ describe('formatWorktreeDirective', () => {
     expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).toMatch(/Never push to or open PRs against `upstream`/i);
     expect(text).toMatch(/Commit and push\./);
-    expect(text).toMatch(/If a goal is given/);
-    expect(text).toMatch(/watch-fix-push/);
-    expect(text).toMatch(/Greptile 5\/5/);
-    expect(text).toMatch(/not after every push/);
     expect(text).toMatch(/Merge PR\./);
-    expect(text).toMatch(/Do not merge the PR unless/);
+    expect(text).toMatch(/Merge the PR only when/);
     expect(text).toMatch(/gh stack merge/);
-    expect(text).toMatch(/Short git requests/i);
+    // Goal playbook and git-phrase expansions travel with the request, not here.
+    expect(text).not.toMatch(/gh pr checks --watch/);
+    expect(text).not.toMatch(/Short git requests/i);
     expect(text).toMatch(/Git authentication \(Settings → Git mode: auto\)/);
     expect(text).not.toMatch(/GitHub app/i);
     expect(text).toMatch(/\.claude\/skills\/<kebab-name>\/SKILL\.md/);
-    expect(text).toMatch(/\/long-running/);
-    expect(text).toMatch(/graph-engineering/);
-    expect(text).toMatch(/Do not write new skills under `\.sideboard\/skills\/?`/);
+    expect(text).toMatch(/Not under `\.sideboard\/skills\/`/);
     expect(text).toMatch(/Skip a guide for a one-off/);
+    // Budget guard: the fresh-session worktree playbook stays under ~1.1k tokens.
+    expect(text.length).toBeLessThan(4_200);
   });
 
   it('injects gh-mode instructions instead of the SSH fallback', () => {
@@ -289,37 +306,5 @@ describe('formatRenameBranchDirective', () => {
       { customPrompt: 'Use a short kebab-case branch name.' },
     );
     expect(text).toContain('Use a short kebab-case branch name.');
-  });
-});
-
-describe('loadAgentInstructions', () => {
-  it('loads CLAUDE.md and AGENTS.md for claude when they differ', () => {
-    const root = mkdtempSync(join(tmpdir(), 'sb-instr-'));
-    writeFileSync(join(root, 'CLAUDE.md'), '# Claude rules\nUse pnpm.\n');
-    writeFileSync(join(root, 'AGENTS.md'), '# Agents\nBe brief.\n');
-
-    const files = loadAgentInstructions(root, 'claude');
-    expect(files.map((f) => f.relativePath)).toEqual(['CLAUDE.md', 'AGENTS.md']);
-  });
-
-  it('skips AGENTS.md when it matches CLAUDE.md', () => {
-    const root = mkdtempSync(join(tmpdir(), 'sb-instr-same-'));
-    const body = '# Sideboard Orchestration\nFollow MCP.\n';
-    writeFileSync(join(root, 'CLAUDE.md'), body);
-    writeFileSync(join(root, 'AGENTS.md'), `${body}\n`);
-
-    const files = loadAgentInstructions(root, 'claude');
-    expect(files.map((f) => f.relativePath)).toEqual(['CLAUDE.md']);
-  });
-});
-
-describe('withAgentInstructions', () => {
-  it('prepends instructions to the prompt', () => {
-    const out = withAgentInstructions('Do the thing', [
-      { relativePath: 'AGENTS.md', content: 'Be brief.' },
-    ]);
-    expect(out).toContain('AGENTS.md');
-    expect(out).toContain('Be brief.');
-    expect(out).toContain('Do the thing');
   });
 });

@@ -226,6 +226,63 @@ describe('context compact', () => {
     expect(seed).toContain('ok\n'.repeat(40).trimEnd());
   });
 
+  it('session seed keeps full tools only for recent messages and never replays thinking', () => {
+    const tool = (name: string) => ({
+      type: 'tool' as const,
+      id: `t-${name}`,
+      name,
+      status: 'done' as const,
+      description: `${name} auth.ts`,
+      input: { file_path: 'src/auth.ts', blob: `${name}-INPUT` },
+      result: `${name}-RESULT`,
+      filePath: 'src/auth.ts',
+    });
+    const seed = buildSessionSeed(
+      [
+        msg('user', 'old request'),
+        msg('agent', 'old reply', {
+          parts: [
+            { type: 'thinking', text: 'SECRET-THINKING' },
+            tool('OldEdit'),
+          ],
+        }),
+        msg('user', 'new request'),
+        msg('agent', 'new reply', {
+          parts: [{ type: 'thinking', text: 'MORE-THINKING' }, tool('NewEdit')],
+        }),
+      ],
+      { fullToolMessages: 2 },
+    );
+    expect(seed).not.toContain('SECRET-THINKING');
+    expect(seed).not.toContain('MORE-THINKING');
+    // Older turn: one-line label only.
+    expect(seed).toContain('- OldEdit: OldEdit auth.ts (src/auth.ts)');
+    expect(seed).not.toContain('OldEdit-INPUT');
+    expect(seed).not.toContain('OldEdit-RESULT');
+    // Recent turn: full input + result.
+    expect(seed).toContain('#### Tool: NewEdit');
+    expect(seed).toContain('NewEdit-INPUT');
+    expect(seed).toContain('NewEdit-RESULT');
+  });
+
+  it('session seed drops the oldest turns past the char budget but keeps summaries', () => {
+    const messages: ThreadMessage[] = [
+      msg('summary', 'PRIOR-SUMMARY'),
+      ...fatThread(10, 2_000),
+    ];
+    const seed = buildSessionSeed(messages, { maxChars: 9_000 })!;
+    expect(seed).toContain('PRIOR-SUMMARY');
+    expect(seed).toContain(messages[messages.length - 1]!.text);
+    expect(seed).not.toContain(messages[1]!.text);
+    expect(seed).toMatch(/\(\d+ older messages omitted for length\)/);
+    expect(seed.length).toBeLessThan(12_000);
+  });
+
+  it('session seed without a budget overflow has no omission marker', () => {
+    const seed = buildSessionSeed(fatThread(4, 100))!;
+    expect(seed).not.toContain('omitted for length');
+  });
+
   it('maybeCompactContext keeps the CLI session when occupancy is below the window', async () => {
     const messages = fatThread(20, 6_000);
     const thread = {

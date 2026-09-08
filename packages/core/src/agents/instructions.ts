@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatGitAuthModeDirective } from '../git/git-auth-mode.js';
 import {
@@ -8,7 +8,7 @@ import {
 } from '../git/worktree-labels.js';
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
 import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
-import type { AgentKind, Thread } from '../types/thread.js';
+import type { Thread } from '../types/thread.js';
 
 function normPath(p: string): string {
   return p.replace(/\/+$/, '');
@@ -85,68 +85,45 @@ export function formatWorktreeDirective(
   lines.push(
     '- Always use this worktree\'s `origin` remote (`git remote get-url origin` from this cwd). Never push to or open PRs against `upstream` (template remotes).',
   );
-  lines.push(
-    '- Push with `git push -u origin HEAD` (or the current branch name). Do not `git push upstream`.',
-  );
-  lines.push('');
   lines.push(formatGitAuthModeDirective(opts?.gitAuthMode ?? 'auto'));
   lines.push(
-    '- Derive the PR title and body from what the changes actually do and why — inspect the diff/commits and the user request. Do not use the soccer-team worktree nickname or placeholder branch as the PR title.',
+    '- PR title/body and commit messages state what the change does and why (inspect the diff/commits and the user request) — never the worktree nickname or placeholder branch. Concise imperative title (Conventional Commits when it fits: feat:/fix:/chore:/docs:); body = intent, key changes, test notes.',
   );
   lines.push(
-    '- Prefer a concise imperative title (Conventional Commits style when it fits: feat:/fix:/chore:/docs:). Body should summarize intent, key changes, and test notes.',
-  );
-  lines.push(
-    '- Commit with messages that state the purpose of the change (same standard as the PR). Stay on this thread branch. Never push directly to main/master or merge locally into the main checkout. Do not merge the PR unless this turn is a Merge PR request or the user explicitly asked. When merging, use GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
+    '- Stay on this thread branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
   );
   if (thread.prUrl) {
     lines.push(
       `- A PR already exists (${thread.prUrl}). Update it (push + edit title/body if the purpose drifted) instead of opening a duplicate.`,
     );
-  } else if (opts?.githubSlug) {
-    lines.push(
-      `- Prefer a draft PR first: \`gh pr create --draft -R ${opts.githubSlug}\` (or update via \`gh pr edit -R ${opts.githubSlug}\`) once the change set is coherent. Always pass \`-R ${opts.githubSlug}\` (this worktree's origin). Bare \`gh pr create\` may target upstream instead of origin on dual-remote checkouts. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name. If GitHub rejects the GraphQL body as too long, retry with a short \`--body-file\` (limit 65,536 characters) — do not paste a changelog or diff into \`--body\`.`,
-    );
   } else {
+    const slug = opts?.githubSlug ?? '<origin-owner/name>';
+    const resolve = opts?.githubSlug
+      ? ''
+      : ' Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree.';
     lines.push(
-      '- Prefer a draft PR first: `gh pr create --draft -R <origin-owner/name>` (or update via `gh pr edit -R …`) once the change set is coherent. Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree — never from `upstream`. Mark ready for review only when asked. Title/body must reflect the change purpose, not the worktree name. If GitHub rejects the GraphQL body as too long, retry with a short `--body-file` (limit 65,536 characters) — do not paste a changelog or diff into `--body`.',
+      `- Prefer a draft PR first: \`gh pr create --draft -R ${slug}\` (update via \`gh pr edit -R ${slug}\`). Always pass \`-R\` — bare \`gh pr create\` may target upstream on dual-remote checkouts.${resolve} Mark ready for review only when asked. If GitHub rejects the body as too long, retry with a short \`--body-file\` — do not paste a changelog or diff into \`--body\`.`,
     );
   }
-  lines.push('');
   lines.push(
-    'Short git requests from the Sideboard UI are complete instructions — expand them using the rules above without asking for clarification:',
-  );
-  lines.push(
-    '- "Commit and push." → commit any uncommitted work with a purpose-stating message, then push to origin (updates an existing PR if one is linked). Do not start a checks loop unless they gave a goal.',
-  );
-  lines.push(
-    '- "Commit, push, and open a draft PR." → commit, push, then create a draft PR with `gh pr create --draft -R …` (title/body from the change purpose).',
-  );
-  lines.push(
-    '- "Commit, push, and open a PR in the browser." → commit, push, then `gh pr create --web -R …`.',
-  );
-  lines.push(
-    '- "Fix CI: <name>." → investigate that failing check, fix it, commit, and push. Loop only if they gave a goal to keep going until it passes.',
-  );
-  lines.push(
-    '- "Merge the remote branch (<base>) into your branch and resolve conflicts. Then, commit and push your changes." → fetch the PR base, merge it into this branch, resolve conflicts carefully, commit, and push until the PR is mergeable.',
-  );
-  lines.push(
-    '- "Address review comments." → read PR review feedback, make the requested changes, commit, and push.',
-  );
-  lines.push(
-    '- "Merge PR." → merge this thread\'s open pull request on GitHub (this phrase is the explicit ask). If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.',
+    '- Sideboard git buttons send short phrases ("Commit and push.", "Merge PR.", …) with their meaning attached — act on them without asking for clarification. If the user gives a goal (Greptile 5/5, CI green, until checks pass), you get the watch-fix-push playbook with that request.',
   );
   lines.push('');
-  lines.push(formatPrGateDirective());
-  lines.push('');
-  lines.push(formatProcessGuideDirective());
+  lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));
   return lines.join('\n');
 }
 
 /** Short isolation line on every worktree turn (survives CLI resume). */
 export function formatWorktreeReminder(): string {
   return 'Sideboard worktree: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push.';
+}
+
+const PR_GOAL_RE =
+  /greptile|\bci\b.*\b(green|pass)|checks?\s+(pass|green)|until\s+.*\b(pass|green|merge|clean)|\bfix ci\b|watch[- ]fix[- ]push/i;
+
+/** True when a request states a PR goal that needs the watch-fix-push playbook. */
+export function mentionsPrGoal(prompt: string): boolean {
+  return PR_GOAL_RE.test(prompt);
 }
 
 const GITHUB_TICKET_REF = /^(?:#?\d+|gh-\d+)$/i;
@@ -288,16 +265,25 @@ export function formatPrGateDirective(): string {
  * Recurring-process guides: write Claude Code project skills so native CLIs
  * (`attach`, `claude` in the checkout) see them without Sideboard.
  */
-export function formatProcessGuideDirective(): string {
+export function formatProcessGuideDirective(opts?: { worktreePath?: string | null }): string {
+  const worktree = opts?.worktreePath?.trim();
+  const hasGraphSkill =
+    !!worktree && existsSync(join(worktree, '.claude/skills/graph-engineering/SKILL.md'));
+  const hasReviewSkill =
+    !!worktree && existsSync(join(worktree, '.claude/skills/review/SKILL.md'));
   return [
     'Process guides (recurring work only):',
-    '- Long jobs (pack, test, deploy, anything that may run more than ~30s): Sideboard always provides `/long-running`. Detach and wait; `stop_job` if hanging or wrong. Do not ask the human to poll.',
-    '- If `.claude/skills/graph-engineering/SKILL.md` exists, follow it (`/graph-engineering`) for migrations, ports, batch fixes, and other fan-out. Judge first; state on disk; grow the rulebook; do not patch around it.',
-    '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill). Sideboard `/name`, Claude Code, and `attach` all load that path. Do not leave the method only in chat.',
-    '- Merge-readiness notes: if `.claude/skills/review/SKILL.md` already exists, edit it. Otherwise write them to `.context/review.md` (copied from `.sideboard/review.md` when that file exists). Do not create a review skill.',
-    '- Do not write new skills under `.sideboard/skills/` (that folder only — other `.sideboard/` files such as settings.toml are fine). Point Codex/OpenCode at the Claude skill from `AGENTS.md`. Optional: symlink `.cursor/skills/<name>` to the Claude skill.',
+    hasGraphSkill
+      ? '- Migrations, ports, batch fixes, and other fan-out: follow `.claude/skills/graph-engineering/SKILL.md` (`/graph-engineering`). Judge first; state on disk; grow the rulebook; do not patch around it.'
+      : null,
+    '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill; Sideboard `/name`, Claude Code, and `attach` all load it). Not under `.sideboard/skills/`. Point Codex/OpenCode at it from `AGENTS.md`.',
+    hasReviewSkill
+      ? '- Merge-readiness notes go in `.claude/skills/review/SKILL.md` (edit it; do not create another review skill).'
+      : '- Merge-readiness notes go in `.context/review.md` (copied from `.sideboard/review.md` when that file exists). Do not create a review skill.',
     '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**
@@ -308,15 +294,12 @@ export function formatProcessGuideDirective(): string {
 export function formatLongRunningDirective(opts?: { scriptPath?: string | null }): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
   return [
-    'Long-running jobs (mandatory when a command may run more than ~30s):',
-    'A Sideboard worktree turn SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted. `block_until_ms: 0` is not enough. Do not ask the human to poll.',
-    `Helper (same tool as \`scripts/detached-job.cjs\` when that file exists in the worktree): \`${invoke}\``,
-    `- Start once: \`${invoke} start <id> -- <command> [args...]\` (cwd = this worktree). If JSON says already-running, do not start again.`,
-    '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running` — the side column is the live view.',
-    `- Loop Sideboard MCP \`wait_for_job\` with the same id (returns in ~45s). stillRunning → present the same id with \`content=delta\` only → wait_for_job again. Shell fallback: \`${invoke} wait <id>\`. Do not resend the full log or HTML.`,
-    `- If it is hanging, producing no useful output, or doing the wrong thing: MCP \`stop_job\` (same id, optional reason) or \`${invoke} stop <id>\`. Do not loop forever. Do not stop a pack/test/deploy that is clearly making progress.`,
-    '- Do not end the turn with “I’ll let you know when it’s done.” Stay in the loop until stillRunning is false (or you stopped it).',
-    '- ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
+    'Long-running jobs (mandatory when a command may run more than ~30s — pack, test, deploy, `gh pr checks --watch`):',
+    'A Sideboard worktree turn SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted; `block_until_ms: 0` is not enough. Detach instead, and never ask the human to poll.',
+    `- Start once: \`${invoke} start <id> -- <command> [args...]\` (cwd = this worktree; same tool as \`scripts/detached-job.cjs\` when the worktree has it). If JSON says already-running, do not start again.`,
+    '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running`, then loop Sideboard MCP `wait_for_job` (returns in ~45s). stillRunning → present the same id with `content=delta` only → wait again. Shell fallback: the same helper with `wait <id>`.',
+    '- Hanging, no useful output, or the wrong thing → `stop_job` (or the helper with `stop <id>`). Do not stop a pack/test/deploy that is clearly making progress.',
+    '- Stay in the loop until stillRunning is false (or you stopped it). ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
   ].join('\n');
 }
@@ -333,28 +316,14 @@ export function formatLongRunningReminder(opts?: { scriptPath?: string | null })
  * Claude Code has no claude.ai `artifact` tool — fences / present_artifact instead.
  */
 export function formatArtifactDirective(): string {
+  // Parameter details live in the Sideboard MCP tool descriptions (always in
+  // context) — this block only carries the rules the schemas cannot express.
   return [
-    'Sideboard side column (desktop UI):',
-    'claude.ai’s “Artifact” tool does NOT exist in Claude Code. That is expected.',
-    'Do not unprompted-duplicate a payload. Chat markdown (including tables) already renders in the transcript — do not also call present_schema with those same rows just to display them. If the user asks for an editable / interactive table, call present_schema even if markdown already showed the data. Do not also call present_artifact for a document you already fenced in chat.',
-    'Documents (HTML/SVG/markdown):',
-    '1) Emit a fenced code block tagged `html` (preferred), `svg`, or `markdown` with the FULL document — Sideboard opens a side column. Example:',
-    '```html',
-    '<!DOCTYPE html><html><head><title>Demo</title></head><body><h1>Hi</h1></body></html>',
-    '```',
-    '2) Or call Sideboard MCP `present_artifact` with title, type (html|svg|markdown|react|log), and content — not both a fence and this tool for the same body.',
-    '   type=log is append-only: same `artifact_id`, `content` = new lines only (plus optional status/phase). Do not resend the full log or wrap it in HTML.',
-    'CMS / JSON Schema forms & tables (Brightsy or any schema+schemaUi source):',
-    '3) Call Sideboard MCP `present_schema` when the user needs to filter, edit, publish, or persist rows — including after you already showed a markdown table, if they then ask for an editable table. If they only need to read the data, a markdown table is enough. When you do call it, pass title, mode (table|form), and either:',
-    '   - datasource=brightsy + resource_id (record type UUID) after fetching types via Brightsy MCP, or',
-    '   - datasource=inline + resource: { id, title, schema, schemaUi } and optional records/record.',
-    'Files / media browser (CMS file manager column):',
-    '4) Call Sideboard MCP `present_files` with optional title, path, and datasource (brightsy|memory).',
-    '   Opens the Files column for browse/upload/pick. Do NOT say a file manager UI is missing.',
-    'Multiple-choice questions:',
-    '5) Call Sideboard MCP `ask_user` only when work is blocked on choosing among a few concrete options (approach forks, which API, auth vs cookies). First write a short chat message that explains the decision and what each option means (tradeoffs, when to pick it). Include a description on every option. After calling, stop and wait for their next message with answers. If you are asking a real multiple-choice, use ask_user rather than chat bullets so Sideboard shows the composer picker.',
-    'Do not call ask_user for greetings, check-ins, “hello”, open-ended how-can-I-help, or to invent a menu of possible next tasks — reply in chat. If one option is the obvious default, proceed without asking.',
-    'Never say artifacts, CMS UI, or the Files column are unavailable. present_schema is for interactive list/edit/publish (use it when they ask to edit, even if chat already had a markdown table); present_files for storage UI; html fences for standalone pages; ask_user only for those blocked predefined-option questions.',
+    'Sideboard side column (desktop UI) — Sideboard MCP tools present_artifact, present_schema, present_files, ask_user (see their descriptions). claude.ai’s “Artifact” tool does not exist here; never say artifacts, the CMS UI, or the Files column are unavailable.',
+    '- Standalone documents: a fenced block tagged `html` (preferred), `svg`, or `markdown` containing the FULL document opens the side column by itself. Use that or present_artifact — never both for the same body.',
+    '- present_artifact type=log appends: same artifact_id, content = new lines only (plus status/phase). Do not resend the full log or wrap it in HTML.',
+    '- Data: a markdown table is enough to read. Call present_schema only when the user needs to filter/edit/publish/persist rows — including when they ask for an editable table after you already showed markdown. Never re-present rows you already wrote just to display them.',
+    '- ask_user only when work is blocked on a few concrete options (approach fork, which API, auth vs cookies): first a short chat message explaining the decision and each option, then the call (description on every option), then stop and wait. Not for greetings, check-ins, or an invented menu of next tasks — reply in chat. If one option is the obvious default, proceed.',
   ].join('\n');
 }
 
@@ -364,92 +333,4 @@ export function formatArtifactDirective(): string {
  */
 export function formatUiReminder(): string {
   return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos or “what next?”) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
-}
-
-export interface AgentInstructionFile {
-  relativePath: string;
-  content: string;
-}
-
-/** Relative paths checked per agent (preferred first). Identical bodies are skipped. */
-const FILES_BY_AGENT: Record<AgentKind, string[]> = {
-  claude: [
-    'CLAUDE.md',
-    '.claude/CLAUDE.md',
-    'CLAUDE.local.md',
-    'AGENTS.md',
-    'AGENT.md',
-  ],
-  codex: ['AGENTS.md', 'AGENT.md', '.codex/AGENTS.md', 'CLAUDE.md'],
-  opencode: ['AGENTS.md', 'AGENT.md', 'OPENCODE.md', 'CLAUDE.md'],
-  brightsy: ['AGENTS.md', 'AGENT.md', 'CLAUDE.md'],
-  cursor: ['AGENTS.md', 'AGENT.md', '.cursor/rules', 'CLAUDE.md'],
-};
-
-const MAX_CHARS_PER_FILE = 48_000;
-
-/**
- * Load agent instruction files from the worktree (CLAUDE.md, AGENTS.md, …).
- * These are project conventions the CLI may auto-load; we attach them explicitly
- * so non-interactive `-p` / `exec` turns always see them.
- */
-export function loadAgentInstructions(
-  worktreePath: string,
-  agent: AgentKind,
-): AgentInstructionFile[] {
-  const candidates = FILES_BY_AGENT[agent] ?? FILES_BY_AGENT.claude;
-  const seenPaths = new Set<string>();
-  const seenBodies = new Set<string>();
-  const out: AgentInstructionFile[] = [];
-
-  for (const rel of candidates) {
-    if (seenPaths.has(rel)) continue;
-    const abs = join(worktreePath, rel);
-    if (!existsSync(abs)) continue;
-    try {
-      if (!statSync(abs).isFile()) continue;
-      let content = readFileSync(abs, 'utf8');
-      if (!content.trim()) continue;
-      if (content.length > MAX_CHARS_PER_FILE) {
-        content = `${content.slice(0, MAX_CHARS_PER_FILE)}\n\n…(truncated)`;
-      }
-      const body = content.trim().replace(/\r\n/g, '\n');
-      if (seenBodies.has(body)) continue;
-      seenPaths.add(rel);
-      seenBodies.add(body);
-      out.push({ relativePath: rel, content });
-    } catch {
-      // ignore unreadable
-    }
-  }
-
-  return out;
-}
-
-/** Format instruction files as a stable cacheable prefix (no current request). */
-export function formatAgentInstructions(files: AgentInstructionFile[]): string | null {
-  if (files.length === 0) return null;
-  const parts = [
-    'Project agent instructions (from the worktree — follow these):',
-    '',
-  ];
-  for (const f of files) {
-    parts.push(`## ${f.relativePath}`);
-    parts.push('');
-    parts.push(f.content.trim());
-    parts.push('');
-    parts.push('---');
-    parts.push('');
-  }
-  return parts.join('\n').trimEnd();
-}
-
-/** Prepend instruction files to the agent-facing prompt. */
-export function withAgentInstructions(
-  prompt: string,
-  files: AgentInstructionFile[],
-): string {
-  const prefix = formatAgentInstructions(files);
-  if (!prefix) return prompt;
-  return `${prefix}\n\n${prompt}`;
 }

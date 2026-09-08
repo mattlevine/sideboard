@@ -11,13 +11,25 @@ export interface AgentTurnInput {
   cachedPrefix?: string;
   /** Current user/turn content (after the stable prefix). */
   prompt: string;
+  /**
+   * Standing per-turn reminders (short restatements of `cachedPrefix` rules).
+   * Claude appends them to the system prompt (`--append-system-prompt`) so they
+   * are cached once instead of accumulating in the conversation on every turn.
+   * Other CLIs prepend them to `prompt` on resumed turns only — a fresh turn
+   * already carries the full playbook in `cachedPrefix`.
+   */
+  systemPrompt?: string;
 }
 
 export function normalizeTurnInput(
   input: string | AgentTurnInput,
 ): Required<Pick<AgentTurnInput, 'prompt'>> & AgentTurnInput {
   if (typeof input === 'string') return { prompt: input };
-  return { prompt: input.prompt, cachedPrefix: input.cachedPrefix?.trim() || undefined };
+  return {
+    prompt: input.prompt,
+    cachedPrefix: input.cachedPrefix?.trim() || undefined,
+    systemPrompt: input.systemPrompt?.trim() || undefined,
+  };
 }
 
 /**
@@ -29,19 +41,42 @@ export function dropCachedPrefixOnResume(
   sessionId: string | null | undefined,
 ): AgentTurnInput {
   const turn = normalizeTurnInput(input);
-  if (sessionId) return { prompt: turn.prompt };
+  if (sessionId) {
+    return turn.systemPrompt
+      ? { prompt: turn.prompt, systemPrompt: turn.systemPrompt }
+      : { prompt: turn.prompt };
+  }
   return turn;
 }
 
 /**
  * Flatten to a single string for CLIs that don't accept cache_control blocks
  * (Codex today; OpenCode `run` is plain text — OpenCode applies provider caching
- * internally after it receives the message).
+ * internally after it receives the message). `systemPrompt` reminders are
+ * folded into the request only when there is no `cachedPrefix` (resumed turns);
+ * a fresh turn already carries the full directives.
  */
 export function flattenTurnInput(input: string | AgentTurnInput): string {
-  const { cachedPrefix, prompt } = normalizeTurnInput(input);
-  if (!cachedPrefix) return prompt;
-  return `${cachedPrefix}\n\n---\n\nCurrent request:\n${prompt}`;
+  const { cachedPrefix, prompt, systemPrompt } = normalizeTurnInput(input);
+  if (cachedPrefix) return `${cachedPrefix}\n\n---\n\nCurrent request:\n${prompt}`;
+  if (systemPrompt) return `${systemPrompt}\n\n${prompt}`;
+  return prompt;
+}
+
+/**
+ * Split for CLIs with a system-prompt flag (Claude `--append-system-prompt`):
+ * reminders go to the system prompt every turn; the user message never carries
+ * them.
+ */
+export function splitTurnInputForSystemPrompt(input: string | AgentTurnInput): {
+  promptText: string;
+  systemPrompt: string | undefined;
+} {
+  const turn = normalizeTurnInput(input);
+  return {
+    promptText: flattenTurnInput({ cachedPrefix: turn.cachedPrefix, prompt: turn.prompt }),
+    systemPrompt: turn.systemPrompt,
+  };
 }
 
 /** Anthropic cache breakpoint shape (used when validating assembled requests). */
