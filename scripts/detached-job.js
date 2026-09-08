@@ -97,6 +97,24 @@ function isAlive(pid) {
   }
 }
 
+/** True if any process remains in the wrap pid's group (wrap itself may already be dead). */
+function processGroupAlive(pgid) {
+  if (process.platform === 'win32') return false;
+  if (!Number.isInteger(pgid) || pgid <= 0) return false;
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch (err) {
+    return Boolean(err && err.code === 'EPERM');
+  }
+}
+
+/** Wrap-exit is not "everything is dead" — leftover children keep the job running. */
+function jobTreeAlive(pid) {
+  if (pid == null) return false;
+  return isAlive(pid) || processGroupAlive(pid);
+}
+
 function readIntFile(file) {
   if (!fs.existsSync(file)) return null;
   const n = Number.parseInt(fs.readFileSync(file, 'utf8').trim(), 10);
@@ -293,7 +311,7 @@ function logHasPattern(file, pattern) {
 
 function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, ui, cursorFile }) {
   const pid = readIntFile(pidFile);
-  const running = pid != null && isAlive(pid);
+  const running = jobTreeAlive(pid);
   const exitCode = exitFile ? readIntFile(exitFile) : null;
   const okFromExit = exitCode === 0;
   const okFromPattern = okPattern ? logHasPattern(logFile, okPattern) && !running : false;
@@ -457,27 +475,76 @@ async function stopJob(root, id, opts = {}) {
     };
   }
   appendLogLine(p.log, `$ stop${why ? `: ${why}` : ''}`);
-  killProcessTree(snap.pid, 'SIGTERM');
+  const targetPid = snap.pid;
+  killProcessTree(targetPid, 'SIGTERM');
   const graceMs = Number.isFinite(opts.graceMs) ? Math.max(50, opts.graceMs) : STOP_GRACE_MS;
   const deadline = Date.now() + graceMs;
-  while (Date.now() < deadline && isAlive(snap.pid)) {
+  while (Date.now() < deadline && jobTreeAlive(targetPid)) {
     await sleep(100);
   }
-  if (isAlive(snap.pid)) {
-    killProcessTree(snap.pid, 'SIGKILL');
-    await sleep(100);
-  }
+  // Always SIGKILL the group. Wrap has no SIGTERM handler, so it exits
+  // immediately; children that ignore/delay SIGTERM would otherwise leak.
+  killProcessTree(targetPid, 'SIGKILL');
+  await sleep(100);
   if (!fs.existsSync(p.exit)) {
     fs.writeFileSync(p.exit, '1\n');
   }
   const after = snapshotFromJobPaths(p);
+  const stillRunning = jobTreeAlive(targetPid) || after.running;
   writeJobUi(after, { id, title: opts.title || id, out: p.ui });
   return {
-    stopped: !after.running,
-    reason: after.running ? 'still-running' : 'stopped',
+    stopped: !stillRunning,
+    reason: stillRunning ? 'still-running' : 'stopped',
     id,
-    snapshot: after,
-    hint: STOP_HINT,
+    snapshot: { ...after, running: stillRunning, stillRunning },
+    hint: stillRunning ? WAIT_STILL_RUNNING_HINT : STOP_HINT,
+  };
+}
+
+/** CLI JSON for `stop` — same contract as MCP stop_job. Never idle/ok after a failed kill. */
+function formatStopPayload(result) {
+  const snap = result.snapshot;
+  if (result.reason === 'not-found') {
+    return {
+      stopped: false,
+      reason: 'not-found',
+      id: result.id,
+      stillRunning: false,
+      ok: false,
+      failed: true,
+      status: 'failed',
+      hint: result.hint,
+    };
+  }
+  if (result.reason === 'not-running') {
+    const ok = Boolean(snap?.ok);
+    return {
+      stopped: false,
+      reason: 'not-running',
+      id: result.id,
+      stillRunning: false,
+      ok,
+      failed: !ok,
+      status: ok ? 'ok' : 'failed',
+      pid: snap?.pid,
+      exitCode: snap?.exitCode ?? undefined,
+      hint: result.hint,
+    };
+  }
+  const stillRunning = Boolean(
+    result.reason === 'still-running' || snap?.stillRunning || snap?.running,
+  );
+  return {
+    stopped: Boolean(result.stopped) && !stillRunning,
+    reason: stillRunning ? 'still-running' : 'stopped',
+    id: result.id,
+    stillRunning,
+    ok: false,
+    failed: true,
+    status: stillRunning ? 'running' : 'failed',
+    pid: snap?.pid,
+    exitCode: snap?.exitCode ?? undefined,
+    hint: stillRunning ? WAIT_STILL_RUNNING_HINT : STOP_HINT,
   };
 }
 
@@ -615,26 +682,9 @@ async function main(argv = process.argv) {
       reason: parsed.reason,
       title: parsed.title,
     });
-    const snap = result.snapshot;
-    console.log(
-      JSON.stringify(
-        {
-          stopped: Boolean(result.stopped),
-          reason: result.reason,
-          id: result.id,
-          stillRunning: Boolean(snap?.stillRunning || snap?.running),
-          ok: false,
-          failed: true,
-          status: result.stopped ? 'failed' : snap?.ok ? 'ok' : 'idle',
-          pid: snap?.pid,
-          exitCode: snap?.exitCode ?? undefined,
-          hint: result.hint,
-        },
-        null,
-        2,
-      ),
-    );
-    process.exit(result.stopped || result.reason === 'not-running' ? 0 : 1);
+    const payload = formatStopPayload(result);
+    console.log(JSON.stringify(payload, null, 2));
+    process.exit(payload.stopped || result.reason === 'not-running' ? 0 : 1);
   }
   if (parsed.cmd === 'status' || parsed.cmd === 'wait' || parsed.cmd === 'ui') {
     let getSnap;
@@ -698,6 +748,9 @@ module.exports = {
   snapshotJob,
   startJob,
   stopJob,
+  formatStopPayload,
+  jobTreeAlive,
+  processGroupAlive,
   waitSnapshot,
   parseArgs,
   collectStream,

@@ -78,6 +78,24 @@ function jobAlive(pid: number): boolean {
   }
 }
 
+/** True if any process remains in the wrap pid's group (wrap itself may already be dead). */
+export function processGroupAlive(pgid: number): boolean {
+  if (process.platform === 'win32') return false;
+  if (!Number.isInteger(pgid) || pgid <= 0) return false;
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch (err) {
+    return err && typeof err === 'object' && 'code' in err && err.code === 'EPERM';
+  }
+}
+
+/** Wrap-exit is not "everything is dead" — leftover children keep the job running. */
+export function jobTreeAlive(pid: number | null | undefined): boolean {
+  if (pid == null) return false;
+  return jobAlive(pid) || processGroupAlive(pid);
+}
+
 function readIntFile(file: string): number | null {
   if (!existsSync(file)) return null;
   const n = Number.parseInt(readFileSync(file, 'utf8').trim(), 10);
@@ -229,7 +247,7 @@ function snapshotJob(dir: string): {
   progress: string;
 } {
   const pid = readIntFile(join(dir, 'pid'));
-  const running = pid != null && jobAlive(pid);
+  const running = jobTreeAlive(pid);
   return {
     pid,
     running,
@@ -395,17 +413,19 @@ export async function stopDetachedJob(
   }
 
   appendJobLog(snap.log, `$ stop${why ? `: ${why}` : ''}`);
-  if (snap.pid != null) killProcessTree(snap.pid, 'SIGTERM');
+  const targetPid = snap.pid;
+  if (targetPid != null) killProcessTree(targetPid, 'SIGTERM');
   const graceMs = Number.isFinite(opts?.graceMs)
     ? Math.max(50, opts!.graceMs!)
     : 2_000;
   const deadline = Date.now() + graceMs;
-  while (Date.now() < deadline && snap.pid != null && jobAlive(snap.pid)) {
+  while (Date.now() < deadline && jobTreeAlive(targetPid)) {
     await sleep(Math.min(100, Math.max(20, deadline - Date.now())));
-    snap = snapshotJob(dir);
   }
-  if (snap.pid != null && jobAlive(snap.pid)) {
-    killProcessTree(snap.pid, 'SIGKILL');
+  // Always SIGKILL the group. Wrap has no SIGTERM handler, so it exits
+  // immediately; children that ignore/delay SIGTERM would otherwise leak.
+  if (targetPid != null) {
+    killProcessTree(targetPid, 'SIGKILL');
     await sleep(100);
   }
   const exitFile = join(dir, 'exit');
@@ -417,14 +437,15 @@ export async function stopDetachedJob(
     }
   }
   snap = snapshotJob(dir);
+  const stillRunning = jobTreeAlive(targetPid) || snap.running;
   const result = toResult(jobId, snap, { failed: true });
-  const stopped = !snap.running;
+  const stopped = !stillRunning;
   return {
     ...result,
-    stillRunning: snap.running,
+    stillRunning,
     ok: false,
     failed: true,
-    status: snap.running ? 'running' : 'failed',
+    status: stillRunning ? 'running' : 'failed',
     stopped,
     reason: stopped ? 'stopped' : 'still-running',
     stopReason: why || undefined,

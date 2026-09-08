@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import {
   DETACHED_JOBS_DIR,
 } from '../paths/workspace-scratch.js';
 import {
+  jobTreeAlive,
   listRunningDetachedJobs,
   looksLikeDeferredDonePromise,
   planJobContinue,
@@ -122,7 +123,7 @@ describe('waitForDetachedJob / listRunningDetachedJobs', () => {
     const root = join(tmpdir(), `sb-job-ok-${Date.now()}`);
     const dir = join(root, DETACHED_JOBS_DIR, 'core-test');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'pid'), '1\n');
+    writeFileSync(join(dir, 'pid'), '999999999\n');
     writeFileSync(join(dir, 'exit'), '0\n');
     writeFileSync(join(dir, 'log'), 'ok\n');
     const result = await waitForDetachedJob(root, 'core-test', { timeoutMs: 1000 });
@@ -166,4 +167,115 @@ describe('waitForDetachedJob / listRunningDetachedJobs', () => {
     expect(result.stopped).toBe(false);
     expect(result.reason).toBe('not-found');
   });
+
+  it('stopDetachedJob SIGKILLs leftover children after wrap exits', async () => {
+    const root = join(tmpdir(), `sb-job-stop-wrap-${Date.now()}`);
+    const dir = join(root, DETACHED_JOBS_DIR, 'hang');
+    mkdirSync(dir, { recursive: true });
+    const { wrapPid, childPid, cleanup } = await spawnWrapWithStubbornChild(dir);
+    try {
+      expect(jobTreeAlive(wrapPid)).toBe(true);
+      const result = await stopDetachedJob(root, 'hang', { graceMs: 400 });
+      expect(result.stopped).toBe(true);
+      expect(result.reason).toBe('stopped');
+      expect(result.stillRunning).toBe(false);
+      expect(result.status).toBe('failed');
+      expect(jobTreeAlive(wrapPid)).toBe(false);
+      expect(pidAlive(childPid)).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('stopDetachedJob still SIGKILLs the group when wrap is already dead', async () => {
+    const root = join(tmpdir(), `sb-job-stop-dead-wrap-${Date.now()}`);
+    const dir = join(root, DETACHED_JOBS_DIR, 'hang');
+    mkdirSync(dir, { recursive: true });
+    const { wrapPid, childPid, cleanup } = await spawnWrapWithStubbornChild(dir);
+    try {
+      process.kill(wrapPid, 'SIGKILL');
+      await waitUntil(() => !pidAlive(wrapPid), 2_000);
+      expect(pidAlive(childPid)).toBe(true);
+      expect(jobTreeAlive(wrapPid)).toBe(true);
+      const result = await stopDetachedJob(root, 'hang', { graceMs: 400 });
+      expect(result.stopped).toBe(true);
+      expect(result.stillRunning).toBe(false);
+      expect(result.status).toBe('failed');
+      expect(pidAlive(childPid)).toBe(false);
+      expect(jobTreeAlive(wrapPid)).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
 });
+
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitUntil(pred: () => boolean, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (pred()) return;
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  throw new Error(`timed out after ${ms}ms`);
+}
+
+async function spawnWrapWithStubbornChild(dir: string): Promise<{
+  wrapPid: number;
+  childPid: number;
+  cleanup: () => void;
+}> {
+  const childPidFile = join(dir, 'child.pid');
+  const stubborn = `
+    process.on('SIGTERM', () => {});
+    require('fs').writeFileSync(${JSON.stringify(childPidFile)}, String(process.pid));
+    setInterval(() => {}, 1000);
+  `;
+  const wrapCode = `
+    const { spawn } = require('child_process');
+    const child = spawn(process.execPath, ['-e', ${JSON.stringify(stubborn)}], { stdio: 'ignore' });
+    child.unref();
+    setInterval(() => {}, 1000);
+  `;
+  const wrap = spawn(process.execPath, ['-e', wrapCode], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  wrap.unref();
+  const wrapPid = wrap.pid;
+  if (wrapPid == null) throw new Error('wrap pid missing');
+  writeFileSync(join(dir, 'pid'), `${wrapPid}\n`);
+  writeFileSync(join(dir, 'log'), 'waiting\n');
+  await waitUntil(() => existsSync(childPidFile), 3_000);
+  const childPid = Number.parseInt(readFileSync(childPidFile, 'utf8').trim(), 10);
+  if (!Number.isInteger(childPid) || childPid <= 0) throw new Error('child pid missing');
+  return {
+    wrapPid,
+    childPid,
+    cleanup: () => {
+      try {
+        process.kill(childPid, 'SIGKILL');
+      } catch {
+        /* already dead */
+      }
+      try {
+        process.kill(-wrapPid, 'SIGKILL');
+      } catch {
+        /* already dead */
+      }
+      try {
+        process.kill(wrapPid, 'SIGKILL');
+      } catch {
+        /* already dead */
+      }
+    },
+  };
+}
