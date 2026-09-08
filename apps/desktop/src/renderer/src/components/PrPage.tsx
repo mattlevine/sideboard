@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { PrDetails, ThreadAttachment } from '@sideboard-ai/core';
 import {
   prActivityItems,
@@ -45,30 +45,38 @@ export function PrPage({ threadId, onAddToChat }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [section, setSection] = useState<Section>('activity');
+  const loadGen = useRef(0);
+  const detailsRef = useRef<PrDetails | null>(null);
+  detailsRef.current = details;
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadDetails = useCallback(() => {
+    const gen = ++loadGen.current;
     setLoading(true);
     setError(null);
     void window.sideboard
       .getPrDetails(threadId)
       .then((next) => {
-        if (cancelled) return;
+        if (gen !== loadGen.current) return;
         setDetails(next);
         if (!next) setError('No pull request linked to this worktree.');
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (gen !== loadGen.current) return;
+        if (detailsRef.current) return;
         setDetails(null);
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (gen === loadGen.current) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [threadId]);
+
+  useEffect(() => {
+    loadDetails();
+    return () => {
+      loadGen.current += 1;
+    };
+  }, [loadDetails]);
 
   const activity = useMemo(
     () => (details ? prActivityItems(details) : []),
@@ -129,17 +137,28 @@ export function PrPage({ threadId, onAddToChat }: Props) {
               Description
             </button>
           </div>
-          {onAddToChat && details ? (
-            <button type="button" className="pr-page-add" onClick={addAllToChat}>
-              Add all to chat
+          <div className="pr-page-actions">
+            <button
+              type="button"
+              className="pr-page-add"
+              disabled={loading}
+              title="Reload pull request comments and reviews"
+              onClick={() => loadDetails()}
+            >
+              {loading && details ? 'Refreshing…' : 'Refresh'}
             </button>
-          ) : null}
+            {onAddToChat && details ? (
+              <button type="button" className="pr-page-add" onClick={addAllToChat}>
+                Add all to chat
+              </button>
+            ) : null}
+          </div>
         </div>
       </header>
 
-      {loading ? (
+      {loading && !details ? (
         <div className="pr-page-empty">Loading pull request…</div>
-      ) : error ? (
+      ) : error && !details ? (
         <div className="pr-page-empty">{error}</div>
       ) : section === 'description' ? (
         <div className="pr-page-body">
