@@ -1,5 +1,10 @@
 import type { PrCheckRun } from '@sideboard-ai/core';
 
+/** True when GitHub reports an approving review (`reviewDecision === APPROVED`). */
+export function isPrApproved(decision: string | null | undefined): boolean {
+  return (decision ?? '').toUpperCase() === 'APPROVED';
+}
+
 /** Aggregate GitHub `reviewDecision` label for PR pill / Review tab. */
 export function formatReviewDecision(decision: string | null | undefined): string | null {
   if (!decision) return null;
@@ -42,11 +47,11 @@ export function prPillModifier(opts: {
   if (opts.draft) return 'draft';
   if (opts.checksFailed) return 'rejected';
   const decision = (opts.reviewDecision ?? '').toUpperCase();
-  if (decision === 'REVIEW_REQUIRED') return 'needs-approval';
   if (decision === 'CHANGES_REQUESTED') return 'rejected';
+  // REVIEW_REQUIRED, empty, or unknown — not yet approved.
+  if (!isPrApproved(decision)) return 'needs-approval';
   if (opts.checksPending) return 'needs-approval';
-  if (decision === 'APPROVED' || opts.checksPassed) return 'approved';
-  return 'open';
+  return 'approved';
 }
 
 /** Status badge text for the top-right PR pill. */
@@ -74,11 +79,12 @@ export function prPillStatusLabel(opts: {
   if (opts.draft) return 'Draft';
   if (opts.checksFailed) return 'Checks failing';
   const review = formatReviewDecision(opts.reviewDecision);
-  if (review === 'Needs approval' || review === 'Changes requested') return review;
+  if (review === 'Changes requested') return review;
+  if (!isPrApproved(opts.reviewDecision)) return 'Needs approval';
   if (opts.checksPending) return 'Checks pending';
   if (review) return review;
   if (opts.checksPassed) return 'Checks passing';
-  return 'Open';
+  return 'Approved';
 }
 
 export function classifyMergeIssue(opts: {

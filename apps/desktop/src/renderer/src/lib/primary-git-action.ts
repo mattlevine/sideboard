@@ -51,7 +51,9 @@ export function primaryGitAction(opts: {
   if (opts.checksFailed) return 'checks-failing';
   const review = reviewDecisionOf(opts.reviewDecision);
   if (review === 'CHANGES_REQUESTED') return 'changes-requested';
-  if (review === 'REVIEW_REQUIRED') return 'needs-approval';
+  // GitHub only sets REVIEW_REQUIRED when branch protection requires reviews.
+  // Waiting PRs often have a null decision — still not approved, so don't say Merge.
+  if (review !== 'APPROVED') return 'needs-approval';
   if (opts.checksPending) return 'checks-pending';
   return 'merge';
 }
