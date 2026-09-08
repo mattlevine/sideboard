@@ -30,6 +30,7 @@ import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
   AGENT_GIT_ACTIONS,
   agentGitPrompt,
+  expandCanonicalGitRequest,
   type AgentGitAction,
 } from '../git/agent-git-actions.js';
 import {
@@ -157,11 +158,13 @@ import {
   formatIssueToolsReminder,
   formatLongRunningDirective,
   formatLongRunningReminder,
+  formatPrGateDirective,
   formatRenameBranchDirective,
   formatUiReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
   issueTicketFromThread,
+  mentionsPrGoal,
 } from '../agents/instructions.js';
 import {
   formatOptionalServicesDirective,
@@ -1156,17 +1159,33 @@ export class Orchestrator {
     const slackReplyContext = formatSlackRepliesForTurn(
       pendingSlackExternalReplies(thread.messages),
     );
+    // Standing reminders restate the fresh-session directives. They travel as
+    // `systemPrompt`: Claude appends them to its (cached) system prompt; other
+    // CLIs prepend them only on resumed turns (fresh turns have the directives).
+    const turnReminders =
+      [
+        worktreeReminder,
+        optionalServicesReminder,
+        issueToolsReminder,
+        viewerContextReminder,
+        artifactReminder,
+        longRunningReminder,
+      ]
+        .filter(Boolean)
+        .join('\n\n') || undefined;
+    // Goal-scoped playbook (Greptile 5/5, CI green) only when this request names one.
+    const prGateDirective =
+      thread.agent !== 'brightsy' &&
+      !isOrchestratorThread(thread) &&
+      mentionsPrGoal(expandedPrompt)
+        ? formatPrGateDirective()
+        : null;
     const agentPrompt = [
       thread.planMode ? PLAN_MODE_INSTRUCTION : null,
       orchestrationReminder,
-      worktreeReminder,
-      optionalServicesReminder,
-      issueToolsReminder,
-      viewerContextReminder,
-      artifactReminder,
-      longRunningReminder,
+      prGateDirective,
       slackReplyContext,
-      expandedPrompt,
+      expandCanonicalGitRequest(expandedPrompt),
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -1301,7 +1320,7 @@ export class Orchestrator {
       const stderrTail: string[] = [];
       const handle = await spawnAgentTurn(
         fresh,
-        { cachedPrefix, prompt: agentPrompt },
+        { cachedPrefix, prompt: agentPrompt, systemPrompt: turnReminders },
         (event) => {
           this.emit({ type: 'turn_output', threadId, event });
           noteTurnLiveEvent(threadId, event);
@@ -1466,7 +1485,7 @@ export class Orchestrator {
           .join('\n\n---\n\n');
         const retryHandle = await spawnAgentTurn(
           retryThread,
-          { cachedPrefix: retryPrefix, prompt: agentPrompt },
+          { cachedPrefix: retryPrefix, prompt: agentPrompt, systemPrompt: turnReminders },
           (event) => {
             this.emit({ type: 'turn_output', threadId, event });
             if (event.type === 'session_id') {

@@ -6,6 +6,7 @@ import {
   dropCachedPrefixOnResume,
   findInvalidCacheControlTtlOrder,
   flattenTurnInput,
+  splitTurnInputForSystemPrompt,
   MAX_ANTHROPIC_CACHE_CONTROL_BLOCKS,
   normalizeTurnInput,
 } from './turn-input.js';
@@ -49,6 +50,45 @@ describe('flattenTurnInput', () => {
     expect(flat.startsWith('## Instructions')).toBe(true);
     expect(flat).toContain('Current request:\nfix the bug');
     expect(flat.indexOf('Instructions')).toBeLessThan(flat.indexOf('fix the bug'));
+  });
+});
+
+describe('systemPrompt reminders', () => {
+  it('survive resume while cachedPrefix is dropped', () => {
+    expect(
+      dropCachedPrefixOnResume(
+        { cachedPrefix: 'playbook', prompt: 'next', systemPrompt: 'reminder' },
+        'sess-1',
+      ),
+    ).toEqual({ prompt: 'next', systemPrompt: 'reminder' });
+  });
+
+  it('flatten folds reminders in only on resumed turns (no cachedPrefix)', () => {
+    expect(
+      flattenTurnInput({ prompt: 'next', systemPrompt: 'reminder' }),
+    ).toBe('reminder\n\nnext');
+    const fresh = flattenTurnInput({
+      cachedPrefix: 'playbook',
+      prompt: 'first',
+      systemPrompt: 'reminder',
+    });
+    expect(fresh).not.toContain('reminder');
+    expect(fresh).toContain('playbook');
+    expect(fresh).toContain('Current request:\nfirst');
+  });
+
+  it('splitTurnInputForSystemPrompt keeps reminders out of the user message', () => {
+    const split = splitTurnInputForSystemPrompt({
+      cachedPrefix: 'playbook',
+      prompt: 'first',
+      systemPrompt: 'reminder',
+    });
+    expect(split.systemPrompt).toBe('reminder');
+    expect(split.promptText).not.toContain('reminder');
+    expect(split.promptText).toContain('playbook');
+    expect(
+      splitTurnInputForSystemPrompt({ prompt: 'next', systemPrompt: '  ' }).systemPrompt,
+    ).toBeUndefined();
   });
 });
 
