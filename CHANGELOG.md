@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.165] - 2026-09-07
+
+### Fixed
+
+- `stop_job` / `detached-job.js stop` SIGKILLs leftover children after wrap exits. SIGTERM-ignoring grandchildren no longer leak. CLI stop reports running honestly when kill fails instead of idle/ok.
+
 ## [0.1.164] - 2026-09-07
 
 ### Added
