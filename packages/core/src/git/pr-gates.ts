@@ -19,7 +19,7 @@ export function prIsInMergeQueue(
   return (gate.mergeStateStatus ?? '').toUpperCase() === 'QUEUED';
 }
 
-/** Conflict or behind-base — GitHub will not create a clean merge commit. */
+/** Conflicts block merge. Behind-base is informational (update recommended, not a failure). */
 export type PrMergeIssue = 'conflicts' | 'behind';
 
 export function classifyPrMergeIssue(

@@ -312,4 +312,52 @@ describe('checksFromRuns', () => {
     expect(summarizeChecks([behind, run('pass')]).label).toBe('Passed (1/1)');
     expect(checksTabShortLabel([behind])).toBe('CI');
   });
+
+  it('counts merge conflicts as a Checks-tab failure but not as CI red', () => {
+    const conflicts: PrCheckRun = {
+      name: 'Merge conflicts',
+      state: 'CONFLICTING',
+      bucket: 'fail',
+      startedAt: null,
+      completedAt: null,
+      link: null,
+      description: null,
+      workflow: 'mergeability',
+      kind: 'mergeability',
+    };
+    expect(summarizeChecks([conflicts, run('pass')])).toEqual({
+      failed: 1,
+      pending: 0,
+      passed: 1,
+      total: 2,
+      label: 'Failed (1/2)',
+    });
+    expect(checksFromRuns([conflicts, run('pass')])).toEqual({
+      checksFailed: false,
+      checksPending: false,
+      checksPassed: true,
+    });
+    expect(checksTabShortLabel([conflicts])).toBe('CI');
+    expect(checksTabShortLabel([conflicts, run('fail')])).toBe('CI 1✕');
+    expect(
+      checksFromRuns([
+        {
+          name: 'Code review',
+          state: 'CHANGES_REQUESTED',
+          bucket: 'fail',
+          startedAt: null,
+          completedAt: null,
+          link: null,
+          description: null,
+          workflow: 'review',
+          kind: 'review',
+        },
+        run('pass'),
+      ]),
+    ).toEqual({
+      checksFailed: false,
+      checksPending: false,
+      checksPassed: true,
+    });
+  });
 });
