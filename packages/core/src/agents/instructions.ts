@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { formatGitAuthModeDirective } from '../git/git-auth-mode.js';
 import {
   isPlaceholderBranch,
+  ticketSlugForBranch,
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
@@ -15,20 +16,32 @@ function normPath(p: string): string {
 
 /**
  * Conductor-style first-turn instruction: rename the placeholder branch to match
- * the task. Worktree directory stays the soccer-team nickname.
+ * the task. Worktree directory stays the nickname (soccer team, plus ticket id
+ * when the thread was created from an issue).
  */
 export function formatRenameBranchDirective(
-  thread: Pick<Thread, 'worktreePath' | 'branchName'>,
+  thread: Pick<Thread, 'worktreePath' | 'branchName'> &
+    Partial<Pick<Thread, 'sourceType' | 'sourceRef'>>,
   opts?: { customPrompt?: string | null },
 ): string | null {
   if (!isPlaceholderBranch(thread.branchName, thread.worktreePath)) return null;
   const dir = worktreeNameFromPath(thread.worktreePath);
+  const ticket =
+    thread.sourceType === 'ticket' ? ticketSlugForBranch(thread.sourceRef ?? '') : null;
+  const example = ticket
+    ? `\`feat/${ticket}-dark-mode\` or \`fix/${ticket}-panel-width\``
+    : '`fix/panel-width` or `feat/dark-mode`';
   const lines = [
     'Branch naming (do this early in the turn):',
-    `- Current branch \`${thread.branchName}\` is a temporary placeholder. The worktree folder \`${dir}\` is a stable soccer-team nickname — do not rename or leave that directory.`,
-    '- Rename the git branch to a short kebab-case name that describes this task (what you are changing), e.g. `fix/panel-width` or `feat/dark-mode`:',
+    `- Current branch \`${thread.branchName}\` is a temporary placeholder. The worktree folder \`${dir}\` is a stable nickname — do not rename or leave that directory.`,
+    `- Rename the git branch to a short kebab-case name that describes this task (what you are changing), e.g. ${example}:`,
     '  `git branch -m <new-name>`',
     '- Prefer Conventional Commits style prefixes when they fit (`fix/`, `feat/`, `chore/`, `docs/`).',
+    ...(ticket
+      ? [
+          `- Keep ticket \`${ticket}\` in the new branch name so the issue stays findable.`,
+        ]
+      : []),
     '- Never push this placeholder to main/master.',
   ];
   const custom = opts?.customPrompt?.trim();

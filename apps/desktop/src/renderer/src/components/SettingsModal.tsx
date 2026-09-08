@@ -15,6 +15,7 @@ import type {
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { emptyPublicIntegrations } from '../lib/optional-services';
+import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ConnectorsSettings } from './ConnectorsSettings';
 import { GitSettings } from './GitSettings';
 import { IssuesSettings } from './IssuesSettings';
@@ -289,6 +290,7 @@ export function SettingsModal({
   const [systemCliPath, setSystemCliPath] = useState<string | null>(null);
   const [brightsySession, setBrightsySession] = useState<BrightsySession | null>(null);
   const [defaultsPickerOpen, setDefaultsPickerOpen] = useState(false);
+  const [orchDefaultsPickerOpen, setOrchDefaultsPickerOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [accountNotesDraft, setAccountNotesDraft] = useState('');
   const [projectNotesDrafts, setProjectNotesDrafts] = useState<Record<string, string>>({});
@@ -533,6 +535,11 @@ export function SettingsModal({
     model?: string | null;
     effort?: ThinkingEffort | null;
     notes?: string | null;
+    orchestrator?: {
+      agent?: AgentKind | null;
+      model?: string | null;
+      effort?: ThinkingEffort | null;
+    } | null;
   }) {
     setBusy(true);
     setError(null);
@@ -599,6 +606,11 @@ export function SettingsModal({
   const defaultAgent: AgentKind = settings.defaults?.agent ?? 'claude';
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
+  const hasOrchDefaults = Boolean(settings.defaults?.orchestrator);
+  const orchDefaults = orchestratorDefaultsFromSettings(settings);
+  const orchAgent = orchDefaults.agent;
+  const orchModel = orchDefaults.model;
+  const orchEffort = orchDefaults.effort;
   const filteredArchived = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
     const list = [...archived].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -844,8 +856,9 @@ export function SettingsModal({
             {nav === 'agents' && !activeAgent && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Default agent for new chats, then account context for finding work. Credentials
-                  set here also appear under Environment and are injected into agent runs.
+                  Default agent for new chats and a separate default for the orchestrator, then
+                  account context for finding work. Credentials set here also appear under
+                  Environment and are injected into agent runs.
                 </p>
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
@@ -867,6 +880,45 @@ export function SettingsModal({
                     >
                       Change
                     </button>
+                  </div>
+                </div>
+                <div className="settings-section settings-section-card">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">
+                        Default orchestrator agent, model &amp; effort
+                      </div>
+                      <p className="settings-hint">
+                        Used for Global chats, Slack and cloud coordinators, and new orchestration
+                        tabs. Unset inherits the defaults above.
+                      </p>
+                      <p className="settings-status-text" style={{ marginTop: 8 }}>
+                        {hasOrchDefaults
+                          ? defaultAgentModelLabel(orchAgent, orchModel, orchEffort)
+                          : `Same as default (${defaultAgentModelLabel(orchAgent, orchModel, orchEffort)})`}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {hasOrchDefaults ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            void saveDefaultsPatch({ orchestrator: null });
+                          }}
+                        >
+                          Reset
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy}
+                        onClick={() => setOrchDefaultsPickerOpen(true)}
+                      >
+                        Change
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="settings-section settings-section-card">
@@ -1940,6 +1992,28 @@ export function SettingsModal({
             agent: next.agent,
             model: next.model,
             effort: next.effort,
+          });
+        }}
+      />
+      <AgentOptionsPicker
+        open={orchDefaultsPickerOpen}
+        value={{
+          agent: orchAgent,
+          model: orchModel,
+          autonomy: 'default' as Autonomy,
+          effort: orchEffort,
+        }}
+        title="Default orchestrator agent, model & effort"
+        confirmLabel="Save"
+        allowedAgents={ORCHESTRATOR_AGENT_KINDS}
+        onClose={() => setOrchDefaultsPickerOpen(false)}
+        onApply={(next) => {
+          void saveDefaultsPatch({
+            orchestrator: {
+              agent: next.agent,
+              model: next.model,
+              effort: next.effort,
+            },
           });
         }}
       />

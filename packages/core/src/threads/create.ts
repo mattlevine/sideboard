@@ -12,6 +12,7 @@ import {
   getPrForHeadBranch,
   resolveDefaultBranch,
   resolveRepoRoot,
+  worktreeSlugForTicket,
 } from '../git/worktree.js';
 import { findLiveThreadForCreate } from '../board/home-board.js';
 import { copyConfiguredFiles } from '../hook/conductor.js';
@@ -250,12 +251,17 @@ export async function createThread(
   }
 
   // Conductor-style: worktree dir + placeholder branch = soccer team.
+  // Tickets keep the identifier in the slug (`thread/eng-12-ajax`).
   // Sidebar later shows renamed branch / PR title (not the create prompt).
   const team = allocateTeamSlug(repoPath);
+  const slug =
+    sourceType === 'ticket'
+      ? worktreeSlugForTicket(persistedSourceRef, team.slug)
+      : team.slug;
   const { branchName, worktreePath } = await createThreadWorktree({
     repoPath,
     sourceRef,
-    slug: team.slug,
+    slug,
   });
 
   copyConfiguredFiles(repoPath, worktreePath);

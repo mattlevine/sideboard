@@ -23,6 +23,36 @@ export function worktreeNameFromPath(worktreePath: string): string {
 }
 
 /**
+ * Ticket id safe for `thread/<ticket>-<team>` (Linear `ENG-12` → `eng-12`,
+ * GitHub `#44` → `44`).
+ */
+export function ticketSlugForBranch(sourceRef: string): string | null {
+  const raw = sourceRef.trim();
+  if (!raw) return null;
+  const linear = raw.match(/\b([A-Za-z]{2,8}-\d{1,6})\b/);
+  if (linear) return linear[1].toLowerCase();
+  const hashed = raw.match(/^#(\d{1,8})$/);
+  if (hashed) return hashed[1];
+  const digits = raw.match(/^(\d{1,8})$/);
+  if (digits) return digits[1];
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  return slug || null;
+}
+
+/** Worktree dir + `thread/<slug>` when creating from a ticket. */
+export function worktreeSlugForTicket(ticketRef: string, teamSlug: string): string {
+  const ticket = ticketSlugForBranch(ticketRef);
+  const team = teamSlug.trim().replace(/^thread\//, '');
+  if (!ticket) return team;
+  if (!team) return ticket;
+  return `${ticket}-${team}`;
+}
+
+/**
  * True while the branch is still the Sideboard/Conductor-style placeholder
  * (`thread/<soccer-team>` or equal to the worktree directory name).
  */

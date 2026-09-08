@@ -98,6 +98,32 @@ describe('global-workspace', () => {
     expect(cloud.effort).toBe('xhigh');
   });
 
+  it('ensureCloudCoordinator prefers orchestrator default model over account', async () => {
+    const { updateDefaultsSettings } = await import('./app-settings.js');
+    updateDefaultsSettings({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'low',
+      orchestrator: { agent: 'claude', model: 'opus', effort: 'xhigh' },
+    });
+    const cloud = ensureCloudCoordinator('claude');
+    expect(cloud.agent).toBe('claude');
+    expect(cloud.model).toBe('opus');
+    expect(cloud.effort).toBe('xhigh');
+  });
+
+  it('createGlobalChat uses orchestrator defaults when model is omitted', async () => {
+    const { updateDefaultsSettings } = await import('./app-settings.js');
+    updateDefaultsSettings({
+      agent: 'cursor',
+      model: 'default',
+      orchestrator: { agent: 'claude', model: 'sonnet' },
+    });
+    const chat = createGlobalChat({ sourceRef: 'Fleet standup' });
+    expect(chat.agent).toBe('claude');
+    expect(chat.model).toBe('sonnet');
+  });
+
   it('ensureCloudCoordinator is a singleton under Global with a soccer nickname', () => {
     const cloud = ensureCloudCoordinator('claude');
     expect(cloud.sourceRef).toBe(CLOUD_ORCHESTRATOR_GOAL);

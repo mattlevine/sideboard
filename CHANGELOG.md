@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.169] - 2026-09-08
+
+### Added
+
+- Settings → Agents has a **Default orchestrator agent, model & effort** picker (Global chats, Slack / cloud coordinators, new orchestration tabs). Unset inherits the worktree defaults above.
+- PR details page shows assignees, reviewers, and labels.
+- Creating a worktree from a ticket keeps the issue id in the branch / folder (`thread/eng-12-ajax`); auto-rename keeps it too.
+
 ## [0.1.168] - 2026-09-08
 
 ### Fixed

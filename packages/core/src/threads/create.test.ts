@@ -280,4 +280,20 @@ describe('createThread reuses a live named branch', () => {
     expect(next.id).not.toBe(existing.id);
     expect(createThreadWorktree).toHaveBeenCalled();
   });
+
+  it('puts the ticket id in the worktree slug and branch', async () => {
+    createThreadWorktree.mockResolvedValue({
+      branchName: 'thread/eng-12-ajax',
+      worktreePath: join(tmpdir(), 'sideboard-ticket-wt'),
+    });
+    await createThread({
+      sourceType: 'ticket',
+      sourceRef: 'ENG-12',
+      agent: 'claude',
+      repoPath: repo,
+    });
+    expect(createThreadWorktree).toHaveBeenCalled();
+    const slug = (createThreadWorktree.mock.calls[0]?.[0] as { slug?: string })?.slug;
+    expect(slug).toMatch(/^eng-12-/);
+  });
 });

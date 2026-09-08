@@ -70,6 +70,32 @@ export function relativePrTime(iso: string, now = Date.now()): string {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
+export function uniquePrLogins(values: Array<string | null | undefined>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of values) {
+    const id = raw?.trim();
+    if (!id) continue;
+    const key = id.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+}
+
+/** Requested reviewers plus people who already left a review. */
+export function prDetailsReviewerList(
+  details: Pick<PrDetails, 'reviewers' | 'teams' | 'reviewRequests' | 'reviews'>,
+): string[] {
+  return uniquePrLogins([
+    ...(details.reviewers ?? []),
+    ...(details.teams ?? []),
+    ...(details.reviewRequests ?? []),
+    ...(details.reviews ?? []).map((r) => r.author.login),
+  ]);
+}
+
 export function prActivityItems(details: Pick<PrDetails, 'comments' | 'reviews'>): PrActivityItem[] {
   const comments = (details.comments ?? []).map((c, i) => ({
     id: `comment:${c.createdAt}:${c.author.login}:${i}`,
@@ -341,9 +367,15 @@ export function prDetailsAttachment(details: PrDetails): ThreadAttachment {
       return `### @${item.author} — ${label}${when}${body}`;
     })
     .join('\n\n');
+  const assignees = (details.assignees ?? []).filter(Boolean);
+  const reviewers = prDetailsReviewerList(details);
+  const labels = (details.labels ?? []).filter(Boolean);
   const content = [
     `#${details.number} ${details.title}`.trim(),
     details.url ? `URL: ${details.url}` : null,
+    assignees.length ? `Assignees: ${assignees.join(', ')}` : null,
+    reviewers.length ? `Reviewers: ${reviewers.join(', ')}` : null,
+    labels.length ? `Labels: ${labels.join(', ')}` : null,
     details.body.trim() ? `## Description\n\n${details.body.trim()}` : null,
     activity ? `## Activity\n\n${activity}` : null,
   ]

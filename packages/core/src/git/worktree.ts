@@ -35,9 +35,13 @@ import { gh, git } from './run.js';
 import {
   applyPrListResponse,
   buildGhPrListArgs,
+  humanReviewerLogins,
+  labelNames,
   listGithubViewerTeamSlugs,
   prListFetchLimit,
   resolveListPrsOptions,
+  reviewerIdentities,
+  teamReviewerSlugs,
   type ListPrsOptions,
 } from './list-prs.js';
 import { withRepoGitLock } from './repo-git-lock.js';
@@ -96,6 +100,8 @@ export function slugify(input: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 48);
 }
+
+export { ticketSlugForBranch, worktreeSlugForTicket } from './worktree-labels.js';
 
 export async function resolveRepoRoot(cwd: string): Promise<string> {
   const { stdout } = await git(['rev-parse', '--show-toplevel'], cwd);
@@ -863,55 +869,38 @@ export async function getPrMeta(
   }
 }
 
-/** PR description / reviews for the Review tab (no nested CI — use getPrChecks). */
-export async function getPrDetails(
-  cwd: string,
-  selector: string,
-): Promise<PrDetails | null> {
-  const slug = await resolveGithubRepoSlug(cwd);
-  const viewArgs = [
-    'pr',
-    'view',
-    selector,
-    '--json',
-    [
-      'number',
-      'title',
-      'body',
-      'url',
-      'state',
-      'isDraft',
-      'reviewDecision',
-      'author',
-      'baseRefName',
-      'headRefName',
-      'additions',
-      'deletions',
-      'changedFiles',
-      'comments',
-      'reviews',
-    ].join(','),
-  ];
-  if (slug) viewArgs.push('--repo', slug);
-  const { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
-  if (exitCode !== 0 || !stdout.trim()) {
-    if (stderr.trim()) {
-      // No PR for this branch is a soft miss, not a hard error.
-      if (/no pull requests found/i.test(stderr)) return null;
-    }
-    return null;
-  }
+/** Fields `gh pr view --json` needs for the PR details page. */
+export const PR_DETAILS_JSON_FIELDS = [
+  'number',
+  'title',
+  'body',
+  'url',
+  'state',
+  'isDraft',
+  'reviewDecision',
+  'author',
+  'baseRefName',
+  'headRefName',
+  'additions',
+  'deletions',
+  'changedFiles',
+  'comments',
+  'reviews',
+  'assignees',
+  'labels',
+  'reviewRequests',
+].join(',');
 
-  let view: Record<string, unknown>;
-  try {
-    view = JSON.parse(stdout) as Record<string, unknown>;
-  } catch {
-    throw new Error(stderr.trim() || 'gh pr view returned invalid JSON');
-  }
-
+/** Map `gh pr view --json` onto {@link PrDetails} (no nested CI). */
+export function parsePrDetailsView(view: Record<string, unknown>): PrDetails {
   const author = (view.author ?? {}) as { login?: string; name?: string | null };
   const comments = Array.isArray(view.comments) ? view.comments : [];
   const reviews = Array.isArray(view.reviews) ? view.reviews : [];
+  const requested = {
+    ids: reviewerIdentities(view.reviewRequests),
+    users: humanReviewerLogins(view.reviewRequests),
+    teams: teamReviewerSlugs(view.reviewRequests),
+  };
 
   return {
     number: Number(view.number),
@@ -951,9 +940,41 @@ export async function getPrDetails(
         submittedAt: normalizeGhTime(row.submittedAt),
       };
     }),
+    assignees: reviewerIdentities(view.assignees),
+    labels: labelNames(view.labels),
+    reviewRequests: requested.ids,
+    reviewers: requested.users,
+    teams: requested.teams,
     // CI lives in Checks tab via getPrChecks — nesting burned GraphQL points.
     checks: [],
   };
+}
+
+/** PR description / reviews for the Review tab (no nested CI — use getPrChecks). */
+export async function getPrDetails(
+  cwd: string,
+  selector: string,
+): Promise<PrDetails | null> {
+  const slug = await resolveGithubRepoSlug(cwd);
+  const viewArgs = ['pr', 'view', selector, '--json', PR_DETAILS_JSON_FIELDS];
+  if (slug) viewArgs.push('--repo', slug);
+  const { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
+  if (exitCode !== 0 || !stdout.trim()) {
+    if (stderr.trim()) {
+      // No PR for this branch is a soft miss, not a hard error.
+      if (/no pull requests found/i.test(stderr)) return null;
+    }
+    return null;
+  }
+
+  let view: Record<string, unknown>;
+  try {
+    view = JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    throw new Error(stderr.trim() || 'gh pr view returned invalid JSON');
+  }
+
+  return parsePrDetailsView(view);
 }
 
 export async function fetchPrHead(

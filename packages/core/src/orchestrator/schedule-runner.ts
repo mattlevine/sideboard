@@ -3,7 +3,7 @@ import {
   type OrchestratorAgentKind,
 } from '../agents/orchestrator-capable.js';
 import { isThisProcessDesktopHost } from '../store/desktop-host.js';
-import { resolveThreadDefaults } from '../store/app-settings.js';
+import { resolveOrchestratorDefaults } from '../store/app-settings.js';
 import {
   getSchedule,
   listSchedules,
@@ -57,7 +57,7 @@ async function defaultDeps(): Promise<ScheduleFireDeps> {
 
 function pickAgent(schedule: ScheduledTask): OrchestratorAgentKind {
   if (schedule.agent) return schedule.agent;
-  return coerceOrchestratorAgent(resolveThreadDefaults().agent);
+  return coerceOrchestratorAgent(resolveOrchestratorDefaults().agent);
 }
 
 /**

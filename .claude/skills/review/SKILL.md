@@ -134,6 +134,8 @@ Cursor transport retry (`retryOnceOnRetryableCursorError`, `CursorAgentError.isR
 
 Orchestration turns isolate vendor MCP so user / claude.ai Linear cannot hang the first find-work turn: Claude `--strict-mcp-config` + `ENABLE_CLAUDEAI_MCP_SERVERS=false`; Codex `-c mcp_servers.<name>.enabled=false` for user servers; OpenCode `enabled: false` in `OPENCODE_CONFIG_CONTENT`; Cursor `settingSources: []` (inline Sideboard MCP still applies). Tickets go through Sideboard `list_issues` / `linear_*`. Do not drop that isolation to “restore” Linear MCP on coordinators. Worktree agents still merge the user’s MCP list. Brightsy has no local MCP injection.
 
+Settings → Default orchestrator agent/model/effort must be the source for every Global / Slack / cloud / schedule create path (`resolveOrchestratorDefaults`, `brightsyCloudConnectAgent`). Do not leave Slack Listen on `getDefaultAgent` while stamping orchestrator model/effort onto that agent.
+
 Connector CLIs (Vercel, Supabase, `sentry-cli`) and PostHog HTTP: never stream raw `--json` / `--expand` / huge dumps into a tool result — this applies to Claude, Cursor, Codex, and OpenCode. Write dumps to `.context/cli/` (worktree scratch; not `.context/attachments/`). Cursor’s crash looks like the packaged SDK dumped into chat (`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then `importas e from"@bufbuild/protobuf"`). Detached jobs may be stopped (`stop_job`) when hung; do not require agents to wait forever on a buffering CLI.
 
 ## Cost / usage fields

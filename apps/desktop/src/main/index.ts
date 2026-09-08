@@ -154,7 +154,7 @@ import {
   type CliAgentKind,
   type CloudConnectStatus,
   type SlackListenStatus,
-  type DefaultsAppSettings,
+  type DefaultsSettingsPatch,
   type IntegrationsSettings,
   type IssueSource,
   type ThinkingEffort,
@@ -946,15 +946,8 @@ function registerIpc(): void {
   );
   ipcMain.handle(
     'updateDefaultsSettings',
-    (
-      _e,
-      patch: Partial<DefaultsAppSettings> & {
-        agent?: AgentKind | null;
-        model?: string | null;
-        effort?: ThinkingEffort | null;
-        fast?: boolean | null;
-      },
-    ) => toPublicAppSettings(updateDefaultsSettings(patch)),
+    (_e, patch: DefaultsSettingsPatch) =>
+      toPublicAppSettings(updateDefaultsSettings(patch)),
   );
   ipcMain.handle(
     'updateProjectProfileSettings',
@@ -1334,7 +1327,7 @@ function registerIpc(): void {
       _e,
       opts: {
         title?: string;
-        agent: AgentKind;
+        agent?: AgentKind;
         autonomy?: Autonomy;
         model?: string | null;
         effort?: ThinkingEffort;

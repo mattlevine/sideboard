@@ -3,9 +3,11 @@ import type { PrDetails, ThreadAttachment } from '@sideboard-ai/core';
 import {
   prActivityItems,
   prDetailsAttachment,
+  prDetailsReviewerList,
   preparePrCommentBody,
   relativePrTime,
   reviewStateLabel,
+  uniquePrLogins,
 } from '../lib/pr-activity';
 import { MarkdownMessage } from './MarkdownMessage';
 
@@ -82,6 +84,18 @@ export function PrPage({ threadId, onAddToChat }: Props) {
     () => (details ? prActivityItems(details) : []),
     [details],
   );
+  const assignees = useMemo(
+    () => (details ? uniquePrLogins(details.assignees) : []),
+    [details],
+  );
+  const reviewers = useMemo(
+    () => (details ? prDetailsReviewerList(details) : []),
+    [details],
+  );
+  const labels = useMemo(
+    () => (details ? uniquePrLogins(details.labels) : []),
+    [details],
+  );
 
   function addAllToChat() {
     if (!details || !onAddToChat) return;
@@ -113,6 +127,32 @@ export function PrPage({ threadId, onAddToChat }: Props) {
             </button>
           ) : null}
         </div>
+        {details ? (
+          <dl className="pr-page-meta">
+            <div className="pr-page-meta-item">
+              <dt>Assignees</dt>
+              <dd>{assignees.length ? assignees.join(', ') : 'None'}</dd>
+            </div>
+            <div className="pr-page-meta-item">
+              <dt>Reviewers</dt>
+              <dd>{reviewers.length ? reviewers.join(', ') : 'None'}</dd>
+            </div>
+            <div className="pr-page-meta-item">
+              <dt>Labels</dt>
+              <dd className="pr-page-tags">
+                {labels.length ? (
+                  labels.map((label) => (
+                    <span key={label} className="pr-page-tag">
+                      {label}
+                    </span>
+                  ))
+                ) : (
+                  <span>None</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
         <div className="pr-page-toolbar">
           <div className="pr-page-sections" role="tablist">
             <button

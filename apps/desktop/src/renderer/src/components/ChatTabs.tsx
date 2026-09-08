@@ -10,7 +10,7 @@ import { CaffeinateBadge } from './CaffeinateBadge';
 import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 import { contextMeterTone } from '../lib/tokens';
-import { loadThreadDefaults } from '../lib/thread-defaults';
+import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defaults';
 
 export type NewChatTabOptions = {
   agent?: AgentKind;
@@ -134,7 +134,9 @@ export function ChatTabs({
   }, [editingId]);
 
   async function openNewTabPicker() {
-    const defaults = await loadThreadDefaults();
+    const defaults = orchAgentsOnly
+      ? await loadOrchestratorDefaults()
+      : await loadThreadDefaults();
     let agent = defaults.agent;
     let model = defaults.model;
     if (orchAgentsOnly && !(ORCHESTRATOR_AGENT_KINDS as readonly string[]).includes(agent)) {
