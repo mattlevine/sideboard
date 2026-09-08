@@ -84,7 +84,7 @@ export function primaryGitLabel(action: PrimaryGitAction): string {
     case 'needs-approval':
       return 'Needs approval';
     case 'changes-requested':
-      return 'Rejected';
+      return 'Changes requested';
     case 'merge':
       return 'Merge';
   }

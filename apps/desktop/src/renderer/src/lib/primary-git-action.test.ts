@@ -67,7 +67,7 @@ describe('primaryGitAction', () => {
     expect(
       primaryGitAction({ ...open, reviewDecision: 'CHANGES_REQUESTED' }),
     ).toBe('changes-requested');
-    expect(primaryGitLabel('changes-requested')).toBe('Rejected');
+    expect(primaryGitLabel('changes-requested')).toBe('Changes requested');
   });
 
   it('keeps update / commit ahead of a missing approval', () => {

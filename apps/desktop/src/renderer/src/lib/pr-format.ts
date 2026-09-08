@@ -5,7 +5,7 @@ export function formatReviewDecision(decision: string | null | undefined): strin
   if (!decision) return null;
   switch (decision.toUpperCase()) {
     case 'CHANGES_REQUESTED':
-      return 'Rejected';
+      return 'Changes requested';
     case 'REVIEW_REQUIRED':
       return 'Needs approval';
     case 'APPROVED':
@@ -74,7 +74,7 @@ export function prPillStatusLabel(opts: {
   if (opts.draft) return 'Draft';
   if (opts.checksFailed) return 'Checks failing';
   const review = formatReviewDecision(opts.reviewDecision);
-  if (review === 'Needs approval' || review === 'Rejected') return review;
+  if (review === 'Needs approval' || review === 'Changes requested') return review;
   if (opts.checksPending) return 'Checks pending';
   if (review) return review;
   if (opts.checksPassed) return 'Checks passing';
@@ -156,7 +156,7 @@ export function checkStatusLabel(check: Pick<PrCheckRun, 'bucket' | 'state' | 'k
       case 'BLOCKED':
         return 'Blocked';
       case 'CHANGES_REQUESTED':
-        return 'Rejected';
+        return 'Changes requested';
       case 'REVIEW_REQUIRED':
         return 'Needs approval';
       case 'UNKNOWN':

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrCheckRun } from '@sideboard-ai/core';
 import {
+  checkStatusLabel,
   classifyMergeIssue,
   formatReviewDecision,
   hasBranchBehindChecks,
@@ -16,8 +17,16 @@ describe('formatReviewDecision', () => {
   it('maps GitHub reviewDecision values', () => {
     expect(formatReviewDecision('REVIEW_REQUIRED')).toBe('Needs approval');
     expect(formatReviewDecision('APPROVED')).toBe('Approved');
-    expect(formatReviewDecision('CHANGES_REQUESTED')).toBe('Rejected');
+    expect(formatReviewDecision('CHANGES_REQUESTED')).toBe('Changes requested');
     expect(formatReviewDecision(null)).toBeNull();
+  });
+});
+
+describe('checkStatusLabel', () => {
+  it('labels a CHANGES_REQUESTED review gate as Changes requested', () => {
+    expect(
+      checkStatusLabel({ kind: 'review', state: 'CHANGES_REQUESTED', bucket: 'fail' }),
+    ).toBe('Changes requested');
   });
 });
 
@@ -103,6 +112,14 @@ describe('pr pill status', () => {
   });
 
   it('shows needs approval / open / approved for open PRs', () => {
+    expect(
+      prPillStatusLabel({
+        merged: false,
+        closed: false,
+        draft: false,
+        reviewDecision: 'CHANGES_REQUESTED',
+      }),
+    ).toBe('Changes requested');
     expect(
       prPillStatusLabel({
         merged: false,

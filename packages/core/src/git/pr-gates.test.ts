@@ -19,7 +19,7 @@ describe('buildMergeGateChecks', () => {
     });
   });
 
-  it('surfaces CHANGES_REQUESTED as rejected review', () => {
+  it('surfaces CHANGES_REQUESTED as a failing review gate', () => {
     const rows = buildMergeGateChecks({
       mergeable: 'MERGEABLE',
       mergeStateStatus: 'CLEAN',
