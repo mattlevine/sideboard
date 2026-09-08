@@ -62,6 +62,25 @@ describe('buildMergeGateChecks', () => {
     expect(rows[0]).toMatchObject({ name: 'Merge blocked', bucket: 'fail' });
   });
 
+  it('surfaces behind-base as informational, not a failing row', () => {
+    const rows = buildMergeGateChecks({
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BEHIND',
+      reviewDecision: null,
+      baseRefName: 'main',
+      url: 'https://github.com/acme/widgets/pull/1',
+    });
+    expect(rows).toEqual([
+      expect.objectContaining({
+        name: 'Branch behind',
+        state: 'BEHIND',
+        bucket: 'info',
+        kind: 'mergeability',
+        description: expect.stringContaining('main'),
+      }),
+    ]);
+  });
+
   it('surfaces GitHub merge queue as a pending row', () => {
     const rows = buildMergeGateChecks({
       mergeable: 'MERGEABLE',
