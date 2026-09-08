@@ -43,6 +43,11 @@ export interface SpawnTurnHandle {
 /**
  * Opt into 1h prompt-cache TTL for desktop gaps (read a diff, Slack, schedules).
  * Claude Code / OpenCode default to 5m on API keys. Honor an explicit 5m force.
+ *
+ * Claude Code v2.1.242+ prefers `CLAUDE_CODE_PROMPT_CACHE_TTL` /
+ * `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL` over `ENABLE_PROMPT_CACHING_1H`
+ * (and over `promptCacheTtl` in settings). Set both so a 5m settings default
+ * does not silently win after a CLI upgrade. Older CLIs ignore the new keys.
  */
 export function applyPromptCacheTtlEnv(
   agent: AgentKind,
@@ -50,6 +55,8 @@ export function applyPromptCacheTtlEnv(
 ): void {
   if (agent === 'claude' && env.FORCE_PROMPT_CACHING_5M !== '1') {
     env.ENABLE_PROMPT_CACHING_1H ??= '1';
+    env.CLAUDE_CODE_PROMPT_CACHE_TTL ??= '1h';
+    env.CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL ??= '1h';
   }
   if (
     agent === 'opencode' &&

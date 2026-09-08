@@ -12,6 +12,8 @@ describe('applyPromptCacheTtlEnv', () => {
     const claude: NodeJS.ProcessEnv = {};
     applyPromptCacheTtlEnv('claude', claude);
     expect(claude.ENABLE_PROMPT_CACHING_1H).toBe('1');
+    expect(claude.CLAUDE_CODE_PROMPT_CACHE_TTL).toBe('1h');
+    expect(claude.CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL).toBe('1h');
 
     const opencode: NodeJS.ProcessEnv = {};
     applyPromptCacheTtlEnv('opencode', opencode);
@@ -22,6 +24,8 @@ describe('applyPromptCacheTtlEnv', () => {
     const claude: NodeJS.ProcessEnv = { FORCE_PROMPT_CACHING_5M: '1' };
     applyPromptCacheTtlEnv('claude', claude);
     expect(claude.ENABLE_PROMPT_CACHING_1H).toBeUndefined();
+    expect(claude.CLAUDE_CODE_PROMPT_CACHE_TTL).toBeUndefined();
+    expect(claude.CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL).toBeUndefined();
 
     const opencode: NodeJS.ProcessEnv = {
       OPENCODE_ANTHROPIC_FORCE_PROMPT_CACHING_5M: '1',
@@ -30,12 +34,26 @@ describe('applyPromptCacheTtlEnv', () => {
     expect(opencode.OPENCODE_ANTHROPIC_PROMPT_CACHING_1H).toBeUndefined();
   });
 
+  it('does not override an explicit Claude TTL already in env', () => {
+    const claude: NodeJS.ProcessEnv = {
+      ENABLE_PROMPT_CACHING_1H: '0',
+      CLAUDE_CODE_PROMPT_CACHE_TTL: '5m',
+      CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL: '5m',
+    };
+    applyPromptCacheTtlEnv('claude', claude);
+    expect(claude.ENABLE_PROMPT_CACHING_1H).toBe('0');
+    expect(claude.CLAUDE_CODE_PROMPT_CACHE_TTL).toBe('5m');
+    expect(claude.CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL).toBe('5m');
+  });
+
   it('leaves Codex / Cursor / Brightsy env unchanged', () => {
     const env: NodeJS.ProcessEnv = {};
     applyPromptCacheTtlEnv('codex', env);
     applyPromptCacheTtlEnv('cursor', env);
     applyPromptCacheTtlEnv('brightsy', env);
     expect(env.ENABLE_PROMPT_CACHING_1H).toBeUndefined();
+    expect(env.CLAUDE_CODE_PROMPT_CACHE_TTL).toBeUndefined();
+    expect(env.CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL).toBeUndefined();
     expect(env.OPENCODE_ANTHROPIC_PROMPT_CACHING_1H).toBeUndefined();
   });
 });

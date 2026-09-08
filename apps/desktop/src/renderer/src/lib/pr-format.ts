@@ -108,7 +108,7 @@ export function hasMergeConflictChecks(
   });
 }
 
-/** True when Checks include a failing behind-base mergeability row. */
+/** True when Checks include a behind-base mergeability row (informational, not a failure). */
 export function hasBranchBehindChecks(
   checks: Array<Pick<PrCheckRun, 'kind' | 'state' | 'name'>> | null | undefined,
 ): boolean {
@@ -195,6 +195,7 @@ export function summarizeChecks(checks: PrCheckRun[]): {
   let passed = 0;
   for (const c of checks) {
     // Behind-base is informational (update with main), not a failed check.
+    // Merge conflicts stay `fail` — those block merge.
     if (c.bucket === 'info') continue;
     if (c.bucket === 'fail') failed++;
     else if (c.bucket === 'pending') pending++;
@@ -209,7 +210,15 @@ export function summarizeChecks(checks: PrCheckRun[]): {
   return { failed, pending, passed, total, label };
 }
 
-/** Flags for the PR pill from loaded `gh pr checks` rows. */
+function isCiCheck(check: Pick<PrCheckRun, 'kind'>): boolean {
+  return !check.kind || check.kind === 'ci';
+}
+
+/**
+ * Flags for the PR pill / primary git button from `gh pr checks` rows.
+ * Only real CI counts — merge conflicts and review gates have their own
+ * actions (Resolve / Needs approval). Behind-base is `info` and never a failure.
+ */
 export function checksFromRuns(checks: PrCheckRun[] | null | undefined): {
   checksFailed: boolean;
   checksPending: boolean;
@@ -218,7 +227,7 @@ export function checksFromRuns(checks: PrCheckRun[] | null | undefined): {
   if (!checks?.length) {
     return { checksFailed: false, checksPending: false, checksPassed: false };
   }
-  const s = summarizeChecks(checks);
+  const s = summarizeChecks(checks.filter(isCiCheck));
   return {
     checksFailed: s.failed > 0,
     checksPending: s.failed === 0 && s.pending > 0,
@@ -226,10 +235,10 @@ export function checksFromRuns(checks: PrCheckRun[] | null | undefined): {
   };
 }
 
-/** Compact Checks tab label (narrow right sidebar). */
+/** Compact Checks tab label (narrow right sidebar). CI only — not behind/conflicts/review. */
 export function checksTabShortLabel(checks: PrCheckRun[] | null | undefined): string {
   if (!checks?.length) return 'CI';
-  const s = summarizeChecks(checks);
+  const s = summarizeChecks(checks.filter(isCiCheck));
   if (s.total === 0) return 'CI';
   if (s.failed > 0) return `CI ${s.failed}✕`;
   if (s.pending > 0) return 'CI …';

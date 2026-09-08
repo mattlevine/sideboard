@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.167] - 2026-09-08
+
+### Added
+
+- PR details page has a Refresh button so comments and reviews can reload without leaving the tab.
+
+### Changed
+
+- The right sidebar git button no longer says Merge while a required review is outstanding or CI is red / still running. Behind-main stays Update (not a failure); merge conflicts stay Resolve.
+- Claude Code turns also set `CLAUDE_CODE_PROMPT_CACHE_TTL` and `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL` to 1h so the desktop-gap cache opt-in survives newer CLI settings.
+
 ## [0.1.166] - 2026-09-08
 
 ### Changed

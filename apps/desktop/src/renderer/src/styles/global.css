@@ -9314,8 +9314,15 @@ button.linkish:hover {
   background: var(--bg-hover);
 }
 
-.pr-page-add {
+.pr-page-actions {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pr-page-add {
   padding: 4px 10px;
   font-size: 12px;
 }

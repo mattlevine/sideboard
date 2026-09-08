@@ -763,7 +763,7 @@ export function RightSidebar({
     !inMergeQueue &&
     !mergeConflicts &&
     (hasBranchBehindChecks(prChecks) || mergeIssue === 'behind');
-  const mergeBlocked = mergeConflicts || branchBehind;
+  const checkFlags = checksFromRuns(prChecks);
   const pillOpts = {
     merged: prMerged,
     closed: prClosed,
@@ -773,7 +773,7 @@ export function RightSidebar({
     branchBehind,
     inMergeQueue,
     baseRefName: prMeta?.baseRefName,
-    ...checksFromRuns(prChecks),
+    ...checkFlags,
   };
   const pillModifier = prUrl ? prPillModifier(pillOpts) : '';
   const pillStatus = prUrl ? prPillStatusLabel(pillOpts) : '';
@@ -812,11 +812,29 @@ export function RightSidebar({
     branchBehind,
     hasLocalChanges,
     originInSync,
+    reviewDecision: prReviewDecision,
+    checksFailed: checkFlags.checksFailed,
+    checksPending: checkFlags.checksPending,
   });
 
+  function openPrSurface() {
+    if (onOpenPr) onOpenPr();
+    else if (prUrl) void window.sideboard.openExternal(prUrl);
+  }
+
   function onPrimaryGitClick() {
-    if (gitAction === 'live' || gitAction === 'closed' || gitAction === 'queued') {
-      if (prUrl) void window.sideboard.openExternal(prUrl);
+    if (gitAction === 'checks-failing' || gitAction === 'checks-pending') {
+      setUpper('checks');
+      return;
+    }
+    if (
+      gitAction === 'live' ||
+      gitAction === 'closed' ||
+      gitAction === 'queued' ||
+      gitAction === 'needs-approval' ||
+      gitAction === 'changes-requested'
+    ) {
+      openPrSurface();
       return;
     }
     if (gitAction === 'resolve' || gitAction === 'update') {
@@ -1212,6 +1230,14 @@ export function RightSidebar({
                           ? `Ask the agent to update this branch from origin/${prBase}`
                         : gitAction === 'ready-for-review'
                           ? 'Mark this draft pull request ready for review'
+                          : gitAction === 'checks-failing'
+                          ? 'CI failed — open Checks'
+                          : gitAction === 'checks-pending'
+                          ? 'CI still running — open Checks'
+                          : gitAction === 'needs-approval'
+                          ? 'Waiting for a required approving review — open the pull request'
+                          : gitAction === 'changes-requested'
+                          ? 'A reviewer requested changes — open the pull request'
                           : gitAction === 'merge'
                           ? 'Merge pull request on GitHub'
                           : gitAction === 'commit-push' || gitAction === 'cowboy-commit-push' || gitAction === 'cowboy-push'
@@ -1262,7 +1288,7 @@ export function RightSidebar({
                               <span className="tool-menu-icon">↗</span>
                               <span>Open on GitHub</span>
                             </button>
-                          ) : mergeBlocked ? (
+                          ) : mergeConflicts ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -1273,6 +1299,18 @@ export function RightSidebar({
                             >
                               <span className="tool-menu-icon">⌥</span>
                               <span>Merge without resolving</span>
+                            </button>
+                          ) : branchBehind ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrMenuOpen(false);
+                                setMergeError(null);
+                                setMergeConfirm(true);
+                              }}
+                            >
+                              <span className="tool-menu-icon">⌥</span>
+                              <span>Merge without updating</span>
                             </button>
                           ) : hasLocalChanges ? (
                             <button
@@ -1286,7 +1324,11 @@ export function RightSidebar({
                               <span className="tool-menu-icon">⌥</span>
                               <span>Merge without pushing</span>
                             </button>
-                          ) : gitAction === 'ready-for-review' ? (
+                          ) : gitAction === 'ready-for-review' ||
+                            gitAction === 'checks-failing' ||
+                            gitAction === 'checks-pending' ||
+                            gitAction === 'needs-approval' ||
+                            gitAction === 'changes-requested' ? (
                             <button
                               type="button"
                               onClick={() => {
