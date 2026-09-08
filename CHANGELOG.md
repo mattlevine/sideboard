@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.169] - 2026-09-08
+
 ### Added
 
 - Settings → Agents has a **Default orchestrator agent, model & effort** picker (Global chats, Slack / cloud coordinators, new orchestration tabs). Unset inherits the worktree defaults above.
