@@ -69,7 +69,7 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
 
    ```bash
    RUN=$(gh run list --workflow=release.yml --limit 1 --json databaseId,headBranch --jq '.[0].databaseId')
-   node scripts/detached-job.js start gha-release -- gh run watch "$RUN" --exit-status
+   node scripts/detached-job.cjs start gha-release -- gh run watch "$RUN" --exit-status
    ```
 
    `present_artifact` `type=log` `artifact_id=gha-release` with `content=delta` only. CI on the same commit title is **not** a second Release — only the tag workflow publishes.
@@ -77,8 +77,8 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
 11. **Deploy if needed.** When `site/` or `apps/slack-relay/` changed in this cut:
 
     ```bash
-    node scripts/detached-job.js start fly-deploy -- fly deploy --config apps/slack-relay/fly.toml --dockerfile apps/slack-relay/Dockerfile .
-    node scripts/detached-job.js wait fly-deploy
+    node scripts/detached-job.cjs start fly-deploy -- fly deploy --config apps/slack-relay/fly.toml --dockerfile apps/slack-relay/Dockerfile .
+    node scripts/detached-job.cjs wait fly-deploy
     ```
 
     From the monorepo root (Docker context is `.`). `present_artifact` `type=log` `artifact_id=fly-deploy` with `delta`. Details: [docs/system/deploy.md](../../../docs/system/deploy.md).

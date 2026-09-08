@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const {
   sanitizeId,
   jobsRoot,
@@ -24,7 +24,7 @@ const {
   renderJobHtml,
   takeDelta,
   WAIT_STILL_RUNNING_HINT,
-} = require('./detached-job.js');
+} = require('./detached-job.cjs');
 
 function pidAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -128,6 +128,31 @@ describe('jobPaths', () => {
     const gi = path.join(root, '.context', '.sideboard', '.gitignore');
     assert.equal(fs.existsSync(gi), true);
     assert.match(fs.readFileSync(gi, 'utf8'), /\*/);
+  });
+
+  it('runs as CJS next to a type:module package.json (packaged MCP layout)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-esm-pkg-'));
+    const dest = path.join(root, 'sideboard-mcp');
+    const cjs = path.join(dest, 'scripts', 'detached-job.cjs');
+    const js = path.join(dest, 'scripts', 'detached-job.js');
+    fs.mkdirSync(path.dirname(cjs), { recursive: true });
+    fs.writeFileSync(
+      path.join(dest, 'package.json'),
+      `${JSON.stringify({ name: 'sideboard-mcp', private: true, type: 'module' }, null, 2)}\n`,
+    );
+    fs.copyFileSync(path.join(__dirname, 'detached-job.cjs'), cjs);
+    fs.copyFileSync(path.join(__dirname, 'detached-job.cjs'), js);
+    const asCjs = spawnSync(process.execPath, [cjs, 'status', 'gone'], {
+      encoding: 'utf8',
+      cwd: root,
+    });
+    assert.doesNotMatch(asCjs.stderr, /require is not defined/);
+    assert.match(asCjs.stdout, /stillRunning/);
+    const asJs = spawnSync(process.execPath, [js, 'status', 'gone'], {
+      encoding: 'utf8',
+      cwd: root,
+    });
+    assert.match(asJs.stderr, /require is not defined/);
   });
 });
 

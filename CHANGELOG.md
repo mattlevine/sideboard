@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.168] - 2026-09-08
+
+### Fixed
+
+- Packaged `detached-job` is `.cjs` so Node treats the CommonJS helper as CJS even when `sideboard-mcp/package.json` is `"type": "module"` (Homebrew Node 24 and other ESM parents).
+
 ## [0.1.167] - 2026-09-08
 
 ### Added
