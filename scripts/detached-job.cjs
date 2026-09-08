@@ -4,16 +4,20 @@
  * SIGTERM does not kill it. Wait in 45s slices (same idea as wait_for_turn)
  * so the agent loops until done — do not ask the human to poll.
  *
- *   node scripts/detached-job.js start <id> -- <command> [args...]
- *   node scripts/detached-job.js wait <id>
- *   node scripts/detached-job.js wait <id> --until-done
- *   node scripts/detached-job.js stop <id> [--reason TEXT]
- *   node scripts/detached-job.js status <id>
- *   node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]
- *   node scripts/detached-job.js wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
+ *   node scripts/detached-job.cjs start <id> -- <command> [args...]
+ *   node scripts/detached-job.cjs wait <id>
+ *   node scripts/detached-job.cjs wait <id> --until-done
+ *   node scripts/detached-job.cjs stop <id> [--reason TEXT]
+ *   node scripts/detached-job.cjs status <id>
+ *   node scripts/detached-job.cjs ui <id> [--title TEXT] [--out FILE]
+ *   node scripts/detached-job.cjs wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
  *
  * Job state: .context/.sideboard/detached-jobs/<id>/ (local scratch).
  * Wait/status still find a legacy .sideboard/detached-jobs/<id>/ job.
+ *
+ * This file is CommonJS. Keep the .cjs extension — packaged extraResources
+ * writes sideboard-mcp/package.json with "type": "module", and Node would
+ * otherwise treat a .js helper as ESM (`require is not defined`).
  */
 
 'use strict';
@@ -666,7 +670,7 @@ async function main(argv = process.argv) {
   const parsed = parseArgs(argv);
   if (parsed.cmd === 'start') {
     if (!parsed.id || parsed.command.length === 0) {
-      console.error('Usage: node scripts/detached-job.js start <id> -- <command>...');
+      console.error('Usage: node scripts/detached-job.cjs start <id> -- <command>...');
       process.exit(1);
     }
     const result = startJob(root, parsed.id, parsed.command, { title: parsed.title });
@@ -675,7 +679,7 @@ async function main(argv = process.argv) {
   }
   if (parsed.cmd === 'stop') {
     if (!parsed.id) {
-      console.error('Usage: node scripts/detached-job.js stop <id> [--reason TEXT]');
+      console.error('Usage: node scripts/detached-job.cjs stop <id> [--reason TEXT]');
       process.exit(1);
     }
     const result = await stopJob(root, parsed.id, {
@@ -699,7 +703,7 @@ async function main(argv = process.argv) {
     } else if (parsed.id) {
       getSnap = () => snapshotJob(root, parsed.id);
     } else {
-      console.error('Usage: node scripts/detached-job.js wait <id>  OR  --pid-file FILE --log-file FILE');
+      console.error('Usage: node scripts/detached-job.cjs wait <id>  OR  --pid-file FILE --log-file FILE');
       process.exit(1);
     }
     const uiOpts = {
@@ -724,12 +728,12 @@ async function main(argv = process.argv) {
     process.exit(printWaitResult(snap));
   }
   console.error(`Usage:
-  node scripts/detached-job.js start <id> -- <command>...
-  node scripts/detached-job.js wait <id>
-  node scripts/detached-job.js wait <id> --until-done
-  node scripts/detached-job.js stop <id> [--reason TEXT]
-  node scripts/detached-job.js status <id>
-  node scripts/detached-job.js ui <id> [--title TEXT] [--out FILE]`);
+  node scripts/detached-job.cjs start <id> -- <command>...
+  node scripts/detached-job.cjs wait <id>
+  node scripts/detached-job.cjs wait <id> --until-done
+  node scripts/detached-job.cjs stop <id> [--reason TEXT]
+  node scripts/detached-job.cjs status <id>
+  node scripts/detached-job.cjs ui <id> [--title TEXT] [--out FILE]`);
   process.exit(1);
 }
 

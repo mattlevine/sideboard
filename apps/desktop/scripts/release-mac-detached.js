@@ -117,7 +117,7 @@ function printStatus() {
 }
 
 async function waitForPack(timeoutMs) {
-  const detached = require(path.join(repoRoot, 'scripts/detached-job.js'));
+  const detached = require(path.join(repoRoot, 'scripts/detached-job.cjs'));
   const snap = await detached.waitSnapshot(
     () =>
       detached.snapshotFromPaths({

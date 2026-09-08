@@ -20,7 +20,7 @@
     "release:desktop": "pnpm --filter @sideboard-ai/desktop exec node scripts/release.js patch mac",
     "release:local": "pnpm --filter @sideboard-ai/desktop exec node scripts/release.js patch all never",
     "publish:npm": "node scripts/publish-npm.js",
-    "job": "node scripts/detached-job.js",
-    "job:wait": "node scripts/detached-job.js wait"
+    "job": "node scripts/detached-job.cjs",
+    "job:wait": "node scripts/detached-job.cjs wait"
   }
 }

@@ -164,7 +164,7 @@ export function formatJobStillRunningContinuePrompt(jobIds: string[]): string {
 export function formatDeferredDoneContinuePrompt(): string {
   return [
     'You ended the turn after promising to report later, but no detached job is running.',
-    'If tests/pack/deploy still need to run: start once with detached-job.js, present_artifact type=log, then loop wait_for_job until stillRunning is false.',
+    'If tests/pack/deploy still need to run: start once with detached-job.cjs, present_artifact type=log, then loop wait_for_job until stillRunning is false.',
     'Do not say you will let the user know later.',
   ].join(' ');
 }
@@ -185,7 +185,7 @@ export function turnWatchedDetachedJob(
     const blob = [p.name, p.detail, p.description, p.input ? JSON.stringify(p.input) : '']
       .filter(Boolean)
       .join(' ');
-    return /detached-job\.js\b/i.test(blob);
+    return /detached-job\.(?:js|cjs)\b/i.test(blob);
   });
 }
 
@@ -317,7 +317,7 @@ export async function waitForDetachedJob(
       id: jobId,
       delta: '',
       progress: 'No detached job. Start one first.',
-      hint: 'Start with detached-job.js start <id> -- <command>, then call wait_for_job again.',
+      hint: 'Start with detached-job.cjs start <id> -- <command>, then call wait_for_job again.',
     };
   }
 
@@ -395,7 +395,7 @@ export async function stopDetachedJob(
       id: jobId,
       delta: '',
       progress: 'No detached job. Start one first.',
-      hint: 'Start with detached-job.js start <id> -- <command>, then wait_for_job or stop_job.',
+      hint: 'Start with detached-job.cjs start <id> -- <command>, then wait_for_job or stop_job.',
       stopped: false,
       reason: 'not-found',
     };

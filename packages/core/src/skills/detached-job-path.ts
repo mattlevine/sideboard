@@ -3,12 +3,22 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packagedMcpDir } from '../agents/packaged-runtime.js';
 
-/** Packaged extraResources copy (`Contents/Resources/sideboard-mcp/scripts/detached-job.js`). */
+/** `.cjs` first — packaged MCP writes `"type": "module"` next to this file. */
+const DETACHED_JOB_FILENAMES = ['detached-job.cjs', 'detached-job.js'] as const;
+
+function detachedJobScriptIn(dir: string): string | null {
+  for (const name of DETACHED_JOB_FILENAMES) {
+    const script = join(dir, 'scripts', name);
+    if (existsSync(script)) return script;
+  }
+  return null;
+}
+
+/** Packaged extraResources copy (`Contents/Resources/sideboard-mcp/scripts/detached-job.cjs`). */
 export function packagedDetachedJobPath(): string | null {
   const dir = packagedMcpDir();
   if (!dir) return null;
-  const script = join(dir, 'scripts', 'detached-job.js');
-  return existsSync(script) ? script : null;
+  return detachedJobScriptIn(dir);
 }
 
 /**
@@ -21,8 +31,8 @@ export function resolveDetachedJobScript(): string | null {
 
   let dir = dirname(fileURLToPath(import.meta.url));
   for (let i = 0; i < 8; i++) {
-    const candidate = join(dir, 'scripts', 'detached-job.js');
-    if (existsSync(candidate)) return candidate;
+    const candidate = detachedJobScriptIn(dir);
+    if (candidate) return candidate;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -30,9 +40,9 @@ export function resolveDetachedJobScript(): string | null {
   return null;
 }
 
-/** Shell invocation agents can copy (`node "/abs/path/detached-job.js"`). */
+/** Shell invocation agents can copy (`node "/abs/path/detached-job.cjs"`). */
 export function formatDetachedJobInvoke(scriptPath?: string | null): string {
   const resolved = scriptPath === undefined ? resolveDetachedJobScript() : scriptPath;
   if (resolved) return `node ${JSON.stringify(resolved)}`;
-  return 'node scripts/detached-job.js';
+  return 'node scripts/detached-job.cjs';
 }

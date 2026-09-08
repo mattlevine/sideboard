@@ -273,7 +273,7 @@ if (doDesktop) {
       appResources,
       'sideboard-mcp/node_modules/@modelcontextprotocol/sdk/package.json',
     );
-    const mcpDetached = path.join(appResources, 'sideboard-mcp/scripts/detached-job.js');
+    const mcpDetached = path.join(appResources, 'sideboard-mcp/scripts/detached-job.cjs');
     if (
       !fs.existsSync(mcpEntry) ||
       !fs.existsSync(mcpCli) ||

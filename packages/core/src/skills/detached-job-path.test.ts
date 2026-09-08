@@ -11,7 +11,7 @@ import {
 
 const repoScript = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../../../../scripts/detached-job.js',
+  '../../../../scripts/detached-job.cjs',
 );
 
 type ProcessWithResources = NodeJS.Process & { resourcesPath?: string };
@@ -28,14 +28,28 @@ describe('resolveDetachedJobScript', () => {
     root = undefined;
   });
 
-  it('finds the repo scripts/detached-job.js when unpackaged', () => {
+  it('finds the repo scripts/detached-job.cjs when unpackaged', () => {
     delete proc.resourcesPath;
     expect(resolveDetachedJobScript()).toBe(repoScript);
     expect(formatDetachedJobInvoke()).toBe(`node ${JSON.stringify(repoScript)}`);
   });
 
-  it('prefers the packaged extraResources copy', () => {
+  it('prefers the packaged extraResources .cjs copy', () => {
     root = mkdtempSync(join(tmpdir(), 'sb-detached-'));
+    const mcp = join(root, 'sideboard-mcp', 'core-dist', 'mcp', 'run-stdio.js');
+    mkdirSync(join(mcp, '..'), { recursive: true });
+    writeFileSync(mcp, '');
+    const script = join(root, 'sideboard-mcp', 'scripts', 'detached-job.cjs');
+    mkdirSync(join(script, '..'), { recursive: true });
+    writeFileSync(script, '#!/usr/bin/env node\n');
+    proc.resourcesPath = root;
+
+    expect(packagedDetachedJobPath()).toBe(script);
+    expect(resolveDetachedJobScript()).toBe(script);
+  });
+
+  it('falls back to a legacy packaged detached-job.js', () => {
+    root = mkdtempSync(join(tmpdir(), 'sb-detached-js-'));
     const mcp = join(root, 'sideboard-mcp', 'core-dist', 'mcp', 'run-stdio.js');
     mkdirSync(join(mcp, '..'), { recursive: true });
     writeFileSync(mcp, '');
@@ -45,13 +59,12 @@ describe('resolveDetachedJobScript', () => {
     proc.resourcesPath = root;
 
     expect(packagedDetachedJobPath()).toBe(script);
-    expect(resolveDetachedJobScript()).toBe(script);
   });
 
   it('quotes a provided path for the shell', () => {
-    expect(formatDetachedJobInvoke('/tmp/detached-job.js')).toBe(
-      'node "/tmp/detached-job.js"',
+    expect(formatDetachedJobInvoke('/tmp/detached-job.cjs')).toBe(
+      'node "/tmp/detached-job.cjs"',
     );
-    expect(formatDetachedJobInvoke(null)).toBe('node scripts/detached-job.js');
+    expect(formatDetachedJobInvoke(null)).toBe('node scripts/detached-job.cjs');
   });
 });

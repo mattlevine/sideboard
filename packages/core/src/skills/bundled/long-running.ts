@@ -15,21 +15,21 @@ Do **not** ask the human to check back. Detach, then **wait** in 45s slices (MCP
 
 ## Tool
 
-Use the helper from the Sideboard playbook — an absolute \`node "…" start\` path injected each turn. If this worktree has \`scripts/detached-job.js\`, that is the same tool.
+Use the helper from the Sideboard playbook — an absolute \`node "…" start\` path injected each turn. If this worktree has \`scripts/detached-job.cjs\`, that is the same tool.
 
 \`\`\`bash
 # Start (exits in ~1s; job survives this turn)
-node <detached-job.js> start <id> -- <command> [args...]
+node <detached-job.cjs> start <id> -- <command> [args...]
 
 # Wait — prefer MCP wait_for_job (same 45s / stillRunning contract).
 # Shell fallback:
-node <detached-job.js> wait <id>
+node <detached-job.cjs> wait <id>
 
 # Block until the process exits (humans / a turn that will not be interrupted)
-node <detached-job.js> wait <id> --until-done
+node <detached-job.cjs> wait <id> --until-done
 
-node <detached-job.js> stop <id> [--reason TEXT]
-node <detached-job.js> status <id>
+node <detached-job.cjs> stop <id> [--reason TEXT]
+node <detached-job.cjs> status <id>
 \`\`\`
 
 \`<id>\` is kebab-case (\`mac-release\`, \`core-test\`, \`fly-deploy\`). State is \`.context/.sideboard/detached-jobs/<id>/\` (local scratch).
@@ -60,7 +60,7 @@ After **start**, present once (\`status=running\`, empty or first lines). After 
 Ad-hoc pid/log (legacy or another tool’s files):
 
 \`\`\`bash
-node <detached-job.js> wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
+node <detached-job.cjs> wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
 \`\`\`
 
 ## Agent loop
@@ -69,7 +69,7 @@ node <detached-job.js> wait --pid-file FILE --log-file FILE [--ok-pattern TEXT]
 2. Immediately \`present_artifact\` \`type=log\` (same \`artifact_id\`, \`status=running\`) — the human should see **working** in the side column, not a “check back later” message.
 3. Loop \`wait_for_job\` (or shell \`wait\`). After each slice, \`present_artifact\` the same id with \`content=delta\` only.
 4. On \`ok\`, present once more (\`status=ok\`, last \`delta\`) and finish the task. On \`failed\`, fix from the log.
-5. **Stop** when the job is hanging, buffering forever, watching the wrong thing, or you already have the answer. MCP \`stop_job\` (same id, optional \`reason\`) or \`detached-job.js stop <id>\`. Do **not** stop a pack/test/deploy that is clearly making progress.
+5. **Stop** when the job is hanging, buffering forever, watching the wrong thing, or you already have the answer. MCP \`stop_job\` (same id, optional \`reason\`) or \`detached-job.cjs stop <id>\`. Do **not** stop a pack/test/deploy that is clearly making progress.
 
 Never tell the user “say status when it’s done.” You wait — unless you decided to stop.
 
@@ -82,7 +82,7 @@ Huge \`--json\` / \`--expand\` dumps crash any worktree agent mid-turn (Claude /
 Do **not** watch after every push. If the user gave a goal (Greptile 5/5, CI green, until checks pass), wait the same way:
 
 \`\`\`bash
-node <detached-job.js> start pr-checks -- gh pr checks --watch
+node <detached-job.cjs> start pr-checks -- gh pr checks --watch
 \`\`\`
 
 On miss, fix, commit, push, and watch again until the goal is met or you are blocked. Do not ask the human to poll. Do not merge unless asked.

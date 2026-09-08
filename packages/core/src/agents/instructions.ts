@@ -297,7 +297,7 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
   return [
     'Long-running jobs (mandatory when a command may run more than ~30s):',
     'A Sideboard worktree turn SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted. `block_until_ms: 0` is not enough. Do not ask the human to poll.',
-    `Helper (same tool as \`scripts/detached-job.js\` when that file exists in the worktree): \`${invoke}\``,
+    `Helper (same tool as \`scripts/detached-job.cjs\` when that file exists in the worktree): \`${invoke}\``,
     `- Start once: \`${invoke} start <id> -- <command> [args...]\` (cwd = this worktree). If JSON says already-running, do not start again.`,
     '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running` — the side column is the live view.',
     `- Loop Sideboard MCP \`wait_for_job\` with the same id (returns in ~45s). stillRunning → present the same id with \`content=delta\` only → wait_for_job again. Shell fallback: \`${invoke} wait <id>\`. Do not resend the full log or HTML.`,
