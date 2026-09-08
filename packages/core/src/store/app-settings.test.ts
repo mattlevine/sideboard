@@ -728,6 +728,31 @@ describe('app settings', () => {
     expect(mod.resolveAgentExecutable('brightsy')).toBe('brightsy');
   });
 
+  it('rejects relative executable overrides and drops legacy relative paths', async () => {
+    const mod = await load();
+    expect(() => mod.updateCodexSettings({ executablePath: 'Users/me/bin/codex' })).toThrow(
+      'Executable path must be absolute',
+    );
+
+    const saved = mod.saveAppSettings({
+      environment: {},
+      claude: { executablePath: 'Users/me/bin/claude' },
+      codex: { executablePath: 'Users/me/bin/codex' },
+      opencode: { executablePath: 'Users/me/bin/opencode' },
+      brightsy: { executablePath: 'Users/me/bin/brightsy' },
+      integrations: {},
+      defaults: {},
+      projects: {},
+      advanced: {},
+    });
+
+    expect(saved.claude.executablePath).toBeUndefined();
+    expect(saved.codex.executablePath).toBeUndefined();
+    expect(saved.opencode.executablePath).toBeUndefined();
+    expect(saved.brightsy.executablePath).toBeUndefined();
+    expect(mod.resolveAgentExecutable('codex')).toBe('codex');
+  });
+
   it('preserves environment when updating Claude settings', async () => {
     const mod = await load();
     mod.updateAppEnvironment({ ANTHROPIC_API_KEY: 'sk-test' });
