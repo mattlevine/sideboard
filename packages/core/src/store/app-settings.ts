@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import {
   coerceOrchestratorAgent,
   isOrchestratorCapableAgent,
@@ -473,7 +473,7 @@ function normalizeClaude(raw: unknown): ClaudeHarnessSettings {
   const out: ClaudeHarnessSettings = {};
   if (typeof source.executablePath === 'string') {
     const path = source.executablePath.trim();
-    if (path) out.executablePath = path;
+    if (path && isAbsolute(path)) out.executablePath = path;
   }
   if (typeof source.chromeEnabled === 'boolean') {
     out.chromeEnabled = source.chromeEnabled;
@@ -494,9 +494,17 @@ function normalizeCliExecutable(raw: unknown): CliExecutableSettings {
   const out: CliExecutableSettings = {};
   if (typeof source.executablePath === 'string') {
     const path = source.executablePath.trim();
-    if (path) out.executablePath = path;
+    if (path && isAbsolute(path)) out.executablePath = path;
   }
   return out;
+}
+
+function absoluteExecutablePath(value: string): string {
+  const path = value.trim();
+  if (!isAbsolute(path)) {
+    throw new Error('Executable path must be absolute. Leave it empty to use the system CLI.');
+  }
+  return path;
 }
 
 function normalizeBrightsy(raw: unknown): BrightsyHarnessSettings {
@@ -505,7 +513,7 @@ function normalizeBrightsy(raw: unknown): BrightsyHarnessSettings {
   const out: BrightsyHarnessSettings = {};
   if (typeof source.executablePath === 'string') {
     const path = source.executablePath.trim();
-    if (path) out.executablePath = path;
+    if (path && isAbsolute(path)) out.executablePath = path;
   }
   if (typeof source.cloudConnectEnabled === 'boolean') {
     out.cloudConnectEnabled = source.cloudConnectEnabled;
@@ -1069,7 +1077,7 @@ export function updateClaudeSettings(
     if (patch.executablePath == null || patch.executablePath.trim() === '') {
       delete claude.executablePath;
     } else {
-      claude.executablePath = patch.executablePath.trim();
+      claude.executablePath = absoluteExecutablePath(patch.executablePath);
     }
   }
   if (typeof patch.chromeEnabled === 'boolean') {
@@ -1092,7 +1100,7 @@ export function updateBrightsySettings(
     if (patch.executablePath == null || patch.executablePath.trim() === '') {
       delete brightsy.executablePath;
     } else {
-      brightsy.executablePath = patch.executablePath.trim();
+      brightsy.executablePath = absoluteExecutablePath(patch.executablePath);
     }
   }
   if (typeof patch.cloudConnectEnabled === 'boolean') {
@@ -1120,7 +1128,7 @@ export function updateCodexSettings(
     if (patch.executablePath == null || patch.executablePath.trim() === '') {
       delete codex.executablePath;
     } else {
-      codex.executablePath = patch.executablePath.trim();
+      codex.executablePath = absoluteExecutablePath(patch.executablePath);
     }
   }
   return saveAppSettings({ ...current, codex });
@@ -1135,7 +1143,7 @@ export function updateOpencodeSettings(
     if (patch.executablePath == null || patch.executablePath.trim() === '') {
       delete opencode.executablePath;
     } else {
-      opencode.executablePath = patch.executablePath.trim();
+      opencode.executablePath = absoluteExecutablePath(patch.executablePath);
     }
   }
   return saveAppSettings({ ...current, opencode });
