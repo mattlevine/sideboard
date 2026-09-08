@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawn } = require('child_process');
 const {
   sanitizeId,
   jobsRoot,
@@ -13,6 +14,8 @@ const {
   resolveJobKind,
   startJob,
   stopJob,
+  formatStopPayload,
+  jobTreeAlive,
   snapshotFromPaths,
   snapshotJob,
   waitSnapshot,
@@ -20,7 +23,78 @@ const {
   escapeHtml,
   renderJobHtml,
   takeDelta,
+  WAIT_STILL_RUNNING_HINT,
 } = require('./detached-job.js');
+
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitUntil(pred, ms) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (pred()) return;
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  throw new Error(`timed out after ${ms}ms`);
+}
+
+async function startStubbornChildJob(root, id) {
+  const p = jobPaths(root, id);
+  fs.mkdirSync(p.dir, { recursive: true });
+  const childPidFile = path.join(p.dir, 'child.pid');
+  const stubborn = `
+    process.on('SIGTERM', () => {});
+    require('fs').writeFileSync(${JSON.stringify(childPidFile)}, String(process.pid));
+    setInterval(() => {}, 1000);
+  `;
+  const wrapCode = `
+    const { spawn } = require('child_process');
+    const child = spawn(process.execPath, ['-e', ${JSON.stringify(stubborn)}], { stdio: 'ignore' });
+    child.unref();
+    setInterval(() => {}, 1000);
+  `;
+  const wrap = spawn(process.execPath, ['-e', wrapCode], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  wrap.unref();
+  const wrapPid = wrap.pid;
+  if (!wrapPid) throw new Error('wrap pid missing');
+  fs.writeFileSync(p.pid, `${wrapPid}\n`);
+  fs.writeFileSync(p.log, 'waiting\n');
+  await waitUntil(() => fs.existsSync(childPidFile), 3_000);
+  const childPid = Number.parseInt(fs.readFileSync(childPidFile, 'utf8').trim(), 10);
+  if (!Number.isInteger(childPid) || childPid <= 0) throw new Error('child pid missing');
+  return {
+    id,
+    wrapPid,
+    childPid,
+    cleanup: () => {
+      try {
+        process.kill(childPid, 'SIGKILL');
+      } catch {
+        /* already dead */
+      }
+      try {
+        process.kill(-wrapPid, 'SIGKILL');
+      } catch {
+        /* already dead */
+      }
+      try {
+        process.kill(wrapPid, 'SIGKILL');
+      } catch {
+        /* already dead */
+      }
+    },
+  };
+}
 
 describe('jobPaths', () => {
   it('writes new jobs under .context/.sideboard/detached-jobs', () => {
@@ -82,6 +156,97 @@ describe('stopJob', () => {
     assert.equal(missing.stopped, false);
     assert.equal(missing.reason, 'not-found');
   });
+
+  it('SIGKILLs leftover children after wrap exits on SIGTERM', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-stop-wrap-'));
+    const { id, wrapPid, childPid, cleanup } = await startStubbornChildJob(root, 'hang');
+    try {
+      assert.equal(jobTreeAlive(wrapPid), true);
+      const result = await stopJob(root, id, { graceMs: 400 });
+      assert.equal(result.stopped, true);
+      assert.equal(result.reason, 'stopped');
+      assert.equal(result.snapshot.stillRunning, false);
+      assert.match(result.hint, /Stopped/);
+      assert.equal(jobTreeAlive(wrapPid), false);
+      assert.equal(pidAlive(childPid), false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('still SIGKILLs the group when wrap is already dead', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-stop-dead-wrap-'));
+    const { id, wrapPid, childPid, cleanup } = await startStubbornChildJob(root, 'hang');
+    try {
+      process.kill(wrapPid, 'SIGKILL');
+      await waitUntil(() => !pidAlive(wrapPid), 2_000);
+      assert.equal(pidAlive(childPid), true);
+      assert.equal(jobTreeAlive(wrapPid), true);
+      const result = await stopJob(root, id, { graceMs: 400 });
+      assert.equal(result.stopped, true);
+      assert.equal(result.reason, 'stopped');
+      assert.equal(pidAlive(childPid), false);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('formatStopPayload', () => {
+  it('prints the stopped hint only when the job is gone', () => {
+    const stopped = formatStopPayload({
+      stopped: true,
+      reason: 'stopped',
+      id: 'hang',
+      snapshot: { running: false, stillRunning: false, pid: 9, exitCode: 1 },
+    });
+    assert.equal(stopped.status, 'failed');
+    assert.equal(stopped.stillRunning, false);
+    assert.equal(stopped.ok, false);
+    assert.equal(stopped.failed, true);
+    assert.match(stopped.hint, /Stopped/);
+  });
+
+  it('reports running after a failed kill — never idle or ok', () => {
+    const failed = formatStopPayload({
+      stopped: false,
+      reason: 'still-running',
+      id: 'hang',
+      hint: 'Stopped. present_artifact type=log with status=failed and the last delta. Do not wait again unless you start a new command.',
+      snapshot: { running: true, stillRunning: true, ok: true, pid: 9 },
+    });
+    assert.equal(failed.status, 'running');
+    assert.equal(failed.stillRunning, true);
+    assert.equal(failed.ok, false);
+    assert.equal(failed.failed, true);
+    assert.equal(failed.stopped, false);
+    assert.equal(failed.hint, WAIT_STILL_RUNNING_HINT);
+    assert.doesNotMatch(failed.hint, /^Stopped/);
+  });
+
+  it('keeps not-found / not-running distinct from a successful stop', () => {
+    const missing = formatStopPayload({
+      stopped: false,
+      reason: 'not-found',
+      id: 'gone',
+      hint: 'No detached job with that id. Start one first, or pick the id from wait/status.',
+    });
+    assert.equal(missing.status, 'failed');
+    assert.equal(missing.stillRunning, false);
+    assert.doesNotMatch(missing.hint, /^Stopped/);
+
+    const finished = formatStopPayload({
+      stopped: false,
+      reason: 'not-running',
+      id: 'done',
+      hint: 'That job is already finished. Read the log; do not wait again unless you start a new command.',
+      snapshot: { ok: true, failed: false, running: false, pid: 1, exitCode: 0 },
+    });
+    assert.equal(finished.status, 'ok');
+    assert.equal(finished.ok, true);
+    assert.equal(finished.failed, false);
+    assert.doesNotMatch(finished.hint, /^Stopped/);
+  });
 });
 
 describe('sanitizeId', () => {
@@ -99,7 +264,7 @@ describe('snapshotFromPaths', () => {
     const pidFile = path.join(dir, 'pid');
     const logFile = path.join(dir, 'log');
     const exitFile = path.join(dir, 'exit');
-    fs.writeFileSync(pidFile, '1\n');
+    fs.writeFileSync(pidFile, '999999999\n');
     fs.writeFileSync(exitFile, '0\n');
     fs.writeFileSync(logFile, 'done\n');
     const snap = snapshotFromPaths({ pidFile, logFile, exitFile });
@@ -112,7 +277,7 @@ describe('snapshotFromPaths', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-'));
     const pidFile = path.join(dir, 'pid');
     const logFile = path.join(dir, 'log');
-    fs.writeFileSync(pidFile, '1\n');
+    fs.writeFileSync(pidFile, '999999999\n');
     fs.writeFileSync(logFile, 'RELEASE_BUILD_OK\n');
     const snap = snapshotFromPaths({
       pidFile,
@@ -128,7 +293,7 @@ describe('snapshotFromPaths', () => {
     const pidFile = path.join(dir, 'pid');
     const logFile = path.join(dir, 'log');
     const exitFile = path.join(dir, 'exit');
-    fs.writeFileSync(pidFile, '1\n');
+    fs.writeFileSync(pidFile, '999999999\n');
     fs.writeFileSync(exitFile, '0\n');
     fs.writeFileSync(logFile, 'ok\n');
     const snap = await waitSnapshot(
@@ -154,7 +319,7 @@ describe('stream ui', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-job-'));
     const pidFile = path.join(dir, 'pid');
     const logFile = path.join(dir, 'log');
-    fs.writeFileSync(pidFile, '1\n');
+    fs.writeFileSync(pidFile, '999999999\n');
     fs.writeFileSync(
       logFile,
       [
