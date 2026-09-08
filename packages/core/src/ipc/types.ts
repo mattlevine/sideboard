@@ -181,6 +181,12 @@ export interface IpcApi {
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
     notes?: string | null;
+    orchestrator?: {
+      agent?: AgentKind | null;
+      model?: string | null;
+      effort?: ThinkingEffort | 'normal' | null;
+      fast?: boolean | null;
+    } | null;
   }): Promise<PublicAppSettings>;
   updateProjectProfileSettings(
     repoPath: string,
@@ -324,7 +330,7 @@ export interface IpcApi {
   onSchedulesChanged(listener: () => void): () => void;
   createGlobalChat(opts: {
     title?: string;
-    agent: AgentKind;
+    agent?: AgentKind;
     autonomy?: Autonomy;
     model?: string | null;
     effort?: ThinkingEffort;

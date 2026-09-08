@@ -312,7 +312,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 
 | Panel | What |
 |-------|------|
-| **Agents** | Default agent, model, and effort; **Account context** (roles, tickets, review queues as freeform text); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Agents** | Default agent, model, and effort; default orchestrator agent, model, and effort; **Account context** (roles, tickets, review queues as freeform text); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
 | **Projects** | Per-repo context that adds to account context. Agents can update either after you confirm. |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |

@@ -4,7 +4,7 @@ Desktop Settings splits connections by job. Slack is remote control. Linear and 
 
 | Panel | What |
 |-------|------|
-| **Settings → Agents** | Default agent / model / effort, then harness setup |
+| **Settings → Agents** | Default agent / model / effort, default orchestrator agent / model / effort, then harness setup |
 | **Settings → Git** | `gh` / SSH / PAT for this Mac and worktree agents |
 | **Settings → Issues** | Issue source, Linear, AbleTime |
 | **Settings → Remote** | Slack workspaces, this Mac’s name, Listen / Relay |

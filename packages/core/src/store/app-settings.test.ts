@@ -368,6 +368,99 @@ describe('app settings', () => {
     expect(mod.getDefaultEffort()).toBe('high');
   });
 
+  it('round-trips default orchestrator agent, model, and effort', async () => {
+    const mod = await load();
+    expect(mod.resolveOrchestratorDefaults()).toEqual({
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      fast: false,
+    });
+
+    mod.updateDefaultsSettings({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'low',
+    });
+    // Unset orchestrator inherits account defaults (Cursor Auto stays Auto).
+    expect(mod.resolveOrchestratorDefaults()).toEqual({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'low',
+      fast: false,
+    });
+
+    const saved = mod.updateDefaultsSettings({
+      orchestrator: { agent: 'claude', model: 'opus', effort: 'xhigh' },
+    });
+    expect(saved.defaults.orchestrator).toEqual({
+      agent: 'claude',
+      model: 'opus',
+      effort: 'xhigh',
+    });
+    expect(mod.resolveOrchestratorDefaults()).toEqual({
+      agent: 'claude',
+      model: 'opus',
+      effort: 'xhigh',
+      fast: false,
+    });
+    // Worktree defaults stay on the account picker.
+    expect(mod.resolveThreadDefaults()).toEqual({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'low',
+      fast: false,
+    });
+
+    expect(mod.resolveNewOrchestratorOptions({})).toEqual({
+      agent: 'claude',
+      model: 'opus',
+      effort: 'xhigh',
+      fast: false,
+    });
+    expect(mod.resolveNewOrchestratorOptions({ model: null })).toEqual({
+      agent: 'claude',
+      model: null,
+      effort: 'xhigh',
+      fast: false,
+    });
+
+    const cleared = mod.updateDefaultsSettings({ orchestrator: null });
+    expect(cleared.defaults.orchestrator).toBeUndefined();
+    expect(mod.resolveOrchestratorDefaults()).toEqual({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'low',
+      fast: false,
+    });
+  });
+
+  it('treats a present orchestrator object as Auto when model is omitted', async () => {
+    const mod = await load();
+    mod.updateDefaultsSettings({
+      agent: 'cursor',
+      model: 'default',
+      orchestrator: { agent: 'claude', effort: 'high' },
+    });
+    expect(mod.resolveOrchestratorDefaults()).toEqual({
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      fast: false,
+    });
+  });
+
+  it('coerces a non-orchestrator account default when resolving orchestrator defaults', async () => {
+    const mod = await load();
+    mod.updateDefaultsSettings({ agent: 'brightsy', model: 'team-1' });
+    expect(mod.resolveOrchestratorDefaults()).toEqual({
+      agent: 'claude',
+      model: 'team-1',
+      effort: 'high',
+      fast: false,
+    });
+  });
+
   it('folds leftover account roles into notes and drops the roles field', async () => {
     const mod = await load();
     expect(mod.resolveAccountProfileFromSettings().accountNotes).toBe('');
@@ -540,6 +633,16 @@ describe('app settings', () => {
     expect(cleared.brightsy.cloudConnectEnabled).toBe(false);
     expect(cleared.brightsy.cloudConnectAgent).toBeUndefined();
     expect(mod.brightsyCloudConnectAgent()).toBe('claude');
+  });
+
+  it('uses orchestrator default agent for cloud connect when set', async () => {
+    const mod = await load();
+    mod.updateDefaultsSettings({
+      agent: 'cursor',
+      orchestrator: { agent: 'codex' },
+    });
+    mod.updateBrightsySettings({ cloudConnectAgent: 'claude' });
+    expect(mod.brightsyCloudConnectAgent()).toBe('codex');
   });
 
   it('uses account default agent for cloud connect when orchestrator-capable', async () => {

@@ -27,7 +27,7 @@ import {
 } from '../lib/composer-file-drop';
 import { attachmentsFromLargePaste } from '../lib/paste-attachment';
 import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
-import { loadThreadDefaults } from '../lib/thread-defaults';
+import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defaults';
 import { createModalHasDraft } from '../lib/create-modal-draft';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -271,7 +271,9 @@ export function CreateModal({
       .catch(() => setStatuses([]))
       .finally(() => setAgentsLoaded(true));
     void refreshWorkspaces(initialRepoPath);
-    void loadThreadDefaults().then((defaults) => {
+    void (
+      initialMode === 'orchestration' ? loadOrchestratorDefaults() : loadThreadDefaults()
+    ).then((defaults) => {
       setOptions((prev) =>
         coerceOptionsForMode(
           {
@@ -371,7 +373,21 @@ export function CreateModal({
   function setModeAndCoerce(next: Mode) {
     setMode(next);
     if (next === 'orchestration') setCowboy(false);
-    setOptions((prev) => coerceOptionsForMode(prev, next));
+    void (next === 'orchestration' ? loadOrchestratorDefaults() : loadThreadDefaults()).then(
+      (defaults) => {
+        setOptions((prev) =>
+          coerceOptionsForMode(
+            {
+              ...prev,
+              agent: defaults.agent,
+              model: defaults.model,
+              effort: defaults.effort,
+            },
+            next,
+          ),
+        );
+      },
+    );
   }
 
   function resetDraft() {

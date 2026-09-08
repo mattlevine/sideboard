@@ -9,7 +9,10 @@ import {
 import { ensureGlobalCoordinatorCwd } from '../orchestrator/coordinator-prompt.js';
 import type { AgentKind, Thread, ThreadAttachment, Autonomy } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
-import { resolveNewThreadOptions, resolveThreadDefaults } from './app-settings.js';
+import {
+  resolveNewOrchestratorOptions,
+  resolveOrchestratorDefaults,
+} from './app-settings.js';
 import { globalAgentCwd } from './paths.js';
 import {
   createEmptyThread,
@@ -109,7 +112,8 @@ export function orchestrationTitleNeedsSoccerNickname(
 
 export interface CreateGlobalChatOpts {
   title?: string;
-  agent: AgentKind;
+  /** Omit to use Settings → Default orchestrator agent. */
+  agent?: AgentKind;
   /** Goal / cloud marker on sourceRef. Title is always a soccer nickname. Cloud uses CLOUD_ORCHESTRATOR_GOAL as sourceRef. */
   sourceRef?: string;
   autonomy?: Autonomy;
@@ -148,7 +152,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
       : allocateTeamName(takenTeamSlugsForOrchestration()).name;
   const sourceRef =
     opts.sourceRef?.trim() || (isCloud ? CLOUD_ORCHESTRATOR_GOAL : title);
-  const resolved = resolveNewThreadOptions({
+  const resolved = resolveNewOrchestratorOptions({
     agent: opts.agent,
     model: opts.model,
     effort: opts.effort,
@@ -252,7 +256,7 @@ export function ensureSlackCoordinator(
   agent: AgentKind,
   opts?: { forceNew?: boolean },
 ): Thread {
-  const defaults = resolveThreadDefaults();
+  const defaults = resolveOrchestratorDefaults();
   const desired = assertOrchestratorCapableAgent(agent);
   const ref = slackCoordinatorSourceRef(teamId, userId);
 
@@ -297,7 +301,7 @@ export function ensureSlackCoordinator(
 
 /** Find or create the singleton Brightsy cloud coordinator under Global. */
 export function ensureCloudCoordinator(agent: AgentKind): Thread {
-  const defaults = resolveThreadDefaults();
+  const defaults = resolveOrchestratorDefaults();
   const desired = assertOrchestratorCapableAgent(agent);
 
   // Sync find+create is atomic on the JS event loop; re-check after create
@@ -311,7 +315,7 @@ export function ensureCloudCoordinator(agent: AgentKind): Thread {
       patch.worktreePath = globalAgentCwd();
       patch.branchName = 'global';
     }
-    // Align idle (pre-session) coordinators with Account defaults / connect agent.
+    // Align idle (pre-session) coordinators with orchestrator / Account defaults.
     const hasAgentTurns = existing.messages.some((m) => m.role === 'agent');
     const canRetarget =
       !existing.sessionId &&

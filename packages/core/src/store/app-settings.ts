@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
+import {
+  coerceOrchestratorAgent,
+  isOrchestratorCapableAgent,
+} from '../agents/orchestrator-capable.js';
 import type { AgentKind } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { stripNestedElectronEnv } from '../hook/nested-electron-env.js';
@@ -34,6 +38,19 @@ const DEFAULT_AGENTS = new Set<AgentKind>([
 ]);
 
 /**
+ * Defaults for Global / Slack / cloud orchestrator chats (Settings → Agents).
+ * Presence of this object is a full override: omitted model = Auto.
+ * When the object is unset, orchestrator chats inherit account defaults.
+ */
+export interface OrchestratorDefaultsSettings {
+  agent?: AgentKind;
+  /** Model id. Empty or omitted = Auto / agent default. */
+  model?: string;
+  effort?: ThinkingEffort;
+  fast?: boolean;
+}
+
+/**
  * App-level defaults for Create / new chat tabs (Settings → Agents).
  * Omitted fields fall back to Claude + Auto + High thinking at runtime.
  */
@@ -57,6 +74,11 @@ export interface DefaultsAppSettings {
   roles?: string[];
   /** @deprecated Folded into {@link DefaultsAppSettings.notes} on read. */
   role?: string;
+  /**
+   * Orchestrator-only agent / model / effort (Global, Slack, cloud).
+   * Unset inherits {@link DefaultsAppSettings.agent} / model / effort.
+   */
+  orchestrator?: OrchestratorDefaultsSettings;
 }
 
 /** Per-repo context (Settings → Projects). Adds to account context. */
@@ -635,6 +657,31 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   return out;
 }
 
+function normalizeOrchestratorDefaults(
+  raw: unknown,
+): OrchestratorDefaultsSettings | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const source = raw as Record<string, unknown>;
+  const out: OrchestratorDefaultsSettings = {};
+  if (
+    typeof source.agent === 'string' &&
+    isOrchestratorCapableAgent(source.agent as AgentKind)
+  ) {
+    out.agent = source.agent as AgentKind;
+  }
+  if (typeof source.model === 'string') {
+    const model = source.model.trim();
+    if (model) out.model = model;
+  }
+  if (normalizeThinkingEffort(source.effort)) {
+    out.effort = normalizeThinkingEffort(source.effort)!;
+  }
+  if (typeof source.fast === 'boolean') {
+    out.fast = source.fast;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   if (!raw || typeof raw !== 'object') return {};
   const source = raw as Record<string, unknown>;
@@ -657,6 +704,8 @@ function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   }
   const notes = foldLegacyRolesIntoNotes(source.roles, source.role, source.notes);
   if (notes) out.notes = notes;
+  const orchestrator = normalizeOrchestratorDefaults(source.orchestrator);
+  if (orchestrator) out.orchestrator = orchestrator;
   return out;
 }
 
@@ -1306,16 +1355,63 @@ export function updateIntegrationsSettings(
   return saveAppSettings({ ...current, integrations });
 }
 
-export function updateDefaultsSettings(
-  patch: {
+export type DefaultsSettingsPatch = {
+  agent?: AgentKind | null;
+  model?: string | null;
+  /** Effort level, or Conductor's `normal` (stored as medium). */
+  effort?: ThinkingEffort | 'normal' | null;
+  fast?: boolean | null;
+  notes?: string | null;
+  /**
+   * Orchestrator defaults. `null` clears the override (inherit account defaults).
+   * Nested nulls clear that field only.
+   */
+  orchestrator?: {
     agent?: AgentKind | null;
     model?: string | null;
-    /** Effort level, or Conductor's `normal` (stored as medium). */
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
-    notes?: string | null;
-  },
-): AppSettings {
+  } | null;
+};
+
+function applyOrchestratorDefaultsPatch(
+  current: OrchestratorDefaultsSettings | undefined,
+  patch: NonNullable<DefaultsSettingsPatch['orchestrator']>,
+): OrchestratorDefaultsSettings | undefined {
+  const next: OrchestratorDefaultsSettings = { ...current };
+  if ('agent' in patch) {
+    if (patch.agent == null) {
+      delete next.agent;
+    } else if (isOrchestratorCapableAgent(patch.agent)) {
+      next.agent = patch.agent;
+    }
+  }
+  if ('model' in patch) {
+    if (patch.model == null || patch.model.trim() === '') {
+      delete next.model;
+    } else {
+      next.model = patch.model.trim();
+    }
+  }
+  if ('effort' in patch) {
+    if (patch.effort == null) {
+      delete next.effort;
+    } else {
+      const effort = normalizeThinkingEffort(patch.effort);
+      if (effort) next.effort = effort;
+    }
+  }
+  if ('fast' in patch) {
+    if (patch.fast == null) {
+      delete next.fast;
+    } else {
+      next.fast = Boolean(patch.fast);
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+export function updateDefaultsSettings(patch: DefaultsSettingsPatch): AppSettings {
   const current = loadAppSettings();
   const defaults: DefaultsAppSettings = { ...current.defaults };
   if ('agent' in patch) {
@@ -1351,6 +1447,18 @@ export function updateDefaultsSettings(
     const notes = normalizeProfileNotes(patch.notes);
     if (!notes) delete defaults.notes;
     else defaults.notes = notes;
+  }
+  if ('orchestrator' in patch) {
+    if (patch.orchestrator == null) {
+      delete defaults.orchestrator;
+    } else {
+      const orchestrator = applyOrchestratorDefaultsPatch(
+        defaults.orchestrator,
+        patch.orchestrator,
+      );
+      if (orchestrator) defaults.orchestrator = orchestrator;
+      else delete defaults.orchestrator;
+    }
   }
   delete defaults.roles;
   delete defaults.role;
@@ -1523,9 +1631,16 @@ export function writeViewerContext(input: {
   return { ok: true, scope: 'account', context: proposed };
 }
 
+export type ResolvedThreadDefaults = {
+  agent: AgentKind;
+  model: string | null;
+  effort: ThinkingEffort;
+  fast: boolean;
+};
+
 export function resolveThreadDefaults(
   settings: AppSettings = loadAppSettings(),
-): { agent: AgentKind; model: string | null; effort: ThinkingEffort; fast: boolean } {
+): ResolvedThreadDefaults {
   return {
     agent: getDefaultAgent(settings),
     model: getDefaultModel(settings),
@@ -1535,20 +1650,37 @@ export function resolveThreadDefaults(
 }
 
 /**
- * Resolve agent/model/effort/fast for a newly created thread.
- * Omitted fields use Agents defaults (Settings → Agents).
- * Pass `model: null` explicitly to force Auto / agent-default.
+ * Defaults for new Global / Slack / cloud orchestrator chats.
+ * Unset orchestrator settings inherit account defaults (agent coerced).
+ * When `defaults.orchestrator` is present, omitted model means Auto.
  */
-export function resolveNewThreadOptions(
+export function resolveOrchestratorDefaults(
+  settings: AppSettings = loadAppSettings(),
+): ResolvedThreadDefaults {
+  const account = resolveThreadDefaults(settings);
+  const orch = settings.defaults.orchestrator;
+  const agent = coerceOrchestratorAgent(orch?.agent ?? account.agent);
+  let model = orch ? orch.model?.trim() || null : account.model;
+  if (model && agent !== 'cursor' && /^(default|auto)$/i.test(model.trim())) {
+    model = null;
+  }
+  return {
+    agent,
+    model,
+    effort: orch?.effort ?? account.effort,
+    fast: orch?.fast ?? account.fast,
+  };
+}
+
+function mergeThreadOptionOverrides(
+  defaults: ResolvedThreadDefaults,
   overrides: {
     agent?: AgentKind | null;
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
-  } = {},
-  settings: AppSettings = loadAppSettings(),
-): { agent: AgentKind; model: string | null; effort: ThinkingEffort; fast: boolean } {
-  const defaults = resolveThreadDefaults(settings);
+  },
+): ResolvedThreadDefaults {
   const effort =
     overrides.effort === undefined || overrides.effort === null
       ? defaults.effort
@@ -1576,6 +1708,39 @@ export function resolveNewThreadOptions(
         ? defaults.fast
         : Boolean(overrides.fast),
   };
+}
+
+/**
+ * Resolve agent/model/effort/fast for a newly created thread.
+ * Omitted fields use Agents defaults (Settings → Agents).
+ * Pass `model: null` explicitly to force Auto / agent-default.
+ */
+export function resolveNewThreadOptions(
+  overrides: {
+    agent?: AgentKind | null;
+    model?: string | null;
+    effort?: ThinkingEffort | 'normal' | null;
+    fast?: boolean | null;
+  } = {},
+  settings: AppSettings = loadAppSettings(),
+): ResolvedThreadDefaults {
+  return mergeThreadOptionOverrides(resolveThreadDefaults(settings), overrides);
+}
+
+/**
+ * Resolve agent/model/effort/fast for a new orchestrator chat.
+ * Omitted fields use Settings → Default orchestrator (else account defaults).
+ */
+export function resolveNewOrchestratorOptions(
+  overrides: {
+    agent?: AgentKind | null;
+    model?: string | null;
+    effort?: ThinkingEffort | 'normal' | null;
+    fast?: boolean | null;
+  } = {},
+  settings: AppSettings = loadAppSettings(),
+): ResolvedThreadDefaults {
+  return mergeThreadOptionOverrides(resolveOrchestratorDefaults(settings), overrides);
 }
 
 /** True when Sideboard has Linear OAuth tokens or an API key stored. */
@@ -1789,9 +1954,9 @@ export function brightsyInjectWorktreeMcpEnabled(
 
 /**
  * Local agent for the Brightsy cloud coordinator.
- * Prefer Account → Default agent when it can run orchestration (Claude / Cursor /
- * Codex / OpenCode). `cloudConnectAgent` is only a fallback when the account
- * default cannot orchestrate (e.g. Brightsy).
+ * Prefer Settings → Default orchestrator agent, then Account → Default agent,
+ * when that agent can run orchestration (Claude / Cursor / Codex / OpenCode).
+ * `cloudConnectAgent` is only a fallback when neither can orchestrate (e.g. Brightsy).
  */
 export function brightsyCloudConnectAgent(
   settings: AppSettings = loadAppSettings(),
@@ -1801,6 +1966,10 @@ export function brightsyCloudConnectAgent(
     CLOUD_CONNECT_AGENTS.has(settings.brightsy.cloudConnectAgent)
       ? settings.brightsy.cloudConnectAgent
       : ('claude' as BrightsyCloudConnectAgent);
+  const orchAgent = settings.defaults.orchestrator?.agent;
+  if (orchAgent && CLOUD_CONNECT_AGENTS.has(orchAgent as BrightsyCloudConnectAgent)) {
+    return orchAgent as BrightsyCloudConnectAgent;
+  }
   const preferred = getDefaultAgent(settings);
   if (CLOUD_CONNECT_AGENTS.has(preferred as BrightsyCloudConnectAgent)) {
     return preferred as BrightsyCloudConnectAgent;
