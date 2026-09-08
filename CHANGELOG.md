@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.171] - 2026-09-08
+
+### Fixed
+
+- Agent executable overrides must be absolute paths. Malformed legacy overrides fall back to the system CLI instead of preventing an agent from launching.
+
 ## [0.1.170] - 2026-09-08
 
 ### Changed
