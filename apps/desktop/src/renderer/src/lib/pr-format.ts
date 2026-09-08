@@ -37,7 +37,8 @@ export function prPillModifier(opts: {
   if (opts.merged) return 'merged';
   if (opts.closed) return 'closed';
   if (opts.inMergeQueue) return 'queued';
-  if (opts.mergeConflicts || opts.branchBehind) return 'conflicts';
+  if (opts.mergeConflicts) return 'conflicts';
+  if (opts.branchBehind) return 'behind';
   if (opts.draft) return 'draft';
   if (opts.checksFailed) return 'rejected';
   const decision = (opts.reviewDecision ?? '').toUpperCase();
@@ -193,11 +194,13 @@ export function summarizeChecks(checks: PrCheckRun[]): {
   let pending = 0;
   let passed = 0;
   for (const c of checks) {
+    // Behind-base is informational (update with main), not a failed check.
+    if (c.bucket === 'info') continue;
     if (c.bucket === 'fail') failed++;
     else if (c.bucket === 'pending') pending++;
     else if (c.bucket === 'pass') passed++;
   }
-  const total = checks.length;
+  const total = checks.filter((c) => c.bucket !== 'info').length;
   let label = '';
   if (total === 0) label = '';
   else if (failed > 0) label = `Failed (${failed}/${total})`;
@@ -227,6 +230,7 @@ export function checksFromRuns(checks: PrCheckRun[] | null | undefined): {
 export function checksTabShortLabel(checks: PrCheckRun[] | null | undefined): string {
   if (!checks?.length) return 'CI';
   const s = summarizeChecks(checks);
+  if (s.total === 0) return 'CI';
   if (s.failed > 0) return `CI ${s.failed}✕`;
   if (s.pending > 0) return 'CI …';
   return 'CI ✓';

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.166] - 2026-09-08
+
+### Changed
+
+- A branch that is behind the PR base no longer tints the header, pill, or Checks row red. Behind-main uses the same blue as an open / update-with-main PR. Merge conflicts stay red.
+
 ## [0.1.165] - 2026-09-07
 
 ### Fixed

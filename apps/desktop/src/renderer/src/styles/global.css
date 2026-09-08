@@ -4106,13 +4106,15 @@ button.worktree-hover-card-title:hover {
 }
 
 /* PR lifecycle colors on the same Create-PR-shaped button. */
-.worktree-hover-card-btn.open {
+.worktree-hover-card-btn.open,
+.worktree-hover-card-btn.behind {
   border-color: var(--accent-dim);
   background: var(--accent-soft);
   color: #75beff;
 }
 
-.worktree-hover-card-btn.open .worktree-hover-card-btn-status {
+.worktree-hover-card-btn.open .worktree-hover-card-btn-status,
+.worktree-hover-card-btn.behind .worktree-hover-card-btn-status {
   color: #9cdcfe;
 }
 
@@ -6227,7 +6229,8 @@ button.worktree-hover-card-title:hover {
 }
 
 /* Conductor-style: tint the whole right header by PR lifecycle state. */
-.right-top.open {
+.right-top.open,
+.right-top.behind {
   background: #16324a;
   border-bottom-color: rgba(0, 127, 212, 0.35);
 }
@@ -6270,6 +6273,7 @@ button.worktree-hover-card-title:hover {
 
 /* PR pill sits on the tinted bar — outlined, status color matches state. */
 .right-top.open .pr-pill,
+.right-top.behind .pr-pill,
 .right-top.draft .pr-pill {
   background: transparent;
   border-color: rgba(117, 190, 255, 0.55);
@@ -6281,6 +6285,7 @@ button.worktree-hover-card-title:hover {
 }
 
 .right-top.open .pr-status,
+.right-top.behind .pr-status,
 .right-top.draft .pr-status {
   color: #75beff;
 }
@@ -6350,6 +6355,8 @@ button.worktree-hover-card-title:hover {
 /* Primary + caret follow the state color; Archive stays solid accent for that state. */
 .right-top.open .btn-continue,
 .right-top.open .split-caret,
+.right-top.behind .btn-continue,
+.right-top.behind .split-caret,
 .right-top.draft .btn-continue,
 .right-top.draft .split-caret {
   border: 1px dashed rgba(117, 190, 255, 0.55) !important;
@@ -6358,6 +6365,7 @@ button.worktree-hover-card-title:hover {
 }
 
 .right-top.open .btn-archive,
+.right-top.behind .btn-archive,
 .right-top.draft .btn-archive {
   background: #0e639c !important;
   border-color: #007fd4 !important;
@@ -7293,7 +7301,8 @@ button.worktree-hover-card-title:hover {
   color: #ffa198;
 }
 
-.pr-link.open .pr-status {
+.pr-link.open .pr-status,
+.pr-link.behind .pr-status {
   color: #9cdcfe;
 }
 
@@ -7691,6 +7700,10 @@ button.worktree-hover-card-title:hover {
   color: #89d185;
 }
 
+.pr-check-summary.bucket-info {
+  color: #9cdcfe;
+}
+
 .pr-check-row {
   display: flex;
   align-items: flex-start;
@@ -7717,6 +7730,10 @@ button.worktree-hover-card-title:hover {
 
 .pr-check-icon.bucket-pending {
   color: #dcdcaa;
+}
+
+.pr-check-icon.bucket-info {
+  color: #75beff;
 }
 
 .pr-check-main {

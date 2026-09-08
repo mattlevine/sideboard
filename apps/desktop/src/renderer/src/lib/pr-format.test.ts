@@ -9,6 +9,7 @@ import {
   prPillStatusLabel,
   checksFromRuns,
   checksTabShortLabel,
+  summarizeChecks,
 } from './pr-format';
 
 describe('formatReviewDecision', () => {
@@ -69,7 +70,7 @@ describe('pr pill status', () => {
     ).toBe('conflicts');
   });
 
-  it('surfaces behind-base over draft', () => {
+  it('surfaces behind-base over draft without the conflicts (red) modifier', () => {
     expect(
       prPillStatusLabel({
         merged: false,
@@ -86,6 +87,16 @@ describe('pr pill status', () => {
         closed: false,
         draft: true,
         reviewDecision: 'APPROVED',
+        branchBehind: true,
+      }),
+    ).toBe('behind');
+    expect(
+      prPillModifier({
+        merged: false,
+        closed: false,
+        draft: true,
+        reviewDecision: 'APPROVED',
+        mergeConflicts: true,
         branchBehind: true,
       }),
     ).toBe('conflicts');
@@ -272,5 +283,33 @@ describe('checksFromRuns', () => {
     });
     expect(checksTabShortLabel([run('pass')])).toBe('CI ✓');
     expect(checksTabShortLabel([run('fail')])).toBe('CI 1✕');
+  });
+
+  it('does not treat behind-base info as a CI failure', () => {
+    const behind: PrCheckRun = {
+      name: 'Branch behind',
+      state: 'BEHIND',
+      bucket: 'info',
+      startedAt: null,
+      completedAt: null,
+      link: null,
+      description: null,
+      workflow: 'mergeability',
+      kind: 'mergeability',
+    };
+    expect(summarizeChecks([behind])).toEqual({
+      failed: 0,
+      pending: 0,
+      passed: 0,
+      total: 0,
+      label: '',
+    });
+    expect(checksFromRuns([behind, run('pass')])).toEqual({
+      checksFailed: false,
+      checksPending: false,
+      checksPassed: true,
+    });
+    expect(summarizeChecks([behind, run('pass')]).label).toBe('Passed (1/1)');
+    expect(checksTabShortLabel([behind])).toBe('CI');
   });
 });

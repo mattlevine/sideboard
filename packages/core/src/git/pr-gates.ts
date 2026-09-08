@@ -90,7 +90,7 @@ export function buildMergeGateChecks(
     rows.push({
       name: 'Branch behind',
       state: 'BEHIND',
-      bucket: 'fail',
+      bucket: 'info',
       startedAt: null,
       completedAt: null,
       link,

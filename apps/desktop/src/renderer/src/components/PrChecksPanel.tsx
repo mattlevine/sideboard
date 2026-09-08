@@ -107,6 +107,8 @@ export function PrChecksPanel({
         {checks.map((check) => {
           const duration = formatCheckDuration(check);
           const failed = check.bucket === 'fail';
+          const behind =
+            check.kind === 'mergeability' && (check.state ?? '').toUpperCase() === 'BEHIND';
           return (
             <div
               key={`${check.name}-${check.workflow ?? ''}-${check.link ?? ''}`}
@@ -119,7 +121,9 @@ export function PrChecksPanel({
                     ? '✕'
                     : check.bucket === 'pending'
                       ? '●'
-                      : '–'}
+                      : check.bucket === 'info'
+                        ? '↑'
+                        : '–'}
               </span>
               <div className="pr-check-main">
                 <div className="pr-check-name">
@@ -144,13 +148,13 @@ export function PrChecksPanel({
                   <div className="pr-check-desc">{check.description}</div>
                 )}
               </div>
-              {failed && (
+              {(failed || behind) && (
                 <button
                   type="button"
                   className="pr-fix-btn"
                   onClick={() => onFixWithAgent(check)}
                 >
-                  Fix with Agent
+                  {behind ? 'Update with Agent' : 'Fix with Agent'}
                 </button>
               )}
             </div>
