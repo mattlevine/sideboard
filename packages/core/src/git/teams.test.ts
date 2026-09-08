@@ -7,6 +7,7 @@ import {
   teamNameFromSlug,
   teamSlugFromName,
 } from './teams.js';
+import { ticketSlugForBranch, worktreeSlugForTicket } from './worktree-labels.js';
 import { worktreeDisplayLabel, worktreeDisplayLabelForGroup } from './worktree.js';
 
 describe('teamNameFromSlug', () => {
@@ -21,6 +22,30 @@ describe('teamNameFromSlug', () => {
 
   it('title-cases unknown slugs', () => {
     expect(teamNameFromSlug('my-custom-work')).toBe('My Custom Work');
+  });
+
+  it('strips a leading ticket id so the soccer nickname still shows', () => {
+    expect(teamNameFromSlug('eng-12-ajax')).toBe('Ajax');
+    expect(teamNameFromSlug('thread/44-west-ham')).toBe('West Ham');
+    expect(teamNameFromSlug('eng-12-ajax-2')).toBe('Ajax 2');
+  });
+});
+
+describe('ticketSlugForBranch', () => {
+  it('normalizes Linear, GitHub, and fallback identifiers', () => {
+    expect(ticketSlugForBranch('ENG-12')).toBe('eng-12');
+    expect(ticketSlugForBranch('#44')).toBe('44');
+    expect(ticketSlugForBranch('44')).toBe('44');
+    expect(ticketSlugForBranch('  Task 99  ')).toBe('task-99');
+    expect(ticketSlugForBranch('')).toBeNull();
+  });
+});
+
+describe('worktreeSlugForTicket', () => {
+  it('prefixes the soccer slug with the ticket id', () => {
+    expect(worktreeSlugForTicket('ENG-12', 'ajax')).toBe('eng-12-ajax');
+    expect(worktreeSlugForTicket('#44', 'thread/west-ham')).toBe('44-west-ham');
+    expect(worktreeSlugForTicket('', 'ajax')).toBe('ajax');
   });
 });
 

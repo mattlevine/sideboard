@@ -326,6 +326,16 @@ export interface PrDetails {
   commits: PrCommitInfo[];
   comments: PrCommentInfo[];
   reviews: PrReviewInfo[];
+  /** Assignee logins (`gh pr view --json assignees`). */
+  assignees: string[];
+  /** Label names (`gh pr view --json labels`). */
+  labels: string[];
+  /** Requested reviewer logins / team slugs (humans and bots). */
+  reviewRequests: string[];
+  /** Individual user reviewers only (bots and teams omitted). */
+  reviewers: string[];
+  /** Team / group review requests (e.g. `engineering-team`). */
+  teams: string[];
   /** Prefer `getPrChecks` — kept for callers; often empty to avoid nested GraphQL. */
   checks: PrCheckRun[];
 }

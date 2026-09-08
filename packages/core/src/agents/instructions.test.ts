@@ -269,6 +269,17 @@ describe('formatRenameBranchDirective', () => {
     ).toBeNull();
   });
 
+  it('keeps the ticket id in the suggested rename for issue worktrees', () => {
+    const text = formatRenameBranchDirective({
+      worktreePath: '/tmp/sideboard/workspaces/app/eng-12-paris',
+      branchName: 'thread/eng-12-paris',
+      sourceType: 'ticket',
+      sourceRef: 'ENG-12',
+    });
+    expect(text).toContain('feat/eng-12-dark-mode');
+    expect(text).toMatch(/Keep ticket `eng-12`/);
+  });
+
   it('includes custom rename_branch prompt when provided', () => {
     const text = formatRenameBranchDirective(
       {

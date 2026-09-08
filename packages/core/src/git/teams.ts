@@ -389,8 +389,12 @@ export function lookupSoccerTeam(titleOrSlug: string): TeamName | null {
 /** Human-readable label for a worktree dir / `thread/<slug>` branch. */
 export function teamNameFromSlug(slug: string): string {
   const normalized = slug.toLowerCase().replace(/^thread\//, '');
-  const suffixMatch = normalized.match(/^(.+)-(\d+)$/);
-  const base = suffixMatch?.[1] ?? normalized;
+  const withoutTicket = normalized
+    .replace(/^[a-z]{2,8}-\d{1,6}-/, '')
+    .replace(/^\d{1,8}-/, '');
+  const lookup = withoutTicket || normalized;
+  const suffixMatch = lookup.match(/^(.+)-(\d+)$/);
+  const base = suffixMatch?.[1] ?? lookup;
   const suffix = suffixMatch?.[2];
   const team = FAMOUS_SOCCER_TEAM_SEEDS.find((t) => t.slug === base);
   if (team) return suffix ? `${team.name} ${suffix}` : team.name;

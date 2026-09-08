@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePrSelector, resolvePrSelectors } from './worktree.js';
+import { parsePrDetailsView, resolvePrSelector, resolvePrSelectors } from './worktree.js';
 
 describe('resolvePrSelector', () => {
   it('prefers prUrl', () => {
@@ -57,5 +57,35 @@ describe('resolvePrSelectors', () => {
         branchName: 'thread/paris',
       }),
     ).toEqual(['thread/paris']);
+  });
+});
+
+describe('parsePrDetailsView', () => {
+  it('maps assignees, labels, and requested reviewers', () => {
+    const details = parsePrDetailsView({
+      number: 84,
+      title: 'feat: defaults',
+      body: '',
+      url: 'https://github.com/acme/app/pull/84',
+      state: 'OPEN',
+      isDraft: false,
+      reviewDecision: 'REVIEW_REQUIRED',
+      author: { login: 'matt' },
+      baseRefName: 'main',
+      headRefName: 'feat/x',
+      additions: 1,
+      deletions: 0,
+      changedFiles: 1,
+      comments: [],
+      reviews: [],
+      assignees: [{ login: 'matt' }],
+      labels: [{ name: 'eng-review' }, 'orchestrator'],
+      reviewRequests: [{ login: 'alice' }, { slug: 'engineering-team' }],
+    });
+    expect(details.assignees).toEqual(['matt']);
+    expect(details.labels).toEqual(['eng-review', 'orchestrator']);
+    expect(details.reviewers).toEqual(['alice']);
+    expect(details.teams).toEqual(['engineering-team']);
+    expect(details.reviewRequests).toEqual(['alice', 'engineering-team']);
   });
 });

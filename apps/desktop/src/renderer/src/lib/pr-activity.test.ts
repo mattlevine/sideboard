@@ -5,6 +5,7 @@ import {
   htmlFragmentsToMarkdown,
   prActivityItems,
   prDetailsAttachment,
+  prDetailsReviewerList,
   prTabTitle,
   preparePrCommentBody,
   relativePrTime,
@@ -31,6 +32,11 @@ const details = (partial: Partial<PrDetails> = {}): PrDetails => ({
   commits: [],
   comments: [],
   reviews: [],
+  assignees: [],
+  labels: [],
+  reviewRequests: [],
+  reviewers: [],
+  teams: [],
   checks: [],
   ...partial,
 });
@@ -230,6 +236,28 @@ describe('preparePrCommentBody', () => {
   });
 });
 
+describe('prDetailsReviewerList', () => {
+  it('unions requested reviewers, teams, and submitted reviews', () => {
+    expect(
+      prDetailsReviewerList(
+        details({
+          reviewers: ['alice'],
+          teams: ['engineering-team'],
+          reviewRequests: ['alice', 'copilot'],
+          reviews: [
+            {
+              author: { login: 'bob' },
+              state: 'APPROVED',
+              body: 'LGTM',
+              submittedAt: '2026-08-11T10:00:00Z',
+            },
+          ],
+        }),
+      ),
+    ).toEqual(['alice', 'engineering-team', 'copilot', 'bob']);
+  });
+});
+
 describe('prDetailsAttachment', () => {
   it('includes title, description, and activity', () => {
     const att = prDetailsAttachment(
@@ -249,5 +277,18 @@ describe('prDetailsAttachment', () => {
     expect(att.content).toContain('Harden the resume path.');
     expect(att.content).toContain('@supabase');
     expect(att.content).toContain('Preview ready');
+  });
+
+  it('includes assignees, reviewers, and labels', () => {
+    const att = prDetailsAttachment(
+      details({
+        assignees: ['matt'],
+        reviewers: ['alice'],
+        labels: ['eng-review'],
+      }),
+    );
+    expect(att.content).toContain('Assignees: matt');
+    expect(att.content).toContain('Reviewers: alice');
+    expect(att.content).toContain('Labels: eng-review');
   });
 });
