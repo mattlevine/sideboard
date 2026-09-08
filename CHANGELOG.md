@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.170] - 2026-09-08
+
 ### Changed
 
 - Agent turns use fewer tokens: per-turn reminders ride on Claude's `--append-system-prompt` (one cached block instead of accumulating in history) and are folded into other CLIs' requests only on resumed turns; the fresh-session playbook drops text already carried by the Sideboard MCP tool descriptions, lists skill guides only when the worktree has them, and no longer spells out every git button phrase — the meaning travels with the phrase itself (`Commit and push.`, `Merge PR.`, `Fix CI: …`), and the watch-fix-push playbook is attached only when a request names a PR goal.
