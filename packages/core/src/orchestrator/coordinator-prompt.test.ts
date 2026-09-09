@@ -174,6 +174,7 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('scope=project');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('repoPath from list_workspaces');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('confirmed=true');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('never pass your own agent or agent=cursor');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('find me work and start it');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Show the options');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Do not call Claude Linear MCP');
@@ -194,6 +195,8 @@ describe('coordinator-prompt', () => {
       const agents = readFileSync(join(cwd, 'AGENTS.md'), 'utf8');
       expect(claude).toContain('Orchestration');
       expect(claude).toContain('create_thread');
+      expect(claude).toContain('Do not pass your own agent or `agent=cursor`');
+      expect(claude).toContain('Settings → Default agent');
       expect(claude).toContain('oversee worktree agents');
       expect(claude).toContain('normal');
       expect(claude).toContain('add_workspace');
