@@ -39,6 +39,7 @@ export type {
   CursorUsageCost,
 } from './cursor-events.js';
 export {
+  isCursorApiKeyConfigured,
   isCursorAutoModel,
   listCursorModels,
   resolveCursorModelId,

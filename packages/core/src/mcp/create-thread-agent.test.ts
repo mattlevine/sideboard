@@ -98,13 +98,26 @@ describe('resolveOrchCreateThreadOptions', () => {
     expect(orchCreateThreadAgentNote(resolved)).toMatch(/Ignored agent=codex/);
   });
 
-  it('falls back to Cursor only when parent and Account default are both Codex', () => {
+  it('falls back to Cursor when parent and Account default are both Codex and a Cursor key is set', () => {
     const resolved = resolveOrchCreateThreadOptions({
       parentAgent: 'codex',
+      cursorReady: true,
       resolveNewThreadOptions: resolver({ agent: 'codex' }),
     });
     expect(resolved.agent).toBe('cursor');
     expect(resolved.coercedFrom).toBe('codex');
+    expect(orchCreateThreadAgentNote(resolved)).toMatch(/used agent=cursor/);
+  });
+
+  it('keeps Codex when parent and Account default are both Codex but Cursor is not configured', () => {
+    const resolved = resolveOrchCreateThreadOptions({
+      parentAgent: 'codex',
+      cursorReady: false,
+      resolveNewThreadOptions: resolver({ agent: 'codex' }),
+    });
+    expect(resolved.agent).toBe('codex');
+    expect(resolved.coercedFrom).toBeUndefined();
+    expect(orchCreateThreadAgentNote(resolved)).toBeUndefined();
   });
 
   it('keeps Cursor when it is the Account default', () => {

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Codex orchestration no longer fails `create_thread` with `CURSOR_API_KEY not set` when the Account default worktree agent is Codex and Cursor is not configured. Nested Codex still switches to Cursor when a key is present.
+
 ### Changed
 
 - Right sidebar **Ready for review** asks the worktree agent (same as Resolve / Commit & push) instead of running `gh pr ready` locally.

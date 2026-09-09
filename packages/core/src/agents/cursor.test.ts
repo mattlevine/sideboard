@@ -28,6 +28,16 @@ const baseThread = {
 } as unknown as Thread;
 
 describe('cursor model helpers', () => {
+  it('reports whether CURSOR_API_KEY is configured without a network call', async () => {
+    const { isCursorApiKeyConfigured } = await import('./cursor.js');
+    vi.stubEnv('SIDEBOARD_APP_DATA', mkdtempSync(join(tmpdir(), 'sideboard-cursor-key-')));
+    vi.stubEnv('CURSOR_API_KEY', '');
+    expect(isCursorApiKeyConfigured()).toBe(false);
+    vi.stubEnv('CURSOR_API_KEY', 'cursor_test');
+    expect(isCursorApiKeyConfigured()).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
   it('treats null/default/auto as Auto', async () => {
     const { isCursorAutoModel, resolveCursorModelId } = await import('./cursor.js');
     expect(isCursorAutoModel(null)).toBe(true);
