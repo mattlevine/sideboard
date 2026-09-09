@@ -7954,6 +7954,7 @@ button.linkish:hover {
 
 .right-upper-body,
 .right-lower-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -8433,6 +8434,15 @@ button.linkish:hover {
   flex-direction: column;
   background: #141210;
   overflow: hidden;
+}
+
+/* Keep xterm mounted (and sized) when Setup/Run is showing so the canvas
+   does not go blank. Overlay the lower body instead of display:none. */
+.terminal-panel.is-parked {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .embedded-terminal {

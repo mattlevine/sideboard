@@ -1,10 +1,15 @@
 /**
- * Persist right-sidebar open/closed and width per worktree path.
+ * Persist right-sidebar open/closed, width, and lower tab per worktree path.
  * Unset worktrees use stable defaults — never inherit another worktree's layout.
  */
 
 const OPEN_BY_WORKTREE_KEY = 'sideboard.rightSidebarOpenByWorktree';
 const WIDTH_BY_WORKTREE_KEY = 'sideboard.rightSidebarWidthByWorktree';
+const LOWER_BY_WORKTREE_KEY = 'sideboard.rightSidebarLowerByWorktree';
+
+export type RightSidebarLowerTab = 'setup' | 'run' | 'terminal';
+
+const LOWER_TABS = new Set<RightSidebarLowerTab>(['setup', 'run', 'terminal']);
 /** Legacy app-wide keys; only used when no worktree is selected (board view). */
 const OPEN_GLOBAL_KEY = 'sideboard.rightSidebar';
 const WIDTH_GLOBAL_KEY = 'sideboard.rightSidebarWidth';
@@ -172,4 +177,45 @@ export function writeRightSidebarWidth(
     return;
   }
   writeGlobalWidth(clamped);
+}
+
+function readLowerMap(): Record<string, RightSidebarLowerTab> {
+  try {
+    const raw = localStorage.getItem(LOWER_BY_WORKTREE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, RightSidebarLowerTab> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === 'string' && LOWER_TABS.has(v as RightSidebarLowerTab)) {
+        out[normalizeWorktreeKey(k)] = v as RightSidebarLowerTab;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Last Setup / Run / Terminal tab for this worktree, if any. */
+export function readRightSidebarLower(
+  worktreeKey: string | null | undefined,
+): RightSidebarLowerTab | null {
+  if (!worktreeKey) return null;
+  return readLowerMap()[normalizeWorktreeKey(worktreeKey)] ?? null;
+}
+
+/** Remember the lower tab so switching worktrees restores Terminal (and its PTY). */
+export function writeRightSidebarLower(
+  worktreeKey: string | null | undefined,
+  tab: RightSidebarLowerTab,
+): void {
+  if (!worktreeKey) return;
+  const map = readLowerMap();
+  map[normalizeWorktreeKey(worktreeKey)] = tab;
+  try {
+    localStorage.setItem(LOWER_BY_WORKTREE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
 }

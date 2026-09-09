@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { BrowserWindow } from 'electron';
 import { stripNestedElectronEnv, type Orchestrator } from '@sideboard-ai/core';
+import {
+  appendTerminalScrollback,
+  findReusableTerminalSession,
+  terminalSessionKind,
+  type TerminalSessionKind,
+} from './terminal-session.js';
 
 interface PtyLike {
   write: (data: string) => void;
@@ -14,7 +20,9 @@ interface PtyLike {
 interface PtySession {
   id: string;
   threadRef: string;
+  kind: TerminalSessionKind;
   pty: PtyLike;
+  scrollback: string;
 }
 
 const sessions = new Map<string, PtySession>();
@@ -130,13 +138,22 @@ function spawnScriptPty(
   };
 }
 
-function bindSession(id: string, threadRef: string, pty: PtyLike): void {
-  pty.onData((data) => broadcast('terminal:data', { id, data }));
+function bindSession(
+  id: string,
+  threadRef: string,
+  kind: TerminalSessionKind,
+  pty: PtyLike,
+): void {
+  const session: PtySession = { id, threadRef, kind, pty, scrollback: '' };
+  pty.onData((data) => {
+    session.scrollback = appendTerminalScrollback(session.scrollback, data);
+    broadcast('terminal:data', { id, data });
+  });
   pty.onExit(({ exitCode }) => {
     sessions.delete(id);
     broadcast('terminal:exit', { id, exitCode });
   });
-  sessions.set(id, { id, threadRef, pty });
+  sessions.set(id, session);
 }
 
 export async function startTerminalSession(
@@ -145,9 +162,16 @@ export async function startTerminalSession(
   cols = 80,
   rows = 24,
   opts?: { command?: string; args?: string[] },
-): Promise<{ id: string }> {
+): Promise<{ id: string; scrollback: string }> {
   const thread = orch.getThread(threadRef);
   if (!thread) throw new Error(`Thread not found: ${threadRef}`);
+
+  const kind = terminalSessionKind(opts);
+  const existing = findReusableTerminalSession(sessions.values(), threadRef, kind);
+  if (existing) {
+    existing.pty.resize?.(cols, rows);
+    return { id: existing.id, scrollback: existing.scrollback };
+  }
 
   const id = randomUUID();
   const shell = resolveShell();
@@ -172,8 +196,8 @@ export async function startTerminalSession(
         cwd: thread.worktreePath,
         env,
       });
-      bindSession(id, threadRef, pty);
-      return { id };
+      bindSession(id, threadRef, kind, pty);
+      return { id, scrollback: '' };
     } catch (err) {
       console.warn('[terminal] node-pty spawn failed, trying fallbacks:', err);
     }
@@ -182,14 +206,18 @@ export async function startTerminalSession(
   // 2) macOS script(1) — allocates a PTY without native addons
   const scriptPty = spawnScriptPty(file, args, thread.worktreePath, env);
   if (scriptPty) {
-    bindSession(id, threadRef, scriptPty);
-    return { id };
+    bindSession(id, threadRef, kind, scriptPty);
+    return { id, scrollback: '' };
   }
 
   // 3) Last resort: plain pipes (limited interactivity)
   const pipe = spawnPipeShell(file, args, thread.worktreePath, env);
-  bindSession(id, threadRef, pipe);
-  return { id };
+  bindSession(id, threadRef, kind, pipe);
+  return { id, scrollback: '' };
+}
+
+export function snapshotTerminal(id: string): string {
+  return sessions.get(id)?.scrollback ?? '';
 }
 
 export function writeTerminal(id: string, data: string): void {

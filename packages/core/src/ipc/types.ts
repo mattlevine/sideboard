@@ -493,9 +493,19 @@ export interface IpcApi {
   attachThread(threadRef: string): Promise<{ file: string; args: string[]; cwd: string }>;
   /** Embedded terminal (PTY) IPC. */
   terminal: {
-    start(threadRef: string, cols?: number, rows?: number): Promise<{ id: string }>;
+    start(
+      threadRef: string,
+      cols?: number,
+      rows?: number,
+    ): Promise<{ id: string; scrollback?: string }>;
     /** Start a PTY running the native agent attach command. */
-    attach(threadRef: string, cols?: number, rows?: number): Promise<{ id: string }>;
+    attach(
+      threadRef: string,
+      cols?: number,
+      rows?: number,
+    ): Promise<{ id: string; scrollback?: string }>;
+    /** Latest buffered output for a live session (replay after remount). */
+    snapshot(id: string): Promise<string>;
     write(id: string, data: string): Promise<void>;
     resize(id: string, cols: number, rows: number): Promise<void>;
     kill(id: string): Promise<void>;

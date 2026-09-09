@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  readRightSidebarLower,
   readRightSidebarOpen,
   readRightSidebarWidth,
   RIGHT_SIDEBAR_WIDTH_FALLBACK,
+  writeRightSidebarLower,
   writeRightSidebarOpen,
   writeRightSidebarWidth,
 } from './right-sidebar-prefs';
@@ -59,6 +61,17 @@ describe('right-sidebar-prefs', () => {
     writeRightSidebarWidth('/wt/cruzeiro', 500);
     expect(readRightSidebarWidth('/wt/monaco')).toBe(400);
     expect(readRightSidebarWidth('/wt/cruzeiro')).toBe(500);
+  });
+
+  it('remembers the lower tab per worktree without cross-bleed', () => {
+    expect(readRightSidebarLower('/wt/monaco')).toBeNull();
+    writeRightSidebarLower('/wt/monaco', 'terminal');
+    expect(readRightSidebarLower('/wt/monaco')).toBe('terminal');
+    expect(readRightSidebarLower('/wt/monaco/')).toBe('terminal');
+    expect(readRightSidebarLower('/wt/cruzeiro')).toBeNull();
+    writeRightSidebarLower('/wt/cruzeiro', 'setup');
+    expect(readRightSidebarLower('/wt/monaco')).toBe('terminal');
+    expect(readRightSidebarLower('/wt/cruzeiro')).toBe('setup');
   });
 
   it('falls back to legacy global key only when worktree is unset', () => {

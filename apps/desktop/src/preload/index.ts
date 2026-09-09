@@ -194,6 +194,7 @@ const api: IpcApi = {
       ipcRenderer.invoke('terminal:start', threadRef, cols, rows),
     attach: (threadRef, cols, rows) =>
       ipcRenderer.invoke('terminal:attach', threadRef, cols, rows),
+    snapshot: (id) => ipcRenderer.invoke('terminal:snapshot', id),
     write: (id, data) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id, cols, rows) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
     kill: (id) => ipcRenderer.invoke('terminal:kill', id),
