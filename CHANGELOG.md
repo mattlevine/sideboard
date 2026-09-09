@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Codex orchestration no longer fails `create_thread` with `CURSOR_API_KEY not set` when the Account default worktree agent is Codex and Cursor is not configured. Nested Codex still switches to Cursor when a key is present.
+- Codex orchestration no longer fails `create_thread` with `CURSOR_API_KEY not set` when the Account default worktree agent is Codex and Cursor is not configured. Nested Codex still switches to Cursor when a key is present. Claude and OpenCode coordinators already honor the Account default and are not switched to Cursor.
 
 ### Changed
 

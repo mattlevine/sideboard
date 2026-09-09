@@ -28,9 +28,10 @@ export type OrchCreateThreadResolution = {
  *
  * Settings → Default agent wins unless the caller passed a real override.
  * Orchestrators (especially Cursor) echo their own agent or the last enum
- * value (`cursor`); those are not overrides. Nested Codex is coerced to
- * Cursor only when a CURSOR_API_KEY is configured — otherwise create_thread
- * would fail with "CURSOR_API_KEY not set" despite a Codex Account default.
+ * value (`cursor`); those are not overrides. Claude / OpenCode parents never
+ * switch the child to Cursor. Nested Codex is coerced to Cursor only when a
+ * CURSOR_API_KEY is configured — otherwise create_thread would fail with
+ * "CURSOR_API_KEY not set" despite a Codex Account default.
  */
 export function resolveOrchCreateThreadOptions(input: {
   requestedAgent?: AgentKind;
