@@ -229,7 +229,6 @@ export function RightSidebar({
   const [mergeConfirm, setMergeConfirm] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
-  const [readyBusy, setReadyBusy] = useState(false);
   const prMenuRef = useRef<HTMLDivElement>(null);
   const runMenuRef = useRef<HTMLDivElement>(null);
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
@@ -854,7 +853,7 @@ export function RightSidebar({
       return;
     }
     if (gitAction === 'ready-for-review') {
-      void markDraftReady();
+      void askAgentGit('ready-for-review');
       return;
     }
     if (gitAction === 'merge') {
@@ -867,47 +866,6 @@ export function RightSidebar({
       return;
     }
     void askAgentGit('create-pr');
-  }
-
-  async function markDraftReady() {
-    if (readyBusy || typeof window.sideboard.markPrReady !== 'function') return;
-    if (!originInSync) {
-      window.alert(
-        'Push this branch to origin before marking the pull request ready for review.',
-      );
-      return;
-    }
-    setReadyBusy(true);
-    try {
-      const result = await window.sideboard.markPrReady(thread.id);
-      setPrMeta((prev) =>
-        prev
-          ? {
-              ...prev,
-              state: result.state || prev.state,
-              url: result.url || prev.url,
-              isDraft: false,
-            }
-          : {
-              number: Number(num) || 0,
-              url: result.url || prUrl || '',
-              state: result.state || 'OPEN',
-              isDraft: false,
-              title: thread.prTitle ?? thread.title,
-              baseRefName: prBase,
-              reviewDecision: null,
-              isInMergeQueue: false,
-              mergeable: null,
-              mergeStateStatus: null,
-            },
-      );
-      onRefresh();
-      void loadPrMeta();
-    } catch (err) {
-      window.alert(formatIpcInvokeError(err));
-    } finally {
-      setReadyBusy(false);
-    }
   }
 
   function archiveThisChat() {
@@ -1006,7 +964,8 @@ export function RightSidebar({
       | 'create-draft'
       | 'create-web'
       | 'commit-push'
-      | 'resolve-conflicts',
+      | 'resolve-conflicts'
+      | 'ready-for-review',
   ) {
     setPrMenuOpen(false);
     const gitAction =
@@ -1016,7 +975,9 @@ export function RightSidebar({
           ? 'create-web'
           : action === 'commit-push'
             ? 'commit-push'
-            : 'resolve-conflicts';
+            : action === 'ready-for-review'
+              ? 'ready-for-review'
+              : 'resolve-conflicts';
     setBusy(true);
     try {
       await window.sideboard.askGit(thread.id, gitAction);
@@ -1227,7 +1188,7 @@ export function RightSidebar({
               <button
                 type="button"
                 className={`${prMerged ? 'btn-live' : prClosed ? 'btn-closed' : 'btn-continue'} split-main`}
-                disabled={busy || mergeBusy || readyBusy}
+                disabled={busy || mergeBusy}
                 onClick={onPrimaryGitClick}
                 title={
                   gitAction === 'live'
@@ -1241,7 +1202,7 @@ export function RightSidebar({
                         : gitAction === 'update'
                           ? `Ask the agent to update this branch from origin/${prBase}`
                         : gitAction === 'ready-for-review'
-                          ? 'Mark this draft pull request ready for review'
+                          ? 'Ask the agent to mark this draft pull request ready for review'
                           : gitAction === 'checks-failing'
                           ? 'CI failed — open Checks'
                           : gitAction === 'checks-pending'
@@ -1267,7 +1228,7 @@ export function RightSidebar({
                   <button
                     type="button"
                     className="btn-continue split-caret"
-                    disabled={busy || mergeBusy || readyBusy}
+                    disabled={busy || mergeBusy}
                     title="More PR options"
                     onClick={() => setPrMenuOpen((v) => !v)}
                   >
@@ -1282,7 +1243,7 @@ export function RightSidebar({
                               type="button"
                               onClick={() => {
                                 setPrMenuOpen(false);
-                                void markDraftReady();
+                                void askAgentGit('ready-for-review');
                               }}
                             >
                               <span className="tool-menu-icon">✓</span>

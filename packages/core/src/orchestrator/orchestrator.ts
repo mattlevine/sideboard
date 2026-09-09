@@ -2594,7 +2594,7 @@ export class Orchestrator {
         'ask_git targets a worktree agent thread (not the orchestrator). Pass a child/worktree thread ref.',
       );
     }
-    if (action === 'merge' && !thread.prUrl) {
+    if ((action === 'merge' || action === 'ready-for-review') && !thread.prUrl) {
       throw new Error(
         'No pull request linked. Ask the worktree agent to open a draft PR first (ask_git create-draft).',
       );

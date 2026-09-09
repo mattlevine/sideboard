@@ -1052,13 +1052,13 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Commit & push, open a draft PR, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Do not start a checks loop on a plain push — only if the user gave a goal (Greptile 5/5, CI green). Pass a worktree thread ref (not the orchestrator). action=merge only when the user explicitly asked to merge that PR. Do not run git or gh from the orchestration cwd. If this tool errors that the GraphQL/PR body is too long, the branch is already pushed — have the worktree agent retry `gh pr create --body-file` with a short description (GitHub limit 65,536 characters). Do not invent SSH/auth failures from that error.',
+    'Commit & push, open a draft PR, mark ready for review, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Do not start a checks loop on a plain push — only if the user gave a goal (Greptile 5/5, CI green). Pass a worktree thread ref (not the orchestrator). action=ready-for-review and action=merge only when the user explicitly asked (or clicked the desktop button). Do not run git or gh from the orchestration cwd. If this tool errors that the GraphQL/PR body is too long, the branch is already pushed — have the worktree agent retry `gh pr create --body-file` with a short description (GitHub limit 65,536 characters). Do not invent SSH/auth failures from that error.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z
         .enum(AGENT_GIT_ACTIONS)
         .describe(
-          'commit-push | create-draft | create-web | resolve-conflicts | merge',
+          'commit-push | create-draft | create-web | resolve-conflicts | ready-for-review | merge',
         ),
     },
     async ({ ref, action }) => {

@@ -1549,6 +1549,7 @@ function registerIpc(): void {
         | 'create-draft'
         | 'create-web'
         | 'resolve-conflicts'
+        | 'ready-for-review'
         | 'merge',
     ) => orch.askGit(ref, action),
   );
