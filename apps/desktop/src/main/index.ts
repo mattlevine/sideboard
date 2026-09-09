@@ -1500,6 +1500,9 @@ function registerIpc(): void {
       });
     },
   );
+  ipcMain.handle('terminal:snapshot', (_e, id: string) => {
+    return import('./terminal.js').then((m) => m.snapshotTerminal(id));
+  });
   ipcMain.handle('terminal:write', (_e, id: string, data: string) => {
     return import('./terminal.js').then((m) => m.writeTerminal(id, data));
   });
@@ -1533,10 +1536,16 @@ function registerIpc(): void {
         | 'merge',
     ) => orch.askGit(ref, action),
   );
-  ipcMain.handle('archiveThread', (_e, ref: string) => orch.archive(ref));
-  ipcMain.handle('purgeThread', (_e, ref: string, opts?: { deleteBranch?: boolean }) =>
-    orch.purge(ref, opts),
-  );
+  ipcMain.handle('archiveThread', async (_e, ref: string) => {
+    const { killTerminalsForThread } = await import('./terminal.js');
+    killTerminalsForThread(ref);
+    return orch.archive(ref);
+  });
+  ipcMain.handle('purgeThread', async (_e, ref: string, opts?: { deleteBranch?: boolean }) => {
+    const { killTerminalsForThread } = await import('./terminal.js');
+    killTerminalsForThread(ref);
+    return orch.purge(ref, opts);
+  });
   ipcMain.handle('restoreThread', (_e, ref: string) => orch.restore(ref));
   ipcMain.handle('getRepoPath', () => repoPath);
   ipcMain.handle('setRepoPath', async (_e, path: string) => {

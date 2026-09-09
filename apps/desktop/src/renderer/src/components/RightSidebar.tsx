@@ -36,6 +36,10 @@ import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { FloatingMenu } from './FloatingMenu';
 import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
+import {
+  readRightSidebarLower,
+  writeRightSidebarLower,
+} from '../lib/right-sidebar-prefs';
 
 interface Props {
   thread: Thread;
@@ -193,9 +197,12 @@ export function RightSidebar({
     x: number;
     y: number;
   } | null>(null);
-  const [lower, setLower] = useState<LowerTab>(() =>
-    !thread.cowboy && thread.messages.length === 0 ? 'setup' : 'run',
+  const [lower, setLower] = useState<LowerTab>(
+    () =>
+      readRightSidebarLower(thread.worktreePath) ??
+      (!thread.cowboy && thread.messages.length === 0 ? 'setup' : 'run'),
   );
+  const [terminalOpened, setTerminalOpened] = useState(() => lower === 'terminal');
   const [diff, setDiff] = useState<DiffResult | null>(null);
   /** True after the includeMeta pass — first paint reports unpushed: 0. */
   const [gitMetaReady, setGitMetaReady] = useState(false);
@@ -250,6 +257,11 @@ export function RightSidebar({
   useEffect(() => {
     setGitMetaReady(false);
   }, [worktreeKey]);
+
+  useEffect(() => {
+    writeRightSidebarLower(worktreeKey, lower);
+    if (lower === 'terminal') setTerminalOpened(true);
+  }, [worktreeKey, lower]);
 
   const isCurrentWorktree = useCallback(
     (path: string | null | undefined) =>
@@ -2002,9 +2014,17 @@ export function RightSidebar({
             </div>
           )}
 
-          {lower === 'terminal' && (
-            <div className="terminal-panel">
-              <EmbeddedTerminal key={thread.id} threadId={thread.id} mode="shell" />
+          {terminalOpened && (
+            <div
+              className={`terminal-panel${lower === 'terminal' ? '' : ' is-parked'}`}
+              aria-hidden={lower !== 'terminal'}
+            >
+              <EmbeddedTerminal
+                key={thread.id}
+                threadId={thread.id}
+                mode="shell"
+                active={lower === 'terminal'}
+              />
             </div>
           )}
         </div>
