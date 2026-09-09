@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.174] - 2026-09-09
+
+### Fixed
+
+- Archive and purge (including auto-archive on merge) tear down the sidebar terminal so a restored worktree does not reuse a stale PTY.
+- Slack Listen uses the Settings orchestrator agent, not the account default, when opening a coordinator.
+- Session seeds skip one oversized newest turn instead of dropping all recent context after a summary.
+- Git-button phrases and PR-goal detection match the raw user prompt, so attachments and skills cannot block or false-trigger them.
+- A no-op chat-tab drop no longer switches the active chat; dragging a tab no longer pastes the chat id into inputs.
+- Ticket worktrees reserve the soccer nickname (`eng-12-ajax` keeps `ajax` taken).
+- Detached-job listing treats leftover children as still running, and process-group checks reject `pgid <= 1` so `kill(-1)` is never used.
+
 ## [0.1.173] - 2026-09-08
 
 ### Fixed
