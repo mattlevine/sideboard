@@ -92,6 +92,7 @@ describe('applyAgentRunnerHeapEnv', () => {
       expect(env.NODE_OPTIONS, agent).toBe(
         `--max-old-space-size=${AGENT_RUNNER_MAX_OLD_SPACE_MB}`,
       );
+      expect(env.NODE_USE_SYSTEM_CA, agent).toBe('1');
     }
   });
 });

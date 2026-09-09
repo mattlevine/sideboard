@@ -188,7 +188,10 @@ describe('resolveNodeLaunch', () => {
     expect(applied).toEqual({
       file: '/opt/homebrew/bin/node',
       args: ['/tmp/run-stdio.js'],
-      env: { NODE_OPTIONS: '--max-old-space-size=8192' },
+      env: {
+        NODE_OPTIONS: '--max-old-space-size=8192',
+        NODE_USE_SYSTEM_CA: '1',
+      },
     });
   });
 
@@ -202,6 +205,7 @@ describe('resolveNodeLaunch', () => {
       expect(applied.args).toEqual(['/tmp/run-stdio.js']);
       expect(applied.env.ELECTRON_RUN_AS_NODE).toBe('1');
       expect(applied.env.NODE_OPTIONS).toBe('--max-old-space-size=8192');
+      expect(applied.env.NODE_USE_SYSTEM_CA).toBe('1');
       return;
     }
     expect(applied.file).toBe('/bin/sh');
@@ -209,5 +213,6 @@ describe('resolveNodeLaunch', () => {
     expect(applied.args.at(-1)).toBe('/tmp/run-stdio.js');
     expect(applied.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect(applied.env.NODE_OPTIONS).toBe('--max-old-space-size=8192');
+    expect(applied.env.NODE_USE_SYSTEM_CA).toBe('1');
   });
 });

@@ -26,6 +26,7 @@ import {
   isElectronLikeCommand,
   wrapElectronAsNodeLaunch,
 } from '../hook/nested-electron-env.js';
+import { applySystemCaEnv } from '../http/system-ca.js';
 import { run } from '../git/run.js';
 import { packagedBundledNodePath } from './packaged-runtime.js';
 
@@ -64,6 +65,7 @@ export function applyAgentRunnerHeapEnv(
     env.NODE_OPTIONS,
     AGENT_RUNNER_MAX_OLD_SPACE_MB,
   );
+  applySystemCaEnv(env);
 }
 
 function envWithAgentHeap(env: Record<string, string>): Record<string, string> {
