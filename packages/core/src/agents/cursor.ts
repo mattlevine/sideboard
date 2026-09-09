@@ -40,6 +40,11 @@ function resolveCursorApiKey(): string {
   return (loadAppSettings().environment.CURSOR_API_KEY || '').trim();
 }
 
+/** True when Settings / env has a CURSOR_API_KEY (no network). */
+export function isCursorApiKeyConfigured(): boolean {
+  return Boolean(resolveCursorApiKey());
+}
+
 /** True when the thread uses Cursor Auto (`default` / null / `auto`). */
 export function isCursorAutoModel(model: string | null | undefined): boolean {
   const id = (model ?? '').trim().toLowerCase();

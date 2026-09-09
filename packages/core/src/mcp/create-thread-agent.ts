@@ -1,3 +1,4 @@
+import { isCursorApiKeyConfigured } from '../agents/cursor.js';
 import type { AgentKind } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 
@@ -27,19 +28,24 @@ export type OrchCreateThreadResolution = {
  *
  * Settings → Default agent wins unless the caller passed a real override.
  * Orchestrators (especially Cursor) echo their own agent or the last enum
- * value (`cursor`); those are not overrides. Nested Codex is coerced only
- * when the parent orchestrator is also Codex.
+ * value (`cursor`); those are not overrides. Claude / OpenCode parents never
+ * switch the child to Cursor. Nested Codex is coerced to Cursor only when a
+ * CURSOR_API_KEY is configured — otherwise create_thread would fail with
+ * "CURSOR_API_KEY not set" despite a Codex Account default.
  */
 export function resolveOrchCreateThreadOptions(input: {
   requestedAgent?: AgentKind;
   requestedModel?: string | null;
   parentAgent?: AgentKind | null;
   resolveNewThreadOptions: ResolveNewThreadOptions;
+  /** Override Cursor-key probe (tests). Default: Settings / env. */
+  cursorReady?: boolean;
 }): OrchCreateThreadResolution {
   const { resolveNewThreadOptions } = input;
   const account = resolveNewThreadOptions({});
   const requested = input.requestedAgent;
   const parent = input.parentAgent ?? undefined;
+  const cursorReady = input.cursorReady ?? isCursorApiKeyConfigured();
 
   let agent = account.agent;
   let ignoredAgent: AgentKind | undefined;
@@ -60,8 +66,10 @@ export function resolveOrchCreateThreadOptions(input: {
   let coercedFrom: AgentKind | undefined;
   // Parent echo already drops a Codex-orchestrator `agent=codex` when Account
   // default is something else. The only remaining nested-Codex case is both
-  // parent and Account default being Codex.
-  if (agent === 'codex' && parent === 'codex') {
+  // parent and Account default being Codex. Prefer Cursor when a key exists
+  // so two `codex exec` processes do not share ~/.codex locks; keep Codex
+  // when Cursor is not authenticated so create_thread still succeeds.
+  if (agent === 'codex' && parent === 'codex' && cursorReady) {
     coercedFrom = requested ?? 'codex';
     agent = 'cursor';
   }
@@ -83,7 +91,7 @@ export function orchCreateThreadAgentNote(input: {
   coercedFrom?: AgentKind;
 }): string | undefined {
   if (input.coercedFrom) {
-    return `Avoid nested Codex under a Codex orchestrator — used Account default agent=${input.agent}`;
+    return `Avoid nested Codex under a Codex orchestrator — used agent=${input.agent}`;
   }
   if (input.ignoredAgent) {
     return `Ignored agent=${input.ignoredAgent} — used Account default agent=${input.agent}`;
