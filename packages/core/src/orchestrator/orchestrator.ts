@@ -1096,9 +1096,13 @@ export class Orchestrator {
     });
 
     thread = this.requireThread(threadId);
+    // Git-button phrases and PR-goal detection must see the raw user text.
+    // Composer expansion appends attachments / @files / skills and would
+    // both miss exact phrases and false-trigger on skill/file mentions of CI.
+    const gitPrompt = expandCanonicalGitRequest(prompt);
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
       thread.worktreePath,
-      prompt,
+      gitPrompt,
       {
         attachments: sentAttachments ?? thread.attachments,
       },
@@ -1177,7 +1181,7 @@ export class Orchestrator {
     const prGateDirective =
       thread.agent !== 'brightsy' &&
       !isOrchestratorThread(thread) &&
-      mentionsPrGoal(expandedPrompt)
+      mentionsPrGoal(prompt)
         ? formatPrGateDirective()
         : null;
     const agentPrompt = [
@@ -1185,7 +1189,7 @@ export class Orchestrator {
       orchestrationReminder,
       prGateDirective,
       slackReplyContext,
-      expandCanonicalGitRequest(expandedPrompt),
+      expandedPrompt,
     ]
       .filter(Boolean)
       .join('\n\n');

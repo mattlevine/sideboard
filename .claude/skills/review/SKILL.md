@@ -136,6 +136,16 @@ Orchestration turns isolate vendor MCP so user / claude.ai Linear cannot hang th
 
 Settings → Default orchestrator agent/model/effort must be the source for every Global / Slack / cloud / schedule create path (`resolveOrchestratorDefaults`, `brightsyCloudConnectAgent`). Do not leave Slack Listen on `getDefaultAgent` while stamping orchestrator model/effort onto that agent.
 
+Desktop terminals: every `orch.archive` / `orch.purge` path (including auto-archive on merge) must kill the thread PTY. Do not leave teardown only on the IPC handlers.
+
+Session seed (`buildSessionSeed`): after pinning summaries, skip oversized newest blocks instead of aborting the newest-first walk — one fat tool dump must not drop every recent turn.
+
+Git-button expansion and PR-goal detection (`expandCanonicalGitRequest`, `mentionsPrGoal`) run on the raw user prompt, not `expandComposerPrompt` output.
+
+Taken soccer nicknames: `takenSlugsFromThread` / `collectTakenTeamSlugs` must record the bare team token from ticket-prefixed dirs (`eng-12-ajax` → `ajax`).
+
+Detached jobs: `listRunningDetachedJobs` uses `jobTreeAlive` (leftover children count). `processGroupAlive` must reject `pgid <= 1` — `kill(-1)` signals every process.
+
 Connector CLIs (Vercel, Supabase, `sentry-cli`) and PostHog HTTP: never stream raw `--json` / `--expand` / huge dumps into a tool result — this applies to Claude, Cursor, Codex, and OpenCode. Write dumps to `.context/cli/` (worktree scratch; not `.context/attachments/`). Cursor’s crash looks like the packaged SDK dumped into chat (`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then `importas e from"@bufbuild/protobuf"`). Detached jobs may be stopped (`stop_job`) when hung; do not require agents to wait forever on a buffering CLI.
 
 Worktree `pnpm install` / setup must keep the per-worktree store under `.context/.sideboard/pkg-cache` (`applyWorktreePkgCacheEnv`). Concurrent worktrees plus a Cursor/Codex sandbox hang on a shared `~/.pnpm-store` or a native build outside the permitted directory. Do not drop that isolation to “restore” a global cache.

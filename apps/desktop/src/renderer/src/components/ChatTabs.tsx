@@ -198,7 +198,6 @@ export function ChatTabs({
     suppressClickAfterDrag.current = false;
     setDraggingId(id);
     e.dataTransfer.setData(CHAT_TAB_DRAG, id);
-    e.dataTransfer.setData('text/plain', id);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setDragImage(e.currentTarget, 16, 12);
   }
@@ -216,13 +215,14 @@ export function ChatTabs({
   function onChatDrop(e: DragEvent<HTMLDivElement>, targetId: string) {
     if (!canReorder || !onReorderChats) return;
     e.preventDefault();
-    const fromId =
-      e.dataTransfer.getData(CHAT_TAB_DRAG) ||
-      e.dataTransfer.getData('text/plain') ||
-      draggedChatId.current;
+    const fromId = e.dataTransfer.getData(CHAT_TAB_DRAG) || draggedChatId.current;
     const place = dropPlaceForTab(e.currentTarget, e.clientX);
     setDropHint(null);
-    if (!fromId || fromId === targetId) return;
+    if (!fromId) return;
+    // HTML5 drag-and-drop fires a click on the drop target; suppress it even
+    // when the drop is a no-op so we do not change the active chat.
+    suppressClickAfterDrag.current = true;
+    if (fromId === targetId) return;
     const next = reorderChatIds(
       chats.map((c) => c.id),
       fromId,
@@ -230,7 +230,6 @@ export function ChatTabs({
       place,
     );
     if (next.join('\0') === chats.map((c) => c.id).join('\0')) return;
-    suppressClickAfterDrag.current = true;
     onReorderChats(next);
   }
 

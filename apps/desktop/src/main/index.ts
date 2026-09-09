@@ -104,7 +104,7 @@ import {
   slackRelayUrl,
   hasBakedSlackOAuth,
   pollSlackOutboundWatches,
-  getDefaultAgent,
+  resolveOrchestratorDefaults,
   followUpBehavior,
   ensureSlackDeviceIdentity,
   loadAppSettings,
@@ -196,6 +196,20 @@ if (!app.isPackaged && !process.env.SIDEBOARD_APP_DATA?.trim()) {
 let mainWindow: BrowserWindow | null = null;
 let repoPath = '';
 const orch = getOrchestrator();
+{
+  const archiveThread = orch.archive.bind(orch);
+  const purgeThread = orch.purge.bind(orch);
+  orch.archive = async (ref: string) => {
+    const { killTerminalsForThread } = await import('./terminal.js');
+    killTerminalsForThread(ref);
+    return archiveThread(ref);
+  };
+  orch.purge = async (ref: string, opts?: { deleteBranch?: boolean }) => {
+    const { killTerminalsForThread } = await import('./terminal.js');
+    killTerminalsForThread(ref);
+    return purgeThread(ref, opts);
+  };
+}
 let openFileWatcher: FSWatcher | null = null;
 let openFileWatchKey: string | null = null;
 let caffeinateProc: ChildProcess | null = null;
@@ -385,7 +399,7 @@ function startSlackListenDaemon(): void {
   syncCaffeinate();
 
   void runSlackListen({
-    agent: getDefaultAgent(settings),
+    agent: resolveOrchestratorDefaults(settings).agent,
     signal: ac.signal,
     fetchImpl: net.fetch.bind(net) as typeof fetch,
     onLog: (line) => {
@@ -1536,16 +1550,10 @@ function registerIpc(): void {
         | 'merge',
     ) => orch.askGit(ref, action),
   );
-  ipcMain.handle('archiveThread', async (_e, ref: string) => {
-    const { killTerminalsForThread } = await import('./terminal.js');
-    killTerminalsForThread(ref);
-    return orch.archive(ref);
-  });
-  ipcMain.handle('purgeThread', async (_e, ref: string, opts?: { deleteBranch?: boolean }) => {
-    const { killTerminalsForThread } = await import('./terminal.js');
-    killTerminalsForThread(ref);
-    return orch.purge(ref, opts);
-  });
+  ipcMain.handle('archiveThread', (_e, ref: string) => orch.archive(ref));
+  ipcMain.handle('purgeThread', (_e, ref: string, opts?: { deleteBranch?: boolean }) =>
+    orch.purge(ref, opts),
+  );
   ipcMain.handle('restoreThread', (_e, ref: string) => orch.restore(ref));
   ipcMain.handle('getRepoPath', () => repoPath);
   ipcMain.handle('setRepoPath', async (_e, path: string) => {

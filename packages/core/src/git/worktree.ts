@@ -1968,13 +1968,17 @@ export function collectTakenTeamSlugs(repoPath: string): Set<string> {
   if (existsSync(root)) {
     for (const entry of readdirSync(root, { withFileTypes: true })) {
       if (entry.isDirectory() && entry.name !== '.DS_Store') {
-        taken.add(normalizeTakenSlug(entry.name));
+        for (const slug of takenSlugsFromThread({ worktreePath: entry.name })) {
+          taken.add(slug);
+        }
       }
     }
   }
 
   for (const slug of listLocalThreadBranchSlugs(repoPath)) {
-    taken.add(slug);
+    for (const token of takenSlugsFromThread({ branchName: slug })) {
+      taken.add(token);
+    }
   }
 
   for (const thread of listThreads({ includeArchived: true })) {

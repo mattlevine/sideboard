@@ -81,7 +81,8 @@ function jobAlive(pid: number): boolean {
 /** True if any process remains in the wrap pid's group (wrap itself may already be dead). */
 export function processGroupAlive(pgid: number): boolean {
   if (process.platform === 'win32') return false;
-  if (!Number.isInteger(pgid) || pgid <= 0) return false;
+  // pgid 1 would become process.kill(-1), which signals every process.
+  if (!Number.isInteger(pgid) || pgid <= 1) return false;
   try {
     process.kill(-pgid, 0);
     return true;
@@ -134,7 +135,7 @@ export function listRunningDetachedJobs(worktreePath: string): string[] {
   for (const id of ids) {
     const dir = resolveJobDir(root, id);
     const pid = readIntFile(join(dir, 'pid'));
-    if (pid != null && jobAlive(pid)) running.push(id);
+    if (jobTreeAlive(pid)) running.push(id);
   }
   return running.sort();
 }
