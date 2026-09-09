@@ -110,17 +110,21 @@ describe('formatProcessGuideDirective', () => {
     expect(text).toMatch(/\.sideboard\/review\.md/);
     // Skill-specific lines only when the worktree has those skills.
     expect(text).not.toMatch(/graph-engineering/);
+    expect(text).not.toMatch(/worktree-install/);
     expect(text).not.toMatch(/\.claude\/skills\/review\/SKILL\.md/);
   });
 
-  it('mentions graph-engineering and the review skill only when the worktree has them', () => {
+  it('mentions graph-engineering, worktree-install, and the review skill only when the worktree has them', () => {
     const root = mkdtempSync(join(tmpdir(), 'sb-guide-'));
     mkdirSync(join(root, '.claude/skills/graph-engineering'), { recursive: true });
     writeFileSync(join(root, '.claude/skills/graph-engineering/SKILL.md'), '# g');
     mkdirSync(join(root, '.claude/skills/review'), { recursive: true });
     writeFileSync(join(root, '.claude/skills/review/SKILL.md'), '# r');
+    mkdirSync(join(root, '.claude/skills/worktree-install'), { recursive: true });
+    writeFileSync(join(root, '.claude/skills/worktree-install/SKILL.md'), '# i');
     const text = formatProcessGuideDirective({ worktreePath: root });
     expect(text).toMatch(/\/graph-engineering/);
+    expect(text).toMatch(/\/worktree-install/);
     expect(text).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
     expect(text).not.toMatch(/\.context\/review\.md/);
   });

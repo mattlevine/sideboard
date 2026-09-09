@@ -138,6 +138,8 @@ Settings → Default orchestrator agent/model/effort must be the source for ever
 
 Connector CLIs (Vercel, Supabase, `sentry-cli`) and PostHog HTTP: never stream raw `--json` / `--expand` / huge dumps into a tool result — this applies to Claude, Cursor, Codex, and OpenCode. Write dumps to `.context/cli/` (worktree scratch; not `.context/attachments/`). Cursor’s crash looks like the packaged SDK dumped into chat (`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then `importas e from"@bufbuild/protobuf"`). Detached jobs may be stopped (`stop_job`) when hung; do not require agents to wait forever on a buffering CLI.
 
+Worktree `pnpm install` / setup must keep the per-worktree store under `.context/.sideboard/pkg-cache` (`applyWorktreePkgCacheEnv`). Concurrent worktrees plus a Cursor/Codex sandbox hang on a shared `~/.pnpm-store` or a native build outside the permitted directory. Do not drop that isolation to “restore” a global cache.
+
 ## Cost / usage fields
 
 Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` (or a delta) when summing.

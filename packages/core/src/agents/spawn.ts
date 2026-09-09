@@ -16,6 +16,7 @@ import {
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
 } from './message-parts.js';
+import { applyWorktreePkgCacheEnv } from '../hook/worktree-pkg-cache.js';
 import { applyAgentRunnerHeapEnv } from './node-launch.js';
 import { ensureAgentPath } from './path.js';
 import { applyTurnUsage } from './usage.js';
@@ -106,6 +107,9 @@ export async function spawnAgentTurn(
   const env = childEnvWithAppSettings(cmd.env);
   applyPromptCacheTtlEnv(thread.agent, env);
   applyAgentRunnerHeapEnv(env);
+  if (!isOrchestratorThread(thread)) {
+    applyWorktreePkgCacheEnv(env, thread.worktreePath);
+  }
   try {
     if (isOrchestratorThread(thread)) {
       mergeAgentGitAuthEnv(env, await resolveAgentGitAuthEnv(env));

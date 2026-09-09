@@ -22,6 +22,7 @@ import {
   type RunScript,
 } from './settings.js';
 import { stripNestedElectronEnv } from './nested-electron-env.js';
+import { applyWorktreePkgCacheEnv } from './worktree-pkg-cache.js';
 import { findConventionSetup } from './convention-setup.js';
 import { runCursorWorktreeSetup } from './cursor-worktrees.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
@@ -215,6 +216,7 @@ export function buildWorkspaceScriptEnv(
     }
   }
 
+  applyWorktreePkgCacheEnv(env, opts.worktreePath);
   return env;
 }
 

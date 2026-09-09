@@ -85,6 +85,13 @@ describe('buildWorkspaceScriptEnv', () => {
     expect(env.CONDUCTOR_ROOT_PATH).toBe('/tmp/repo');
     expect(env.SIDEBOARD_DEFAULT_BRANCH).toBe('main');
     expect(env.SIDEBOARD_IS_LOCAL).toBe('1');
+    expect(env.npm_config_store_dir).toBe(
+      '/tmp/ws/ajax/.context/.sideboard/pkg-cache/pnpm-store',
+    );
+    expect(env.npm_config_devdir).toBe(
+      '/tmp/ws/ajax/.context/.sideboard/pkg-cache/node-gyp',
+    );
+    expect(env.ELECTRON_CACHE).toBeUndefined();
   });
 
   it('strips inherited Electron/Chromium env so nested electron-vite can start', () => {
