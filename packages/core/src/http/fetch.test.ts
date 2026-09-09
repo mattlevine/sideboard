@@ -11,6 +11,19 @@ describe('formatFetchError', () => {
       'fetch failed [ENOTFOUND: getaddrinfo ENOTFOUND api.linear.app] (https://api.linear.app/oauth/token)',
     );
   });
+
+  it('explains UNABLE_TO_GET_ISSUER_CERT_LOCALLY for agent Linear', () => {
+    const cause = Object.assign(new Error('unable to get local issuer certificate'), {
+      code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+    });
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    expect(formatFetchError(err, 'https://api.linear.app/graphql')).toContain(
+      'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+    );
+    expect(formatFetchError(err, 'https://api.linear.app/graphql')).toContain(
+      'Desktop Linear can still work',
+    );
+  });
 });
 
 describe('httpFetch', () => {

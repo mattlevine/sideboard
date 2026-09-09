@@ -119,6 +119,8 @@ import {
   runCloudConnect,
   saveAppSettings,
   setHttpFetchImpl,
+  applySystemCaEnv,
+  materializeSystemCaBundle,
   startOrchestration,
   createGlobalChat,
   ensureCloudCoordinator,
@@ -1655,6 +1657,13 @@ function registerIpc(): void {
 app.whenReady().then(async () => {
   // Chromium networking — Node undici `fetch` fails as "fetch failed" on many VPNs.
   setHttpFetchImpl(net.fetch.bind(net) as typeof fetch);
+  // Agent / MCP children are real Node and need Keychain CAs (Linear picker
+  // works here via net.fetch; agents otherwise get UNABLE_TO_GET_ISSUER_CERT_LOCALLY).
+  const systemCaBundle = materializeSystemCaBundle();
+  if (systemCaBundle && !process.env.NODE_EXTRA_CA_CERTS?.trim()) {
+    process.env.NODE_EXTRA_CA_CERTS = systemCaBundle;
+  }
+  applySystemCaEnv(process.env);
   try {
     initDesktopSecretVault();
   } catch (err) {

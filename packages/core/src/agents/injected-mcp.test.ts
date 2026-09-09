@@ -75,7 +75,10 @@ describe('injected-mcp', () => {
     expect(servers[0]!.name).toBe('sideboard');
     // Dev machines without a global `sideboard` binary get `node <abs>/mcp/run-stdio.js`
     // (absolute node from PATH). Never Sideboard.app / Electron-as-Node when node exists.
-    if (servers[0]!.command === 'sideboard') {
+    if (
+      servers[0]!.command === 'sideboard' ||
+      /[/\\]sideboard$/.test(servers[0]!.command)
+    ) {
       expect(servers[0]!.args).toEqual(['mcp']);
     } else {
       expect(
@@ -98,6 +101,7 @@ describe('injected-mcp', () => {
     expect(servers[0]!.env?.GIT_TERMINAL_PROMPT).toBe('0');
     expect(servers[0]!.env?.GH_PROMPT_DISABLED).toBe('1');
     expect(servers[0]!.env?.NODE_OPTIONS).toMatch(/--max-old-space-size=8192/);
+    expect(servers[0]!.env?.NODE_USE_SYSTEM_CA).toBe('1');
 
     const cursorMap = toCursorMcpServers(servers);
     expect(cursorMap.sideboard?.type).toBe('stdio');
