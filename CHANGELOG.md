@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.175] - 2026-09-09
+
 ### Fixed
 
 - Orchestration `create_thread` uses Settings → Default agent instead of echoing Cursor (or the coordinator’s own agent). Nested Codex is coerced only when the parent orchestrator is also Codex.
