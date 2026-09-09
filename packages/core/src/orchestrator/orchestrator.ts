@@ -175,6 +175,7 @@ import {
   formatViewerContextReminder,
   isAbleTimeConnected,
   isLinearConnected,
+  followUpBehavior,
   loadAppSettings,
   resolveEffectiveIssueSource,
   resolveViewerProfileForRepo,
@@ -237,6 +238,21 @@ export async function waitForPidExit(
     await new Promise((r) => setTimeout(r, 80));
   }
   return true;
+}
+
+/**
+ * Desktop/CLI pass follow-up explicitly. Internal sends (child-halt
+ * "Sideboard: …" notices, Slack, schedules) omit it — orchestrators then
+ * use Settings → Follow-up behavior (default steer) so those do not sit
+ * in the queue while the user asked to interrupt. Worktree MCP
+ * send_to_thread stays queue unless the caller opts in.
+ */
+export function resolveSendFollowUp(
+  thread: Pick<Thread, 'sourceType' | 'repoPath'>,
+  requested?: FollowUpBehavior,
+): FollowUpBehavior {
+  if (requested === 'steer' || requested === 'queue') return requested;
+  return isOrchestratorThread(thread) ? followUpBehavior() : 'queue';
 }
 
 /** After Send now / Stop, do not pin drainQueue on a wedged agent child. */
@@ -847,13 +863,13 @@ export class Orchestrator {
     if (thread.status === 'archived') {
       throw new Error(`Thread is archived: ${thread.id}`);
     }
-    const followUp = opts?.followUp === 'steer' ? 'steer' : 'queue';
     let shouldSteer = false;
     const sent = await withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       if (current.status === 'archived') {
         throw new Error(`Thread is archived: ${thread.id}`);
       }
+      const followUp = resolveSendFollowUp(current, opts?.followUp);
       const queue = [...current.queue, prompt];
       this.crashContinued.delete(thread.id);
       this.jobContinueCount.delete(thread.id);

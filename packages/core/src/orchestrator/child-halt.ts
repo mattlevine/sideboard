@@ -43,8 +43,9 @@ function noticeKey(childId: string, status: ThreadStatus): string {
 }
 
 /**
- * Queue a follow-up on the parent orchestration chat so it notices a child
- * that stopped/errored while it was not waiting.
+ * Wake the parent orchestration chat so it notices a child that
+ * stopped/errored while it was not waiting. `send` should honor the user's
+ * follow-up setting (steer interrupts; queue waits).
  */
 export function notifyParentOfChildHalt(
   child: Thread,
