@@ -237,6 +237,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).not.toMatch(/GH_TOKEN/);
     expect(text).toMatch(/Never push to or open PRs against `upstream`/i);
     expect(text).toMatch(/Commit and push\./);
+    expect(text).toMatch(/Ready for review\./);
     expect(text).toMatch(/Merge PR\./);
     expect(text).toMatch(/Merge the PR only when/);
     expect(text).toMatch(/gh stack merge/);

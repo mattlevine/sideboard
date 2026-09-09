@@ -10,6 +10,7 @@ describe('agentGitPrompt', () => {
     expect(agentGitPrompt('create-web')).toBe(
       'Commit, push, and open a PR in the browser.',
     );
+    expect(agentGitPrompt('ready-for-review')).toBe('Ready for review.');
     expect(agentGitPrompt('merge')).toBe('Merge PR.');
   });
 
@@ -39,6 +40,7 @@ describe('expandCanonicalGitRequest', () => {
     expect(expandCanonicalGitRequest('Commit, push, and open a PR in the browser.')).toMatch(
       /--web/,
     );
+    expect(expandCanonicalGitRequest('Ready for review.')).toMatch(/gh pr ready/);
   });
 
   it('names the base when resolving conflicts', () => {

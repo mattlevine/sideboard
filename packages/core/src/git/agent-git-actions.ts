@@ -5,6 +5,7 @@ export const AGENT_GIT_ACTIONS = [
   'create-draft',
   'create-web',
   'resolve-conflicts',
+  'ready-for-review',
   'merge',
 ] as const;
 
@@ -26,6 +27,8 @@ export function agentGitPrompt(
       const named = base ? ` (${base})` : '';
       return `Merge the remote branch${named} into your branch and resolve conflicts. Then, commit and push your changes.`;
     }
+    case 'ready-for-review':
+      return 'Ready for review.';
     case 'merge':
       return 'Merge PR.';
   }
@@ -49,6 +52,8 @@ function gitActionExpansion(action: AgentGitAction, base: string | null): string
       return 'Commit, push, then `gh pr create --web -R <origin-owner/name>`.';
     case 'resolve-conflicts':
       return `Fetch the PR base${base ? ` (\`${base}\`)` : ''}, merge it into this branch, resolve conflicts carefully, then commit and push until the PR is mergeable.`;
+    case 'ready-for-review':
+      return 'This phrase is the explicit ask to mark this thread\'s draft pull request ready for review on GitHub (`gh pr ready -R <origin-owner/name>` or `gh pr ready`). Update title/body if the purpose drifted. Do not merge.';
     case 'merge':
       return 'This phrase is the explicit ask to merge this thread\'s open pull request on GitHub. If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.';
   }

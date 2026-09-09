@@ -106,7 +106,7 @@ export function formatWorktreeDirective(
     );
   }
   lines.push(
-    '- Sideboard git buttons send short phrases ("Commit and push.", "Merge PR.", …) with their meaning attached — act on them without asking for clarification. If the user gives a goal (Greptile 5/5, CI green, until checks pass), you get the watch-fix-push playbook with that request.',
+    '- Sideboard git buttons send short phrases ("Commit and push.", "Ready for review.", "Merge PR.", …) with their meaning attached — act on them without asking for clarification. If the user gives a goal (Greptile 5/5, CI green, until checks pass), you get the watch-fix-push playbook with that request.',
   );
   lines.push('');
   lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));

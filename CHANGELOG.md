@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Right sidebar **Ready for review** asks the worktree agent (same as Resolve / Commit & push) instead of running `gh pr ready` locally.
+
 ## [0.1.175] - 2026-09-09
 
 ### Fixed

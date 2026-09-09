@@ -465,6 +465,7 @@ export interface IpcApi {
       | 'create-draft'
       | 'create-web'
       | 'resolve-conflicts'
+      | 'ready-for-review'
       | 'merge',
   ): Promise<Thread>;
   archiveThread(threadRef: string): Promise<Thread>;
