@@ -10,6 +10,8 @@ pnpm --filter @sideboard-ai/core test
 pnpm --filter @sideboard-ai/desktop dev
 ```
 
+In a Sideboard worktree, setup and agent env already point `pnpm install` at `.context/.sideboard/pkg-cache` so sibling worktrees and sandboxed native builds do not share `~/.pnpm-store`. After merge-from-main or a hung install, follow [`.claude/skills/worktree-install/SKILL.md`](../../.claude/skills/worktree-install/SKILL.md). Do not `pnpm install` in the main checkout.
+
 `pnpm typecheck` has known debt (Thread test fixtures, electron-vite typings). CI treats typecheck as soft. Prefer green **build + test**.
 
 ## Desktop pack in a Sideboard worktree

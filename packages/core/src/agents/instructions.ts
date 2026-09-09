@@ -271,10 +271,15 @@ export function formatProcessGuideDirective(opts?: { worktreePath?: string | nul
     !!worktree && existsSync(join(worktree, '.claude/skills/graph-engineering/SKILL.md'));
   const hasReviewSkill =
     !!worktree && existsSync(join(worktree, '.claude/skills/review/SKILL.md'));
+  const hasInstallSkill =
+    !!worktree && existsSync(join(worktree, '.claude/skills/worktree-install/SKILL.md'));
   return [
     'Process guides (recurring work only):',
     hasGraphSkill
       ? '- Migrations, ports, batch fixes, and other fan-out: follow `.claude/skills/graph-engineering/SKILL.md` (`/graph-engineering`). Judge first; state on disk; grow the rulebook; do not patch around it.'
+      : null,
+    hasInstallSkill
+      ? '- After merge-from-main / lockfile change, or a hung `pnpm install`: follow `.claude/skills/worktree-install/SKILL.md` (`/worktree-install`). Use the worktree-local store Sideboard already set; do not share `~/.pnpm-store` across concurrent worktrees.'
       : null,
     '- If this same shape of work will happen again, write `.claude/skills/<kebab-name>/SKILL.md` in this worktree (Claude Code project skill; Sideboard `/name`, Claude Code, and `attach` all load it). Not under `.sideboard/skills/`. Point Codex/OpenCode at it from `AGENTS.md`.',
     hasReviewSkill

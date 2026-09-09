@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.173] - 2026-09-08
+
+### Fixed
+
+- Concurrent worktree `pnpm install` (and sandboxed native rebuilds) no longer share `~/.pnpm-store`. Setup and worktree agent env point pnpm / npm / node-gyp / Electron download caches at `.context/.sideboard/pkg-cache`.
+
+### Added
+
+- `/worktree-install` skill for merge-from-main or a hung install across worktrees.
+
 ## [0.1.172] - 2026-09-08
 
 ### Added
