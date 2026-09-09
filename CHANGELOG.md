@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.177] - 2026-09-09
+
+### Fixed
+
+- Orchestration child-halt notices (`Sideboard: child worktree …`) and other internal `send()` follow-ups honor Settings → Follow-up behavior. With **steer** (the default) they interrupt instead of sitting in the queue. Worktree `send_to_thread` still queues unless the caller opts in.
+
 ## [0.1.176] - 2026-09-09
 
 ### Fixed
