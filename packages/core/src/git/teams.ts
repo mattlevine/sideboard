@@ -425,6 +425,32 @@ export function normalizeTakenSlug(raw: string): string {
 }
 
 /**
+ * Bare soccer-team token from a ticket-prefixed dir/branch (`eng-12-ajax` → `ajax`).
+ * Used so later worktrees do not reuse a nickname already shown in the sidebar.
+ */
+export function soccerTokenFromTakenSlug(raw: string): string | null {
+  const normalized = normalizeTakenSlug(raw);
+  if (!normalized) return null;
+  const withoutTicket = normalized
+    .replace(/^[a-z]{2,8}-\d{1,6}-/, '')
+    .replace(/^\d{1,8}-/, '');
+  const lookup = withoutTicket || normalized;
+  const suffixMatch = lookup.match(/^(.+)-(\d+)$/);
+  const base = suffixMatch?.[1] ?? lookup;
+  const team = FAMOUS_SOCCER_TEAM_SEEDS.find((t) => t.slug === base);
+  if (!team) return null;
+  return suffixMatch ? `${team.slug}-${suffixMatch[2]}` : team.slug;
+}
+
+function addTakenSlug(out: Set<string>, raw: string): void {
+  const normalized = normalizeTakenSlug(raw);
+  if (!normalized) return;
+  out.add(normalized);
+  const token = soccerTokenFromTakenSlug(normalized);
+  if (token) out.add(token);
+}
+
+/**
  * Slugs that should count as "already used" for a thread record — title (when
  * it maps to a club), placeholder branch, and worktree directory name.
  */
@@ -438,14 +464,13 @@ export function takenSlugsFromThread(thread: {
   if (titleSlug) out.add(normalizeTakenSlug(titleSlug));
 
   if (thread.branchName?.trim()) {
-    const branch = normalizeTakenSlug(thread.branchName.trim());
-    if (branch) out.add(branch);
+    addTakenSlug(out, thread.branchName.trim());
   }
 
   if (thread.worktreePath) {
     const parts = thread.worktreePath.replace(/\/+$/, '').split('/');
     const dir = parts[parts.length - 1];
-    if (dir) out.add(normalizeTakenSlug(dir));
+    if (dir) addTakenSlug(out, dir);
   }
 
   return [...out];

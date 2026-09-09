@@ -278,6 +278,20 @@ describe('context compact', () => {
     expect(seed.length).toBeLessThan(12_000);
   });
 
+  it('session seed skips an oversized newest turn instead of dropping all recent context', () => {
+    const huge = 'H'.repeat(8_000);
+    const messages: ThreadMessage[] = [
+      msg('summary', 'PRIOR-SUMMARY'),
+      msg('user', 'RECENT-USER'),
+      msg('agent', huge),
+    ];
+    const seed = buildSessionSeed(messages, { maxChars: 4_000 })!;
+    expect(seed).toContain('PRIOR-SUMMARY');
+    expect(seed).toContain('RECENT-USER');
+    expect(seed).not.toContain(huge);
+    expect(seed).toMatch(/omitted for length/);
+  });
+
   it('session seed without a budget overflow has no omission marker', () => {
     const seed = buildSessionSeed(fatThread(4, 100))!;
     expect(seed).not.toContain('omitted for length');

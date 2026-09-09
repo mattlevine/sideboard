@@ -220,7 +220,9 @@ export function buildSessionSeed(
   for (let i = blocks.length - 1; i >= 0; i--) {
     if (keep[i]) continue;
     const next = used + blocks[i]!.length + 2;
-    if (next > maxChars && used > 0) break;
+    // Skip oversized newest blocks instead of aborting — a pinned summary
+    // would otherwise drop every recent turn after one fat tool dump.
+    if (next > maxChars && used > 0) continue;
     keep[i] = true;
     used = next;
   }

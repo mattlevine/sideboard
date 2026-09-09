@@ -26,6 +26,12 @@ interface PtySession {
 }
 
 const sessions = new Map<string, PtySession>();
+/** In-flight starts so overlapping remounts share one PTY per thread+kind. */
+const starting = new Map<string, Promise<{ id: string; scrollback: string }>>();
+
+function startKey(threadRef: string, kind: TerminalSessionKind): string {
+  return `${threadRef}:${kind}`;
+}
 
 function resolveShell(): string {
   const fromEnv = process.env.SHELL?.trim();
@@ -171,6 +177,33 @@ export async function startTerminalSession(
   if (existing) {
     existing.pty.resize?.(cols, rows);
     return { id: existing.id, scrollback: existing.scrollback };
+  }
+
+  const key = startKey(threadRef, kind);
+  const inflight = starting.get(key);
+  if (inflight) return inflight;
+
+  const started = startNewTerminalSession(thread, threadRef, kind, cols, rows, opts).finally(
+    () => {
+      if (starting.get(key) === started) starting.delete(key);
+    },
+  );
+  starting.set(key, started);
+  return started;
+}
+
+async function startNewTerminalSession(
+  thread: { worktreePath: string },
+  threadRef: string,
+  kind: TerminalSessionKind,
+  cols: number,
+  rows: number,
+  opts?: { command?: string; args?: string[] },
+): Promise<{ id: string; scrollback: string }> {
+  const reused = findReusableTerminalSession(sessions.values(), threadRef, kind);
+  if (reused) {
+    reused.pty.resize?.(cols, rows);
+    return { id: reused.id, scrollback: reused.scrollback };
   }
 
   const id = randomUUID();

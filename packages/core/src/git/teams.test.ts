@@ -142,6 +142,16 @@ describe('takenSlugsFromThread', () => {
       }).sort(),
     ).toEqual(['monaco']);
   });
+
+  it('reserves the soccer token from a ticket-prefixed dir and branch', () => {
+    expect(
+      takenSlugsFromThread({
+        title: 'ENG-12 login',
+        branchName: 'thread/eng-12-ajax',
+        worktreePath: '/Users/me/sideboard/workspaces/sideboard/eng-12-ajax',
+      }).sort(),
+    ).toEqual(['ajax', 'eng-12-ajax']);
+  });
 });
 
 describe('allocateTeamName', () => {
@@ -155,6 +165,16 @@ describe('allocateTeamName', () => {
     const team = allocateTeamName(['thread/liverpool', 'arsenal'], () => 0);
     expect(team.slug).not.toBe('liverpool');
     expect(team.slug).not.toBe('arsenal');
+  });
+
+  it('does not reuse a soccer token already used under a ticket prefix', () => {
+    const taken = takenSlugsFromThread({
+      branchName: 'thread/eng-12-ajax',
+      worktreePath: '/tmp/eng-12-ajax',
+    });
+    const others = FAMOUS_SOCCER_TEAMS.map((t) => t.slug).filter((s) => s !== 'ajax');
+    const team = allocateTeamName([...others, ...taken], () => 0);
+    expect(team.slug).not.toBe('ajax');
   });
 
   it('never returns a taken slug', () => {

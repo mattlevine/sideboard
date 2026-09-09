@@ -104,7 +104,8 @@ function isAlive(pid) {
 /** True if any process remains in the wrap pid's group (wrap itself may already be dead). */
 function processGroupAlive(pgid) {
   if (process.platform === 'win32') return false;
-  if (!Number.isInteger(pgid) || pgid <= 0) return false;
+  // pgid 1 would become process.kill(-1), which signals every process.
+  if (!Number.isInteger(pgid) || pgid <= 1) return false;
   try {
     process.kill(-pgid, 0);
     return true;

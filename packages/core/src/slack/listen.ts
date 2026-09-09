@@ -6,7 +6,7 @@ import {
 } from '../orchestrator/coordinator-prompt.js';
 import {
   ensureSlackDeviceIdentity,
-  getDefaultAgent,
+  resolveOrchestratorDefaults,
 } from '../store/app-settings.js';
 import {
   ensureSlackCoordinator,
@@ -523,7 +523,7 @@ export async function handleSlackInbound(
     log(`skip superseded ${msg.kind} ${msg.ts}`);
     return;
   }
-  const agent = coerceOrchestratorAgent(opts.agent ?? getDefaultAgent());
+  const agent = coerceOrchestratorAgent(opts.agent ?? resolveOrchestratorDefaults().agent);
   const workspaces = refreshWorkspaces();
   for (const ws of workspaces) {
     await getOrchestrator().reconcile(ws.path).catch(() => undefined);
@@ -702,7 +702,7 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
   const log = opts.onLog ?? console.log;
   const connected = listSlackWorkspacesRaw();
   const orch = getOrchestrator();
-  const agent = coerceOrchestratorAgent(opts.agent ?? getDefaultAgent());
+  const agent = coerceOrchestratorAgent(opts.agent ?? resolveOrchestratorDefaults().agent);
   let inboundGeneration = 0;
   const off = orch.on((event) => {
     if (event.type !== 'turn_finished') return;

@@ -9,6 +9,7 @@ import {
 import {
   jobTreeAlive,
   listRunningDetachedJobs,
+  processGroupAlive,
   looksLikeDeferredDonePromise,
   planJobContinue,
   stopDetachedJob,
@@ -138,6 +139,27 @@ describe('waitForDetachedJob / listRunningDetachedJobs', () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'pid'), `${process.pid}\n`);
     expect(listRunningDetachedJobs(root)).toEqual(['core-test']);
+  });
+
+  it('processGroupAlive rejects pid 1 so we never signal every process', () => {
+    expect(processGroupAlive(1)).toBe(false);
+    expect(processGroupAlive(0)).toBe(false);
+    expect(processGroupAlive(-3)).toBe(false);
+  });
+
+  it('lists leftover children after wrap exits', async () => {
+    const root = join(tmpdir(), `sb-job-list-wrap-${Date.now()}`);
+    const dir = join(root, DETACHED_JOBS_DIR, 'hang');
+    mkdirSync(dir, { recursive: true });
+    const { wrapPid, cleanup } = await spawnWrapWithStubbornChild(dir);
+    try {
+      process.kill(wrapPid, 'SIGKILL');
+      await waitUntil(() => !pidAlive(wrapPid), 2_000);
+      expect(jobTreeAlive(wrapPid)).toBe(true);
+      expect(listRunningDetachedJobs(root)).toEqual(['hang']);
+    } finally {
+      cleanup();
+    }
   });
 
   it('stopDetachedJob kills a live sleep and marks failed', async () => {
