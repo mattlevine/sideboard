@@ -43,6 +43,11 @@ import {
 } from './lib/unread-worktrees';
 import { readWorktreeSort, writeWorktreeSort } from './lib/worktree-sort';
 import {
+  orderWorktreeChatsForKey,
+  writeLastWorktreeChatId,
+  writeWorktreeChatOrder,
+} from './lib/worktree-tabs';
+import {
   shouldHoldCreateOverlay,
   threadHasVisibleFirstTurn,
   type CreatePaneProgress,
@@ -113,6 +118,8 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  /** Bump when the user drag-reorders tabs so worktreeChats re-reads localStorage. */
+  const [tabOrderEpoch, setTabOrderEpoch] = useState(0);
   const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set());
   /** Threads currently tearing down via archive (sidebar shows progress on each). */
   const [archivingIds, setArchivingIds] = useState<Set<string>>(() => new Set());
@@ -655,10 +662,17 @@ export function App() {
 
   const worktreeChats = useMemo(() => {
     if (!selected) return [];
-    return threads
-      .filter((t) => sameWorktreePath(t.worktreePath, selected.worktreePath))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }, [threads, selected]);
+    const siblings = threads.filter((t) =>
+      sameWorktreePath(t.worktreePath, selected.worktreePath),
+    );
+    return orderWorktreeChatsForKey(siblings, unreadWorktreeKey(selected));
+  }, [threads, selected, tabOrderEpoch]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const key = unreadWorktreeKey(selected);
+    if (key) writeLastWorktreeChatId(key, selected.id);
+  }, [selected?.id, selected?.worktreePath, selected?.repoPath]);
 
   const knownWorkspaces = useMemo(() => {
     const byPath = new Map<string, Workspace>();
@@ -709,6 +723,14 @@ export function App() {
     const activity = latestAgentResponseAt(group) ?? new Date().toISOString();
     markWorktreeSeen(key, activity);
   }, [view, selectedId, threads, archived]);
+
+  function reorderSelectedChats(ids: string[]) {
+    if (!selected) return;
+    const key = unreadWorktreeKey(selected);
+    if (!key) return;
+    writeWorktreeChatOrder(key, ids);
+    setTabOrderEpoch((n) => n + 1);
+  }
 
   function onSelect(id: string, multi: boolean) {
     setView('thread');
@@ -1060,6 +1082,7 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
+              onReorderChats: reorderSelectedChats,
             };
             const urlPreviewProps = {
               openUrls,
@@ -1098,6 +1121,7 @@ export function App() {
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
               }}
+              onReorderChats={reorderSelectedChats}
               onLeaveThread={showBoard}
               composerPrefill={prefill}
               onComposerPrefillConsumed={() => setPrefill(undefined)}

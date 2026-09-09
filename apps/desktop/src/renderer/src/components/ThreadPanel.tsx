@@ -142,6 +142,8 @@ interface Props {
   worktreeChats: Thread[];
   onRefresh: () => void;
   onSelectChat: (id: string, created?: Thread) => void;
+  /** Drag-reorder agent / orchestration tabs; parent persists the order. */
+  onReorderChats?: (ids: string[]) => void;
   /** When the active chat is archived and no sibling tabs remain (e.g. last orchestration). */
   onLeaveThread?: () => void;
   /**
@@ -264,6 +266,7 @@ export function ThreadPanel({
   worktreeChats,
   onRefresh,
   onSelectChat,
+  onReorderChats,
   onLeaveThread,
   onArchiveThread,
   composerPrefill,
@@ -1720,6 +1723,7 @@ export function ThreadPanel({
             window.alert(err instanceof Error ? err.message : String(err));
           });
         }}
+        onReorderChats={onReorderChats}
       />
 
       {forkWorkspaceConfirm && (

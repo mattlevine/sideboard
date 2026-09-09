@@ -2560,6 +2560,22 @@ body.resizing-panels webview {
   color: var(--muted);
 }
 
+.chat-tab.chat-tab-agent.is-reorderable {
+  cursor: grab;
+}
+
+.chat-tab.chat-tab-agent.is-dragging {
+  opacity: 0.45;
+}
+
+.chat-tab.chat-tab-agent.drop-before {
+  box-shadow: inset 2px 0 0 #c4a574;
+}
+
+.chat-tab.chat-tab-agent.drop-after {
+  box-shadow: inset -2px 0 0 #c4a574;
+}
+
 .chat-tab.file-tab-item.active,
 .chat-tab.chat-tab-agent.active {
   color: var(--text);
