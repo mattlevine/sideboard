@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Orchestration `create_thread` uses Settings → Default agent instead of echoing Cursor (or the coordinator’s own agent). Nested Codex is coerced only when the parent orchestrator is also Codex.
 - Agent Linear tools trust the OS/Keychain CA store. The create-worktree issue picker already used Chromium (`net.fetch`); MCP/agents are real Node and were failing with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` on corporate VPN/proxy CAs.
 
 ## [0.1.174] - 2026-09-09

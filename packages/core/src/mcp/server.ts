@@ -62,7 +62,11 @@ import {
   type BoardKindFilter,
 } from '../board/home-board.js';
 import type { AgentKind, ThreadAttachment } from '../types/thread.js';
-import type { ThinkingEffort } from '../types/thinking-effort.js';
+import {
+  orchCreateThreadAgentNote,
+  resolveOrchCreateThreadOptions,
+  type ResolveNewThreadOptions,
+} from './create-thread-agent.js';
 
 const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
@@ -85,16 +89,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
     );
   });
 }
-
-type ResolveNewThreadOptions = (overrides: {
-  agent?: AgentKind;
-  model?: string | null;
-}) => {
-  agent: AgentKind;
-  model: string | null;
-  effort: ThinkingEffort;
-  fast: boolean;
-};
 
 type CreateOrchThreadArgs = {
   sourceType: 'branch' | 'pr' | 'ticket';
@@ -146,18 +140,13 @@ async function createOrchChildThread(
       };
     }
   }
-  let agentArg = args.agent;
-  let agentCoercedFrom: string | undefined;
-  const resolvedProbe = resolveNewThreadOptions({ agent: agentArg }).agent;
-  if (resolvedProbe === 'codex') {
-    agentCoercedFrom = agentArg ?? 'codex';
-    const accountAgent = resolveNewThreadOptions({}).agent;
-    agentArg = accountAgent !== 'codex' ? accountAgent : 'cursor';
-  }
-  const opts = resolveNewThreadOptions({
-    agent: agentArg,
-    model: args.model,
+  const opts = resolveOrchCreateThreadOptions({
+    requestedAgent: args.agent,
+    requestedModel: args.model,
+    parentAgent: parent?.agent,
+    resolveNewThreadOptions,
   });
+  const agentNote = orchCreateThreadAgentNote(opts);
   try {
     const priorIds = new Set(orch.getThreads(false).map((t) => t.id));
     const thread = await withTimeout(
@@ -197,12 +186,9 @@ async function createOrchChildThread(
         link: `sideboard://thread/${thread.id}`,
         parentThreadId: thread.parentThreadId,
         ...(alreadyStarted ? { alreadyStarted: true } : {}),
-        ...(agentCoercedFrom
-          ? {
-              agentCoercedFrom,
-              note: `Avoid nested Codex under a Codex orchestrator — used Account default agent=${thread.agent}`,
-            }
-          : {}),
+        ...(opts.coercedFrom ? { agentCoercedFrom: opts.coercedFrom } : {}),
+        ...(opts.ignoredAgent ? { agentIgnored: opts.ignoredAgent } : {}),
+        ...(agentNote ? { note: agentNote } : {}),
         ...(parentCorrectedFrom ? { parentCorrectedFrom, parentNote } : {}),
       }),
     };
@@ -718,14 +704,16 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_thread',
-    `Create a worktree thread (chat) from branch, pr, or ticket. A ticket, PR, or named branch may have only one live worktree — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Prefer omitting agent/model so Sideboard applies ${accountDefaultsHint}. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
+    `Create a worktree thread (chat) from branch, pr, or ticket. A ticket, PR, or named branch may have only one live worktree — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Omit agent/model — Sideboard applies ${accountDefaultsHint}. Do not pass your own agent or agent=cursor; those are ignored. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
       agent: z
         .enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor'])
         .optional()
-        .describe(`Omit to use Account default agent (${accountDefaults.agent})`),
+        .describe(
+          `Usually omit. Sideboard uses Account default agent (${accountDefaults.agent}). Passing your own agent or cursor is ignored.`,
+        ),
       model: z
         .string()
         .nullable()

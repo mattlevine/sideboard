@@ -83,7 +83,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Workspaces:',
   '- add_workspace / remove_workspace — register or unregister a git repo',
   'Worktree threads (chats):',
-  '- create_thread — create a worktree + chat from branch | pr | ticket (appears on Home). Do not create a second worktree for a ticket, PR, or named branch that already has one — that call returns the live thread (alreadyStarted=true). Creating from the default branch still opens a new isolated worktree. Pass repoPath + parentThreadId; omit agent and model to use Sideboard Account defaults (Settings → Default agent, model & effort). If the repo has a setup script, Sideboard runs it in the background (does not block send_to_thread). If you are Codex, do not set agent=codex (nested Codex deadlocks)',
+  '- create_thread — create a worktree + chat from branch | pr | ticket (appears on Home). Do not create a second worktree for a ticket, PR, or named branch that already has one — that call returns the live thread (alreadyStarted=true). Creating from the default branch still opens a new isolated worktree. Pass repoPath + parentThreadId; omit agent and model so Sideboard applies Settings → Default agent, model & effort (never pass your own agent or agent=cursor). If the repo has a setup script, Sideboard runs it in the background (does not block send_to_thread). Nested Codex (you are Codex and the child is Codex) deadlocks — omit agent; Sideboard coerces that case',
   '- start_board_card — same as create_thread for a ticket/PR/named branch (attaches issue text when resolvable). Then send_to_thread.',
   '- fork_worktree — fork a worktree chat into a NEW git worktree + chat (transcript attached); optional agent; leave model unset (Auto) unless you have a reason. Not for orchestration chats.',
   '- fork_chat — fork a worktree chat (same worktree tab) OR a Global orchestration chat (new orchestration tab); optional agent; leave model unset (Auto) unless you have a reason. Remote coordinators: use this to continue another orchestration chat on a different agent after session limits.',
@@ -266,8 +266,8 @@ export function ensureGlobalCoordinatorCwd(opts?: {
     orchId
       ? `Pass parentThreadId="${orchId}" (or omit it). Never invent another parentThreadId.`
       : 'Pass `parentThreadId` for children (this chat\'s id from the turn reminder).',
-    'Omit `agent` / `model` on `create_thread` unless you have a reason to override Account defaults.',
-    'Never pass `agent=codex` when you yourself are Codex — nested Codex deadlocks on shared ~/.codex locks. Omit agent (Account default) or use cursor/claude.',
+    'Omit `agent` / `model` on `create_thread`. Sideboard applies Settings → Default agent, model & effort. Do not pass your own agent or `agent=cursor` — those are ignored.',
+    'Never pass `agent=codex` when you yourself are Codex — nested Codex deadlocks on shared ~/.codex locks. Omit agent; Sideboard applies Account defaults (and coerces only that nested-Codex case).',
     'Typical flow (Home board): list_board → create_thread (sourceType=ticket|pr|branch) → send_to_thread → wait_for_turn (loop while stillRunning) → ask_git create-draft → wait_for_turn. Merge only if the user explicitly asked (`ask_git` merge).',
     'Typical flow (branch / explicit source): list_workspaces → list_branches|list_prs|list_issues → create_thread → send_to_thread → wait_for_turn (loop while stillRunning) → ask_git create-draft.',
     'Typical flow (find work): list_workspaces → pick repo(s) matching account / project context → Sideboard list_issues / linear_* (tickets) or list_prs(queue=review) (reviews) → show the options. Never wait on Claude Linear MCP. Only create_thread + send_to_thread when they asked to start (e.g. “find me work and start it”) — then wait_for_turn (loop while stillRunning) → ask_git create-draft.',

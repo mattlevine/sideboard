@@ -136,6 +136,8 @@ Orchestration turns isolate vendor MCP so user / claude.ai Linear cannot hang th
 
 Settings → Default orchestrator agent/model/effort must be the source for every Global / Slack / cloud / schedule create path (`resolveOrchestratorDefaults`, `brightsyCloudConnectAgent`). Do not leave Slack Listen on `getDefaultAgent` while stamping orchestrator model/effort onto that agent.
 
+MCP `create_thread` / `start_board_card` must apply Settings → Default agent (`resolveOrchCreateThreadOptions`). Ignore an orchestrator-echoed or Cursor-autofilled agent. Coerce Codex→fallback only when the parent orchestrator is also Codex — do not force Cursor whenever the child would be Codex.
+
 Desktop terminals: every `orch.archive` / `orch.purge` path (including auto-archive on merge) must kill the thread PTY. Do not leave teardown only on the IPC handlers.
 
 Session seed (`buildSessionSeed`): after pinning summaries, skip oversized newest blocks instead of aborting the newest-first walk — one fat tool dump must not drop every recent turn.
