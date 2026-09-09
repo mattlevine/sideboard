@@ -24,6 +24,7 @@ import {
   latestAgentResponseAt,
   unreadWorktreeKey,
 } from '../lib/unread-worktrees';
+import { pickWorktreeChat } from '../lib/worktree-tabs';
 import { useCaffeinateHold } from '../lib/caffeinate-tab';
 import { billedUsageLabel, sumUsage, usageTooltip } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
@@ -735,7 +736,7 @@ export function Sidebar({
               (() => {
                 // One sidebar row (like a worktree); sibling chats live in the tab bar.
                 const primary =
-                  globalThreads.find((t) => t.id === selectedId) ?? globalThreads[0]!;
+                  pickWorktreeChat(globalThreads, selectedId) ?? globalThreads[0]!;
                 const active =
                   view === 'thread' &&
                   globalThreads.some((t) => t.id === selectedId);
@@ -890,7 +891,7 @@ export function Sidebar({
             )}
             {groupHomeBoardWorktrees(repoThreads, worktreeSort).map((group) => {
               const primary =
-                group.find((t) => t.id === selectedId) ?? group[0]!;
+                pickWorktreeChat(group, selectedId) ?? group[0]!;
               const worktreeLabel = worktreeDisplayLabelForGroup(group);
               const active =
                 view === 'thread' && group.some((t) => t.id === selectedId);

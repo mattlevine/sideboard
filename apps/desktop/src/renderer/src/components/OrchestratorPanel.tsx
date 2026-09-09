@@ -10,6 +10,7 @@ interface Props {
   onRefresh: () => void;
   onSelectChild: (id: string) => void;
   onSelectChat: (id: string, created?: Thread) => void;
+  onReorderChats?: (ids: string[]) => void;
   /** Leave the chat pane when the last orchestration/global tab is archived. */
   onLeaveThread?: () => void;
   composerPrefill?: string;
@@ -41,6 +42,7 @@ export function OrchestratorPanel({
   onRefresh,
   onSelectChild,
   onSelectChat,
+  onReorderChats,
   onLeaveThread,
   composerPrefill,
   onComposerPrefillConsumed,
@@ -117,6 +119,7 @@ export function OrchestratorPanel({
           worktreeChats={worktreeChats}
           onRefresh={onRefresh}
           onSelectChat={onSelectChat}
+          onReorderChats={onReorderChats}
           onLeaveThread={onLeaveThread}
           composerPrefill={composerPrefill}
           onComposerPrefillConsumed={onComposerPrefillConsumed}

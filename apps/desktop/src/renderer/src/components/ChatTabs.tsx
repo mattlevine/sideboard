@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { isOrchestratorThread, threadDisplayTitle } from '../lib/global-workspace';
 import { chatTabIsCaffeinated, useCaffeinateHold } from '../lib/caffeinate-tab';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
+import { reorderChatIds } from '../lib/worktree-tabs';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 import { contextMeterTone } from '../lib/tokens';
 import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defaults';
+
+const CHAT_TAB_DRAG = 'application/x-sideboard-chat-tab';
 
 export type NewChatTabOptions = {
   agent?: AgentKind;
@@ -64,6 +67,8 @@ interface Props {
   onNewTab: (opts?: NewChatTabOptions) => void;
   onRename: (id: string, title: string) => void;
   onCloseTab?: (id: string) => void;
+  /** Persist a new agent/orchestration tab order (leave/return uses the same list). */
+  onReorderChats?: (ids: string[]) => void;
 }
 
 function basename(path: string): string {
@@ -105,6 +110,7 @@ export function ChatTabs({
   onNewTab,
   onRename,
   onCloseTab,
+  onReorderChats,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -122,6 +128,13 @@ export function ChatTabs({
   });
   const caffeinateHold = useCaffeinateHold();
   const inputRef = useRef<HTMLInputElement>(null);
+  const draggedChatId = useRef<string | null>(null);
+  const suppressClickAfterDrag = useRef(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{
+    id: string;
+    place: 'before' | 'after';
+  } | null>(null);
 
   const activeChat = useMemo(
     () => chats.find((c) => c.id === activeChatId) ?? chats[0],
@@ -169,6 +182,63 @@ export function ChatTabs({
   const urlActive = Boolean(activeUrl) && !changesActive && !prPageActive;
   const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive && !prPageActive;
   const meterTone = contextRatio != null ? contextMeterTone(contextRatio) : '';
+  const canReorder = Boolean(onReorderChats) && chats.length > 1;
+
+  function dropPlaceForTab(el: HTMLElement, clientX: number): 'before' | 'after' {
+    const rect = el.getBoundingClientRect();
+    return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+  }
+
+  function onChatDragStart(e: DragEvent<HTMLDivElement>, id: string) {
+    if (!canReorder || editingId === id) {
+      e.preventDefault();
+      return;
+    }
+    draggedChatId.current = id;
+    suppressClickAfterDrag.current = false;
+    setDraggingId(id);
+    e.dataTransfer.setData(CHAT_TAB_DRAG, id);
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setDragImage(e.currentTarget, 16, 12);
+  }
+
+  function onChatDragOver(e: DragEvent<HTMLDivElement>, id: string) {
+    if (!canReorder) return;
+    const from = draggedChatId.current || e.dataTransfer.getData(CHAT_TAB_DRAG);
+    if (!from || from === id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const place = dropPlaceForTab(e.currentTarget, e.clientX);
+    setDropHint((prev) => (prev?.id === id && prev.place === place ? prev : { id, place }));
+  }
+
+  function onChatDrop(e: DragEvent<HTMLDivElement>, targetId: string) {
+    if (!canReorder || !onReorderChats) return;
+    e.preventDefault();
+    const fromId =
+      e.dataTransfer.getData(CHAT_TAB_DRAG) ||
+      e.dataTransfer.getData('text/plain') ||
+      draggedChatId.current;
+    const place = dropPlaceForTab(e.currentTarget, e.clientX);
+    setDropHint(null);
+    if (!fromId || fromId === targetId) return;
+    const next = reorderChatIds(
+      chats.map((c) => c.id),
+      fromId,
+      targetId,
+      place,
+    );
+    if (next.join('\0') === chats.map((c) => c.id).join('\0')) return;
+    suppressClickAfterDrag.current = true;
+    onReorderChats(next);
+  }
+
+  function onChatDragEnd() {
+    draggedChatId.current = null;
+    setDraggingId(null);
+    setDropHint(null);
+  }
 
   return (
     <div className="chat-tabs">
@@ -299,11 +369,29 @@ export function ChatTabs({
             caffeinateHold,
             Boolean(caffeinateHold?.appCaffeinated),
           );
+          const dragging = draggingId === t.id;
+          const dropClass =
+            dropHint?.id === t.id
+              ? dropHint.place === 'before'
+                ? ' drop-before'
+                : ' drop-after'
+              : '';
           return (
             <div
               key={t.id}
-              className={`chat-tab chat-tab-agent${active ? ' active' : ''}${caffeinated ? ' caffeinated' : ''}`}
-              onClick={() => onSelectChat(t.id)}
+              className={`chat-tab chat-tab-agent${active ? ' active' : ''}${caffeinated ? ' caffeinated' : ''}${canReorder ? ' is-reorderable' : ''}${dragging ? ' is-dragging' : ''}${dropClass}`}
+              draggable={canReorder && editingId !== t.id}
+              onDragStart={(e) => onChatDragStart(e, t.id)}
+              onDragOver={(e) => onChatDragOver(e, t.id)}
+              onDrop={(e) => onChatDrop(e, t.id)}
+              onDragEnd={onChatDragEnd}
+              onClick={() => {
+                if (suppressClickAfterDrag.current) {
+                  suppressClickAfterDrag.current = false;
+                  return;
+                }
+                onSelectChat(t.id);
+              }}
               onDoubleClick={() => startEdit(t)}
             >
               {editingId === t.id ? (

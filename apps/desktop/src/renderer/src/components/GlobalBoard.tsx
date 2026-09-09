@@ -27,6 +27,7 @@ import {
   latestAgentResponseAt,
   unreadWorktreeKey,
 } from '../lib/unread-worktrees';
+import { orderWorktreeChatsForKey, pickWorktreeChat } from '../lib/worktree-tabs';
 import { useLiveThread } from '../lib/live-paint-context';
 import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { FleetActivityBar } from './FleetActivityBar';
@@ -314,7 +315,8 @@ function WorktreeCard({
 }) {
   const oldest = group[0]!;
   const newest = [...group].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!;
-  const primary = group.find((t) => t.id === selectedId) ?? oldest;
+  const primary = pickWorktreeChat(group, selectedId) ?? oldest;
+  const chats = orderWorktreeChatsForKey(group, unreadWorktreeKey(oldest));
   const status = worktreeBoardStatus(group);
   const repo = workspaceName(oldest.repoPath, workspaces);
   const label = worktreeDisplayLabelForGroup(group);
@@ -398,7 +400,7 @@ function WorktreeCard({
         </div>
       )}
       <div className={`board-card-chats${group.length > 3 ? ' is-scrollable' : ''}`}>
-        {group.map((chat) => (
+        {chats.map((chat) => (
           <ChatCard
             key={chat.id}
             thread={chat}
