@@ -52,6 +52,11 @@ export * from './integrations/issues.js';
 export * from './integrations/optional-services.js';
 export * from './integrations/optional-cli.js';
 export { setHttpFetchImpl, formatFetchError, httpFetch } from './http/fetch.js';
+export {
+  applySystemCaEnv,
+  materializeSystemCaBundle,
+  trustSystemCertificates,
+} from './http/system-ca.js';
 export * from './agents/index.js';
 export * from './agents/spawn.js';
 export * from './agents/message-parts.js';
