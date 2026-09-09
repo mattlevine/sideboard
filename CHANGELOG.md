@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.172] - 2026-09-08
+
 ### Added
 
 - Agent and orchestration chat tabs can be drag-reordered. The order and the last active tab are remembered when you leave a worktree (or the Board) and come back.
