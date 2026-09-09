@@ -4,7 +4,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readThread, createEmptyThread, writeThread } from '../store/thread-store.js';
-import { Orchestrator } from './orchestrator.js';
+import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
+import { updateAdvancedSettings } from '../store/app-settings.js';
+import { Orchestrator, resolveSendFollowUp } from './orchestrator.js';
 
 describe('Orchestrator queued-message editing', () => {
   let dataDir: string;
@@ -30,6 +32,23 @@ describe('Orchestrator queued-message editing', () => {
       agent: 'claude',
       queue,
       status: 'queued',
+    });
+    writeThread(thread);
+    return thread;
+  }
+
+  function seedOrch(queue: string[] = []) {
+    mkdirSync(join(dataDir, 'global'), { recursive: true });
+    const thread = createEmptyThread({
+      title: 'Orch',
+      sourceType: 'orchestration',
+      sourceRef: 'Coordinate',
+      branchName: 'global',
+      worktreePath: join(dataDir, 'global'),
+      repoPath: GLOBAL_WORKSPACE_ID,
+      agent: 'claude',
+      queue,
+      status: queue.length ? 'queued' : 'idle',
     });
     writeThread(thread);
     return thread;
@@ -206,6 +225,74 @@ describe('Orchestrator queued-message editing', () => {
     expect(readThread(thread.id)?.queue[0]).toMatch(/no detached job/i);
     internal.maybeEnqueueJobContinue(thread.id, "I'll let you know when the tests are done.");
     expect(readThread(thread.id)?.queue).toHaveLength(1);
+  });
+
+  it('resolves omitted follow-up: worktrees queue, orchestrators use the setting', () => {
+    const worktree = seedThread([]);
+    const orch = seedOrch();
+    expect(resolveSendFollowUp(worktree)).toBe('queue');
+    expect(resolveSendFollowUp(orch)).toBe('steer');
+    expect(resolveSendFollowUp(orch, 'queue')).toBe('queue');
+    expect(resolveSendFollowUp(worktree, 'steer')).toBe('steer');
+    updateAdvancedSettings({ followUpBehavior: 'queue' });
+    expect(resolveSendFollowUp(orch)).toBe('queue');
+    expect(resolveSendFollowUp(worktree)).toBe('queue');
+  });
+
+  it('steers an omitted follow-up on a busy orchestrator (default setting)', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedOrch(['later']);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(
+      thread.id,
+      'Sideboard: child worktree [Fix](sideboard://thread/abc) stopped before finishing (status=stopped).',
+    );
+    expect(kill).toHaveBeenCalledOnce();
+    expect(updated.queue[0]).toMatch(/^Sideboard:/);
+    expect(updated.queue).toContain('later');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
+  it('queues an omitted follow-up on a busy orchestrator when the setting is queue', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    updateAdvancedSettings({ followUpBehavior: 'queue' });
+    const thread = seedOrch([]);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    internal.drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(thread.id, 'Sideboard: child stopped');
+    expect(kill).not.toHaveBeenCalled();
+    expect(updated.queue).toEqual(['Sideboard: child stopped']);
+    expect(updated.status).toBe('running');
   });
 
   it('keeps status running when a follow-up is queued during an in-flight turn', async () => {

@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
 import {
   createEmptyThread,
   readThread,
@@ -217,6 +216,51 @@ describe('Orchestrator.stop force-stop', () => {
     orch.stop(child.id);
     expect(send).toHaveBeenCalledOnce();
     expect(String(send.mock.calls[0]?.[1])).toContain('stopped before finishing');
+  });
+
+  it('steers the Sideboard child-halt notice on the parent when follow-up is steer', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const { parent, child } = seedOrchChild();
+    const orch = new Orchestrator();
+    const parentKill = vi.fn();
+    const childKill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+    const hang = () => new Promise(() => {});
+    internal.activeTurns.set(parent.id, {
+      pid: 1,
+      kill: parentKill,
+      done: hang(),
+    });
+    internal.activeTurns.set(child.id, {
+      pid: 2,
+      kill: childKill,
+      done: Promise.resolve({
+        exitCode: 143,
+        sessionId: null,
+        assistantText: '',
+        parts: [],
+        usage: null,
+      }),
+    });
+    const runningParent = readThread(parent.id)!;
+    runningParent.status = 'running';
+    runningParent.queue = ['later'];
+    writeThread(runningParent);
+
+    orch.stop(child.id);
+    await vi.waitFor(() => {
+      expect(parentKill).toHaveBeenCalledOnce();
+    });
+    const after = readThread(parent.id)!;
+    expect(after.queue[0]).toMatch(/^Sideboard:/);
+    expect(after.queue[0]).toContain('stopped before finishing');
+    expect(after.queue).toContain('later');
+    expect(drainQueue).toHaveBeenCalledWith(parent.id);
   });
 
   it('does not notify the parent when MCP force_stop already owns the interrupt', () => {
