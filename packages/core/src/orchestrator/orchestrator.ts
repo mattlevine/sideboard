@@ -167,6 +167,11 @@ import {
   mentionsPrGoal,
 } from '../agents/instructions.js';
 import {
+  formatReviewWriteGateDirective,
+  formatReviewWriteGateReminder,
+  isReviewWriteGatedThread,
+} from '../review/review-write-gate.js';
+import {
   formatOptionalServicesDirective,
   formatOptionalServicesReminder,
 } from '../integrations/optional-services.js';
@@ -1182,6 +1187,12 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatViewerContextReminder()
         : null;
+    const reviewWriteGateReminder =
+      thread.agent !== 'brightsy' &&
+      !isOrchestratorThread(thread) &&
+      isReviewWriteGatedThread(thread)
+        ? formatReviewWriteGateReminder()
+        : null;
     const slackReplyContext = formatSlackRepliesForTurn(
       pendingSlackExternalReplies(thread.messages),
     );
@@ -1193,6 +1204,7 @@ export class Orchestrator {
         worktreeReminder,
         optionalServicesReminder,
         issueToolsReminder,
+        reviewWriteGateReminder,
         viewerContextReminder,
         artifactReminder,
         longRunningReminder,
@@ -1270,6 +1282,10 @@ export class Orchestrator {
             ticketId: freshIssueTicket?.id,
             ticketProvider: freshIssueTicket?.provider,
           });
+    const reviewWriteGateDirective =
+      isBrightsy || isOrchestration || !isReviewWriteGatedThread(fresh)
+        ? null
+        : formatReviewWriteGateDirective();
     let viewerContextDirective: string | null = null;
     if (!isBrightsy && !isOrchestration) {
       try {
@@ -1333,6 +1349,7 @@ export class Orchestrator {
           worktreeDirective,
           optionalServicesDirective,
           issueToolsDirective,
+          reviewWriteGateDirective,
           viewerContextDirective,
           artifactDirective,
           longRunningDirective,
@@ -1501,6 +1518,7 @@ export class Orchestrator {
           worktreeDirective,
           optionalServicesDirective,
           issueToolsDirective,
+          reviewWriteGateDirective,
           viewerContextDirective,
           artifactDirective,
           longRunningDirective,

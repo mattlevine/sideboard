@@ -22,6 +22,14 @@ In 1–3 sentences, say **why** — grounded in correctness, risk, test coverage
 
 People running this review are asking “can we ship this?” Treat that as the question you answer first.
 
+## Confirm before posting
+
+The report stays in this chat until the user posts it. Do not call `github_comment`, `linear_comment`, `abletime_comment`, `github_update_issue`, `linear_update_issue`, `abletime_update_task`, or run `gh pr review` / `gh pr comment`, until they confirm.
+
+After the Recommendation is in chat, ask_user (**Post this review** / **Keep it in chat**), then wait. If they already asked you to post a specific comment or update in this turn, that is confirmation.
+
+The PR author sees those writes immediately — a draft review will confuse them. Do not request reviewers, change labels, or assign yourself unless they asked.
+
 ## Findings
 
 Below are guidelines for determining whether an issue is worth flagging to the original author.

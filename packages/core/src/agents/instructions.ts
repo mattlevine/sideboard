@@ -188,6 +188,7 @@ export function formatIssueToolsDirective(opts: {
   }
   lines.push(
     '- Do not ask the user to `claude mcp login` for tickets. Reconnect the Account source in Settings → Issues (or Git for `gh`).',
+    '- When reviewing someone else\'s PR (review inbox or a Review tab): write the review in chat; ask_user (Post this review / Keep it in chat) before `github_comment` / `linear_comment` / `*_update_*` / `gh pr review`. The PR author sees those immediately.',
   );
   const ticket = opts.ticketId?.trim();
   if (ticket) {
@@ -232,7 +233,7 @@ export function formatIssueToolsReminder(opts: {
   const ticketBit = ticket
     ? ` This ticket: ${ticket}${opts.ticketProvider ? ` (${opts.ticketProvider})` : ''} — get/comment/update; create with parent for spin-offs.`
     : ' get/comment/update/create (parent= for spin-offs).';
-  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit}`;
+  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit} When reviewing someone else's PR, ask_user (Post this review / Keep it in chat) before comment/update.`;
 }
 
 /** @deprecated Use {@link formatIssueToolsReminder} */

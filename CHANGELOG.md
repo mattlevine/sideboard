@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.180] - 2026-09-10
+
+### Changed
+
+- Review turns (Review tab and `sourceType=pr` worktrees) keep the recommendation in chat and ask **Post this review / Keep it in chat** before commenting on or updating the PR or ticket. The PR author sees those writes immediately.
+
 ## [0.1.179] - 2026-09-10
 
 ### Changed
