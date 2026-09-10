@@ -136,6 +136,17 @@ export interface Thread {
    */
   prIsDraft?: boolean;
   /**
+   * Cached GitHub PR author login from create-from-PR / `getPrMeta`.
+   * Compared to the `gh` viewer login for Board/sidebar Mine vs Reviewing.
+   */
+  prAuthorLogin?: string | null;
+  /**
+   * Cached human requested-reviewer logins (bots and team slugs omitted).
+   * Used when the author is unknown so a review-requested PR still counts
+   * as Reviewing.
+   */
+  prReviewerLogins?: string[];
+  /**
    * When true, skip auto-archive if the PR is already MERGED (set on restore
    * so unarchiving a merged workspace does not immediately re-archive).
    * Cleared when `prState` becomes a non-merged open state again.
@@ -356,6 +367,10 @@ export interface PrMeta {
   mergeable: string | null;
   /** GitHub `mergeStateStatus` (CLEAN / DIRTY / BEHIND / BLOCKED / …). */
   mergeStateStatus: string | null;
+  /** GitHub author login when fetched with `--json author`. */
+  authorLogin?: string | null;
+  /** Human requested-reviewer logins (bots and team slugs omitted). */
+  reviewerLogins?: string[];
 }
 
 /** One layer in a GitHub PR stack (bottom = position 1). */

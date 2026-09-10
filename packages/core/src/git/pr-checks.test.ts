@@ -243,6 +243,8 @@ describe('getPrMeta', () => {
         isInMergeQueue: true,
         mergeStateStatus: 'CLEAN',
         mergeable: 'MERGEABLE',
+        author: { login: 'sam' },
+        reviewRequests: [{ login: 'matt' }],
       }),
       stderr: '',
       exitCode: 0,
@@ -253,6 +255,8 @@ describe('getPrMeta', () => {
       isInMergeQueue: true,
       mergeable: 'MERGEABLE',
       mergeStateStatus: 'CLEAN',
+      authorLogin: 'sam',
+      reviewerLogins: ['matt'],
     });
   });
 

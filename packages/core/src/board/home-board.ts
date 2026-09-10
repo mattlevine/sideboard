@@ -238,6 +238,69 @@ export function groupHomeBoardWorktrees<
     .sort((a, b) => compareWorktreeGroups(a, b, sort, labelOf));
 }
 
+/**
+ * Mine = PRs you authored, or local WIP with no PR.
+ * Reviewing = someone else's PR (author known and not you), a create-from-PR
+ * checkout, or a PR that requested your review.
+ * Viewer login comes from `gh` (`getGitHubStatus().login`) — not a setting.
+ */
+export type WorktreeOwnership = 'mine' | 'reviewing';
+
+/** Board / sidebar filter. Default `all` shows every worktree. */
+export type BoardOwnershipFilter = 'all' | WorktreeOwnership;
+
+export const DEFAULT_BOARD_OWNERSHIP: BoardOwnershipFilter = 'all';
+
+function normalizeViewerLogin(login: string | null | undefined): string {
+  return (login ?? '').trim().toLowerCase();
+}
+
+export function loginsInclude(
+  logins: string[] | null | undefined,
+  viewerLogin: string,
+): boolean {
+  const me = normalizeViewerLogin(viewerLogin);
+  if (!me) return false;
+  return (logins ?? []).some((login) => normalizeViewerLogin(login) === me);
+}
+
+export function classifyWorktreeOwnership(
+  group: Array<
+    Pick<Thread, 'prUrl' | 'prAuthorLogin' | 'prReviewerLogins' | 'sourceType'>
+  >,
+  viewerLogin = '',
+): WorktreeOwnership {
+  const me = normalizeViewerLogin(viewerLogin);
+  if (
+    group.some((t) => {
+      const author = normalizeViewerLogin(t.prAuthorLogin);
+      return Boolean(author && me && author === me);
+    })
+  ) {
+    return 'mine';
+  }
+
+  const reviewing = group.some((t) => {
+    const author = normalizeViewerLogin(t.prAuthorLogin);
+    if (author && me && author !== me) return true;
+    if (t.sourceType === 'pr' && (!author || !me || author !== me)) return true;
+    if (me && loginsInclude(t.prReviewerLogins, me)) return true;
+    return false;
+  });
+  return reviewing ? 'reviewing' : 'mine';
+}
+
+export function worktreeMatchesOwnership(
+  group: Array<
+    Pick<Thread, 'prUrl' | 'prAuthorLogin' | 'prReviewerLogins' | 'sourceType'>
+  >,
+  filter: BoardOwnershipFilter,
+  viewerLogin = '',
+): boolean {
+  if (filter === 'all') return true;
+  return classifyWorktreeOwnership(group, viewerLogin) === filter;
+}
+
 /** Column for a worktree: merged → Merged, open non-draft → Review, draft → Draft. */
 export function classifyWorktreeColumn(
   group: Array<Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft'>>,
@@ -1083,12 +1146,18 @@ export function assembleHomeBoard(input: {
   repoPath?: string;
   kind?: BoardKindFilter;
   column?: BoardColumnId;
+  /** Mine = authored / local WIP; reviewing = someone else's PR. */
+  ownership?: BoardOwnershipFilter;
+  /** `gh` login used to classify Mine vs Reviewing. */
+  viewerLogin?: string;
   limit?: number;
   workspaceName?: (path: string) => string;
 }): HomeBoardSnapshot {
   const tokens = tokenizeQuery(input.query ?? '');
   const repo = input.repoPath?.trim() ?? '';
   const kind = input.kind ?? 'all';
+  const ownership = input.ownership ?? DEFAULT_BOARD_OWNERSHIP;
+  const viewerLogin = input.viewerLogin ?? '';
   const limit = Math.max(1, input.limit ?? BOARD_PAGE_SIZE);
   const wsName = input.workspaceName ?? (() => '');
   const live = input.threads.filter((t) => t.status !== 'archived' && isHomeBoardThread(t));
@@ -1119,6 +1188,7 @@ export function assembleHomeBoard(input: {
   };
   for (const group of groupHomeBoardWorktrees(live)) {
     if (!group.some((t) => threadMatchesKind(t, kind))) continue;
+    if (!worktreeMatchesOwnership(group, ownership, viewerLogin)) continue;
     const col = classifyWorktreeColumn(group);
     if (col === 'backlog') continue;
     const primary = group[0]!;
@@ -1154,7 +1224,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs nest as inner cards). Do not create a second worktree for a ticket, PR, or named branch that already has a live checkout — create_thread / start_board_card return that thread (alreadyStarted). Creating from the default branch still opens a new isolated worktree. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs nest as inner cards). Do not create a second worktree for a ticket, PR, or named branch that already has a live checkout — create_thread / start_board_card return that thread (alreadyStarted). Creating from the default branch still opens a new isolated worktree. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

@@ -6,13 +6,17 @@ import {
 } from '@sideboard/worktree-labels';
 import {
   DEFAULT_WORKTREE_SORT,
+  classifyWorktreeOwnership,
   groupHomeBoardWorktrees,
   latestVisibleMessageText,
   worktreeBoardStatus,
+  worktreeMatchesOwnership,
+  type BoardOwnershipFilter,
   type WorktreeSortMode,
 } from '@sideboard/home-board';
 import type { Thread } from '@sideboard-ai/core';
 import { isSetupLastError } from '../lib/pane-progress';
+import { WorktreeOwnershipFilter } from './WorktreeOwnershipFilter';
 import { WorktreeSortSelect } from './WorktreeSortSelect';
 import {
   GLOBAL_WORKSPACE_ID,
@@ -58,6 +62,9 @@ interface Props {
   onOpenSettings?: () => void;
   worktreeSort?: WorktreeSortMode;
   onWorktreeSortChange?: (mode: WorktreeSortMode) => void;
+  ownership?: BoardOwnershipFilter;
+  onOwnershipChange?: (filter: BoardOwnershipFilter) => void;
+  githubLogin?: string | null;
 }
 
 function repoName(repoPath: string): string {
@@ -420,6 +427,7 @@ function WorktreeSidebarRow({
   selected,
   archiving,
   unread,
+  reviewing,
   onSelect,
   showArchive,
   onRequestArchive,
@@ -431,6 +439,7 @@ function WorktreeSidebarRow({
   selected: boolean;
   archiving: boolean;
   unread: boolean;
+  reviewing: boolean;
   onSelect: (id: string, multi: boolean) => void;
   /** When true, show the archive control (parent handles teardown). */
   showArchive?: boolean;
@@ -482,7 +491,7 @@ function WorktreeSidebarRow({
   return (
     <div
       ref={rowRef}
-      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
+      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}${reviewing ? ' is-reviewing' : ''}`}
       aria-busy={archiving}
       onMouseEnter={() => {
         setGitCardOpen(true);
@@ -516,9 +525,16 @@ function WorktreeSidebarRow({
               : worktreeLabel
           }
         >
-          {worktreeLabel}
-          {primary.sourceType === 'orchestration' ? ' ✦' : ''}
+          <span className="thread-title-text">
+            {worktreeLabel}
+            {primary.sourceType === 'orchestration' ? ' ✦' : ''}
+          </span>
           {primary.cowboy ? <span className="board-badge">cowboy</span> : null}
+          {reviewing ? (
+            <span className="board-badge is-reviewing" title="Someone else's PR">
+              review
+            </span>
+          ) : null}
         </div>
         <div className="thread-meta">
           {archiving
@@ -588,6 +604,9 @@ export function Sidebar({
   onOpenSettings,
   worktreeSort = DEFAULT_WORKTREE_SORT,
   onWorktreeSortChange,
+  ownership = 'all',
+  onOwnershipChange,
+  githubLogin = null,
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -812,6 +831,14 @@ export function Sidebar({
             >
               <span className="filter-glyph" aria-hidden />
             </button>
+            {onOwnershipChange ? (
+              <WorktreeOwnershipFilter
+                variant="icon"
+                value={ownership}
+                onChange={onOwnershipChange}
+                githubLogin={githubLogin}
+              />
+            ) : null}
             {onWorktreeSortChange ? (
               <WorktreeSortSelect
                 variant="icon"
@@ -889,10 +916,16 @@ export function Sidebar({
                 No threads
               </div>
             )}
-            {groupHomeBoardWorktrees(repoThreads, worktreeSort).map((group) => {
+            {groupHomeBoardWorktrees(repoThreads, worktreeSort)
+              .filter((group) =>
+                worktreeMatchesOwnership(group, ownership, githubLogin ?? ''),
+              )
+              .map((group) => {
               const primary =
                 pickWorktreeChat(group, selectedId) ?? group[0]!;
               const worktreeLabel = worktreeDisplayLabelForGroup(group);
+              const reviewing =
+                classifyWorktreeOwnership(group, githubLogin ?? '') === 'reviewing';
               const active =
                 view === 'thread' && group.some((t) => t.id === selectedId);
               const selected =
@@ -909,6 +942,7 @@ export function Sidebar({
                     primary={primary}
                     group={group}
                     worktreeLabel={worktreeLabel}
+                    reviewing={reviewing}
                     active={active}
                     selected={selected}
                     archiving={archiving}

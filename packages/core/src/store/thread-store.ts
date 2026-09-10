@@ -73,6 +73,8 @@ export function createEmptyThread(
     | 'prTitle'
     | 'prState'
     | 'prIsDraft'
+    | 'prAuthorLogin'
+    | 'prReviewerLogins'
     | 'skipAutoArchiveOnMerge'
     | 'stackId'
     | 'stackLayer'
@@ -107,6 +109,8 @@ export function createEmptyThread(
         | 'prTitle'
         | 'prState'
         | 'prIsDraft'
+        | 'prAuthorLogin'
+        | 'prReviewerLogins'
         | 'skipAutoArchiveOnMerge'
         | 'cowboy'
         | 'stackId'
@@ -135,6 +139,8 @@ export function createEmptyThread(
     prTitle: partial.prTitle ?? null,
     prState: partial.prState ?? null,
     prIsDraft: Boolean(partial.prIsDraft),
+    prAuthorLogin: partial.prAuthorLogin?.trim() || null,
+    prReviewerLogins: partial.prReviewerLogins ?? [],
     skipAutoArchiveOnMerge: partial.skipAutoArchiveOnMerge ?? false,
     cowboy: Boolean(partial.cowboy),
     stackId: partial.stackId ?? null,

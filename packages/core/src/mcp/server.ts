@@ -60,7 +60,9 @@ import {
   findLiveThreadForCreate,
   type BoardColumnId,
   type BoardKindFilter,
+  type BoardOwnershipFilter,
 } from '../board/home-board.js';
+import { getGitHubStatus } from '../integrations/github.js';
 import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import {
   orchCreateThreadAgentNote,
@@ -314,7 +316,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of worktrees (New, Draft, Review, Merged) — one card per checkout; sibling chat tabs nest as inner cards. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
+    'Home Kanban of worktrees (New, Draft, Review, Merged) — one card per checkout; sibling chat tabs nest as inner cards. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -325,6 +327,12 @@ export async function startMcpServer(): Promise<void> {
         .enum(['all', 'tickets', 'prs', 'branches', 'threads'])
         .optional()
         .describe('Filter by worktree source (default all)'),
+      ownership: z
+        .enum(['all', 'mine', 'reviewing'])
+        .optional()
+        .describe(
+          'Mine = PRs you authored or local WIP; reviewing = someone else\'s PR. Uses the gh login.',
+        ),
       column: z
         .enum(['new', 'draft', 'review', 'done', 'needs_you'])
         .optional()
@@ -338,15 +346,18 @@ export async function startMcpServer(): Promise<void> {
         .optional()
         .describe('Max cards per column (default 40). hidden counts the remainder.'),
     },
-    async ({ query, repoPath, kind, column, limit }) => {
+    async ({ query, repoPath, kind, ownership, column, limit }) => {
       const workspaces = orch.listWorkspaces();
       const all = orch.getThreads(true);
       const names = new Map(workspaces.map((w) => [w.path, w.name]));
+      const github = await getGitHubStatus();
       const snap = assembleHomeBoard({
         threads: all.filter((t) => t.status !== 'archived'),
         query,
         repoPath,
         kind: (kind ?? 'all') as BoardKindFilter,
+        ownership: (ownership ?? 'all') as BoardOwnershipFilter,
+        viewerLogin: github.login ?? '',
         column: (column === 'needs_you' ? 'new' : column) as BoardColumnId | undefined,
         limit,
         workspaceName: (path) => names.get(path) ?? '',
