@@ -491,7 +491,7 @@ function WorktreeSidebarRow({
   return (
     <div
       ref={rowRef}
-      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}${reviewing ? ' is-reviewing' : ''}`}
+      className={`thread-item${active ? ' active' : ''}${selected ? ' selected' : ''}${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
       aria-busy={archiving}
       onMouseEnter={() => {
         setGitCardOpen(true);

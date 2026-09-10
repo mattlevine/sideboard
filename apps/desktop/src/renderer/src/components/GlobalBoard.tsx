@@ -369,7 +369,7 @@ function WorktreeCard({
 
   return (
     <article
-      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}${reviewing ? ' is-reviewing' : ''}`}
+      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}`}
       aria-busy={archiving}
       onClick={openWorktree}
     >
