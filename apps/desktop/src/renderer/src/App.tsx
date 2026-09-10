@@ -8,7 +8,7 @@ import type {
   ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
-import type { WorktreeSortMode } from '@sideboard/home-board';
+import type { BoardOwnershipFilter, WorktreeSortMode } from '@sideboard/home-board';
 import { lookupSoccerTeam } from '@sideboard/teams';
 import { LivePaintProvider } from './lib/live-paint-context';
 import { createLivePaintStore } from './lib/live-paint-store';
@@ -42,6 +42,7 @@ import {
   unreadWorktreeKey,
 } from './lib/unread-worktrees';
 import { readWorktreeSort, writeWorktreeSort } from './lib/worktree-sort';
+import { readWorktreeOwnership, writeWorktreeOwnership } from './lib/worktree-ownership';
 import {
   orderWorktreeChatsForKey,
   writeLastWorktreeChatId,
@@ -115,6 +116,9 @@ export function App() {
   archivedRef.current = archived;
   const [view, setView] = useState<'board' | 'thread'>('board');
   const [worktreeSort, setWorktreeSort] = useState<WorktreeSortMode>(readWorktreeSort);
+  const [worktreeOwnership, setWorktreeOwnership] =
+    useState<BoardOwnershipFilter>(readWorktreeOwnership);
+  const [githubLogin, setGithubLogin] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
@@ -381,6 +385,26 @@ export function App() {
       setFollowUpBehavior(s.advanced?.followUpBehavior === 'queue' ? 'queue' : 'steer');
     });
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    function loadGithubLogin() {
+      void window.sideboard
+        .getGitHubStatus()
+        .then((status) => {
+          if (!cancelled) setGithubLogin(status.login);
+        })
+        .catch(() => {
+          if (!cancelled) setGithubLogin(null);
+        });
+    }
+    loadGithubLogin();
+    const interval = window.setInterval(loadGithubLogin, 5 * 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [settingsOpen]);
 
   const notifySoccerNickname = useCallback((title: string | null | undefined) => {
     if (!title?.trim()) return;
@@ -946,6 +970,11 @@ export function App() {
     writeWorktreeSort(mode);
   }, []);
 
+  const onWorktreeOwnershipChange = useCallback((filter: BoardOwnershipFilter) => {
+    setWorktreeOwnership(filter);
+    writeWorktreeOwnership(filter);
+  }, []);
+
   function openCreate(
     forRepo?: string,
     mode: CreateState['mode'] = 'quick',
@@ -1004,6 +1033,9 @@ export function App() {
             onRemoveWorkspace={removeWorkspaceAndRefresh}
             worktreeSort={worktreeSort}
             onWorktreeSortChange={onWorktreeSortChange}
+            ownership={worktreeOwnership}
+            onOwnershipChange={onWorktreeOwnershipChange}
+            githubLogin={githubLogin}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -1031,6 +1063,9 @@ export function App() {
           }}
           worktreeSort={worktreeSort}
           onWorktreeSortChange={onWorktreeSortChange}
+          ownership={worktreeOwnership}
+          onOwnershipChange={onWorktreeOwnershipChange}
+          githubLogin={githubLogin}
           onRefresh={() => void refresh()}
           onAddToBoard={() =>
             openCreate(repoPath || undefined, 'quick', { stayOnBoard: true })

@@ -10,6 +10,7 @@ import {
   BOARD_COLUMN_DEFS,
   BOARD_PAGE_SIZE,
   classifyWorktreeColumn,
+  classifyWorktreeOwnership,
   compactPreview,
   markdownPreviewSource,
   DEFAULT_WORKTREE_SORT,
@@ -18,9 +19,12 @@ import {
   isHomeBoardThread,
   visiblePage,
   worktreeBoardStatus,
+  worktreeMatchesOwnership,
   type BoardColumnId,
+  type BoardOwnershipFilter,
   type WorktreeSortMode,
 } from '../lib/home-board';
+import { WorktreeOwnershipFilter } from './WorktreeOwnershipFilter';
 import { WorktreeSortSelect } from './WorktreeSortSelect';
 import {
   isWorktreeUnread,
@@ -51,6 +55,9 @@ interface Props {
   archivingIds?: Set<string>;
   worktreeSort?: WorktreeSortMode;
   onWorktreeSortChange?: (mode: WorktreeSortMode) => void;
+  ownership?: BoardOwnershipFilter;
+  onOwnershipChange?: (filter: BoardOwnershipFilter) => void;
+  githubLogin?: string | null;
   /** Left-edge open control when the left sidebar is closed. */
   leftSidebarToggle?: ReactNode;
 }
@@ -104,17 +111,28 @@ export function GlobalBoard({
   archivingIds = new Set(),
   worktreeSort = DEFAULT_WORKTREE_SORT,
   onWorktreeSortChange,
+  ownership = 'all',
+  onOwnershipChange,
+  githubLogin = null,
   leftSidebarToggle,
 }: Props) {
   const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
 
-  const worktrees = useMemo(
+  const allWorktrees = useMemo(
     () =>
       groupHomeBoardWorktrees(
         threads.filter((t) => t.status !== 'archived' && isHomeBoardThread(t)),
         worktreeSort,
       ),
     [threads, worktreeSort],
+  );
+
+  const worktrees = useMemo(
+    () =>
+      allWorktrees.filter((group) =>
+        worktreeMatchesOwnership(group, ownership, githubLogin ?? ''),
+      ),
+    [allWorktrees, ownership, githubLogin],
   );
 
   const byColumn = useMemo(() => {
@@ -134,7 +152,7 @@ export function GlobalBoard({
   }, [worktrees]);
 
   const worktreeCount = worktrees.length;
-  const hasBoardContent = worktreeCount > 0;
+  const hasBoardContent = allWorktrees.length > 0;
 
   function shownFor(col: BoardColumnId): number {
     return shownByCol[col] ?? BOARD_PAGE_SIZE;
@@ -181,6 +199,14 @@ export function GlobalBoard({
             : '…'}
         </span>
         <div className="actions">
+          {onOwnershipChange ? (
+            <WorktreeOwnershipFilter
+              value={ownership}
+              onChange={onOwnershipChange}
+              githubLogin={githubLogin}
+              className="worktree-ownership board-ownership"
+            />
+          ) : null}
           {onWorktreeSortChange ? (
             <WorktreeSortSelect
               value={worktreeSort}
@@ -233,6 +259,7 @@ export function GlobalBoard({
                           <WorktreeCard
                             key={normalizeWorktreePath(primary.worktreePath)}
                             group={group}
+                            githubLogin={githubLogin}
                             workspaces={workspaces}
                             selectedId={selectedId}
                             archiving={group.some((t) => archivingIds.has(t.id))}
@@ -300,6 +327,7 @@ function WorktreeCard({
   selectedId,
   archiving,
   canArchive,
+  githubLogin,
   onOpenThread,
   onRefresh,
   onArchive,
@@ -309,6 +337,7 @@ function WorktreeCard({
   selectedId: string | null;
   archiving: boolean;
   canArchive: boolean;
+  githubLogin: string | null;
   onOpenThread: (id: string) => void;
   onRefresh: () => void;
   onArchive: () => void;
@@ -332,6 +361,7 @@ function WorktreeCard({
   );
 
   const dirty = loaded && Boolean(stat?.dirty);
+  const reviewing = classifyWorktreeOwnership(group, githubLogin ?? '') === 'reviewing';
 
   function openWorktree() {
     if (!archiving) onOpenThread(primary.id);
@@ -339,7 +369,7 @@ function WorktreeCard({
 
   return (
     <article
-      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}`}
+      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}${reviewing ? ' is-reviewing' : ''}`}
       aria-busy={archiving}
       onClick={openWorktree}
     >
@@ -368,7 +398,14 @@ function WorktreeCard({
             }
           }}
         >
-          <div className="thread-title">{label}</div>
+          <div className="thread-title">
+            <span className="thread-title-text">{label}</span>
+            {reviewing ? (
+              <span className="board-badge is-reviewing" title="Someone else's PR">
+                review
+              </span>
+            ) : null}
+          </div>
           <div className="thread-meta">
             {archiving
               ? 'Archiving…'

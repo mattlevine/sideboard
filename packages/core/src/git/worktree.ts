@@ -433,7 +433,7 @@ export async function getPr(
     'view',
     String(number),
     '--json',
-    'number,title,headRefName,url,isCrossRepository',
+    'number,title,headRefName,url,isCrossRepository,author',
   ];
   if (slug) args.push('--repo', slug);
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
@@ -510,7 +510,7 @@ export async function getPrForHeadBranch(
     'view',
     head,
     '--json',
-    'number,title,headRefName,url,isCrossRepository',
+    'number,title,headRefName,url,isCrossRepository,author',
   ];
   if (slug) viewArgs.push('--repo', slug);
   const viewed = await gh(viewArgs, repoPath, { reject: false });
@@ -529,7 +529,7 @@ export async function getPrForHeadBranch(
     '--head',
     listHead,
     '--json',
-    'number,title,headRefName,url,isCrossRepository',
+    'number,title,headRefName,url,isCrossRepository,author',
     '--limit',
     '1',
     '--state',
@@ -811,7 +811,7 @@ export async function getPrMeta(
     'view',
     selector,
     '--json',
-    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,isInMergeQueue,mergeStateStatus,mergeable',
+    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,isInMergeQueue,mergeStateStatus,mergeable,author,reviewRequests',
   ];
   if (slug) viewArgs.push('--repo', slug);
   let { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
@@ -821,7 +821,7 @@ export async function getPrMeta(
       'view',
       selector,
       '--json',
-      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,mergeStateStatus,mergeable',
+      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,mergeStateStatus,mergeable,author,reviewRequests',
     ];
     if (slug) retry.push('--repo', slug);
     ({ stdout, exitCode, stderr } = await gh(retry, cwd, { reject: false }));
@@ -851,6 +851,7 @@ export async function getPrMeta(
     };
     const probed = await probeLocalMergeGate(cwd, gate);
     const resolved = probed.gate ?? gate;
+    const author = (view.author ?? {}) as { login?: string };
     return {
       number: Number(view.number),
       title: String(view.title ?? ''),
@@ -863,6 +864,8 @@ export async function getPrMeta(
       isInMergeQueue: Boolean(resolved.isInMergeQueue),
       mergeable: resolved.mergeable,
       mergeStateStatus: resolved.mergeStateStatus,
+      authorLogin: author.login?.trim() || null,
+      reviewerLogins: humanReviewerLogins(view.reviewRequests),
     };
   } catch {
     return null;

@@ -227,6 +227,12 @@ export function isPidAlive(pid: number): boolean {
   }
 }
 
+function sameLoginList(a?: string[] | null, b?: string[] | null): boolean {
+  const left = [...(a ?? [])].map((s) => s.trim().toLowerCase()).filter(Boolean).sort();
+  const right = [...(b ?? [])].map((s) => s.trim().toLowerCase()).filter(Boolean).sort();
+  return left.length === right.length && left.every((login, i) => login === right[i]);
+}
+
 /** Wait until pid exits, or `timeoutMs` elapses. */
 export async function waitForPidExit(
   pid: number,
@@ -2410,6 +2416,14 @@ export class Orchestrator {
     const nextDraft =
       Boolean(meta.isDraft) && nextState !== 'MERGED' && nextState !== 'CLOSED';
     if (nextDraft !== Boolean(thread.prIsDraft)) patch.prIsDraft = nextDraft;
+    const nextAuthor = meta.authorLogin?.trim() || '';
+    if (nextAuthor && nextAuthor !== (thread.prAuthorLogin ?? '').trim()) {
+      patch.prAuthorLogin = nextAuthor;
+    }
+    const nextReviewers = meta.reviewerLogins ?? [];
+    if (!sameLoginList(nextReviewers, thread.prReviewerLogins)) {
+      patch.prReviewerLogins = nextReviewers;
+    }
     if (
       thread.skipAutoArchiveOnMerge &&
       nextState &&
@@ -2447,6 +2461,14 @@ export class Orchestrator {
       const sibPatch: Partial<Thread> = { prState: 'MERGED', prIsDraft: false };
       if (meta.url && meta.url !== t.prUrl) sibPatch.prUrl = meta.url;
       if (meta.title && meta.title !== t.prTitle) sibPatch.prTitle = meta.title;
+      const sibAuthor = meta.authorLogin?.trim() || '';
+      if (sibAuthor && sibAuthor !== (t.prAuthorLogin ?? '').trim()) {
+        sibPatch.prAuthorLogin = sibAuthor;
+      }
+      const sibReviewers = meta.reviewerLogins ?? [];
+      if (!sameLoginList(sibReviewers, t.prReviewerLogins)) {
+        sibPatch.prReviewerLogins = sibReviewers;
+      }
       if (Object.keys(sibPatch).length > 0) updateThread(t.id, sibPatch);
     }
     for (const t of siblings) {

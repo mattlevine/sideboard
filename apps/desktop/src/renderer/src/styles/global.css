@@ -1926,6 +1926,74 @@ body.resizing-panels webview {
   font-size: 12px;
 }
 
+.worktree-ownership {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.worktree-ownership-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+}
+
+.worktree-ownership-tabs button {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.worktree-ownership-tabs button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.worktree-ownership-tabs button.active {
+  background: var(--bg-hover);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ownership-glyph {
+  display: block;
+  width: 14px;
+  height: 14px;
+  position: relative;
+  opacity: 0.8;
+}
+
+.ownership-glyph::before,
+.ownership-glyph::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: currentColor;
+}
+
+.ownership-glyph::before {
+  top: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.ownership-glyph::after {
+  bottom: 1px;
+  width: 10px;
+  height: 6px;
+  border-radius: 5px 5px 2px 2px;
+}
+
 .section-label {
   color: var(--muted);
   font-size: 11px;
@@ -2308,6 +2376,27 @@ body.resizing-panels webview {
   font-weight: 500;
   letter-spacing: var(--letter-tight);
   color: var(--text-secondary);
+}
+
+.thread-item .thread-title,
+.board-card-worktree .thread-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  text-overflow: unset;
+  white-space: nowrap;
+}
+
+.thread-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.thread-item .thread-title .board-badge,
+.board-card-worktree .thread-title .board-badge {
+  flex-shrink: 0;
 }
 
 .thread-item.active .thread-title {
@@ -9903,6 +9992,20 @@ body:has(.update-banner) .team-toast-stack {
   font-weight: 600;
   letter-spacing: 0.02em;
   vertical-align: middle;
+}
+
+.board-badge.is-reviewing {
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+  background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+  color: var(--warn);
+}
+
+.thread-item.is-reviewing {
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+
+.board-card-worktree.is-reviewing {
+  box-shadow: inset 2px 0 0 var(--warn);
 }
 
 .board-row .thread-title {

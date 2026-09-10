@@ -70,6 +70,8 @@ function worktreeBindingFrom(from: Thread): Pick<
   | 'prTitle'
   | 'prState'
   | 'prIsDraft'
+  | 'prAuthorLogin'
+  | 'prReviewerLogins'
   | 'skipAutoArchiveOnMerge'
   | 'stackId'
   | 'stackLayer'
@@ -93,6 +95,8 @@ function worktreeBindingFrom(from: Thread): Pick<
     prTitle: from.prTitle,
     prState: from.prState,
     prIsDraft: from.prIsDraft,
+    prAuthorLogin: from.prAuthorLogin,
+    prReviewerLogins: from.prReviewerLogins,
     skipAutoArchiveOnMerge: from.skipAutoArchiveOnMerge,
     stackId: from.stackId,
     stackLayer: from.stackLayer,

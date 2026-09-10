@@ -200,6 +200,7 @@ export async function createThread(
 
   let prUrl: string | null = null;
   let prTitle: string | null = null;
+  let prAuthorLogin: string | null = null;
   if (sourceType === 'pr') {
     const num = Number(input.sourceRef.replace(/^#/, ''));
     if (!Number.isFinite(num)) throw new Error(`Invalid PR number: ${input.sourceRef}`);
@@ -215,6 +216,7 @@ export async function createThread(
     if (reusedPr) return reusedPr;
     sourceIsFork = pr.isCrossRepository;
     prUrl = pr.url;
+    prAuthorLogin = pr.author?.login?.trim() || null;
     const localFetchBranch = `sideboard-pr-${pr.number}`;
     await fetchPrHead(repoPath, pr.number, localFetchBranch);
     sourceRef = localFetchBranch;
@@ -243,6 +245,7 @@ export async function createThread(
         if (existing.url) {
           prUrl = existing.url;
           prTitle = existing.title;
+          prAuthorLogin = existing.author?.login?.trim() || null;
         }
       }
     }
@@ -289,6 +292,7 @@ export async function createThread(
     status: 'idle',
     prUrl,
     prTitle,
+    prAuthorLogin,
   });
   writeThread(thread);
   await ensureWorkspace(repoPath);

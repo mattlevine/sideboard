@@ -54,6 +54,8 @@ export function GitSettings({
             <div className="settings-section-title">GitHub</div>
             <p className="settings-hint">
               The selected mode is injected into agent prompts so they use the same path.
+              The connected login also marks your PRs versus ones you are reviewing on the Board
+              and in the sidebar — no separate username setting.
             </p>
             {githubStatus?.connected ? (
               <p className="settings-status-text" style={{ marginTop: 8 }}>

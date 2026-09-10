@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.178] - 2026-09-10
+
+### Added
+
+- Board and sidebar **Mine / Reviewing** filter. Your GitHub login from `gh` (Settings → Git) marks PRs you authored versus ones you are reviewing — no separate username setting. Reviewing worktrees get a **review** badge in the sidebar and on the board.
+
 ## [0.1.177] - 2026-09-09
 
 ### Fixed

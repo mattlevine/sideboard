@@ -9,6 +9,8 @@ import {
   boardPrKey,
   classifyThreadColumn,
   classifyWorktreeColumn,
+  classifyWorktreeOwnership,
+  worktreeMatchesOwnership,
   groupHomeBoardWorktrees,
   DEFAULT_WORKTREE_SORT,
   isHomeBoardThread,
@@ -223,6 +225,103 @@ describe('classifyThreadColumn', () => {
         }),
       ]),
     ).toBe('draft');
+  });
+});
+
+describe('classifyWorktreeOwnership', () => {
+  it('treats authored PRs and local WIP as mine', () => {
+    expect(
+      classifyWorktreeOwnership(
+        [thread({ id: 'wip', sourceType: 'ticket' })],
+        'matt',
+      ),
+    ).toBe('mine');
+    expect(
+      classifyWorktreeOwnership(
+        [
+          thread({
+            id: 'own',
+            sourceType: 'ticket',
+            prUrl: 'https://github.com/acme/app/pull/1',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+      ),
+    ).toBe('mine');
+  });
+
+  it('treats someone else\'s PR as reviewing', () => {
+    expect(
+      classifyWorktreeOwnership(
+        [
+          thread({
+            id: 'theirs',
+            sourceType: 'pr',
+            prUrl: 'https://github.com/acme/app/pull/2',
+            prAuthorLogin: 'sam',
+          }),
+        ],
+        'matt',
+      ),
+    ).toBe('reviewing');
+  });
+
+  it('treats create-from-PR as reviewing when author is unknown', () => {
+    expect(
+      classifyWorktreeOwnership(
+        [
+          thread({
+            id: 'review',
+            sourceType: 'pr',
+            prUrl: 'https://github.com/acme/app/pull/3',
+          }),
+        ],
+        'matt',
+      ),
+    ).toBe('reviewing');
+  });
+
+  it('treats review-requested PRs as reviewing when you are not the author', () => {
+    expect(
+      classifyWorktreeOwnership(
+        [
+          thread({
+            id: 'asked',
+            sourceType: 'branch',
+            prUrl: 'https://github.com/acme/app/pull/4',
+            prAuthorLogin: 'sam',
+            prReviewerLogins: ['matt'],
+          }),
+        ],
+        'matt',
+      ),
+    ).toBe('reviewing');
+  });
+
+  it('filters All / Mine / Reviewing', () => {
+    const mine = [
+      thread({
+        id: 'mine',
+        sourceType: 'ticket',
+        prUrl: 'https://github.com/acme/app/pull/1',
+        prAuthorLogin: 'matt',
+      }),
+    ];
+    const reviewing = [
+      thread({
+        id: 'review',
+        sourceType: 'pr',
+        prUrl: 'https://github.com/acme/app/pull/2',
+        prAuthorLogin: 'sam',
+      }),
+    ];
+    expect(worktreeMatchesOwnership(mine, 'all', 'matt')).toBe(true);
+    expect(worktreeMatchesOwnership(reviewing, 'all', 'matt')).toBe(true);
+    expect(worktreeMatchesOwnership(mine, 'mine', 'matt')).toBe(true);
+    expect(worktreeMatchesOwnership(reviewing, 'mine', 'matt')).toBe(false);
+    expect(worktreeMatchesOwnership(mine, 'reviewing', 'matt')).toBe(false);
+    expect(worktreeMatchesOwnership(reviewing, 'reviewing', 'matt')).toBe(true);
   });
 });
 
@@ -707,6 +806,51 @@ describe('assembleHomeBoard', () => {
     expect(col.columns.new).toHaveLength(2);
     expect(col.columns.done).toHaveLength(0);
     expect(col.totals.done).toBe(1);
+  });
+
+  it('filters mine vs reviewing using the gh viewer login', () => {
+    const threads = [
+      thread({
+        id: 'mine-pr',
+        title: 'My change',
+        sourceType: 'ticket',
+        prUrl: 'https://github.com/acme/app/pull/1',
+        prState: 'OPEN',
+        prAuthorLogin: 'matt',
+      }),
+      thread({
+        id: 'review-pr',
+        title: 'Their change',
+        sourceType: 'pr',
+        prUrl: 'https://github.com/acme/app/pull/2',
+        prState: 'OPEN',
+        prAuthorLogin: 'sam',
+      }),
+    ];
+    const mine = assembleHomeBoard({
+      threads,
+      ownership: 'mine',
+      viewerLogin: 'matt',
+    });
+    expect(mine.totals.threads).toBe(1);
+    expect(mine.columns.review).toHaveLength(1);
+    expect(
+      mine.columns.review[0] &&
+        mine.columns.review[0].kind === 'thread' &&
+        mine.columns.review[0].id,
+    ).toBe('mine-pr');
+
+    const reviewing = assembleHomeBoard({
+      threads,
+      ownership: 'reviewing',
+      viewerLogin: 'matt',
+    });
+    expect(reviewing.totals.threads).toBe(1);
+    expect(
+      reviewing.columns.review[0] &&
+        reviewing.columns.review[0].kind === 'thread' &&
+        reviewing.columns.review[0].id,
+    ).toBe('review-pr');
   });
 
   it('keeps picker cycle helpers and syncs pin metadata from remotes', () => {
