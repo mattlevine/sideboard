@@ -182,6 +182,9 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('flap');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('github_*');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('abletime_*');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Post this review');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Keep it in chat');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not tell the child to comment');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
@@ -214,6 +217,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('Never wait on Claude Linear MCP');
       expect(claude).toContain('Typical flow (review inbox)');
       expect(claude).toContain('list_prs(queue=review, limit=N)');
+      expect(claude).toContain('Post this review');
       expect(claude).toContain('force_stop: true');
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('ask_git');
