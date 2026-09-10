@@ -10000,14 +10000,6 @@ body:has(.update-banner) .team-toast-stack {
   color: var(--warn);
 }
 
-.thread-item.is-reviewing {
-  box-shadow: inset 2px 0 0 var(--warn);
-}
-
-.board-card-worktree.is-reviewing {
-  box-shadow: inset 2px 0 0 var(--warn);
-}
-
 .board-row .thread-title {
   display: flex;
   align-items: center;

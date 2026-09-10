@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.179] - 2026-09-10
+
+### Changed
+
+- Review worktrees keep the **review** badge only — no yellow left stripe on the sidebar or Home Kanban.
+
 ## [0.1.178] - 2026-09-10
 
 ### Added
