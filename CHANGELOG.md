@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.181] - 2026-09-11
+
 ### Added
 
 - Issue search (`list_issues`, `linear_search_issues`, `github_search_issues`, AbleTime list/search) accepts `updatedSince` (ISO, YYYY-MM-DD, or `yesterday` / `2d`). One call returns tickets created or updated since then plus new comment previews — no per-ticket `get_issue` scan.
