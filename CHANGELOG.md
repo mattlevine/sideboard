@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.183] - 2026-09-11
+
+### Fixed
+
+- Streaming log artifacts no longer steal the right-column tab. A new tab still focuses on first open; later appends refresh the log in place if you switched away.
+
 ## [0.1.182] - 2026-09-11
 
 ### Fixed
