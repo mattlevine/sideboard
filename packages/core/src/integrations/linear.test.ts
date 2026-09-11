@@ -189,6 +189,13 @@ describe('buildLinearIssueFilter', () => {
     expect(
       buildLinearIssueFilter({ updatedSince: '2026-09-10T00:00:00.000Z' }).updatedAt,
     ).toEqual({ gte: '2026-09-10T00:00:00.000Z' });
+    expect(buildLinearIssueFilter({ assignee: 'all', query: 'inbox' }).or).toEqual([
+      { title: { containsIgnoreCase: 'inbox' } },
+      { description: { containsIgnoreCase: 'inbox' } },
+    ]);
+    expect(buildLinearIssueFilter({ query: 'ENG-9' }).or).toEqual(
+      expect.arrayContaining([{ number: { eq: 9 } }]),
+    );
   });
 });
 
@@ -527,6 +534,59 @@ describe('Linear GraphQL writes', () => {
       body: 'Please ship',
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('scopes comments-since to the search query and listed issue ids', async () => {
+    await withAuth();
+    const since = '2026-09-10T00:00:00.000Z';
+    const fetchMock = mockGraphql((query, variables) => {
+      expect(query).toContain('SideboardCommentsSince');
+      expect(variables.filter).toEqual({
+        createdAt: { gte: since },
+        issue: {
+          state: { type: { nin: ['completed', 'canceled'] } },
+          or: [
+            { title: { containsIgnoreCase: 'inbox' } },
+            { description: { containsIgnoreCase: 'inbox' } },
+          ],
+        },
+      });
+      return {
+        comments: {
+          nodes: [
+            {
+              id: 'c-hit',
+              body: 'On the search hit',
+              createdAt: '2026-09-10T12:00:00.000Z',
+              user: { id: 'user-2', name: 'Ada' },
+              issue: { identifier: 'ENG-9', title: 'Inbox' },
+            },
+            {
+              id: 'c-other',
+              body: 'On another ticket',
+              createdAt: '2026-09-10T12:00:00.000Z',
+              user: { id: 'user-2', name: 'Ada' },
+              issue: { identifier: 'ENG-8', title: 'Other' },
+            },
+          ],
+        },
+      };
+    });
+    const comments = await listLinearCommentsSince({
+      since,
+      query: 'inbox',
+      issueIdentifiers: ['ENG-9'],
+    });
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.identifier).toBe('ENG-9');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(
+      listLinearCommentsSince({
+        since,
+        query: 'inbox',
+        issueIdentifiers: [],
+      }),
+    ).resolves.toEqual([]);
   });
 
   it('rewrites GraphQL permission errors', async () => {

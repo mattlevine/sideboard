@@ -90,22 +90,23 @@ export function registerLinearTools(server: McpServer): void {
       try {
         const page = clampMcpIssueLimit(limit);
         const since = updatedSince ? parseIssueSince(updatedSince) : undefined;
-        const [listed, comments] = await Promise.all([
-          listLinearIssuesFiltered({
-            query,
-            assignee,
-            limit: page + 1,
-            updatedSince: since,
-          }),
-          since
-            ? listLinearCommentsSince({
-                since,
-                assignee,
-                query,
-                limit: page + 1,
-              })
-            : Promise.resolve(undefined),
-        ]);
+        const listed = await listLinearIssuesFiltered({
+          query,
+          assignee,
+          limit: page + 1,
+          updatedSince: since,
+        });
+        const comments = since
+          ? await listLinearCommentsSince({
+              since,
+              assignee,
+              query,
+              issueIdentifiers: query
+                ? listed.issues.map((issue) => issue.identifier)
+                : undefined,
+              limit: page + 1,
+            })
+          : undefined;
         return mcpJson(
           formatListedIssuesForMcp(
             {

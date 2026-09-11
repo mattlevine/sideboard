@@ -282,6 +282,22 @@ describe('classifyWorktreeOwnership', () => {
     ).toBe('reviewing');
   });
 
+  it('does not mark create-from-PR as reviewing before the viewer login loads', () => {
+    expect(
+      classifyWorktreeOwnership(
+        [
+          thread({
+            id: 'review',
+            sourceType: 'pr',
+            prUrl: 'https://github.com/acme/app/pull/3',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        '',
+      ),
+    ).toBe('mine');
+  });
+
   it('treats review-requested PRs as reviewing when you are not the author', () => {
     expect(
       classifyWorktreeOwnership(

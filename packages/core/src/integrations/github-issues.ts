@@ -136,9 +136,44 @@ function issueNumberFromApiUrl(url: string): number | null {
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
+const GITHUB_ISSUE_COMMENTS_PAGE_SIZE = 100;
+const GITHUB_ISSUE_COMMENTS_MAX_PAGES = 5;
+
+function parseGitHubIssueCommentNode(
+  item: unknown,
+  allowed: Set<number> | null,
+): IssueActivityComment | null {
+  const rec = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
+  if (!rec) return null;
+  const issueUrl = typeof rec.issue_url === 'string' ? rec.issue_url : '';
+  const number = issueNumberFromApiUrl(issueUrl);
+  if (number == null) return null;
+  if (allowed && !allowed.has(number)) return null;
+  const body = previewIssueCommentBody(typeof rec.body === 'string' ? rec.body : '');
+  const user =
+    rec.user && typeof rec.user === 'object'
+      ? String((rec.user as { login?: string }).login ?? '').trim()
+      : '';
+  const createdAt =
+    typeof rec.created_at === 'string'
+      ? rec.created_at
+      : typeof rec.createdAt === 'string'
+        ? rec.createdAt
+        : undefined;
+  const url = typeof rec.html_url === 'string' ? rec.html_url : undefined;
+  return {
+    identifier: `#${number}`,
+    ...(user ? { author: user } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    body,
+    ...(url ? { url } : {}),
+  };
+}
+
 /**
  * Repo issue comments created at/after `since`. Pass `issueIdentifiers` (#12)
- * to keep only comments on that inbox page — one REST call, not N issue views.
+ * to keep only comments on that inbox page — paginated REST, not N issue views.
+ * An empty allowlist means no comments (do not fall through to the whole repo).
  */
 export async function listGitHubIssueCommentsSince(opts: {
   since: string;
@@ -149,6 +184,7 @@ export async function listGitHubIssueCommentsSince(opts: {
   const limit = Math.max(1, Math.min(250, opts.limit ?? 200));
   const { cwd, slug } = await resolveGitHubIssueRepo(opts.repoPath);
   if (!slug) return [];
+  const restrictToIssues = opts.issueIdentifiers != null;
   const allowed = new Set(
     (opts.issueIdentifiers ?? [])
       .map((id) => {
@@ -160,44 +196,29 @@ export async function listGitHubIssueCommentsSince(opts: {
       })
       .filter((n): n is number => n != null),
   );
-  const path = `repos/${slug}/issues/comments?since=${encodeURIComponent(opts.since)}&per_page=${limit + 1}`;
-  const result = await gh(['api', path], cwd, { reject: false });
-  if (result.exitCode !== 0 || !result.stdout.trim()) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(result.stdout);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
+  if (restrictToIssues && allowed.size === 0) return [];
+  const pageSize = Math.min(GITHUB_ISSUE_COMMENTS_PAGE_SIZE, Math.max(1, limit));
   const out: IssueActivityComment[] = [];
-  for (const item of parsed) {
-    const rec = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
-    if (!rec) continue;
-    const issueUrl = typeof rec.issue_url === 'string' ? rec.issue_url : '';
-    const number = issueNumberFromApiUrl(issueUrl);
-    if (number == null) continue;
-    if (allowed.size > 0 && !allowed.has(number)) continue;
-    const body = previewIssueCommentBody(typeof rec.body === 'string' ? rec.body : '');
-    const user =
-      rec.user && typeof rec.user === 'object'
-        ? String((rec.user as { login?: string }).login ?? '').trim()
-        : '';
-    const createdAt =
-      typeof rec.created_at === 'string'
-        ? rec.created_at
-        : typeof rec.createdAt === 'string'
-          ? rec.createdAt
-          : undefined;
-    const url = typeof rec.html_url === 'string' ? rec.html_url : undefined;
-    out.push({
-      identifier: `#${number}`,
-      ...(user ? { author: user } : {}),
-      ...(createdAt ? { createdAt } : {}),
-      body,
-      ...(url ? { url } : {}),
-    });
-    if (out.length >= limit) break;
+  for (let page = 1; page <= GITHUB_ISSUE_COMMENTS_MAX_PAGES; page++) {
+    const path =
+      `repos/${slug}/issues/comments?since=${encodeURIComponent(opts.since)}` +
+      `&sort=created&direction=desc&per_page=${pageSize}&page=${page}`;
+    const result = await gh(['api', path], cwd, { reject: false });
+    if (result.exitCode !== 0 || !result.stdout.trim()) break;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result.stdout);
+    } catch {
+      break;
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) break;
+    for (const item of parsed) {
+      const comment = parseGitHubIssueCommentNode(item, restrictToIssues ? allowed : null);
+      if (!comment) continue;
+      out.push(comment);
+      if (out.length >= limit) return out;
+    }
+    if (parsed.length < pageSize) break;
   }
   return out;
 }

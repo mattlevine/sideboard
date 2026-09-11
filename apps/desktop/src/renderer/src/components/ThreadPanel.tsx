@@ -1534,6 +1534,7 @@ export function ThreadPanel({
         const session = upsertRightPaneTab(prev.tabs, candidate, {
           activate: false,
           activeId: prev.activeId,
+          replaceId: prev.tabs[liveIdx]!.id,
         });
         rememberRightPaneSession(thread.id, session);
         return session;

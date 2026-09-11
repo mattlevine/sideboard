@@ -644,15 +644,39 @@ function assigneeFilterKey(assignee?: string | null): string {
  * Linear `IssueFilter` for open issues. Default assignee is `me` so existing
  * Home / Create-from callers stay assigned-to-you unless they ask otherwise.
  */
+function applyLinearIssueQueryFilter(
+  filter: Record<string, unknown>,
+  query?: string | null,
+): void {
+  const term = query?.trim();
+  if (!term) return;
+  const or: Record<string, unknown>[] = [
+    { title: { containsIgnoreCase: term } },
+    { description: { containsIgnoreCase: term } },
+  ];
+  const identifierMatch = term.match(/^[A-Za-z][\w]*-(\d+)$/);
+  const asNumber = identifierMatch
+    ? Number(identifierMatch[1])
+    : /^\d+$/.test(term)
+      ? Number(term)
+      : NaN;
+  if (Number.isFinite(asNumber) && asNumber > 0) {
+    or.push({ number: { eq: asNumber } });
+  }
+  filter.or = or;
+}
+
 export function buildLinearIssueFilter(input?: {
   assignee?: string | null;
   updatedSince?: string | null;
+  query?: string | null;
 }): Record<string, unknown> {
   const filter: Record<string, unknown> = {
     state: { type: { nin: ['completed', 'canceled'] } },
   };
   const since = input?.updatedSince?.trim();
   if (since) filter.updatedAt = { gte: since };
+  applyLinearIssueQueryFilter(filter, input?.query);
   const raw = assigneeFilterKey(input?.assignee) || 'me';
   const key = raw.toLowerCase();
   if (key === 'all' || key === '*') return filter;
@@ -756,18 +780,26 @@ type LinearCommentSinceNode = {
 };
 
 /**
- * Comments created at/after `since` on issues matching the same assignee filter.
- * One GraphQL query — do not get_issue each ticket to check for new comments.
+ * Comments created at/after `since` on issues matching the same assignee / search
+ * filter. One GraphQL query — do not get_issue each ticket to check for new comments.
+ * Pass `issueIdentifiers` (search hits) to keep only those tickets; an empty
+ * allowlist means no comments.
  */
 export async function listLinearCommentsSince(opts: {
   since: string;
   assignee?: string | null;
   query?: string;
+  issueIdentifiers?: string[];
   limit?: number;
   apiKey?: string | null;
 }): Promise<IssueActivityComment[]> {
   const first = Math.max(1, Math.min(250, opts.limit ?? 200));
   const query = opts.query?.trim() ?? '';
+  const restrictToIssues = opts.issueIdentifiers != null;
+  const allowed = new Set(
+    (opts.issueIdentifiers ?? []).map((id) => id.trim()).filter(Boolean),
+  );
+  if (restrictToIssues && allowed.size === 0) return [];
   const assignee = assigneeFilterKey(opts.assignee) || (query ? 'all' : 'me');
   const json = await linearGraphql<{
     comments?: { nodes?: LinearCommentSinceNode[] };
@@ -777,7 +809,7 @@ export async function listLinearCommentsSince(opts: {
       first,
       filter: {
         createdAt: { gte: opts.since },
-        issue: buildLinearIssueFilter({ assignee }),
+        issue: buildLinearIssueFilter({ assignee, query: query || undefined }),
       },
     },
     opts,
@@ -785,6 +817,7 @@ export async function listLinearCommentsSince(opts: {
   const out: IssueActivityComment[] = [];
   for (const node of json.comments?.nodes ?? []) {
     const identifier = String(node.issue?.identifier ?? '').trim();
+    if (restrictToIssues && !allowed.has(identifier)) continue;
     const body = previewIssueCommentBody(String(node.body ?? ''));
     if (!identifier && !body) continue;
     out.push({

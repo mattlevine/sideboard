@@ -195,22 +195,23 @@ export async function listIssues(
   const since = opts?.updatedSince ? parseIssueSince(opts.updatedSince) : undefined;
 
   if (source === 'linear') {
-    const [listed, comments] = await Promise.all([
-      listLinearIssuesFiltered({
-        assignee,
-        query,
-        limit: opts?.limit,
-        updatedSince: since,
-      }),
-      since
-        ? listLinearCommentsSince({
-            since,
-            assignee,
-            query,
-            limit: opts?.limit,
-          })
-        : Promise.resolve(undefined),
-    ]);
+    const listed = await listLinearIssuesFiltered({
+      assignee,
+      query,
+      limit: opts?.limit,
+      updatedSince: since,
+    });
+    const comments = since
+      ? await listLinearCommentsSince({
+          since,
+          assignee,
+          query,
+          issueIdentifiers: query
+            ? listed.issues.map((issue) => issue.identifier)
+            : undefined,
+          limit: opts?.limit,
+        })
+      : undefined;
     return {
       source,
       preferredSource,
