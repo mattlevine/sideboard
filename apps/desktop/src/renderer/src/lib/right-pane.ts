@@ -3,6 +3,7 @@ import {
   extractArtifacts,
   flattenToolInput,
   latestArtifact,
+  mergeAppendableArtifact,
   toolShortName,
   unwrapToolResultPayload,
   type ChatArtifact,
@@ -102,6 +103,80 @@ export function isDocumentPane(
   content: RightPaneContent | null | undefined,
 ): content is ChatArtifact {
   return Boolean(content && !isSchemaPane(content) && !isFilesPane(content));
+}
+
+/** Open right-column tabs for one chat. */
+export interface RightPaneSession {
+  tabs: RightPaneContent[];
+  activeId: string | null;
+}
+
+/** True when two payloads should share one tab (same schema/files target or same document). */
+export function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean {
+  if (isSchemaPane(a) && isSchemaPane(b)) {
+    return (
+      a.resourceId === b.resourceId &&
+      a.datasource === b.datasource &&
+      (a.recordId ?? null) === (b.recordId ?? null)
+    );
+  }
+  if (isFilesPane(a) && isFilesPane(b)) {
+    return a.datasource === b.datasource && (a.path ?? '') === (b.path ?? '');
+  }
+  if (
+    !isSchemaPane(a) &&
+    !isSchemaPane(b) &&
+    !isFilesPane(a) &&
+    !isFilesPane(b)
+  ) {
+    return a.content === b.content && a.title === b.title;
+  }
+  return false;
+}
+
+/**
+ * Insert or merge a right-pane tab.
+ * New tabs always become active. Existing-tab updates keep `activeId` unless
+ * `activate` is true (user opened this pane) or they were already on this tab.
+ */
+export function upsertRightPaneTab(
+  tabs: RightPaneContent[],
+  next: RightPaneContent,
+  options?: { activate?: boolean; activeId?: string | null },
+): RightPaneSession {
+  const activate = options?.activate ?? true;
+  const currentActiveId = options?.activeId ?? null;
+  const matchIdx = tabs.findIndex(
+    (t) => t.id === next.id || sameRightPane(t, next),
+  );
+  if (matchIdx < 0) {
+    return { tabs: [...tabs, next], activeId: next.id };
+  }
+
+  const matchedId = tabs[matchIdx]!.id;
+  const prev = tabs[matchIdx]!;
+  const merged =
+    isDocumentPane(prev) && isDocumentPane(next)
+      ? mergeAppendableArtifact(prev, next)
+      : next;
+  const cleaned = tabs
+    .filter((t) => t.id === matchedId || !sameRightPane(t, next))
+    .map((t) => (t.id === matchedId ? merged : t));
+
+  if (activate) {
+    return { tabs: cleaned, activeId: merged.id };
+  }
+  if (
+    currentActiveId == null ||
+    currentActiveId === matchedId ||
+    currentActiveId === merged.id
+  ) {
+    return { tabs: cleaned, activeId: merged.id };
+  }
+  if (cleaned.some((t) => t.id === currentActiveId)) {
+    return { tabs: cleaned, activeId: currentActiveId };
+  }
+  return { tabs: cleaned, activeId: merged.id };
 }
 
 function asRecord(input: unknown): Record<string, unknown> | undefined {

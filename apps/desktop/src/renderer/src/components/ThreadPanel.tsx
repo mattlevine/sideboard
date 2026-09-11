@@ -27,12 +27,14 @@ import {
 } from './schema/RightColumnPane';
 import type { FilePickerRequest } from './schema/FileManagerColumn';
 import {
-  isDocumentPane,
   isFilesPane,
   isSchemaPane,
   latestRightPaneContent,
+  sameRightPane,
+  upsertRightPaneTab,
   type FilesPaneContent,
   type RightPaneContent,
+  type RightPaneSession,
   type SchemaPaneContent,
 } from '../lib/right-pane';
 import {
@@ -42,9 +44,7 @@ import {
   rememberClosedRightPane,
   rememberRightPaneSession,
   setRightPaneSuppressed,
-  type RightPaneSession,
 } from '../lib/right-pane-memory';
-import { mergeAppendableArtifact } from '../lib/artifacts';
 import { forwardOccupancyTokens, threadHasCompactedContext } from '@sideboard/context-estimate';
 import {
   contextMeterTooltip,
@@ -1355,55 +1355,11 @@ export function ThreadPanel({
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
 
-  function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean {
-    if (isSchemaPane(a) && isSchemaPane(b)) {
-      return (
-        a.resourceId === b.resourceId &&
-        a.datasource === b.datasource &&
-        (a.recordId ?? null) === (b.recordId ?? null)
-      );
-    }
-    if (isFilesPane(a) && isFilesPane(b)) {
-      return a.datasource === b.datasource && (a.path ?? '') === (b.path ?? '');
-    }
-    if (
-      !isSchemaPane(a) &&
-      !isSchemaPane(b) &&
-      !isFilesPane(a) &&
-      !isFilesPane(b)
-    ) {
-      return a.content === b.content && a.title === b.title;
-    }
-    return false;
-  }
-
-  function upsertTab(
-    tabs: RightPaneContent[],
-    next: RightPaneContent,
-  ): RightPaneSession {
-    const matchIdx = tabs.findIndex(
-      (t) => t.id === next.id || sameRightPane(t, next),
-    );
-    if (matchIdx >= 0) {
-      const matchedId = tabs[matchIdx]!.id;
-      const prev = tabs[matchIdx]!;
-      const merged =
-        isDocumentPane(prev) && isDocumentPane(next)
-          ? mergeAppendableArtifact(prev, next)
-          : next;
-      const cleaned = tabs
-        .filter((t) => t.id === matchedId || !sameRightPane(t, next))
-        .map((t) => (t.id === matchedId ? merged : t));
-      return { tabs: cleaned, activeId: merged.id };
-    }
-    return { tabs: [...tabs, next], activeId: next.id };
-  }
-
   function openRightPane(next: RightPaneContent) {
     suppressArtifactAutoOpen.current = false;
     setRightPaneSuppressed(thread.id, false);
     setRightSession((prev) => {
-      const session = upsertTab(prev?.tabs ?? [], next);
+      const session = upsertRightPaneTab(prev?.tabs ?? [], next);
       rememberRightPaneSession(thread.id, session);
       return session;
     });
@@ -1550,7 +1506,10 @@ export function ThreadPanel({
         setRightPaneSuppressed(thread.id, false);
       }
       setRightSession((prev) => {
-        const session = upsertTab(prev?.tabs ?? [], candidate);
+        const session = upsertRightPaneTab(prev?.tabs ?? [], candidate, {
+          activate: false,
+          activeId: prev?.activeId,
+        });
         rememberRightPaneSession(thread.id, session);
         return session;
       });
@@ -1572,14 +1531,12 @@ export function ThreadPanel({
             sameRightPane(t, candidate),
         );
         if (liveIdx < 0) return prev;
-        const wasActive = prev.tabs[liveIdx]?.id === prev.activeId;
-        const session = upsertTab(prev.tabs, candidate);
-        const next = {
-          tabs: session.tabs,
-          activeId: wasActive ? session.activeId : prev.activeId,
-        };
-        rememberRightPaneSession(thread.id, next);
-        return next;
+        const session = upsertRightPaneTab(prev.tabs, candidate, {
+          activate: false,
+          activeId: prev.activeId,
+        });
+        rememberRightPaneSession(thread.id, session);
+        return session;
       }
       return prev;
     });
