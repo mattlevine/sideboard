@@ -309,6 +309,29 @@ describe('upsertRightPaneTab', () => {
 });
 
 describe('latestRightPaneContent', () => {
+  it('opens the log pane from wait_for_job without present_artifact', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'w1',
+        name: 'wait_for_job',
+        status: 'done',
+        input: { id: 'core-test' },
+        result: JSON.stringify({
+          stillRunning: true,
+          status: 'running',
+          id: 'core-test',
+          delta: 'PASS 1',
+          phase: 'vitest',
+        }),
+      },
+    ];
+    const latest = latestRightPaneContent('', parts);
+    expect(latest?.kind).toBe('log');
+    expect(latest?.id).toBe('tool-core-test');
+    expect(latest && 'content' in latest ? latest.content : '').toBe('PASS 1');
+  });
+
   it('prefers schema panes over HTML artifacts', () => {
     const text = '```html\n<!DOCTYPE html><html><body><h1>Page</h1></body></html>\n```';
     const parts: MessagePart[] = [

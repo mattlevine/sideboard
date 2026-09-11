@@ -634,7 +634,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_job',
-    'Wait on a detached long job (tests, pack, deploy, connector CLI) started with detached-job.cjs. MCP clients kill tools around 60s, so this returns within 45s. stillRunning is the source of truth — if true, present_artifact type=log with content=delta (same artifact_id) and call wait_for_job again. If the job is hanging, producing no useful output, or doing the wrong thing, call stop_job instead of looping forever. Do not end the turn or tell the user you will let them know later. If false, ok/failed is the result.',
+    'Wait on a detached long job (tests, pack, deploy, connector CLI) started with detached-job.cjs. MCP clients kill tools around 60s, so this returns within 45s. Sideboard opens a type=log pane from this result (artifact_id = job id, content = delta). stillRunning is the source of truth — if true, call wait_for_job again. If the job is hanging, producing no useful output, or doing the wrong thing, call stop_job instead of looping forever. Do not end the turn or tell the user you will let them know later. If false, ok/failed is the result.',
     {
       id: z
         .string()
@@ -651,7 +651,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'stop_job',
-    'Stop a detached job you started with detached-job.cjs when it is hanging, producing no useful output, buffering forever, or doing the wrong thing (wrong project, infinite watch, huge dump). Do not stop a pack/test/deploy that is clearly making progress. After stop, present_artifact type=log with status=failed and the last delta, then decide the next step.',
+    'Stop a detached job you started with detached-job.cjs when it is hanging, producing no useful output, buffering forever, or doing the wrong thing (wrong project, infinite watch, huge dump). Do not stop a pack/test/deploy that is clearly making progress. The type=log pane updates to status=failed with the last delta. Then decide the next step.',
     {
       id: z
         .string()

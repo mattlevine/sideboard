@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.186] - 2026-09-11
+
+### Changed
+
+- Detached long jobs open the side-column log pane from `wait_for_job` / `stop_job` (and shell `detached-job` wait JSON). Agents no longer have to call `present_artifact` for the user to see live output.
+
 ## [0.1.185] - 2026-09-11
 
 ### Fixed

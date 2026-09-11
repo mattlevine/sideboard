@@ -23,9 +23,9 @@ export const MCP_WAIT_FOR_JOB_MAX_MS = 45_000;
 export const MAX_JOB_CONTINUES = 8;
 
 export const MCP_WAIT_JOB_STILL_RUNNING_HINT =
-  'Job is still running. present_artifact type=log with the same artifact_id and content=delta (new lines only). Then call wait_for_job again. If it is hanging, producing no useful output, or doing the wrong thing, call stop_job (same id) instead of looping forever. Do not end the turn or tell the user you will let them know later.';
+  'Job is still running. The type=log pane already appended this delta. Call wait_for_job again. If it is hanging, producing no useful output, or doing the wrong thing, call stop_job (same id) instead of looping forever. Do not end the turn or tell the user you will let them know later.';
 export const MCP_STOP_JOB_HINT =
-  'Stopped. present_artifact type=log with status=failed and the last delta. Do not wait again unless you start a new command.';
+  'Stopped. The type=log pane is status=failed with the last delta. Do not wait again unless you start a new command.';
 
 const JOB_ID_RE = /^[a-zA-Z0-9._-]{1,64}$/;
 
@@ -156,7 +156,7 @@ export function formatJobStillRunningContinuePrompt(jobIds: string[]): string {
   const ids = jobIds.join(', ');
   return [
     `Detached job still running: ${ids}.`,
-    'Do not end this turn. Loop wait_for_job (same id) and present_artifact type=log with content=delta until stillRunning is false.',
+    'Do not end this turn. Loop wait_for_job (same id) until stillRunning is false. The log pane updates from each wait result.',
     'If the job is hanging or doing the wrong thing, call stop_job (same id) instead of looping forever.',
     'Then report the result. Do not tell the user you will let them know later.',
   ].join(' ');
@@ -165,7 +165,7 @@ export function formatJobStillRunningContinuePrompt(jobIds: string[]): string {
 export function formatDeferredDoneContinuePrompt(): string {
   return [
     'You ended the turn after promising to report later, but no detached job is running.',
-    'If tests/pack/deploy still need to run: start once with detached-job.cjs, present_artifact type=log, then loop wait_for_job until stillRunning is false.',
+    'If tests/pack/deploy still need to run: start once with detached-job.cjs, then loop wait_for_job until stillRunning is false (the log pane updates from wait JSON).',
     'Do not say you will let the user know later.',
   ].join(' ');
 }
@@ -225,6 +225,15 @@ function tailProgress(logFile: string, maxLines = 12): string {
   return lines.slice(-maxLines).join('\n');
 }
 
+function lastProgressLine(progress: string): string | undefined {
+  const last = progress
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && l !== '(no log yet)')
+    .at(-1);
+  return last ? last.slice(0, 72) : undefined;
+}
+
 function readLogLines(file: string): string[] {
   if (!existsSync(file)) return [];
   const lines = readFileSync(file, 'utf8').split('\n');
@@ -277,6 +286,7 @@ function toResult(
     /* best-effort cursor */
   }
   const status = ok ? 'ok' : failed && !stillRunning ? 'failed' : stillRunning ? 'running' : 'idle';
+  const progress = extra?.progress ?? snap.progress;
   return {
     stillRunning,
     ok,
@@ -285,8 +295,9 @@ function toResult(
     id,
     pid: snap.pid,
     exitCode: snap.exitCode ?? undefined,
+    phase: lastProgressLine(progress),
     delta,
-    progress: extra?.progress ?? snap.progress,
+    progress,
     hint: stillRunning ? MCP_WAIT_JOB_STILL_RUNNING_HINT : undefined,
   };
 }

@@ -148,6 +148,7 @@ describe('jobPaths', () => {
     });
     assert.doesNotMatch(asCjs.stderr, /require is not defined/);
     assert.match(asCjs.stdout, /stillRunning/);
+    assert.match(asCjs.stdout, /"id": "gone"/);
     const asJs = spawnSync(process.execPath, [js, 'status', 'gone'], {
       encoding: 'utf8',
       cwd: root,

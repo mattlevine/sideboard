@@ -309,6 +309,145 @@ describe('log artifacts', () => {
     expect(mergeAppendableArtifact(prev, next).status).toBe('ok');
   });
 
+  it('opens a log pane from wait_for_job results', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'w1',
+        name: 'mcp__sideboard__wait_for_job',
+        status: 'done',
+        input: { id: 'core-test' },
+        result: JSON.stringify({
+          stillRunning: true,
+          status: 'running',
+          id: 'core-test',
+          delta: 'PASS src/foo.test.ts',
+          phase: 'vitest',
+        }),
+      },
+      {
+        type: 'tool',
+        id: 'w2',
+        name: 'wait_for_job',
+        status: 'done',
+        input: { id: 'core-test' },
+        result: JSON.stringify({
+          stillRunning: false,
+          status: 'ok',
+          id: 'core-test',
+          delta: 'Test Files  1 passed',
+          phase: 'done',
+        }),
+      },
+    ];
+    const merged = latestArtifact('', parts);
+    expect(merged?.kind).toBe('log');
+    expect(merged?.id).toBe('tool-core-test');
+    expect(merged?.title).toBe('core-test');
+    expect(merged?.content).toBe('PASS src/foo.test.ts\nTest Files  1 passed');
+    expect(merged?.status).toBe('ok');
+    expect(merged?.phase).toBe('done');
+  });
+
+  it('opens a running log as soon as wait_for_job starts', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'w0',
+        name: 'wait_for_job',
+        status: 'running',
+        input: { id: 'mac-release' },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.id).toBe('tool-mac-release');
+    expect(arts[0]!.kind).toBe('log');
+    expect(arts[0]!.status).toBe('running');
+    expect(arts[0]!.content).toBe('');
+  });
+
+  it('opens a log pane from stop_job', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 's1',
+        name: 'stop_job',
+        status: 'done',
+        input: { id: 'hang', reason: 'no progress' },
+        result: JSON.stringify({
+          stopped: true,
+          status: 'failed',
+          id: 'hang',
+          delta: '$ stop: no progress',
+        }),
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.status).toBe('failed');
+    expect(arts[0]!.content).toBe('$ stop: no progress');
+  });
+
+  it('opens a log pane from shell detached-job wait JSON', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'sh1',
+        name: 'Shell',
+        status: 'done',
+        input: { command: 'node scripts/detached-job.cjs wait core-test' },
+        result: JSON.stringify(
+          {
+            stillRunning: true,
+            status: 'running',
+            id: 'core-test',
+            delta: 'ok\n',
+            phase: 'ok',
+          },
+          null,
+          2,
+        ),
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.id).toBe('tool-core-test');
+    expect(arts[0]!.content).toBe('ok\n');
+    expect(arts[0]!.status).toBe('running');
+  });
+
+  it('parses job id from a detached-job start command before wait JSON exists', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'sh0',
+        name: 'Bash',
+        status: 'running',
+        detail: 'node "/abs/detached-job.cjs" start fly-deploy -- fly deploy',
+        input: { command: 'node "/abs/detached-job.cjs" start fly-deploy -- fly deploy' },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.id).toBe('tool-fly-deploy');
+    expect(arts[0]!.status).toBe('running');
+  });
+
+  it('does not treat an unrelated shell JSON dump as a job log', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'shx',
+        name: 'Bash',
+        status: 'done',
+        input: { command: 'cat package.json' },
+        result: JSON.stringify({ name: 'sideboard', version: '0.1.0' }),
+      },
+    ];
+    expect(extractToolArtifacts(parts)).toHaveLength(0);
+  });
+
   it('replace mode overwrites the buffer', () => {
     const prev = {
       id: 'tool-j',

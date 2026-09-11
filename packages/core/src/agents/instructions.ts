@@ -303,7 +303,7 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
     'Long-running jobs (mandatory when a command may run more than ~30s — pack, test, deploy, `gh pr checks --watch`):',
     'A Sideboard worktree turn SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted; `block_until_ms: 0` is not enough. Detach instead, and never ask the human to poll.',
     `- Start once: \`${invoke} start <id> -- <command> [args...]\` (cwd = this worktree; same tool as \`scripts/detached-job.cjs\` when the worktree has it). If JSON says already-running, do not start again.`,
-    '- Immediately `present_artifact` `type=log` with `artifact_id=<id>` and `status=running`, then loop Sideboard MCP `wait_for_job` (returns in ~45s). stillRunning → present the same id with `content=delta` only → wait again. Shell fallback: the same helper with `wait <id>`.',
+    '- Loop Sideboard MCP `wait_for_job` (returns in ~45s). The desktop opens a `type=log` pane from wait/stop (and shell detached-job JSON) automatically — you may still `present_artifact` with `artifact_id=<id>` for a custom title. stillRunning → wait again. Shell fallback: the same helper with `wait <id>`.',
     '- Hanging, no useful output, or the wrong thing → `stop_job` (or the helper with `stop <id>`). Do not stop a pack/test/deploy that is clearly making progress.',
     '- Stay in the loop until stillRunning is false (or you stopped it). ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
@@ -313,7 +313,7 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
 /** Short long-job line on every worktree turn (survives CLI resume). */
 export function formatLongRunningReminder(opts?: { scriptPath?: string | null }): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
-  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait), present_artifact type=log (delta). stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn.`;
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn.`;
 }
 
 /**

@@ -131,6 +131,7 @@ describe('waitForDetachedJob / listRunningDetachedJobs', () => {
     expect(result.ok).toBe(true);
     expect(result.stillRunning).toBe(false);
     expect(result.delta).toMatch(/ok/);
+    expect(result.phase).toBe('ok');
   });
 
   it('lists a live pid as running', () => {

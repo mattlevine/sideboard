@@ -30,9 +30,9 @@ const WAIT_SLICE_MS = 45_000;
 const WAIT_POLL_MS = 2_000;
 const WAIT_UNTIL_DONE_MS = 90 * 60 * 1000;
 const WAIT_STILL_RUNNING_HINT =
-  'Job is still running. present_artifact type=log with the same artifact_id and content=delta (new lines only). Then call wait again. If it is hanging, producing no useful output, or doing the wrong thing, stop it (`stop <id>` / MCP stop_job) instead of looping forever. Do not resend HTML or the full log. Do not ask the user to check status, and do not start a second job with the same id.';
+  'Job is still running. The type=log pane already appended this delta. Call wait again. If it is hanging, producing no useful output, or doing the wrong thing, stop it (`stop <id>` / MCP stop_job) instead of looping forever. Do not resend HTML or the full log. Do not ask the user to check status, and do not start a second job with the same id.';
 const STOP_HINT =
-  'Stopped. present_artifact type=log with status=failed and the last delta. Do not wait again unless you start a new command.';
+  'Stopped. The type=log pane is status=failed with the last delta. Do not wait again unless you start a new command.';
 const STOP_GRACE_MS = 2_000;
 
 function repoRootFrom(cwd = process.cwd()) {
@@ -314,7 +314,7 @@ function logHasPattern(file, pattern) {
   return fs.readFileSync(file, 'utf8').includes(pattern);
 }
 
-function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, ui, cursorFile }) {
+function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, ui, cursorFile, id }) {
   const pid = readIntFile(pidFile);
   const running = jobTreeAlive(pid);
   const exitCode = exitFile ? readIntFile(exitFile) : null;
@@ -324,6 +324,7 @@ function snapshotFromPaths({ pidFile, logFile, exitFile, okPattern, startedAt, u
   const failed = !running && !ok && (pid != null || (logFile && fs.existsSync(logFile)));
   const stream = collectStream(logFile, 160);
   return {
+    id: id || undefined,
     pid,
     running,
     stillRunning: running,
@@ -359,6 +360,7 @@ function snapshotFromJobPaths(p) {
     startedAt: readStartedAt(p.meta),
     ui: p.ui,
     cursorFile: p.cursor,
+    id: path.basename(p.dir),
   });
 }
 
@@ -385,6 +387,7 @@ function printWaitResult(snap) {
     ok: Boolean(snap.ok),
     failed: Boolean(snap.failed && !snap.stillRunning && !snap.ok),
     status,
+    id: snap.id || undefined,
     pid: snap.pid,
     exitCode: snap.exitCode ?? undefined,
     phase: snap.phase,
@@ -597,7 +600,7 @@ function startJob(root, id, command, opts = {}) {
     log: p.log,
     ui: p.ui,
     id,
-    hint: 'present_artifact type=log now (artifact_id = job id, status=running). Then loop wait and append content=delta only.',
+    hint: 'Log pane opens from wait/stop (artifact_id = job id). Loop wait; the type=log pane appends each delta.',
   };
 }
 
@@ -700,6 +703,7 @@ async function main(argv = process.argv) {
           logFile: path.resolve(parsed.logFile),
           okPattern: parsed.okPattern,
           cursorFile: path.join(path.dirname(path.resolve(parsed.logFile)), 'present.cursor'),
+          id: parsed.id || 'job',
         });
     } else if (parsed.id) {
       getSnap = () => snapshotJob(root, parsed.id);
