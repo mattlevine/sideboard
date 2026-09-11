@@ -173,28 +173,28 @@ export function formatIssueToolsDirective(opts: {
   ];
   if (opts.linear) {
     lines.push(
-      '- Linear: `linear_get_issue` (comments; pass `include=full` if crush.truncated), `linear_comment`, `linear_update_issue` (state), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
+      '- Linear: `linear_search_issues` (assignee=me; pass `updatedSince` for “any updates since yesterday?” — new tickets, edits, and comments), `linear_get_issue` (comments; pass `include=full` if crush.truncated), `linear_comment`, `linear_update_issue` (state), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
     );
   }
   if (github) {
     lines.push(
-      '- GitHub: `github_get_issue` (comments; pass `include=full` if crush.truncated), `github_comment`, `github_update_issue` (state open|closed), `github_create_issue` (pass `parent` for spin-offs). Uses Account `gh`.',
+      '- GitHub: `github_search_issues` (assignee=me; `updatedSince` for inbox updates + comments), `github_get_issue` (comments; pass `include=full` if crush.truncated), `github_comment`, `github_update_issue` (state open|closed), `github_create_issue` (pass `parent` for spin-offs). Uses Account `gh`.',
     );
   }
   if (opts.abletime) {
     lines.push(
-      '- AbleTime: `abletime_get_task` (comments; pass `include=full` if crush.truncated), `abletime_comment`, `abletime_update_task` (state), `abletime_create_task` (pass `parent` for spin-offs; `abletime_list_projects` if needed).',
+      '- AbleTime: `abletime_list_tasks` / `abletime_search_tasks` (`updatedSince` for inbox updates + comments), `abletime_get_task` (comments; pass `include=full` if crush.truncated), `abletime_comment`, `abletime_update_task` (state), `abletime_create_task` (pass `parent` for spin-offs; `abletime_list_projects` if needed).',
     );
   }
   lines.push(
     '- Do not ask the user to `claude mcp login` for tickets. Reconnect the Account source in Settings → Issues (or Git for `gh`).',
-    '- When reviewing someone else\'s PR (review inbox or a Review tab): write the review in chat; ask_user (Post this review / Keep it in chat) before `github_comment` / `linear_comment` / `*_update_*` / `gh pr review`. The PR author sees those immediately.',
+    '- When reviewing a PR or ticket (review inbox or a Review tab): write the review in chat so the user can work through the feedback first; ask_user (Post this review / Keep it in chat) before `github_comment` / `linear_comment` / `*_update_*` / `gh pr review`. The PR or ticket author sees those immediately.',
   );
   const ticket = opts.ticketId?.trim();
   if (ticket) {
     const provider = opts.ticketProvider ?? 'linear';
     lines.push(
-      `- This thread's ticket is \`${ticket}\` (${provider}). Use that id for get/comment/update; pass it as \`parent\` on spin-offs.`,
+      `- This thread's ticket is \`${ticket}\` (${provider}). Use that id for get. Do not comment or update it with review findings until they confirm (ask_user: Post this review / Keep it in chat) — they should work through the feedback in chat first. If they asked you to do the work, routine status and spin-offs (\`parent=\`) are OK.`,
     );
   }
   return lines.join('\n');
@@ -231,9 +231,9 @@ export function formatIssueToolsReminder(opts: {
   ].filter(Boolean);
   const ticket = opts.ticketId?.trim();
   const ticketBit = ticket
-    ? ` This ticket: ${ticket}${opts.ticketProvider ? ` (${opts.ticketProvider})` : ''} — get/comment/update; create with parent for spin-offs.`
+    ? ` This ticket: ${ticket}${opts.ticketProvider ? ` (${opts.ticketProvider})` : ''} — get; comment/update review findings only after ask_user. Spin-offs use parent=.`
     : ' get/comment/update/create (parent= for spin-offs).';
-  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit} When reviewing someone else's PR, ask_user (Post this review / Keep it in chat) before comment/update.`;
+  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit} Review feedback stays in chat until ask_user (Post this review / Keep it in chat) — PR and ticket authors see comments immediately.`;
 }
 
 /** @deprecated Use {@link formatIssueToolsReminder} */

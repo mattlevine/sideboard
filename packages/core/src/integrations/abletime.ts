@@ -38,6 +38,8 @@ export interface AbleTimeTask {
   assignee?: { id?: string; name: string };
   labels: string[];
   comments: AbleTimeComment[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AbleTimeProject {
@@ -177,6 +179,17 @@ export function mapAbleTimeTask(raw: unknown, host?: string | null): AbleTimeTas
     assignee: assigneeOf(nested),
     labels: labelsOf(nested),
     comments: commentsOf(nested),
+    createdAt:
+      firstString(nested, ['created_at', 'createdAt', 'created']) || undefined,
+    updatedAt:
+      firstString(nested, [
+        'updated_at',
+        'updatedAt',
+        'modified_at',
+        'modifiedAt',
+        'last_activity_at',
+        'lastActivityAt',
+      ]) || undefined,
   };
 }
 
@@ -190,6 +203,8 @@ export function toAbleTimeIssueInfo(task: AbleTimeTask): IssueInfo {
     provider: 'abletime',
     assignee: task.assignee?.name,
     assignees: task.assignee?.name ? [task.assignee.name] : undefined,
+    ...(task.createdAt ? { createdAt: task.createdAt } : {}),
+    ...(task.updatedAt ? { updatedAt: task.updatedAt } : {}),
   };
 }
 

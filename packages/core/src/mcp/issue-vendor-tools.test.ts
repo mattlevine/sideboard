@@ -44,6 +44,7 @@ describe('registerConnectedIssueVendorTools', () => {
     const { vendor } = await load();
     const { server, names } = fakeServer();
     vendor.registerConnectedIssueVendorTools(server);
+    expect(names).toContain('github_search_issues');
     expect(names).toContain('github_get_issue');
     expect(names).toContain('github_comment');
     expect(names).toContain('github_update_issue');

@@ -41,6 +41,8 @@ describe('abletime helpers', () => {
       state: 'todo',
       tags: [{ name: 'bug' }],
       assignee: { name: 'Grant' },
+      created_at: '2026-08-01T00:00:00.000Z',
+      updated_at: '2026-09-10T12:00:00.000Z',
     });
     expect(task).toMatchObject({
       id: '01TASK',
@@ -50,6 +52,8 @@ describe('abletime helpers', () => {
       labels: ['bug'],
       assignee: { name: 'Grant' },
       comments: [],
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-09-10T12:00:00.000Z',
     });
     const withComments = mapAbleTimeTask({
       id: '01TASK',

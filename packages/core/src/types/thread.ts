@@ -430,6 +430,18 @@ export interface IssueInfo {
   cycle?: IssueCycleInfo | null;
   /** Linear team key (e.g. ENG). */
   teamKey?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Comment on a listed ticket (inbox / updatedSince). Body is already preview-truncated. */
+export interface IssueActivityComment {
+  identifier: string;
+  title?: string;
+  author?: string;
+  createdAt?: string;
+  body: string;
+  url?: string;
 }
 
 export interface DiffFile {

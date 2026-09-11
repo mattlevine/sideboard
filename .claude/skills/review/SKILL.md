@@ -28,7 +28,7 @@ The report stays in this chat until the user posts it. Do not call `github_comme
 
 After the Recommendation is in chat, ask_user (**Post this review** / **Keep it in chat**), then wait. If they already asked you to post a specific comment or update in this turn, that is confirmation.
 
-The PR author sees those writes immediately — a draft review will confuse them. Do not request reviewers, change labels, or assign yourself unless they asked.
+The user should be able to work through the feedback in chat first. The PR or ticket author sees those writes immediately — a draft review will confuse them. Do not request reviewers, change labels, or assign yourself unless they asked.
 
 ## Findings
 

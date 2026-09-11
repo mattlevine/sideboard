@@ -1,6 +1,7 @@
 import { ghRepoSelectArgs, resolveGithubRepoSlug, resolveRepoRoot } from '../git/worktree.js';
 import { gh } from '../git/run.js';
-import type { IssueInfo } from '../types/thread.js';
+import type { IssueActivityComment, IssueInfo } from '../types/thread.js';
+import { previewIssueCommentBody } from './issue-since.js';
 
 export interface GitHubIssueComment {
   id?: string;
@@ -126,6 +127,79 @@ export function toGitHubIssueInfo(issue: GitHubIssue): IssueInfo {
     assignee: issue.assignees[0],
     assignees: issue.assignees.length ? issue.assignees : undefined,
   };
+}
+
+function issueNumberFromApiUrl(url: string): number | null {
+  const match = url.match(/\/issues\/(\d+)(?:\b|$)/i);
+  if (!match) return null;
+  const number = Number(match[1]);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+/**
+ * Repo issue comments created at/after `since`. Pass `issueIdentifiers` (#12)
+ * to keep only comments on that inbox page — one REST call, not N issue views.
+ */
+export async function listGitHubIssueCommentsSince(opts: {
+  since: string;
+  repoPath?: string | null;
+  issueIdentifiers?: string[];
+  limit?: number;
+}): Promise<IssueActivityComment[]> {
+  const limit = Math.max(1, Math.min(250, opts.limit ?? 200));
+  const { cwd, slug } = await resolveGitHubIssueRepo(opts.repoPath);
+  if (!slug) return [];
+  const allowed = new Set(
+    (opts.issueIdentifiers ?? [])
+      .map((id) => {
+        try {
+          return parseGitHubIssueNumber(id);
+        } catch {
+          return null;
+        }
+      })
+      .filter((n): n is number => n != null),
+  );
+  const path = `repos/${slug}/issues/comments?since=${encodeURIComponent(opts.since)}&per_page=${limit + 1}`;
+  const result = await gh(['api', path], cwd, { reject: false });
+  if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: IssueActivityComment[] = [];
+  for (const item of parsed) {
+    const rec = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
+    if (!rec) continue;
+    const issueUrl = typeof rec.issue_url === 'string' ? rec.issue_url : '';
+    const number = issueNumberFromApiUrl(issueUrl);
+    if (number == null) continue;
+    if (allowed.size > 0 && !allowed.has(number)) continue;
+    const body = previewIssueCommentBody(typeof rec.body === 'string' ? rec.body : '');
+    const user =
+      rec.user && typeof rec.user === 'object'
+        ? String((rec.user as { login?: string }).login ?? '').trim()
+        : '';
+    const createdAt =
+      typeof rec.created_at === 'string'
+        ? rec.created_at
+        : typeof rec.createdAt === 'string'
+          ? rec.createdAt
+          : undefined;
+    const url = typeof rec.html_url === 'string' ? rec.html_url : undefined;
+    out.push({
+      identifier: `#${number}`,
+      ...(user ? { author: user } : {}),
+      ...(createdAt ? { createdAt } : {}),
+      body,
+      ...(url ? { url } : {}),
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 export async function getGitHubIssue(

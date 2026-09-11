@@ -1,5 +1,6 @@
 import { httpFetch } from '../http/fetch.js';
-import type { IssueInfo } from '../types/thread.js';
+import type { IssueActivityComment, IssueInfo } from '../types/thread.js';
+import { previewIssueCommentBody } from './issue-since.js';
 import { getLinearAuthToken, linearAuthorizationHeader } from './linear-oauth.js';
 
 const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
@@ -16,6 +17,8 @@ const LIST_ISSUE_FIELDS = `
   identifier
   title
   url
+  createdAt
+  updatedAt
   assignee { id name }
   team { id key }
   labels(first: 10) { nodes { name } }
@@ -79,16 +82,32 @@ const ISSUE_FIELDS = `
 `;
 
 const ASSIGNED_ISSUES_QUERY = `
-query SideboardAssignedIssues($first: Int!) {
+query SideboardAssignedIssues($first: Int!, $filter: IssueFilter) {
   viewer {
     id
     name
     assignedIssues(
       first: $first
       orderBy: updatedAt
-      filter: { state: { type: { nin: ["completed", "canceled"] } } }
+      filter: $filter
     ) {
       nodes { ${LIST_ISSUE_FIELDS} }
+    }
+  }
+}
+`;
+
+const COMMENTS_SINCE_QUERY = `
+query SideboardCommentsSince($first: Int!, $filter: CommentFilter) {
+  viewer { id name }
+  comments(first: $first, orderBy: createdAt, filter: $filter) {
+    nodes {
+      id
+      body
+      url
+      createdAt
+      user { id name }
+      issue { identifier title url }
     }
   }
 }
@@ -543,6 +562,8 @@ function toIssueInfo(issue: LinearIssue): IssueInfo {
     assignees: issue.assignee?.name ? [issue.assignee.name] : undefined,
     cycle: issue.cycle ?? null,
     teamKey: issue.team?.key || undefined,
+    ...(issue.createdAt ? { createdAt: issue.createdAt } : {}),
+    ...(issue.updatedAt ? { updatedAt: issue.updatedAt } : {}),
   };
 }
 
@@ -625,10 +646,13 @@ function assigneeFilterKey(assignee?: string | null): string {
  */
 export function buildLinearIssueFilter(input?: {
   assignee?: string | null;
+  updatedSince?: string | null;
 }): Record<string, unknown> {
   const filter: Record<string, unknown> = {
     state: { type: { nin: ['completed', 'canceled'] } },
   };
+  const since = input?.updatedSince?.trim();
+  if (since) filter.updatedAt = { gte: since };
   const raw = assigneeFilterKey(input?.assignee) || 'me';
   const key = raw.toLowerCase();
   if (key === 'all' || key === '*') return filter;
@@ -687,12 +711,16 @@ export async function listLinearIssuesFiltered(
     apiKey?: string | null;
     assignee?: string | null;
     query?: string;
+    updatedSince?: string | null;
   },
 ): Promise<LinearAssignedIssuesResult> {
   const first = Math.max(1, Math.min(250, opts?.limit ?? 200));
   const query = opts?.query?.trim() ?? '';
   const assignee = assigneeFilterKey(opts?.assignee) || (query ? 'all' : 'me');
-  const filter = buildLinearIssueFilter({ assignee });
+  const filter = buildLinearIssueFilter({
+    assignee,
+    updatedSince: opts?.updatedSince,
+  });
   if (query) {
     const json = await linearGraphql<LinearListedPayload>(
       SEARCH_ISSUES_QUERY,
@@ -704,7 +732,7 @@ export async function listLinearIssuesFiltered(
   if (isAssignedToMe(assignee)) {
     const json = await linearGraphql<LinearListedPayload>(
       ASSIGNED_ISSUES_QUERY,
-      { first },
+      { first, filter },
       opts,
     );
     return listedLinearIssues(json, json.viewer?.assignedIssues?.nodes);
@@ -715,6 +743,59 @@ export async function listLinearIssuesFiltered(
     opts,
   );
   return listedLinearIssues(json, json.issues?.nodes);
+}
+
+type LinearCommentSinceNode = {
+  id?: string;
+  body?: string;
+  url?: string;
+  createdAt?: string;
+  user?: LinearUserNode;
+  issue?: LinearIssueRefNode;
+};
+
+/**
+ * Comments created at/after `since` on issues matching the same assignee filter.
+ * One GraphQL query — do not get_issue each ticket to check for new comments.
+ */
+export async function listLinearCommentsSince(opts: {
+  since: string;
+  assignee?: string | null;
+  query?: string;
+  limit?: number;
+  apiKey?: string | null;
+}): Promise<IssueActivityComment[]> {
+  const first = Math.max(1, Math.min(250, opts.limit ?? 200));
+  const query = opts.query?.trim() ?? '';
+  const assignee = assigneeFilterKey(opts.assignee) || (query ? 'all' : 'me');
+  const json = await linearGraphql<{
+    comments?: { nodes?: LinearCommentSinceNode[] };
+  }>(
+    COMMENTS_SINCE_QUERY,
+    {
+      first,
+      filter: {
+        createdAt: { gte: opts.since },
+        issue: buildLinearIssueFilter({ assignee }),
+      },
+    },
+    opts,
+  );
+  const out: IssueActivityComment[] = [];
+  for (const node of json.comments?.nodes ?? []) {
+    const identifier = String(node.issue?.identifier ?? '').trim();
+    const body = previewIssueCommentBody(String(node.body ?? ''));
+    if (!identifier && !body) continue;
+    out.push({
+      identifier: identifier || String(node.id ?? ''),
+      ...(node.issue?.title ? { title: String(node.issue.title) } : {}),
+      ...(node.user?.name ? { author: String(node.user.name) } : {}),
+      ...(node.createdAt?.trim() ? { createdAt: node.createdAt.trim() } : {}),
+      body,
+      ...(node.url?.trim() ? { url: node.url.trim() } : {}),
+    });
+  }
+  return out;
 }
 
 /**

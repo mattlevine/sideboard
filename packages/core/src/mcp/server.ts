@@ -35,7 +35,8 @@ import { registerViewerContextTools } from './viewer-context-tools.js';
 import {
   applyIssueListWindow,
   clampMcpIssueLimit,
-  formatMcpIssueList,
+  formatListedIssuesForMcp,
+  mcpIssueUpdatedSinceSchema,
   mcpJson,
 } from './issue-list.js';
 import { formatMcpPrList } from './pr-list.js';
@@ -1041,7 +1042,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'request_review',
-    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .claude/skills/review/SKILL.md when present (else copies .sideboard/review.md into .context/review.md, or seeds that file from the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information in that chat. Do not comment on or update the PR/ticket until the user confirms (ask_user: Post this review / Keep it in chat). Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
+    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .claude/skills/review/SKILL.md when present (else copies .sideboard/review.md into .context/review.md, or seeds that file from the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information in that chat. Do not comment on or update the PR or ticket until the user confirms (ask_user: Post this review / Keep it in chat) — they work through the feedback in chat first. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
     { ref: z.string().describe('Worktree thread id/ref to review') },
     async ({ ref }) => {
       try {
@@ -1490,7 +1491,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Then create_thread with sourceType=ticket.',
+    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Pass updatedSince for new/updated tickets and new comments (“any updates since yesterday?”). Then create_thread with sourceType=ticket.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('Search title, identifier, or description'),
@@ -1505,21 +1506,18 @@ export async function startMcpServer(): Promise<void> {
         .max(250)
         .optional()
         .describe('Page size (default 40, max 250). Raise when truncated is true.'),
+      updatedSince: mcpIssueUpdatedSinceSchema,
     },
-    async ({ repoPath, query, assignee, limit }) => {
+    async ({ repoPath, query, assignee, limit, updatedSince }) => {
       const root = await resolveRepoRoot(repoPath);
       const page = clampMcpIssueLimit(limit);
-      const result = await listIssues(root, { query, assignee, limit: page + 1 });
-      const windowed = applyIssueListWindow(result.issues, page);
-      return mcpJson(
-        formatMcpIssueList({
-          source: result.source,
-          viewer: result.viewer?.name || result.viewer?.login,
-          limit: page,
-          issues: windowed.items,
-          truncated: windowed.truncated,
-        }),
-      );
+      const result = await listIssues(root, {
+        query,
+        assignee,
+        limit: page + 1,
+        updatedSince,
+      });
+      return mcpJson(formatListedIssuesForMcp(result, page));
     },
   );
   }

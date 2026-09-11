@@ -12,20 +12,46 @@ describe('isReviewWriteGatedThread', () => {
     expect(isReviewWriteGatedThread({ sourceType: 'ticket', title: 'Review' })).toBe(true);
   });
 
-  it('leaves ticket and branch implementation threads ungated', () => {
+  it('gates a ticket or branch tab while a Review sibling is open', () => {
+    const siblings = [
+      { id: 'rev', title: 'Review', status: 'idle' as const },
+      { id: 'impl', title: 'ENG-9 login', status: 'idle' as const },
+    ];
+    expect(
+      isReviewWriteGatedThread(
+        { id: 'impl', sourceType: 'ticket', title: 'ENG-9 login', worktreePath: '/wt' },
+        siblings,
+      ),
+    ).toBe(true);
+    expect(
+      isReviewWriteGatedThread(
+        { id: 'impl', sourceType: 'branch', title: 'Feat dark mode', worktreePath: '/wt' },
+        siblings,
+      ),
+    ).toBe(true);
+  });
+
+  it('leaves ticket and branch implementation threads ungated without a Review tab', () => {
     expect(isReviewWriteGatedThread({ sourceType: 'ticket', title: 'ENG-9 login' })).toBe(
       false,
     );
     expect(isReviewWriteGatedThread({ sourceType: 'branch', title: 'Feat dark mode' })).toBe(
       false,
     );
+    expect(
+      isReviewWriteGatedThread(
+        { id: 'impl', sourceType: 'ticket', title: 'ENG-9 login', worktreePath: '/wt' },
+        [{ id: 'other', title: 'Notes', status: 'idle' }],
+      ),
+    ).toBe(false);
   });
 });
 
 describe('formatReviewWriteGateDirective', () => {
   it('requires ask_user before public review writes', () => {
     const text = formatReviewWriteGateDirective();
-    expect(text).toMatch(/PR author/);
+    expect(text).toMatch(/PR or ticket author/);
+    expect(text).toMatch(/work through the feedback/);
     expect(text).toMatch(/ask_user/);
     expect(text).toMatch(/Post this review/);
     expect(text).toMatch(/Keep it in chat/);
@@ -41,5 +67,6 @@ describe('formatReviewWriteGateReminder', () => {
     expect(text.length).toBeLessThan(280);
     expect(text).toMatch(/ask_user/);
     expect(text).toMatch(/Post this review/);
+    expect(text).toMatch(/PR or ticket/);
   });
 });
