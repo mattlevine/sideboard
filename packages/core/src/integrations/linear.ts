@@ -661,7 +661,8 @@ export function buildLinearIssueFilter(input?: {
     return filter;
   }
   if (key === 'me' || key === '@me') {
-    filter.assignee = { isMe: true };
+    // Linear UserFilter.isMe is BooleanComparator, not a bare boolean.
+    filter.assignee = { isMe: { eq: true } };
     return filter;
   }
   if (UUID_RE.test(raw)) {

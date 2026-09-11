@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.182] - 2026-09-11
+
+### Fixed
+
+- Linear issue lists send `assignee.isMe` as `{ eq: true }` (BooleanComparator). A bare `true` was a 400 and broke the create-worktree issue picker.
+
 ## [0.1.181] - 2026-09-11
 
 ### Added
