@@ -176,7 +176,7 @@ describe('buildLinearIssueFilter', () => {
   it('filters me, unassigned, all, and named users', () => {
     expect(buildLinearIssueFilter()).toEqual({
       state: { type: { nin: ['completed', 'canceled'] } },
-      assignee: { isMe: true },
+      assignee: { isMe: { eq: true } },
     });
     expect(buildLinearIssueFilter({ assignee: 'unassigned' }).assignee).toEqual({ null: true });
     expect(buildLinearIssueFilter({ assignee: 'all' }).assignee).toBeUndefined();
@@ -492,7 +492,7 @@ describe('Linear GraphQL writes', () => {
           createdAt: { gte: since },
           issue: {
             state: { type: { nin: ['completed', 'canceled'] } },
-            assignee: { isMe: true },
+            assignee: { isMe: { eq: true } },
           },
         });
         return {
@@ -511,7 +511,7 @@ describe('Linear GraphQL writes', () => {
       }
       expect(query).toContain('SideboardAssignedIssues');
       expect(variables.filter).toMatchObject({
-        assignee: { isMe: true },
+        assignee: { isMe: { eq: true } },
         updatedAt: { gte: since },
       });
       return {
