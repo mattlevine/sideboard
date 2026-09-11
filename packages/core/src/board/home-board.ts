@@ -283,7 +283,10 @@ export function classifyWorktreeOwnership(
   const reviewing = group.some((t) => {
     const author = normalizeViewerLogin(t.prAuthorLogin);
     if (author && me && author !== me) return true;
-    if (t.sourceType === 'pr' && (!author || !me || author !== me)) return true;
+    // Create-from-PR is reviewing only after we know the viewer — an empty
+    // login would otherwise badge every PR checkout as reviewing and hide it
+    // from a persisted Mine filter until `gh api user` returns.
+    if (t.sourceType === 'pr' && me && (!author || author !== me)) return true;
     if (me && loginsInclude(t.prReviewerLogins, me)) return true;
     return false;
   });

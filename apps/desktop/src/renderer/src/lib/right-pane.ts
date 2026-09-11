@@ -138,16 +138,19 @@ export function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean
  * Insert or merge a right-pane tab.
  * New tabs always become active. Existing-tab updates keep `activeId` unless
  * `activate` is true (user opened this pane) or they were already on this tab.
+ * Pass `replaceId` when a live tab is rewriting to a persisted id so a
+ * `sameRightPane` miss still updates in place instead of inserting + focusing.
  */
 export function upsertRightPaneTab(
   tabs: RightPaneContent[],
   next: RightPaneContent,
-  options?: { activate?: boolean; activeId?: string | null },
+  options?: { activate?: boolean; activeId?: string | null; replaceId?: string },
 ): RightPaneSession {
   const activate = options?.activate ?? true;
   const currentActiveId = options?.activeId ?? null;
+  const replaceId = options?.replaceId?.trim() || '';
   const matchIdx = tabs.findIndex(
-    (t) => t.id === next.id || sameRightPane(t, next),
+    (t) => t.id === next.id || (replaceId && t.id === replaceId) || sameRightPane(t, next),
   );
   if (matchIdx < 0) {
     return { tabs: [...tabs, next], activeId: next.id };

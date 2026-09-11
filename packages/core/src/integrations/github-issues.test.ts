@@ -147,11 +147,66 @@ describe('listGitHubIssueCommentsSince', () => {
         body: 'On mine',
       },
     ]);
-    expect(gh.mock.calls[0]?.[0]).toEqual(
-      expect.arrayContaining([
-        'api',
-        expect.stringContaining('repos/acme/app/issues/comments?since='),
-      ]),
-    );
+    const path = String(gh.mock.calls[0]?.[0]?.[1] ?? '');
+    expect(path).toContain('repos/acme/app/issues/comments?since=');
+    expect(path).toContain('direction=desc');
+    expect(path).toContain('per_page=100');
+    expect(path).toContain('page=1');
+  });
+
+  it('returns no comments when the inbox issue allowlist is empty', async () => {
+    const comments = await listGitHubIssueCommentsSince({
+      since: '2026-09-10T00:00:00.000Z',
+      repoPath: '/tmp/repo',
+      issueIdentifiers: [],
+    });
+    expect(comments).toEqual([]);
+    expect(gh).not.toHaveBeenCalled();
+  });
+
+  it('pages newest-first until it finds comments on the inbox issues', async () => {
+    gh.mockImplementation(async (args: string[]) => {
+      const path = String(args[1] ?? '');
+      const page = path.includes('page=2') ? 2 : 1;
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify(
+          page === 1
+            ? [
+                {
+                  body: 'Noise',
+                  created_at: '2026-09-11T12:00:00.000Z',
+                  issue_url: 'https://api.github.com/repos/acme/app/issues/99',
+                  user: { login: 'ada' },
+                },
+              ]
+            : [
+                {
+                  body: 'On mine',
+                  created_at: '2026-09-10T12:00:00.000Z',
+                  issue_url: 'https://api.github.com/repos/acme/app/issues/12',
+                  user: { login: 'ada' },
+                },
+              ],
+        ),
+        stderr: '',
+      };
+    });
+    const comments = await listGitHubIssueCommentsSince({
+      since: '2026-09-10T00:00:00.000Z',
+      repoPath: '/tmp/repo',
+      issueIdentifiers: ['#12'],
+      limit: 1,
+    });
+    expect(comments).toEqual([
+      {
+        identifier: '#12',
+        author: 'ada',
+        createdAt: '2026-09-10T12:00:00.000Z',
+        body: 'On mine',
+      },
+    ]);
+    expect(gh).toHaveBeenCalledTimes(2);
+    expect(String(gh.mock.calls[1]?.[0]?.[1] ?? '')).toContain('page=2');
   });
 });

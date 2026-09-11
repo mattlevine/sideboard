@@ -277,6 +277,35 @@ describe('upsertRightPaneTab', () => {
     });
     expect(migrated.activeId).toBe('msg-3-0');
   });
+
+  it('keeps the current tab when a live rewrite does not match sameRightPane', () => {
+    const live = logPane({
+      id: 'live-0',
+      title: 'Spec',
+      kind: 'markdown',
+      language: 'markdown',
+      content: '# Spec\n\nStreaming…',
+      source: 'fence',
+    });
+    const persisted = logPane({
+      id: 'msg-3-0',
+      title: 'Spec',
+      kind: 'markdown',
+      language: 'markdown',
+      content: '# Spec\n\nDone.',
+      source: 'fence',
+    });
+    const migrated = upsertRightPaneTab([live, other], persisted, {
+      activate: false,
+      activeId: other.id,
+      replaceId: live.id,
+    });
+    expect(migrated.activeId).toBe(other.id);
+    expect(migrated.tabs.map((t) => t.id)).toEqual(['msg-3-0', other.id]);
+    expect(migrated.tabs.find((t) => t.id === 'msg-3-0')?.content).toBe(
+      '# Spec\n\nDone.',
+    );
+  });
 });
 
 describe('latestRightPaneContent', () => {
