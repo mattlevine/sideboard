@@ -1,10 +1,6 @@
-import type { RightPaneContent } from './right-pane';
+import type { RightPaneContent, RightPaneSession } from './right-pane';
 
-/** Open right-column tabs for one chat (session memory). */
-export interface RightPaneSession {
-  tabs: RightPaneContent[];
-  activeId: string | null;
-}
+export type { RightPaneSession };
 
 /**
  * Per-chat right-column state for the session.

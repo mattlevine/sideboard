@@ -8,6 +8,9 @@ import {
   isSchemaPane,
   latestRightPaneContent,
   resourceHasContentStates,
+  upsertRightPaneTab,
+  type ChatArtifact,
+  type RightPaneContent,
 } from './right-pane';
 
 describe('extractSchemaPanes', () => {
@@ -176,6 +179,103 @@ describe('resourceHasContentStates', () => {
         schemaUi: { 'ui:contentStates': ['draft', 'published'] },
       }),
     ).toBe(true);
+  });
+});
+
+function logPane(overrides: Partial<ChatArtifact> & { id: string }): RightPaneContent {
+  return {
+    title: 'Mac pack',
+    kind: 'log',
+    language: 'log',
+    content: 'line 1',
+    source: 'tool',
+    status: 'running',
+    ...overrides,
+  };
+}
+
+describe('upsertRightPaneTab', () => {
+  const other: RightPaneContent = {
+    kind: 'files',
+    id: 'files-1',
+    title: 'Files',
+    datasource: 'memory',
+    source: 'tool',
+  };
+
+  it('focuses a tab the first time it opens', () => {
+    const first = logPane({ id: 'tool-job', content: '[1] start' });
+    const opened = upsertRightPaneTab([other], first, {
+      activate: false,
+      activeId: other.id,
+    });
+    expect(opened.activeId).toBe('tool-job');
+    expect(opened.tabs.map((t) => t.id)).toEqual(['files-1', 'tool-job']);
+  });
+
+  it('does not steal focus when a streaming log appends', () => {
+    const log = logPane({ id: 'tool-job', content: '[1] start' });
+    const next = logPane({ id: 'tool-job', content: '[2] more', phase: 'Signing' });
+    const updated = upsertRightPaneTab([log, other], next, {
+      activate: false,
+      activeId: other.id,
+    });
+    expect(updated.activeId).toBe(other.id);
+    expect(updated.tabs.find((t) => t.id === 'tool-job')?.content).toBe(
+      '[1] start\n[2] more',
+    );
+  });
+
+  it('stays on the log when the user has not switched away', () => {
+    const log = logPane({ id: 'tool-job', content: '[1] start' });
+    const next = logPane({ id: 'tool-job', content: '[2] more' });
+    const updated = upsertRightPaneTab([log, other], next, {
+      activate: false,
+      activeId: log.id,
+    });
+    expect(updated.activeId).toBe('tool-job');
+  });
+
+  it('focuses the tab when the user opens it', () => {
+    const log = logPane({ id: 'tool-job' });
+    const opened = upsertRightPaneTab([log, other], log);
+    expect(opened.activeId).toBe('tool-job');
+  });
+
+  it('keeps the user on another tab when a live id migrates after the turn', () => {
+    const live = logPane({
+      id: 'live-0',
+      title: 'Spec',
+      kind: 'markdown',
+      language: 'markdown',
+      content: '# Spec\n\nDone.',
+      source: 'fence',
+    });
+    const persisted = { ...live, id: 'msg-3-0' };
+    const migrated = upsertRightPaneTab([live, other], persisted, {
+      activate: false,
+      activeId: other.id,
+    });
+    expect(migrated.activeId).toBe(other.id);
+    expect(migrated.tabs.some((t) => t.id === 'msg-3-0')).toBe(true);
+    expect(migrated.tabs.some((t) => t.id === 'live-0')).toBe(false);
+  });
+
+  it('follows a live id migration when that tab is active', () => {
+    const live = logPane({
+      id: 'live-0',
+      title: 'Spec',
+      kind: 'markdown',
+      language: 'markdown',
+      content: '# Spec\n\nDone.',
+      source: 'fence',
+    });
+    const persisted = { ...live, id: 'msg-3-0' };
+    const migrated = upsertRightPaneTab([live], persisted, {
+      activate: false,
+      activeId: live.id,
+    });
+    expect(migrated.activeId).toBe('msg-3-0');
   });
 });
 
