@@ -375,6 +375,127 @@ function matchesPresentTool(shortName: string, suffix: string): boolean {
   return new RegExp(`${suffix}$`, 'i').test(shortName);
 }
 
+function isJobWaitTool(shortName: string): boolean {
+  return /^(wait_for_job|stop_job)$/i.test(shortName);
+}
+
+function isShellTool(shortName: string): boolean {
+  return /^(bash|shell|zsh)$/i.test(shortName);
+}
+
+function jobIdFromCommand(blob: string): string | undefined {
+  const fromArg =
+    /detached-job\.(?:js|cjs)["']?\s+(?:start|wait|stop|status|ui)\s+([A-Za-z0-9._-]{1,64})/i.exec(
+      blob,
+    );
+  if (fromArg?.[1]) return fromArg[1];
+  const fromPath = /detached-jobs[/\\]([A-Za-z0-9._-]{1,64})(?:[/\\]|$)/i.exec(blob);
+  return fromPath?.[1];
+}
+
+function looksLikeJobPayload(rec: Record<string, unknown>): boolean {
+  if (typeof rec.stillRunning === 'boolean' && parseLogStatus(rec.status)) return true;
+  if (typeof rec.delta === 'string' && parseLogStatus(rec.status)) return true;
+  if (rec.started === true || rec.reason === 'already-running') return true;
+  if (typeof rec.stopped === 'boolean' && (str(rec.id) || parseLogStatus(rec.status))) {
+    return true;
+  }
+  return false;
+}
+
+function jobPayloadFromResult(result: unknown): Record<string, unknown> | undefined {
+  const unwrapped = unwrapToolResultPayload(result);
+  const rec = asRecord(unwrapped);
+  if (rec && looksLikeJobPayload(rec)) return rec;
+  const text =
+    typeof unwrapped === 'string'
+      ? unwrapped
+      : (str(rec?.stdout) ?? str(rec?.output) ?? str(rec?.text));
+  if (!text?.trim()) return undefined;
+  const trimmed = text.trim();
+  const parsed = asRecord(parseMaybeJson(trimmed));
+  if (parsed && looksLikeJobPayload(parsed)) return parsed;
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    const sliced = asRecord(parseMaybeJson(trimmed.slice(start, end + 1)));
+    if (sliced && looksLikeJobPayload(sliced)) return sliced;
+  }
+  return undefined;
+}
+
+function jobLogArtifact(opts: {
+  id: string;
+  title: string;
+  content: string;
+  status: ArtifactLogStatus;
+  phase?: string;
+}): ChatArtifact {
+  return {
+    id: `tool-${opts.id}`,
+    title: opts.title,
+    kind: 'log',
+    language: 'log',
+    content: opts.content,
+    source: 'tool',
+    status: opts.status,
+    phase: opts.phase,
+    mode: 'append',
+  };
+}
+
+/** wait_for_job / stop_job / shell detached-job JSON → append-only log pane. */
+function extractJobLogArtifact(
+  shortName: string,
+  part: Extract<MessagePart, { type: 'tool' }>,
+  input: Record<string, unknown> | undefined,
+  result: unknown,
+): ChatArtifact | undefined {
+  const blob = [
+    part.detail,
+    part.description,
+    str(input?.command),
+    str(input?.cmd),
+    input ? JSON.stringify(input) : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const waitStop = isJobWaitTool(shortName);
+  const fromShell = isShellTool(shortName) && /detached-job\.(?:js|cjs)\b/i.test(blob);
+  if (!waitStop && !fromShell) return undefined;
+
+  const payload = jobPayloadFromResult(result);
+  const id =
+    str(payload?.id) ??
+    str(payload?.artifact_id) ??
+    str(input?.id) ??
+    jobIdFromCommand(blob);
+  if (!id) return undefined;
+
+  const stopCmd = /^stop_job$/i.test(shortName) || /\bstop\s+[A-Za-z0-9._-]{1,64}\b/i.test(blob);
+  const status =
+    parseLogStatus(payload?.status) ??
+    (payload?.started === true || payload?.reason === 'already-running'
+      ? 'running'
+      : stopCmd && payload
+        ? 'failed'
+        : 'running');
+  const content =
+    typeof payload?.delta === 'string'
+      ? payload.delta
+      : typeof payload?.content === 'string'
+        ? payload.content
+        : '';
+
+  return jobLogArtifact({
+    id,
+    title: str(payload?.title) ?? str(input?.title) ?? id,
+    content,
+    status,
+    phase: str(payload?.phase),
+  });
+}
+
 /** Extract artifacts from present_artifact / Brightsy create|update_artifact tool parts. */
 export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArtifact[] {
   if (!parts?.length) return [];
@@ -383,6 +504,13 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
     if (part.type !== 'tool') continue;
     const rawInput = asRecord(part.input);
     const shortName = toolShortName(part.name, rawInput);
+    const input = flattenToolInput(rawInput);
+    const result = unwrapToolResultPayload(part.result);
+    const jobLog = extractJobLogArtifact(shortName, part, input, result);
+    if (jobLog) {
+      out.push(jobLog);
+      continue;
+    }
     if (
       !/^(create|update)_artifact$/i.test(shortName) &&
       !matchesPresentTool(shortName, 'present_artifact')
@@ -390,8 +518,6 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
       continue;
     }
 
-    const input = flattenToolInput(rawInput);
-    const result = unwrapToolResultPayload(part.result);
     const resultRec = asRecord(result);
     const wrapped =
       asRecord(resultRec?.data) ??

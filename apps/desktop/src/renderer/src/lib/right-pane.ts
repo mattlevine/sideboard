@@ -129,6 +129,7 @@ export function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean
     !isFilesPane(a) &&
     !isFilesPane(b)
   ) {
+    if (a.kind === 'log' && b.kind === 'log') return a.id === b.id;
     return a.content === b.content && a.title === b.title;
   }
   return false;

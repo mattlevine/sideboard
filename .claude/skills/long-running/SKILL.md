@@ -45,7 +45,7 @@ Wait JSON:
 
 ## Sideboard UI (append-only log)
 
-The side column **is** the live view. Use `present_artifact` **`type=log`** with a stable `artifact_id` (the job id). Each call **appends** — send only `delta` from wait JSON, not the full log and not HTML.
+The side column **is** the live view. `wait_for_job` / `stop_job` (and shell `detached-job` wait JSON) open a `type=log` pane automatically (`artifact_id` = job id, content = `delta`). You may still call `present_artifact` **`type=log`** for a custom title. Each update **appends** — send only `delta`, not the full log and not HTML.
 
 ```
 present_artifact
@@ -57,7 +57,7 @@ present_artifact
   phase: <wait.phase>
 ```
 
-After **start**, present once (`status=running`, empty or first lines). After **every wait**, present the same id with `content=delta`. Do **not** dump the log in chat. Do **not** also fence HTML.
+After **start**, the first `wait` opens the pane (`status=running`). Do **not** dump the log in chat. Do **not** also fence HTML.
 
 `detached-job.cjs ui` still writes a snapshot HTML file for debugging. Prefer `type=log`.
 
@@ -76,8 +76,8 @@ node scripts/detached-job.cjs wait --pid-file FILE --log-file FILE [--ok-pattern
 ## Agent loop
 
 1. `start` once. If JSON says `already-running`, do not start again.
-2. Immediately `present_artifact` `type=log` (same `artifact_id`, `status=running`) — the human should see **working** in the side column, not a “check back later” message.
-3. Loop `wait` (use `--timeout-ms 15000` for a livelier pane). After each slice, `present_artifact` the **same** id with `content=delta` only.
+2. Loop `wait` (use `--timeout-ms 15000` for a livelier pane). The human should see **working** in the side column from the wait JSON — do not also dump the log in chat.
+3. After each slice, the same log pane appends `delta`. Optional: `present_artifact` the same id for a custom title.
 4. On `ok`, present once more (`status=ok`, last `delta`) and finish the task. On `failed`, fix from the log.
 5. **Stop** when the job is hanging, buffering forever, watching the wrong thing, or you already have the answer. MCP `stop_job` (same id, optional `reason`) or `node scripts/detached-job.cjs stop <id>`. Do **not** stop a pack/test/deploy that is clearly making progress.
 
