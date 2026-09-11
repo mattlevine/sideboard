@@ -113,7 +113,8 @@ describe('requestReview', () => {
     expect(resolved.content).not.toContain('name: review');
     expect(resolved.content).toContain('## Required outcome');
     expect(resolved.content).toContain('## Confirm before posting');
-    expect(resolved.content).toContain('Post this review');
+    expect(resolved.content).toContain('Do not call ask_user');
+    expect(resolved.content).toContain('type the next steps');
   });
 
   it('does not create a review skill when one is already present', () => {
@@ -199,6 +200,7 @@ describe('requestReview', () => {
     expect(REVIEW_REQUEST_TEMPLATE).toMatch(/do not create a review skill/);
     expect(REVIEW_REQUEST_TEMPLATE).toMatch(/\.sideboard\/skills\//);
     expect(REVIEW_REQUEST_TEMPLATE).toMatch(/Confirm before posting/);
-    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/Post this review/);
+    expect(REVIEW_REQUEST_TEMPLATE).toMatch(/Do not call ask_user/);
+    expect(REVIEW_REQUEST_TEMPLATE).not.toMatch(/ask_user \(Post this review/);
   });
 });

@@ -48,13 +48,13 @@ describe('isReviewWriteGatedThread', () => {
 });
 
 describe('formatReviewWriteGateDirective', () => {
-  it('requires ask_user before public review writes', () => {
+  it('keeps the review in chat and does not ask_user after it', () => {
     const text = formatReviewWriteGateDirective();
     expect(text).toMatch(/PR or ticket author/);
     expect(text).toMatch(/work through the feedback/);
-    expect(text).toMatch(/ask_user/);
-    expect(text).toMatch(/Post this review/);
-    expect(text).toMatch(/Keep it in chat/);
+    expect(text).toMatch(/Do not call ask_user/);
+    expect(text).toMatch(/type a next step/);
+    expect(text).not.toMatch(/ask_user \(Post this review/);
     expect(text).toMatch(/github_comment/);
     expect(text).toMatch(/gh pr review/);
     expect(text).toMatch(/already asked you to post/);
@@ -65,8 +65,9 @@ describe('formatReviewWriteGateReminder', () => {
   it('is a short resume line', () => {
     const text = formatReviewWriteGateReminder();
     expect(text.length).toBeLessThan(280);
-    expect(text).toMatch(/ask_user/);
-    expect(text).toMatch(/Post this review/);
+    expect(text).toMatch(/Do not ask_user after it/);
+    expect(text).toMatch(/type next steps/);
+    expect(text).not.toMatch(/ask_user \(Post this review/);
     expect(text).toMatch(/PR or ticket/);
   });
 });

@@ -24,11 +24,11 @@ People running this review are asking “can we ship this?” Treat that as the 
 
 ## Confirm before posting
 
-The report stays in this chat until the user posts it. Do not call `github_comment`, `linear_comment`, `abletime_comment`, `github_update_issue`, `linear_update_issue`, `abletime_update_task`, or run `gh pr review` / `gh pr comment`, until they confirm.
+The report stays in this chat until the user posts it. Do not call `github_comment`, `linear_comment`, `abletime_comment`, `github_update_issue`, `linear_update_issue`, `abletime_update_task`, or run `gh pr review` / `gh pr comment`, until they type a next step that asks you to post.
 
-After the Recommendation is in chat, ask_user (**Post this review** / **Keep it in chat**), then wait. If they already asked you to post a specific comment or update in this turn, that is confirmation.
+After the Recommendation is in chat, stop. Do not call ask_user. The user needs time to read the review and will type the next steps. If they already asked you to post a specific comment or update in this turn, that is confirmation.
 
-The user should be able to work through the feedback in chat first. The PR or ticket author sees those writes immediately — a draft review will confuse them. Do not request reviewers, change labels, or assign yourself unless they asked.
+The PR or ticket author sees those writes immediately — a draft review will confuse them. Do not request reviewers, change labels, or assign yourself unless they asked.
 
 ## Findings
 

@@ -174,8 +174,9 @@ describe('formatIssueToolsDirective', () => {
     expect(text).toMatch(/vendor issue MCP/);
     expect(text).toMatch(/ENG-9/);
     expect(text).toMatch(/Do not ask the user to `claude mcp login`/);
-    expect(text).toMatch(/Post this review/);
-    expect(text).toMatch(/Keep it in chat/);
+    expect(text).toMatch(/Do not call ask_user/);
+    expect(text).toMatch(/type next steps/);
+    expect(text).not.toMatch(/ask_user \(Post this review/);
     expect(text).toMatch(/reviewing a PR or ticket/);
     expect(text).toMatch(/work through the feedback/);
   });
@@ -193,7 +194,8 @@ describe('formatIssueToolsReminder', () => {
     expect(text).toMatch(/github_\*/);
     expect(text).not.toMatch(/abletime_\*/);
     expect(text).toMatch(/#4/);
-    expect(text).toMatch(/Post this review/);
+    expect(text).toMatch(/do not ask_user after it/);
+    expect(text).toMatch(/type next steps/);
   });
 });
 

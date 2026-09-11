@@ -157,7 +157,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_comment',
-    'Add a markdown comment on an AbleTime task (id or CRM-232). When reviewing a PR or ticket, show the draft in chat and ask_user (Post this review / Keep it in chat) first — the author sees this immediately.',
+    'Add a markdown comment on an AbleTime task (id or CRM-232). When reviewing a PR or ticket, show the draft in chat and wait until they type a next step — do not ask_user after the review. The author sees this immediately.',
     { id: z.string(), body: z.string() },
     async (args) => {
       try {
@@ -170,7 +170,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_update_task',
-    'Update an AbleTime task (id or CRM-232). Pass title, description, and/or state. When reviewing a PR or ticket, ask_user (Post this review / Keep it in chat) before changing the task — the author is notified.',
+    'Update an AbleTime task (id or CRM-232). Pass title, description, and/or state. When reviewing a PR or ticket, wait until they type a next step before changing the task — do not ask_user after the review. The author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),
