@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.185] - 2026-09-11
+
+### Fixed
+
+- Inbox comments no longer leak the whole repo when no tickets match `updatedSince`, GitHub comments-since pages newest-first, and Linear comments honor the search query.
+- Create-from-PR worktrees stay Mine until the GitHub viewer login loads, instead of flashing a review badge.
+- Persisting a live right-pane artifact after the turn no longer steals focus from the tab you selected.
+
 ## [0.1.184] - 2026-09-11
 
 ### Changed
