@@ -10,6 +10,7 @@ import {
   getLinearIssue,
   linearCycleIsActive,
   listLinearAssignedIssues,
+  listLinearCommentsSince,
   listLinearIssuesFiltered,
   listLinearTeams,
   resolveLinearState,
@@ -185,6 +186,9 @@ describe('buildLinearIssueFilter', () => {
     expect(
       buildLinearIssueFilter({ assignee: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }).assignee,
     ).toEqual({ id: { eq: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' } });
+    expect(
+      buildLinearIssueFilter({ updatedSince: '2026-09-10T00:00:00.000Z' }).updatedAt,
+    ).toEqual({ gte: '2026-09-10T00:00:00.000Z' });
   });
 });
 
@@ -476,6 +480,52 @@ describe('Linear GraphQL writes', () => {
     expect(unassigned.issues[0]?.assignee).toBeUndefined();
     const searched = await listLinearIssuesFiltered({ query: 'inbox' });
     expect(searched.issues[0]?.title).toBe('Inbox');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('filters assigned issues by updatedSince and lists comments since then', async () => {
+    await withAuth();
+    const since = '2026-09-10T00:00:00.000Z';
+    const fetchMock = mockGraphql((query, variables) => {
+      if (query.includes('SideboardCommentsSince')) {
+        expect(variables.filter).toEqual({
+          createdAt: { gte: since },
+          issue: {
+            state: { type: { nin: ['completed', 'canceled'] } },
+            assignee: { isMe: true },
+          },
+        });
+        return {
+          comments: {
+            nodes: [
+              {
+                id: 'c-new',
+                body: 'Please ship',
+                createdAt: '2026-09-10T12:00:00.000Z',
+                user: { id: 'user-2', name: 'Ada' },
+                issue: { identifier: 'ENG-9', title: 'Ship it' },
+              },
+            ],
+          },
+        };
+      }
+      expect(query).toContain('SideboardAssignedIssues');
+      expect(variables.filter).toMatchObject({
+        assignee: { isMe: true },
+        updatedAt: { gte: since },
+      });
+      return {
+        viewer: { id: 'user-1', name: 'Matt', assignedIssues: { nodes: [issueNode()] } },
+      };
+    });
+    const listed = await listLinearIssuesFiltered({ updatedSince: since });
+    expect(listed.issues[0]?.updatedAt).toBe('2026-09-01T00:00:00.000Z');
+    const comments = await listLinearCommentsSince({ since });
+    expect(comments[0]).toMatchObject({
+      identifier: 'ENG-9',
+      author: 'Ada',
+      body: 'Please ship',
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

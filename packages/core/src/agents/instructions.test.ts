@@ -165,6 +165,9 @@ describe('formatIssueToolsDirective', () => {
       ticketId: 'ENG-9',
       ticketProvider: 'linear',
     });
+    expect(text).toMatch(/linear_search_issues/);
+    expect(text).toMatch(/github_search_issues/);
+    expect(text).toMatch(/updatedSince/);
     expect(text).toMatch(/linear_get_issue/);
     expect(text).toMatch(/github_comment/);
     expect(text).toMatch(/abletime_update_task/);
@@ -173,7 +176,8 @@ describe('formatIssueToolsDirective', () => {
     expect(text).toMatch(/Do not ask the user to `claude mcp login`/);
     expect(text).toMatch(/Post this review/);
     expect(text).toMatch(/Keep it in chat/);
-    expect(text).toMatch(/reviewing someone else's PR/);
+    expect(text).toMatch(/reviewing a PR or ticket/);
+    expect(text).toMatch(/work through the feedback/);
   });
 });
 

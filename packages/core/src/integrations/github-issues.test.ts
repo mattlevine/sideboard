@@ -3,6 +3,7 @@ import {
   commentGitHubIssue,
   createGitHubIssue,
   getGitHubIssue,
+  listGitHubIssueCommentsSince,
   parseGitHubIssueNumber,
   updateGitHubIssue,
 } from './github-issues.js';
@@ -110,5 +111,47 @@ describe('github issue writes', () => {
     expect(spin.identifier).toBe('#13');
     const createArgs = gh.mock.calls.find((call) => call[0]?.[1] === 'create')?.[0] as string[];
     expect(createArgs.join(' ')).toMatch(/Spin-off of #12/);
+  });
+});
+
+describe('listGitHubIssueCommentsSince', () => {
+  it('keeps comments on the requested issue numbers', async () => {
+    gh.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify([
+        {
+          body: 'On mine',
+          created_at: '2026-09-10T12:00:00.000Z',
+          issue_url: 'https://api.github.com/repos/acme/app/issues/12',
+          user: { login: 'ada' },
+        },
+        {
+          body: 'On theirs',
+          created_at: '2026-09-10T12:00:00.000Z',
+          issue_url: 'https://api.github.com/repos/acme/app/issues/99',
+          user: { login: 'ada' },
+        },
+      ]),
+      stderr: '',
+    });
+    const comments = await listGitHubIssueCommentsSince({
+      since: '2026-09-10T00:00:00.000Z',
+      repoPath: '/tmp/repo',
+      issueIdentifiers: ['#12'],
+    });
+    expect(comments).toEqual([
+      {
+        identifier: '#12',
+        author: 'ada',
+        createdAt: '2026-09-10T12:00:00.000Z',
+        body: 'On mine',
+      },
+    ]);
+    expect(gh.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([
+        'api',
+        expect.stringContaining('repos/acme/app/issues/comments?since='),
+      ]),
+    );
   });
 });

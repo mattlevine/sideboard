@@ -75,6 +75,39 @@ describe('mcp issue-list', () => {
     expect(mcpJson(listed).content[0]?.text).not.toContain('\n');
   });
 
+  it('marks created vs updated rows and includes comment previews when since is set', () => {
+    const created = compactIssueRow(
+      issue({
+        createdAt: '2026-09-11T00:00:00.000Z',
+        updatedAt: '2026-09-11T00:00:00.000Z',
+      }),
+      { since: '2026-09-10T00:00:00.000Z' },
+    );
+    const updated = compactIssueRow(
+      issue({
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-09-11T00:00:00.000Z',
+      }),
+      { since: '2026-09-10T00:00:00.000Z' },
+    );
+    expect(created.kind).toBe('created');
+    expect(updated.kind).toBe('updated');
+    const listed = formatMcpIssueList({
+      source: 'linear',
+      viewer: 'Matt',
+      limit: 40,
+      truncated: false,
+      since: '2026-09-10T07:00:00.000Z',
+      issues: [issue({ identifier: 'ENG-2', title: 'Inbox', createdAt: '2026-09-11T00:00:00.000Z' })],
+      comments: [{ identifier: 'ENG-2', title: 'Inbox', author: 'Ada', body: 'Please ship' }],
+    });
+    expect(listed.since).toBe('2026-09-10T07:00:00.000Z');
+    expect(listed.issues[0]?.kind).toBe('created');
+    expect(listed.comments).toEqual([
+      { identifier: 'ENG-2', title: 'Inbox', author: 'Ada', body: 'Please ship' },
+    ]);
+  });
+
   it('encodes compact JSON (no pretty-print indent)', () => {
     const out = mcpJson({ a: 1, nest: { b: 2 } }, true);
     expect(out.content[0]?.text).toBe('{"a":1,"nest":{"b":2}}');

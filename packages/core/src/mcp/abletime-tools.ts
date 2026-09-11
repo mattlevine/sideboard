@@ -11,8 +11,18 @@ import {
   searchAbleTimeTasks,
   toAbleTimeIssueInfo,
   updateAbleTimeTask,
+  type AbleTimeTask,
 } from '../integrations/abletime.js';
-import { mcpJson } from './issue-list.js';
+import {
+  issueMatchesUpdatedSince,
+  parseIssueSince,
+  previewIssueCommentBody,
+} from '../integrations/issue-since.js';
+import {
+  formatListedIssuesForMcp,
+  mcpIssueUpdatedSinceSchema,
+  mcpJson,
+} from './issue-list.js';
 import { formatAbleTimeTaskPayload, mcpIssueIncludeSchema } from './issue-payload.js';
 
 function text(payload: unknown, isError = false) {
@@ -23,6 +33,36 @@ function fail(err: unknown) {
   return text(
     { error: err instanceof Error ? err.message : String(err) },
     true,
+  );
+}
+
+function formatAbleTimeTaskList(tasks: AbleTimeTask[], updatedSince?: string) {
+  if (!updatedSince) return { issues: tasks.map(toAbleTimeIssueInfo) };
+  const since = parseIssueSince(updatedSince);
+  const issues = tasks
+    .map(toAbleTimeIssueInfo)
+    .filter((issue) => issueMatchesUpdatedSince(issue, since));
+  const keep = new Set(issues.map((issue) => issue.identifier));
+  const sinceMs = Date.parse(since);
+  const comments = tasks.flatMap((task) => {
+    if (!keep.has(task.identifier)) return [];
+    return task.comments
+      .filter((comment) => {
+        const at = comment.createdAt ? Date.parse(comment.createdAt) : Number.NaN;
+        return !Number.isFinite(at) || !Number.isFinite(sinceMs) || at >= sinceMs;
+      })
+      .map((comment) => ({
+        identifier: task.identifier,
+        title: task.title,
+        ...(comment.user ? { author: comment.user } : {}),
+        ...(comment.createdAt ? { createdAt: comment.createdAt } : {}),
+        body: previewIssueCommentBody(comment.body),
+        ...(comment.url ? { url: comment.url } : {}),
+      }));
+  });
+  return formatListedIssuesForMcp(
+    { source: 'abletime', issues, since, comments },
+    Math.max(issues.length, 1),
   );
 }
 
@@ -76,12 +116,12 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_list_tasks',
-    'List open AbleTime tasks (excludes done/archived). Optional projectId filter.',
-    { projectId: z.string().optional() },
-    async ({ projectId }) => {
+    'List open AbleTime tasks (excludes done/archived). Optional projectId filter. Pass updatedSince for tasks updated since then and any comments on that page.',
+    { projectId: z.string().optional(), updatedSince: mcpIssueUpdatedSinceSchema },
+    async ({ projectId, updatedSince }) => {
       try {
         const tasks = await listAbleTimeTasks({ projectId });
-        return text({ issues: tasks.map(toAbleTimeIssueInfo) });
+        return text(formatAbleTimeTaskList(tasks, updatedSince));
       } catch (err) {
         return fail(err);
       }
@@ -90,12 +130,12 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_search_tasks',
-    'Search AbleTime tasks by text, reference, or tag.',
-    { query: z.string() },
-    async ({ query }) => {
+    'Search AbleTime tasks by text, reference, or tag. Pass updatedSince for tasks updated since then and any comments on that page.',
+    { query: z.string(), updatedSince: mcpIssueUpdatedSinceSchema },
+    async ({ query, updatedSince }) => {
       try {
         const tasks = await searchAbleTimeTasks(query);
-        return text({ issues: tasks.map(toAbleTimeIssueInfo) });
+        return text(formatAbleTimeTaskList(tasks, updatedSince));
       } catch (err) {
         return fail(err);
       }
@@ -117,7 +157,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_comment',
-    'Add a markdown comment on an AbleTime task (id or CRM-232). When reviewing someone else\'s PR, show the draft in chat and ask_user (Post this review / Keep it in chat) first.',
+    'Add a markdown comment on an AbleTime task (id or CRM-232). When reviewing a PR or ticket, show the draft in chat and ask_user (Post this review / Keep it in chat) first — the author sees this immediately.',
     { id: z.string(), body: z.string() },
     async (args) => {
       try {
@@ -130,7 +170,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_update_task',
-    'Update an AbleTime task (id or CRM-232). Pass title, description, and/or state. When reviewing someone else\'s PR, ask_user (Post this review / Keep it in chat) before changing the task.',
+    'Update an AbleTime task (id or CRM-232). Pass title, description, and/or state. When reviewing a PR or ticket, ask_user (Post this review / Keep it in chat) before changing the task — the author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),

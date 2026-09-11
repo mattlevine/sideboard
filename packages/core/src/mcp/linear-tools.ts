@@ -1,17 +1,19 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { parseIssueSince } from '../integrations/issue-since.js';
 import {
   commentLinearIssue,
   createLinearIssue,
   getLinearIssue,
+  listLinearCommentsSince,
   listLinearIssuesFiltered,
   listLinearTeams,
   updateLinearIssue,
 } from '../integrations/linear.js';
 import {
-  applyIssueListWindow,
   clampMcpIssueLimit,
-  formatMcpIssueList,
+  formatListedIssuesForMcp,
+  mcpIssueUpdatedSinceSchema,
   mcpJson,
 } from './issue-list.js';
 import { formatLinearIssuePayload, mcpIssueIncludeSchema } from './issue-payload.js';
@@ -65,7 +67,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_search_issues',
-    'Search or list open Linear issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all (default with query), or a user id/name.',
+    'Search or list open Linear issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all (default with query), or a user id/name. Pass updatedSince for new/updated tickets and new comments (e.g. “any updates since yesterday?”).',
     {
       query: z
         .string()
@@ -82,24 +84,39 @@ export function registerLinearTools(server: McpServer): void {
         .max(250)
         .optional()
         .describe('Page size (default 40, max 250). Raise when truncated is true.'),
+      updatedSince: mcpIssueUpdatedSinceSchema,
     },
-    async ({ query, assignee, limit }) => {
+    async ({ query, assignee, limit, updatedSince }) => {
       try {
         const page = clampMcpIssueLimit(limit);
-        const listed = await listLinearIssuesFiltered({
-          query,
-          assignee,
-          limit: page + 1,
-        });
-        const windowed = applyIssueListWindow(listed.issues, page);
-        return mcpJson(
-          formatMcpIssueList({
-            source: 'linear',
-            viewer: listed.viewer.name,
-            limit: page,
-            issues: windowed.items,
-            truncated: windowed.truncated,
+        const since = updatedSince ? parseIssueSince(updatedSince) : undefined;
+        const [listed, comments] = await Promise.all([
+          listLinearIssuesFiltered({
+            query,
+            assignee,
+            limit: page + 1,
+            updatedSince: since,
           }),
+          since
+            ? listLinearCommentsSince({
+                since,
+                assignee,
+                query,
+                limit: page + 1,
+              })
+            : Promise.resolve(undefined),
+        ]);
+        return mcpJson(
+          formatListedIssuesForMcp(
+            {
+              source: 'linear',
+              viewer: listed.viewer,
+              issues: listed.issues,
+              since,
+              comments,
+            },
+            page,
+          ),
         );
       } catch (err) {
         return fail(err);
@@ -146,7 +163,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_update_issue',
-    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, and/or priority. When reviewing someone else\'s PR, ask_user (Post this review / Keep it in chat) before changing the ticket.',
+    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, and/or priority. When reviewing a PR or ticket, ask_user (Post this review / Keep it in chat) before changing the ticket — the author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),
@@ -166,7 +183,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_comment',
-    'Add a markdown comment on a Linear issue (uuid or ENG-123). When reviewing someone else\'s PR, show the draft in chat and ask_user (Post this review / Keep it in chat) first.',
+    'Add a markdown comment on a Linear issue (uuid or ENG-123). When reviewing a PR or ticket, show the draft in chat and ask_user (Post this review / Keep it in chat) first — the author sees this immediately.',
     {
       id: z.string(),
       body: z.string(),

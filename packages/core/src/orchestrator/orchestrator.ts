@@ -1190,7 +1190,10 @@ export class Orchestrator {
     const reviewWriteGateReminder =
       thread.agent !== 'brightsy' &&
       !isOrchestratorThread(thread) &&
-      isReviewWriteGatedThread(thread)
+      isReviewWriteGatedThread(
+        thread,
+        thread.worktreePath ? threadsSharingWorktree(thread.worktreePath) : [],
+      )
         ? formatReviewWriteGateReminder()
         : null;
     const slackReplyContext = formatSlackRepliesForTurn(
@@ -1283,7 +1286,12 @@ export class Orchestrator {
             ticketProvider: freshIssueTicket?.provider,
           });
     const reviewWriteGateDirective =
-      isBrightsy || isOrchestration || !isReviewWriteGatedThread(fresh)
+      isBrightsy ||
+      isOrchestration ||
+      !isReviewWriteGatedThread(
+        fresh,
+        fresh.worktreePath ? threadsSharingWorktree(fresh.worktreePath) : [],
+      )
         ? null
         : formatReviewWriteGateDirective();
     let viewerContextDirective: string | null = null;

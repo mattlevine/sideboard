@@ -170,6 +170,8 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Settings → Agents / Projects context');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('eng-review');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Find work:');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('updatedSince');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Ticket updates:');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('update_viewer_context');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('scope=project');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('repoPath from list_workspaces');

@@ -310,4 +310,65 @@ describe('integrations / issues', () => {
     await issues.listIssues('/tmp/repo', { limit: 41 });
     expect(gh).toHaveBeenCalled();
   });
+
+  it('passes GitHub updatedSince into search and loads comments for those issues', async () => {
+    const { issues } = await load();
+    const gh = vi.spyOn(await import('../git/run.js'), 'gh').mockImplementation(async (args) => {
+      if (args[0] === 'api') {
+        return { stdout: 'octocat\n', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === 'issue') {
+        expect(args).toContain('--search');
+        expect(args[args.indexOf('--search') + 1]).toContain('updated:>=2026-09-10T07:00:00Z');
+        expect(args[args.indexOf('--json') + 1]).toContain('updatedAt');
+        return {
+          stdout: JSON.stringify([
+            {
+              number: 12,
+              title: 'Fix login',
+              url: 'https://github.com/acme/app/issues/12',
+              labels: [],
+              assignees: [{ login: 'octocat' }],
+              createdAt: '2026-08-01T00:00:00.000Z',
+              updatedAt: '2026-09-10T12:00:00.000Z',
+            },
+          ]),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const comments = vi.spyOn(await import('./github-issues.js'), 'listGitHubIssueCommentsSince');
+    comments.mockResolvedValue([
+      {
+        identifier: '#12',
+        author: 'ada',
+        createdAt: '2026-09-10T12:00:00.000Z',
+        body: 'Please ship',
+        url: 'https://github.com/acme/app/issues/12#issuecomment-1',
+      },
+    ]);
+    const result = await issues.listIssues('/tmp/repo', {
+      updatedSince: '2026-09-10T07:00:00.000Z',
+    });
+    expect(result.since).toBe('2026-09-10T07:00:00.000Z');
+    expect(result.issues[0]?.updatedAt).toBe('2026-09-10T12:00:00.000Z');
+    expect(result.comments).toEqual([
+      {
+        identifier: '#12',
+        author: 'ada',
+        createdAt: '2026-09-10T12:00:00.000Z',
+        body: 'Please ship',
+        url: 'https://github.com/acme/app/issues/12#issuecomment-1',
+      },
+    ]);
+    expect(comments).toHaveBeenCalledWith(
+      expect.objectContaining({
+        since: '2026-09-10T07:00:00.000Z',
+        issueIdentifiers: ['#12'],
+      }),
+    );
+    expect(gh).toHaveBeenCalled();
+  });
 });

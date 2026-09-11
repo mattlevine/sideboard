@@ -44,6 +44,7 @@ describe('sideboardMcpProfile', () => {
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_board');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_teams');
     expect([...WORKTREE_GITHUB_MCP_TOOLS]).toEqual([
+      'github_search_issues',
       'github_get_issue',
       'github_comment',
       'github_update_issue',

@@ -18,6 +18,7 @@ export const WORKTREE_MCP_TOOLS = [
 
 /** GitHub Issues via Account `gh` — always registered on worktree + orchestration. */
 export const WORKTREE_GITHUB_MCP_TOOLS = [
+  'github_search_issues',
   'github_get_issue',
   'github_comment',
   'github_update_issue',
