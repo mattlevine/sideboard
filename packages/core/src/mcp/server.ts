@@ -1042,7 +1042,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'request_review',
-    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .claude/skills/review/SKILL.md when present (else copies .sideboard/review.md into .context/review.md, or seeds that file from the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information in that chat. Do not comment on or update the PR or ticket until the user confirms (ask_user: Post this review / Keep it in chat) — they work through the feedback in chat first. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
+    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .claude/skills/review/SKILL.md when present (else copies .sideboard/review.md into .context/review.md, or seeds that file from the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information in that chat. The review stays there so the user can read it and type next steps — do not comment on or update the PR or ticket, and do not ask_user after the review, until they ask. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
     { ref: z.string().describe('Worktree thread id/ref to review') },
     async ({ ref }) => {
       try {

@@ -119,7 +119,7 @@ export function registerGithubIssueTools(server: McpServer): void {
 
   server.tool(
     'github_comment',
-    'Add a markdown comment on a GitHub issue (#123 or URL). Uses Account gh. When reviewing a PR or ticket, show the draft in chat and ask_user (Post this review / Keep it in chat) first — the author sees this immediately.',
+    'Add a markdown comment on a GitHub issue (#123 or URL). Uses Account gh. When reviewing a PR or ticket, show the draft in chat and wait until they type a next step — do not ask_user after the review. The author sees this immediately.',
     { id: z.string(), body: z.string(), repoPath: repoPathSchema },
     async ({ id, body, repoPath }) => {
       try {
@@ -132,7 +132,7 @@ export function registerGithubIssueTools(server: McpServer): void {
 
   server.tool(
     'github_update_issue',
-    'Update a GitHub issue (#123). Pass title, body, and/or state (open|closed). When reviewing a PR or ticket, ask_user (Post this review / Keep it in chat) before changing the issue — the author is notified.',
+    'Update a GitHub issue (#123). Pass title, body, and/or state (open|closed). When reviewing a PR or ticket, wait until they type a next step before changing the issue — do not ask_user after the review. The author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),

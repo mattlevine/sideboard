@@ -188,13 +188,13 @@ export function formatIssueToolsDirective(opts: {
   }
   lines.push(
     '- Do not ask the user to `claude mcp login` for tickets. Reconnect the Account source in Settings → Issues (or Git for `gh`).',
-    '- When reviewing a PR or ticket (review inbox or a Review tab): write the review in chat so the user can work through the feedback first; ask_user (Post this review / Keep it in chat) before `github_comment` / `linear_comment` / `*_update_*` / `gh pr review`. The PR or ticket author sees those immediately.',
+    '- When reviewing a PR or ticket (review inbox or a Review tab): write the review in chat and stop. Do not call ask_user. The user needs time to read and will type next steps. Do not `github_comment` / `linear_comment` / `*_update_*` / `gh pr review` until they ask. The PR or ticket author sees those immediately.',
   );
   const ticket = opts.ticketId?.trim();
   if (ticket) {
     const provider = opts.ticketProvider ?? 'linear';
     lines.push(
-      `- This thread's ticket is \`${ticket}\` (${provider}). Use that id for get. Do not comment or update it with review findings until they confirm (ask_user: Post this review / Keep it in chat) — they should work through the feedback in chat first. If they asked you to do the work, routine status and spin-offs (\`parent=\`) are OK.`,
+      `- This thread's ticket is \`${ticket}\` (${provider}). Use that id for get. Do not comment or update it with review findings until they type a next step that asks you to — they should work through the feedback in chat first. If they asked you to do the work, routine status and spin-offs (\`parent=\`) are OK.`,
     );
   }
   return lines.join('\n');
@@ -231,9 +231,9 @@ export function formatIssueToolsReminder(opts: {
   ].filter(Boolean);
   const ticket = opts.ticketId?.trim();
   const ticketBit = ticket
-    ? ` This ticket: ${ticket}${opts.ticketProvider ? ` (${opts.ticketProvider})` : ''} — get; comment/update review findings only after ask_user. Spin-offs use parent=.`
+    ? ` This ticket: ${ticket}${opts.ticketProvider ? ` (${opts.ticketProvider})` : ''} — get; comment/update review findings only after they ask. Spin-offs use parent=.`
     : ' get/comment/update/create (parent= for spin-offs).';
-  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit} Review feedback stays in chat until ask_user (Post this review / Keep it in chat) — PR and ticket authors see comments immediately.`;
+  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit} Review stays in chat — do not ask_user after it; they type next steps. Authors see comments immediately.`;
 }
 
 /** @deprecated Use {@link formatIssueToolsReminder} */
@@ -329,7 +329,7 @@ export function formatArtifactDirective(): string {
     '- Standalone documents: a fenced block tagged `html` (preferred), `svg`, or `markdown` containing the FULL document opens the side column by itself. Use that or present_artifact — never both for the same body.',
     '- present_artifact type=log appends: same artifact_id, content = new lines only (plus status/phase). Do not resend the full log or wrap it in HTML.',
     '- Data: a markdown table is enough to read. Call present_schema only when the user needs to filter/edit/publish/persist rows — including when they ask for an editable table after you already showed markdown. Never re-present rows you already wrote just to display them.',
-    '- ask_user only when work is blocked on a few concrete options (approach fork, which API, auth vs cookies): first a short chat message explaining the decision and each option, then the call (description on every option), then stop and wait. Not for greetings, check-ins, or an invented menu of next tasks — reply in chat. If one option is the obvious default, proceed.',
+    '- ask_user only when work is blocked on a few concrete options (approach fork, which API, auth vs cookies): first a short chat message explaining the decision and each option, then the call (description on every option), then stop and wait. Not for greetings, check-ins, an invented menu of next tasks, or after a review — reply in chat. If one option is the obvious default, proceed.',
   ].join('\n');
 }
 
@@ -338,5 +338,5 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos or “what next?”) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
 }

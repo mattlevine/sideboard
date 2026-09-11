@@ -163,7 +163,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_update_issue',
-    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, and/or priority. When reviewing a PR or ticket, ask_user (Post this review / Keep it in chat) before changing the ticket — the author is notified.',
+    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, and/or priority. When reviewing a PR or ticket, wait until they type a next step before changing the ticket — do not ask_user after the review. The author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),
@@ -183,7 +183,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_comment',
-    'Add a markdown comment on a Linear issue (uuid or ENG-123). When reviewing a PR or ticket, show the draft in chat and ask_user (Post this review / Keep it in chat) first — the author sees this immediately.',
+    'Add a markdown comment on a Linear issue (uuid or ENG-123). When reviewing a PR or ticket, show the draft in chat and wait until they type a next step — do not ask_user after the review. The author sees this immediately.',
     {
       id: z.string(),
       body: z.string(),

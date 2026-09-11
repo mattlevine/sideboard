@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Review turns no longer call `ask_user` (Post this review / Keep it in chat) after the recommendation. The review stays in chat so you can read it and type the next step; public GitHub/Linear/AbleTime writes still wait until you ask.
+
 ## [0.1.183] - 2026-09-11
 
 ### Fixed
