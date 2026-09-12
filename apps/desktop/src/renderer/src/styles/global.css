@@ -2838,7 +2838,8 @@ body.resizing-panels webview {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   font-size: var(--font-size-chat);
   line-height: var(--line-height-chat);
   letter-spacing: var(--letter-tight);
@@ -2927,6 +2928,8 @@ body.resizing-panels webview {
   flex-direction: column;
   gap: 10px;
   padding: 2px 0 4px;
+  width: 100%;
+  min-width: 0;
   font-size: var(--font-size-chat);
   line-height: var(--line-height-chat);
 }
@@ -2975,23 +2978,32 @@ body.resizing-panels webview {
   animation: none;
 }
 
+.turn-thinking {
+  width: 100%;
+  min-width: 0;
+}
+
 .turn-thinking-pill {
   display: block;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
   max-height: min(40vh, 320px);
   overflow: auto;
   color: var(--muted);
   font-size: inherit;
   line-height: var(--line-height-chat);
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  /* `anywhere` + shrink-to-fit collapses the box to 1ch (one letter per line). */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .turn-tool {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
+  gap: 6px 8px;
+  flex-wrap: wrap;
   width: 100%;
   min-width: 0;
   padding: 4px 0;
@@ -3005,6 +3017,10 @@ body.resizing-panels webview {
   cursor: pointer;
 }
 
+.turn-tool > :first-child {
+  flex-shrink: 0;
+}
+
 .turn-tool:hover:not(:disabled) {
   background: transparent;
 }
@@ -3016,8 +3032,11 @@ body.resizing-panels webview {
 
 .turn-tool-desc {
   color: var(--muted);
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 1 1 10rem;
+  min-width: min(10rem, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .turn-tool-pill {
@@ -3057,6 +3076,8 @@ body.resizing-panels webview {
 
 .turn-tool-tail {
   margin: 0;
+  width: 100%;
+  min-width: 0;
   max-height: min(28vh, 220px);
   overflow: auto;
   padding: 10px 12px;
@@ -3068,8 +3089,8 @@ body.resizing-panels webview {
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .turn-tool-tail.live {
@@ -4974,10 +4995,14 @@ button.worktree-hover-card-title:hover {
 .md-codeblock > pre,
 .md pre {
   overflow: auto;
+  overflow-x: auto;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .md-codeblock > pre {
@@ -5017,6 +5042,9 @@ button.worktree-hover-card-title:hover {
   padding: 0;
   font-size: 12px;
   line-height: 1.45;
+  white-space: inherit;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .md-mermaid {

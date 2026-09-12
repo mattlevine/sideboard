@@ -269,6 +269,19 @@ describe('toolDetail', () => {
     expect(toolDetail('Bash', { command: 'ls -la' })).toBe('ls -la');
   });
 
+  it('clips a multiline shell script to the first line', () => {
+    const command = [
+      "cd /Users/me/proj; python3 - <<'PY'",
+      "p='apps/api/src/course-quality/catalog.service.ts'",
+      's=open(p).read()',
+      'print(s)',
+      'PY',
+    ].join('\n');
+    const detail = toolDetail('Bash', { command });
+    expect(detail).toBe("cd /Users/me/proj; python3 - <<'PY'");
+    expect(detail).not.toContain('open(p)');
+  });
+
   it('prefers the search pattern over the worktree path', () => {
     expect(
       toolDetail('Grep', {
@@ -306,6 +319,28 @@ describe('visibleToolRowDetail', () => {
     expect(visibleToolRowDetail('git status', 'Check git status', wt)).toBe(
       'git status',
     );
+  });
+
+  it('does not treat a shell script as a file path', () => {
+    const script = [
+      'cd /Users/me/proj/scholar; python3 - <<\'PY\'',
+      "p='apps/api/src/course-quality/catalog.service.ts'",
+      's=open(p).read()',
+      'PY',
+    ].join('\n');
+    expect(visibleToolRowDetail(script, 'Run shell command', wt)).toBe(
+      'cd /Users/me/proj/scholar; python3 - <<\'PY\'',
+    );
+  });
+
+  it('clips a long one-line command instead of taking the last path segments', () => {
+    const cmd =
+      'rg --json --glob "*.ts" visibleToolRowDetail /Users/me/proj/scholar/apps/desktop/src';
+    const pill = visibleToolRowDetail(cmd, 'Search repository', wt);
+    expect(pill?.startsWith('rg --json')).toBe(true);
+    expect(pill).not.toMatch(/^…\//);
+    expect(pill?.includes('…') ?? false).toBe(true);
+    expect(pill?.length).toBeLessThanOrEqual(72);
   });
 
   it('labels Cursor task tools from description', () => {
