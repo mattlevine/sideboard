@@ -15,8 +15,8 @@
  * links Cellar `libuv`. That combo has aborted in `uv_run` while running
  * Cursor's local agent. The packaged app ships official Node 22 in
  * extraResources (`node/bin/node`) and prefers it. Unpackaged / CLI still
- * probe `node -v` and prefer even LTS ≥20 — do not trust keg names
- * (`opt/node@22` can alias Current).
+ * probe `node -v` and prefer even LTS ≥22 — do not trust keg names
+ * (`opt/node@22` can alias Current). Node 20 is EOL; do not probe that keg.
  */
 
 import { existsSync, readdirSync, realpathSync } from 'node:fs';
@@ -94,8 +94,8 @@ export function nodeReadableScriptPath(scriptPath: string): string {
   return unpackedAsarPath(scriptPath) ?? scriptPath;
 }
 
-/** Even majors 20+ are LTS; odd majors are Current. */
-const PREFERRED_LTS_MAJORS = [24, 22, 20] as const;
+/** Even majors 22+ are supported LTS; odd majors are Current. Node 20 is EOL. */
+const PREFERRED_LTS_MAJORS = [24, 22] as const;
 
 export type NodeRuntimeCandidate = {
   path: string;
@@ -111,13 +111,13 @@ export function parseNodeMajor(version: string): number | null {
 
 /**
  * Higher is better. Cursor's local agent is native-heavy; Homebrew Current
- * (odd majors, shared libuv) has crashed in `uv_run`. Prefer even LTS ≥20.
+ * (odd majors, shared libuv) has crashed in `uv_run`. Prefer even LTS ≥22.
  * Score the probed version — Homebrew `opt/node@22` can alias Current.
  */
 export function scoreNodeForAgentRuntime(candidate: NodeRuntimeCandidate): number {
   const major = parseNodeMajor(candidate.version);
   if (major == null) return Number.NEGATIVE_INFINITY;
-  if (major < 20) return major - 100;
+  if (major < 22) return major - 100;
 
   const posix = candidate.path.replace(/\\/g, '/');
   let score = 0;

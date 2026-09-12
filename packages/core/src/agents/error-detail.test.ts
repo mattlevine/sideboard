@@ -157,7 +157,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     ).toBe(true);
     expect(
       looksLikeRetryableRunnerCrash(
-        'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.',
+        'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.',
       ),
     ).toBe(true);
     expect(looksLikeRetryableRunnerCrash('')).toBe(true);
@@ -271,9 +271,9 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     );
     const summary = summarizeTurnStderr(tail);
     expect(summary).toMatch(/Homebrew Node \+ shared libuv/i);
-    expect(summary).toMatch(/brew install node@22/);
+    expect(summary).toMatch(/brew install node@24/);
     expect(summary).not.toMatch(/0x107aca130/);
-    expect(formatTurnExitError(1, summary)).toMatch(/brew install node@22/);
+    expect(formatTurnExitError(1, summary)).toMatch(/brew install node@24/);
   });
 
   it('does not tell users to brew-install Node when bundled official Node aborted', () => {
@@ -431,7 +431,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
 
   it('puts runner crashes into chat text when the agent said nothing', () => {
     const detail =
-      'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.';
+      'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.';
     expect(turnFailChatText({ exitCode: 1, assistantText: '', detail })).toBe(detail);
     expect(
       turnFailChatText({
@@ -454,7 +454,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(
       shouldFeedErrorBackToAgent({
         detail:
-          'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.',
+          'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.',
       }),
     ).toBe(true);
     expect(
