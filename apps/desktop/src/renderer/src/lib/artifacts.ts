@@ -192,14 +192,23 @@ export function coalesceLogArtifacts(arts: ChatArtifact[]): ChatArtifact[] {
   return out;
 }
 
+/** Job waits default title to the id; keep a custom present_artifact title. */
+function mergeLogTitle(prev: ChatArtifact, next: ChatArtifact): string {
+  const jobId = next.id.replace(/^tool-/, '');
+  const nextIsDefault = !next.title || next.title === jobId || next.title === next.id;
+  if (nextIsDefault && prev.title) return prev.title;
+  return next.title || prev.title;
+}
+
 /** Merge a later log chunk into the pane already on screen. */
 export function mergeAppendableArtifact(prev: ChatArtifact, next: ChatArtifact): ChatArtifact {
   if (prev.kind !== 'log' || next.kind !== 'log' || prev.id !== next.id) return next;
   if (next.mode === 'replace') return next;
+  const title = mergeLogTitle(prev, next);
   if (!next.content) {
     return {
       ...prev,
-      title: next.title || prev.title,
+      title,
       status: next.status ?? prev.status,
       phase: next.phase ?? prev.phase,
     };
@@ -208,12 +217,13 @@ export function mergeAppendableArtifact(prev: ChatArtifact, next: ChatArtifact):
     return {
       ...prev,
       ...next,
+      title,
       content: next.content,
     };
   }
   return {
     ...prev,
-    title: next.title || prev.title,
+    title,
     status: next.status ?? prev.status,
     phase: next.phase ?? prev.phase,
     content: joinLogChunks(prev.content, next.content),

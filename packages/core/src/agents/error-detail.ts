@@ -135,17 +135,28 @@ export function looksLikeHugeToolResultDump(text: string): boolean {
   return looksLikeMinifiedJsDump(t);
 }
 
+/** True for wait_for_job / stop_job / detached-job JSON — not wait_for_turn. */
+function looksLikeJobWaitResult(rec: Record<string, unknown>): boolean {
+  if (typeof rec.delta === 'string') {
+    return (
+      typeof rec.status === 'string' ||
+      typeof rec.id === 'string' ||
+      typeof rec.stillRunning === 'boolean'
+    );
+  }
+  if (typeof rec.stopped === 'boolean') {
+    return typeof rec.id === 'string' || typeof rec.status === 'string';
+  }
+  return rec.started === true || rec.reason === 'already-running';
+}
+
 /** Shrink wait/stop job JSON without breaking parse (log pane reads `delta`). */
 function clipJobWaitResultJson(content: string): string | undefined {
   const trimmed = content.trim();
   if (!trimmed.startsWith('{')) return undefined;
   try {
     const rec = JSON.parse(trimmed) as Record<string, unknown>;
-    const isJob =
-      typeof rec.stillRunning === 'boolean' ||
-      typeof rec.stopped === 'boolean' ||
-      (typeof rec.delta === 'string' && typeof rec.status === 'string');
-    if (!isJob) return undefined;
+    if (!looksLikeJobWaitResult(rec)) return undefined;
     if (typeof rec.delta === 'string' && rec.delta.length > 3_500) {
       rec.delta = `…(truncated ${rec.delta.length} chars)\n${rec.delta.slice(-3_500)}`;
     }

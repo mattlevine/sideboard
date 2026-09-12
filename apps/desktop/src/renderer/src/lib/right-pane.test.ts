@@ -4,6 +4,7 @@ import {
   extractFilesPanes,
   extractSchemaFencePanes,
   extractSchemaPanes,
+  findLiveTabReplaceIndex,
   isFilesPane,
   isSchemaPane,
   latestRightPaneContent,
@@ -305,6 +306,49 @@ describe('upsertRightPaneTab', () => {
     expect(migrated.tabs.find((t) => t.id === 'msg-3-0')?.content).toBe(
       '# Spec\n\nDone.',
     );
+  });
+});
+
+describe('findLiveTabReplaceIndex', () => {
+  it('rewrites the matching live document, not an earlier schema-live tab', () => {
+    const schema: RightPaneContent = {
+      kind: 'schema',
+      id: 'schema-live-0',
+      title: 'Posts',
+      mode: 'table',
+      datasource: 'inline',
+      source: 'tool',
+    };
+    const liveDoc = logPane({
+      id: 'live-1',
+      title: 'Spec',
+      kind: 'markdown',
+      language: 'markdown',
+      content: '# Spec\n\nDone.',
+      source: 'fence',
+    });
+    const settled = { ...liveDoc, id: 'msg-3-0' };
+    expect(findLiveTabReplaceIndex([schema, liveDoc], settled)).toBe(1);
+  });
+
+  it('returns -1 when no live tab of that kind exists', () => {
+    const schema: RightPaneContent = {
+      kind: 'schema',
+      id: 'schema-live-0',
+      title: 'Posts',
+      mode: 'table',
+      datasource: 'inline',
+      source: 'tool',
+    };
+    const settled = logPane({
+      id: 'msg-3-0',
+      title: 'Spec',
+      kind: 'markdown',
+      language: 'markdown',
+      content: '# Spec',
+      source: 'fence',
+    });
+    expect(findLiveTabReplaceIndex([schema], settled)).toBe(-1);
   });
 });
 

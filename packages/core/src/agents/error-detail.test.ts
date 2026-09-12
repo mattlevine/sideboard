@@ -403,6 +403,34 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(clipped!.length).toBeLessThanOrEqual(8_000);
   });
 
+  it('does not treat wait_for_turn JSON as a job wait stub', () => {
+    const payload = {
+      stillRunning: false,
+      status: 'idle',
+      id: 'thread-child',
+      text: `Recommendation\n\n${'x'.repeat(9_000)}`,
+      progress: 'Child finished.',
+      hint: 'Turn completed.',
+    };
+    const raw = JSON.stringify(payload);
+    expect(raw.length).toBeGreaterThan(8_000);
+    const clipped = clipToolResultForStore(raw);
+    expect(clipped).toBeTruthy();
+    expect(clipped).toContain('Recommendation');
+    expect(clipped).not.toMatch(/"delta":""/);
+    const parsed = (() => {
+      try {
+        return JSON.parse(clipped!);
+      } catch {
+        return null;
+      }
+    })();
+    if (parsed) {
+      expect(parsed.text).toBeTruthy();
+      expect(parsed.delta).toBeUndefined();
+    }
+  });
+
   it('summarizes Cursor findFilesWithRipgrep / resource_exhausted instead of asar stacks', () => {
     const tail: string[] = [];
     pushTurnStderr(

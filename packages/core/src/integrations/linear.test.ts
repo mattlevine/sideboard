@@ -144,6 +144,17 @@ describe('resolveLinearTeam / resolveLinearState', () => {
     expect(resolveLinearCycle(team, 'none')).toBe(null);
     expect(resolveLinearCycle(team, null)).toBe(null);
   });
+
+  it('resolves the active cycle by name when it is missing from the cycles page', () => {
+    const team: LinearTeam = {
+      ...TEAM,
+      activeCycle: { id: 'cyc-34', name: 'Week 34', number: 34, isActive: true },
+      cycles: [{ id: 'cyc-1', name: 'Week 1', number: 1, isActive: false }],
+    };
+    expect(resolveLinearCycle(team, 'Week 34')).toBe('cyc-34');
+    expect(resolveLinearCycle(team, '34')).toBe('cyc-34');
+    expect(resolveLinearCycle(team, 'current')).toBe('cyc-34');
+  });
 });
 
 describe('linearCycleIsActive', () => {
@@ -617,10 +628,6 @@ describe('Linear GraphQL writes', () => {
         createdAt: { gte: since },
         issue: {
           state: { type: { nin: ['completed', 'canceled'] } },
-          or: [
-            { title: { containsIgnoreCase: 'inbox' } },
-            { description: { containsIgnoreCase: 'inbox' } },
-          ],
         },
       });
       return {
