@@ -73,6 +73,11 @@ export interface ThreadMessage {
    * in chat history after pending thread.attachments are cleared).
    */
   attachments?: ThreadAttachment[];
+  /**
+   * Host-queued keep-alive (job still running / crash recover). Shown as a
+   * system note — not a user bubble.
+   */
+  origin?: 'continue';
   ts: string;
 }
 

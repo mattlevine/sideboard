@@ -21,6 +21,13 @@ import { mcpWaitForTurnTimeoutMs } from './wait-for-turn.js';
 
 export const MCP_WAIT_FOR_JOB_MAX_MS = 45_000;
 export const MAX_JOB_CONTINUES = 8;
+/** Keep wait JSON under the 8k tool-result store cap so the log pane can parse `delta`. */
+export const MAX_JOB_DELTA_LINES = 80;
+export const MAX_JOB_DELTA_CHARS = 4_000;
+/** Farewells are short. Long replies that quote the phrase are explanations. */
+export const DEFERRED_DONE_MAX_CHARS = 480;
+
+const GH_WATCH_REFRESH = 'Refreshing run status every 3 seconds.';
 
 export const MCP_WAIT_JOB_STILL_RUNNING_HINT =
   'Job is still running. The type=log pane already appended this delta. Call wait_for_job again. If it is hanging, producing no useful output, or doing the wrong thing, call stop_job (same id) instead of looping forever. Do not end the turn or tell the user you will let them know later.';
@@ -143,13 +150,54 @@ export function listRunningDetachedJobs(worktreePath: string): string[] {
 /** Last assistant text promised results later instead of waiting. */
 export function looksLikeDeferredDonePromise(text: string | null | undefined): boolean {
   const t = (text ?? '').trim();
-  if (!t) return false;
+  if (!t || t.length > DEFERRED_DONE_MAX_CHARS) return false;
+  const unquoted = t
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/["“”][^"“”]*["“”]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!unquoted) return false;
   return (
-    /\b(i['’]?ll|i will)\s+let you know\b/i.test(t) ||
-    /\blet you know when\b/i.test(t) ||
-    /\b(check back|ping me)\s+when\b/i.test(t) ||
-    /\bi(?:['’]ll| will)\s+(report|update you)\s+when\b/i.test(t)
+    /\b(i['’]?ll|i will)\s+let you know\b/i.test(unquoted) ||
+    /\blet you know when\b/i.test(unquoted) ||
+    /\b(check back|ping me)\s+when\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+(report|update you)\s+when\b/i.test(unquoted)
   );
+}
+
+/** Host-queued keep-alive — not something the human typed. */
+export function isJobContinuePrompt(text: string): boolean {
+  const t = text.trim();
+  return (
+    t.startsWith('Detached job still running:') ||
+    t.startsWith('You ended the turn after promising to report later')
+  );
+}
+
+/** Drop repeated `gh run watch` TTY frames; keep the latest checklist. */
+export function collapseGhRunWatchLog(text: string): string {
+  if (!text.includes(GH_WATCH_REFRESH)) return text;
+  const frames = text.split(/(?=Refreshing run status every 3 seconds\.)/);
+  const watchFrames = frames.filter((f) => f.includes(GH_WATCH_REFRESH));
+  if (watchFrames.length <= 1) return text;
+  const prefix = frames[0]?.includes(GH_WATCH_REFRESH) ? '' : (frames[0] ?? '');
+  const last = watchFrames[watchFrames.length - 1] ?? '';
+  const omitted = watchFrames.length - 1;
+  const note = `(${omitted} identical gh run watch refresh${omitted === 1 ? '' : 'es'} omitted)\n`;
+  return [prefix.trimEnd(), note, last.trimStart()].filter(Boolean).join('\n');
+}
+
+export function capJobLogDelta(text: string): string {
+  const collapsed = collapseGhRunWatchLog(text);
+  const lines = collapsed.split('\n');
+  let out =
+    lines.length > MAX_JOB_DELTA_LINES
+      ? `…(${lines.length - MAX_JOB_DELTA_LINES} earlier lines omitted)\n${lines.slice(-MAX_JOB_DELTA_LINES).join('\n')}`
+      : collapsed;
+  if (out.length > MAX_JOB_DELTA_CHARS) {
+    out = `…(truncated ${out.length} chars)\n${out.slice(-MAX_JOB_DELTA_CHARS)}`;
+  }
+  return out;
 }
 
 export function formatJobStillRunningContinuePrompt(jobIds: string[]): string {
@@ -245,7 +293,7 @@ function takeDelta(logFile: string, cursorFile: string): { delta: string; nextCu
   const lines = readLogLines(logFile);
   const cursor = readIntFile(cursorFile) ?? 0;
   const start = Math.min(Math.max(0, cursor), lines.length);
-  return { delta: lines.slice(start).join('\n'), nextCursor: lines.length };
+  return { delta: capJobLogDelta(lines.slice(start).join('\n')), nextCursor: lines.length };
 }
 
 function snapshotJob(dir: string): {
