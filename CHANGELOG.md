@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.187] - 2026-09-12
+
+### Fixed
+
+- Chat tool rows no longer dump long shell scripts or wrap one letter per line. Command pills show the first line only; thinking, live output, and markdown fences wrap on word boundaries.
+
 ## [0.1.186] - 2026-09-11
 
 ### Changed
