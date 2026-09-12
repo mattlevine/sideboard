@@ -12,10 +12,23 @@ function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v : undefined;
 }
 
+const CHAT_DETAIL_MAX = 72;
+
+/** First line only, so a python heredoc never becomes the tool-row pill. */
+function clipChatLine(value: string, max = CHAT_DETAIL_MAX): string {
+  const line = value.trim().split(/\r?\n/, 1)[0] ?? '';
+  if (line.length <= max) return line;
+  return `${line.slice(0, Math.max(1, max - 1))}…`;
+}
+
 function looksLikeFilePath(value: string): boolean {
-  if (value.startsWith('/') || value.startsWith('~/')) return true;
-  if (/^[A-Za-z]:[\\/]/.test(value)) return true;
-  return value.includes('/') || value.includes('\\');
+  const trimmed = value.trim();
+  // Shell scripts almost always contain `/` (`cd /Users/…`); do not treat those
+  // as paths or the pill becomes `…/last/segment` plus the rest of the script.
+  if (!trimmed || /[\s;|&<>]/.test(trimmed)) return false;
+  if (trimmed.startsWith('/') || trimmed.startsWith('~/')) return true;
+  if (/^[A-Za-z]:[\\/]/.test(trimmed)) return true;
+  return trimmed.includes('/') || trimmed.includes('\\');
 }
 
 function stripWorktreePrefix(path: string, worktreePath?: string | null): string {
@@ -40,8 +53,9 @@ export function visibleToolRowDetail(
   const raw = detail.trim();
   const desc = (description ?? '').trim();
   if (!looksLikeFilePath(raw)) {
-    if (desc === raw) return undefined;
-    return raw;
+    const clipped = clipChatLine(raw);
+    if (!clipped || desc === clipped || desc === raw) return undefined;
+    return clipped;
   }
   const rel = stripWorktreePrefix(raw, worktreePath);
   if (!rel) return undefined;
@@ -56,7 +70,7 @@ export function visibleToolRowDetail(
 export function toolDetail(name: string, input?: Record<string, unknown>): string | undefined {
   if (!input) return undefined;
   const command = str(input.command) ?? str(input.cmd);
-  if (command) return command;
+  if (command) return clipChatLine(command);
   const pattern = str(input.pattern) ?? str(input.glob) ?? str(input.glob_pattern);
   const isSearch = /grep|glob|search|ripgrep|findfiles|semsearch/i.test(name);
   if (isSearch && pattern) {
