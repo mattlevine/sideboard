@@ -133,6 +133,35 @@ export function parseLogStatus(value: unknown): ArtifactLogStatus | undefined {
   return undefined;
 }
 
+/** Prefer stillRunning / ok / failed over a stale `status: running` field. */
+export function inferJobLogStatus(payload: Record<string, unknown> | undefined): ArtifactLogStatus | undefined {
+  if (!payload) return undefined;
+  if (payload.stillRunning === true) return 'running';
+  if (payload.ok === true) return 'ok';
+  if (payload.failed === true || payload.stopped === true) return 'failed';
+  const explicit = parseLogStatus(payload.status);
+  if (explicit) return explicit;
+  if (payload.started === true || payload.reason === 'already-running') return 'running';
+  if (payload.stillRunning === false) return 'idle';
+  return undefined;
+}
+
+/**
+ * After the chat stream ends, a leftover `working` pill is wrong unless the
+ * last completed wait still says the detached job is running.
+ */
+export function settleLogStatusAfterStream(
+  artifact: ChatArtifact,
+  parts?: MessagePart[],
+): ChatArtifact {
+  if (artifact.kind !== 'log' || artifact.status !== 'running') return artifact;
+  const payload = lastCompletedJobPayload(parts);
+  if (payload?.stillRunning === true) return artifact;
+  const inferred = inferJobLogStatus(payload);
+  if (inferred && inferred !== 'running') return { ...artifact, status: inferred };
+  return { ...artifact, status: 'ok' };
+}
+
 export function joinLogChunks(prev: string, next: string): string {
   if (!next) return prev;
   if (!prev) return next;
@@ -394,13 +423,29 @@ function jobIdFromCommand(blob: string): string | undefined {
 }
 
 function looksLikeJobPayload(rec: Record<string, unknown>): boolean {
-  if (typeof rec.stillRunning === 'boolean' && parseLogStatus(rec.status)) return true;
-  if (typeof rec.delta === 'string' && parseLogStatus(rec.status)) return true;
+  if (typeof rec.stillRunning === 'boolean' && (parseLogStatus(rec.status) || str(rec.id) || typeof rec.ok === 'boolean')) {
+    return true;
+  }
+  if (typeof rec.delta === 'string' && (parseLogStatus(rec.status) || str(rec.id))) return true;
   if (rec.started === true || rec.reason === 'already-running') return true;
   if (typeof rec.stopped === 'boolean' && (str(rec.id) || parseLogStatus(rec.status))) {
     return true;
   }
   return false;
+}
+
+function lastCompletedJobPayload(
+  parts: MessagePart[] | undefined,
+): Record<string, unknown> | undefined {
+  if (!parts?.length) return undefined;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    if (!part || part.type !== 'tool') continue;
+    if (part.status === 'running') continue;
+    const payload = jobPayloadFromResult(part.result);
+    if (payload) return payload;
+  }
+  return undefined;
 }
 
 function jobPayloadFromResult(result: unknown): Record<string, unknown> | undefined {
@@ -473,13 +518,16 @@ function extractJobLogArtifact(
   if (!id) return undefined;
 
   const stopCmd = /^stop_job$/i.test(shortName) || /\bstop\s+[A-Za-z0-9._-]{1,64}\b/i.test(blob);
+  const startCmd = fromShell && /\bstart\b/i.test(blob);
   const status =
-    parseLogStatus(payload?.status) ??
-    (payload?.started === true || payload?.reason === 'already-running'
-      ? 'running'
-      : stopCmd && payload
-        ? 'failed'
-        : 'running');
+    inferJobLogStatus(payload) ??
+    (stopCmd && (payload || part.status === 'done' || part.status === 'error')
+      ? 'failed'
+      : startCmd || part.status === 'running'
+        ? 'running'
+        : part.status === 'error'
+          ? 'failed'
+          : 'ok');
   const content =
     typeof payload?.delta === 'string'
       ? payload.delta
@@ -562,7 +610,9 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
       mode,
     });
   }
-  return out;
+  const streaming = parts.some((p) => p.type === 'tool' && p.status === 'running');
+  if (streaming) return out;
+  return out.map((art) => settleLogStatusAfterStream(art, parts));
 }
 
 /** Collect artifacts from a turn's text + structured parts (tools win on duplicate titles). */

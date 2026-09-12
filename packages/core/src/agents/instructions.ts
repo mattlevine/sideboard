@@ -173,7 +173,7 @@ export function formatIssueToolsDirective(opts: {
   ];
   if (opts.linear) {
     lines.push(
-      '- Linear: `linear_search_issues` (assignee=me; pass `updatedSince` for “any updates since yesterday?” — new tickets, edits, and comments), `linear_get_issue` (comments; pass `include=full` if crush.truncated), `linear_comment`, `linear_update_issue` (state), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
+      '- Linear: `linear_search_issues` (assignee=me; pass `updatedSince` for “any updates since yesterday?” — new tickets, edits, and comments), `linear_get_issue` (comments; pass `include=full` if crush.truncated), `linear_comment`, `linear_update_issue` (state, cycle), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
     );
   }
   if (github) {

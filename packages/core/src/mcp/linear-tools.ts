@@ -54,7 +54,7 @@ export const LINEAR_MCP_TOOL_NAMES = [
 export function registerLinearTools(server: McpServer): void {
   server.tool(
     'linear_list_teams',
-    'List Linear teams (id, key, name) and workflow states. Use team key on create; state name or type on create/update.',
+    'List Linear teams (id, key, name), workflow states, and the active cycle. Use team key on create; state name or type on create/update; cycle name/"current"/"none" on update.',
     {},
     async () => {
       try {
@@ -164,7 +164,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_update_issue',
-    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, and/or priority. When reviewing a PR or ticket, wait until they type a next step before changing the ticket — do not ask_user after the review. The author is notified.',
+    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, priority, and/or cycle. Cycle is name, number, "current"/"active", or "none" to unschedule. When reviewing a PR or ticket, wait until they type a next step before changing the ticket — do not ask_user after the review. The author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),
@@ -172,6 +172,11 @@ export function registerLinearTools(server: McpServer): void {
       state: z.string().optional(),
       assignee: z.string().nullable().optional(),
       priority: prioritySchema,
+      cycle: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Cycle name, number, "current"/"active", or "none" to unschedule.'),
     },
     async (args) => {
       try {

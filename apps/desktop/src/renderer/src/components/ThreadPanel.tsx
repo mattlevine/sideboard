@@ -27,6 +27,7 @@ import {
 } from './schema/RightColumnPane';
 import type { FilePickerRequest } from './schema/FileManagerColumn';
 import {
+  finalizeRightPaneAfterStream,
   isFilesPane,
   isSchemaPane,
   latestRightPaneContent,
@@ -1487,7 +1488,10 @@ export function ThreadPanel({
       const m = thread.messages[i];
       if (m?.role !== 'agent') continue;
       fromHistory = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
-      if (fromHistory) break;
+      if (fromHistory) {
+        fromHistory = finalizeRightPaneAfterStream(fromHistory, m.parts);
+        break;
+      }
     }
     if (fromHistory) {
       const session = { tabs: [fromHistory], activeId: fromHistory.id };
@@ -1532,15 +1536,16 @@ export function ThreadPanel({
         if (m?.role !== 'agent') continue;
         const candidate = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
         if (!candidate) return prev;
+        const settled = finalizeRightPaneAfterStream(candidate, m.parts);
         const liveIdx = prev.tabs.findIndex(
           (t) =>
             t.id.startsWith('live') ||
             t.id.startsWith('schema-live') ||
             t.id.startsWith('files-live') ||
-            sameRightPane(t, candidate),
+            sameRightPane(t, settled),
         );
         if (liveIdx < 0) return prev;
-        const session = upsertRightPaneTab(prev.tabs, candidate, {
+        const session = upsertRightPaneTab(prev.tabs, settled, {
           activate: false,
           activeId: prev.activeId,
           replaceId: prev.tabs[liveIdx]!.id,

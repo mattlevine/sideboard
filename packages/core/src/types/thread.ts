@@ -414,6 +414,7 @@ export interface PrStack {
 }
 
 export interface IssueCycleInfo {
+  id?: string;
   name: string;
   number?: number;
   isActive: boolean;
