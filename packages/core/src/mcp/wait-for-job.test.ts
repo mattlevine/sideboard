@@ -10,6 +10,9 @@ import {
   jobTreeAlive,
   listRunningDetachedJobs,
   processGroupAlive,
+  capJobLogDelta,
+  collapseGhRunWatchLog,
+  isJobContinuePrompt,
   looksLikeDeferredDonePromise,
   planJobContinue,
   stopDetachedJob,
@@ -30,6 +33,54 @@ describe('looksLikeDeferredDonePromise', () => {
   it('ignores a finished report', () => {
     expect(looksLikeDeferredDonePromise('Tests passed. Ready to commit.')).toBe(false);
     expect(looksLikeDeferredDonePromise('')).toBe(false);
+  });
+
+  it('ignores quoted examples and long explanations', () => {
+    expect(
+      looksLikeDeferredDonePromise(
+        'That bubble is the continue after the agent quoted “I’ll let you know.”',
+      ),
+    ).toBe(false);
+    expect(
+      looksLikeDeferredDonePromise(
+        `${'This is documentation about the continue logic. '.repeat(12)}I'll let you know when they're done.`,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('collapseGhRunWatchLog / capJobLogDelta', () => {
+  const frame = (n: number) =>
+    `Refreshing run status every 3 seconds. Press Ctrl+C to quit.\n\n* v0.1.187 Release\n* Build step ${n}\n`;
+
+  it('keeps the last gh run watch frame', () => {
+    const log = `${frame(1)}${frame(2)}${frame(3)}`;
+    const out = collapseGhRunWatchLog(log);
+    expect(out).toMatch(/2 identical gh run watch refreshes omitted/);
+    expect(out).toMatch(/Build step 3/);
+    expect(out).not.toMatch(/Build step 1/);
+  });
+
+  it('caps a long delta', () => {
+    const lines = Array.from({ length: 120 }, (_, i) => `line ${i}`);
+    const out = capJobLogDelta(lines.join('\n'));
+    expect(out).toMatch(/earlier lines omitted/);
+    expect(out).toMatch(/line 119/);
+    expect(out).not.toMatch(/line 0\n/);
+  });
+});
+
+describe('isJobContinuePrompt', () => {
+  it('matches host keep-alives', () => {
+    expect(isJobContinuePrompt('Detached job still running: gha-release. Loop wait_for_job.')).toBe(
+      true,
+    );
+    expect(
+      isJobContinuePrompt(
+        'You ended the turn after promising to report later, but no detached job is running.',
+      ),
+    ).toBe(true);
+    expect(isJobContinuePrompt('merge in new updates')).toBe(false);
   });
 });
 
@@ -132,6 +183,22 @@ describe('waitForDetachedJob / listRunningDetachedJobs', () => {
     expect(result.stillRunning).toBe(false);
     expect(result.delta).toMatch(/ok/);
     expect(result.phase).toBe('ok');
+  });
+
+  it('collapses repeated gh run watch frames in delta', async () => {
+    const root = join(tmpdir(), `sb-job-watch-${Date.now()}`);
+    const dir = join(root, DETACHED_JOBS_DIR, 'gha-release');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'pid'), '999999999\n');
+    writeFileSync(join(dir, 'exit'), '0\n');
+    const frame = (n: number) =>
+      `Refreshing run status every 3 seconds. Press Ctrl+C to quit.\n\n* Release\n* step ${n}\n`;
+    writeFileSync(join(dir, 'log'), `${frame(1)}${frame(2)}${frame(3)}`);
+    const result = await waitForDetachedJob(root, 'gha-release', { timeoutMs: 1000 });
+    expect(result.ok).toBe(true);
+    expect(result.delta).toMatch(/step 3/);
+    expect(result.delta).toMatch(/omitted/);
+    expect(result.delta).not.toMatch(/step 1/);
   });
 
   it('lists a live pid as running', () => {

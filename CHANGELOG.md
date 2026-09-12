@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.188] - 2026-09-12
+
+### Fixed
+
+- Detached-job log panes keep a valid wait JSON `delta` (collapse `gh run watch` reprints and cap size) so the side column updates instead of going empty after the 8k tool-result clip.
+- Explaining “I’ll let you know” no longer queues a fake continue. Auto-continues skip leftover composer attachments and show as a system note, not a user bubble.
+
 ## [0.1.187] - 2026-09-12
 
 ### Fixed

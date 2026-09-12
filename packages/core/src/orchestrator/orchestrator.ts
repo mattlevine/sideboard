@@ -86,6 +86,7 @@ import {
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
 import { notifyParentOfChildHalt } from './child-halt.js';
 import {
+  isJobContinuePrompt,
   listRunningDetachedJobs,
   planJobContinue,
   turnWatchedDetachedJob,
@@ -1113,12 +1114,18 @@ export class Orchestrator {
       thread = this.requireThread(threadId);
     }
 
+    const autoContinue =
+      isJobContinuePrompt(prompt) ||
+      prompt.trim().startsWith('The previous agent process ended before it finished.');
     const sentAttachments =
-      thread.attachments.length > 0 ? [...thread.attachments] : undefined;
+      !autoContinue && thread.attachments.length > 0
+        ? [...thread.attachments]
+        : undefined;
     appendMessage(threadId, {
       role: 'user',
       text: prompt,
       ...(sentAttachments ? { attachments: sentAttachments } : {}),
+      ...(autoContinue ? { origin: 'continue' as const } : {}),
       ts: new Date().toISOString(),
     });
 
@@ -1131,7 +1138,7 @@ export class Orchestrator {
       thread.worktreePath,
       gitPrompt,
       {
-        attachments: sentAttachments ?? thread.attachments,
+        attachments: autoContinue ? [] : (sentAttachments ?? thread.attachments),
       },
     );
     // Re-assert on every turn (incl. Claude --resume, which drops cachedPrefix).
@@ -1230,8 +1237,9 @@ export class Orchestrator {
     ]
       .filter(Boolean)
       .join('\n\n');
-    // Attachments are consumed on the first turn (like Conductor transcript chips).
-    if (thread.attachments.length > 0) {
+    // Attachments are consumed on the first user turn (like Conductor transcript chips).
+    // Auto-continues leave the composer staging area alone.
+    if (!autoContinue && thread.attachments.length > 0) {
       updateThread(threadId, { attachments: [] });
     }
 

@@ -244,6 +244,15 @@ function userTextToMarkdown(text: string): string {
 }
 
 /** User bubble after send — including the ask-user answer transcript. */
+function looksLikeAutoContinuePrompt(text: string): boolean {
+  const t = text.trim();
+  return (
+    t.startsWith('Detached job still running:') ||
+    t.startsWith('You ended the turn after promising to report later') ||
+    t.startsWith('The previous agent process ended before it finished.')
+  );
+}
+
 function UserMessageText({
   text,
   onThreadLinkClick,
@@ -1877,7 +1886,10 @@ export function ThreadPanel({
                 presentedPlan?.source === 'text' ||
                 presentedPlan?.source === 'exit_plan');
             return (
-              <div key={`${m.ts}-${i}`} className={`msg ${m.role}`}>
+              <div
+                key={`${m.ts}-${i}`}
+                className={`msg ${m.origin === 'continue' ? 'continue' : m.role}`}
+              >
                 {m.role === 'agent' ? (
                   <>
                     <AgentMessage
@@ -1934,6 +1946,10 @@ export function ThreadPanel({
                       onThreadLinkClick={onOpenThreadLink}
                     />
                   </div>
+                ) : m.origin === 'continue' ? (
+                  <div className="msg-continue" title={m.text}>
+                    Sideboard continued the turn
+                  </div>
                 ) : (
                   <div className="msg-user-body">
                     {(m.attachments?.length ?? 0) > 0 && (
@@ -1956,23 +1972,31 @@ export function ThreadPanel({
             );
           })}
           {pendingTranscript && (
-            <div className="msg user pending">
-              <div className="msg-user-body">
-                {pendingAttachments.length > 0 && (
-                  <ComposerAttachmentChips
-                    attachments={pendingAttachments}
-                    className="msg-attachments"
-                    expandImages
-                    onOpen={onSelectFile}
-                  />
-                )}
-                {pendingTranscript ? (
-                  <UserMessageText
-                    text={pendingTranscript}
-                    onThreadLinkClick={onOpenThreadLink}
-                  />
-                ) : null}
-              </div>
+            <div
+              className={`msg ${looksLikeAutoContinuePrompt(pendingTranscript) ? 'continue' : 'user'} pending`}
+            >
+              {looksLikeAutoContinuePrompt(pendingTranscript) ? (
+                <div className="msg-continue" title={pendingTranscript}>
+                  Sideboard continued the turn
+                </div>
+              ) : (
+                <div className="msg-user-body">
+                  {pendingAttachments.length > 0 && (
+                    <ComposerAttachmentChips
+                      attachments={pendingAttachments}
+                      className="msg-attachments"
+                      expandImages
+                      onOpen={onSelectFile}
+                    />
+                  )}
+                  {pendingTranscript ? (
+                    <UserMessageText
+                      text={pendingTranscript}
+                      onThreadLinkClick={onOpenThreadLink}
+                    />
+                  ) : null}
+                </div>
+              )}
             </div>
           )}
           {showStreaming && (

@@ -135,6 +135,42 @@ export function looksLikeHugeToolResultDump(text: string): boolean {
   return looksLikeMinifiedJsDump(t);
 }
 
+/** Shrink wait/stop job JSON without breaking parse (log pane reads `delta`). */
+function clipJobWaitResultJson(content: string): string | undefined {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('{')) return undefined;
+  try {
+    const rec = JSON.parse(trimmed) as Record<string, unknown>;
+    const isJob =
+      typeof rec.stillRunning === 'boolean' ||
+      typeof rec.stopped === 'boolean' ||
+      (typeof rec.delta === 'string' && typeof rec.status === 'string');
+    if (!isJob) return undefined;
+    if (typeof rec.delta === 'string' && rec.delta.length > 3_500) {
+      rec.delta = `…(truncated ${rec.delta.length} chars)\n${rec.delta.slice(-3_500)}`;
+    }
+    if (typeof rec.progress === 'string' && rec.progress.length > 800) {
+      rec.progress = rec.progress.slice(-800);
+    }
+    if (typeof rec.hint === 'string' && rec.hint.length > 240) {
+      rec.hint = rec.hint.slice(0, 240);
+    }
+    let out = JSON.stringify(rec);
+    if (out.length <= TOOL_RESULT_STORE_MAX_CHARS) return out;
+    return JSON.stringify({
+      stillRunning: rec.stillRunning,
+      ok: rec.ok,
+      failed: rec.failed,
+      status: rec.status,
+      id: rec.id,
+      phase: rec.phase,
+      delta: typeof rec.delta === 'string' ? rec.delta.slice(-2_500) : '',
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 /** Store a short slice (or a one-line hint) instead of megabytes of CLI JSON. */
 export function clipToolResultForStore(
   content: string | undefined | null,
@@ -143,6 +179,8 @@ export function clipToolResultForStore(
   if (looksLikeCursorSdkSourceDump(content) || looksLikeMinifiedJsDump(content)) {
     return `${HUGE_TOOL_RESULT_SUMMARY} (${content.length} chars omitted)`;
   }
+  const jobClipped = clipJobWaitResultJson(content);
+  if (jobClipped) return jobClipped;
   if (content.length <= TOOL_RESULT_STORE_MAX_CHARS) return content;
   const head = 5_000;
   const tail = 2_000;

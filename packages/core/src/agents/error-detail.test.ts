@@ -379,6 +379,30 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(clipToolResultForStore('{"ok":true}')).toBe('{"ok":true}');
   });
 
+  it('clips a huge wait_for_job result without breaking JSON', () => {
+    const payload = {
+      stillRunning: true,
+      ok: false,
+      failed: false,
+      status: 'running',
+      id: 'gha-release',
+      phase: 'Build',
+      delta: `${'Refreshing run status every 3 seconds.\n✓ step\n'.repeat(400)}last frame`,
+      progress: 'x'.repeat(2_000),
+      hint: 'Job is still running. '.repeat(20),
+    };
+    const raw = JSON.stringify(payload);
+    expect(raw.length).toBeGreaterThan(8_000);
+    const clipped = clipToolResultForStore(raw);
+    expect(clipped).toBeTruthy();
+    const parsed = JSON.parse(clipped!);
+    expect(parsed.id).toBe('gha-release');
+    expect(parsed.stillRunning).toBe(true);
+    expect(typeof parsed.delta).toBe('string');
+    expect(parsed.delta).toMatch(/last frame/);
+    expect(clipped!.length).toBeLessThanOrEqual(8_000);
+  });
+
   it('summarizes Cursor findFilesWithRipgrep / resource_exhausted instead of asar stacks', () => {
     const tail: string[] = [];
     pushTurnStderr(
