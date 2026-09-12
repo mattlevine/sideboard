@@ -1094,7 +1094,7 @@ export async function updateLinearIssue(
     }
     const cycles = await listLinearTeamCycles(teamId, opts);
     mutationInput.cycleId = resolveLinearCycle(
-      { key: cycles.key || existing?.team?.key || teamId, ...cycles },
+      { ...cycles, key: cycles.key || existing?.team?.key || teamId },
       input.cycle,
     );
   }
