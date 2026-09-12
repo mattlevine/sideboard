@@ -13,6 +13,7 @@ import {
   listLinearCommentsSince,
   listLinearIssuesFiltered,
   listLinearTeams,
+  resolveLinearCycle,
   resolveLinearState,
   resolveLinearTeam,
   rewriteLinearError,
@@ -126,6 +127,22 @@ describe('resolveLinearTeam / resolveLinearState', () => {
     expect(resolveLinearState(TEAM, 'In Progress').id).toBe('state-doing');
     expect(resolveLinearState(TEAM, 'started').id).toBe('state-doing');
     expect(resolveLinearState(TEAM, 'state-done').name).toBe('Done');
+  });
+
+  it('resolves cycle by current, name, number, or none', () => {
+    const team: LinearTeam = {
+      ...TEAM,
+      activeCycle: { id: 'cyc-34', name: 'Week 34', number: 34, isActive: true },
+      cycles: [
+        { id: 'cyc-33', name: 'Week 33', number: 33, isActive: false },
+        { id: 'cyc-34', name: 'Week 34', number: 34, isActive: true },
+      ],
+    };
+    expect(resolveLinearCycle(team, 'current')).toBe('cyc-34');
+    expect(resolveLinearCycle(team, 'Week 33')).toBe('cyc-33');
+    expect(resolveLinearCycle(team, '34')).toBe('cyc-34');
+    expect(resolveLinearCycle(team, 'none')).toBe(null);
+    expect(resolveLinearCycle(team, null)).toBe(null);
   });
 });
 
@@ -355,6 +372,61 @@ describe('Linear GraphQL writes', () => {
     });
     expect(issue.title).toBe('Shipped');
     expect(issue.state?.type).toBe('completed');
+  });
+
+  it('updates an issue cycle by name', async () => {
+    await withAuth();
+    mockGraphql((query, variables) => {
+      if (query.includes('SideboardIssueUpdate')) {
+        expect((variables.input as { cycleId?: string }).cycleId).toBe('cyc-34');
+        return {
+          issueUpdate: {
+            success: true,
+            issue: issueNode({
+              cycle: {
+                id: 'cyc-34',
+                name: 'Week 34',
+                number: 34,
+                startsAt: '2026-08-24T00:00:00.000Z',
+                endsAt: '2026-08-31T00:00:00.000Z',
+              },
+            }),
+          },
+        };
+      }
+      if (query.includes('SideboardTeamCycles')) {
+        return {
+          team: {
+            id: TEAM.id,
+            key: TEAM.key,
+            activeCycle: {
+              id: 'cyc-34',
+              name: 'Week 34',
+              number: 34,
+              startsAt: '2026-08-24T00:00:00.000Z',
+              endsAt: '2026-08-31T00:00:00.000Z',
+            },
+            cycles: {
+              nodes: [
+                {
+                  id: 'cyc-34',
+                  name: 'Week 34',
+                  number: 34,
+                  startsAt: '2026-08-24T00:00:00.000Z',
+                  endsAt: '2026-08-31T00:00:00.000Z',
+                },
+              ],
+            },
+          },
+        };
+      }
+      if (query.includes('SideboardIssue')) {
+        return { issue: issueNode({ team: { id: TEAM.id, key: TEAM.key, name: TEAM.name } }) };
+      }
+      throw new Error(`unexpected query ${query.slice(0, 80)}`);
+    });
+    const issue = await updateLinearIssue({ id: 'ENG-9', cycle: 'Week 34' });
+    expect(issue.cycle).toMatchObject({ name: 'Week 34', number: 34, isActive: false });
   });
 
   it('comments on an issue', async () => {

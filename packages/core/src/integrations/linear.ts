@@ -22,7 +22,7 @@ const LIST_ISSUE_FIELDS = `
   assignee { id name }
   team { id key }
   labels(first: 10) { nodes { name } }
-  cycle { name number startsAt endsAt completedAt }
+  cycle { id name number startsAt endsAt completedAt }
 `;
 
 const ISSUE_REF_FIELDS = `
@@ -50,7 +50,7 @@ const ISSUE_FIELDS = `
   creator { id name }
   team { id key name }
   labels(first: 50) { nodes { name } }
-  cycle { name number startsAt endsAt completedAt }
+  cycle { id name number startsAt endsAt completedAt }
   project { id name }
   parent { ${ISSUE_REF_FIELDS} }
   children(first: 25) { nodes { ${ISSUE_REF_FIELDS} } }
@@ -140,6 +140,20 @@ query SideboardTeams {
       key
       name
       states(first: 50) { nodes { id name type } }
+      activeCycle { id name number startsAt endsAt completedAt }
+    }
+  }
+}
+`;
+
+const TEAM_CYCLES_QUERY = `
+query SideboardTeamCycles($id: String!) {
+  team(id: $id) {
+    id
+    key
+    activeCycle { id name number startsAt endsAt completedAt }
+    cycles(first: 40) {
+      nodes { id name number startsAt endsAt completedAt }
     }
   }
 }
@@ -248,11 +262,20 @@ export interface LinearWorkflowState {
   type: string;
 }
 
+export interface LinearCycle {
+  id: string;
+  name: string;
+  number?: number;
+  isActive: boolean;
+}
+
 export interface LinearTeam {
   id: string;
   key: string;
   name: string;
   states: LinearWorkflowState[];
+  activeCycle?: LinearCycle | null;
+  cycles?: LinearCycle[];
 }
 
 export interface LinearIssueRef {
@@ -302,7 +325,7 @@ export interface LinearIssue {
   creator?: { id: string; name: string };
   team?: { id: string; key: string; name: string; states: LinearWorkflowState[] };
   labels: string[];
-  cycle?: { name: string; number?: number; isActive: boolean } | null;
+  cycle?: { id?: string; name: string; number?: number; isActive: boolean } | null;
   project?: { id: string; name: string };
   parent?: LinearIssueRef;
   children: LinearIssueRef[];
@@ -408,13 +431,45 @@ export function linearCycleIsActive(
   return true;
 }
 
+function cycleDisplayName(node: {
+  name?: string;
+  number?: number;
+} | null | undefined): string {
+  return String(node?.name ?? (node?.number != null ? `Cycle ${node.number}` : '')).trim();
+}
+
+function mapNamedCycle(
+  node:
+    | {
+        id?: string;
+        name?: string;
+        number?: number;
+        startsAt?: string;
+        endsAt?: string;
+        completedAt?: string | null;
+      }
+    | null
+    | undefined,
+): LinearCycle | null {
+  if (!node?.id) return null;
+  const name = cycleDisplayName(node);
+  if (!name) return null;
+  return {
+    id: String(node.id),
+    name,
+    number: typeof node.number === 'number' ? node.number : undefined,
+    isActive: linearCycleIsActive(node),
+  };
+}
+
 function mapCycle(
   node: LinearIssueNode['cycle'],
 ): LinearIssue['cycle'] {
   if (!node?.name && node?.number == null) return null;
-  const name = String(node.name ?? (node.number != null ? `Cycle ${node.number}` : '')).trim();
+  const name = cycleDisplayName(node);
   if (!name) return null;
   return {
+    ...(node.id ? { id: String(node.id) } : {}),
     name,
     number: typeof node.number === 'number' ? node.number : undefined,
     isActive: linearCycleIsActive(node),
@@ -572,7 +627,13 @@ function mapTeam(node: {
   key?: string;
   name?: string;
   states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> };
+  activeCycle?: LinearIssueNode['cycle'];
+  cycles?: { nodes?: Array<NonNullable<LinearIssueNode['cycle']>> };
 }): LinearTeam {
+  const cycles = (node.cycles?.nodes ?? []).flatMap((c) => {
+    const cycle = mapNamedCycle(c);
+    return cycle ? [cycle] : [];
+  });
   return {
     id: String(node.id ?? ''),
     key: String(node.key ?? ''),
@@ -581,6 +642,8 @@ function mapTeam(node: {
       const state = mapState(s);
       return state ? [state] : [];
     }),
+    activeCycle: mapNamedCycle(node.activeCycle),
+    ...(cycles.length ? { cycles } : {}),
   };
 }
 
@@ -615,6 +678,37 @@ export function resolveLinearState(
     throw new Error(`Linear state not found on ${team.key}: ${state}. Available: ${available}`);
   }
   return found;
+}
+
+export function resolveLinearCycle(
+  team: Pick<LinearTeam, 'key' | 'activeCycle' | 'cycles'>,
+  cycle: string | null,
+): string | null {
+  if (cycle == null) return null;
+  const s = cycle.trim();
+  if (!s || /^(none|clear|unschedule|null)$/i.test(s)) return null;
+  if (/^(current|active|this)$/i.test(s)) {
+    const active =
+      team.activeCycle ?? team.cycles?.find((c) => c.isActive);
+    if (!active?.id) {
+      throw new Error(`Linear team ${team.key} has no active cycle`);
+    }
+    return active.id;
+  }
+  const lower = s.toLowerCase();
+  const asNumber = Number.parseInt(s, 10);
+  const cycles = team.cycles ?? [];
+  const found =
+    cycles.find((c) => c.id === s) ||
+    cycles.find((c) => c.name.toLowerCase() === lower) ||
+    (Number.isInteger(asNumber) ? cycles.find((c) => c.number === asNumber) : undefined);
+  if (!found) {
+    const available =
+      cycles.map((c) => (c.number != null ? `${c.name} (${c.number})` : c.name)).join(', ') ||
+      '(none)';
+    throw new Error(`Linear cycle not found on ${team.key}: ${cycle}. Available: ${available}`);
+  }
+  return found.id;
 }
 
 function normalizePriority(priority: number | undefined): number | undefined {
@@ -859,6 +953,7 @@ export async function listLinearTeams(
         key?: string;
         name?: string;
         states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> };
+        activeCycle?: LinearIssueNode['cycle'];
       }>;
     };
   }>(TEAMS_QUERY, undefined, opts);
@@ -868,6 +963,30 @@ export async function listLinearTeams(
       name: String(json.viewer?.name ?? ''),
     },
     teams: (json.teams?.nodes ?? []).map(mapTeam),
+  };
+}
+
+export async function listLinearTeamCycles(
+  teamId: string,
+  opts?: { apiKey?: string | null },
+): Promise<Pick<LinearTeam, 'id' | 'key' | 'activeCycle' | 'cycles'>> {
+  const json = await linearGraphql<{
+    team?: {
+      id?: string;
+      key?: string;
+      activeCycle?: LinearIssueNode['cycle'];
+      cycles?: { nodes?: Array<NonNullable<LinearIssueNode['cycle']>> };
+    } | null;
+  }>(TEAM_CYCLES_QUERY, { id: teamId }, opts);
+  if (!json.team?.id) {
+    throw new Error(`Linear team not found: ${teamId}`);
+  }
+  const mapped = mapTeam(json.team);
+  return {
+    id: mapped.id,
+    key: mapped.key,
+    activeCycle: mapped.activeCycle,
+    cycles: mapped.cycles ?? [],
   };
 }
 
@@ -941,6 +1060,8 @@ export async function updateLinearIssue(
     state?: string;
     assignee?: string | null;
     priority?: number;
+    /** Cycle name, number, "current"/"active", or "none" to unschedule. */
+    cycle?: string | null;
   },
   opts?: { apiKey?: string | null },
 ): Promise<LinearIssue> {
@@ -955,15 +1076,27 @@ export async function updateLinearIssue(
   if (input.description !== undefined) {
     mutationInput.description = input.description;
   }
+  const needsTeam = Boolean(input.state?.trim()) || input.cycle !== undefined;
+  const existing = needsTeam ? await getLinearIssue(issueId, opts) : undefined;
   if (input.state?.trim()) {
-    const existing = await getLinearIssue(issueId, opts);
     const { teams } = await listLinearTeams(opts);
-    const teamRef = existing.team?.key || existing.team?.id;
+    const teamRef = existing?.team?.key || existing?.team?.id;
     const team = teamRef ? resolveLinearTeam(teams, teamRef) : undefined;
     if (!team?.states.length) {
-      throw new Error(`Linear issue ${existing.identifier} has no workflow states to resolve "${input.state}"`);
+      throw new Error(`Linear issue ${existing?.identifier ?? issueId} has no workflow states to resolve "${input.state}"`);
     }
     mutationInput.stateId = resolveLinearState(team, input.state).id;
+  }
+  if (input.cycle !== undefined) {
+    const teamId = existing?.team?.id;
+    if (!teamId) {
+      throw new Error(`Linear issue ${existing?.identifier ?? issueId} has no team to resolve a cycle`);
+    }
+    const cycles = await listLinearTeamCycles(teamId, opts);
+    mutationInput.cycleId = resolveLinearCycle(
+      { key: cycles.key || existing?.team?.key || teamId, ...cycles },
+      input.cycle,
+    );
   }
   if (input.assignee !== undefined) {
     const assignee = input.assignee?.trim() || null;
@@ -978,7 +1111,7 @@ export async function updateLinearIssue(
     mutationInput.priority = normalizePriority(input.priority);
   }
   if (Object.keys(mutationInput).length === 0) {
-    throw new Error('linear_update_issue needs at least one of title, description, state, assignee, priority');
+    throw new Error('linear_update_issue needs at least one of title, description, state, assignee, priority, cycle');
   }
 
   const json = await linearGraphql<{

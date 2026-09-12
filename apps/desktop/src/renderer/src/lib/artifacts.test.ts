@@ -3,9 +3,11 @@ import {
   extractArtifacts,
   extractFenceArtifacts,
   extractToolArtifacts,
+  inferJobLogStatus,
   joinLogChunks,
   latestArtifact,
   mergeAppendableArtifact,
+  settleLogStatusAfterStream,
 } from './artifacts';
 import type { MessagePart } from '@sideboard-ai/core';
 
@@ -268,7 +270,39 @@ describe('log artifacts', () => {
     expect(merged?.kind).toBe('log');
     expect(merged?.content).toBe('[1/2] Building\n[2/2] Signing');
     expect(merged?.phase).toBe('Signing');
-    expect(merged?.status).toBe('running');
+    expect(merged?.status).toBe('ok');
+  });
+
+  it('keeps working while a log tool is still streaming', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't1',
+        name: 'present_artifact',
+        status: 'done',
+        input: {
+          artifact_id: 'mac-release',
+          type: 'log',
+          title: 'Mac pack',
+          content: '[1/2] Building',
+          status: 'running',
+        },
+      },
+      {
+        type: 'tool',
+        id: 't2',
+        name: 'present_artifact',
+        status: 'running',
+        input: {
+          artifact_id: 'mac-release',
+          type: 'log',
+          title: 'Mac pack',
+          content: '[2/2] Signing',
+          status: 'running',
+        },
+      },
+    ];
+    expect(latestArtifact('', parts)?.status).toBe('running');
   });
 
   it('accepts a short log chunk (under the html minimum)', () => {
@@ -432,6 +466,92 @@ describe('log artifacts', () => {
     expect(arts).toHaveLength(1);
     expect(arts[0]!.id).toBe('tool-fly-deploy');
     expect(arts[0]!.status).toBe('running');
+  });
+
+  it('marks the log done when wait finished without a status field', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'w1',
+        name: 'wait_for_job',
+        status: 'done',
+        input: { id: 'gha-release' },
+        result: JSON.stringify({
+          stillRunning: false,
+          ok: true,
+          failed: false,
+          id: 'gha-release',
+          delta: '✓ desktop',
+        }),
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts[0]!.status).toBe('ok');
+    expect(arts[0]!.content).toBe('✓ desktop');
+  });
+
+  it('marks the log done when wait_for_job completed with no parseable result', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'w1',
+        name: 'wait_for_job',
+        status: 'done',
+        input: { id: 'gha-release' },
+      },
+    ];
+    expect(extractToolArtifacts(parts)[0]!.status).toBe('ok');
+  });
+
+  it('settles a leftover working pill after the stream unless the job is still running', () => {
+    const running: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'w1',
+        name: 'wait_for_job',
+        status: 'done',
+        input: { id: 'core-test' },
+        result: JSON.stringify({
+          stillRunning: true,
+          status: 'running',
+          id: 'core-test',
+          delta: 'PASS 1',
+        }),
+      },
+    ];
+    const art = {
+      id: 'tool-core-test',
+      title: 'core-test',
+      kind: 'log' as const,
+      language: 'log',
+      content: 'PASS 1',
+      source: 'tool' as const,
+      status: 'running' as const,
+    };
+    expect(settleLogStatusAfterStream(art, running).status).toBe('running');
+    expect(settleLogStatusAfterStream(art, []).status).toBe('ok');
+    expect(
+      settleLogStatusAfterStream(art, [
+        {
+          type: 'tool',
+          id: 'p1',
+          name: 'present_artifact',
+          status: 'done',
+          input: {
+            artifact_id: 'core-test',
+            type: 'log',
+            content: 'PASS 1',
+            status: 'running',
+          },
+        },
+      ]).status,
+    ).toBe('ok');
+  });
+
+  it('infers ok from stillRunning/ok even when status says running', () => {
+    expect(
+      inferJobLogStatus({ stillRunning: false, ok: true, status: 'running' }),
+    ).toBe('ok');
   });
 
   it('does not treat an unrelated shell JSON dump as a job log', () => {

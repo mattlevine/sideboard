@@ -4,6 +4,7 @@ import {
   flattenToolInput,
   latestArtifact,
   mergeAppendableArtifact,
+  settleLogStatusAfterStream,
   toolShortName,
   unwrapToolResultPayload,
   type ChatArtifact,
@@ -452,4 +453,13 @@ export function latestRightPaneContent(
   ];
   if (panes.length) return panes[panes.length - 1]!;
   return latestArtifact(text, parts, idPrefix);
+}
+
+/** Chat stream ended — flip a leftover `working` log pill unless the job is still running. */
+export function finalizeRightPaneAfterStream(
+  content: RightPaneContent,
+  parts?: MessagePart[],
+): RightPaneContent {
+  if (!isDocumentPane(content) || content.kind !== 'log') return content;
+  return settleLogStatusAfterStream(content, parts);
 }
