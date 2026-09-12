@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.189] - 2026-09-12
+
+### Fixed
+
+- Log panes no longer stay on **working** after the chat stream ends. Wait/stop JSON is inferred from `stillRunning` / `ok` / `failed`, and a leftover running pill settles to done unless the last completed wait still says the detached job is running.
+
+### Added
+
+- `linear_update_issue` can set or clear a cycle (`current` / `active`, name, number, or `none`).
+
 ## [0.1.188] - 2026-09-12
 
 ### Fixed
