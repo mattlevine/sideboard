@@ -28,6 +28,7 @@ import {
 import type { FilePickerRequest } from './schema/FileManagerColumn';
 import {
   finalizeRightPaneAfterStream,
+  findLiveTabReplaceIndex,
   isFilesPane,
   isSchemaPane,
   latestRightPaneContent,
@@ -1537,13 +1538,7 @@ export function ThreadPanel({
         const candidate = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
         if (!candidate) return prev;
         const settled = finalizeRightPaneAfterStream(candidate, m.parts);
-        const liveIdx = prev.tabs.findIndex(
-          (t) =>
-            t.id.startsWith('live') ||
-            t.id.startsWith('schema-live') ||
-            t.id.startsWith('files-live') ||
-            sameRightPane(t, settled),
-        );
+        const liveIdx = findLiveTabReplaceIndex(prev.tabs, settled);
         if (liveIdx < 0) return prev;
         const session = upsertRightPaneTab(prev.tabs, settled, {
           activate: false,

@@ -54,7 +54,7 @@ describe('isAsarPath', () => {
 });
 
 describe('scoreNodeForAgentRuntime', () => {
-  it('prefers even LTS ≥20 over odd Current', () => {
+  it('prefers even LTS ≥22 over odd Current', () => {
     expect(
       scoreNodeForAgentRuntime({ path: '/opt/homebrew/opt/node@22/bin/node', version: 'v22.14.0' }),
     ).toBeGreaterThan(
@@ -80,12 +80,26 @@ describe('scoreNodeForAgentRuntime', () => {
     expect(realLts).toBeGreaterThan(aliased);
   });
 
-  it('rejects Node <20 below engines', () => {
+  it('rejects Node <22 below engines', () => {
     expect(
       scoreNodeForAgentRuntime({ path: '/usr/local/bin/node', version: 'v18.20.0' }),
     ).toBeLessThan(
       scoreNodeForAgentRuntime({ path: '/opt/homebrew/bin/node', version: 'v23.6.0' }),
     );
+    expect(
+      scoreNodeForAgentRuntime({ path: '/opt/homebrew/opt/node@20/bin/node', version: 'v20.19.0' }),
+    ).toBeLessThan(
+      scoreNodeForAgentRuntime({ path: '/opt/homebrew/opt/node@22/bin/node', version: 'v22.14.0' }),
+    );
+  });
+
+  it('prefers Node 24 LTS over Node 22', () => {
+    expect(
+      pickPreferredNodeBin([
+        { path: '/opt/homebrew/opt/node@22/bin/node', version: 'v22.14.0' },
+        { path: '/opt/homebrew/opt/node@24/bin/node', version: 'v24.8.0' },
+      ]),
+    ).toBe('/opt/homebrew/opt/node@24/bin/node');
   });
 });
 

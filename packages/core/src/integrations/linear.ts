@@ -697,7 +697,14 @@ export function resolveLinearCycle(
   }
   const lower = s.toLowerCase();
   const asNumber = Number.parseInt(s, 10);
-  const cycles = team.cycles ?? [];
+  const seen = new Set<string>();
+  const cycles = [team.activeCycle, ...(team.cycles ?? [])].filter(
+    (c): c is NonNullable<typeof c> => {
+      if (!c?.id || seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    },
+  );
   const found =
     cycles.find((c) => c.id === s) ||
     cycles.find((c) => c.name.toLowerCase() === lower) ||
@@ -903,7 +910,12 @@ export async function listLinearCommentsSince(opts: {
       first,
       filter: {
         createdAt: { gte: opts.since },
-        issue: buildLinearIssueFilter({ assignee, query: query || undefined }),
+        issue: buildLinearIssueFilter({
+          assignee,
+          // Search hits may match identifier/comments — do not also require
+          // title/description contains when an allowlist is already applied.
+          query: restrictToIssues ? undefined : query || undefined,
+        }),
       },
     },
     opts,

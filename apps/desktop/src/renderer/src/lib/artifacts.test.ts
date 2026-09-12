@@ -343,6 +343,26 @@ describe('log artifacts', () => {
     expect(mergeAppendableArtifact(prev, next).status).toBe('ok');
   });
 
+  it('keeps a custom present_artifact title when wait_for_job uses the job id', () => {
+    const prev = {
+      id: 'tool-core-test',
+      title: 'Core tests',
+      kind: 'log' as const,
+      language: 'log',
+      content: 'start',
+      source: 'tool' as const,
+      status: 'running' as const,
+    };
+    const next = {
+      ...prev,
+      title: 'core-test',
+      content: 'start\nPASS',
+      status: 'ok' as const,
+    };
+    expect(mergeAppendableArtifact(prev, next).title).toBe('Core tests');
+    expect(mergeAppendableArtifact(prev, next).content).toBe('start\nPASS');
+  });
+
   it('opens a log pane from wait_for_job results', () => {
     const parts: MessagePart[] = [
       {

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.190] - 2026-09-12
+
+### Changed
+
+- CI and release Actions run on Node 24 (`checkout` / `setup-node` / `pnpm/action-setup` no longer declare Node 20). Agent runtime prefers even LTS ≥22 and the Homebrew crash hint recommends `node@24`.
+
+### Fixed
+
+- `wait_for_turn` / `get_turn_result` JSON is no longer stored as a detached-job stub, which dropped the child `text`.
+- Linear cycle names resolve against `activeCycle` when that cycle is missing from the first 40 cycles page.
+- Linear comments-since with a search allowlist no longer also requires title/description `contains`, so identifier/comment search hits keep their comments.
+- GitHub comments-since always uses page size 100; `limit` only caps collected rows.
+- Custom `present_artifact` log titles survive later `wait_for_job` updates.
+- Persisting a live right-pane tab after the turn rewrites the matching kind, not the first `live*` pane.
+
 ## [0.1.189] - 2026-09-12
 
 ### Fixed

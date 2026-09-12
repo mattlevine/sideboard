@@ -136,6 +136,30 @@ export function sameRightPane(a: RightPaneContent, b: RightPaneContent): boolean
   return false;
 }
 
+/** Live tab ids written while streaming (`live`, `schema-live`, `files-live`). */
+function isLiveTabId(id: string, kind: RightPaneContent['kind']): boolean {
+  if (kind === 'schema') return id.startsWith('schema-live');
+  if (kind === 'files') return id.startsWith('files-live');
+  return (
+    (id === 'live' || id.startsWith('live-') || id.startsWith('live')) &&
+    !id.startsWith('schema-live') &&
+    !id.startsWith('files-live')
+  );
+}
+
+/**
+ * Which open tab a post-stream persist should rewrite. Prefer same pane /
+ * same kind — never the first `live*` tab when a log and an artifact coexist.
+ */
+export function findLiveTabReplaceIndex(
+  tabs: RightPaneContent[],
+  settled: RightPaneContent,
+): number {
+  const same = tabs.findIndex((t) => t.id === settled.id || sameRightPane(t, settled));
+  if (same >= 0) return same;
+  return tabs.findIndex((t) => isLiveTabId(t.id, settled.kind) && t.kind === settled.kind);
+}
+
 /**
  * Insert or merge a right-pane tab.
  * New tabs always become active. Existing-tab updates keep `activeId` unless

@@ -157,7 +157,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     ).toBe(true);
     expect(
       looksLikeRetryableRunnerCrash(
-        'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.',
+        'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.',
       ),
     ).toBe(true);
     expect(looksLikeRetryableRunnerCrash('')).toBe(true);
@@ -271,9 +271,9 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     );
     const summary = summarizeTurnStderr(tail);
     expect(summary).toMatch(/Homebrew Node \+ shared libuv/i);
-    expect(summary).toMatch(/brew install node@22/);
+    expect(summary).toMatch(/brew install node@24/);
     expect(summary).not.toMatch(/0x107aca130/);
-    expect(formatTurnExitError(1, summary)).toMatch(/brew install node@22/);
+    expect(formatTurnExitError(1, summary)).toMatch(/brew install node@24/);
   });
 
   it('does not tell users to brew-install Node when bundled official Node aborted', () => {
@@ -403,6 +403,34 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(clipped!.length).toBeLessThanOrEqual(8_000);
   });
 
+  it('does not treat wait_for_turn JSON as a job wait stub', () => {
+    const payload = {
+      stillRunning: false,
+      status: 'idle',
+      id: 'thread-child',
+      text: `Recommendation\n\n${'x'.repeat(9_000)}`,
+      progress: 'Child finished.',
+      hint: 'Turn completed.',
+    };
+    const raw = JSON.stringify(payload);
+    expect(raw.length).toBeGreaterThan(8_000);
+    const clipped = clipToolResultForStore(raw);
+    expect(clipped).toBeTruthy();
+    expect(clipped).toContain('Recommendation');
+    expect(clipped).not.toMatch(/"delta":""/);
+    const parsed = (() => {
+      try {
+        return JSON.parse(clipped!);
+      } catch {
+        return null;
+      }
+    })();
+    if (parsed) {
+      expect(parsed.text).toBeTruthy();
+      expect(parsed.delta).toBeUndefined();
+    }
+  });
+
   it('summarizes Cursor findFilesWithRipgrep / resource_exhausted instead of asar stacks', () => {
     const tail: string[] = [];
     pushTurnStderr(
@@ -431,7 +459,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
 
   it('puts runner crashes into chat text when the agent said nothing', () => {
     const detail =
-      'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.';
+      'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.';
     expect(turnFailChatText({ exitCode: 1, assistantText: '', detail })).toBe(detail);
     expect(
       turnFailChatText({
@@ -454,7 +482,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(
       shouldFeedErrorBackToAgent({
         detail:
-          'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.',
+          'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.',
       }),
     ).toBe(true);
     expect(

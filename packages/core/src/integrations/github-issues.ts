@@ -197,7 +197,7 @@ export async function listGitHubIssueCommentsSince(opts: {
       .filter((n): n is number => n != null),
   );
   if (restrictToIssues && allowed.size === 0) return [];
-  const pageSize = Math.min(GITHUB_ISSUE_COMMENTS_PAGE_SIZE, Math.max(1, limit));
+  const pageSize = GITHUB_ISSUE_COMMENTS_PAGE_SIZE;
   const out: IssueActivityComment[] = [];
   for (let page = 1; page <= GITHUB_ISSUE_COMMENTS_MAX_PAGES; page++) {
     const path =

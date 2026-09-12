@@ -168,18 +168,17 @@ describe('listGitHubIssueCommentsSince', () => {
     gh.mockImplementation(async (args: string[]) => {
       const path = String(args[1] ?? '');
       const page = path.includes('page=2') ? 2 : 1;
+      const noise = {
+        body: 'Noise',
+        created_at: '2026-09-11T12:00:00.000Z',
+        issue_url: 'https://api.github.com/repos/acme/app/issues/99',
+        user: { login: 'ada' },
+      };
       return {
         exitCode: 0,
         stdout: JSON.stringify(
           page === 1
-            ? [
-                {
-                  body: 'Noise',
-                  created_at: '2026-09-11T12:00:00.000Z',
-                  issue_url: 'https://api.github.com/repos/acme/app/issues/99',
-                  user: { login: 'ada' },
-                },
-              ]
+            ? Array.from({ length: 100 }, () => noise)
             : [
                 {
                   body: 'On mine',
@@ -207,6 +206,7 @@ describe('listGitHubIssueCommentsSince', () => {
       },
     ]);
     expect(gh).toHaveBeenCalledTimes(2);
+    expect(String(gh.mock.calls[0]?.[0]?.[1] ?? '')).toContain('per_page=100');
     expect(String(gh.mock.calls[1]?.[0]?.[1] ?? '')).toContain('page=2');
   });
 });

@@ -135,17 +135,28 @@ export function looksLikeHugeToolResultDump(text: string): boolean {
   return looksLikeMinifiedJsDump(t);
 }
 
+/** True for wait_for_job / stop_job / detached-job JSON — not wait_for_turn. */
+function looksLikeJobWaitResult(rec: Record<string, unknown>): boolean {
+  if (typeof rec.delta === 'string') {
+    return (
+      typeof rec.status === 'string' ||
+      typeof rec.id === 'string' ||
+      typeof rec.stillRunning === 'boolean'
+    );
+  }
+  if (typeof rec.stopped === 'boolean') {
+    return typeof rec.id === 'string' || typeof rec.status === 'string';
+  }
+  return rec.started === true || rec.reason === 'already-running';
+}
+
 /** Shrink wait/stop job JSON without breaking parse (log pane reads `delta`). */
 function clipJobWaitResultJson(content: string): string | undefined {
   const trimmed = content.trim();
   if (!trimmed.startsWith('{')) return undefined;
   try {
     const rec = JSON.parse(trimmed) as Record<string, unknown>;
-    const isJob =
-      typeof rec.stillRunning === 'boolean' ||
-      typeof rec.stopped === 'boolean' ||
-      (typeof rec.delta === 'string' && typeof rec.status === 'string');
-    if (!isJob) return undefined;
+    if (!looksLikeJobWaitResult(rec)) return undefined;
     if (typeof rec.delta === 'string' && rec.delta.length > 3_500) {
       rec.delta = `…(truncated ${rec.delta.length} chars)\n${rec.delta.slice(-3_500)}`;
     }
@@ -215,7 +226,7 @@ const NESTED_ELECTRON_SUMMARY =
   'Cursor local agent crashed at Electron startup (nested Chromium / HasCustomHostObject)';
 
 const HOMEBREW_LIBUV_SUMMARY =
-  'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.';
+  'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.';
 
 const BUNDLED_NODE_CRASH_SUMMARY =
   'Cursor runner crashed in Node. Retry the turn.';
@@ -420,9 +431,9 @@ export function humanizeAgentFailDetail(detail: string): string {
     return /ran out of memory/i.test(raw) ? raw : V8_OOM_SUMMARY;
   }
   if (/homebrew node \+ shared libuv|Cellar\/(?:libuv|node)|libuv\.\d+\.dylib/i.test(raw)) {
-    return /brew install node@22/i.test(raw)
+    return /brew install node@(?:22|24)/i.test(raw)
       ? raw
-      : `${raw} — install Node 22 LTS (\`brew install node@22\`) and retry.`;
+      : `${raw} — install Node 24 LTS (\`brew install node@24\`) and retry.`;
   }
   if (/uv_run|spineventloopinternal|uv__io_poll|cursor runner crashed in node/i.test(lower)) {
     return /retry the turn/i.test(raw) ? raw : BUNDLED_NODE_CRASH_SUMMARY;

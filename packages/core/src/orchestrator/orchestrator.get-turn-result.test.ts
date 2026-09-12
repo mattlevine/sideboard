@@ -62,7 +62,7 @@ describe('Orchestrator.getTurnResult', () => {
     const thread = seed({
       status: 'error',
       lastError:
-        'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 22 LTS (`brew install node@22`) and retry.',
+        'Cursor runner crashed in Node (Homebrew Node + shared libuv). Install Node 24 LTS (`brew install node@24`) and retry.',
     });
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.status).toBe('error');
