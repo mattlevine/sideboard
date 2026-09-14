@@ -130,14 +130,41 @@ export function registerGithubIssueTools(server: McpServer): void {
     },
   );
 
+  const relationInputSchema = z.object({
+    type: z.string().describe('blocks or blockedBy (this issue\'s view).'),
+    issue: z.string().describe('Related issue #123 or URL.'),
+  });
+
   server.tool(
     'github_update_issue',
-    'Update a GitHub issue (#123). Pass title, body, and/or state (open|closed). When reviewing a PR or ticket, wait until they type a next step before changing the issue — do not ask_user after the review. The author is notified.',
+    'Update a GitHub issue (#123). Pass title, body, state (open|closed), labels, project, parent, and/or relations. labels replaces all names (pass [] to clear). project is a Project title, or "none" to remove. parent is #123 or "none". relations adds blockedBy/blocks; removeRelations drops them (`gh` 2.94+). When reviewing a PR or ticket, wait until they type a next step before changing the issue — do not ask_user after the review. The author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),
       body: z.string().optional(),
       state: z.string().optional().describe('open or closed'),
+      labels: z
+        .array(z.string())
+        .optional()
+        .describe('Replace all labels. Empty array clears. Call github_get_issue first to keep existing.'),
+      project: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('GitHub Project title, or "none" to remove current projects.'),
+      parent: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Parent issue #123 or URL, or "none" to unset.'),
+      relations: z
+        .array(relationInputSchema)
+        .optional()
+        .describe('Add blockedBy or blocks relations (issue #123 or URL).'),
+      removeRelations: z
+        .array(relationInputSchema)
+        .optional()
+        .describe('Remove blockedBy or blocks relations.'),
       repoPath: repoPathSchema,
     },
     async (args) => {

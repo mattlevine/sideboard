@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ableTimeDependencyTarget,
   commentAbleTimeTask,
   createAbleTimeTask,
   ensureAbleTimeTask,
@@ -23,6 +24,9 @@ describe('abletime helpers', () => {
     expect(normalizeAbleTimeHost('track.abletime.com')).toBe('https://track.abletime.com');
     expect(abletimeMcpUrl('https://track.abletime.com/')).toBe(
       'https://track.abletime.com/api/public/v2/mcp',
+    );
+    expect(abletimeMcpUrl('https://track.abletime.com/', { pm: true })).toBe(
+      'https://track.abletime.com/api/public/v2/mcp/pm',
     );
   });
 
@@ -68,6 +72,17 @@ describe('abletime helpers', () => {
       identifier: 'CRM-232',
       provider: 'abletime',
       assignee: 'Grant',
+    });
+  });
+
+  it('maps blockedBy / blocks onto set_task_dependency ids', () => {
+    expect(ableTimeDependencyTarget('A', 'blockedBy', 'B')).toEqual({
+      taskId: 'A',
+      dependsOn: 'B',
+    });
+    expect(ableTimeDependencyTarget('A', 'blocks', 'B')).toEqual({
+      taskId: 'B',
+      dependsOn: 'A',
     });
   });
 });
@@ -201,6 +216,50 @@ describe('ensureAbleTimeTask', () => {
       .find((body) => body.params?.name === 'create_task');
     expect(createCall.params.arguments.parent).toBe('CRM-232');
     expect(createCall.params.arguments.description).toMatch(/Spin-off of CRM-232/);
+  });
+
+  it('updates labels, project, parent, and a blockedBy dependency', async () => {
+    const fetchMock = mockTools({
+      orientation: { projects: [{ id: 'p1', name: 'Acme', categories: [] }] },
+      update_task: { id: 't1', reference: 'CRM-232', title: 'Fix login', tags: ['bug'] },
+      set_task_dependency: { id: 't1', depends_on: 'CRM-8' },
+      get_task: {
+        id: 't1',
+        reference: 'CRM-232',
+        title: 'Fix login',
+        tags: ['bug'],
+        project_id: 'p1',
+      },
+    });
+    const updated = await updateAbleTimeTask(
+      {
+        id: 'CRM-232',
+        labels: ['bug'],
+        project: 'Acme',
+        parent: 'CRM-1',
+        relations: [{ type: 'blockedBy', issue: 'CRM-8' }],
+      },
+      { token: 'apt_test' },
+    );
+    expect(updated.labels).toEqual(['bug']);
+    const calls = fetchMock.mock.calls.map(([url, init]) => ({
+      url: String(url),
+      body: JSON.parse(String((init as RequestInit).body)) as {
+        params?: { name?: string; arguments?: Record<string, unknown> };
+      },
+    }));
+    const update = calls.find((call) => call.body.params?.name === 'update_task');
+    expect(update?.body.params?.arguments).toMatchObject({
+      tags: ['bug'],
+      project_id: 'p1',
+      parent: 'CRM-1',
+    });
+    const dep = calls.find((call) => call.body.params?.name === 'set_task_dependency');
+    expect(dep?.url).toContain('/api/public/v2/mcp/pm');
+    expect(dep?.body.params?.arguments).toMatchObject({
+      task_id: 'CRM-232',
+      depends_on: 'CRM-8',
+    });
   });
 });
 

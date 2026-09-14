@@ -162,9 +162,16 @@ export function registerLinearTools(server: McpServer): void {
     },
   );
 
+  const relationInputSchema = z.object({
+    type: z
+      .string()
+      .describe('blocks, blockedBy, related, duplicate, or duplicateOf (this issue\'s view).'),
+    issue: z.string().describe('Related issue uuid or identifier (ENG-123).'),
+  });
+
   server.tool(
     'linear_update_issue',
-    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, priority, and/or cycle. Cycle is name, number, "current"/"active", or "none" to unschedule. When reviewing a PR or ticket, wait until they type a next step before changing the ticket — do not ask_user after the review. The author is notified.',
+    'Update a Linear issue (uuid or ENG-123). Pass title, description, state, assignee, priority, cycle, labels, project, parent, and/or relations. Cycle/project/parent: name or id, or "none" to clear. labels replaces all names (pass [] to clear; get the issue first to keep existing). relations adds; removeRelations removes by type + issue. When reviewing a PR or ticket, wait until they type a next step before changing the ticket — do not ask_user after the review. The author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),
@@ -177,6 +184,28 @@ export function registerLinearTools(server: McpServer): void {
         .nullable()
         .optional()
         .describe('Cycle name, number, "current"/"active", or "none" to unschedule.'),
+      labels: z
+        .array(z.string())
+        .optional()
+        .describe('Replace all labels (names or ids). Empty array clears. Call linear_get_issue first to keep existing.'),
+      project: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Project name, id, slug, or "none" to unassign.'),
+      parent: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Parent issue uuid or identifier (ENG-123), or "none" to unset.'),
+      relations: z
+        .array(relationInputSchema)
+        .optional()
+        .describe('Add relations from this issue\'s view (blocks, blockedBy, related, duplicate, duplicateOf).'),
+      removeRelations: z
+        .array(relationInputSchema)
+        .optional()
+        .describe('Remove relations by type + related issue (uuid or ENG-123).'),
     },
     async (args) => {
       try {

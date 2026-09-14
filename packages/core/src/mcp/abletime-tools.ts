@@ -168,14 +168,41 @@ export function registerAbleTimeTools(server: McpServer): void {
     },
   );
 
+  const relationInputSchema = z.object({
+    type: z.string().describe('blockedBy (this waits on issue) or blocks (issue waits on this).'),
+    issue: z.string().describe('Related task id or reference (CRM-232).'),
+  });
+
   server.tool(
     'abletime_update_task',
-    'Update an AbleTime task (id or CRM-232). Pass title, description, and/or state. When reviewing a PR or ticket, wait until they type a next step before changing the task — do not ask_user after the review. The author is notified.',
+    'Update an AbleTime task (id or CRM-232). Pass title, description, state, labels, project, parent, and/or relations. labels replaces tags. project is name or id (tasks stay in a project). parent is CRM-232 or "none". relations sets the wait-on dependency (blockedBy/blocks); removeRelations clears it. When reviewing a PR or ticket, wait until they type a next step before changing the task — do not ask_user after the review. The author is notified.',
     {
       id: z.string(),
       title: z.string().optional(),
       description: z.string().optional(),
       state: z.string().optional(),
+      labels: z
+        .array(z.string())
+        .optional()
+        .describe('Replace tags/labels. Empty array clears when the host accepts it.'),
+      project: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Project name or id. AbleTime tasks stay in a project.'),
+      parent: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Parent task id or reference (CRM-232), or "none" to unset.'),
+      relations: z
+        .array(relationInputSchema)
+        .optional()
+        .describe('Set a wait-on dependency: blockedBy or blocks.'),
+      removeRelations: z
+        .array(relationInputSchema)
+        .optional()
+        .describe('Clear a wait-on dependency.'),
     },
     async (args) => {
       try {

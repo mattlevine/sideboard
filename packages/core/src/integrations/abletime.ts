@@ -387,8 +387,85 @@ export async function commentAbleTimeTask(
   };
 }
 
+export interface AbleTimeTaskRelationInput {
+  type: string;
+  /** Related task id or reference (CRM-232). */
+  issue: string;
+}
+
+function isAbleTimeNoneToken(value: string | null | undefined): boolean {
+  if (value == null) return true;
+  const s = value.trim();
+  return !s || /^(none|clear|unschedule|null)$/i.test(s);
+}
+
+function taskIdArgs(id: string): Record<string, string> {
+  return { id, task_id: id, task: id };
+}
+
+/** AbleTime set_task_dependency: this task waits on `dependsOn` (blockedBy). */
+export function ableTimeDependencyTarget(
+  thisId: string,
+  type: string,
+  relatedId: string,
+): { taskId: string; dependsOn: string | null } {
+  const s = type.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  if (s === 'none' || s === 'clear' || s === 'null') {
+    return { taskId: thisId, dependsOn: null };
+  }
+  if (s === 'blockedby' || s === 'blocked' || s === 'dependson' || s === 'waiton') {
+    return { taskId: thisId, dependsOn: relatedId };
+  }
+  if (s === 'blocks' || s === 'blocking') {
+    return { taskId: relatedId, dependsOn: thisId };
+  }
+  throw new Error(
+    `AbleTime relation type must be blocks or blockedBy (got ${type}). AbleTime models one wait-on dependency.`,
+  );
+}
+
+async function setAbleTimeTaskDependency(
+  taskId: string,
+  dependsOn: string | null,
+  opts?: { token?: string | null; host?: string | null },
+): Promise<void> {
+  const args: Record<string, unknown> = {
+    ...taskIdArgs(taskId),
+  };
+  if (dependsOn) {
+    args.depends_on = dependsOn;
+    args.depends_on_id = dependsOn;
+    args.dependency = dependsOn;
+    args.dependency_id = dependsOn;
+    args.blocked_by = dependsOn;
+    args.wait_on = dependsOn;
+    args.related_task_id = dependsOn;
+  } else {
+    args.depends_on = null;
+    args.dependency = null;
+    args.blocked_by = null;
+    args.clear = true;
+  }
+  await callAbleTimeTool('set_task_dependency', args, opts);
+}
+
 export async function updateAbleTimeTask(
-  input: { id: string; title?: string; description?: string; state?: string },
+  input: {
+    id: string;
+    title?: string;
+    description?: string;
+    state?: string;
+    /** Replace tags/labels. Empty array clears when the host accepts it. */
+    labels?: string[];
+    /** Project name or id. AbleTime tasks stay in a project — "none" is rejected. */
+    project?: string | null;
+    /** Parent task id or reference, or "none" to unset. */
+    parent?: string | null;
+    /** Add a wait-on dependency (blockedBy / blocks). */
+    relations?: AbleTimeTaskRelationInput[];
+    /** Clear a wait-on dependency. */
+    removeRelations?: AbleTimeTaskRelationInput[];
+  },
   opts?: { token?: string | null; host?: string | null },
 ): Promise<AbleTimeTask> {
   const id = input.id.trim();
@@ -396,33 +473,77 @@ export async function updateAbleTimeTask(
   const title = input.title?.trim();
   const description = input.description;
   const state = input.state?.trim();
-  if (!title && description === undefined && !state) {
-    throw new Error('abletime_update_task needs at least one of title, description, state');
+  const addRelations = input.relations?.length ? input.relations : undefined;
+  const removeRelations = input.removeRelations?.length ? input.removeRelations : undefined;
+  const updateArgs: Record<string, unknown> = { ...taskIdArgs(id) };
+  if (title) updateArgs.title = title;
+  if (description !== undefined) updateArgs.description = description;
+  if (input.labels !== undefined) {
+    updateArgs.tags = input.labels;
+    updateArgs.labels = input.labels;
+    updateArgs.tag_names = input.labels;
+  }
+  if (input.project !== undefined) {
+    if (isAbleTimeNoneToken(input.project)) {
+      throw new Error('AbleTime tasks stay in a project — pass a project name or id');
+    }
+    const project = await resolveAbleTimeProject(input.project, opts);
+    updateArgs.project = project.id;
+    updateArgs.project_id = project.id;
+  }
+  if (input.parent !== undefined) {
+    if (isAbleTimeNoneToken(input.parent)) {
+      updateArgs.parent = null;
+      updateArgs.parent_id = null;
+      updateArgs.related_task_id = null;
+    } else {
+      const parent = (input.parent ?? '').trim();
+      updateArgs.parent = parent;
+      updateArgs.parent_id = parent;
+      updateArgs.related_task_id = parent;
+    }
+  }
+  const hasUpdateFields =
+    Boolean(title) ||
+    description !== undefined ||
+    input.labels !== undefined ||
+    input.project !== undefined ||
+    input.parent !== undefined;
+  if (!hasUpdateFields && !state && !addRelations && !removeRelations) {
+    throw new Error(
+      'abletime_update_task needs at least one of title, description, state, labels, project, parent, relations, removeRelations',
+    );
   }
   if (state) {
     await callAbleTimeTool(
       'set_task_state',
-      { id, task_id: id, task: id, state },
+      { ...taskIdArgs(id), state },
       opts,
     ).catch(async () => {
       await callAbleTimeTool(
         'update_task',
-        { id, task_id: id, title, description, state },
+        { ...updateArgs, state },
         opts,
       );
     });
   }
-  if (title || description !== undefined) {
-    await callAbleTimeTool(
-      'update_task',
-      {
-        id,
-        task_id: id,
-        ...(title ? { title } : {}),
-        ...(description !== undefined ? { description } : {}),
-      },
-      opts,
-    );
+  if (hasUpdateFields) {
+    await callAbleTimeTool('update_task', updateArgs, opts);
+  }
+  for (const rel of removeRelations ?? []) {
+    const related = rel.issue.trim() || id;
+    const target = ableTimeDependencyTarget(id, rel.type, related);
+    await setAbleTimeTaskDependency(target.taskId, null, opts);
+  }
+  for (const rel of addRelations ?? []) {
+    const related = rel.issue.trim();
+    if (!related) throw new Error('AbleTime relations.issue is required (id or CRM-232)');
+    const target = ableTimeDependencyTarget(id, rel.type, related);
+    if (!target.dependsOn) {
+      await setAbleTimeTaskDependency(target.taskId, null, opts);
+      continue;
+    }
+    await setAbleTimeTaskDependency(target.taskId, target.dependsOn, opts);
   }
   return getAbleTimeTask(id, opts);
 }
