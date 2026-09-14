@@ -8,12 +8,17 @@ import {
   commentLinearIssue,
   flipLinearRelationType,
   getLinearIssue,
+  isLinearNoneToken,
   linearCycleIsActive,
+  linearRelationCreateInput,
   listLinearAssignedIssues,
   listLinearCommentsSince,
   listLinearIssuesFiltered,
   listLinearTeams,
+  normalizeLinearRelationType,
   resolveLinearCycle,
+  resolveLinearLabel,
+  resolveLinearProject,
   resolveLinearState,
   resolveLinearTeam,
   rewriteLinearError,
@@ -75,6 +80,7 @@ function issueNode(overrides: Record<string, unknown> = {}) {
     relations: {
       nodes: [
         {
+          id: 'rel-blocks',
           type: 'blocks',
           relatedIssue: {
             id: 'blocked-uuid',
@@ -88,6 +94,7 @@ function issueNode(overrides: Record<string, unknown> = {}) {
     inverseRelations: {
       nodes: [
         {
+          id: 'rel-blocked-by',
           type: 'blocks',
           issue: {
             id: 'blocker-uuid',
@@ -197,6 +204,53 @@ describe('flipLinearRelationType', () => {
     expect(flipLinearRelationType('blockedBy')).toBe('blocks');
     expect(flipLinearRelationType('duplicate')).toBe('duplicateOf');
     expect(flipLinearRelationType('related')).toBe('related');
+  });
+});
+
+describe('resolveLinearLabel / resolveLinearProject', () => {
+  const labels = [
+    { id: 'lab-1', name: 'Bug' },
+    { id: 'lab-2', name: 'p0' },
+  ];
+  const projects = [
+    { id: 'proj-1', name: 'Ship', slugId: 'ship' },
+    { id: 'proj-2', name: 'Infra' },
+  ];
+
+  it('resolves labels by name or id', () => {
+    expect(resolveLinearLabel(labels, 'bug').id).toBe('lab-1');
+    expect(resolveLinearLabel(labels, 'lab-2').name).toBe('p0');
+  });
+
+  it('resolves project by name, slug, id, or none', () => {
+    expect(resolveLinearProject(projects, 'ship')).toBe('proj-1');
+    expect(resolveLinearProject(projects, 'Infra')).toBe('proj-2');
+    expect(resolveLinearProject(projects, 'proj-1')).toBe('proj-1');
+    expect(resolveLinearProject(projects, 'none')).toBe(null);
+    expect(resolveLinearProject(projects, null)).toBe(null);
+    expect(isLinearNoneToken('clear')).toBe(true);
+  });
+});
+
+describe('linearRelationCreateInput', () => {
+  it('normalizes aliases and swaps inverse types', () => {
+    expect(normalizeLinearRelationType('blocked-by')).toBe('blockedBy');
+    expect(normalizeLinearRelationType('duplicate_of')).toBe('duplicateOf');
+    expect(linearRelationCreateInput('a', 'blocks', 'b')).toEqual({
+      issueId: 'a',
+      relatedIssueId: 'b',
+      type: 'blocks',
+    });
+    expect(linearRelationCreateInput('a', 'blockedBy', 'b')).toEqual({
+      issueId: 'b',
+      relatedIssueId: 'a',
+      type: 'blocks',
+    });
+    expect(linearRelationCreateInput('a', 'duplicateOf', 'b')).toEqual({
+      issueId: 'b',
+      relatedIssueId: 'a',
+      type: 'duplicate',
+    });
   });
 });
 
@@ -440,6 +494,158 @@ describe('Linear GraphQL writes', () => {
     expect(issue.cycle).toMatchObject({ name: 'Week 34', number: 34, isActive: false });
   });
 
+  it('updates labels, project, and parent', async () => {
+    await withAuth();
+    mockGraphql((query, variables) => {
+      if (query.includes('SideboardIssueUpdate')) {
+        expect(variables.id).toBe('ENG-9');
+        expect(variables.input).toMatchObject({
+          labelIds: ['lab-1', 'lab-2'],
+          projectId: 'proj-1',
+          parentId: 'parent-1',
+        });
+        return {
+          issueUpdate: {
+            success: true,
+            issue: issueNode({
+              labels: { nodes: [{ name: 'Bug' }, { name: 'p0' }] },
+              project: { id: 'proj-1', name: 'Ship' },
+              parent: {
+                id: 'parent-1',
+                identifier: 'ENG-1',
+                title: 'Epic',
+                url: 'https://linear.app/acme/issue/ENG-1',
+              },
+            }),
+          },
+        };
+      }
+      if (query.includes('SideboardLabels')) {
+        return {
+          issueLabels: {
+            nodes: [
+              { id: 'lab-1', name: 'Bug' },
+              { id: 'lab-2', name: 'p0' },
+            ],
+          },
+        };
+      }
+      if (query.includes('SideboardProjects')) {
+        return { projects: { nodes: [{ id: 'proj-1', name: 'Ship', slugId: 'ship' }] } };
+      }
+      if (query.includes('SideboardIssue')) {
+        return { issue: issueNode({ id: 'parent-1', identifier: 'ENG-1' }) };
+      }
+      throw new Error(`unexpected query ${query.slice(0, 80)}`);
+    });
+    const issue = await updateLinearIssue({
+      id: 'ENG-9',
+      labels: ['bug', 'p0'],
+      project: 'Ship',
+      parent: 'ENG-1',
+    });
+    expect(issue.labels).toEqual(['Bug', 'p0']);
+    expect(issue.project).toEqual({ id: 'proj-1', name: 'Ship' });
+    expect(issue.parent?.identifier).toBe('ENG-1');
+  });
+
+  it('clears project and parent with none', async () => {
+    await withAuth();
+    mockGraphql((query, variables) => {
+      if (query.includes('SideboardIssueUpdate')) {
+        expect(variables.input).toEqual({ projectId: null, parentId: null });
+        return {
+          issueUpdate: {
+            success: true,
+            issue: issueNode({ project: null, parent: null }),
+          },
+        };
+      }
+      throw new Error(`unexpected query ${query.slice(0, 80)}`);
+    });
+    const issue = await updateLinearIssue({ id: 'ENG-9', project: 'none', parent: 'none' });
+    expect(issue.project).toBeUndefined();
+    expect(issue.parent).toBeUndefined();
+  });
+
+  it('adds a blockedBy relation by swapping issue ids', async () => {
+    await withAuth();
+    const created: Array<Record<string, unknown>> = [];
+    mockGraphql((query, variables) => {
+      if (query.includes('SideboardIssueRelationCreate')) {
+        created.push(variables.input as Record<string, unknown>);
+        return { issueRelationCreate: { success: true, issueRelation: { id: 'rel-new', type: 'blocks' } } };
+      }
+      if (query.includes('SideboardIssue')) {
+        if ((variables.id as string) === 'ENG-2' || (variables.id as string) === 'blocker-uuid') {
+          return {
+            issue: issueNode({
+              id: 'blocker-uuid',
+              identifier: 'ENG-2',
+              title: 'Unblock ship',
+            }),
+          };
+        }
+        return {
+          issue: issueNode({
+            id: 'issue-uuid',
+            identifier: 'ENG-9',
+            relations: { nodes: [] },
+            inverseRelations: { nodes: [] },
+          }),
+        };
+      }
+      throw new Error(`unexpected query ${query.slice(0, 80)}`);
+    });
+    const issue = await updateLinearIssue({
+      id: 'ENG-9',
+      relations: [{ type: 'blockedBy', issue: 'ENG-2' }],
+    });
+    expect(created).toEqual([
+      { issueId: 'blocker-uuid', relatedIssueId: 'issue-uuid', type: 'blocks' },
+    ]);
+    expect(issue.identifier).toBe('ENG-9');
+  });
+
+  it('removes a relation by type and identifier', async () => {
+    await withAuth();
+    const deleted: string[] = [];
+    mockGraphql((query, variables) => {
+      if (query.includes('SideboardIssueRelationDelete')) {
+        deleted.push(String(variables.id));
+        return { issueRelationDelete: { success: true } };
+      }
+      if (query.includes('SideboardIssue')) {
+        return {
+          issue: issueNode({
+            id: 'issue-uuid',
+            relations: {
+              nodes: [
+                {
+                  id: 'rel-blocks',
+                  type: 'blocks',
+                  relatedIssue: {
+                    id: 'blocked-uuid',
+                    identifier: 'ENG-8',
+                    title: 'Depends on ship',
+                    url: 'https://linear.app/acme/issue/ENG-8',
+                  },
+                },
+              ],
+            },
+            inverseRelations: { nodes: [] },
+          }),
+        };
+      }
+      throw new Error(`unexpected query ${query.slice(0, 80)}`);
+    });
+    await updateLinearIssue({
+      id: 'ENG-9',
+      removeRelations: [{ type: 'blocks', issue: 'ENG-8' }],
+    });
+    expect(deleted).toEqual(['rel-blocks']);
+  });
+
   it('comments on an issue', async () => {
     await withAuth();
     mockGraphql((_query, variables) => {
@@ -471,10 +677,12 @@ describe('Linear GraphQL writes', () => {
     ]);
     expect(issue.relations).toEqual([
       {
+        id: 'rel-blocks',
         type: 'blocks',
         issue: expect.objectContaining({ identifier: 'ENG-8' }),
       },
       {
+        id: 'rel-blocked-by',
         type: 'blockedBy',
         issue: expect.objectContaining({ identifier: 'ENG-2' }),
       },

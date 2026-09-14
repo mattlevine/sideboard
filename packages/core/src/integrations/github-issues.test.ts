@@ -3,6 +3,7 @@ import {
   commentGitHubIssue,
   createGitHubIssue,
   getGitHubIssue,
+  githubRelationEditFlag,
   listGitHubIssueCommentsSince,
   parseGitHubIssueNumber,
   updateGitHubIssue,
@@ -28,6 +29,13 @@ describe('parseGitHubIssueNumber', () => {
     expect(parseGitHubIssueNumber('#12')).toBe(12);
     expect(parseGitHubIssueNumber('gh-12')).toBe(12);
     expect(parseGitHubIssueNumber('https://github.com/acme/app/issues/12')).toBe(12);
+  });
+});
+
+describe('githubRelationEditFlag', () => {
+  it('maps blockedBy / blocks to gh issue edit flags', () => {
+    expect(githubRelationEditFlag('blocked-by')).toBe('--add-blocked-by');
+    expect(githubRelationEditFlag('blocks', true)).toBe('--remove-blocking');
   });
 });
 
@@ -111,6 +119,59 @@ describe('github issue writes', () => {
     expect(spin.identifier).toBe('#13');
     const createArgs = gh.mock.calls.find((call) => call[0]?.[1] === 'create')?.[0] as string[];
     expect(createArgs.join(' ')).toMatch(/Spin-off of #12/);
+  });
+
+  it('updates labels, project, parent, and blocked-by', async () => {
+    gh.mockImplementation(async (args: string[]) => {
+      if (args[1] === 'view') {
+        const json = args.includes('projectItems,projects')
+          ? { projectItems: [{ title: 'Old board' }], projects: [] }
+          : {
+              number: 12,
+              title: 'Fix login',
+              url: 'https://github.com/acme/app/issues/12',
+              state: 'OPEN',
+              labels: [{ name: 'old' }],
+              assignees: [],
+              comments: [],
+            };
+        return { exitCode: 0, stdout: JSON.stringify(json), stderr: '' };
+      }
+      if (args[1] === 'edit') {
+        return { exitCode: 0, stdout: '', stderr: '' };
+      }
+      return { exitCode: 1, stdout: '', stderr: `unexpected ${args.join(' ')}` };
+    });
+    await updateGitHubIssue(
+      {
+        id: '#12',
+        labels: ['bug'],
+        project: 'Roadmap',
+        parent: '#10',
+        relations: [{ type: 'blockedBy', issue: '#8' }],
+      },
+      { repoPath: '/tmp/repo' },
+    );
+    const edit = gh.mock.calls.find((call) => call[0]?.[1] === 'edit')?.[0] as string[];
+    expect(edit).toEqual(
+      expect.arrayContaining([
+        'issue',
+        'edit',
+        '12',
+        '--add-label',
+        'bug',
+        '--remove-label',
+        'old',
+        '--add-project',
+        'Roadmap',
+        '--remove-project',
+        'Old board',
+        '--parent',
+        '10',
+        '--add-blocked-by',
+        '8',
+      ]),
+    );
   });
 });
 

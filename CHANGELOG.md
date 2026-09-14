@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `linear_update_issue` can set labels (replace names/ids), project, parent, and relations (`blocks` / `blockedBy` / `related` / `duplicate` / `duplicateOf`; `removeRelations` to drop one).
+- `github_update_issue` can set labels, project, parent, and blocked-by / blocking relations (`gh issue edit`; relations need `gh` 2.94+).
+- `abletime_update_task` can set labels/tags, project, parent, and the wait-on dependency (`set_task_dependency` on the PM MCP endpoint).
+
 ## [0.1.190] - 2026-09-12
 
 ### Changed

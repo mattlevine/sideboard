@@ -276,16 +276,122 @@ export async function commentGitHubIssue(
   return { body, url };
 }
 
+export interface GitHubIssueRelationInput {
+  type: string;
+  /** Related issue #123 or URL. */
+  issue: string;
+}
+
+function isGitHubNoneToken(value: string | null | undefined): boolean {
+  if (value == null) return true;
+  const s = value.trim();
+  return !s || /^(none|clear|unschedule|null)$/i.test(s);
+}
+
+/** Map this-issue-view type to `gh issue edit` add/remove flags. */
+export function githubRelationEditFlag(type: string, remove = false): string {
+  const s = type.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  if (s === 'blockedby' || s === 'blocked' || s === 'dependson') {
+    return remove ? '--remove-blocked-by' : '--add-blocked-by';
+  }
+  if (s === 'blocks' || s === 'blocking') {
+    return remove ? '--remove-blocking' : '--add-blocking';
+  }
+  throw new Error(
+    `GitHub relation type must be blocks or blockedBy (got ${type}). Parent is a separate parent= field.`,
+  );
+}
+
+function labelsEqual(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function parseProjectTitles(raw: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (name: string) => {
+    const title = name.trim();
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) return;
+    seen.add(key);
+    out.push(title);
+  };
+  const fromItems = raw.projectItems ?? raw.projects ?? raw.projectItemsV2;
+  if (Array.isArray(fromItems)) {
+    for (const item of fromItems) {
+      if (typeof item === 'string') {
+        push(item);
+        continue;
+      }
+      if (!item || typeof item !== 'object') continue;
+      const rec = item as Record<string, unknown>;
+      const nested =
+        rec.project && typeof rec.project === 'object'
+          ? (rec.project as Record<string, unknown>)
+          : rec;
+      const title = String(nested.title ?? nested.name ?? rec.title ?? rec.name ?? '').trim();
+      if (title) push(title);
+    }
+  }
+  return out;
+}
+
+async function listGitHubIssueProjects(
+  number: number,
+  cwd: string,
+  repoArgs: string[],
+): Promise<string[]> {
+  const result = await gh(
+    ['issue', 'view', String(number), ...repoArgs, '--json', 'projectItems,projects'],
+    cwd,
+    { reject: false },
+  );
+  if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+  try {
+    const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+    return parseProjectTitles(parsed);
+  } catch {
+    return [];
+  }
+}
+
 export async function updateGitHubIssue(
-  input: { id: string; title?: string; body?: string; state?: string },
+  input: {
+    id: string;
+    title?: string;
+    body?: string;
+    state?: string;
+    /** Replace all labels. Empty array clears. */
+    labels?: string[];
+    /** Project title, or "none" to remove current projects. */
+    project?: string | null;
+    /** Parent issue #123 or URL, or "none" to unset. */
+    parent?: string | null;
+    /** Add blockedBy / blocks relations. */
+    relations?: GitHubIssueRelationInput[];
+    /** Remove blockedBy / blocks relations. */
+    removeRelations?: GitHubIssueRelationInput[];
+  },
   opts?: { repoPath?: string | null },
 ): Promise<GitHubIssue> {
   const number = parseGitHubIssueNumber(input.id);
   const title = input.title?.trim();
   const body = input.body;
   const state = input.state?.trim().toLowerCase();
-  if (!title && body === undefined && !state) {
-    throw new Error('github_update_issue needs at least one of title, body, state');
+  const addRelations = input.relations?.length ? input.relations : undefined;
+  const removeRelations = input.removeRelations?.length ? input.removeRelations : undefined;
+  const hasEditFields =
+    Boolean(title) ||
+    body !== undefined ||
+    input.labels !== undefined ||
+    input.project !== undefined ||
+    input.parent !== undefined ||
+    Boolean(addRelations) ||
+    Boolean(removeRelations);
+  if (!hasEditFields && !state) {
+    throw new Error(
+      'github_update_issue needs at least one of title, body, state, labels, project, parent, relations, removeRelations',
+    );
   }
   const { cwd, repoArgs } = await resolveGitHubIssueRepo(opts?.repoPath);
   if (state === 'closed' || state === 'close') {
@@ -301,10 +407,46 @@ export async function updateGitHubIssue(
   } else if (state) {
     throw new Error(`GitHub issue state must be open or closed (got ${input.state})`);
   }
-  if (title || body !== undefined) {
-    const args = ['issue', 'edit', String(number), ...repoArgs];
-    if (title) args.push('--title', title);
-    if (body !== undefined) args.push('--body', body);
+  const args = ['issue', 'edit', String(number), ...repoArgs];
+  if (title) args.push('--title', title);
+  if (body !== undefined) args.push('--body', body);
+  if (input.labels !== undefined) {
+    const existing = await getGitHubIssue(String(number), opts);
+    const desired = input.labels.map((name) => name.trim()).filter(Boolean);
+    const add = desired.filter((name) => !existing.labels.some((cur) => labelsEqual(cur, name)));
+    const remove = existing.labels.filter((cur) => !desired.some((name) => labelsEqual(cur, name)));
+    if (add.length) args.push('--add-label', add.join(','));
+    if (remove.length) args.push('--remove-label', remove.join(','));
+  }
+  if (input.project !== undefined) {
+    const current = await listGitHubIssueProjects(number, cwd, repoArgs);
+    if (isGitHubNoneToken(input.project)) {
+      for (const name of current) args.push('--remove-project', name);
+    } else {
+      const wanted = (input.project ?? '').trim();
+      if (!current.some((name) => labelsEqual(name, wanted))) {
+        args.push('--add-project', wanted);
+      }
+      for (const name of current) {
+        if (!labelsEqual(name, wanted)) args.push('--remove-project', name);
+      }
+    }
+  }
+  if (input.parent !== undefined) {
+    if (isGitHubNoneToken(input.parent)) {
+      args.push('--remove-parent');
+    } else {
+      args.push('--parent', String(parseGitHubIssueNumber(input.parent ?? '')));
+    }
+  }
+  for (const rel of removeRelations ?? []) {
+    args.push(githubRelationEditFlag(rel.type, true), String(parseGitHubIssueNumber(rel.issue)));
+  }
+  for (const rel of addRelations ?? []) {
+    args.push(githubRelationEditFlag(rel.type, false), String(parseGitHubIssueNumber(rel.issue)));
+  }
+  const editChanged = args.length > 3 + repoArgs.length;
+  if (editChanged) {
     requireGhOk(await gh(args, cwd, { reject: false }), `GitHub edit #${number}`);
   }
   return getGitHubIssue(String(number), opts);

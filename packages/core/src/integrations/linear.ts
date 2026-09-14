@@ -56,12 +56,14 @@ const ISSUE_FIELDS = `
   children(first: 25) { nodes { ${ISSUE_REF_FIELDS} } }
   relations(first: 25) {
     nodes {
+      id
       type
       relatedIssue { ${ISSUE_REF_FIELDS} }
     }
   }
   inverseRelations(first: 25) {
     nodes {
+      id
       type
       issue { ${ISSUE_REF_FIELDS} }
     }
@@ -192,6 +194,39 @@ mutation SideboardCommentCreate($input: CommentCreateInput!) {
 }
 `;
 
+const LABELS_QUERY = `
+query SideboardLabels($first: Int!) {
+  issueLabels(first: $first) {
+    nodes { id name }
+  }
+}
+`;
+
+const PROJECTS_QUERY = `
+query SideboardProjects($first: Int!, $filter: ProjectFilter) {
+  projects(first: $first, filter: $filter) {
+    nodes { id name slugId }
+  }
+}
+`;
+
+const ISSUE_RELATION_CREATE = `
+mutation SideboardIssueRelationCreate($input: IssueRelationCreateInput!) {
+  issueRelationCreate(input: $input) {
+    success
+    issueRelation { id type }
+  }
+}
+`;
+
+const ISSUE_RELATION_DELETE = `
+mutation SideboardIssueRelationDelete($id: String!) {
+  issueRelationDelete(id: $id) {
+    success
+  }
+}
+`;
+
 type LinearUserNode = { id?: string; name?: string } | null;
 
 type LinearIssueRefNode = {
@@ -236,10 +271,10 @@ type LinearIssueNode = {
   parent?: LinearIssueRefNode;
   children?: { nodes?: LinearIssueRefNode[] };
   relations?: {
-    nodes?: Array<{ type?: string; relatedIssue?: LinearIssueRefNode }>;
+    nodes?: Array<{ id?: string; type?: string; relatedIssue?: LinearIssueRefNode }>;
   };
   inverseRelations?: {
-    nodes?: Array<{ type?: string; issue?: LinearIssueRefNode }>;
+    nodes?: Array<{ id?: string; type?: string; issue?: LinearIssueRefNode }>;
   };
   comments?: {
     nodes?: Array<{
@@ -289,6 +324,15 @@ export interface LinearIssueRelation {
   /** Linear relation type from this issue's perspective (blocks, blockedBy, related, duplicate, duplicateOf). */
   type: string;
   issue: LinearIssueRef;
+  /** Relation row id — required to delete. */
+  id?: string;
+}
+
+/** Add or remove a relation from this issue's perspective. */
+export interface LinearIssueRelationInput {
+  type: string;
+  /** Related issue uuid or identifier (ENG-123). */
+  issue: string;
 }
 
 export interface LinearIssueComment {
@@ -515,12 +559,18 @@ function mapRelations(node: LinearIssueNode): LinearIssueRelation[] {
   for (const rel of node.relations?.nodes ?? []) {
     const issue = mapIssueRef(rel.relatedIssue);
     if (!issue) continue;
-    out.push({ type: String(rel.type ?? 'related'), issue });
+    const id = rel.id?.trim();
+    out.push({ type: String(rel.type ?? 'related'), issue, ...(id ? { id } : {}) });
   }
   for (const rel of node.inverseRelations?.nodes ?? []) {
     const issue = mapIssueRef(rel.issue);
     if (!issue) continue;
-    out.push({ type: flipLinearRelationType(String(rel.type ?? 'related')), issue });
+    const id = rel.id?.trim();
+    out.push({
+      type: flipLinearRelationType(String(rel.type ?? 'related')),
+      issue,
+      ...(id ? { id } : {}),
+    });
   }
   return out;
 }
@@ -718,6 +768,210 @@ export function resolveLinearCycle(
   return found.id;
 }
 
+export type LinearNamedRef = { id: string; name: string };
+
+const LINEAR_NONE_RE = /^(none|clear|unschedule|null)$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isLinearNoneToken(value: string | null | undefined): boolean {
+  if (value == null) return true;
+  const s = value.trim();
+  return !s || LINEAR_NONE_RE.test(s);
+}
+
+export function resolveLinearLabel(labels: LinearNamedRef[], name: string): LinearNamedRef {
+  const s = name.trim();
+  if (!s) throw new Error('Linear label is empty');
+  const lower = s.toLowerCase();
+  const found =
+    labels.find((x) => x.id === s) || labels.find((x) => x.name.toLowerCase() === lower);
+  if (!found) {
+    const available = labels.map((x) => x.name).filter(Boolean).slice(0, 20).join(', ') || '(none)';
+    throw new Error(`Linear label not found: ${name}. Available: ${available}`);
+  }
+  return found;
+}
+
+export type LinearProjectRef = LinearNamedRef & { slugId?: string };
+
+export function resolveLinearProject(
+  projects: LinearProjectRef[],
+  project: string | null,
+): string | null {
+  if (isLinearNoneToken(project)) return null;
+  const s = (project ?? '').trim();
+  const lower = s.toLowerCase();
+  const found =
+    projects.find((x) => x.id === s) ||
+    projects.find((x) => x.name.toLowerCase() === lower) ||
+    projects.find((x) => x.slugId?.toLowerCase() === lower);
+  if (!found) {
+    const available = projects.map((x) => x.name).filter(Boolean).slice(0, 20).join(', ') || '(none)';
+    throw new Error(`Linear project not found: ${project}. Available: ${available}`);
+  }
+  return found.id;
+}
+
+/** This-issue-view types agents pass on update (includes inverses). */
+export function normalizeLinearRelationType(type: string): string {
+  const s = type.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  if (s === 'blocks' || s === 'block') return 'blocks';
+  if (s === 'blockedby' || s === 'blocked') return 'blockedBy';
+  if (s === 'related' || s === 'relates' || s === 'relatesto') return 'related';
+  if (s === 'duplicate' || s === 'dup') return 'duplicate';
+  if (s === 'duplicateof' || s === 'original') return 'duplicateOf';
+  if (s === 'similar') return 'similar';
+  throw new Error(
+    `Linear relation type must be blocks, blockedBy, related, duplicate, or duplicateOf (got ${type})`,
+  );
+}
+
+/**
+ * Map a this-issue-view relation into issueRelationCreate IDs.
+ * `blockedBy` / `duplicateOf` swap the pair and use the forward API type.
+ */
+export function linearRelationCreateInput(
+  thisIssueId: string,
+  type: string,
+  relatedIssueId: string,
+): { issueId: string; relatedIssueId: string; type: string } {
+  const view = normalizeLinearRelationType(type);
+  if (view === 'blockedBy') {
+    return { issueId: relatedIssueId, relatedIssueId: thisIssueId, type: 'blocks' };
+  }
+  if (view === 'duplicateOf') {
+    return { issueId: relatedIssueId, relatedIssueId: thisIssueId, type: 'duplicate' };
+  }
+  return { issueId: thisIssueId, relatedIssueId: relatedIssueId, type: view };
+}
+
+function relationMatches(
+  rel: LinearIssueRelation,
+  type: string,
+  issueRef: string,
+): boolean {
+  if (rel.type.toLowerCase() !== type.toLowerCase()) return false;
+  const ref = issueRef.trim().toLowerCase();
+  return rel.issue.id.toLowerCase() === ref || rel.issue.identifier.toLowerCase() === ref;
+}
+
+function formatRelationList(relations: LinearIssueRelation[]): string {
+  if (!relations.length) return '(none)';
+  return relations.map((r) => `${r.type} ${r.issue.identifier || r.issue.id}`).join(', ');
+}
+
+async function listLinearLabels(
+  opts?: { apiKey?: string | null },
+): Promise<LinearNamedRef[]> {
+  const json = await linearGraphql<{
+    issueLabels?: { nodes?: Array<{ id?: string; name?: string }> };
+  }>(LABELS_QUERY, { first: 250 }, opts);
+  return (json.issueLabels?.nodes ?? []).flatMap((node) => {
+    const id = String(node.id ?? '').trim();
+    const name = String(node.name ?? '').trim();
+    if (!id) return [];
+    return [{ id, name }];
+  });
+}
+
+async function listLinearProjects(
+  filter: Record<string, unknown> | undefined,
+  opts?: { apiKey?: string | null },
+): Promise<LinearProjectRef[]> {
+  const json = await linearGraphql<{
+    projects?: { nodes?: Array<{ id?: string; name?: string; slugId?: string }> };
+  }>(PROJECTS_QUERY, { first: 50, filter: filter ?? {} }, opts);
+  return (json.projects?.nodes ?? []).flatMap((node) => {
+    const id = String(node.id ?? '').trim();
+    if (!id) return [];
+    return [
+      {
+        id,
+        name: String(node.name ?? ''),
+        ...(node.slugId ? { slugId: String(node.slugId) } : {}),
+      },
+    ];
+  });
+}
+
+async function resolveLinearProjectId(
+  project: string | null,
+  opts?: { apiKey?: string | null },
+): Promise<string | null> {
+  if (isLinearNoneToken(project)) return null;
+  const s = (project ?? '').trim();
+  const filter = UUID_RE.test(s) ? { id: { eq: s } } : { name: { eqIgnoreCase: s } };
+  const matched = await listLinearProjects(filter, opts);
+  try {
+    return resolveLinearProject(matched, s);
+  } catch {
+    if (UUID_RE.test(s)) return s;
+    const listed = await listLinearProjects(undefined, opts);
+    return resolveLinearProject(listed, s);
+  }
+}
+
+async function resolveLinearLabelIds(
+  names: string[],
+  opts?: { apiKey?: string | null },
+): Promise<string[]> {
+  if (names.length === 0) return [];
+  const labels = await listLinearLabels(opts);
+  return names.map((name) => {
+    const s = name.trim();
+    try {
+      return resolveLinearLabel(labels, s).id;
+    } catch (error) {
+      if (UUID_RE.test(s)) return s;
+      throw error;
+    }
+  });
+}
+
+async function applyLinearIssueRelations(
+  issue: LinearIssue,
+  add: LinearIssueRelationInput[] | undefined,
+  remove: LinearIssueRelationInput[] | undefined,
+  opts?: { apiKey?: string | null },
+): Promise<void> {
+  const current = [...issue.relations];
+  for (const rel of remove ?? []) {
+    const type = normalizeLinearRelationType(rel.type);
+    const issueRef = rel.issue.trim();
+    if (!issueRef) throw new Error('Linear removeRelations.issue is required (uuid or ENG-123)');
+    const match = current.find((r) => relationMatches(r, type, issueRef));
+    if (!match?.id) {
+      throw new Error(
+        `Linear relation not found: ${type} ${issueRef}. Existing: ${formatRelationList(current)}`,
+      );
+    }
+    const json = await linearGraphql<{
+      issueRelationDelete?: { success?: boolean };
+    }>(ISSUE_RELATION_DELETE, { id: match.id }, opts);
+    if (!json.issueRelationDelete?.success) {
+      throw new Error(`Linear issueRelationDelete failed (${type} ${issueRef})`);
+    }
+    const idx = current.indexOf(match);
+    if (idx >= 0) current.splice(idx, 1);
+  }
+  for (const rel of add ?? []) {
+    const type = normalizeLinearRelationType(rel.type);
+    const issueRef = rel.issue.trim();
+    if (!issueRef) throw new Error('Linear relations.issue is required (uuid or ENG-123)');
+    if (current.some((r) => relationMatches(r, type, issueRef))) continue;
+    const related = await getLinearIssue(issueRef, opts);
+    const input = linearRelationCreateInput(issue.id, type, related.id);
+    const json = await linearGraphql<{
+      issueRelationCreate?: { success?: boolean };
+    }>(ISSUE_RELATION_CREATE, { input }, opts);
+    if (!json.issueRelationCreate?.success) {
+      throw new Error(`Linear issueRelationCreate failed (${type} ${related.identifier})`);
+    }
+    current.push({ type, issue: related, id: undefined });
+  }
+}
+
 function normalizePriority(priority: number | undefined): number | undefined {
   if (priority == null) return undefined;
   if (!Number.isInteger(priority) || priority < 0 || priority > 4) {
@@ -733,9 +987,6 @@ export type LinearAssignedIssuesResult = {
 
 /** `me`, `unassigned`, `all`, a Linear user id, or a display name. */
 export type LinearAssigneeFilter = string;
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function assigneeFilterKey(assignee?: string | null): string {
   return (assignee ?? '').trim();
@@ -1074,6 +1325,16 @@ export async function updateLinearIssue(
     priority?: number;
     /** Cycle name, number, "current"/"active", or "none" to unschedule. */
     cycle?: string | null;
+    /** Replace all labels (names or ids). Empty array clears. */
+    labels?: string[];
+    /** Project name, id, slug, or "none" to unassign. */
+    project?: string | null;
+    /** Parent issue uuid or identifier, or "none" to unset. */
+    parent?: string | null;
+    /** Add relations from this issue's view (blocks, blockedBy, related, duplicate, duplicateOf). */
+    relations?: LinearIssueRelationInput[];
+    /** Remove relations by type + related issue. */
+    removeRelations?: LinearIssueRelationInput[];
   },
   opts?: { apiKey?: string | null },
 ): Promise<LinearIssue> {
@@ -1088,8 +1349,14 @@ export async function updateLinearIssue(
   if (input.description !== undefined) {
     mutationInput.description = input.description;
   }
-  const needsTeam = Boolean(input.state?.trim()) || input.cycle !== undefined;
-  const existing = needsTeam ? await getLinearIssue(issueId, opts) : undefined;
+  const addRelations = input.relations?.length ? input.relations : undefined;
+  const removeRelations = input.removeRelations?.length ? input.removeRelations : undefined;
+  const needsIssue =
+    Boolean(input.state?.trim()) ||
+    input.cycle !== undefined ||
+    Boolean(addRelations) ||
+    Boolean(removeRelations);
+  const existing = needsIssue ? await getLinearIssue(issueId, opts) : undefined;
   if (input.state?.trim()) {
     const { teams } = await listLinearTeams(opts);
     const teamRef = existing?.team?.key || existing?.team?.id;
@@ -1122,17 +1389,47 @@ export async function updateLinearIssue(
   if (input.priority !== undefined) {
     mutationInput.priority = normalizePriority(input.priority);
   }
-  if (Object.keys(mutationInput).length === 0) {
-    throw new Error('linear_update_issue needs at least one of title, description, state, assignee, priority, cycle');
+  if (input.labels !== undefined) {
+    mutationInput.labelIds = await resolveLinearLabelIds(input.labels, opts);
+  }
+  if (input.project !== undefined) {
+    mutationInput.projectId = await resolveLinearProjectId(input.project, opts);
+  }
+  if (input.parent !== undefined) {
+    if (isLinearNoneToken(input.parent)) {
+      mutationInput.parentId = null;
+    } else {
+      const parent = await getLinearIssue((input.parent ?? '').trim(), opts);
+      mutationInput.parentId = parent.id;
+    }
+  }
+  const hasIssueFields = Object.keys(mutationInput).length > 0;
+  const hasRelationWrites = Boolean(addRelations || removeRelations);
+  if (!hasIssueFields && !hasRelationWrites) {
+    throw new Error(
+      'linear_update_issue needs at least one of title, description, state, assignee, priority, cycle, labels, project, parent, relations, removeRelations',
+    );
   }
 
-  const json = await linearGraphql<{
-    issueUpdate?: { success?: boolean; issue?: LinearIssueNode | null };
-  }>(ISSUE_UPDATE, { id: issueId, input: mutationInput }, opts);
-  if (!json.issueUpdate?.success || !json.issueUpdate.issue) {
-    throw new Error('Linear issueUpdate failed');
+  let updated: LinearIssue | undefined;
+  if (hasIssueFields) {
+    const json = await linearGraphql<{
+      issueUpdate?: { success?: boolean; issue?: LinearIssueNode | null };
+    }>(ISSUE_UPDATE, { id: issueId, input: mutationInput }, opts);
+    if (!json.issueUpdate?.success || !json.issueUpdate.issue) {
+      throw new Error('Linear issueUpdate failed');
+    }
+    updated = mapIssue(json.issueUpdate.issue);
   }
-  return mapIssue(json.issueUpdate.issue);
+  if (hasRelationWrites) {
+    const base = updated ?? existing;
+    if (!base) {
+      throw new Error(`Linear issue not found: ${issueId}`);
+    }
+    await applyLinearIssueRelations(base, addRelations, removeRelations, opts);
+    return getLinearIssue(base.id || issueId, opts);
+  }
+  return updated!;
 }
 
 export async function commentLinearIssue(

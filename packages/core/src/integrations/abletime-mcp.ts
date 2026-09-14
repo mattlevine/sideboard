@@ -7,8 +7,25 @@ import {
 
 export const DEFAULT_ABLETIME_HOST = 'https://track.abletime.com';
 export const ABLETIME_MCP_PATH = '/api/public/v2/mcp';
+export const ABLETIME_MCP_PM_PATH = '/api/public/v2/mcp/pm';
 
 const MCP_PROTOCOL_VERSION = '2025-03-26';
+
+/** Project-management tools live on `/mcp/pm`, not the time-tracking endpoint. */
+export const ABLETIME_PM_TOOL_NAMES = [
+  'set_task_assignee',
+  'set_task_priority',
+  'set_task_stage',
+  'set_task_dependency',
+  'set_task_blocked',
+  'set_task_locked',
+  'set_task_schedule',
+  'clear_task_schedule',
+  'archive_task',
+  'delete_task',
+] as const;
+
+export type AbleTimePmToolName = (typeof ABLETIME_PM_TOOL_NAMES)[number];
 
 export type AbleTimeMcpToolName =
   | 'orientation'
@@ -29,7 +46,12 @@ export type AbleTimeMcpToolName =
   | 'list_projects'
   | 'list_users'
   | 'tool_schema'
-  | 'full_catalog';
+  | 'full_catalog'
+  | AbleTimePmToolName;
+
+export function abletimeToolUsesPm(name: string): boolean {
+  return (ABLETIME_PM_TOOL_NAMES as readonly string[]).includes(name);
+}
 
 type JsonRpcError = { code?: number; message?: string; data?: unknown };
 
@@ -46,8 +68,12 @@ export function normalizeAbleTimeHost(raw?: string | null): string {
   return withScheme.replace(/\/+$/, '');
 }
 
-export function abletimeMcpUrl(host?: string | null): string {
-  return `${normalizeAbleTimeHost(host)}${ABLETIME_MCP_PATH}`;
+export function abletimeMcpUrl(
+  host?: string | null,
+  opts?: { pm?: boolean },
+): string {
+  const path = opts?.pm ? ABLETIME_MCP_PM_PATH : ABLETIME_MCP_PATH;
+  return `${normalizeAbleTimeHost(host)}${path}`;
 }
 
 export function rewriteAbleTimeError(message: string): string {
@@ -141,7 +167,7 @@ function textsFromUnknown(value: unknown): string {
 export async function abletimeMcpRequest(
   method: string,
   params?: unknown,
-  opts?: { token?: string | null; host?: string | null },
+  opts?: { token?: string | null; host?: string | null; pm?: boolean },
 ): Promise<unknown> {
   const token = (opts?.token ?? getAbleTimeAccessToken())?.trim();
   if (!token) {
@@ -149,6 +175,7 @@ export async function abletimeMcpRequest(
   }
   const url = abletimeMcpUrl(
     opts?.host ?? (opts?.token ? DEFAULT_ABLETIME_HOST : getAbleTimeHost()),
+    { pm: opts?.pm },
   );
   const res = await httpFetch(url, {
     method: 'POST',
@@ -201,6 +228,7 @@ export async function abletimeMcpRequest(
 async function initializeIfNeeded(opts?: {
   token?: string | null;
   host?: string | null;
+  pm?: boolean;
 }): Promise<void> {
   try {
     await abletimeMcpRequest(
@@ -224,14 +252,15 @@ async function initializeIfNeeded(opts?: {
 export async function callAbleTimeTool<T = unknown>(
   name: AbleTimeMcpToolName,
   args: Record<string, unknown> = {},
-  opts?: { token?: string | null; host?: string | null },
+  opts?: { token?: string | null; host?: string | null; pm?: boolean },
 ): Promise<T> {
   if (!opts?.token && !isAbleTimeConnected()) {
     throw new Error('AbleTime is not connected — paste a personal access token in Account settings');
   }
 
+  const requestOpts = { ...opts, pm: opts?.pm ?? abletimeToolUsesPm(name) };
   const call = () =>
-    abletimeMcpRequest('tools/call', { name, arguments: args }, opts).then((result) => {
+    abletimeMcpRequest('tools/call', { name, arguments: args }, requestOpts).then((result) => {
       return unwrapToolResult(result) as T;
     });
 
@@ -240,7 +269,7 @@ export async function callAbleTimeTool<T = unknown>(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (/initialize|session|not initialized|-32000/i.test(message)) {
-      await initializeIfNeeded(opts);
+      await initializeIfNeeded(requestOpts);
       return await call();
     }
     throw err instanceof Error ? new Error(rewriteAbleTimeError(err.message)) : err;
