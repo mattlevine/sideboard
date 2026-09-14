@@ -484,10 +484,11 @@ export async function updateAbleTimeTask(
     updateArgs.tag_names = input.labels;
   }
   if (input.project !== undefined) {
-    if (isAbleTimeNoneToken(input.project)) {
+    const projectName = (input.project ?? '').trim();
+    if (isAbleTimeNoneToken(projectName)) {
       throw new Error('AbleTime tasks stay in a project — pass a project name or id');
     }
-    const project = await resolveAbleTimeProject(input.project, opts);
+    const project = await resolveAbleTimeProject(projectName, opts);
     updateArgs.project = project.id;
     updateArgs.project_id = project.id;
   }
