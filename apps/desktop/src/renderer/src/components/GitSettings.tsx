@@ -68,10 +68,7 @@ export function GitSettings({
     }
   }
 
-  const defaultPrefix =
-    sanitizeGitBranchPrefix(githubStatus?.login) ?? 'username';
-  const previewPrefix =
-    sanitizeGitBranchPrefix(branchPrefixDraft) ?? defaultPrefix;
+  const previewPrefix = sanitizeGitBranchPrefix(branchPrefixDraft);
 
   return (
     <div className="settings-body">
@@ -245,8 +242,7 @@ export function GitSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Branch prefix</div>
         <p className="settings-hint">
-          First segment of renamed task branches. Empty uses your GitHub username
-          {githubStatus?.login ? ` (${githubStatus.login})` : ''}.
+          Optional first segment of renamed task branches. Leave empty for no prefix.
         </p>
         <label className="settings-field" style={{ marginTop: 10 }}>
           <input
@@ -255,13 +251,18 @@ export function GitSettings({
             autoComplete="off"
             value={branchPrefixDraft}
             disabled={busy}
-            placeholder={defaultPrefix}
+            placeholder="none"
             onChange={(e) => setBranchPrefixDraft(e.target.value)}
             onBlur={() => void saveBranchPrefix(branchPrefixDraft)}
           />
         </label>
         <p className="settings-hint" style={{ marginTop: 8 }}>
-          Example: <code>{previewPrefix}/bb-1234-eng-fix-thing</code>
+          Example:{' '}
+          <code>
+            {previewPrefix
+              ? `${previewPrefix}/bb-1234-eng-fix-thing`
+              : 'bb-1234-eng-fix-thing'}
+          </code>
         </p>
       </div>
     </div>

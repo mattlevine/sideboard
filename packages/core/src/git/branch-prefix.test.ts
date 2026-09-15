@@ -20,17 +20,13 @@ describe('sanitizeGitBranchPrefix', () => {
 });
 
 describe('resolveGitBranchPrefix', () => {
-  it('prefers the saved setting over GitHub login', () => {
-    expect(resolveGitBranchPrefix({ setting: 'ml', githubLogin: 'mattlevine' })).toBe(
-      'ml',
-    );
+  it('uses the saved setting when set', () => {
+    expect(resolveGitBranchPrefix({ setting: 'ml' })).toBe('ml');
   });
 
-  it('falls back to the GitHub username', () => {
-    expect(resolveGitBranchPrefix({ setting: '', githubLogin: 'mattlevine' })).toBe(
-      'mattlevine',
-    );
-    expect(resolveGitBranchPrefix({ githubLogin: 'Matt' })).toBe('matt');
+  it('stays empty when the setting is blank', () => {
+    expect(resolveGitBranchPrefix({ setting: '' })).toBeNull();
+    expect(resolveGitBranchPrefix({})).toBeNull();
   });
 });
 

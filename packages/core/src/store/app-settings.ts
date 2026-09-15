@@ -256,7 +256,7 @@ export interface AdvancedAppSettings {
   autoRenameBranch?: boolean;
   /**
    * First segment of renamed task branches (`matt/bb-1234-eng-fix-thing`).
-   * Empty / omitted → connected GitHub username.
+   * Empty / omitted → no prefix.
    */
   branchPrefix?: string;
   /**
@@ -2085,7 +2085,7 @@ export function autoRenameBranchEnabled(
   return settings.advanced.autoRenameBranch !== false;
 }
 
-/** Saved account prefix, or null to fall back to the GitHub username. */
+/** Saved account prefix, or null when empty (no default). */
 export function gitBranchPrefixSetting(
   settings: AppSettings = loadAppSettings(),
 ): string | null {

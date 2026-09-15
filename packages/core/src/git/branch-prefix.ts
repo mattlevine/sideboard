@@ -1,6 +1,6 @@
 /**
  * Account git branch prefix (Settings → Git).
- * Empty setting falls back to the connected GitHub username.
+ * Empty / omitted means no prefix — do not invent a default.
  */
 
 export function sanitizeGitBranchPrefix(raw: string | null | undefined): string | null {
@@ -13,14 +13,11 @@ export function sanitizeGitBranchPrefix(raw: string | null | undefined): string 
   return slug || null;
 }
 
-/** Prefer the saved setting; otherwise the GitHub login. */
+/** Saved setting only. Empty does not fall back to the GitHub username. */
 export function resolveGitBranchPrefix(opts: {
   setting?: string | null;
-  githubLogin?: string | null;
 }): string | null {
-  return (
-    sanitizeGitBranchPrefix(opts.setting) ?? sanitizeGitBranchPrefix(opts.githubLogin)
-  );
+  return sanitizeGitBranchPrefix(opts.setting);
 }
 
 /** Example branch for the rename-placeholder directive. */
