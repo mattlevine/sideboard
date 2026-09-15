@@ -312,7 +312,7 @@ describe('formatRenameBranchDirective', () => {
     expect(text).toMatch(/Keep ticket `eng-12`/);
   });
 
-  it('prefixes examples with the account GitHub username', () => {
+  it('prefixes examples when an account branch prefix is set', () => {
     const text = formatRenameBranchDirective(
       {
         worktreePath: '/tmp/sideboard/workspaces/app/paris',

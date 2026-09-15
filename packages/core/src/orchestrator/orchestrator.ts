@@ -1321,22 +1321,11 @@ export class Orchestrator {
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     let renameBranchDirective: string | null = null;
     if (!isBrightsy && !isOrchestration && autoRenameBranchEnabled()) {
-      const { isPlaceholderBranch } = await import('../git/worktree-labels.js');
-      let githubLogin: string | null = null;
-      if (isPlaceholderBranch(fresh.branchName, fresh.worktreePath) && !gitBranchPrefixSetting()) {
-        try {
-          const { getGitHubStatus } = await import('../integrations/github.js');
-          githubLogin = (await getGitHubStatus()).login;
-        } catch {
-          // Prefix stays unset; examples omit the username segment.
-        }
-      }
       const { resolveGitBranchPrefix } = await import('../git/branch-prefix.js');
       renameBranchDirective = formatRenameBranchDirective(fresh, {
         customPrompt: settings?.prompts?.renameBranch,
         branchPrefix: resolveGitBranchPrefix({
           setting: gitBranchPrefixSetting(),
-          githubLogin,
         }),
       });
     }

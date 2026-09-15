@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Settings → Git **Branch prefix** stays unset when empty. It no longer defaults to the GitHub username.
+
 ## [0.1.193] - 2026-09-15
 
 ### Changed
