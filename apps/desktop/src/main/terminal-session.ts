@@ -20,15 +20,36 @@ export function terminalSessionKind(opts?: {
   return opts?.command ? 'attach' : 'shell';
 }
 
+/** Shell is one PTY per worktree; attach stays per chat (agent session). */
+export function terminalReuseKey(
+  kind: TerminalSessionKind,
+  worktreeKey: string,
+  threadRef: string,
+): string {
+  return kind === 'shell' ? `shell:${worktreeKey}` : `attach:${threadRef}`;
+}
+
 export function findReusableTerminalSession<
-  T extends { threadRef: string; kind: TerminalSessionKind },
+  T extends { reuseKey: string; kind: TerminalSessionKind },
 >(
   sessions: Iterable<T>,
-  threadRef: string,
+  reuseKey: string,
   kind: TerminalSessionKind,
 ): T | undefined {
   for (const session of sessions) {
-    if (session.threadRef === threadRef && session.kind === kind) return session;
+    if (session.reuseKey === reuseKey && session.kind === kind) return session;
   }
   return undefined;
+}
+
+/** Archive/purge: drop attach for this chat; drop the shared shell only on last tab. */
+export function shouldTeardownTerminalSession(
+  session: { kind: TerminalSessionKind; threadRef: string; worktreeKey: string },
+  input: { threadRef: string; worktreeKey: string; lastWorktreeChat: boolean },
+): boolean {
+  if (session.kind === 'attach') return session.threadRef === input.threadRef;
+  if (input.lastWorktreeChat && input.worktreeKey && session.worktreeKey === input.worktreeKey) {
+    return true;
+  }
+  return !input.worktreeKey && session.threadRef === input.threadRef;
 }

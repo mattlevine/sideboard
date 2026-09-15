@@ -1,10 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { BrowserWindow } from 'electron';
-import { stripNestedElectronEnv, type Orchestrator } from '@sideboard-ai/core';
+import {
+  normalizeWorktreePath,
+  stripNestedElectronEnv,
+  threadsSharingWorktree,
+  type Orchestrator,
+} from '@sideboard-ai/core';
 import {
   appendTerminalScrollback,
   findReusableTerminalSession,
+  shouldTeardownTerminalSession,
+  terminalReuseKey,
   terminalSessionKind,
   type TerminalSessionKind,
 } from './terminal-session.js';
@@ -20,18 +27,16 @@ interface PtyLike {
 interface PtySession {
   id: string;
   threadRef: string;
+  worktreeKey: string;
+  reuseKey: string;
   kind: TerminalSessionKind;
   pty: PtyLike;
   scrollback: string;
 }
 
 const sessions = new Map<string, PtySession>();
-/** In-flight starts so overlapping remounts share one PTY per thread+kind. */
+/** In-flight starts so overlapping remounts share one PTY per worktree shell (or chat attach). */
 const starting = new Map<string, Promise<{ id: string; scrollback: string }>>();
-
-function startKey(threadRef: string, kind: TerminalSessionKind): string {
-  return `${threadRef}:${kind}`;
-}
 
 function resolveShell(): string {
   const fromEnv = process.env.SHELL?.trim();
@@ -147,10 +152,20 @@ function spawnScriptPty(
 function bindSession(
   id: string,
   threadRef: string,
+  worktreeKey: string,
+  reuseKey: string,
   kind: TerminalSessionKind,
   pty: PtyLike,
 ): void {
-  const session: PtySession = { id, threadRef, kind, pty, scrollback: '' };
+  const session: PtySession = {
+    id,
+    threadRef,
+    worktreeKey,
+    reuseKey,
+    kind,
+    pty,
+    scrollback: '',
+  };
   pty.onData((data) => {
     session.scrollback = appendTerminalScrollback(session.scrollback, data);
     broadcast('terminal:data', { id, data });
@@ -173,34 +188,44 @@ export async function startTerminalSession(
   if (!thread) throw new Error(`Thread not found: ${threadRef}`);
 
   const kind = terminalSessionKind(opts);
-  const existing = findReusableTerminalSession(sessions.values(), threadRef, kind);
+  const worktreeKey = normalizeWorktreePath(thread.worktreePath) || threadRef;
+  const reuseKey = terminalReuseKey(kind, worktreeKey, threadRef);
+  const existing = findReusableTerminalSession(sessions.values(), reuseKey, kind);
   if (existing) {
     existing.pty.resize?.(cols, rows);
     return { id: existing.id, scrollback: existing.scrollback };
   }
 
-  const key = startKey(threadRef, kind);
-  const inflight = starting.get(key);
+  const inflight = starting.get(reuseKey);
   if (inflight) return inflight;
 
-  const started = startNewTerminalSession(thread, threadRef, kind, cols, rows, opts).finally(
-    () => {
-      if (starting.get(key) === started) starting.delete(key);
-    },
-  );
-  starting.set(key, started);
+  const started = startNewTerminalSession(
+    thread,
+    threadRef,
+    worktreeKey,
+    reuseKey,
+    kind,
+    cols,
+    rows,
+    opts,
+  ).finally(() => {
+    if (starting.get(reuseKey) === started) starting.delete(reuseKey);
+  });
+  starting.set(reuseKey, started);
   return started;
 }
 
 async function startNewTerminalSession(
   thread: { worktreePath: string },
   threadRef: string,
+  worktreeKey: string,
+  reuseKey: string,
   kind: TerminalSessionKind,
   cols: number,
   rows: number,
   opts?: { command?: string; args?: string[] },
 ): Promise<{ id: string; scrollback: string }> {
-  const reused = findReusableTerminalSession(sessions.values(), threadRef, kind);
+  const reused = findReusableTerminalSession(sessions.values(), reuseKey, kind);
   if (reused) {
     reused.pty.resize?.(cols, rows);
     return { id: reused.id, scrollback: reused.scrollback };
@@ -229,7 +254,7 @@ async function startNewTerminalSession(
         cwd: thread.worktreePath,
         env,
       });
-      bindSession(id, threadRef, kind, pty);
+      bindSession(id, threadRef, worktreeKey, reuseKey, kind, pty);
       return { id, scrollback: '' };
     } catch (err) {
       console.warn('[terminal] node-pty spawn failed, trying fallbacks:', err);
@@ -239,13 +264,13 @@ async function startNewTerminalSession(
   // 2) macOS script(1) — allocates a PTY without native addons
   const scriptPty = spawnScriptPty(file, args, thread.worktreePath, env);
   if (scriptPty) {
-    bindSession(id, threadRef, kind, scriptPty);
+    bindSession(id, threadRef, worktreeKey, reuseKey, kind, scriptPty);
     return { id, scrollback: '' };
   }
 
   // 3) Last resort: plain pipes (limited interactivity)
   const pipe = spawnPipeShell(file, args, thread.worktreePath, env);
-  bindSession(id, threadRef, kind, pipe);
+  bindSession(id, threadRef, worktreeKey, reuseKey, kind, pipe);
   return { id, scrollback: '' };
 }
 
@@ -276,10 +301,35 @@ export function killTerminal(id: string): void {
   sessions.delete(id);
 }
 
-export function killTerminalsForThread(threadRef: string): void {
+export function killTerminalsForThread(
+  threadRef: string,
+  opts?: { worktreeKey?: string; lastWorktreeChat?: boolean },
+): void {
+  const worktreeKey = opts?.worktreeKey ?? '';
+  const lastWorktreeChat = opts?.lastWorktreeChat ?? !worktreeKey;
   for (const [id, session] of sessions) {
-    if (session.threadRef === threadRef) {
+    if (
+      shouldTeardownTerminalSession(session, {
+        threadRef,
+        worktreeKey,
+        lastWorktreeChat,
+      })
+    ) {
       killTerminal(id);
     }
   }
+}
+
+/** Archive/purge: kill attach for this chat; kill the shared shell only if last tab. */
+export function killTerminalsOnThreadTeardown(orch: Orchestrator, threadRef: string): void {
+  const thread = orch.getThread(threadRef);
+  if (!thread) {
+    killTerminalsForThread(threadRef);
+    return;
+  }
+  const worktreeKey = normalizeWorktreePath(thread.worktreePath);
+  const lastWorktreeChat = threadsSharingWorktree(thread.worktreePath).every(
+    (t) => t.id === thread.id,
+  );
+  killTerminalsForThread(threadRef, { worktreeKey, lastWorktreeChat });
 }
