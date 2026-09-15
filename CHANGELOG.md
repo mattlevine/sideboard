@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.192] - 2026-09-14
+
+### Changed
+
+- Orchestration `send_to_thread` and dirty `ask_git` honor Settings → Follow-up (default **steer**): they interrupt the worktree agent and start the new prompt now instead of sitting in the queue. `force_stop` still clears the inbox first.
+
+### Fixed
+
+- `github_update_issue` lists current boards with `gh issue view --json projectItems` (not the invalid `projects` field), so `none` and replace actually remove old projects.
+- `linear_update_issue` resolves labels on the issue's team (paginated) instead of one unfiltered workspace page.
+- Detached-job log panes no longer treat `wait --pid-file` / other flags as a job id.
+
 ## [0.1.191] - 2026-09-13
 
 ### Added

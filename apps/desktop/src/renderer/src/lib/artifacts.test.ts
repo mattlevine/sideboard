@@ -471,6 +471,20 @@ describe('log artifacts', () => {
     expect(arts[0]!.status).toBe('running');
   });
 
+  it('does not treat detached-job flags as a job id', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'sh0',
+        name: 'Bash',
+        status: 'running',
+        detail: 'node scripts/detached-job.cjs wait --pid-file FILE --log-file FILE',
+        input: { command: 'node scripts/detached-job.cjs wait --pid-file FILE --log-file FILE' },
+      },
+    ];
+    expect(extractToolArtifacts(parts)).toEqual([]);
+  });
+
   it('parses job id from a detached-job start command before wait JSON exists', () => {
     const parts: MessagePart[] = [
       {

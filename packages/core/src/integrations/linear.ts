@@ -202,6 +202,17 @@ query SideboardLabels($first: Int!) {
 }
 `;
 
+const TEAM_LABELS_QUERY = `
+query SideboardTeamLabels($id: String!, $first: Int!, $after: String) {
+  team(id: $id) {
+    labels(first: $first, after: $after) {
+      nodes { id name }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+`;
+
 const PROJECTS_QUERY = `
 query SideboardProjects($first: Int!, $filter: ProjectFilter) {
   projects(first: $first, filter: $filter) {
@@ -861,18 +872,54 @@ function formatRelationList(relations: LinearIssueRelation[]): string {
   return relations.map((r) => `${r.type} ${r.issue.identifier || r.issue.id}`).join(', ');
 }
 
-async function listLinearLabels(
-  opts?: { apiKey?: string | null },
-): Promise<LinearNamedRef[]> {
-  const json = await linearGraphql<{
-    issueLabels?: { nodes?: Array<{ id?: string; name?: string }> };
-  }>(LABELS_QUERY, { first: 250 }, opts);
-  return (json.issueLabels?.nodes ?? []).flatMap((node) => {
+function mapLabelNodes(
+  nodes: Array<{ id?: string; name?: string }> | undefined,
+): LinearNamedRef[] {
+  return (nodes ?? []).flatMap((node) => {
     const id = String(node.id ?? '').trim();
     const name = String(node.name ?? '').trim();
     if (!id) return [];
     return [{ id, name }];
   });
+}
+
+async function listLinearWorkspaceLabels(
+  opts?: { apiKey?: string | null },
+): Promise<LinearNamedRef[]> {
+  const json = await linearGraphql<{
+    issueLabels?: { nodes?: Array<{ id?: string; name?: string }> };
+  }>(LABELS_QUERY, { first: 250 }, opts);
+  return mapLabelNodes(json.issueLabels?.nodes);
+}
+
+async function listLinearLabels(
+  opts?: { apiKey?: string | null; teamId?: string | null },
+): Promise<LinearNamedRef[]> {
+  const teamId = opts?.teamId?.trim();
+  if (teamId) {
+    const out: LinearNamedRef[] = [];
+    let after: string | undefined;
+    for (let page = 0; page < 4; page++) {
+      const json = await linearGraphql<{
+        team?: {
+          labels?: {
+            nodes?: Array<{ id?: string; name?: string }>;
+            pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+          };
+        } | null;
+      }>(
+        TEAM_LABELS_QUERY,
+        after ? { id: teamId, first: 250, after } : { id: teamId, first: 250 },
+        opts,
+      );
+      const conn = json.team?.labels;
+      out.push(...mapLabelNodes(conn?.nodes));
+      if (!conn?.pageInfo?.hasNextPage || !conn.pageInfo.endCursor) break;
+      after = conn.pageInfo.endCursor;
+    }
+    if (out.length) return out;
+  }
+  return listLinearWorkspaceLabels(opts);
 }
 
 async function listLinearProjects(
@@ -914,7 +961,7 @@ async function resolveLinearProjectId(
 
 async function resolveLinearLabelIds(
   names: string[],
-  opts?: { apiKey?: string | null },
+  opts?: { apiKey?: string | null; teamId?: string | null },
 ): Promise<string[]> {
   if (names.length === 0) return [];
   const labels = await listLinearLabels(opts);
@@ -1354,6 +1401,7 @@ export async function updateLinearIssue(
   const needsIssue =
     Boolean(input.state?.trim()) ||
     input.cycle !== undefined ||
+    input.labels !== undefined ||
     Boolean(addRelations) ||
     Boolean(removeRelations);
   const existing = needsIssue ? await getLinearIssue(issueId, opts) : undefined;
@@ -1390,7 +1438,10 @@ export async function updateLinearIssue(
     mutationInput.priority = normalizePriority(input.priority);
   }
   if (input.labels !== undefined) {
-    mutationInput.labelIds = await resolveLinearLabelIds(input.labels, opts);
+    mutationInput.labelIds = await resolveLinearLabelIds(input.labels, {
+      ...opts,
+      teamId: existing?.team?.id,
+    });
   }
   if (input.project !== undefined) {
     mutationInput.projectId = await resolveLinearProjectId(input.project, opts);

@@ -223,6 +223,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('do not ask_user after it');
       expect(claude).not.toContain('Post this review');
       expect(claude).toContain('force_stop: true');
+      expect(claude).toContain('steer a prompt');
       expect(claude).toContain('Greenfield');
       expect(claude).toContain('ask_git');
       expect(claude).toContain('get_pr_checks');

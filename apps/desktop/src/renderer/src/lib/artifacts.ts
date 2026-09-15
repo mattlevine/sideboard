@@ -427,7 +427,9 @@ function jobIdFromCommand(blob: string): string | undefined {
     /detached-job\.(?:js|cjs)["']?\s+(?:start|wait|stop|status|ui)\s+([A-Za-z0-9._-]{1,64})/i.exec(
       blob,
     );
-  if (fromArg?.[1]) return fromArg[1];
+  const token = fromArg?.[1];
+  // `wait --pid-file` / `ui --title` are flags, not kebab job ids.
+  if (token && !token.startsWith('-')) return token;
   const fromPath = /detached-jobs[/\\]([A-Za-z0-9._-]{1,64})(?:[/\\]|$)/i.exec(blob);
   return fromPath?.[1];
 }
