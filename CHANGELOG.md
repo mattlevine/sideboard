@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.192] - 2026-09-14
+
 ### Changed
 
 - Orchestration `send_to_thread` and dirty `ask_git` honor Settings → Follow-up (default **steer**): they interrupt the worktree agent and start the new prompt now instead of sitting in the queue. `force_stop` still clears the inbox first.
