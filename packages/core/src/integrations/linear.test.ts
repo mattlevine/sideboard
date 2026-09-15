@@ -520,13 +520,17 @@ describe('Linear GraphQL writes', () => {
           },
         };
       }
-      if (query.includes('SideboardLabels')) {
+      if (query.includes('SideboardTeamLabels')) {
+        expect(variables.id).toBe(TEAM.id);
         return {
-          issueLabels: {
-            nodes: [
-              { id: 'lab-1', name: 'Bug' },
-              { id: 'lab-2', name: 'p0' },
-            ],
+          team: {
+            labels: {
+              nodes: [
+                { id: 'lab-1', name: 'Bug' },
+                { id: 'lab-2', name: 'p0' },
+              ],
+              pageInfo: { hasNextPage: false },
+            },
           },
         };
       }
@@ -534,7 +538,10 @@ describe('Linear GraphQL writes', () => {
         return { projects: { nodes: [{ id: 'proj-1', name: 'Ship', slugId: 'ship' }] } };
       }
       if (query.includes('SideboardIssue')) {
-        return { issue: issueNode({ id: 'parent-1', identifier: 'ENG-1' }) };
+        if (variables.id === 'ENG-1' || variables.id === 'parent-1') {
+          return { issue: issueNode({ id: 'parent-1', identifier: 'ENG-1' }) };
+        }
+        return { issue: issueNode({ team: { id: TEAM.id, key: TEAM.key, name: TEAM.name } }) };
       }
       throw new Error(`unexpected query ${query.slice(0, 80)}`);
     });
@@ -547,6 +554,48 @@ describe('Linear GraphQL writes', () => {
     expect(issue.labels).toEqual(['Bug', 'p0']);
     expect(issue.project).toEqual({ id: 'proj-1', name: 'Ship' });
     expect(issue.parent?.identifier).toBe('ENG-1');
+  });
+
+  it('resolves labels from the issue team, not a same-named workspace label', async () => {
+    await withAuth();
+    mockGraphql((query, variables) => {
+      if (query.includes('SideboardIssueUpdate')) {
+        expect(variables.input).toMatchObject({ labelIds: ['team-bug'] });
+        return {
+          issueUpdate: {
+            success: true,
+            issue: issueNode({ labels: { nodes: [{ name: 'Bug' }] } }),
+          },
+        };
+      }
+      if (query.includes('SideboardTeamLabels')) {
+        expect(variables.id).toBe(TEAM.id);
+        return {
+          team: {
+            labels: {
+              nodes: [{ id: 'team-bug', name: 'Bug' }],
+              pageInfo: { hasNextPage: false },
+            },
+          },
+        };
+      }
+      if (query.includes('SideboardLabels')) {
+        return {
+          issueLabels: {
+            nodes: [
+              { id: 'workspace-bug', name: 'Bug' },
+              { id: 'team-bug', name: 'Bug' },
+            ],
+          },
+        };
+      }
+      if (query.includes('SideboardIssue')) {
+        return { issue: issueNode({ team: { id: TEAM.id, key: TEAM.key, name: TEAM.name } }) };
+      }
+      throw new Error(`unexpected query ${query.slice(0, 80)}`);
+    });
+    const issue = await updateLinearIssue({ id: 'ENG-9', labels: ['bug'] });
+    expect(issue.labels).toEqual(['Bug']);
   });
 
   it('clears project and parent with none', async () => {

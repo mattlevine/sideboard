@@ -124,8 +124,8 @@ describe('github issue writes', () => {
   it('updates labels, project, parent, and blocked-by', async () => {
     gh.mockImplementation(async (args: string[]) => {
       if (args[1] === 'view') {
-        const json = args.includes('projectItems,projects')
-          ? { projectItems: [{ title: 'Old board' }], projects: [] }
+        const json = args.includes('projectItems')
+          ? { projectItems: [{ title: 'Old board' }] }
           : {
               number: 12,
               title: 'Fix login',
@@ -152,6 +152,11 @@ describe('github issue writes', () => {
       },
       { repoPath: '/tmp/repo' },
     );
+    const view = gh.mock.calls.find((call) =>
+      (call[0] as string[] | undefined)?.includes('projectItems'),
+    )?.[0] as string[];
+    expect(view).toEqual(expect.arrayContaining(['--json', 'projectItems']));
+    expect(view.at(-1)).toBe('projectItems');
     const edit = gh.mock.calls.find((call) => call[0]?.[1] === 'edit')?.[0] as string[];
     expect(edit).toEqual(
       expect.arrayContaining([

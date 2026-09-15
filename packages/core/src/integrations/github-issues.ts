@@ -342,7 +342,7 @@ async function listGitHubIssueProjects(
   repoArgs: string[],
 ): Promise<string[]> {
   const result = await gh(
-    ['issue', 'view', String(number), ...repoArgs, '--json', 'projectItems,projects'],
+    ['issue', 'view', String(number), ...repoArgs, '--json', 'projectItems'],
     cwd,
     { reject: false },
   );

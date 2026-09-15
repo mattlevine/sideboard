@@ -256,8 +256,11 @@ export async function waitForPidExit(
  * Desktop/CLI pass follow-up explicitly. Internal sends (child-halt
  * "Sideboard: …" notices, Slack, schedules) omit it — orchestrators then
  * use Settings → Follow-up behavior (default steer) so those do not sit
- * in the queue while the user asked to interrupt. Worktree MCP
- * send_to_thread stays queue unless the caller opts in.
+ * in the queue while the user asked to interrupt.
+ *
+ * Orchestrator → worktree talk (`send_to_thread`, dirty `ask_git`) must
+ * pass {@link resolveOrchChildFollowUp} so those prompts steer by default.
+ * Create/reuse first prompts still queue unless the caller opts in.
  */
 export function resolveSendFollowUp(
   thread: Pick<Thread, 'sourceType' | 'repoPath'>,
@@ -265,6 +268,14 @@ export function resolveSendFollowUp(
 ): FollowUpBehavior {
   if (requested === 'steer' || requested === 'queue') return requested;
   return isOrchestratorThread(thread) ? followUpBehavior() : 'queue';
+}
+
+/** Settings follow-up for orchestrator prompts to worktree agents (default steer). */
+export function resolveOrchChildFollowUp(
+  requested?: FollowUpBehavior,
+): FollowUpBehavior {
+  if (requested === 'steer' || requested === 'queue') return requested;
+  return followUpBehavior();
 }
 
 /** After Send now / Stop, do not pin drainQueue on a wedged agent child. */
@@ -2653,7 +2664,7 @@ export class Orchestrator {
   /**
    * Desktop git buttons + MCP `ask_git`.
    * When the worktree is clean, push / open the PR here (HTTPS via `gh` if SSH
-   * is missing). When dirty, queue the worktree agent to commit first.
+   * is missing). When dirty, steer the worktree agent to commit first.
    */
   async askGit(threadRef: string, action: AgentGitAction): Promise<Thread> {
     if (!AGENT_GIT_ACTIONS.includes(action)) {
@@ -2697,7 +2708,9 @@ export class Orchestrator {
         // Fall back to the generic merge-remote-branch phrase.
       }
     }
-    return this.send(threadRef, agentGitPrompt(action, { prBase }));
+    return this.send(threadRef, agentGitPrompt(action, { prBase }), {
+      followUp: resolveOrchChildFollowUp(),
+    });
   }
 
   /** Push origin (gh HTTPS fallback) and create/update the PR when requested. */

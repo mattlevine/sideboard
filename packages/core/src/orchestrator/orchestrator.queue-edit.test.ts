@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { readThread, createEmptyThread, writeThread } from '../store/thread-store.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { updateAdvancedSettings } from '../store/app-settings.js';
-import { Orchestrator, resolveSendFollowUp } from './orchestrator.js';
+import { Orchestrator, resolveOrchChildFollowUp, resolveSendFollowUp } from './orchestrator.js';
 
 describe('Orchestrator queued-message editing', () => {
   let dataDir: string;
@@ -234,9 +234,12 @@ describe('Orchestrator queued-message editing', () => {
     expect(resolveSendFollowUp(orch)).toBe('steer');
     expect(resolveSendFollowUp(orch, 'queue')).toBe('queue');
     expect(resolveSendFollowUp(worktree, 'steer')).toBe('steer');
+    expect(resolveOrchChildFollowUp()).toBe('steer');
+    expect(resolveOrchChildFollowUp('queue')).toBe('queue');
     updateAdvancedSettings({ followUpBehavior: 'queue' });
     expect(resolveSendFollowUp(orch)).toBe('queue');
     expect(resolveSendFollowUp(worktree)).toBe('queue');
+    expect(resolveOrchChildFollowUp()).toBe('queue');
   });
 
   it('steers an omitted follow-up on a busy orchestrator (default setting)', async () => {
@@ -316,6 +319,35 @@ describe('Orchestrator queued-message editing', () => {
     const updated = await orch.send(thread.id, 'follow-up');
     expect(updated.queue).toEqual(['follow-up']);
     expect(updated.status).toBe('running');
+  });
+
+  it('steers a busy worktree when the orchestrator uses child follow-up', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread(['later']);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(thread.id, 'from orch', {
+      followUp: resolveOrchChildFollowUp(),
+    });
+    expect(kill).toHaveBeenCalledOnce();
+    expect(updated.queue[0]).toBe('from orch');
+    expect(updated.queue).toContain('later');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 
   it('steers a follow-up to the front and interrupts the in-flight turn', async () => {

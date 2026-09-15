@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
-import { getOrchestrator } from '../orchestrator/orchestrator.js';
+import { getOrchestrator, resolveOrchChildFollowUp } from '../orchestrator/orchestrator.js';
 import {
   listBranches,
   listPrs,
@@ -870,7 +870,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_thread',
-    'Queue a prompt on a worktree thread chat (runs under concurrency cap). Use after create_thread to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not force_stop to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that stops the child mid-thought. Call wait_for_turn again instead.',
+    'Steer a prompt on a worktree thread chat (Settings → Follow-up, default steer: interrupt and start now, skip the inbox). Use after create_thread to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_thread to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
     {
       ref: z.string(),
       prompt: z.string(),
@@ -883,7 +883,9 @@ export async function startMcpServer(): Promise<void> {
           orch.stop(ref, { clearQueue: true, notifyParent: false });
         }
       }
-      const thread = await orch.send(ref, prompt);
+      const thread = await orch.send(ref, prompt, {
+        followUp: resolveOrchChildFollowUp(),
+      });
       return mcpJson({
         id: thread.id,
         status: thread.status,
@@ -895,7 +897,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. stillRunning is the source of truth — if false, the child is not working (do not say it is waiting for a gate). If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send a check-in prompt, force_stop, or assume a hang. On status error, lastError/text is the failure. On status stopped or broken, the child did not finish — resume with send_to_thread or tell the user; do not treat that as success. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
+    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. stillRunning is the source of truth — if false, the child is not working (do not say it is waiting for a gate). If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts), force_stop, or assume a hang. On status error, lastError/text is the failure. On status stopped or broken, the child did not finish — resume with send_to_thread or tell the user; do not treat that as success. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -1064,7 +1066,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Commit & push, open a draft PR, mark ready for review, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, queues the worktree agent to commit; then wait_for_turn (loop while stillRunning). Do not start a checks loop on a plain push — only if the user gave a goal (Greptile 5/5, CI green). Pass a worktree thread ref (not the orchestrator). action=ready-for-review and action=merge only when the user explicitly asked (or clicked the desktop button). Do not run git or gh from the orchestration cwd. If this tool errors that the GraphQL/PR body is too long, the branch is already pushed — have the worktree agent retry `gh pr create --body-file` with a short description (GitHub limit 65,536 characters). Do not invent SSH/auth failures from that error.',
+    'Commit & push, open a draft PR, mark ready for review, resolve conflicts, or merge — same actions as the desktop git buttons. When the worktree is clean, Sideboard pushes / opens the PR itself (HTTPS via `gh` even when origin is SSH / Settings → Git is SSH). When dirty, steers the worktree agent to commit (Settings → Follow-up, default interrupt now); then wait_for_turn (loop while stillRunning). Do not start a checks loop on a plain push — only if the user gave a goal (Greptile 5/5, CI green). Pass a worktree thread ref (not the orchestrator). action=ready-for-review and action=merge only when the user explicitly asked (or clicked the desktop button). Do not run git or gh from the orchestration cwd. If this tool errors that the GraphQL/PR body is too long, the branch is already pushed — have the worktree agent retry `gh pr create --body-file` with a short description (GitHub limit 65,536 characters). Do not invent SSH/auth failures from that error.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z
