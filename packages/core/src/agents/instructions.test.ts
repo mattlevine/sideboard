@@ -308,8 +308,22 @@ describe('formatRenameBranchDirective', () => {
       sourceType: 'ticket',
       sourceRef: 'ENG-12',
     });
-    expect(text).toContain('feat/eng-12-dark-mode');
+    expect(text).toContain('eng-12-eng-fix-thing');
     expect(text).toMatch(/Keep ticket `eng-12`/);
+  });
+
+  it('prefixes examples with the account GitHub username', () => {
+    const text = formatRenameBranchDirective(
+      {
+        worktreePath: '/tmp/sideboard/workspaces/app/paris',
+        branchName: 'thread/paris',
+        sourceType: 'ticket',
+        sourceRef: 'BB-1234',
+      },
+      { branchPrefix: 'matt' },
+    );
+    expect(text).toContain('matt/bb-1234-eng-fix-thing');
+    expect(text).toContain('matt/<ticket-or-task>-<short-kebab-description>');
   });
 
   it('includes custom rename_branch prompt when provided', () => {

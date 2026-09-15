@@ -607,7 +607,13 @@ export function ThreadPanel({
 
   useEffect(() => {
     if (composerPrefill) {
-      setPrompt(composerPrefill);
+      const next = composerPrefill.trim();
+      if (next) {
+        setPrompt((prev) => {
+          const existing = prev.trimEnd();
+          return existing ? `${existing}\n${next}` : next;
+        });
+      }
       setComposerFocused(true);
       onComposerPrefillConsumed?.();
       requestAnimationFrame(() => textareaRef.current?.focus());

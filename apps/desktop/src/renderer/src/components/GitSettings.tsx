@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { GitHubStatus, GithubGitAuthMode, PublicAppSettings } from '@sideboard-ai/core';
+import {
+  sanitizeGitBranchPrefix,
+  type GitHubStatus,
+  type GithubGitAuthMode,
+  type PublicAppSettings,
+} from '@sideboard-ai/core';
 
 export function GitSettings({
   settings,
@@ -17,6 +22,13 @@ export function GitSettings({
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
   const [githubPatDraft, setGithubPatDraft] = useState('');
   const [showGithubPat, setShowGithubPat] = useState(false);
+  const [branchPrefixDraft, setBranchPrefixDraft] = useState(
+    settings.advanced?.branchPrefix ?? '',
+  );
+
+  useEffect(() => {
+    setBranchPrefixDraft(settings.advanced?.branchPrefix ?? '');
+  }, [settings.advanced?.branchPrefix]);
 
   useEffect(() => {
     void window.sideboard
@@ -42,10 +54,34 @@ export function GitSettings({
     }
   }
 
+  async function saveBranchPrefix(raw: string) {
+    const next = raw.trim();
+    const current = settings.advanced?.branchPrefix ?? '';
+    if (next === current) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await window.sideboard.updateAdvancedSettings({
+        branchPrefix: next || '',
+      });
+      applySettings(saved);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const defaultPrefix =
+    sanitizeGitBranchPrefix(githubStatus?.login) ?? 'username';
+  const previewPrefix =
+    sanitizeGitBranchPrefix(branchPrefixDraft) ?? defaultPrefix;
+
   return (
     <div className="settings-body">
       <p className="settings-lead">
-        How Sideboard and worktree agents authenticate git on this Mac.
+        How Sideboard and worktree agents authenticate git on this Mac, and the
+        prefix used when renaming placeholder branches.
       </p>
 
       <div className="settings-section settings-section-card">
@@ -208,6 +244,29 @@ export function GitSettings({
             );
           })}
         </div>
+      </div>
+
+      <div className="settings-section settings-section-card">
+        <div className="settings-section-title">Branch prefix</div>
+        <p className="settings-hint">
+          First segment of renamed task branches. Empty uses your GitHub username
+          {githubStatus?.login ? ` (${githubStatus.login})` : ''}.
+        </p>
+        <label className="settings-field" style={{ marginTop: 10 }}>
+          <input
+            type="text"
+            spellCheck={false}
+            autoComplete="off"
+            value={branchPrefixDraft}
+            disabled={busy}
+            placeholder={defaultPrefix}
+            onChange={(e) => setBranchPrefixDraft(e.target.value)}
+            onBlur={() => void saveBranchPrefix(branchPrefixDraft)}
+          />
+        </label>
+        <p className="settings-hint" style={{ marginTop: 8 }}>
+          Example: <code>{previewPrefix}/bb-1234-eng-fix-thing</code>
+        </p>
       </div>
     </div>
   );

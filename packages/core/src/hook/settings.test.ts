@@ -67,6 +67,30 @@ icon = "test-tube"
     expect(settings?.runScripts[1]?.name).toBe('test');
   });
 
+  it('reads [prompts] create_pr and resolve_merge_conflicts', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-prompts-'));
+    mkdirSync(join(root, '.sideboard'));
+    writeFileSync(
+      join(root, '.sideboard', 'settings.toml'),
+      `
+[prompts]
+create_pr = "Write a concise PR description with test results."
+resolve_merge_conflicts = "Preserve user changes unless obsolete."
+rename_branch = "Use a short kebab-case branch name."
+`,
+    );
+    const settings = loadRepoSettings(root);
+    expect(settings?.prompts).toEqual({
+      renameBranch: 'Use a short kebab-case branch name.',
+      createPr: 'Write a concise PR description with test results.',
+      general: undefined,
+      resolveMergeConflicts: 'Preserve user changes unless obsolete.',
+    });
+    expect(getRepoSetupInfo(root).prompts?.createPr).toBe(
+      'Write a concise PR description with test results.',
+    );
+  });
+
   it('reads worktrees.root override with ~ expansion', () => {
     const root = mkdtempSync(join(tmpdir(), 'sideboard-settings-'));
     mkdirSync(join(root, '.sideboard'));

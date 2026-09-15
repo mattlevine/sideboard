@@ -16,7 +16,6 @@ import {
   type PathRefTarget,
 } from './AddReferenceAction';
 import { FileTree } from './FileTree';
-import { MergeModal } from './MergeModal';
 import { PrChecksPanel } from './PrChecksPanel';
 import { StackMap } from './StackMap';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
@@ -27,8 +26,10 @@ import {
   primaryGitIcon,
   primaryGitLabel,
 } from '../lib/primary-git-action';
-import { agentGitPrompt } from '@sideboard/agent-git-actions';
-import { formatIpcInvokeError } from '@sideboard/gh-errors';
+import {
+  resolveSidebarGitPrompt,
+  type SidebarGitAction,
+} from '@sideboard/agent-git-actions';
 import {
   ensureReviewRequestFile,
 } from '../lib/review-request';
@@ -80,6 +81,12 @@ interface RepoSetupInfo {
   hasConfig: boolean;
   hasSetupScript: boolean;
   configLabel: string | null;
+  prompts?: {
+    renameBranch?: string;
+    createPr?: string;
+    general?: string;
+    resolveMergeConflicts?: string;
+  };
 }
 
 interface RunScriptInfo {
@@ -222,13 +229,10 @@ export function RightSidebar({
   const setupOutputRef = useRef<HTMLPreElement>(null);
   const liveSetupRef = useRef(false);
   const [runScripts, setRunScripts] = useState<RunScriptInfo[]>([]);
+  const [busy, setBusy] = useState(false);
   const [runLogs, setRunLogs] = useState<Record<string, string>>({});
   const [prMenuOpen, setPrMenuOpen] = useState(false);
   const [runMenuOpen, setRunMenuOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [mergeConfirm, setMergeConfirm] = useState(false);
-  const [mergeBusy, setMergeBusy] = useState(false);
-  const [mergeError, setMergeError] = useState<string | null>(null);
   const prMenuRef = useRef<HTMLDivElement>(null);
   const runMenuRef = useRef<HTMLDivElement>(null);
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
@@ -857,8 +861,7 @@ export function RightSidebar({
       return;
     }
     if (gitAction === 'merge') {
-      setMergeError(null);
-      setMergeConfirm(true);
+      void askAgentGit('merge');
       return;
     }
     if (gitAction === 'commit-push' || gitAction === 'cowboy-commit-push' || gitAction === 'cowboy-push') {
@@ -887,47 +890,6 @@ export function RightSidebar({
       });
   }
 
-  async function confirmMergePr() {
-    if (mergeBusy) return;
-    setMergeBusy(true);
-    setMergeError(null);
-    try {
-      const result = await window.sideboard.mergePr(thread.id);
-      setMergeConfirm(false);
-      setPrMeta((prev) =>
-        prev
-          ? {
-              ...prev,
-              state: result.state || 'MERGED',
-              url: result.url || prev.url,
-              isDraft: false,
-              reviewDecision: null,
-              isInMergeQueue: false,
-              mergeable: null,
-              mergeStateStatus: null,
-            }
-          : {
-              number: Number(num) || 0,
-              url: result.url || prUrl || '',
-              state: result.state || 'MERGED',
-              isDraft: false,
-              title: thread.prTitle ?? thread.title,
-              baseRefName: 'main',
-              reviewDecision: null,
-              isInMergeQueue: false,
-              mergeable: null,
-              mergeStateStatus: null,
-            },
-      );
-      onRefresh();
-      void loadPrMeta();
-    } catch (err) {
-      setMergeError(formatIpcInvokeError(err));
-    } finally {
-      setMergeBusy(false);
-    }
-  }
-
   const checksForBadge = prChecks;
   const checksTabLabel = useMemo(() => {
     if (!checksForBadge || checksForBadge.length === 0) return 'Checks';
@@ -939,48 +901,44 @@ export function RightSidebar({
     [checksForBadge],
   );
 
-  async function fixCheckWithAgent(check: PrCheckRun) {
+  function fixCheckWithAgent(check: PrCheckRun) {
     const kind = check.kind ?? 'ci';
     let prompt: string;
     if (kind === 'mergeability') {
-      prompt = agentGitPrompt('resolve-conflicts', { prBase });
+      prompt = resolveSidebarGitPrompt('resolve-conflicts', {
+        prBase,
+        resolveMergeConflicts: setupInfo?.prompts?.resolveMergeConflicts,
+      });
     } else if (kind === 'review') {
       prompt = 'Address review comments.';
     } else {
       prompt = `Fix CI: ${check.name}.`;
     }
-    try {
-      await window.sideboard.sendToThread(thread.id, prompt);
-      onRefresh();
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : String(err));
-    }
+    void sendGitPrompt(prompt);
   }
 
-  /** Desktop git buttons: Sideboard pushes when clean; otherwise the worktree agent commits. */
-  async function askAgentGit(
-    action:
-      | 'create-pr'
-      | 'create-draft'
-      | 'create-web'
-      | 'commit-push'
-      | 'resolve-conflicts'
-      | 'ready-for-review',
-  ) {
+  /** Same path as Resolve: `askGit` queues the action prompt on the worktree agent. */
+  async function askAgentGit(action: SidebarGitAction) {
     setPrMenuOpen(false);
-    const gitAction =
-      action === 'create-pr' || action === 'create-draft'
-        ? 'create-draft'
-        : action === 'create-web'
-          ? 'create-web'
-          : action === 'commit-push'
-            ? 'commit-push'
-            : action === 'ready-for-review'
-              ? 'ready-for-review'
-              : 'resolve-conflicts';
+    if (busy) return;
+    const gitAction = action === 'create-pr' ? 'create-draft' : action;
     setBusy(true);
     try {
       await window.sideboard.askGit(thread.id, gitAction);
+      onRefresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendGitPrompt(prompt: string) {
+    setPrMenuOpen(false);
+    if (busy) return;
+    setBusy(true);
+    try {
+      await window.sideboard.sendToThread(thread.id, prompt);
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
@@ -1188,7 +1146,7 @@ export function RightSidebar({
               <button
                 type="button"
                 className={`${prMerged ? 'btn-live' : prClosed ? 'btn-closed' : 'btn-continue'} split-main`}
-                disabled={busy || mergeBusy}
+                disabled={busy}
                 onClick={onPrimaryGitClick}
                 title={
                   gitAction === 'live'
@@ -1212,7 +1170,7 @@ export function RightSidebar({
                           : gitAction === 'changes-requested'
                           ? 'A reviewer requested changes — open the pull request'
                           : gitAction === 'merge'
-                          ? 'Merge pull request on GitHub'
+                          ? 'Ask the agent to merge this pull request'
                           : gitAction === 'commit-push' || gitAction === 'cowboy-commit-push' || gitAction === 'cowboy-push'
                             ? 'Ask the agent to commit and push'
                             : 'Ask the agent to create a pull request'
@@ -1228,7 +1186,7 @@ export function RightSidebar({
                   <button
                     type="button"
                     className="btn-continue split-caret"
-                    disabled={busy || mergeBusy}
+                    disabled={busy}
                     title="More PR options"
                     onClick={() => setPrMenuOpen((v) => !v)}
                   >
@@ -1241,10 +1199,7 @@ export function RightSidebar({
                           {prDraft && originInSync && gitAction !== 'ready-for-review' ? (
                             <button
                               type="button"
-                              onClick={() => {
-                                setPrMenuOpen(false);
-                                void askAgentGit('ready-for-review');
-                              }}
+                              onClick={() => void askAgentGit('ready-for-review')}
                             >
                               <span className="tool-menu-icon">✓</span>
                               <span>Ready for review</span>
@@ -1261,65 +1216,31 @@ export function RightSidebar({
                               <span className="tool-menu-icon">↗</span>
                               <span>Open on GitHub</span>
                             </button>
-                          ) : mergeConflicts ? (
+                          ) : gitAction === 'commit-push' ||
+                            gitAction === 'cowboy-commit-push' ||
+                            gitAction === 'cowboy-push' ? (
                             <button
                               type="button"
-                              onClick={() => {
-                                setPrMenuOpen(false);
-                                setMergeError(null);
-                                setMergeConfirm(true);
-                              }}
-                            >
-                              <span className="tool-menu-icon">⌥</span>
-                              <span>Merge without resolving</span>
-                            </button>
-                          ) : branchBehind ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPrMenuOpen(false);
-                                setMergeError(null);
-                                setMergeConfirm(true);
-                              }}
-                            >
-                              <span className="tool-menu-icon">⌥</span>
-                              <span>Merge without updating</span>
-                            </button>
-                          ) : hasLocalChanges ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPrMenuOpen(false);
-                                setMergeError(null);
-                                setMergeConfirm(true);
-                              }}
-                            >
-                              <span className="tool-menu-icon">⌥</span>
-                              <span>Merge without pushing</span>
-                            </button>
-                          ) : gitAction === 'ready-for-review' ||
-                            gitAction === 'checks-failing' ||
-                            gitAction === 'checks-pending' ||
-                            gitAction === 'needs-approval' ||
-                            gitAction === 'changes-requested' ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPrMenuOpen(false);
-                                setMergeError(null);
-                                setMergeConfirm(true);
-                              }}
+                              onClick={() => void askAgentGit('merge')}
                             >
                               <span className="tool-menu-icon">⤵</span>
                               <span>Merge</span>
                             </button>
-                          ) : (
+                          ) : gitAction === 'merge' ? (
                             <button
                               type="button"
                               onClick={() => void askAgentGit('commit-push')}
                             >
                               <span className="tool-menu-icon">↑</span>
                               <span>Commit & push</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void askAgentGit('merge')}
+                            >
+                              <span className="tool-menu-icon">⤵</span>
+                              <span>Merge</span>
                             </button>
                           )}
                           {!thread.stackId ? (
@@ -1990,32 +1911,6 @@ export function RightSidebar({
           )}
         </div>
       </div>
-
-      {mergeConfirm && (
-        <MergeModal
-          prNumber={num}
-          prTitle={prMeta?.title ?? thread.prTitle}
-          branch={thread.branchName}
-          target={prMeta?.baseRefName || 'main'}
-          isDraft={Boolean(prMeta?.isDraft)}
-          busy={mergeBusy}
-          error={mergeError}
-          stackMerge={Boolean(thread.stackId)}
-          onConfirm={() => void confirmMergePr()}
-          onFixConflicts={() => {
-            if (mergeBusy) return;
-            setMergeConfirm(false);
-            setMergeError(null);
-            void askAgentGit('resolve-conflicts');
-          }}
-          onCancel={() => {
-            if (!mergeBusy) {
-              setMergeConfirm(false);
-              setMergeError(null);
-            }
-          }}
-        />
-      )}
     </aside>
   );
 }
