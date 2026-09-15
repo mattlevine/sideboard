@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  sanitizeGitBranchPrefix,
-  type GitHubStatus,
-  type GithubGitAuthMode,
-  type PublicAppSettings,
-} from '@sideboard-ai/core';
+import type { GitHubStatus, GithubGitAuthMode, PublicAppSettings } from '@sideboard-ai/core';
+import { sanitizeGitBranchPrefix } from '@sideboard/branch-prefix';
 
 export function GitSettings({
   settings,
