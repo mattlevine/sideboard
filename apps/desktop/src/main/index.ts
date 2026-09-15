@@ -202,13 +202,13 @@ const orch = getOrchestrator();
   const archiveThread = orch.archive.bind(orch);
   const purgeThread = orch.purge.bind(orch);
   orch.archive = async (ref: string) => {
-    const { killTerminalsForThread } = await import('./terminal.js');
-    killTerminalsForThread(ref);
+    const { killTerminalsOnThreadTeardown } = await import('./terminal.js');
+    killTerminalsOnThreadTeardown(orch, ref);
     return archiveThread(ref);
   };
   orch.purge = async (ref: string, opts?: { deleteBranch?: boolean }) => {
-    const { killTerminalsForThread } = await import('./terminal.js');
-    killTerminalsForThread(ref);
+    const { killTerminalsOnThreadTeardown } = await import('./terminal.js');
+    killTerminalsOnThreadTeardown(orch, ref);
     return purgeThread(ref, opts);
   };
 }

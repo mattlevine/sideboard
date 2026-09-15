@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Settings → Git **Branch prefix** stays unset when empty. It no longer defaults to the GitHub username.
+- The right-sidebar terminal is one shell per worktree. Switching chat tabs reuses the same PTY; archive/purge only tear it down when the last chat in that worktree is gone.
 
 ## [0.1.193] - 2026-09-15
 

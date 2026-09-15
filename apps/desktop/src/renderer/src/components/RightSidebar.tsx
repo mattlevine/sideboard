@@ -1902,8 +1902,9 @@ export function RightSidebar({
               aria-hidden={lower !== 'terminal'}
             >
               <EmbeddedTerminal
-                key={thread.id}
+                key={worktreeKey}
                 threadId={thread.id}
+                worktreePath={thread.worktreePath}
                 mode="shell"
                 active={lower === 'terminal'}
               />

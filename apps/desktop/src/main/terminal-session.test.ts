@@ -3,6 +3,8 @@ import {
   MAX_TERMINAL_SCROLLBACK,
   appendTerminalScrollback,
   findReusableTerminalSession,
+  shouldTeardownTerminalSession,
+  terminalReuseKey,
   terminalSessionKind,
 } from './terminal-session';
 
@@ -28,14 +30,54 @@ describe('terminal session reuse', () => {
     expect(terminalSessionKind({ command: '/usr/bin/claude' })).toBe('attach');
   });
 
-  it('finds the matching live session for a thread + kind', () => {
+  it('keys shell by worktree and attach by chat', () => {
+    expect(terminalReuseKey('shell', '/wt/paris', 'chat-a')).toBe('shell:/wt/paris');
+    expect(terminalReuseKey('shell', '/wt/paris', 'chat-b')).toBe('shell:/wt/paris');
+    expect(terminalReuseKey('attach', '/wt/paris', 'chat-a')).toBe('attach:chat-a');
+    expect(terminalReuseKey('attach', '/wt/paris', 'chat-b')).toBe('attach:chat-b');
+  });
+
+  it('finds the matching live session for a reuse key + kind', () => {
     const sessions = [
-      { threadRef: 'a', kind: 'shell' as const },
-      { threadRef: 'a', kind: 'attach' as const },
-      { threadRef: 'b', kind: 'shell' as const },
+      { reuseKey: 'shell:/wt/a', kind: 'shell' as const },
+      { reuseKey: 'attach:chat-a', kind: 'attach' as const },
+      { reuseKey: 'shell:/wt/b', kind: 'shell' as const },
     ];
-    expect(findReusableTerminalSession(sessions, 'a', 'shell')).toEqual(sessions[0]);
-    expect(findReusableTerminalSession(sessions, 'a', 'attach')).toEqual(sessions[1]);
-    expect(findReusableTerminalSession(sessions, 'c', 'shell')).toBeUndefined();
+    expect(findReusableTerminalSession(sessions, 'shell:/wt/a', 'shell')).toEqual(sessions[0]);
+    expect(findReusableTerminalSession(sessions, 'attach:chat-a', 'attach')).toEqual(sessions[1]);
+    expect(findReusableTerminalSession(sessions, 'shell:/wt/c', 'shell')).toBeUndefined();
+  });
+
+  it('tears down the shared shell only when the last worktree chat is gone', () => {
+    const shell = { kind: 'shell' as const, threadRef: 'chat-a', worktreeKey: '/wt/paris' };
+    const attach = { kind: 'attach' as const, threadRef: 'chat-a', worktreeKey: '/wt/paris' };
+    expect(
+      shouldTeardownTerminalSession(shell, {
+        threadRef: 'chat-a',
+        worktreeKey: '/wt/paris',
+        lastWorktreeChat: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldTeardownTerminalSession(shell, {
+        threadRef: 'chat-b',
+        worktreeKey: '/wt/paris',
+        lastWorktreeChat: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldTeardownTerminalSession(attach, {
+        threadRef: 'chat-a',
+        worktreeKey: '/wt/paris',
+        lastWorktreeChat: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldTeardownTerminalSession(attach, {
+        threadRef: 'chat-b',
+        worktreeKey: '/wt/paris',
+        lastWorktreeChat: true,
+      }),
+    ).toBe(false);
   });
 });

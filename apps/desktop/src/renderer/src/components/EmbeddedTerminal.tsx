@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
 interface Props {
+  /** Any live chat in the worktree — main uses it to resolve cwd. */
   threadId: string;
+  /** One shell PTY per worktree, shared across chat tabs. */
+  worktreePath: string;
   mode?: 'shell' | 'attach';
   /** False while the panel is parked (another lower tab). Refresh xterm when shown. */
   active?: boolean;
@@ -11,11 +14,16 @@ interface Props {
  * Full-bleed worktree terminal (Conductor-style). xterm when available;
  * otherwise a minimal scrollback + line input.
  *
- * The PTY lives in the main process and is reused when this component remounts
- * (switching worktrees / tabs). Do not kill the session on unmount — archive
- * and purge tear it down.
+ * The PTY lives in the main process and is reused across chat tabs in the same
+ * worktree (switching chats must not spawn a second shell). Do not kill the
+ * session on unmount — archive and purge tear it down when the last tab goes.
  */
-export function EmbeddedTerminal({ threadId, mode = 'shell', active = true }: Props) {
+export function EmbeddedTerminal({
+  threadId,
+  worktreePath,
+  mode = 'shell',
+  active = true,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
@@ -34,6 +42,9 @@ export function EmbeddedTerminal({ threadId, mode = 'shell', active = true }: Pr
     const id = requestAnimationFrame(() => termRef.current?.refresh());
     return () => cancelAnimationFrame(id);
   }, [active]);
+
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +65,7 @@ export function EmbeddedTerminal({ threadId, mode = 'shell', active = true }: Pr
           mode === 'attach' && typeof window.sideboard.terminal.attach === 'function'
             ? window.sideboard.terminal.attach
             : window.sideboard.terminal.start;
-        const { id } = await start(threadId, 100, 24);
+        const { id } = await start(threadIdRef.current, 100, 24);
         if (cancelled) return;
         setSessionId(id);
 
@@ -176,7 +187,7 @@ export function EmbeddedTerminal({ threadId, mode = 'shell', active = true }: Pr
       termRef.current?.dispose();
       termRef.current = null;
     };
-  }, [threadId, mode]);
+  }, [worktreePath, mode]);
 
   async function sendLine(e: React.FormEvent) {
     e.preventDefault();

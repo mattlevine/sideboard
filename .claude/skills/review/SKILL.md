@@ -146,7 +146,7 @@ Settings → Default orchestrator agent/model/effort must be the source for ever
 
 MCP `create_thread` / `start_board_card` must apply Settings → Default agent (`resolveOrchCreateThreadOptions`). Ignore an orchestrator-echoed or Cursor-autofilled agent. Coerce Codex→fallback only when the parent orchestrator is also Codex — do not force Cursor whenever the child would be Codex.
 
-Desktop terminals: every `orch.archive` / `orch.purge` path (including auto-archive on merge) must kill the thread PTY. Do not leave teardown only on the IPC handlers.
+Desktop terminals: one right-sidebar shell PTY per worktree (reuse across chat tabs). Every `orch.archive` / `orch.purge` path (including auto-archive on merge) must kill attach for that chat and the shared shell only when it is the last live tab. Do not leave teardown only on the IPC handlers.
 
 Session seed (`buildSessionSeed`): after pinning summaries, skip oversized newest blocks instead of aborting the newest-first walk — one fat tool dump must not drop every recent turn.
 
