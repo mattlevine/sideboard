@@ -37,6 +37,7 @@ export interface RepoSettings {
     renameBranch?: string;
     createPr?: string;
     general?: string;
+    resolveMergeConflicts?: string;
   };
 }
 
@@ -160,8 +161,17 @@ function parseSettingsFile(
     createPr:
       typeof promptsRaw.create_pr === 'string' ? promptsRaw.create_pr : undefined,
     general: typeof promptsRaw.general === 'string' ? promptsRaw.general : undefined,
+    resolveMergeConflicts:
+      typeof promptsRaw.resolve_merge_conflicts === 'string'
+        ? promptsRaw.resolve_merge_conflicts
+        : undefined,
   };
-  const hasPrompts = Boolean(prompts.renameBranch || prompts.createPr || prompts.general);
+  const hasPrompts = Boolean(
+    prompts.renameBranch ||
+      prompts.createPr ||
+      prompts.general ||
+      prompts.resolveMergeConflicts,
+  );
 
   return {
     source,
@@ -198,8 +208,16 @@ function mergeSettings(
     renameBranch: overlay.prompts?.renameBranch ?? base.prompts?.renameBranch,
     createPr: overlay.prompts?.createPr ?? base.prompts?.createPr,
     general: overlay.prompts?.general ?? base.prompts?.general,
+    resolveMergeConflicts:
+      overlay.prompts?.resolveMergeConflicts ??
+      base.prompts?.resolveMergeConflicts,
   };
-  const hasPrompts = Boolean(prompts.renameBranch || prompts.createPr || prompts.general);
+  const hasPrompts = Boolean(
+    prompts.renameBranch ||
+      prompts.createPr ||
+      prompts.general ||
+      prompts.resolveMergeConflicts,
+  );
 
   return {
     source: overlay.source,
@@ -390,6 +408,8 @@ export interface RepoSetupInfo {
   /** A setup command will run on new worktrees (settings, Cursor json, or script/setup). */
   hasSetupScript: boolean;
   configLabel: string | null;
+  /** `[prompts]` from workspace settings (Create PR / Resolve, etc.). */
+  prompts?: RepoSettings['prompts'];
 }
 
 /** Setup panel state for a thread worktree (falls back to main repo config). */
@@ -414,5 +434,6 @@ export function getRepoSetupInfo(
     hasConfig: hasWorkspaceHook(worktreePath, repoPath) || cursor || Boolean(convention),
     hasSetupScript,
     configLabel,
+    ...(settings?.prompts ? { prompts: settings.prompts } : {}),
   };
 }

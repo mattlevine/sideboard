@@ -556,6 +556,7 @@ describe('app settings', () => {
   it('round-trips Advanced preferences with Conductor-like defaults', async () => {
     const mod = await load();
     expect(mod.autoRenameBranchEnabled()).toBe(true);
+    expect(mod.gitBranchPrefixSetting()).toBeNull();
     expect(mod.autoRunAfterSetupEnabled()).toBe(false);
     expect(mod.caffeinateWhileRunningEnabled()).toBe(false);
     expect(mod.caffeinateWhileSlackListenEnabled()).toBe(false);
@@ -598,6 +599,12 @@ describe('app settings', () => {
       'steer',
     );
     expect(mod.followUpBehavior()).toBe('steer');
+    expect(mod.updateAdvancedSettings({ branchPrefix: 'Matt/extra' }).advanced.branchPrefix).toBe(
+      'matt',
+    );
+    expect(mod.gitBranchPrefixSetting()).toBe('matt');
+    expect(mod.updateAdvancedSettings({ branchPrefix: '' }).advanced.branchPrefix).toBeUndefined();
+    expect(mod.gitBranchPrefixSetting()).toBeNull();
     expect(mod.autoRenameBranchEnabled()).toBe(false);
     expect(mod.caffeinateWhileSlackListenEnabled()).toBe(true);
     expect(mod.caffeinateWhileSchedulesEnabled()).toBe(true);

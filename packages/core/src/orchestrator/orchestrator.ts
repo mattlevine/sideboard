@@ -10,27 +10,21 @@ import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
-  createOrUpdatePr,
-  currentBranch,
   getPrChecks,
   getPrDetails,
   getPrMeta as fetchPrMeta,
-  isDirty,
   markPrReady as markGithubPrReady,
   mergePr as mergeGithubPr,
-  pushBranch,
   removeWorktree,
-  resolveDefaultBranch,
   resolveGithubRepoSlug,
   resolvePrSelector,
   resolvePrSelectors,
 } from '../git/worktree.js';
-import { suggestPrMetadata } from '../land/pr-metadata.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
   AGENT_GIT_ACTIONS,
-  agentGitPrompt,
   expandCanonicalGitRequest,
+  resolveSidebarGitPrompt,
   type AgentGitAction,
 } from '../git/agent-git-actions.js';
 import {
@@ -258,7 +252,7 @@ export async function waitForPidExit(
  * use Settings → Follow-up behavior (default steer) so those do not sit
  * in the queue while the user asked to interrupt.
  *
- * Orchestrator → worktree talk (`send_to_thread`, dirty `ask_git`) must
+ * Orchestrator → worktree talk (`send_to_thread`, `ask_git`) must
  * pass {@link resolveOrchChildFollowUp} so those prompts steer by default.
  * Create/reuse first prompts still queue unless the caller opts in.
  */
@@ -1272,9 +1266,8 @@ export class Orchestrator {
     // stuffing those directives has contributed to empty model responses.
     const isBrightsy = fresh.agent === 'brightsy';
     const isOrchestration = isOrchestratorThread(fresh);
-    const { autoRenameBranchEnabled, getGithubGitAuthMode } = await import(
-      '../store/app-settings.js'
-    );
+    const { autoRenameBranchEnabled, getGithubGitAuthMode, gitBranchPrefixSetting } =
+      await import('../store/app-settings.js');
     const gitAuthMode = getGithubGitAuthMode();
     // Orchestrators use Sideboard MCP across registered repos — not a single worktree PR playbook.
     const worktreeDirective =
@@ -1326,12 +1319,27 @@ export class Orchestrator {
       }
     }
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
-    const renameBranchDirective =
-      !isBrightsy && !isOrchestration && autoRenameBranchEnabled()
-        ? formatRenameBranchDirective(fresh, {
-            customPrompt: settings?.prompts?.renameBranch,
-          })
-        : null;
+    let renameBranchDirective: string | null = null;
+    if (!isBrightsy && !isOrchestration && autoRenameBranchEnabled()) {
+      const { isPlaceholderBranch } = await import('../git/worktree-labels.js');
+      let githubLogin: string | null = null;
+      if (isPlaceholderBranch(fresh.branchName, fresh.worktreePath) && !gitBranchPrefixSetting()) {
+        try {
+          const { getGitHubStatus } = await import('../integrations/github.js');
+          githubLogin = (await getGitHubStatus()).login;
+        } catch {
+          // Prefix stays unset; examples omit the username segment.
+        }
+      }
+      const { resolveGitBranchPrefix } = await import('../git/branch-prefix.js');
+      renameBranchDirective = formatRenameBranchDirective(fresh, {
+        customPrompt: settings?.prompts?.renameBranch,
+        branchPrefix: resolveGitBranchPrefix({
+          setting: gitBranchPrefixSetting(),
+          githubLogin,
+        }),
+      });
+    }
     // CLIs auto-load CLAUDE.md / AGENTS.md from the worktree — do not duplicate
     // them in the user message. Brightsy carries its own server-side instructions.
     // Fresh / compacted sessions have no CLI resume — seed from Sideboard history.
@@ -2662,9 +2670,9 @@ export class Orchestrator {
   }
 
   /**
-   * Desktop git buttons + MCP `ask_git`.
-   * When the worktree is clean, push / open the PR here (HTTPS via `gh` if SSH
-   * is missing). When dirty, steer the worktree agent to commit first.
+   * Desktop git buttons + MCP `ask_git`. Always queues the worktree agent
+   * with the action prompt (same path as Resolve). Repository `[prompts]`
+   * overrides apply when set.
    */
   async askGit(threadRef: string, action: AgentGitAction): Promise<Thread> {
     if (!AGENT_GIT_ACTIONS.includes(action)) {
@@ -2682,23 +2690,6 @@ export class Orchestrator {
         'No pull request linked. Ask the worktree agent to open a draft PR first (ask_git create-draft).',
       );
     }
-    if (
-      (action === 'commit-push' ||
-        action === 'create-draft' ||
-        action === 'create-web') &&
-      thread.worktreePath?.trim() &&
-      !(await isDirty(thread.worktreePath))
-    ) {
-      try {
-        await this.pushAndMaybeOpenPr(thread, action);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        updateThread(thread.id, { lastError: message });
-        this.emit({ type: 'error', threadId: thread.id, message });
-        throw err;
-      }
-      return this.requireThread(threadRef);
-    }
     let prBase: string | undefined;
     if (action === 'resolve-conflicts') {
       try {
@@ -2708,48 +2699,18 @@ export class Orchestrator {
         // Fall back to the generic merge-remote-branch phrase.
       }
     }
-    return this.send(threadRef, agentGitPrompt(action, { prBase }), {
-      followUp: resolveOrchChildFollowUp(),
-    });
-  }
-
-  /** Push origin (gh HTTPS fallback) and create/update the PR when requested. */
-  private async pushAndMaybeOpenPr(
-    thread: Thread,
-    action: 'commit-push' | 'create-draft' | 'create-web',
-  ): Promise<void> {
-    const cwd = thread.worktreePath;
-    const branch = await currentBranch(cwd);
-    await pushBranch(cwd, branch);
-    if (action === 'commit-push') return;
-
-    const base = await resolveDefaultBranch(thread.repoPath);
-    const meta = await suggestPrMetadata(cwd, {
-      base,
-      fallbackTitle: thread.prTitle ?? thread.title,
-    });
-    const url = await createOrUpdatePr(cwd, {
-      title: meta.title,
-      body: meta.body,
-      base,
-      head: branch,
-      draft: action === 'create-draft',
-      web: action === 'create-web',
-    });
-    if (!url) return;
-    const patch: Partial<Thread> = {
-      prUrl: url,
-      prTitle: meta.title,
-      prIsDraft: action === 'create-draft',
-    };
-    try {
-      const fetched = await fetchPrMeta(cwd, url);
-      if (fetched?.title) patch.prTitle = fetched.title;
-      if (fetched) patch.prIsDraft = Boolean(fetched.isDraft);
-    } catch {
-      // URL alone is enough
-    }
-    updateThread(thread.id, patch);
+    const settings = loadWorkspaceSettings(thread.worktreePath, thread.repoPath);
+    return this.send(
+      threadRef,
+      resolveSidebarGitPrompt(action, {
+        prBase,
+        createPr: settings?.prompts?.createPr,
+        resolveMergeConflicts: settings?.prompts?.resolveMergeConflicts,
+      }),
+      {
+        followUp: resolveOrchChildFollowUp(),
+      },
+    );
   }
 
   setThreadOptions(threadRef: string, patch: ThreadOptionsPatch): Thread {

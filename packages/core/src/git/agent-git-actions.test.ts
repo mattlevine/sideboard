@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { agentGitPrompt, expandCanonicalGitRequest } from './agent-git-actions.js';
+import {
+  agentGitPrompt,
+  expandCanonicalGitRequest,
+  resolveSidebarGitPrompt,
+} from './agent-git-actions.js';
 
 describe('agentGitPrompt', () => {
   it('matches the worktree-agent short git requests', () => {
@@ -60,5 +64,41 @@ describe('expandCanonicalGitRequest', () => {
     expect(expandCanonicalGitRequest('Commit and push. Then deploy.')).toBe(
       'Commit and push. Then deploy.',
     );
+  });
+});
+
+describe('resolveSidebarGitPrompt', () => {
+  it('uses the draft-PR phrase for the primary Create PR button', () => {
+    expect(resolveSidebarGitPrompt('create-pr')).toBe(
+      'Commit, push, and open a draft PR.',
+    );
+  });
+
+  it('prefers repository [prompts] create_pr and resolve_merge_conflicts', () => {
+    expect(
+      resolveSidebarGitPrompt('create-pr', {
+        createPr: 'Write a concise PR description with test results.',
+      }),
+    ).toBe('Write a concise PR description with test results.');
+    expect(
+      resolveSidebarGitPrompt('create-draft', {
+        createPr: '  Open a draft with testers tagged.  ',
+      }),
+    ).toBe('Open a draft with testers tagged.');
+    expect(
+      resolveSidebarGitPrompt('resolve-conflicts', {
+        prBase: 'main',
+        resolveMergeConflicts: 'Keep ours unless theirs is clearly newer.',
+      }),
+    ).toBe('Keep ours unless theirs is clearly newer.');
+  });
+
+  it('falls back to the canonical phrase when an override is blank', () => {
+    expect(resolveSidebarGitPrompt('merge', { createPr: 'unused' })).toBe(
+      'Merge PR.',
+    );
+    expect(
+      resolveSidebarGitPrompt('create-web', { createPr: '   ' }),
+    ).toBe('Commit, push, and open a PR in the browser.');
   });
 });

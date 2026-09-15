@@ -88,6 +88,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/git/agent-git-actions.ts',
         ),
+        '@sideboard/branch-prefix': resolve(
+          __dirname,
+          '../../packages/core/src/git/branch-prefix.ts',
+        ),
         '@sideboard/review-request-template': resolve(
           __dirname,
           '../../packages/core/src/review/review-request-template.ts',

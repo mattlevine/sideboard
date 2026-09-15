@@ -457,7 +457,7 @@ export interface IpcApi {
   ): Promise<{ url: string; state: string; isDraft: boolean }>;
   /** Merge the thread's linked PR on GitHub (`gh pr merge`). */
   mergePr(threadRef: string): Promise<{ url: string; state: string }>;
-  /** Desktop git buttons: push/PR when clean, else queue the worktree agent. */
+  /** Desktop git buttons: queue the same prompt the Resolve button sends. */
   askGit(
     threadRef: string,
     action:
@@ -540,6 +540,12 @@ export interface IpcApi {
     hasConfig: boolean;
     hasSetupScript: boolean;
     configLabel: string | null;
+    prompts?: {
+      renameBranch?: string;
+      createPr?: string;
+      general?: string;
+      resolveMergeConflicts?: string;
+    };
   }>;
   /** Replay persisted setup output (create races the sidebar mount). */
   getSetupLog(threadRef: string): Promise<SetupLogSnapshot>;

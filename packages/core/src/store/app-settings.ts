@@ -17,6 +17,7 @@ import {
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
 import { loadSecretVault, saveSecretVault } from './secret-vault.js';
+import { sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 
 /** Well-known env keys managed from Settings → Agents (Conductor-style harnesses). */
 export const HARNESS_ENV_KEYS = {
@@ -253,6 +254,11 @@ export interface AdvancedAppSettings {
    * Conductor: Git → “Auto-rename placeholder branch on send” (default on).
    */
   autoRenameBranch?: boolean;
+  /**
+   * First segment of renamed task branches (`matt/bb-1234-eng-fix-thing`).
+   * Empty / omitted → connected GitHub username.
+   */
+  branchPrefix?: string;
   /**
    * After workspace setup finishes, start the default run/dev script.
    * Conductor: `scripts.auto_run_after_setup` (default off).
@@ -773,6 +779,10 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   const out: AdvancedAppSettings = {};
   if (typeof source.autoRenameBranch === 'boolean') {
     out.autoRenameBranch = source.autoRenameBranch;
+  }
+  if (typeof source.branchPrefix === 'string') {
+    const prefix = sanitizeGitBranchPrefix(source.branchPrefix);
+    if (prefix) out.branchPrefix = prefix;
   }
   if (typeof source.autoRunAfterSetup === 'boolean') {
     out.autoRunAfterSetup = source.autoRunAfterSetup;
@@ -1993,6 +2003,13 @@ export function updateAdvancedSettings(
   if (typeof patch.autoRenameBranch === 'boolean') {
     advanced.autoRenameBranch = patch.autoRenameBranch;
   }
+  if (patch.branchPrefix === null || patch.branchPrefix === '') {
+    delete advanced.branchPrefix;
+  } else if (typeof patch.branchPrefix === 'string') {
+    const prefix = sanitizeGitBranchPrefix(patch.branchPrefix);
+    if (prefix) advanced.branchPrefix = prefix;
+    else delete advanced.branchPrefix;
+  }
   if (typeof patch.autoRunAfterSetup === 'boolean') {
     advanced.autoRunAfterSetup = patch.autoRunAfterSetup;
   }
@@ -2066,6 +2083,13 @@ export function autoRenameBranchEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return settings.advanced.autoRenameBranch !== false;
+}
+
+/** Saved account prefix, or null to fall back to the GitHub username. */
+export function gitBranchPrefixSetting(
+  settings: AppSettings = loadAppSettings(),
+): string | null {
+  return sanitizeGitBranchPrefix(settings.advanced.branchPrefix);
 }
 
 export function autoRunAfterSetupEnabled(

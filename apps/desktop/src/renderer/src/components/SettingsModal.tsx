@@ -1442,8 +1442,9 @@ export function SettingsModal({
                       </div>
                       <p className="settings-hint">
                         On the first agent turn, ask the agent to rename temporary{' '}
-                        <code>thread/&lt;team&gt;</code> branches to a task-shaped name (Conductor
-                        Git default: on).
+                        <code>thread/&lt;team&gt;</code> branches to{' '}
+                        <code>prefix/ticket-description</code> (Settings → Git prefix, default
+                        GitHub username).
                       </p>
                     </div>
                     <button

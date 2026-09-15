@@ -38,10 +38,16 @@ export * from './git/git-auth-mode.js';
 export * from './git/worktree.js';
 export * from './git/stack.js';
 export {
+  examplePrefixedBranch,
+  resolveGitBranchPrefix,
+  sanitizeGitBranchPrefix,
+} from './git/branch-prefix.js';
+export {
   AGENT_GIT_ACTIONS,
   agentGitPrompt,
+  resolveSidebarGitPrompt,
 } from './git/agent-git-actions.js';
-export type { AgentGitAction } from './git/agent-git-actions.js';
+export type { AgentGitAction, SidebarGitAction } from './git/agent-git-actions.js';
 export * from './integrations/github.js';
 export * from './integrations/linear.js';
 export * from './integrations/linear-oauth.js';

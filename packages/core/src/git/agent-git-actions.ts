@@ -11,6 +11,9 @@ export const AGENT_GIT_ACTIONS = [
 
 export type AgentGitAction = (typeof AGENT_GIT_ACTIONS)[number];
 
+/** Desktop right-sidebar git buttons, including the primary Create PR action. */
+export type SidebarGitAction = AgentGitAction | 'create-pr';
+
 export function agentGitPrompt(
   action: AgentGitAction,
   opts?: { prBase?: string | null },
@@ -32,6 +35,35 @@ export function agentGitPrompt(
     case 'merge':
       return 'Merge PR.';
   }
+}
+
+/**
+ * Prompt text for a sidebar / `ask_git` action. Repository `[prompts]`
+ * overrides (`create_pr`, `resolve_merge_conflicts`) win when set.
+ */
+export function resolveSidebarGitPrompt(
+  action: SidebarGitAction,
+  opts?: {
+    prBase?: string | null;
+    createPr?: string | null;
+    resolveMergeConflicts?: string | null;
+  },
+): string {
+  if (
+    action === 'create-pr' ||
+    action === 'create-draft' ||
+    action === 'create-web'
+  ) {
+    const custom = opts?.createPr?.trim();
+    if (custom) return custom;
+    return agentGitPrompt(action === 'create-pr' ? 'create-draft' : action);
+  }
+  if (action === 'resolve-conflicts') {
+    const custom = opts?.resolveMergeConflicts?.trim();
+    if (custom) return custom;
+    return agentGitPrompt('resolve-conflicts', opts);
+  }
+  return agentGitPrompt(action, opts);
 }
 
 const RESOLVE_CONFLICTS_RE =

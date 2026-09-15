@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatGitAuthModeDirective } from '../git/git-auth-mode.js';
+import { examplePrefixedBranch, sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 import {
   isPlaceholderBranch,
   ticketSlugForBranch,
@@ -22,21 +23,22 @@ function normPath(p: string): string {
 export function formatRenameBranchDirective(
   thread: Pick<Thread, 'worktreePath' | 'branchName'> &
     Partial<Pick<Thread, 'sourceType' | 'sourceRef'>>,
-  opts?: { customPrompt?: string | null },
+  opts?: { customPrompt?: string | null; branchPrefix?: string | null },
 ): string | null {
   if (!isPlaceholderBranch(thread.branchName, thread.worktreePath)) return null;
   const dir = worktreeNameFromPath(thread.worktreePath);
   const ticket =
     thread.sourceType === 'ticket' ? ticketSlugForBranch(thread.sourceRef ?? '') : null;
-  const example = ticket
-    ? `\`feat/${ticket}-dark-mode\` or \`fix/${ticket}-panel-width\``
-    : '`fix/panel-width` or `feat/dark-mode`';
+  const prefix = sanitizeGitBranchPrefix(opts?.branchPrefix);
+  const example = examplePrefixedBranch(prefix, ticket);
+  const shape = prefix
+    ? `\`${prefix}/<ticket-or-task>-<short-kebab-description>\``
+    : '`<ticket-or-task>-<short-kebab-description>`';
   const lines = [
     'Branch naming (do this early in the turn):',
     `- Current branch \`${thread.branchName}\` is a temporary placeholder. The worktree folder \`${dir}\` is a stable nickname — do not rename or leave that directory.`,
-    `- Rename the git branch to a short kebab-case name that describes this task (what you are changing), e.g. ${example}:`,
+    `- Rename the git branch to ${shape}, e.g. \`${example}\`:`,
     '  `git branch -m <new-name>`',
-    '- Prefer Conventional Commits style prefixes when they fit (`fix/`, `feat/`, `chore/`, `docs/`).',
     ...(ticket
       ? [
           `- Keep ticket \`${ticket}\` in the new branch name so the issue stays findable.`,
