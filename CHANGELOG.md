@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.193] - 2026-09-15
+
+### Changed
+
+- Right-sidebar git buttons (Create PR, Commit & push, Ready for review, Merge) now steer the worktree agent with the same prompt path as Resolve, instead of pushing or opening the PR locally. Repository `[prompts].create_pr` and `[prompts].resolve_merge_conflicts` override the text when set.
+
+### Added
+
+- Settings → Git **Branch prefix** (empty uses the connected GitHub username) so renamed placeholder branches look like `matt/bb-1234-eng-fix-thing`.
+
 ## [0.1.192] - 2026-09-14
 
 ### Changed
