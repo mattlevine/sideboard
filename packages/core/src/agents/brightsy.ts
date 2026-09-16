@@ -16,7 +16,11 @@ import {
   type BrightsyChatTargets,
   type BrightsyTeamTargets,
 } from './brightsy-targets.js';
-import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
+import {
+  extractJsonErrorMessage,
+  formatUnknownDetail,
+  looksLikeBrightsyEmptyCompletion,
+} from './error-detail.js';
 import { flattenTurnInput } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
@@ -58,6 +62,12 @@ export function parseBrightsyCliLine(line: string): AgentEvent | AgentEvent[] | 
   try {
     const obj = JSON.parse(trimmed) as Record<string, unknown>;
     if (obj.type === 'text' && typeof obj.text === 'string') {
+      if (looksLikeBrightsyEmptyCompletion(obj.text)) {
+        return [
+          { type: 'stderr', data: obj.text },
+          { type: 'stdout', data: `Error: ${obj.text}` },
+        ] satisfies AgentEvent[];
+      }
       return { type: 'stdout', data: obj.text };
     }
     if (obj.type === 'thinking' && typeof obj.text === 'string') {
@@ -124,7 +134,10 @@ export function parseBrightsyCliLine(line: string): AgentEvent | AgentEvent[] | 
     ) {
       return null;
     }
-    if (/error|failed|unauthorized|quota|limit|not logged in/i.test(trimmed)) {
+    if (
+      looksLikeBrightsyEmptyCompletion(trimmed) ||
+      /error|failed|unauthorized|quota|limit|not logged in/i.test(trimmed)
+    ) {
       return [
         { type: 'stderr', data: trimmed },
         { type: 'stdout', data: `Error: ${trimmed}` },
@@ -132,6 +145,20 @@ export function parseBrightsyCliLine(line: string): AgentEvent | AgentEvent[] | 
     }
     return { type: 'stdout', data: line };
   }
+}
+
+/** Brightsy CLI exits 0 after the empty-completion fallback — fail the turn. */
+export function adjustBrightsyTurnExit(
+  exitCode: number | null,
+  assistantText: string,
+): number | null {
+  if (
+    looksLikeBrightsyEmptyCompletion(assistantText) &&
+    (exitCode === 0 || exitCode == null)
+  ) {
+    return 2;
+  }
+  return exitCode;
 }
 
 async function fetchTeamChatTargets(

@@ -10,6 +10,8 @@ import {
   looksLikeCursorSdkSourceDump,
   looksLikeHugeToolResultDump,
   looksLikeInvalidAgentSession,
+  looksLikeBrightsyEmptyCompletion,
+  looksLikeCursorHttp2StreamClose,
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
   shouldRetryFailedAgentTurn,
@@ -124,6 +126,14 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(
       humanizeAgentFailDetail('Cursor startup failed: Network request failed (retryable)'),
     ).toMatch(/retry the turn/i);
+    expect(
+      humanizeAgentFailDetail(
+        'Cursor run failed (run-80eeb45d-de78-48f0-9c1a-7b2c3d4e5f60): [unknown] [internal] Stream closed with error code NGHTTP2_INTERNAL_ERROR',
+      ),
+    ).toMatch(/fresh Cursor session/i);
+    expect(
+      humanizeAgentFailDetail('I did not receive a valid model response. Please try again.'),
+    ).toMatch(/empty model completion/i);
   });
 
   it('detects invalid resume / missing session failures', () => {
@@ -167,6 +177,16 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
       ),
     ).toBe(true);
     expect(
+      looksLikeRetryableRunnerCrash(
+        'Cursor run failed (run-80eeb45d-de78-48f0-9c1a-7b2c3d4e5f60): [unknown] [internal] Stream closed with error code NGHTTP2_INTERNAL_ERROR',
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeRetryableRunnerCrash(
+        'I did not receive a valid model response. Please try again.',
+      ),
+    ).toBe(true);
+    expect(
       looksLikeRetryableRunnerCrash('Cursor startup failed: Network request failed (retryable)'),
     ).toBe(true);
     expect(looksLikeRetryableRunnerCrash('Network request failed')).toBe(true);
@@ -185,7 +205,30 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(looksLikeRetryableRunnerCrash('API Error: 500 Internal server error')).toBe(
       false,
     );
+    expect(
+      looksLikeCursorHttp2StreamClose('Stream closed with error code NGHTTP2_INTERNAL_ERROR'),
+    ).toBe(true);
+    expect(looksLikeCursorHttp2StreamClose('Stream closed with error code')).toBe(false);
+    expect(looksLikeRetryableRunnerCrash('Stream closed with error code')).toBe(false);
     expect(looksLikeRetryableRunnerCrash('API Error: Connection error')).toBe(false);
+    expect(
+      looksLikeBrightsyEmptyCompletion('I did not receive a valid model response. Please try again.'),
+    ).toBe(true);
+    expect(
+      looksLikeBrightsyEmptyCompletion(
+        'Error: I did not receive a valid model response. Please try again.',
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeBrightsyEmptyCompletion(
+        'The CLI printed I did not receive a valid model response after tools finished.',
+      ),
+    ).toBe(false);
+    expect(
+      looksLikeRetryableRunnerCrash(
+        'The CLI printed I did not receive a valid model response after tools finished.',
+      ),
+    ).toBe(false);
     expect(looksLikeRetryableRunnerCrash('API retry 5/5 (wait 800ms)')).toBe(false);
     expect(
       shouldRetryFailedAgentTurn('Codex turn failed', { hasSession: false }),
@@ -504,6 +547,14 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
         partsCount: 2,
       }),
     ).toBe(false);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail:
+          'Cursor run failed (run-80eeb45d-de78-48f0-9c1a-7b2c3d4e5f60): [unknown] [internal] Stream closed with error code NGHTTP2_INTERNAL_ERROR',
+        assistantText: 'Tests passed. Next I will commit.',
+        partsCount: 4,
+      }),
+    ).toBe(true);
     expect(formatAgentErrorContinuePrompt('segfault at 0x0')).toMatch(/Continue from where you left off/);
   });
 
