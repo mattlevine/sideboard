@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.196] - 2026-09-15
+
+### Fixed
+
+- Codex worktree and orchestration turns disable ChatGPT Apps/connectors (`features.apps=false`). A PostHog (or other) OAuth MCP `AuthRequired` no longer kills `codex exec`. Use Settings → Connectors + the HTTP API instead.
+
 ## [0.1.195] - 2026-09-15
 
 ### Changed
