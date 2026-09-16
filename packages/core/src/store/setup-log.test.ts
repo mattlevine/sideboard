@@ -9,6 +9,7 @@ import {
   mergeSetupOutput,
   readSetupLog,
   resetSetupLogMemory,
+  setupLogKeyForWorktree,
 } from './setup-log.js';
 
 describe('setup log', () => {
@@ -45,6 +46,11 @@ describe('setup log', () => {
     expect(mergeSetupOutput('b\nc', 'a\nb\nc')).toBe('a\nb\nc');
     expect(mergeSetupOutput('a\nb\nc', 'a\nb')).toBe('a\nb\nc');
     expect(mergeSetupOutput('', 'hello')).toBe('hello');
+  });
+
+  it('keys the shared worktree log the same for trailing-slash variants', () => {
+    expect(setupLogKeyForWorktree('/wt/paris/')).toBe(setupLogKeyForWorktree('/wt/paris'));
+    expect(setupLogKeyForWorktree('/wt/paris')).not.toBe(setupLogKeyForWorktree('/wt/lyon'));
   });
 
   it('marks a new run as running with a cleared buffer', () => {

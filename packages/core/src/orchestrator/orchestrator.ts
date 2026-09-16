@@ -37,6 +37,7 @@ import {
   beginSetupLog,
   finishSetupLog,
   readSetupLog,
+  setupLogKeyForWorktree,
   type SetupLogSnapshot,
 } from '../store/setup-log.js';
 import {
@@ -106,6 +107,14 @@ import {
 } from './setup-last-error.js';
 import { requestReview } from '../review/request-review.js';
 import { forkThreadWorktree as forkThreadWorktreeImpl } from '../threads/fork-worktree.js';
+import {
+  isWorktreeRunProcessKey,
+  mergeWorktreeActiveRuns,
+  pickRichestSetupLog,
+  worktreeDevProcessKey,
+  worktreeRunProcessKey,
+  worktreeSetupProcessKey,
+} from '../threads/worktree-runtime.js';
 import {
   createQuotaFailoverChat,
   planOrchestrationQuotaFailover,
@@ -1814,24 +1823,33 @@ export class Orchestrator {
       );
     }
 
-    const runKey = `${thread.id}:run:${resolvedName}`;
-    const existing = this.processes.get(runKey);
-    const active = (thread.activeRuns ?? []).find((r) => r.scriptName === resolvedName);
+    const siblings = threadsSharingWorktree(thread.worktreePath);
+    const shared = mergeWorktreeActiveRuns(siblings);
+    const runKey = worktreeRunProcessKey(thread.worktreePath, resolvedName);
+    const existing =
+      this.processes.get(runKey) ??
+      siblings
+        .map((t) => this.processes.get(`${t.id}:run:${resolvedName}`))
+        .find(Boolean);
+    const active = shared.activeRuns.find((r) => r.scriptName === resolvedName);
     if (existing && active) {
       return { port: active.port, scriptName: resolvedName, ports: active.ports };
     }
     // Legacy key
     if (!scriptName) {
-      const legacy = this.processes.get(`${thread.id}:dev`);
-      if (legacy && thread.devPort) {
-        return { port: thread.devPort, scriptName: resolvedName, ports: [thread.devPort] };
+      const legacy =
+        this.processes.get(worktreeDevProcessKey(thread.worktreePath)) ??
+        siblings.map((t) => this.processes.get(`${t.id}:dev`)).find(Boolean);
+      if (legacy && shared.devPort) {
+        return { port: shared.devPort, scriptName: resolvedName, ports: [shared.devPort] };
       }
     }
 
     const mode = getRunMode(thread.worktreePath, thread.repoPath);
     if (mode === 'nonconcurrent') {
+      const here = normalizeWorktreePath(thread.worktreePath);
       for (const t of listThreads()) {
-        if (t.id === thread.id) continue;
+        if (normalizeWorktreePath(t.worktreePath) === here) continue;
         const runs = t.activeRuns ?? [];
         if (runs.length > 0 || t.devPort) {
           throw new Error(
@@ -1872,7 +1890,7 @@ export class Orchestrator {
       (!scripts.some((s) => s.default) &&
         (resolvedName === 'dev' || resolvedName === scripts[0]?.name));
     if (isDefault) {
-      this.processes.set(`${thread.id}:dev`, {
+      this.processes.set(worktreeDevProcessKey(thread.worktreePath), {
         kind: 'dev',
         pid: handle.pid,
         startedAt,
@@ -1888,13 +1906,14 @@ export class Orchestrator {
       startedAt,
     };
     const nextRuns = [
-      ...(thread.activeRuns ?? []).filter((r) => r.scriptName !== resolvedName),
+      ...shared.activeRuns.filter((r) => r.scriptName !== resolvedName),
       run,
     ];
-    updateThread(thread.id, {
-      activeRuns: nextRuns,
-      devPort: isDefault ? handle.port : thread.devPort,
-    });
+    this.syncWorktreeRuns(
+      thread.worktreePath,
+      nextRuns,
+      isDefault ? handle.port : shared.devPort,
+    );
     this.emit({
       type: 'dev_server_started',
       threadId: thread.id,
@@ -1903,15 +1922,14 @@ export class Orchestrator {
     });
     void handle.done.then(() => {
       this.processes.delete(runKey);
-      if (isDefault) this.processes.delete(`${thread.id}:dev`);
-      const latest = readThread(thread.id);
-      const remaining = (latest?.activeRuns ?? []).filter(
-        (r) => r.scriptName !== resolvedName,
+      if (isDefault) this.processes.delete(worktreeDevProcessKey(thread.worktreePath));
+      const latest = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath));
+      const remaining = latest.activeRuns.filter((r) => r.scriptName !== resolvedName);
+      this.syncWorktreeRuns(
+        thread.worktreePath,
+        remaining,
+        isDefault ? null : latest.devPort,
       );
-      updateThread(thread.id, {
-        activeRuns: remaining,
-        devPort: isDefault ? null : latest?.devPort ?? null,
-      });
       this.emit({
         type: 'dev_server_stopped',
         threadId: thread.id,
@@ -1923,30 +1941,51 @@ export class Orchestrator {
 
   stopDev(threadRef: string, scriptName?: string): void {
     const thread = this.requireThread(threadRef);
+    const siblings = threadsSharingWorktree(thread.worktreePath);
+    const shared = mergeWorktreeActiveRuns(siblings);
     if (scriptName) {
-      const runKey = `${thread.id}:run:${scriptName}`;
-      const proc = this.processes.get(runKey);
-      if (proc) proc.kill();
-      this.processes.delete(runKey);
-      const remaining = (thread.activeRuns ?? []).filter((r) => r.scriptName !== scriptName);
-      const isPrimary = thread.devPort != null &&
-        thread.activeRuns?.find((r) => r.scriptName === scriptName)?.port === thread.devPort;
-      updateThread(thread.id, {
-        activeRuns: remaining,
-        devPort: isPrimary ? null : thread.devPort,
-      });
+      const keys = [
+        worktreeRunProcessKey(thread.worktreePath, scriptName),
+        ...siblings.map((t) => `${t.id}:run:${scriptName}`),
+      ];
+      for (const key of keys) {
+        const proc = this.processes.get(key);
+        if (proc) proc.kill();
+        this.processes.delete(key);
+      }
+      const remaining = shared.activeRuns.filter((r) => r.scriptName !== scriptName);
+      const isPrimary =
+        shared.devPort != null &&
+        shared.activeRuns.find((r) => r.scriptName === scriptName)?.port === shared.devPort;
+      this.syncWorktreeRuns(
+        thread.worktreePath,
+        remaining,
+        isPrimary ? null : shared.devPort,
+      );
       this.emit({ type: 'dev_server_stopped', threadId: thread.id, scriptName });
       return;
     }
-    // Stop all run scripts for this thread
     for (const [key, proc] of [...this.processes.entries()]) {
-      if (key.startsWith(`${thread.id}:run:`) || key === `${thread.id}:dev`) {
+      if (
+        isWorktreeRunProcessKey(key, thread.worktreePath) ||
+        siblings.some((t) => key.startsWith(`${t.id}:run:`) || key === `${t.id}:dev`)
+      ) {
         proc.kill();
         this.processes.delete(key);
       }
     }
-    updateThread(thread.id, { activeRuns: [], devPort: null });
+    this.syncWorktreeRuns(thread.worktreePath, [], null);
     this.emit({ type: 'dev_server_stopped', threadId: thread.id });
+  }
+
+  private syncWorktreeRuns(
+    worktreePath: string,
+    activeRuns: ActiveRun[],
+    devPort: number | null,
+  ): void {
+    for (const sibling of threadsSharingWorktree(worktreePath)) {
+      updateThread(sibling.id, { activeRuns, devPort });
+    }
   }
 
   listThreadRunScripts(threadRef: string): RunScript[] {
@@ -1955,17 +1994,42 @@ export class Orchestrator {
   }
 
   getActiveRuns(threadRef: string): ActiveRun[] {
-    return this.requireThread(threadRef).activeRuns ?? [];
+    const thread = this.requireThread(threadRef);
+    return mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath)).activeRuns;
   }
 
   getSetupLog(threadRef: string): SetupLogSnapshot {
     const thread = this.getThread(threadRef);
     if (!thread) return readSetupLog(threadRef);
-    const snap = readSetupLog(thread.id);
-    if (snap.running && !this.processes.has(`${thread.id}:setup`)) {
+    const siblingIds = [
+      thread.id,
+      ...threadsSharingWorktree(thread.worktreePath).map((t) => t.id),
+    ];
+    const snap =
+      pickRichestSetupLog([
+        readSetupLog(setupLogKeyForWorktree(thread.worktreePath)),
+        ...[...new Set(siblingIds)].map((id) => readSetupLog(id)),
+      ]) ?? readSetupLog(thread.id);
+    if (snap.running && !this.hasWorktreeSetupProcess(thread.worktreePath)) {
       return { ...snap, running: false };
     }
     return snap;
+  }
+
+  private hasWorktreeSetupProcess(worktreePath: string): boolean {
+    if (this.processes.has(worktreeSetupProcessKey(worktreePath))) return true;
+    return threadsSharingWorktree(worktreePath).some((t) =>
+      this.processes.has(`${t.id}:setup`),
+    );
+  }
+
+  private writeSetupLog(
+    threadId: string,
+    worktreePath: string,
+    fn: (key: string) => void,
+  ): void {
+    fn(setupLogKeyForWorktree(worktreePath));
+    fn(threadId);
   }
 
   async runSetup(
@@ -1974,9 +2038,9 @@ export class Orchestrator {
   ): Promise<{ exitCode: number | null; source?: string | null }> {
     const thread = this.requireThread(threadRef);
     this.assertNotGlobal(thread, 'Setup');
-    const key = `${thread.id}:setup`;
-    if (this.processes.has(key)) {
-      throw new Error('Setup already running for this thread');
+    const key = worktreeSetupProcessKey(thread.worktreePath);
+    if (this.hasWorktreeSetupProcess(thread.worktreePath)) {
+      throw new Error('Setup already running for this worktree');
     }
 
     const abort = new AbortController();
@@ -1985,14 +2049,16 @@ export class Orchestrator {
       startedAt: new Date().toISOString(),
       kill: () => abort.abort(),
     });
-    beginSetupLog(thread.id);
+    this.writeSetupLog(thread.id, thread.worktreePath, beginSetupLog);
     this.emit({ type: 'setup_started', threadId: thread.id });
 
     let finished = false;
     const finish = (exitCode: number | null, source?: string | null) => {
       if (finished) return;
       finished = true;
-      finishSetupLog(thread.id, exitCode, source);
+      this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
+        finishSetupLog(logKey, exitCode, source),
+      );
       this.emit({ type: 'setup_finished', threadId: thread.id, exitCode });
     };
 
@@ -2001,7 +2067,9 @@ export class Orchestrator {
         thread.repoPath,
         thread.worktreePath,
         (line) => {
-          appendSetupLog(thread.id, line);
+          this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
+            appendSetupLog(logKey, line),
+          );
           this.emit({ type: 'setup_output', threadId: thread.id, line });
         },
         { signal: abort.signal },
@@ -2010,7 +2078,9 @@ export class Orchestrator {
       if (!setup.ran) {
         const line =
           'No setup script in .sideboard/settings.toml, .conductor/settings.toml, .cursor/worktrees.json, or script/setup (bin/setup, scripts/setup)';
-        appendSetupLog(thread.id, line);
+        this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
+          appendSetupLog(logKey, line),
+        );
         this.emit({ type: 'setup_output', threadId: thread.id, line });
         finish(null, null);
         throw new Error(line);
@@ -2043,8 +2113,14 @@ export class Orchestrator {
 
   cancelSetup(threadRef: string): void {
     const thread = this.requireThread(threadRef);
-    const proc = this.processes.get(`${thread.id}:setup`);
-    if (proc) proc.kill();
+    const keys = [
+      worktreeSetupProcessKey(thread.worktreePath),
+      ...threadsSharingWorktree(thread.worktreePath).map((t) => `${t.id}:setup`),
+    ];
+    for (const key of [...new Set(keys)]) {
+      const proc = this.processes.get(key);
+      if (proc) proc.kill();
+    }
   }
 
   async applyIntoMain(

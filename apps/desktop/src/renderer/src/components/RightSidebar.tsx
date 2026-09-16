@@ -163,6 +163,20 @@ function sameWorktreePath(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
+async function eventOnWorktree(
+  eventThreadId: string,
+  currentThreadId: string,
+  isCurrentWorktree: (path: string | null | undefined) => boolean,
+): Promise<boolean> {
+  if (eventThreadId === currentThreadId) return true;
+  try {
+    const other = await window.sideboard.getThread(eventThreadId);
+    return Boolean(other && isCurrentWorktree(other.worktreePath));
+  } catch {
+    return false;
+  }
+}
+
 function isNotGitError(message: string): boolean {
   const m = message.toLowerCase();
   return (
@@ -317,57 +331,62 @@ export function RightSidebar({
     return () => {
       cancelled = true;
     };
-  }, [thread.id]);
+  }, [worktreeKey]);
 
   useEffect(() => {
     const off = window.sideboard.onEvent((event) => {
       if (event.type === 'setup_started') {
-        if (event.threadId !== thread.id) return;
-        liveSetupRef.current = true;
-        setSetupOutput('');
-        setSetupRunning(true);
-        setLower('setup');
+        void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
+          if (!ok) return;
+          liveSetupRef.current = true;
+          setSetupOutput('');
+          setSetupRunning(true);
+          setLower('setup');
+        });
       }
       if (event.type === 'setup_output') {
-        if (event.threadId !== thread.id) return;
-        liveSetupRef.current = true;
-        setSetupOutput((prev) => (prev ? `${prev}\n${event.line}` : event.line));
+        void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
+          if (!ok) return;
+          liveSetupRef.current = true;
+          setSetupOutput((prev) => (prev ? `${prev}\n${event.line}` : event.line));
+        });
       }
       if (event.type === 'setup_finished') {
-        if (event.threadId !== thread.id) return;
-        liveSetupRef.current = true;
-        setSetupRunning(false);
-        void window.sideboard
-          .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
-          .then(setSetupInfo);
-        void window.sideboard
-          .hasConductorHook(thread.worktreePath, thread.repoPath)
-          .then(setHasHook);
-        reloadRunScripts();
+        void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
+          if (!ok) return;
+          liveSetupRef.current = true;
+          setSetupRunning(false);
+          void window.sideboard
+            .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
+            .then(setSetupInfo);
+          void window.sideboard
+            .hasConductorHook(thread.worktreePath, thread.repoPath)
+            .then(setHasHook);
+          reloadRunScripts();
+        });
       }
       if (event.type === 'run_output') {
-        if (event.threadId !== thread.id) return;
-        setRunLogs((prev) => {
-          const cur = prev[event.scriptName] ?? '';
-          return {
-            ...prev,
-            [event.scriptName]: cur ? `${cur}\n${event.line}` : event.line,
-          };
+        void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
+          if (!ok) return;
+          setRunLogs((prev) => {
+            const cur = prev[event.scriptName] ?? '';
+            return {
+              ...prev,
+              [event.scriptName]: cur ? `${cur}\n${event.line}` : event.line,
+            };
+          });
         });
       }
       if (event.type === 'dev_server_started' || event.type === 'dev_server_stopped') {
-        if (event.threadId !== thread.id) return;
-        onRefresh();
+        void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
+          if (!ok) return;
+          onRefresh();
+        });
       }
       if (event.type === 'turn_finished') {
         void (async () => {
-          if (event.threadId !== thread.id) {
-            try {
-              const other = await window.sideboard.getThread(event.threadId);
-              if (!other || !isCurrentWorktree(other.worktreePath)) return;
-            } catch {
-              return;
-            }
+          if (!(await eventOnWorktree(event.threadId, thread.id, isCurrentWorktree))) {
+            return;
           }
           if (worktreeKeyRef.current !== worktreeKey) return;
           void window.sideboard
