@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.198] - 2026-09-15
+
+### Fixed
+
+- Cursor local HTTP/2 stream resets (`NGHTTP2_INTERNAL_ERROR`) are retried once in the runner and, if the turn still dies, respawned or continued like `Connection stalled`.
+- Brightsy's empty-completion fallback (`I did not receive a valid model response`) is treated as a failed turn (even when the CLI exits 0) and retried/continued once, not as a successful answer.
+
 ## [0.1.197] - 2026-09-15
 
 ### Fixed
