@@ -60,8 +60,15 @@ import {
 import { useShowCost } from '../lib/show-cost';
 import { useFollowUpBehavior } from '../lib/follow-up-behavior';
 import { useLiveThread } from '../lib/live-paint-context';
+import { shouldShowClaudePlanUsage, useClaudePlanUsage } from '../lib/use-claude-usage';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
+import { ClaudeUsageMeter } from './ClaudeUsageMeter';
+import { ConfirmDialog } from './ConfirmDialog';
+import {
+  claudeUsageOverLimitWindows,
+  formatClaudeUsageOverLimitConfirm,
+} from '@sideboard/claude-usage';
 import { isSetupLastError } from '../lib/pane-progress';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
@@ -325,6 +332,10 @@ export function ThreadPanel({
   const [editingQueueIndex, setEditingQueueIndex] = useState<number | null>(null);
   const [queueEditText, setQueueEditText] = useState('');
   const [queueBusyIndex, setQueueBusyIndex] = useState<number | null>(null);
+  const [usageLimitConfirm, setUsageLimitConfirm] = useState<{
+    message: string;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(null);
@@ -1027,11 +1038,29 @@ export function ThreadPanel({
     setPendingAttachments([]);
   }
 
+  async function confirmSendDespiteClaudeUsage(): Promise<boolean> {
+    if (!shouldShowClaudePlanUsage(thread)) return true;
+    try {
+      const settings = await window.sideboard.getAppSettings();
+      if (!settings.advanced?.confirmClaudeUsageOverLimit) return true;
+      const usage = await window.sideboard.getClaudeUsage(true);
+      const over = claudeUsageOverLimitWindows(usage);
+      if (over.length === 0) return true;
+      const message = formatClaudeUsageOverLimitConfirm(over);
+      return await new Promise<boolean>((resolve) => {
+        setUsageLimitConfirm({ message, resolve });
+      });
+    } catch {
+      return true;
+    }
+  }
+
   async function send() {
     const text = prompt.trim();
     if (!text) return;
     const queueing = followUpBusy && !steeringFollowUp;
     if (!followUpBusy && busy) return;
+    if (!(await confirmSendDespiteClaudeUsage())) return;
     const snapshotAttachments = [...(thread.attachments ?? [])];
     beginPendingSend(text, snapshotAttachments);
     setPrompt('');
@@ -1145,6 +1174,7 @@ export function ThreadPanel({
 
   async function implementPlan() {
     if (busy) return;
+    if (!(await confirmSendDespiteClaudeUsage())) return;
     const notes = prompt.trim();
     await window.sideboard.setThreadOptions(thread.id, { planMode: false });
     setBusy(true);
@@ -1184,6 +1214,7 @@ export function ThreadPanel({
   /** Fork a new same-worktree chat with the plan history, then implement there. */
   async function handOffPlan() {
     if (busy) return;
+    if (!(await confirmSendDespiteClaudeUsage())) return;
     const notes = prompt.trim();
     setBusy(true);
     try {
@@ -1369,6 +1400,11 @@ export function ThreadPanel({
       ? occupancyFillRatio(forwardOccupancy, contextWindow)
       : null;
   const contextCompacted = threadHasCompactedContext(forwardMessages);
+  const showClaudePlan = shouldShowClaudePlanUsage(thread);
+  const claudePlanUsage = useClaudePlanUsage(
+    showClaudePlan,
+    `${thread.status}:${thread.messages.length}`,
+  );
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
 
@@ -1567,6 +1603,24 @@ export function ThreadPanel({
 
   return (
     <section className="panel thread-main">
+      {usageLimitConfirm ? (
+        <ConfirmDialog
+          title="Claude usage is over the limit"
+          message={usageLimitConfirm.message}
+          confirmLabel="Send anyway"
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            const resolve = usageLimitConfirm.resolve;
+            setUsageLimitConfirm(null);
+            resolve(true);
+          }}
+          onCancel={() => {
+            const resolve = usageLimitConfirm.resolve;
+            setUsageLimitConfirm(null);
+            resolve(false);
+          }}
+        />
+      ) : null}
       <ChatTabs
         chats={chats}
         activeChatId={thread.id}
@@ -1618,6 +1672,11 @@ export function ThreadPanel({
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })
             : undefined
+        }
+        planUsage={
+          showClaudePlan && claudePlanUsage ? (
+            <ClaudeUsageMeter usage={claudePlanUsage} />
+          ) : null
         }
         openMenu={
           isGlobalThread(thread) ? undefined : (
@@ -2301,6 +2360,7 @@ export function ThreadPanel({
               onSubmit={(message) => {
                 setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
                 void (async () => {
+                  if (!(await confirmSendDespiteClaudeUsage())) return;
                   setBusy(true);
                   beginPendingSend(message);
                   try {

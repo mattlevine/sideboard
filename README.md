@@ -187,7 +187,7 @@ A worktree chat is **repo + worktree + CMS** in one view:
 
 Agents open structure tabs via MCP (or you reopen them from message chips). Tabs stick per chat until you close them.
 
-Token counts always show on message chips, the thread Σ total, and worktree hover spend. **Settings → Advanced → Show cost (when available)** (off by default) also shows provider-reported USD when the agent CLI reports it (Claude, Cursor, OpenCode, Brightsy). Codex streams tokens only — no USD.
+Token counts always show on message chips, the thread Σ total, and worktree hover spend. **Settings → Advanced → Show cost (when available)** (off by default) also shows provider-reported USD when the agent CLI reports it (Claude, Cursor, OpenCode, Brightsy). Codex streams tokens only — no USD. Claude chats also show remaining Claude Code plan usage (5-hour, weekly, and per-model windows when the login has them) next to the context ring. Hover the meter for used/remaining bars, reset time, and extra usage. Global / orchestration chats show the same account-level meter.
 
 ### Schema → form (not “a CMS product”)
 
@@ -320,7 +320,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Connectors** | Optional project services: Vercel, Supabase, PostHog, Sentry |
 | **Environment** | Extra env vars injected into agent runs |
 | **Schedules** | Local jobs that wake an orchestration chat |
-| **Advanced** | Cowboy mode, caffeinate, show cost, Brightsy MCP inject |
+| **Advanced** | Cowboy mode, caffeinate, show cost, confirm send when Claude usage is over the limit, Brightsy MCP inject |
 | **History** | Archived chats |
 
 Ask the orchestrator **find me some work** to list matching tickets (`list_issues`) and review PRs (`list_prs queue=review`) from that profile. **Find me work and start it** lists, then creates the worktrees. Same split for reviews. The orchestrator stays contextually aware of that profile in every chat.

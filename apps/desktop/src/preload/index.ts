@@ -28,6 +28,7 @@ const api: IpcApi = {
   listCursorModels: () => ipcRenderer.invoke('listCursorModels'),
   listCodexModels: () => ipcRenderer.invoke('listCodexModels'),
   listOpencodeModels: () => ipcRenderer.invoke('listOpencodeModels'),
+  getClaudeUsage: (refresh) => ipcRenderer.invoke('getClaudeUsage', refresh),
   getBrightsySession: () => ipcRenderer.invoke('getBrightsySession'),
   getBrightsyCmsAuth: () => ipcRenderer.invoke('getBrightsyCmsAuth'),
   switchBrightsyAccount: (accountIdOrSlug) =>

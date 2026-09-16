@@ -43,6 +43,7 @@ import type { Workspace } from '../store/workspaces.js';
 import type { AddBoardPinInput, BoardPin, HomeBoardLoaded } from '../board/home-board.js';
 import type { BrightsyChatTargets } from '../agents/brightsy-targets.js';
 import type { AgentModelInfo, CursorModelInfo } from '../agents/model-info.js';
+import type { ClaudePlanUsage } from '../agents/claude-usage.js';
 import type {
   AgentSetupActionResult,
   AgentSetupInfo,
@@ -123,6 +124,11 @@ export interface IpcApi {
   listCodexModels(): Promise<AgentModelInfo[]>;
   /** Models from `opencode models` for the composer picker. */
   listOpencodeModels(): Promise<AgentModelInfo[]>;
+  /**
+   * Claude Code subscription windows (5-hour / weekly / per-model remaining).
+   * Null when the account is API-key-only, logged out, or the usage API fails.
+   */
+  getClaudeUsage(refresh?: boolean): Promise<ClaudePlanUsage | null>;
   /** Brightsy login + connected teams (shared by CLI, Brightsy agent, and Claude MCP). */
   getBrightsySession(): Promise<BrightsySession>;
   /**

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Claude chats show remaining Claude Code plan usage (5-hour, weekly, Opus/Sonnet when present) next to the context ring. Global / orchestration chats show the same account-level meter. Settings → Advanced can require a confirm before sending when a plan window is exhausted.
+
 ## [0.1.198] - 2026-09-15
 
 ### Fixed

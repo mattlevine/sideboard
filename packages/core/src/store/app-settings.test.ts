@@ -564,6 +564,7 @@ describe('app settings', () => {
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.cowboyModeEnabled()).toBe(false);
     expect(mod.showCostEnabled()).toBe(false);
+    expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
     expect(mod.maxConcurrentAgents()).toBe(5);
     expect(mod.followUpBehavior()).toBe('steer');
@@ -577,6 +578,7 @@ describe('app settings', () => {
       deleteBranchOnPurge: true,
       cowboyMode: true,
       showCost: true,
+      confirmClaudeUsageOverLimit: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
       followUpBehavior: 'queue',
@@ -590,6 +592,7 @@ describe('app settings', () => {
       deleteBranchOnPurge: true,
       cowboyMode: true,
       showCost: true,
+      confirmClaudeUsageOverLimit: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
       followUpBehavior: 'queue',
@@ -611,6 +614,7 @@ describe('app settings', () => {
     expect(mod.autoArchiveOnMergeEnabled()).toBe(true);
     expect(mod.cowboyModeEnabled()).toBe(true);
     expect(mod.showCostEnabled()).toBe(true);
+    expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(true);
     expect(mod.maxConcurrentAgents()).toBe(8);
   });
 

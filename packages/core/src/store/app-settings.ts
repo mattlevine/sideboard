@@ -301,6 +301,11 @@ export interface AdvancedAppSettings {
    */
   showCost?: boolean;
   /**
+   * When a Claude Code plan window is exhausted, ask before sending in
+   * Claude / orchestration chats. Default off — turn on in Settings → Advanced.
+   */
+  confirmClaudeUsageOverLimit?: boolean;
+  /**
    * When a linked PR becomes MERGED, archive the worktree’s chats.
    * Conductor: auto-archive on merge (opt-in; default off).
    */
@@ -807,6 +812,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.showCost === 'boolean') {
     out.showCost = source.showCost;
+  }
+  if (typeof source.confirmClaudeUsageOverLimit === 'boolean') {
+    out.confirmClaudeUsageOverLimit = source.confirmClaudeUsageOverLimit;
   }
   if (typeof source.autoArchiveOnMerge === 'boolean') {
     out.autoArchiveOnMerge = source.autoArchiveOnMerge;
@@ -2035,6 +2043,9 @@ export function updateAdvancedSettings(
   if (typeof patch.showCost === 'boolean') {
     advanced.showCost = patch.showCost;
   }
+  if (typeof patch.confirmClaudeUsageOverLimit === 'boolean') {
+    advanced.confirmClaudeUsageOverLimit = patch.confirmClaudeUsageOverLimit;
+  }
   if (typeof patch.autoArchiveOnMerge === 'boolean') {
     advanced.autoArchiveOnMerge = patch.autoArchiveOnMerge;
   }
@@ -2141,6 +2152,13 @@ export function showCostEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.showCost);
+}
+
+/** Settings → Advanced → Confirm send when Claude usage is over the limit (default off). */
+export function confirmClaudeUsageOverLimitEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.confirmClaudeUsageOverLimit);
 }
 
 /** Conductor-style opt-in — default off. */
