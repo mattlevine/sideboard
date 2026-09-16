@@ -131,6 +131,34 @@ describe('createChatTab', () => {
     expect(written?.branchName).toBe(source.branchName);
   });
 
+  it('inherits the worktree Run pane from a sibling tab', async () => {
+    listed = [
+      {
+        ...source,
+        activeRuns: [
+          {
+            scriptName: 'dev',
+            port: 3000,
+            ports: [3000],
+            startedAt: '2026-09-15T00:00:00.000Z',
+          },
+        ],
+        devPort: 3000,
+      },
+    ];
+    const { createChatTab } = await import('./chat-tabs.js');
+    const tab = createChatTab({ fromThreadId: source.id, title: 'Second' });
+    expect(tab.activeRuns).toEqual([
+      {
+        scriptName: 'dev',
+        port: 3000,
+        ports: [3000],
+        startedAt: '2026-09-15T00:00:00.000Z',
+      },
+    ]);
+    expect(tab.devPort).toBe(3000);
+  });
+
   it('defaults new tabs to a random soccer team name', async () => {
     const { createChatTab } = await import('./chat-tabs.js');
     const tab = createChatTab({ fromThreadId: source.id });

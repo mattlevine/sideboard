@@ -28,6 +28,7 @@ import type {
   ThreadAttachment,
   ThreadMessage,
 } from '../types/thread.js';
+import { mergeWorktreeActiveRuns } from './worktree-runtime.js';
 
 export { normalizeWorktreePath } from '../git/worktree-labels.js';
 
@@ -185,6 +186,7 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     autonomy: input.autonomy ?? from.autonomy,
     attachments: input.attachments ?? [],
     status: 'idle',
+    ...mergeWorktreeActiveRuns(threadsSharingWorktree(binding.worktreePath)),
   });
   writeThread(thread);
   return thread;

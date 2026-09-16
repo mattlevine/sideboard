@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { normalizeWorktreePath } from '../git/worktree-labels.js';
 import { threadsDir } from './paths.js';
 
 export interface SetupLogSnapshot {
@@ -21,6 +23,12 @@ const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function setupLogPath(threadId: string): string {
   return join(threadsDir(), `${threadId}.setup.log.json`);
+}
+
+/** Stable store id for the shared worktree setup pane (not a chat id). */
+export function setupLogKeyForWorktree(worktreePath: string): string {
+  const norm = normalizeWorktreePath(worktreePath);
+  return `wt-${createHash('sha1').update(norm).digest('hex').slice(0, 16)}`;
 }
 
 export function emptySetupLog(): SetupLogSnapshot {

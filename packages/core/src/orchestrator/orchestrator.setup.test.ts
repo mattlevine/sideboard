@@ -139,4 +139,53 @@ describe('Orchestrator.runSetup lastError', () => {
     expect(log.output).toContain('[setup] .sideboard/settings.toml (worktree)');
     expect(log.output).toContain('ok');
   });
+
+  it('replays the same setup log on a sibling chat tab', async () => {
+    runWorkspaceSetup.mockImplementation(async (_repo, _wt, onLine: (line: string) => void) => {
+      onLine('shared setup');
+      return { ran: true, exitCode: 0, source: 'script/setup' };
+    });
+    const first = seedThread('idle');
+    const sibling = createEmptyThread({
+      title: 'Second',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: first.branchName,
+      worktreePath: first.worktreePath,
+      repoPath: first.repoPath,
+      agent: 'claude',
+    });
+    writeThread(sibling);
+    const orch = new Orchestrator();
+    await orch.runSetup(first.id);
+    const fromSibling = orch.getSetupLog(sibling.id);
+    expect(fromSibling.output).toContain('shared setup');
+    expect(fromSibling.exitCode).toBe(0);
+  });
+
+  it('refuses a second setup while one is already running on the worktree', async () => {
+    let release!: (value: { ran: boolean; exitCode: number; source: string }) => void;
+    runWorkspaceSetup.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const first = seedThread('idle');
+    const sibling = createEmptyThread({
+      title: 'Second',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: first.branchName,
+      worktreePath: first.worktreePath,
+      repoPath: first.repoPath,
+      agent: 'claude',
+    });
+    writeThread(sibling);
+    const orch = new Orchestrator();
+    const running = orch.runSetup(first.id);
+    await expect(orch.runSetup(sibling.id)).rejects.toThrow(/already running for this worktree/i);
+    release({ ran: true, exitCode: 0, source: 'script/setup' });
+    await running;
+  });
 });
