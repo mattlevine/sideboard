@@ -18,6 +18,19 @@ const EMPTY: SetupLogSnapshot = {
   source: null,
 };
 
+/** Rolling cap on replayable setup output (same order as terminal scrollback). */
+export const MAX_SETUP_LOG_CHARS = 256_000;
+
+/** Append a line, keeping the newest bytes once over the cap. */
+export function appendSetupOutput(prev: string, line: string, max = MAX_SETUP_LOG_CHARS): string {
+  const next = prev ? `${prev}\n${line}` : line;
+  if (next.length <= max) return next;
+  const cut = next.slice(next.length - max);
+  // Start at a line boundary so the pane never opens mid-line.
+  const nl = cut.indexOf('\n');
+  return nl >= 0 && nl < cut.length - 1 ? cut.slice(nl + 1) : cut;
+}
+
 const memory = new Map<string, SetupLogSnapshot>();
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -118,7 +131,7 @@ export function appendSetupLog(threadId: string, line: string): SetupLogSnapshot
   const current = memory.get(threadId) ?? readSetupLog(threadId);
   const snap: SetupLogSnapshot = {
     ...current,
-    output: current.output ? `${current.output}\n${line}` : line,
+    output: appendSetupOutput(current.output, line),
     running: true,
   };
   memory.set(threadId, snap);

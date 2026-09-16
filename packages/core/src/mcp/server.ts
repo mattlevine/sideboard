@@ -870,7 +870,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_thread',
-    'Steer a prompt on a worktree thread chat (Settings → Follow-up, default steer: interrupt and start now, skip the inbox). Use after create_thread to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_thread to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
+    'Steer a prompt on a worktree thread chat (Settings → Follow-up, default steer: front of the queue, skips the inbox; while the desktop board is running it starts as soon as the in-flight turn yields). Use after create_thread to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_thread to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
     {
       ref: z.string(),
       prompt: z.string(),

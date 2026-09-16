@@ -21,13 +21,29 @@ function clipChatLine(value: string, max = CHAT_DETAIL_MAX): string {
   return `${line.slice(0, Math.max(1, max - 1))}…`;
 }
 
+const SHELL_BIN_DIR = /^(?:\/usr\/local\/bin|\/usr\/bin|\/bin|\/opt\/homebrew\/bin|\/sbin|\/usr\/sbin)\//;
+
+/**
+ * A rooted path may contain spaces (`/Users/me/My Project/a.ts`); a command
+ * usually starts with a bare word (`cd`, `rg`) or a `/usr/bin/...` binary and
+ * carries flags / further rooted args.
+ */
+function rootedPathWithSpaces(trimmed: string): boolean {
+  const [head = '', ...rest] = trimmed.split(/\s+/);
+  if (SHELL_BIN_DIR.test(head)) return false;
+  // `cp /a /b`, `python3 -m …`, `$HOME/x` → command.
+  return rest.every((tok) => !/^[-/~$]/.test(tok) && !tok.includes('='));
+}
+
 function looksLikeFilePath(value: string): boolean {
   const trimmed = value.trim();
   // Shell scripts almost always contain `/` (`cd /Users/…`); do not treat those
   // as paths or the pill becomes `…/last/segment` plus the rest of the script.
-  if (!trimmed || /[\s;|&<>]/.test(trimmed)) return false;
-  if (trimmed.startsWith('/') || trimmed.startsWith('~/')) return true;
-  if (/^[A-Za-z]:[\\/]/.test(trimmed)) return true;
+  if (!trimmed || /[\r\n;|&<>]/.test(trimmed)) return false;
+  const rooted =
+    trimmed.startsWith('/') || trimmed.startsWith('~/') || /^[A-Za-z]:[\\/]/.test(trimmed);
+  if (/\s/.test(trimmed)) return rooted && rootedPathWithSpaces(trimmed);
+  if (rooted) return true;
   return trimmed.includes('/') || trimmed.includes('\\');
 }
 
@@ -442,6 +458,18 @@ function parseDiffStat(result: string | undefined): {
   return {};
 }
 
+/**
+ * Thinking is never replayed to the agent (seeds pass `thinking: false`), so
+ * it only costs main + renderer memory and thread JSON. Keep the newest tail.
+ */
+export const THINKING_PART_MAX_CHARS = 64_000;
+
+export function clipThinkingForStore(text: string, max = THINKING_PART_MAX_CHARS): string {
+  if (text.length <= max) return text;
+  const marker = '…(earlier thinking trimmed)\n';
+  return marker + text.slice(text.length - Math.max(1, max - marker.length));
+}
+
 /** Apply a structured agent event onto an accumulated parts list. */
 function withPartTimes<T extends MessagePart>(next: T, prev?: MessagePart | null): T {
   const now = Date.now();
@@ -488,7 +516,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
           next[i] = withPartTimes(
             {
               type: 'thinking',
-              text: data,
+              text: clipThinkingForStore(data),
               ...(event.parentId ? { parentId: event.parentId } : {}),
             },
             prev,
@@ -499,7 +527,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       next.push(
         withPartTimes({
           type: 'thinking',
-          text: data,
+          text: clipThinkingForStore(data),
           ...(event.parentId ? { parentId: event.parentId } : {}),
         }),
       );
@@ -510,7 +538,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       next[next.length - 1] = withPartTimes(
         {
           type: 'thinking',
-          text: last.text + data,
+          text: clipThinkingForStore(last.text + data),
           ...(event.parentId ? { parentId: event.parentId } : {}),
         },
         last,
