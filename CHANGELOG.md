@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.195] - 2026-09-15
+
 ### Changed
 
 - Setup, Run, and Terminal in the right sidebar are one pane per worktree. Switching chat tabs keeps the same setup log, running scripts, and shell.
