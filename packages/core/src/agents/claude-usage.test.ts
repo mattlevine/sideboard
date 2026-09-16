@@ -5,6 +5,7 @@ import {
   formatClaudeUsageCompact,
   formatClaudeUsageFetchedAt,
   formatClaudeUsageOverLimitConfirm,
+  formatClaudeUsageOverLimitWait,
   formatClaudeUsageReset,
   formatClaudeUsageResetClock,
   formatClaudeUsageTooltip,
@@ -188,6 +189,11 @@ describe('claudeUsageOverLimitWindows', () => {
       formatClaudeUsageOverLimitConfirm(over, new Date('2026-04-08T12:00:00Z')),
     ).toBe(
       'Claude Code 5-hour session (resets in 6h), Opus are at or over the plan limit. Send this message anyway?',
+    );
+    expect(
+      formatClaudeUsageOverLimitWait(over, new Date('2026-04-08T12:00:00Z')),
+    ).toBe(
+      'Claude Code 5-hour session (resets in 6h), Opus are at or over the plan limit. Sending is paused until the window resets.',
     );
   });
 

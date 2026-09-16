@@ -6,8 +6,8 @@ import {
 } from '../agents/session-quota.js';
 import {
   orchestrationQuotaFallbackAgent,
-  orchestrationQuotaOnLimit,
-  type OrchestrationQuotaOnLimit,
+  usageOnLimit,
+  type UsageOnLimit,
 } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import { listThreads, updateThread } from '../store/thread-store.js';
@@ -24,25 +24,35 @@ export type QuotaFailoverPlan = {
   resumeAt?: Date;
 };
 
-/** Decide host action for an orchestration session-quota failure. */
+/** Decide host action when any chat hits a provider session/usage limit. */
 export function planOrchestrationQuotaFailover(
   thread: Thread,
   limitText: string,
   opts?: {
-    onLimit?: OrchestrationQuotaOnLimit;
+    onLimit?: UsageOnLimit;
     fallbackAgent?: AgentKind | null;
     now?: Date;
   },
 ): QuotaFailoverPlan | null {
-  if (!isOrchestratorThread(thread)) return null;
   if (!isSessionQuotaLimit(limitText)) return null;
 
-  const onLimit = opts?.onLimit ?? orchestrationQuotaOnLimit();
+  const onLimit = opts?.onLimit ?? usageOnLimit();
   const resumeAt = parseSessionQuotaResetAt(limitText, opts?.now);
+
+  if (onLimit === 'keep_going' || onLimit === 'confirm') {
+    return {
+      action: 'none',
+      reason:
+        onLimit === 'confirm'
+          ? 'Settings: confirm with user; no automatic continue.'
+          : 'Settings: keep going; no automatic continue.',
+      limitText,
+    };
+  }
 
   // Already continued once onto another agent — don't cascade forever.
   if (thread.quotaContinuedFromId) {
-    if (resumeAt) {
+    if (onLimit === 'switch_agent' && resumeAt) {
       return {
         action: 'wait_reset',
         reason: 'Already continued once; waiting for quota reset instead.',
@@ -52,7 +62,7 @@ export function planOrchestrationQuotaFailover(
     }
     return {
       action: 'none',
-      reason: 'Already continued once; no parseable reset time.',
+      reason: 'Already continued once; no further automatic continue.',
       limitText,
     };
   }
@@ -73,7 +83,6 @@ export function planOrchestrationQuotaFailover(
     };
   }
 
-  // Default: switch_agent
   const preferred = opts?.fallbackAgent ?? orchestrationQuotaFallbackAgent();
   const fallbackAgent = resolveQuotaFallbackAgent(thread.agent, preferred);
   return {
@@ -106,8 +115,22 @@ export function buildQuotaHandoffAttachment(
     })
     .filter(Boolean);
 
+  const orch = isOrchestratorThread(from);
+  const instructions = orch
+    ? [
+        '- Continue fleet orchestration from this handoff.',
+        '- Prefer Sideboard MCP (list_board, list_threads, get_thread, send_to_thread, …) for live status.',
+        '- Leave model Auto unless there is a specific reason to pin one.',
+        `- Do not wait on the limited ${from.agent} account; keep going on ${fallbackAgent}.`,
+      ]
+    : [
+        '- Continue this worktree chat from the handoff.',
+        '- Leave model Auto unless there is a specific reason to pin one.',
+        `- Do not wait on the limited ${from.agent} account; keep going on ${fallbackAgent}.`,
+      ];
+
   const body = [
-    `# Orchestration handoff`,
+    `# ${orch ? 'Orchestration' : 'Chat'} handoff`,
     '',
     `Previous chat: ${from.title} (\`${from.id}\`) on **${from.agent}** hit a session/usage limit.`,
     `Limit: ${limitText.trim()}`,
@@ -123,15 +146,12 @@ export function buildQuotaHandoffAttachment(
     recent.length ? recent.join('\n') : '(none)',
     '',
     `## Instructions`,
-    `- Continue fleet orchestration from this handoff.`,
-    `- Prefer Sideboard MCP (list_board, list_threads, get_thread, send_to_thread, …) for live status.`,
-    `- Leave model Auto unless there is a specific reason to pin one.`,
-    `- Do not wait on the limited ${from.agent} account; keep going on ${fallbackAgent}.`,
+    ...instructions,
   ].join('\n');
 
   return {
     id: randomUUID(),
-    name: 'Orchestration quota handoff.md',
+    name: orch ? 'Orchestration quota handoff.md' : 'Quota handoff.md',
     kind: 'transcript',
     content: body,
   };
@@ -139,14 +159,14 @@ export function buildQuotaHandoffAttachment(
 
 export const QUOTA_CONTINUE_PROMPT = (fromAgent: AgentKind, fallback: AgentKind) =>
   [
-    `${fromAgent} hit a session/usage limit. Continue this orchestration on ${fallback} using the attached handoff.`,
-    'Call list_board or list_threads for live fleet status, then proceed with the goal. Leave model Auto unless needed.',
+    `${fromAgent} hit a session/usage limit. Continue this chat on ${fallback} using the attached handoff.`,
+    'Proceed with the goal. Leave model Auto unless needed.',
   ].join(' ');
 
 export const QUOTA_RESUME_PROMPT =
-  'Session/usage limit window should have reset. Continue the orchestration from where you left off. Use list_board or list_threads for fleet status.';
+  'Session/usage limit window should have reset. Continue this chat from where you left off.';
 
-/** Create a sibling orchestration chat on the fallback agent with a compact handoff. */
+/** Sibling chat on the fallback agent (same worktree or Global home) with a compact handoff. */
 export function createQuotaFailoverChat(
   from: Thread,
   fallbackAgent: AgentKind,
@@ -159,10 +179,13 @@ export function createQuotaFailoverChat(
     model: null,
     attachments: [handoff],
   });
-  return updateThread(tab.id, {
-    parentThreadId: from.id,
+  const patch: Partial<Thread> = {
     quotaContinuedFromId: from.id,
     sourceRef: from.sourceRef,
-    sourceType: 'orchestration',
-  });
+  };
+  if (isOrchestratorThread(from)) {
+    patch.parentThreadId = from.id;
+    patch.sourceType = 'orchestration';
+  }
+  return updateThread(tab.id, patch);
 }

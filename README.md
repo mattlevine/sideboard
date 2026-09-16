@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.199/Sideboard-0.1.199-arm64.dmg
+https://github.com/mattlevine/sideboard/releases/download/v0.1.200/Sideboard-0.1.200-arm64.dmg
 
 > Direct download links only work while the GitHub repo (or its releases) are **public**.
 
@@ -320,7 +320,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Connectors** | Optional project services: Vercel, Supabase, PostHog, Sentry |
 | **Environment** | Extra env vars injected into agent runs |
 | **Schedules** | Local jobs that wake an orchestration chat |
-| **Advanced** | Cowboy mode, caffeinate, show cost, confirm send when Claude usage is over the limit, Brightsy MCP inject |
+| **Advanced** | Cowboy mode, caffeinate, show cost, on usage/session limit (keep going, confirm, switch agent, or wait for reset), Brightsy MCP inject |
 | **History** | Archived chats |
 
 Ask the orchestrator **find me some work** to list matching tickets (`list_issues`) and review PRs (`list_prs queue=review`) from that profile. **Find me work and start it** lists, then creates the worktrees. Same split for reviews. The orchestrator stays contextually aware of that profile in every chat.

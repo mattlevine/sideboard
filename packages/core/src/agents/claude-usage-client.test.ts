@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { setHttpFetchImpl } from '../http/fetch.js';
 import {
   accessTokenFromCredentialsJson,
   CLAUDE_OAUTH_USAGE_URL,
@@ -9,6 +10,7 @@ import {
 
 afterEach(() => {
   resetClaudeUsageCacheForTests();
+  setHttpFetchImpl(null);
 });
 
 describe('accessTokenFromCredentialsJson', () => {
@@ -116,6 +118,27 @@ describe('getClaudePlanUsage', () => {
     });
     expect(first?.windows[0]?.usedPercent).toBe(10);
     expect(second).toEqual(first);
+  });
+
+  it('uses injected httpFetch when no fetch opt is passed', async () => {
+    let called = 0;
+    setHttpFetchImpl(async () => {
+      called += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          five_hour: { utilization: 7, resets_at: '2026-04-08T18:00:00Z' },
+        }),
+      } as Response;
+    });
+    const usage = await getClaudePlanUsage({
+      now: 1_000,
+      readAccessToken: async () => 'sk-ant-oat01-test',
+      userAgent: 'claude-code/2.1.80',
+    });
+    expect(usage?.windows[0]?.usedPercent).toBe(7);
+    expect(called).toBe(1);
   });
 
   it('force skips a fresh cache', async () => {

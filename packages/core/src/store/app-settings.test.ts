@@ -564,6 +564,7 @@ describe('app settings', () => {
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.cowboyModeEnabled()).toBe(false);
     expect(mod.showCostEnabled()).toBe(false);
+    expect(mod.usageOnLimit()).toBe('keep_going');
     expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
     expect(mod.maxConcurrentAgents()).toBe(5);
@@ -578,7 +579,7 @@ describe('app settings', () => {
       deleteBranchOnPurge: true,
       cowboyMode: true,
       showCost: true,
-      confirmClaudeUsageOverLimit: true,
+      usageOnLimit: 'confirm',
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
       followUpBehavior: 'queue',
@@ -592,6 +593,7 @@ describe('app settings', () => {
       deleteBranchOnPurge: true,
       cowboyMode: true,
       showCost: true,
+      usageOnLimit: 'confirm',
       confirmClaudeUsageOverLimit: true,
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
@@ -615,7 +617,27 @@ describe('app settings', () => {
     expect(mod.cowboyModeEnabled()).toBe(true);
     expect(mod.showCostEnabled()).toBe(true);
     expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(true);
+    expect(mod.usageOnLimit()).toBe('confirm');
     expect(mod.maxConcurrentAgents()).toBe(8);
+  });
+
+  it('migrates legacy confirm and orchestration quota fields into usageOnLimit', async () => {
+    const mod = await load();
+    expect(mod.resolveUsageOnLimit({})).toBe('keep_going');
+    expect(mod.resolveUsageOnLimit({ confirmClaudeUsageOverLimit: true })).toBe('confirm');
+    expect(mod.resolveUsageOnLimit({ orchestrationQuotaOnLimit: 'wait_reset' })).toBe(
+      'wait_reset',
+    );
+    expect(mod.resolveUsageOnLimit({ orchestrationQuotaOnLimit: 'switch_agent' })).toBe(
+      'switch_agent',
+    );
+    expect(
+      mod.resolveUsageOnLimit({
+        usageOnLimit: 'keep_going',
+        confirmClaudeUsageOverLimit: true,
+        orchestrationQuotaOnLimit: 'switch_agent',
+      }),
+    ).toBe('keep_going');
   });
 
   it('round-trips Brightsy cloud connect settings', async () => {

@@ -72,13 +72,28 @@ describe('planOrchestrationQuotaFailover', () => {
     expect(plan?.action).toBe('wait_reset');
   });
 
-  it('ignores non-orchestration and non-quota failures', () => {
+  it('switches a worktree chat the same way as orchestration', () => {
+    const plan = planOrchestrationQuotaFailover(
+      orchThread({ sourceType: 'branch', repoPath: '/repo' }),
+      LIMIT,
+      { onLimit: 'switch_agent', fallbackAgent: 'cursor' },
+    );
+    expect(plan?.action).toBe('switch_agent');
+    expect(plan?.fallbackAgent).toBe('cursor');
+  });
+
+  it('does nothing when the policy is keep going or confirm', () => {
     expect(
-      planOrchestrationQuotaFailover(
-        orchThread({ sourceType: 'branch', repoPath: '/repo' }),
-        LIMIT,
-      ),
-    ).toBeNull();
+      planOrchestrationQuotaFailover(orchThread(), LIMIT, { onLimit: 'keep_going' })
+        ?.action,
+    ).toBe('none');
+    expect(
+      planOrchestrationQuotaFailover(orchThread(), LIMIT, { onLimit: 'confirm' })
+        ?.action,
+    ).toBe('none');
+  });
+
+  it('ignores non-quota failures', () => {
     expect(
       planOrchestrationQuotaFailover(orchThread(), 'Prompt is too long'),
     ).toBeNull();

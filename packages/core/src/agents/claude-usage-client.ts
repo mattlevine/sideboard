@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
+import { httpFetch } from '../http/fetch.js';
 import { resolveClaudeExecutable } from '../store/app-settings.js';
 import {
   parseClaudeUsagePayload,
@@ -143,7 +144,7 @@ export async function getClaudePlanUsage(
         cache = { at: now, value: null };
         return null;
       }
-      const fetchFn = opts.fetch ?? (globalThis.fetch as FetchLike);
+      const fetchFn = opts.fetch ?? (httpFetch as FetchLike);
       const userAgent = opts.userAgent ?? (await resolveClaudeUserAgent());
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), 8_000);

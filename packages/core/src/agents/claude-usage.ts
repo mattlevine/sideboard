@@ -296,17 +296,36 @@ export function claudeUsageOverLimitWindows(
   return usage.windows.filter(claudeUsageWindowOverLimit);
 }
 
+function formatOverLimitWindowList(
+  windows: ClaudeUsageWindow[],
+  now: Date,
+): { list: string; verb: string } {
+  const parts = windows.map((w) => {
+    const reset = formatClaudeUsageReset(w.resetsAt, now);
+    return reset ? `${w.label} (${reset})` : w.label;
+  });
+  return {
+    list: parts.join(', '),
+    verb: windows.length === 1 ? 'is' : 'are',
+  };
+}
+
 /** Composer confirm copy when Settings → Advanced asks before sending over limit. */
 export function formatClaudeUsageOverLimitConfirm(
   windows: ClaudeUsageWindow[],
   now: Date = new Date(),
 ): string {
   if (windows.length === 0) return '';
-  const parts = windows.map((w) => {
-    const reset = formatClaudeUsageReset(w.resetsAt, now);
-    return reset ? `${w.label} (${reset})` : w.label;
-  });
-  const list = parts.join(', ');
-  const verb = windows.length === 1 ? 'is' : 'are';
+  const { list, verb } = formatOverLimitWindowList(windows, now);
   return `Claude Code ${list} ${verb} at or over the plan limit. Send this message anyway?`;
+}
+
+/** Composer copy when Settings → Advanced stops send until the window resets. */
+export function formatClaudeUsageOverLimitWait(
+  windows: ClaudeUsageWindow[],
+  now: Date = new Date(),
+): string {
+  if (windows.length === 0) return '';
+  const { list, verb } = formatOverLimitWindowList(windows, now);
+  return `Claude Code ${list} ${verb} at or over the plan limit. Sending is paused until the window resets.`;
 }

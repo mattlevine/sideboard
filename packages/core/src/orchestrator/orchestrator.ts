@@ -624,8 +624,8 @@ export class Orchestrator {
   }
 
   /**
-   * Host-side continue when an orchestration chat hits a provider session/usage
-   * limit (not context size): switch agent (Auto) or wait until reset.
+   * Host-side continue when any chat hits a provider session/usage limit
+   * (not context size): switch agent (Auto) or wait until reset.
    */
   private async maybeHandleOrchestrationQuotaFailover(
     threadId: string,
@@ -643,7 +643,7 @@ export class Orchestrator {
       setStatus(threadId, 'idle', null);
       appendMessage(threadId, {
         role: 'agent',
-        text: `Sideboard will auto-retry this orchestration around ${plan.resumeAt.toLocaleString()} when the session limit resets.`,
+        text: `Sideboard will auto-retry this chat around ${plan.resumeAt.toLocaleString()} when the session limit resets.`,
         ts: new Date().toISOString(),
       });
       this.emit({

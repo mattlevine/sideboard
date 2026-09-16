@@ -13,6 +13,7 @@ export default defineConfig({
       '@sideboard/message-parts': core('agents/message-parts.ts'),
       '@sideboard/usage': core('agents/usage.ts'),
       '@sideboard/claude-usage': core('agents/claude-usage.ts'),
+      '@sideboard/usage-on-limit': core('store/usage-on-limit.ts'),
       '@sideboard/context-estimate': core('composer/context-estimate.ts'),
       '@sideboard/worktree-labels': core('git/worktree-labels.ts'),
       '@sideboard/brightsy-targets': core('agents/brightsy-targets.ts'),

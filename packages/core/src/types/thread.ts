@@ -184,13 +184,13 @@ export interface Thread {
    */
   agentPid?: number | null;
   /**
-   * When set, host auto-retries this orchestration chat after a provider
-   * session/usage quota reset (ISO timestamp).
+   * When set, host auto-retries this chat after a provider session/usage
+   * quota reset (ISO timestamp).
    */
   quotaResumeAt?: string | null;
   /**
-   * Orchestration chat this one was auto-continued from after a session quota
-   * limit (prevents infinite agent-switch cascades).
+   * Chat this one was auto-continued from after a session quota limit
+   * (prevents infinite agent-switch cascades).
    */
   quotaContinuedFromId?: string | null;
 }

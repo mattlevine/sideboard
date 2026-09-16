@@ -18,6 +18,18 @@ import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
 import { loadSecretVault, saveSecretVault } from './secret-vault.js';
 import { sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
+import {
+  isUsageOnLimit,
+  resolveUsageOnLimit,
+  type UsageOnLimit,
+} from './usage-on-limit.js';
+
+export {
+  isUsageOnLimit,
+  resolveUsageOnLimit,
+  USAGE_ON_LIMIT_VALUES,
+  type UsageOnLimit,
+} from './usage-on-limit.js';
 
 /** Well-known env keys managed from Settings → Agents (Conductor-style harnesses). */
 export const HARNESS_ENV_KEYS = {
@@ -301,8 +313,13 @@ export interface AdvancedAppSettings {
    */
   showCost?: boolean;
   /**
-   * When a Claude Code plan window is exhausted, ask before sending in
-   * Claude / orchestration chats. Default off — turn on in Settings → Advanced.
+   * Unified over-limit policy. Default `keep_going`.
+   * @see UsageOnLimit
+   */
+  usageOnLimit?: UsageOnLimit;
+  /**
+   * @deprecated Prefer {@link AdvancedAppSettings.usageOnLimit} `confirm`.
+   * Still read on load for migration.
    */
   confirmClaudeUsageOverLimit?: boolean;
   /**
@@ -324,9 +341,8 @@ export interface AdvancedAppSettings {
   /** When true, reconcile auto-removes excess orphan worktrees. */
   autoCleanupOrphans?: boolean;
   /**
-   * When an orchestration chat hits a provider session/usage limit:
-   * - `switch_agent` (default): continue on {@link AdvancedAppSettings.orchestrationQuotaFallbackAgent} with Auto
-   * - `wait_reset`: schedule auto-retry when the limit message’s reset time arrives
+   * @deprecated Prefer {@link AdvancedAppSettings.usageOnLimit}.
+   * Still read on load for migration.
    */
   orchestrationQuotaOnLimit?: OrchestrationQuotaOnLimit;
   /** Agent to continue on after a session limit (default: cursor). Ignored when equal to the limited agent. */
@@ -812,6 +828,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.showCost === 'boolean') {
     out.showCost = source.showCost;
+  }
+  if (isUsageOnLimit(source.usageOnLimit)) {
+    out.usageOnLimit = source.usageOnLimit;
   }
   if (typeof source.confirmClaudeUsageOverLimit === 'boolean') {
     out.confirmClaudeUsageOverLimit = source.confirmClaudeUsageOverLimit;
@@ -2043,8 +2062,16 @@ export function updateAdvancedSettings(
   if (typeof patch.showCost === 'boolean') {
     advanced.showCost = patch.showCost;
   }
-  if (typeof patch.confirmClaudeUsageOverLimit === 'boolean') {
+  if (isUsageOnLimit(patch.usageOnLimit)) {
+    advanced.usageOnLimit = patch.usageOnLimit;
+    advanced.confirmClaudeUsageOverLimit = patch.usageOnLimit === 'confirm';
+    if (patch.usageOnLimit === 'switch_agent' || patch.usageOnLimit === 'wait_reset') {
+      advanced.orchestrationQuotaOnLimit = patch.usageOnLimit;
+    }
+  } else if (typeof patch.confirmClaudeUsageOverLimit === 'boolean') {
     advanced.confirmClaudeUsageOverLimit = patch.confirmClaudeUsageOverLimit;
+    if (patch.confirmClaudeUsageOverLimit) advanced.usageOnLimit = 'confirm';
+    else if (advanced.usageOnLimit === 'confirm') advanced.usageOnLimit = 'keep_going';
   }
   if (typeof patch.autoArchiveOnMerge === 'boolean') {
     advanced.autoArchiveOnMerge = patch.autoArchiveOnMerge;
@@ -2154,11 +2181,11 @@ export function showCostEnabled(
   return Boolean(settings.advanced.showCost);
 }
 
-/** Settings → Advanced → Confirm send when Claude usage is over the limit (default off). */
+/** Settings → Advanced → Confirm with user when usage is over the limit. */
 export function confirmClaudeUsageOverLimitEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
-  return Boolean(settings.advanced.confirmClaudeUsageOverLimit);
+  return usageOnLimit(settings) === 'confirm';
 }
 
 /** Conductor-style opt-in — default off. */
@@ -2174,11 +2201,19 @@ export function autoCleanupOrphansEnabled(
   return Boolean(settings.advanced.autoCleanupOrphans);
 }
 
-/** Default: switch to another agent (Auto) when orchestration hits a session limit. */
+/** Unified over-limit policy (default: keep going). */
+export function usageOnLimit(
+  settings: AppSettings = loadAppSettings(),
+): UsageOnLimit {
+  return resolveUsageOnLimit(settings.advanced);
+}
+
+/** @deprecated Prefer {@link usageOnLimit}. */
 export function orchestrationQuotaOnLimit(
   settings: AppSettings = loadAppSettings(),
 ): OrchestrationQuotaOnLimit {
-  return settings.advanced.orchestrationQuotaOnLimit ?? 'switch_agent';
+  const action = usageOnLimit(settings);
+  return action === 'wait_reset' ? 'wait_reset' : 'switch_agent';
 }
 
 /** Default fallback agent for orchestration session-limit continue (cursor). */
