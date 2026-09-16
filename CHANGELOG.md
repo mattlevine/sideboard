@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.200] - 2026-09-16
+
 ### Changed
 
 - Settings → Advanced now has one **On usage / session limit** policy for every worktree and orchestration chat (any agent): nothing (keep going), confirm with you, switch agent, or stop until the window resets.
