@@ -68,6 +68,7 @@ import {
   listCursorModels,
   listCodexModels,
   listOpencodeModels,
+  getClaudePlanUsage,
   getBrightsySession,
   switchBrightsyAccount,
   connectBrightsyTeam,
@@ -1183,6 +1184,10 @@ function registerIpc(): void {
     ensureAgentPath();
     applyAppEnvironment(process.env);
     return listOpencodeModels();
+  });
+  ipcMain.handle('getClaudeUsage', (_e, refresh?: boolean) => {
+    applyAppEnvironment(process.env);
+    return getClaudePlanUsage({ force: Boolean(refresh) });
   });
   ipcMain.handle('getBrightsySession', () => getBrightsySession());
   ipcMain.handle('getBrightsyCmsAuth', async () => {

@@ -51,6 +51,8 @@ interface Props {
   /** 0–1 fill of the fixed 1M window; omit to hide the ring. */
   contextRatio?: number | null;
   contextTooltip?: string;
+  /** Claude Code plan remaining (5h / weekly / model) — shown only for Claude chats. */
+  planUsage?: ReactNode;
   onSelectChat: (id: string) => void;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
@@ -95,6 +97,7 @@ export function ChatTabs({
   usageTotalTooltip,
   contextRatio = null,
   contextTooltip,
+  planUsage = null,
   onSelectChat,
   onSelectFile,
   onCloseFile,
@@ -490,6 +493,7 @@ export function ChatTabs({
             )}
           </span>
         )}
+        {planUsage}
         {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}
         {rightSidebarToggle}
         {openMenu}

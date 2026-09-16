@@ -54,6 +54,25 @@ export {
   resolveQuotaFallbackAgent,
 } from './session-quota.js';
 export {
+  parseClaudeUsagePayload,
+  formatClaudeUsageTooltip,
+  formatClaudeUsageReset,
+  formatClaudeUsageResetClock,
+  formatClaudeUsageFetchedAt,
+  formatClaudeExtraUsageDetail,
+  formatClaudeUsageCompact,
+  hottestClaudeWindow,
+  claudeUsageOverLimitWindows,
+  formatClaudeUsageOverLimitConfirm,
+} from './claude-usage.js';
+export type {
+  ClaudePlanUsage,
+  ClaudeUsageWindow,
+  ClaudeUsageWindowId,
+  ClaudeExtraUsage,
+} from './claude-usage.js';
+export { getClaudePlanUsage } from './claude-usage-client.js';
+export {
   ORCHESTRATOR_AGENT_KINDS,
   isOrchestratorCapableAgent,
   assertOrchestratorCapableAgent,

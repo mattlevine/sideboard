@@ -1760,6 +1760,35 @@ export function SettingsModal({
                 </div>
 
                 <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div className="settings-section-title">
+                        Confirm send when Claude usage is over the limit
+                      </div>
+                      <p className="settings-hint">
+                        When a Claude Code plan window (5-hour, weekly, or per-model) is
+                        exhausted, ask before sending in Claude and orchestration chats. Off by
+                        default.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.confirmClaudeUsageOverLimit ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.confirmClaudeUsageOverLimit)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          confirmClaudeUsageOverLimit: !advanced.confirmClaudeUsageOverLimit,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
                   <label className="settings-section-title" htmlFor="max-concurrent-agents">
                     Max concurrent agents
                   </label>
