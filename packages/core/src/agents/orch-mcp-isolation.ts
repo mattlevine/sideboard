@@ -115,3 +115,14 @@ export function toCodexDisableUserMcpArgs(names: string[]): string[] {
   }
   return args;
 }
+
+/**
+ * ChatGPT Apps / connectors (PostHog, Linear, …) attach streamable-HTTP MCP
+ * with OAuth. In `codex exec`, `AuthRequired` is fatal: rmcp quits the
+ * transport worker and the turn dies — even when Settings → Connectors
+ * already injected `POSTHOG_PERSONAL_API_KEY`. Disable the Apps surface on
+ * every Sideboard-launched exec; keep injected stdio `mcp_servers`.
+ */
+export function toCodexUnattendedAppsArgs(): string[] {
+  return ['-c', 'features.apps=false', '-c', 'apps._default.enabled=false'];
+}

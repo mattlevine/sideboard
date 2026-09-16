@@ -120,6 +120,20 @@ describe('codexAdapter.buildTurn', () => {
     expect(cmd.args[cmd.args.indexOf('--sandbox') + 1]).toBe('danger-full-access');
   });
 
+  it('disables ChatGPT Apps on worktree and orchestration turns', async () => {
+    const work = await codexAdapter.buildTurn(baseThread, { prompt: 'find work' });
+    const orch = await codexAdapter.buildTurn(
+      { ...baseThread, sourceType: 'orchestration' } as typeof baseThread & {
+        sourceType: 'orchestration';
+      },
+      { prompt: 'find work' },
+    );
+    for (const cmd of [work, orch]) {
+      expect(cmd.args).toContain('features.apps=false');
+      expect(cmd.args).toContain('apps._default.enabled=false');
+    }
+  });
+
   it('disables user Codex MCP servers on orchestration turns only', async () => {
     const spy = vi
       .spyOn(orchMcpIsolation, 'listUserCodexMcpNames')

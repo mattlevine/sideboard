@@ -10,6 +10,7 @@ import {
   listUserCursorMcpNames,
   listUserOpencodeMcpNames,
   toCodexDisableUserMcpArgs,
+  toCodexUnattendedAppsArgs,
   userMcpNamesToDisable,
 } from './orch-mcp-isolation.js';
 
@@ -72,6 +73,15 @@ command = "node"
     expect(toCodexDisableUserMcpArgs(['linear', 'bad.name'])).toEqual([
       '-c',
       'mcp_servers.linear.enabled=false',
+    ]);
+  });
+
+  it('disables ChatGPT Apps so OAuth MCP cannot kill unattended exec', () => {
+    expect(toCodexUnattendedAppsArgs()).toEqual([
+      '-c',
+      'features.apps=false',
+      '-c',
+      'apps._default.enabled=false',
     ]);
   });
 });

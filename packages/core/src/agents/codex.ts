@@ -16,6 +16,7 @@ import {
 import {
   listUserCodexMcpNames,
   toCodexDisableUserMcpArgs,
+  toCodexUnattendedAppsArgs,
   userMcpNamesToDisable,
 } from './orch-mcp-isolation.js';
 import type { AgentModelInfo } from './model-info.js';
@@ -244,6 +245,7 @@ export const codexAdapter: AgentAdapter = {
       orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
     const mcpOverrides = [
+      ...toCodexUnattendedAppsArgs(),
       ...toCodexMcpConfigArgs(injected),
       ...(isOrchestrator
         ? toCodexDisableUserMcpArgs(
