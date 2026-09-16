@@ -22,6 +22,7 @@ A Sideboard `thread/*` worktree (this repo checked out by Sideboard, not the mai
 
 ## Code
 
+- **Render blocking is a product constraint**, not a later optimization. List/refresh IPC must not ship full transcripts; archive and stream updates must not rebuild the composer/chat tree at input priority (`startTransition`, memoized transcript, `useDeferredValue` on filters). See [architecture.md](architecture.md) (Render blocking).
 - TypeScript, ESM in core/cli (`"type": "module"`). Desktop main is CJS (electron-vite).
 - Colocate tests as `*.test.ts` next to the source.
 - Do not put Slack client secrets or `xapp-` tokens in git or the DMG. Relay secrets live on Fly (`SIDEBOARD_SLACK_CLIENT_SECRET`, `SIDEBOARD_SLACK_APP_TOKEN`).

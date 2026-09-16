@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyThreadToLists, createThreadRefreshScheduler } from './thread-refresh';
+import {
+  applyThreadToLists,
+  createThreadRefreshScheduler,
+  mergeFullThreadIntoLists,
+  threadListsUnchanged,
+} from './thread-refresh';
 import type { Thread } from '@sideboard-ai/core';
 
 function thread(partial: Partial<Thread> & { id: string; status: Thread['status'] }): Thread {
@@ -95,5 +100,38 @@ describe('createThreadRefreshScheduler', () => {
     expect(refreshOne).toHaveBeenCalledWith('a');
     expect(refreshOne).toHaveBeenCalledWith('b');
     scheduler.dispose();
+  });
+});
+
+describe('mergeFullThreadIntoLists', () => {
+  it('replaces the slim list row with the full transcript', () => {
+    const slim = thread({ id: 'a', status: 'idle', messages: [{ role: 'user', text: 'hi', ts: 't' }] });
+    const full = thread({
+      id: 'a',
+      status: 'idle',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      messages: [
+        { role: 'user', text: 'hi', ts: 't' },
+        { role: 'agent', text: 'long answer', ts: 't2' },
+      ],
+    });
+    const next = mergeFullThreadIntoLists({ threads: [slim], archived: [] }, full);
+    expect(next.threads[0]?.messages).toHaveLength(2);
+    expect(next.threads[0]?.messages[1]?.text).toBe('long answer');
+  });
+});
+
+describe('threadListsUnchanged', () => {
+  it('treats identical id/updatedAt/status/length as unchanged', () => {
+    const a = thread({ id: 'a', status: 'idle' });
+    expect(threadListsUnchanged({ threads: [a], archived: [] }, { threads: [a], archived: [] })).toBe(
+      true,
+    );
+    expect(
+      threadListsUnchanged(
+        { threads: [a], archived: [] },
+        { threads: [{ ...a, status: 'running' }], archived: [] },
+      ),
+    ).toBe(false);
   });
 });

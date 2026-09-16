@@ -221,6 +221,12 @@ export function invalidateThreadListCache(): void {
   listCache = null;
 }
 
+/** Drop one cached record so the next read hydrates from disk. */
+export function invalidateThreadRecord(id: string): void {
+  if (!id) return;
+  forgetThread(id);
+}
+
 export function readThread(id: string): Thread | null {
   const path = threadFilePath(id);
   const mtimeMs = fileMtimeMs(path);

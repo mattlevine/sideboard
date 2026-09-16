@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
   threadDisplayLabel,
@@ -626,7 +626,8 @@ export function Sidebar({
     });
   }
 
-  const q = filter.trim().toLowerCase();
+  const deferredFilter = useDeferredValue(filter);
+  const q = deferredFilter.trim().toLowerCase();
 
   const globalThreads = useMemo(() => {
     return threads

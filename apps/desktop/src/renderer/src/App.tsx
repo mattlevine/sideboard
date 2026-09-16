@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import type {
   DiffScope,
   FollowUpBehavior,
@@ -13,7 +21,12 @@ import { lookupSoccerTeam } from '@sideboard/teams';
 import { LivePaintProvider } from './lib/live-paint-context';
 import { createLivePaintStore } from './lib/live-paint-store';
 import type { LivePaintOp } from './lib/live-paint';
-import { applyThreadToLists, createThreadRefreshScheduler } from './lib/thread-refresh';
+import {
+  applyThreadToLists,
+  createThreadRefreshScheduler,
+  mergeFullThreadIntoLists,
+  threadListsUnchanged,
+} from './lib/thread-refresh';
 import { ShowCostProvider } from './lib/show-cost';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
@@ -114,6 +127,9 @@ export function App() {
   const archivedRef = useRef<Thread[]>([]);
   threadsRef.current = threads;
   archivedRef.current = archived;
+  /** Full transcripts for the open chat (list IPC is preview-only). */
+  const fullByIdRef = useRef(new Map<string, Thread>());
+  const [selectedRev, setSelectedRev] = useState(0);
   const [view, setView] = useState<'board' | 'thread'>('board');
   const [worktreeSort, setWorktreeSort] = useState<WorktreeSortMode>(readWorktreeSort);
   const [worktreeOwnership, setWorktreeOwnership] =
@@ -325,6 +341,47 @@ export function App() {
 
   const refreshBusy = useRef(false);
   const refreshQueued = useRef(false);
+
+  const rememberFull = useCallback((thread: Thread | null) => {
+    if (!thread) return;
+    const prev = fullByIdRef.current.get(thread.id);
+    fullByIdRef.current.set(thread.id, thread);
+    if (
+      thread.id === selectedIdRef.current &&
+      (!prev ||
+        prev.updatedAt !== thread.updatedAt ||
+        prev.messages.length !== thread.messages.length ||
+        prev.status !== thread.status)
+    ) {
+      startTransition(() => {
+        setSelectedRev((n) => n + 1);
+      });
+    }
+  }, []);
+
+  const commitThreadLists = useCallback((next: { threads: Thread[]; archived: Thread[] }) => {
+    const selectedId = selectedIdRef.current;
+    const cached = selectedId ? fullByIdRef.current.get(selectedId) ?? null : null;
+    const merged = mergeFullThreadIntoLists(next, cached ?? null);
+    if (
+      threadListsUnchanged(
+        { threads: threadsRef.current, archived: archivedRef.current },
+        merged,
+      )
+    ) {
+      threadsRef.current = merged.threads;
+      archivedRef.current = merged.archived;
+      return false;
+    }
+    threadsRef.current = merged.threads;
+    archivedRef.current = merged.archived;
+    startTransition(() => {
+      setThreads(merged.threads);
+      setArchived(merged.archived);
+    });
+    return true;
+  }, []);
+
   const refresh = useCallback(async () => {
     if (refreshBusy.current) {
       refreshQueued.current = true;
@@ -334,41 +391,48 @@ export function App() {
     try {
       do {
         refreshQueued.current = false;
-        const [all, rt, ws] = await Promise.all([
+        const selectedId = selectedIdRef.current;
+        const [all, rt, ws, selectedFull] = await Promise.all([
           window.sideboard.getThreads(true),
           window.sideboard.getRuntime(),
           window.sideboard.listWorkspaces().catch(() => [] as Workspace[]),
+          selectedId
+            ? window.sideboard.getThread(selectedId).catch(() => null)
+            : Promise.resolve(null),
         ]);
+        rememberFull(selectedFull);
         const live = all.filter((t) => t.status !== 'archived');
         const archivedThreads = all.filter((t) => t.status === 'archived');
-        threadsRef.current = live;
-        archivedRef.current = archivedThreads;
-        setThreads(live);
-        setArchived(archivedThreads);
-        setRuntime(rt);
-        setWorkspaces(Array.isArray(ws) ? ws : []);
+        commitThreadLists({ threads: live, archived: archivedThreads });
+        startTransition(() => {
+          setRuntime(rt);
+          setWorkspaces(Array.isArray(ws) ? ws : []);
+        });
       } while (refreshQueued.current);
     } finally {
       refreshBusy.current = false;
     }
-  }, []);
+  }, [commitThreadLists, rememberFull]);
 
   const refreshThread = useCallback(async (id: string) => {
     const [thread, rt] = await Promise.all([
       window.sideboard.getThread(id).catch(() => null),
       window.sideboard.getRuntime().catch(() => null),
     ]);
+    if (!thread) fullByIdRef.current.delete(id);
+    rememberFull(thread);
     const next = applyThreadToLists(
       { threads: threadsRef.current, archived: archivedRef.current },
       thread,
       id,
     );
-    threadsRef.current = next.threads;
-    archivedRef.current = next.archived;
-    setThreads(next.threads);
-    setArchived(next.archived);
-    if (rt) setRuntime(rt);
-  }, []);
+    commitThreadLists(next);
+    if (rt) {
+      startTransition(() => {
+        setRuntime(rt);
+      });
+    }
+  }, [commitThreadLists, rememberFull]);
 
   const refreshWorkspaces = useCallback(async () => {
     try {
@@ -421,8 +485,9 @@ export function App() {
   }, []);
 
   const upsertThread = useCallback((thread: Thread) => {
+    rememberFull(thread);
     setThreads((prev) => [...prev.filter((t) => t.id !== thread.id), thread]);
-  }, []);
+  }, [rememberFull]);
 
   const selectCreatedThread = useCallback(
     (thread: Thread) => {
@@ -623,10 +688,12 @@ export function App() {
     };
   }, [openPrSyncKey]);
 
-  const selected = useMemo(
-    () => threads.find((t) => t.id === selectedId) ?? archived.find((t) => t.id === selectedId) ?? null,
-    [threads, archived, selectedId],
-  );
+  const selected = useMemo(() => {
+    if (!selectedId) return null;
+    const cached = fullByIdRef.current.get(selectedId);
+    if (cached) return cached;
+    return threads.find((t) => t.id === selectedId) ?? archived.find((t) => t.id === selectedId) ?? null;
+  }, [threads, archived, selectedId, selectedRev]);
 
   const holdCreateOverlay = shouldHoldCreateOverlay({
     paneProgress,
@@ -759,6 +826,7 @@ export function App() {
   function onSelect(id: string, multi: boolean) {
     setView('thread');
     setSelectedId(id);
+    void refreshThread(id);
     const selectedThread = threads.find((t) => t.id === id);
     if (selectedThread && !multi) {
       const key = unreadWorktreeKey(selectedThread);
@@ -784,19 +852,23 @@ export function App() {
       else next.delete(id);
     }
     archivingIdsRef.current = next;
-    setArchivingIds(next);
+    startTransition(() => {
+      setArchivingIds(next);
+    });
     return next.size;
   }
 
   function syncArchiveOverlayHint(label?: string) {
     if (!archiveOverlayHeld.current) return;
     const n = archivingIdsRef.current.size;
-    setPaneProgress((prev) => ({
-      mode: 'archive',
-      repoName: label?.trim() || prev?.repoName || 'Worktree',
-      selectionHint:
-        n > 1 ? `${n} worktrees` : n === 1 ? 'removing worktree' : null,
-    }));
+    startTransition(() => {
+      setPaneProgress((prev) => ({
+        mode: 'archive',
+        repoName: label?.trim() || prev?.repoName || 'Worktree',
+        selectionHint:
+          n > 1 ? `${n} worktrees` : n === 1 ? 'removing worktree' : null,
+      }));
+    });
   }
 
   /**
@@ -963,6 +1035,7 @@ export function App() {
     setSelectedId(match.id);
     setView('thread');
     setMultiSelected(new Set([match.id]));
+    void refreshThread(match.id);
   }
 
   const onWorktreeSortChange = useCallback((mode: WorktreeSortMode) => {
@@ -1060,6 +1133,7 @@ export function App() {
             setSelectedId(id);
             setView('thread');
             setMultiSelected(new Set([id]));
+            void refreshThread(id);
           }}
           worktreeSort={worktreeSort}
           onWorktreeSortChange={onWorktreeSortChange}
@@ -1108,6 +1182,7 @@ export function App() {
                 }
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
+                void refreshThread(id);
               },
               onLeaveThread: showBoard,
               onArchiveThread: (id: string, meta?: { title?: string; removesWorktree?: boolean }) =>
@@ -1155,6 +1230,7 @@ export function App() {
                 }
                 setSelectedId(id);
                 setMultiSelected(new Set([id]));
+                void refreshThread(id);
               }}
               onReorderChats={reorderSelectedChats}
               onLeaveThread={showBoard}
@@ -1216,6 +1292,7 @@ export function App() {
                   }
                   setSelectedId(id);
                   setMultiSelected(new Set([id]));
+                  void refreshThread(id);
                 }}
                 onAskAboutFile={(path) =>
                   setPrefill(`Look at the changes in ${path} and suggest next steps.`)
@@ -1380,6 +1457,7 @@ export function App() {
             setSelectedId(id);
             setView('thread');
             setMultiSelected(new Set([id]));
+            void refreshThread(id);
           }}
           onSettingsChange={(s) => {
             setShowCost(Boolean(s.advanced?.showCost));

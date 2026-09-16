@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -9,9 +10,11 @@ import {
 import type {
   AgentKind,
   DiffScope,
+  MessagePart,
   ThinkingEffort,
   Thread,
   ThreadAttachment,
+  TokenUsage,
 } from '@sideboard-ai/core';
 import { resolveUsageOnLimit } from '@sideboard/usage-on-limit';
 import {
@@ -280,6 +283,271 @@ function UserMessageText({
     </div>
   );
 }
+
+type ChatTranscriptHandlers = {
+  onSelectFile?: Props['onSelectFile'];
+  attachToChat: (att: ThreadAttachment) => void;
+  onOpenThreadLink?: (threadRef: string) => void;
+  openRightPane: (next: RightPaneContent) => void;
+  forkToTab: (throughIndex: number) => void;
+  requestForkWorkspace: (throughIndex: number) => void;
+};
+
+/** Isolated from composer `prompt` so keystrokes do not rebuild markdown/tool cards. */
+const ChatTranscript = memo(function ChatTranscript({
+  messages,
+  fallbackDurations,
+  showPlanCard,
+  showStreaming,
+  lastAgentMessageIndex,
+  presentedPlanSource,
+  showPlanQuestions,
+  pendingPlanQuestions,
+  pendingTranscript,
+  pendingAttachments,
+  liveOutput,
+  liveParts,
+  liveUsage,
+  turnStartedAt,
+  forwardOccupancy,
+  threadId,
+  worktreePath,
+  agent,
+  model,
+  status,
+  filePaths,
+  activeArtifactId,
+  canForkWorkspace,
+  liveHasPresentPlan,
+  handlersRef,
+}: {
+  messages: Thread['messages'];
+  fallbackDurations: Array<number | undefined>;
+  showPlanCard: boolean;
+  showStreaming: boolean;
+  lastAgentMessageIndex: number;
+  presentedPlanSource?: string;
+  showPlanQuestions: boolean;
+  pendingPlanQuestions: ReturnType<typeof latestPendingPlanQuestions>;
+  pendingTranscript: string | null;
+  pendingAttachments: ThreadAttachment[];
+  liveOutput: string;
+  liveParts: MessagePart[];
+  liveUsage: TokenUsage | null;
+  turnStartedAt: number | undefined;
+  forwardOccupancy: number | undefined;
+  threadId: string;
+  worktreePath: string;
+  agent: Thread['agent'];
+  model: Thread['model'];
+  status: Thread['status'];
+  filePaths: string[];
+  activeArtifactId?: string;
+  canForkWorkspace: boolean;
+  liveHasPresentPlan: boolean;
+  handlersRef: { current: ChatTranscriptHandlers };
+}) {
+  const h = handlersRef.current;
+  return (
+    <>
+      {messages.map((m, i) => {
+        const fallbackDuration = fallbackDurations[i];
+        const hidePlanProse =
+          showPlanCard &&
+          !showStreaming &&
+          i === lastAgentMessageIndex &&
+          m.role === 'agent' &&
+          (presentedPlanSource === 'present_plan' ||
+            presentedPlanSource === 'text' ||
+            presentedPlanSource === 'exit_plan');
+        return (
+          <div
+            key={`${m.ts}-${i}`}
+            className={`msg ${m.origin === 'continue' ? 'continue' : m.role}`}
+          >
+            {m.role === 'agent' ? (
+              <>
+                <AgentMessage
+                  text={m.text}
+                  parts={m.parts}
+                  ts={m.ts}
+                  durationMs={m.durationMs ?? fallbackDuration}
+                  usage={m.usage}
+                  occupancyTokens={
+                    !showStreaming && i === lastAgentMessageIndex
+                      ? forwardOccupancy
+                      : undefined
+                  }
+                  agent={agent}
+                  model={model}
+                  threadId={threadId}
+                  worktreePath={worktreePath}
+                  knownFilePaths={filePaths}
+                  onOpenFile={h.onSelectFile}
+                  onCodeReference={h.attachToChat}
+                  onOpenThread={h.onOpenThreadLink}
+                  onOpenArtifact={h.openRightPane}
+                  activeArtifactId={activeArtifactId}
+                  artifactIdPrefix={`msg-${i}`}
+                  onFork={() => void h.forkToTab(i)}
+                  onForkWorkspace={
+                    canForkWorkspace ? () => h.requestForkWorkspace(i) : undefined
+                  }
+                  hideAnswer={hidePlanProse}
+                />
+                {showPlanQuestions &&
+                  pendingPlanQuestions &&
+                  extractPendingPlanQuestions(m.parts)?.signature ===
+                    pendingPlanQuestions.signature && (
+                    <div
+                      className="plan-questions-chat-brief"
+                      key={pendingPlanQuestions.signature}
+                    >
+                      <MarkdownMessage
+                        text={formatPlanQuestionsForChat(
+                          pendingPlanQuestions.questions,
+                        )}
+                      />
+                    </div>
+                  )}
+              </>
+            ) : m.role === 'summary' ? (
+              <div className="msg-summary">
+                <div className="msg-summary-label">Context summarized</div>
+                <MarkdownMessage
+                  text={m.text}
+                  onThreadLinkClick={h.onOpenThreadLink}
+                />
+              </div>
+            ) : m.origin === 'continue' ? (
+              <div className="msg-continue" title={m.text}>
+                Sideboard continued the turn
+              </div>
+            ) : (
+              <div className="msg-user-body">
+                {(m.attachments?.length ?? 0) > 0 && (
+                  <ComposerAttachmentChips
+                    attachments={m.attachments!}
+                    className="msg-attachments"
+                    expandImages
+                    onOpen={h.onSelectFile}
+                  />
+                )}
+                {m.text ? (
+                  <UserMessageText
+                    text={m.text}
+                    onThreadLinkClick={h.onOpenThreadLink}
+                  />
+                ) : null}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {pendingTranscript && (
+        <div
+          className={`msg ${looksLikeAutoContinuePrompt(pendingTranscript) ? 'continue' : 'user'} pending`}
+        >
+          {looksLikeAutoContinuePrompt(pendingTranscript) ? (
+            <div className="msg-continue" title={pendingTranscript}>
+              Sideboard continued the turn
+            </div>
+          ) : (
+            <div className="msg-user-body">
+              {pendingAttachments.length > 0 && (
+                <ComposerAttachmentChips
+                  attachments={pendingAttachments}
+                  className="msg-attachments"
+                  expandImages
+                  onOpen={h.onSelectFile}
+                />
+              )}
+              {pendingTranscript ? (
+                <UserMessageText
+                  text={pendingTranscript}
+                  onThreadLinkClick={h.onOpenThreadLink}
+                />
+              ) : null}
+            </div>
+          )}
+        </div>
+      )}
+      {showStreaming && (
+        <div
+          className={`msg agent streaming${liveOutput || liveParts.length ? '' : ' waiting'}`}
+        >
+          {liveOutput || liveParts.length || turnStartedAt ? (
+            <AgentMessage
+              text={liveOutput}
+              parts={liveParts}
+              streaming
+              startedAt={turnStartedAt}
+              usage={liveUsage ?? undefined}
+              occupancyTokens={forwardOccupancy}
+              agent={agent}
+              model={model}
+              threadId={threadId}
+              worktreePath={worktreePath}
+              knownFilePaths={filePaths}
+              onOpenFile={h.onSelectFile}
+              onCodeReference={h.attachToChat}
+              onOpenThread={h.onOpenThreadLink}
+              onOpenArtifact={h.openRightPane}
+              activeArtifactId={activeArtifactId}
+              artifactIdPrefix="live"
+              hideAnswer={showPlanCard && liveHasPresentPlan}
+              onFork={() =>
+                void h.forkToTab(Math.max(0, messages.length - 1))
+              }
+              onForkWorkspace={
+                canForkWorkspace
+                  ? () => h.requestForkWorkspace(Math.max(0, messages.length - 1))
+                  : undefined
+              }
+            />
+          ) : (
+            <>
+              <ThinkingIndicator
+                queued={status === 'queued'}
+                showMark={false}
+              />
+              <div
+                className="msg-stream-activity"
+                aria-live="polite"
+                aria-label={status === 'queued' ? 'Queued' : 'Generating'}
+              >
+                <ActivityMark
+                  tone={status === 'queued' ? 'queued' : 'active'}
+                  size="sm"
+                />
+                <span className="thinking-indicator-dots" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
+            </>
+          )}
+          {showPlanQuestions &&
+            pendingPlanQuestions &&
+            extractPendingPlanQuestions(liveParts)?.signature ===
+              pendingPlanQuestions.signature && (
+              <div
+                className="plan-questions-chat-brief"
+                key={pendingPlanQuestions.signature}
+              >
+                <MarkdownMessage
+                  text={formatPlanQuestionsForChat(
+                    pendingPlanQuestions.questions,
+                  )}
+                />
+              </div>
+            )}
+        </div>
+      )}
+    </>
+  );
+});
 
 export function ThreadPanel({
   thread,
@@ -1611,6 +1879,23 @@ export function ThreadPanel({
     thread.id,
   ]);
 
+  const chatHandlersRef = useRef<ChatTranscriptHandlers>({
+    onSelectFile,
+    attachToChat,
+    onOpenThreadLink,
+    openRightPane,
+    forkToTab,
+    requestForkWorkspace,
+  });
+  chatHandlersRef.current = {
+    onSelectFile,
+    attachToChat,
+    onOpenThreadLink,
+    openRightPane,
+    forkToTab,
+    requestForkWorkspace,
+  };
+
   return (
     <section className="panel thread-main">
       {usageLimitConfirm ? (
@@ -1955,206 +2240,33 @@ export function ThreadPanel({
                 )}
               </div>
             )}
-          {thread.messages.map((m, i) => {
-            const fallbackDuration = fallbackDurations[i];
-            const hidePlanProse =
-              showPlanCard &&
-              !showStreaming &&
-              i === lastAgentMessageIndex &&
-              m.role === 'agent' &&
-              (presentedPlan?.source === 'present_plan' ||
-                presentedPlan?.source === 'text' ||
-                presentedPlan?.source === 'exit_plan');
-            return (
-              <div
-                key={`${m.ts}-${i}`}
-                className={`msg ${m.origin === 'continue' ? 'continue' : m.role}`}
-              >
-                {m.role === 'agent' ? (
-                  <>
-                    <AgentMessage
-                      text={m.text}
-                      parts={m.parts}
-                      ts={m.ts}
-                      durationMs={m.durationMs ?? fallbackDuration}
-                      usage={m.usage}
-                      occupancyTokens={
-                        !showStreaming && i === lastAgentMessageIndex
-                          ? forwardOccupancy
-                          : undefined
-                      }
-                      agent={thread.agent}
-                      model={thread.model}
-                      threadId={thread.id}
-                      worktreePath={thread.worktreePath}
-                      knownFilePaths={filePaths}
-                      onOpenFile={onSelectFile}
-                      onCodeReference={attachToChat}
-                      onOpenThread={onOpenThreadLink}
-                      onOpenArtifact={openRightPane}
-                      activeArtifactId={rightPane?.id}
-                      artifactIdPrefix={`msg-${i}`}
-                      onFork={() => void forkToTab(i)}
-                      onForkWorkspace={
-                        canForkWorkspace
-                          ? () => requestForkWorkspace(i)
-                          : undefined
-                      }
-                      hideAnswer={hidePlanProse}
-                    />
-                    {showPlanQuestions &&
-                      pendingPlanQuestions &&
-                      extractPendingPlanQuestions(m.parts)?.signature ===
-                        pendingPlanQuestions.signature && (
-                        <div
-                          className="plan-questions-chat-brief"
-                          key={pendingPlanQuestions.signature}
-                        >
-                          <MarkdownMessage
-                            text={formatPlanQuestionsForChat(
-                              pendingPlanQuestions.questions,
-                            )}
-                          />
-                        </div>
-                      )}
-                  </>
-                ) : m.role === 'summary' ? (
-                  <div className="msg-summary">
-                    <div className="msg-summary-label">Context summarized</div>
-                    <MarkdownMessage
-                      text={m.text}
-                      onThreadLinkClick={onOpenThreadLink}
-                    />
-                  </div>
-                ) : m.origin === 'continue' ? (
-                  <div className="msg-continue" title={m.text}>
-                    Sideboard continued the turn
-                  </div>
-                ) : (
-                  <div className="msg-user-body">
-                    {(m.attachments?.length ?? 0) > 0 && (
-                      <ComposerAttachmentChips
-                        attachments={m.attachments!}
-                        className="msg-attachments"
-                        expandImages
-                        onOpen={onSelectFile}
-                      />
-                    )}
-                    {m.text ? (
-                      <UserMessageText
-                        text={m.text}
-                        onThreadLinkClick={onOpenThreadLink}
-                      />
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {pendingTranscript && (
-            <div
-              className={`msg ${looksLikeAutoContinuePrompt(pendingTranscript) ? 'continue' : 'user'} pending`}
-            >
-              {looksLikeAutoContinuePrompt(pendingTranscript) ? (
-                <div className="msg-continue" title={pendingTranscript}>
-                  Sideboard continued the turn
-                </div>
-              ) : (
-                <div className="msg-user-body">
-                  {pendingAttachments.length > 0 && (
-                    <ComposerAttachmentChips
-                      attachments={pendingAttachments}
-                      className="msg-attachments"
-                      expandImages
-                      onOpen={onSelectFile}
-                    />
-                  )}
-                  {pendingTranscript ? (
-                    <UserMessageText
-                      text={pendingTranscript}
-                      onThreadLinkClick={onOpenThreadLink}
-                    />
-                  ) : null}
-                </div>
-              )}
-            </div>
-          )}
-          {showStreaming && (
-            <div
-              className={`msg agent streaming${liveOutput || liveParts.length ? '' : ' waiting'}`}
-            >
-              {liveOutput || liveParts.length || turnStartedAt ? (
-                <AgentMessage
-                  text={liveOutput}
-                  parts={liveParts}
-                  streaming
-                  startedAt={turnStartedAt}
-                  usage={liveUsage ?? undefined}
-                  occupancyTokens={forwardOccupancy}
-                  agent={thread.agent}
-                  model={thread.model}
-                  threadId={thread.id}
-                  worktreePath={thread.worktreePath}
-                  knownFilePaths={filePaths}
-                  onOpenFile={onSelectFile}
-                  onCodeReference={attachToChat}
-                  onOpenThread={onOpenThreadLink}
-                  onOpenArtifact={openRightPane}
-                  activeArtifactId={rightPane?.id}
-                  artifactIdPrefix="live"
-                  hideAnswer={showPlanCard && liveHasPresentPlan}
-                  onFork={() =>
-                    void forkToTab(Math.max(0, thread.messages.length - 1))
-                  }
-                  onForkWorkspace={
-                    canForkWorkspace
-                      ? () =>
-                          requestForkWorkspace(
-                            Math.max(0, thread.messages.length - 1),
-                          )
-                      : undefined
-                  }
-                />
-              ) : (
-                <>
-                  <ThinkingIndicator
-                    queued={thread.status === 'queued'}
-                    showMark={false}
-                  />
-                  <div
-                    className="msg-stream-activity"
-                    aria-live="polite"
-                    aria-label={thread.status === 'queued' ? 'Queued' : 'Generating'}
-                  >
-                    <ActivityMark
-                      tone={thread.status === 'queued' ? 'queued' : 'active'}
-                      size="sm"
-                    />
-                    <span className="thinking-indicator-dots" aria-hidden>
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                  </div>
-                </>
-              )}
-              {showPlanQuestions &&
-                pendingPlanQuestions &&
-                extractPendingPlanQuestions(liveParts)?.signature ===
-                  pendingPlanQuestions.signature && (
-                  <div
-                    className="plan-questions-chat-brief"
-                    key={pendingPlanQuestions.signature}
-                  >
-                    <MarkdownMessage
-                      text={formatPlanQuestionsForChat(
-                        pendingPlanQuestions.questions,
-                      )}
-                    />
-                  </div>
-                )}
-            </div>
-          )}
+          <ChatTranscript
+            messages={thread.messages}
+            fallbackDurations={fallbackDurations}
+            showPlanCard={showPlanCard}
+            showStreaming={showStreaming}
+            lastAgentMessageIndex={lastAgentMessageIndex}
+            presentedPlanSource={presentedPlan?.source}
+            showPlanQuestions={showPlanQuestions}
+            pendingPlanQuestions={pendingPlanQuestions}
+            pendingTranscript={pendingTranscript}
+            pendingAttachments={pendingAttachments}
+            liveOutput={liveOutput}
+            liveParts={liveParts}
+            liveUsage={liveUsage}
+            turnStartedAt={turnStartedAt}
+            forwardOccupancy={forwardOccupancy}
+            threadId={thread.id}
+            worktreePath={thread.worktreePath}
+            agent={thread.agent}
+            model={thread.model}
+            status={thread.status}
+            filePaths={filePaths}
+            activeArtifactId={rightPane?.id}
+            canForkWorkspace={canForkWorkspace}
+            liveHasPresentPlan={liveHasPresentPlan}
+            handlersRef={chatHandlersRef}
+          />
           {showPlanCard && presentedPlan && (
             <div className="msg agent plan-at-end">
               <PlanApprovalCard

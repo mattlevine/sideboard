@@ -131,6 +131,8 @@ import {
   threadsDir,
   isThreadRecordFile,
   invalidateThreadListCache,
+  invalidateThreadRecord,
+  slimThreadForUiList,
   schedulesPath,
   listSchedules,
   createSchedule,
@@ -716,9 +718,15 @@ function setupStoreWatcher(): void {
   const watcher = watch(dir, { ignoreInitial: true, depth: 0 });
   let adoptTimer: ReturnType<typeof setTimeout> | null = null;
   let notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  const pendingRecordIds = new Set<string>();
   const flushNotify = () => {
     notifyTimer = null;
-    invalidateThreadListCache();
+    if (pendingRecordIds.size > 0) {
+      for (const id of pendingRecordIds) invalidateThreadRecord(id);
+      pendingRecordIds.clear();
+    } else {
+      invalidateThreadListCache();
+    }
     mainWindow?.webContents.send('threads:changed');
     // MCP stdio (separate process) enqueues via send_to_thread; when that child
     // exits mid-wait, queues stay on disk. Adopt them into the desktop drain.
@@ -736,6 +744,8 @@ function setupStoreWatcher(): void {
     // Ignore `<id>.live.json` and atomic `*.tmp` — those fire on every tool
     // chunk and made the renderer re-parse every thread JSON on the UI thread.
     if (!isThreadRecordFile(changed)) return;
+    const id = basename(changed).replace(/\.json$/, '');
+    if (id) pendingRecordIds.add(id);
     if (notifyTimer) clearTimeout(notifyTimer);
     notifyTimer = setTimeout(flushNotify, 250);
   };
@@ -1244,7 +1254,7 @@ function registerIpc(): void {
   );
   ipcMain.handle('resolveRepoRoot', (_e, cwd: string) => resolveRepoRoot(cwd));
   ipcMain.handle('getThreads', (_e, includeArchived?: boolean) =>
-    orch.getThreads(Boolean(includeArchived)),
+    orch.getThreads(Boolean(includeArchived)).map(slimThreadForUiList),
   );
   ipcMain.handle('getThread', (_e, id: string) => orch.getThread(id));
   ipcMain.handle('getRuntime', () => orch.getRuntime());

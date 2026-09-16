@@ -28,6 +28,27 @@ export function applyThreadToLists(
   return { threads: upsert(state.threads), archived: drop(state.archived) };
 }
 
+/** Put the open chat's full transcript back after a slim list reload. */
+export function mergeFullThreadIntoLists(
+  state: ThreadLists,
+  full: Thread | null,
+): ThreadLists {
+  if (!full) return state;
+  return applyThreadToLists(state, full, full.id);
+}
+
+/** Skip React setState when a slim/full refresh did not change list identity. */
+export function threadListsUnchanged(a: ThreadLists, b: ThreadLists): boolean {
+  return listSignature(a.threads) === listSignature(b.threads)
+    && listSignature(a.archived) === listSignature(b.archived);
+}
+
+function listSignature(list: Thread[]): string {
+  return list
+    .map((t) => `${t.id}:${t.updatedAt}:${t.status}:${t.messages.length}`)
+    .join('\n');
+}
+
 export type ThreadRefreshReason = 'full' | 'status';
 
 /**
