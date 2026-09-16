@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdvancedAppSettings,
   AgentKind,
@@ -612,8 +612,9 @@ export function SettingsModal({
   const orchAgent = orchDefaults.agent;
   const orchModel = orchDefaults.model;
   const orchEffort = orchDefaults.effort;
+  const deferredHistoryQuery = useDeferredValue(historyQuery);
   const filteredArchived = useMemo(() => {
-    const q = historyQuery.trim().toLowerCase();
+    const q = deferredHistoryQuery.trim().toLowerCase();
     const list = [...archived].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     if (!q) return list;
     return list.filter((t) => {
@@ -622,7 +623,7 @@ export function SettingsModal({
         `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repo}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [archived, historyQuery]);
+  }, [archived, deferredHistoryQuery]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>

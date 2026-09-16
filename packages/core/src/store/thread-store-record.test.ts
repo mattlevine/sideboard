@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   createEmptyThread,
   invalidateThreadListCache,
+  invalidateThreadRecord,
   isThreadRecordFile,
   listThreads,
   readThread,
@@ -92,5 +93,40 @@ describe('thread list cache', () => {
     expect(readThread(thread.id)?.status).toBe('running');
     expect(readThread(thread.id)?.messages.at(-1)?.text).toBe('Working on the PR');
     expect(listThreads()[0]?.status).toBe('running');
+  });
+
+  it('invalidating one record leaves other cached threads in memory', () => {
+    const first = createEmptyThread({
+      title: 'one',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/one',
+      worktreePath: '/tmp/one',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    const second = createEmptyThread({
+      title: 'two',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/two',
+      worktreePath: '/tmp/two',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    writeThread(first);
+    writeThread(second);
+    expect(listThreads()).toHaveLength(2);
+
+    const path = threadFilePath(first.id);
+    const onDisk = JSON.parse(readFileSync(path, 'utf8')) as typeof first;
+    onDisk.title = 'renamed';
+    writeFileSync(path, JSON.stringify(onDisk, null, 2), 'utf8');
+    const later = new Date(Date.now() + 1000);
+    utimesSync(path, later, later);
+
+    invalidateThreadRecord(first.id);
+    expect(readThread(first.id)?.title).toBe('renamed');
+    expect(readThread(second.id)?.title).toBe('two');
   });
 });

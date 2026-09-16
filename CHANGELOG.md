@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Archiving several worktrees no longer stalls typing. Board/history list IPC ships a preview instead of every transcript, archive refreshes are lower priority than keystrokes, and the chat markdown tree does not rebuild on each composer character.
+
 ## [0.1.200] - 2026-09-16
 
 ### Changed
