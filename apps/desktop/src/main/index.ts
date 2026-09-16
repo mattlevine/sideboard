@@ -25,6 +25,7 @@ import {
   registerArtifactPreviewScheme,
 } from './artifact-preview';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
+import { formatUpdaterCheckError } from './updater-error';
 import { initDesktopSecretVault } from './secret-vault';
 import {
   caffeinateIndicatorReasons,
@@ -708,7 +709,7 @@ function setupUpdater(): void {
 
   autoUpdater.on('error', (err) => {
     mainWindow?.webContents.send('update:error', {
-      message: err instanceof Error ? err.message : String(err),
+      message: formatUpdaterCheckError(err).detail,
     });
   });
 }

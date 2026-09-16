@@ -7,6 +7,7 @@ import {
   type MenuItemConstructorOptions,
 } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import { formatUpdaterCheckError } from './updater-error';
 
 type UpdatePhase = 'idle' | 'checking' | 'available' | 'ready' | 'error';
 
@@ -71,16 +72,24 @@ export async function checkForUpdatesManual(): Promise<void> {
   try {
     await autoUpdater.checkForUpdates();
   } catch (err) {
-    manualCheck = false;
-    phase = 'idle';
-    await dialog.showMessageBox({
-      type: 'error',
-      message: 'Couldn’t check for updates',
-      detail: err instanceof Error ? err.message : String(err),
-      buttons: ['OK'],
-      defaultId: 0,
-    });
+    presentManualCheckFailure(err);
   }
+}
+
+function presentManualCheckFailure(err: unknown): void {
+  if (!manualCheck) return;
+  manualCheck = false;
+  phase = 'idle';
+  const formatted = formatUpdaterCheckError(err);
+  const type =
+    formatted.kind === 'failed' ? 'error' : formatted.kind === 'offline' ? 'warning' : 'info';
+  void dialog.showMessageBox({
+    type,
+    message: formatted.title,
+    detail: formatted.detail,
+    buttons: ['OK'],
+    defaultId: 0,
+  });
 }
 
 /** Wire electron-updater events used by the app menu dialogs. */
@@ -123,17 +132,7 @@ export function bindUpdaterEvents(_getMainWindow: () => BrowserWindow | null): v
   });
 
   autoUpdater.on('error', (err) => {
-    phase = 'error';
-    if (manualCheck) {
-      manualCheck = false;
-      void dialog.showMessageBox({
-        type: 'error',
-        message: 'Couldn’t check for updates',
-        detail: err instanceof Error ? err.message : String(err),
-        buttons: ['OK'],
-        defaultId: 0,
-      });
-    }
+    presentManualCheckFailure(err);
     phase = 'idle';
   });
 }
