@@ -394,6 +394,43 @@ describe('Orchestrator queued-message editing', () => {
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 
+  it('MCP steer only reorders while the desktop host owns the child (#115)', async () => {
+    // Another live process is the desktop host — this one is MCP/CLI.
+    const host = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    });
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    });
+    try {
+      writeFileSync(join(dataDir, 'desktop-host.pid'), `${host.pid}\n`);
+      const thread = seedThread(['later']);
+      const live = readThread(thread.id)!;
+      live.status = 'running';
+      live.agentPid = child.pid!;
+      writeThread(live);
+      const orch = new Orchestrator();
+      const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
+      const drainQueue = vi.fn().mockResolvedValue(undefined);
+      internal.drainQueue = drainQueue;
+
+      const updated = await orch.send(thread.id, 'steer now', { followUp: 'steer' });
+      expect(updated.queue).toEqual(['steer now', 'later']);
+      expect(updated.status).toBe('running');
+      expect(drainQueue).not.toHaveBeenCalled();
+      // Desktop-owned child untouched.
+      expect(() => process.kill(child.pid!, 0)).not.toThrow();
+    } finally {
+      for (const p of [host, child]) {
+        try {
+          p.kill('SIGKILL');
+        } catch {
+          // already dead
+        }
+      }
+    }
+  });
+
   it('drains send() when this process is the desktop host', async () => {
     writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
     const thread = seedThread([]);

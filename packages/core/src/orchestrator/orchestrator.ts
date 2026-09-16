@@ -110,7 +110,7 @@ import { forkThreadWorktree as forkThreadWorktreeImpl } from '../threads/fork-wo
 import {
   isWorktreeRunProcessKey,
   mergeWorktreeActiveRuns,
-  pickRichestSetupLog,
+  resolveWorktreeSetupLog,
   worktreeDevProcessKey,
   worktreeRunProcessKey,
   worktreeSetupProcessKey,
@@ -1000,6 +1000,12 @@ export class Orchestrator {
       return true;
     });
     if (!promoted) return this.requireThread(thread.id);
+    // MCP/CLI while the board is alive: the in-flight child belongs to the
+    // desktop. Killing it by agentPid reads as a crash there (retry / error
+    // continue), and draining here spawns the next turn in a stdio process
+    // with no renderer IPC. Leave the promoted prompt at the front — the
+    // desktop drain loop runs it as soon as the current turn unwinds.
+    if (!thisProcessShouldDrainAgentQueues()) return this.requireThread(thread.id);
     const current = this.requireThread(thread.id);
     const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
     const livePid = current.agentPid;
@@ -2006,10 +2012,10 @@ export class Orchestrator {
       ...threadsSharingWorktree(thread.worktreePath).map((t) => t.id),
     ];
     const snap =
-      pickRichestSetupLog([
+      resolveWorktreeSetupLog(
         readSetupLog(setupLogKeyForWorktree(thread.worktreePath)),
-        ...[...new Set(siblingIds)].map((id) => readSetupLog(id)),
-      ]) ?? readSetupLog(thread.id);
+        [...new Set(siblingIds)].map((id) => readSetupLog(id)),
+      ) ?? readSetupLog(thread.id);
     if (snap.running && !this.hasWorktreeSetupProcess(thread.worktreePath)) {
       return { ...snap, running: false };
     }

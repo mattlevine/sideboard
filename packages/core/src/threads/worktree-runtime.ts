@@ -44,6 +44,19 @@ export function pickRichestSetupLog<
   return best;
 }
 
+/**
+ * The worktree-keyed log is rewritten on every run, so it is canonical. Only
+ * chats that predate that key have nothing there; for them fall back to the
+ * richest per-chat log. Never let a longer stale sibling log outrank a
+ * fresher shared one (a later short run from another tab must win).
+ */
+export function resolveWorktreeSetupLog<
+  T extends { output: string; running: boolean; exitCode: number | null },
+>(shared: T, legacyChatLogs: readonly T[]): T | undefined {
+  if (shared.output || shared.running || shared.exitCode != null) return shared;
+  return pickRichestSetupLog(legacyChatLogs);
+}
+
 /** One Run pane per worktree — merge sibling chat records. */
 export function mergeWorktreeActiveRuns(
   threads: readonly { activeRuns?: ActiveRun[]; devPort?: number | null }[],

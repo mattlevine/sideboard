@@ -4,6 +4,7 @@ import {
   isWorktreeRunProcessKey,
   mergeWorktreeActiveRuns,
   pickRichestSetupLog,
+  resolveWorktreeSetupLog,
   worktreeDevProcessKey,
   worktreeRunProcessKey,
   worktreeSetupProcessKey,
@@ -28,6 +29,31 @@ describe('pickRichestSetupLog', () => {
     expect(pickRichestSetupLog([empty, done, live])).toEqual(live);
     expect(pickRichestSetupLog([empty, done])).toEqual(done);
     expect(pickRichestSetupLog([empty])).toBeUndefined();
+  });
+});
+
+describe('resolveWorktreeSetupLog', () => {
+  type Snap = { output: string; running: boolean; exitCode: number | null };
+  const empty: Snap = { output: '', running: false, exitCode: null };
+
+  it('prefers the worktree log even when a stale sibling chat log is longer (#119)', () => {
+    const shared = { output: 'short rerun', running: false, exitCode: 1 };
+    const staleSibling = { output: 'a much longer earlier run\nline 2\nline 3', running: false, exitCode: 0 };
+    expect(resolveWorktreeSetupLog(shared, [staleSibling])).toBe(shared);
+  });
+
+  it('falls back to the richest per-chat log for records that predate the worktree key', () => {
+    const legacy = { output: 'old run', running: false, exitCode: 0 };
+    expect(resolveWorktreeSetupLog(empty, [empty, legacy])).toBe(legacy);
+    expect(resolveWorktreeSetupLog(empty, [empty])).toBeUndefined();
+  });
+
+  it('treats a live or finished-but-silent worktree log as present', () => {
+    const live: Snap = { output: '', running: true, exitCode: null };
+    const silent: Snap = { output: '', running: false, exitCode: 0 };
+    const legacy: Snap = { output: 'old run', running: false, exitCode: 0 };
+    expect(resolveWorktreeSetupLog(live, [legacy])).toBe(live);
+    expect(resolveWorktreeSetupLog(silent, [legacy])).toBe(silent);
   });
 });
 

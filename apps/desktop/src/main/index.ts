@@ -201,15 +201,30 @@ const orch = getOrchestrator();
 {
   const archiveThread = orch.archive.bind(orch);
   const purgeThread = orch.purge.bind(orch);
+  // Terminal teardown runs after archive/purge settle: the orchestrator
+  // serializes sibling closes per worktree, so only the last one sees an
+  // empty live list and kills the shared shell PTY.
   orch.archive = async (ref: string) => {
-    const { killTerminalsOnThreadTeardown } = await import('./terminal.js');
-    killTerminalsOnThreadTeardown(orch, ref);
-    return archiveThread(ref);
+    const { killTerminalsAfterThreadTeardown, threadWorktreePathForTeardown } = await import(
+      './terminal.js'
+    );
+    const worktreePath = threadWorktreePathForTeardown(orch, ref);
+    try {
+      return await archiveThread(ref);
+    } finally {
+      killTerminalsAfterThreadTeardown(ref, worktreePath);
+    }
   };
   orch.purge = async (ref: string, opts?: { deleteBranch?: boolean }) => {
-    const { killTerminalsOnThreadTeardown } = await import('./terminal.js');
-    killTerminalsOnThreadTeardown(orch, ref);
-    return purgeThread(ref, opts);
+    const { killTerminalsAfterThreadTeardown, threadWorktreePathForTeardown } = await import(
+      './terminal.js'
+    );
+    const worktreePath = threadWorktreePathForTeardown(orch, ref);
+    try {
+      return await purgeThread(ref, opts);
+    } finally {
+      killTerminalsAfterThreadTeardown(ref, worktreePath);
+    }
   };
 }
 let openFileWatcher: FSWatcher | null = null;

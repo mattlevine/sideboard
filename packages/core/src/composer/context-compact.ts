@@ -1,3 +1,4 @@
+import { clipToolResultForStore } from '../agents/error-detail.js';
 import { contextTokens } from '../agents/usage.js';
 import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
 import {
@@ -103,7 +104,9 @@ function formatToolPart(
   if (t.input && Object.keys(t.input).length > 0) {
     lines.push('Input:');
     lines.push('```json');
-    lines.push(JSON.stringify(t.input, null, 2));
+    // Stored inputs are uncapped (artifact HTML, Write bodies) so the UI can
+    // re-render them; the agent-facing transcript gets the same clip as results.
+    lines.push(clipToolResultForStore(JSON.stringify(t.input, null, 2)) ?? '');
     lines.push('```');
   } else if (t.detail) {
     lines.push(`Detail: ${t.detail}`);
@@ -184,6 +187,48 @@ export interface SessionSeedOptions {
 }
 
 /**
+ * Keep summaries + newest blocks within `maxChars`; drop the oldest others
+ * first and note how many were omitted.
+ */
+function budgetSeedBlocks(
+  messages: readonly ThreadMessage[],
+  blocks: readonly string[],
+  maxChars: number,
+): string {
+  const keep = new Array<boolean>(blocks.length).fill(false);
+  let used = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    if (messages[i]!.role === 'summary') {
+      keep[i] = true;
+      used += blocks[i]!.length + 2;
+    }
+  }
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (keep[i]) continue;
+    const next = used + blocks[i]!.length + 2;
+    // Skip oversized newest blocks instead of aborting — a pinned summary
+    // would otherwise drop every recent turn after one fat tool dump.
+    if (next > maxChars && used > 0) continue;
+    keep[i] = true;
+    used = next;
+  }
+  const dropped = keep.filter((k) => !k).length;
+  const marker = `_(${dropped} older message${dropped === 1 ? '' : 's'} omitted for length)_`;
+  const kept: string[] = [];
+  let markerPlaced = false;
+  for (let i = 0; i < blocks.length; i++) {
+    if (!keep[i]) continue;
+    if (dropped > 0 && !markerPlaced && messages[i]!.role !== 'summary') {
+      kept.push(marker);
+      markerPlaced = true;
+    }
+    kept.push(blocks[i]!);
+  }
+  if (dropped > 0 && !markerPlaced) kept.push(marker);
+  return kept.join('\n\n');
+}
+
+/**
  * Seed prompt for a fresh agent session (no --resume).
  * Prior summaries always survive. The last few turns keep full tool data so
  * continuity is not lost; older turns keep one-line tool labels; thinking is
@@ -207,40 +252,7 @@ export function buildSessionSeed(
       thinking: false,
     }),
   );
-
-  // Keep summaries + newest blocks within budget; drop oldest others first.
-  const keep = new Array<boolean>(blocks.length).fill(false);
-  let used = 0;
-  for (let i = 0; i < blocks.length; i++) {
-    if (messages[i]!.role === 'summary') {
-      keep[i] = true;
-      used += blocks[i]!.length + 2;
-    }
-  }
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    if (keep[i]) continue;
-    const next = used + blocks[i]!.length + 2;
-    // Skip oversized newest blocks instead of aborting — a pinned summary
-    // would otherwise drop every recent turn after one fat tool dump.
-    if (next > maxChars && used > 0) continue;
-    keep[i] = true;
-    used = next;
-  }
-  const dropped = keep.filter((k) => !k).length;
-  const kept: string[] = [];
-  let markerPlaced = false;
-  for (let i = 0; i < blocks.length; i++) {
-    if (!keep[i]) continue;
-    if (dropped > 0 && !markerPlaced && messages[i]!.role !== 'summary') {
-      kept.push(`_(${dropped} older message${dropped === 1 ? '' : 's'} omitted for length)_`);
-      markerPlaced = true;
-    }
-    kept.push(blocks[i]!);
-  }
-  if (dropped > 0 && !markerPlaced) {
-    kept.push(`_(${dropped} older message${dropped === 1 ? '' : 's'} omitted for length)_`);
-  }
-  const body = kept.join('\n\n');
+  const body = budgetSeedBlocks(messages, blocks, maxChars);
   if (!body.trim()) return null;
   return [
     'Sideboard conversation context (restored after compaction or a new session):',
@@ -332,14 +344,21 @@ export function messagesSinceLastBrightsyContextSummary(
 }
 
 /**
- * Brightsy `chat` is a stateless completion (one stdin blob, no --resume).
- * Seed the last `summarize_context` result plus every later turn, text-only
- * so other tool dumps do not empty-complete.
+ * Brightsy `chat` is a stateless completion (one stdin blob, no --resume), so
+ * this seed is paid on *every* turn. Seed the last `summarize_context` result
+ * plus later turns, text-only so other tool dumps do not empty-complete.
+ * No last-N cap, but the same {@link SEED_MAX_CHARS} budget as other agents:
+ * once the tail outgrows it, the oldest turns after the summary are dropped.
  */
-export function buildBrightsySessionSeed(messages: ThreadMessage[]): string | null {
+export function buildBrightsySessionSeed(
+  messages: ThreadMessage[],
+  opts?: { maxChars?: number },
+): string | null {
   const match = findLastBrightsyContextSummary(messages);
   const tail = match ? messages.slice(match.index + 1) : messages;
-  const body = formatMessagesAsTranscript(tail, { tools: 'none', thinking: false });
+  const budget = Math.max(1_000, (opts?.maxChars ?? SEED_MAX_CHARS) - (match?.text.length ?? 0));
+  const tailBlocks = tail.map((m) => formatMessageBlock(m, { tools: 'none', thinking: false }));
+  const body = budgetSeedBlocks(tail, tailBlocks, budget);
   if (!match && !body.trim()) return null;
   const blocks = [
     'Sideboard conversation context (restored after compaction or a new session):',

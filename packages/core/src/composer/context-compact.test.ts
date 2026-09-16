@@ -177,6 +177,52 @@ describe('context compact', () => {
     expect(seed).not.toContain('#### Tool:');
   });
 
+  it('buildBrightsySessionSeed keeps the summary and drops the oldest tail turns past the char budget', () => {
+    const tail = fatThread(12, 1_000);
+    const messages = [
+      msg('agent', 'summarized', {
+        parts: [
+          {
+            type: 'tool',
+            id: 'c1',
+            name: 'summarize_context',
+            status: 'done',
+            result: JSON.stringify({ context_summary: 'Prior work on auth' }),
+          },
+        ],
+      }),
+      ...tail,
+    ];
+    const seed = buildBrightsySessionSeed(messages, { maxChars: 5_000 })!;
+    expect(seed).toContain('Prior work on auth');
+    expect(seed).toContain(tail[tail.length - 1]!.text);
+    expect(seed).not.toContain(tail[0]!.text);
+    expect(seed).toMatch(/older messages omitted for length/);
+    // Summary + kept tail stay near the budget (header/footer excluded).
+    expect(seed.length).toBeLessThan(5_000 + 1_000);
+  });
+
+  it('seed transcripts clip oversized tool input like results', () => {
+    const seed = buildSessionSeed([
+      msg('user', 'render'),
+      msg('agent', 'Done', {
+        parts: [
+          {
+            type: 'tool',
+            id: 't1',
+            name: 'present_artifact',
+            status: 'done',
+            input: { title: 'Report', content: 'h'.repeat(50_000) },
+            result: 'ok',
+          },
+        ],
+      }),
+    ])!;
+    expect(seed).toContain('present_artifact');
+    expect(seed).toMatch(/truncated \d+ chars/);
+    expect(seed.length).toBeLessThan(12_000);
+  });
+
   it('buildBrightsySessionSeed omits non-summary tool bodies', () => {
     const seed = buildBrightsySessionSeed([
       msg('user', 'edit the file'),

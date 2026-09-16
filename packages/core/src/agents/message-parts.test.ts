@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  THINKING_PART_MAX_CHARS,
   applyAgentEvent,
+  clipThinkingForStore,
   isInternalAgentStatusText,
   lastAssistantMessageText,
   liveActivitySummary,
@@ -13,6 +15,26 @@ import {
 } from './message-parts.js';
 
 describe('applyAgentEvent', () => {
+  it('caps a streaming thinking part at the newest tail', () => {
+    let parts = applyAgentEvent([], { type: 'thinking', data: 'a'.repeat(THINKING_PART_MAX_CHARS) });
+    parts = applyAgentEvent(parts, { type: 'thinking', data: 'END' });
+    expect(parts).toHaveLength(1);
+    const th = parts[0] as { type: 'thinking'; text: string };
+    expect(th.text.length).toBeLessThanOrEqual(THINKING_PART_MAX_CHARS);
+    expect(th.text.endsWith('END')).toBe(true);
+    expect(th.text.startsWith('…(earlier thinking trimmed)')).toBe(true);
+    // Replace-mode (OpenCode) snapshots get the same cap.
+    const replaced = applyAgentEvent(parts, {
+      type: 'thinking',
+      data: 'b'.repeat(THINKING_PART_MAX_CHARS + 10),
+      replace: true,
+    });
+    expect((replaced[0] as { text: string }).text.length).toBeLessThanOrEqual(
+      THINKING_PART_MAX_CHARS,
+    );
+    expect(clipThinkingForStore('short')).toBe('short');
+  });
+
   it('accumulates text, thinking, and tools', () => {
     let parts = applyAgentEvent([], { type: 'thinking', data: 'plan…' });
     parts = applyAgentEvent(parts, {
@@ -330,6 +352,32 @@ describe('visibleToolRowDetail', () => {
     ].join('\n');
     expect(visibleToolRowDetail(script, 'Run shell command', wt)).toBe(
       'cd /Users/me/proj/scholar; python3 - <<\'PY\'',
+    );
+  });
+
+  it('treats a rooted path with spaces as a path, not a command (#108)', () => {
+    const spaced = '/Users/me/My Project';
+    expect(
+      visibleToolRowDetail(`${spaced}/apps/desktop/src/Create Modal.tsx`, 'Read Create Modal.tsx', spaced),
+    ).toBeUndefined();
+    expect(
+      visibleToolRowDetail(`${spaced}/apps/desktop/src/Create Modal.tsx`, 'Search files', spaced),
+    ).toBe('apps/desktop/src/Create Modal.tsx');
+    expect(visibleToolRowDetail('~/My Docs/notes.md', 'Read', null)).toBe('~/My Docs/notes.md');
+  });
+
+  it('still treats rooted binaries and rooted args as commands', () => {
+    expect(visibleToolRowDetail('/usr/bin/python3 script.py', 'Run shell command', wt)).toBe(
+      '/usr/bin/python3 script.py',
+    );
+    expect(visibleToolRowDetail(`cp ${wt}/a.ts ${wt}/b.ts`, 'Run shell command', wt)).toBe(
+      `cp ${wt}/a.ts ${wt}/b.ts`,
+    );
+    expect(visibleToolRowDetail(`${wt}/run.sh --fast`, 'Run shell command', wt)).toBe(
+      `${wt}/run.sh --fast`,
+    );
+    expect(visibleToolRowDetail(`${wt}/bin/tool ${wt}/x`, 'Run shell command', wt)).toBe(
+      `${wt}/bin/tool ${wt}/x`,
     );
   });
 

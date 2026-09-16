@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Closing several chat tabs on one worktree at once (sidebar close, multi-select, workspace remove) now tears down the shared shell PTY on the last one instead of leaking it. Terminal teardown runs after archive/purge settle.
+- MCP / CLI `send_to_thread` steer while the desktop is running only moves the prompt to the front of the queue; it no longer kills the board-owned agent child or starts the next turn in a stdio process with no chat output.
+- Setup pane: a fresh, shorter setup run from another chat tab no longer loses to a longer stale sibling log on remount or restart.
+- Tool-row pills: absolute paths containing spaces (`/Users/me/My Project/…`) are shown as paths again instead of being clipped like a shell command.
+
+### Changed
+
+- Memory / token caps: thinking parts keep the newest 64k chars; setup logs keep a rolling 256k tail; Brightsy per-turn session seeds honor the same 60k-char budget as other agents (oldest turns after the last `summarize_context` drop first); seed and fork transcripts clip tool *input* at 8k like tool results (stored parts stay intact for the UI).
+
 ## [0.1.196] - 2026-09-15
 
 ### Fixed

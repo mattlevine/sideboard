@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  MAX_SETUP_LOG_CHARS,
   appendSetupLog,
+  appendSetupOutput,
   beginSetupLog,
   finishSetupLog,
   mergeSetupOutput,
@@ -25,6 +27,17 @@ describe('setup log', () => {
     resetSetupLogMemory();
     vi.unstubAllEnvs();
     rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('caps setup output at a rolling tail on a line boundary', () => {
+    expect(appendSetupOutput('', 'first')).toBe('first');
+    expect(appendSetupOutput('first', 'second')).toBe('first\nsecond');
+    const rolled = appendSetupOutput('aaaa\nbbbb\ncccc', 'dddd', 10);
+    expect(rolled.length).toBeLessThanOrEqual(10);
+    expect(rolled).toBe('cccc\ndddd');
+    beginSetupLog('t-cap');
+    for (let i = 0; i < 4; i++) appendSetupLog('t-cap', 'x'.repeat(100_000));
+    expect(readSetupLog('t-cap').output.length).toBeLessThanOrEqual(MAX_SETUP_LOG_CHARS);
   });
 
   it('replays persisted output after memory is cleared', () => {

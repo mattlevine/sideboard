@@ -11,6 +11,7 @@ import {
   appendTerminalScrollback,
   findReusableTerminalSession,
   shouldTeardownTerminalSession,
+  teardownInputAfterArchive,
   terminalReuseKey,
   terminalSessionKind,
   type TerminalSessionKind,
@@ -320,16 +321,31 @@ export function killTerminalsForThread(
   }
 }
 
-/** Archive/purge: kill attach for this chat; kill the shared shell only if last tab. */
-export function killTerminalsOnThreadTeardown(orch: Orchestrator, threadRef: string): void {
-  const thread = orch.getThread(threadRef);
-  if (!thread) {
+/**
+ * Archive/purge: kill attach for this chat; kill the shared shell only if last tab.
+ * Call *after* `orch.archive` / `orch.purge` resolve — they serialize per
+ * worktree, so siblings closed together are already archived by then. Deciding
+ * before the call made every parallel close look like "not last" and leaked
+ * the PTY (Bugbot, #118).
+ */
+export function killTerminalsAfterThreadTeardown(
+  threadRef: string,
+  worktreePath: string | null | undefined,
+): void {
+  if (!worktreePath) {
     killTerminalsForThread(threadRef);
     return;
   }
-  const worktreeKey = normalizeWorktreePath(thread.worktreePath);
-  const lastWorktreeChat = threadsSharingWorktree(thread.worktreePath).every(
-    (t) => t.id === thread.id,
-  );
+  const worktreeKey = normalizeWorktreePath(worktreePath);
+  const live = threadsSharingWorktree(worktreePath).map((t) => t.id);
+  const { lastWorktreeChat } = teardownInputAfterArchive(threadRef, worktreeKey, live);
   killTerminalsForThread(threadRef, { worktreeKey, lastWorktreeChat });
+}
+
+/** Snapshot before teardown: purge deletes the record so the path is gone afterwards. */
+export function threadWorktreePathForTeardown(
+  orch: Orchestrator,
+  threadRef: string,
+): string | null {
+  return orch.getThread(threadRef)?.worktreePath ?? null;
 }

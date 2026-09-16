@@ -4,6 +4,7 @@ import {
   appendTerminalScrollback,
   findReusableTerminalSession,
   shouldTeardownTerminalSession,
+  teardownInputAfterArchive,
   terminalReuseKey,
   terminalSessionKind,
 } from './terminal-session';
@@ -79,5 +80,32 @@ describe('terminal session reuse', () => {
         lastWorktreeChat: true,
       }),
     ).toBe(false);
+  });
+
+  it('parallel archive of sibling tabs tears the shared shell down on the last one (#118)', () => {
+    const shell = { kind: 'shell' as const, threadRef: 'chat-a', worktreeKey: '/wt/paris' };
+    // Archives serialize per worktree: after chat-a settles, chat-b is still live.
+    const afterA = teardownInputAfterArchive('chat-a', '/wt/paris', ['chat-b']);
+    expect(afterA.lastWorktreeChat).toBe(false);
+    expect(shouldTeardownTerminalSession(shell, afterA)).toBe(false);
+    // After chat-b settles nothing is live on the worktree — shell goes.
+    const afterB = teardownInputAfterArchive('chat-b', '/wt/paris', []);
+    expect(afterB.lastWorktreeChat).toBe(true);
+    expect(shouldTeardownTerminalSession(shell, afterB)).toBe(true);
+  });
+
+  it('keeps the shared shell when archive failed and the chat is still live', () => {
+    const shell = { kind: 'shell' as const, threadRef: 'chat-a', worktreeKey: '/wt/paris' };
+    const input = teardownInputAfterArchive('chat-a', '/wt/paris', ['chat-a']);
+    expect(input.lastWorktreeChat).toBe(false);
+    expect(shouldTeardownTerminalSession(shell, input)).toBe(false);
+  });
+
+  it('falls back to per-chat teardown without a worktree key', () => {
+    expect(teardownInputAfterArchive('chat-a', '', [])).toEqual({
+      threadRef: 'chat-a',
+      worktreeKey: '',
+      lastWorktreeChat: true,
+    });
   });
 });
