@@ -5,7 +5,7 @@ import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mo
 import { childEnvWithAppSettings } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentKind, MessagePart, Thread, TokenUsage } from '../types/thread.js';
-import { parseBrightsyCliLine } from './brightsy.js';
+import { adjustBrightsyTurnExit, parseBrightsyCliLine } from './brightsy.js';
 import { getAdapter } from './index.js';
 import { assertOrchestratorCapableAgent } from './orchestrator-capable.js';
 import {
@@ -198,12 +198,15 @@ export async function spawnAgentTurn(
 
   const done = child.then((result) => {
     outbound.flush();
-    const exitCode = result.exitCode ?? null;
-    onEvent({ type: 'exit', data: exitCode });
     const finalized = finalizeParts(parts);
     const rawText = assistantText.trim() || partsToAssistantText(finalized);
     const text =
       thread.agent === 'brightsy' ? stripBrightsyNdjsonNoise(rawText) : rawText;
+    const exitCode =
+      thread.agent === 'brightsy'
+        ? adjustBrightsyTurnExit(result.exitCode ?? null, text)
+        : (result.exitCode ?? null);
+    onEvent({ type: 'exit', data: exitCode });
     return { exitCode, sessionId, assistantText: text, parts: finalized, usage };
   });
 

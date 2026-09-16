@@ -110,6 +110,14 @@ describe('isRetryableCursorTransportError', () => {
       ),
     ).toBe(true);
     expect(isRetryableCursorTransportError(new Error('Network request failed'))).toBe(true);
+    expect(
+      isRetryableCursorTransportError(
+        new Error('[unknown] [internal] Stream closed with error code NGHTTP2_INTERNAL_ERROR'),
+      ),
+    ).toBe(true);
+    expect(
+      isRetryableCursorTransportError(new Error('Stream closed with error code')),
+    ).toBe(false);
   });
 
   it('ignores auth and credits even when marked retryable', () => {

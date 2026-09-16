@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brightsyAdapter } from './brightsy.js';
+import { adjustBrightsyTurnExit, brightsyAdapter } from './brightsy.js';
 import { decodeBrightsyTarget, encodeBrightsyTarget } from './brightsy-targets.js';
 
 const baseThread = {
@@ -121,6 +121,34 @@ describe('brightsyAdapter.parseEvent', () => {
   it('maps text events to stdout', () => {
     const event = brightsyAdapter.parseEvent(JSON.stringify({ type: 'text', text: 'pong' }));
     expect(event).toEqual({ type: 'stdout', data: 'pong' });
+  });
+
+  it('treats the empty-completion fallback as a failed turn, not an answer', () => {
+    const msg = 'I did not receive a valid model response. Please try again.';
+    expect(brightsyAdapter.parseEvent(JSON.stringify({ type: 'text', text: msg }))).toEqual([
+      { type: 'stderr', data: msg },
+      { type: 'stdout', data: `Error: ${msg}` },
+    ]);
+    expect(adjustBrightsyTurnExit(0, `Error: ${msg}`)).toBe(2);
+    expect(adjustBrightsyTurnExit(0, 'Here are your records.')).toBe(0);
+    expect(adjustBrightsyTurnExit(1, msg)).toBe(1);
+    expect(
+      adjustBrightsyTurnExit(
+        0,
+        `The CLI printed ${msg} after the records loaded.`,
+      ),
+    ).toBe(0);
+    expect(
+      brightsyAdapter.parseEvent(
+        JSON.stringify({
+          type: 'text',
+          text: `The CLI printed ${msg} after the records loaded.`,
+        }),
+      ),
+    ).toEqual({
+      type: 'stdout',
+      data: `The CLI printed ${msg} after the records loaded.`,
+    });
   });
 
   it('maps error events to stderr and stdout (so the UI shows them)', () => {
