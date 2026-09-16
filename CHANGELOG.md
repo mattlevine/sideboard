@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Settings → Advanced now has one **On usage / session limit** policy for every worktree and orchestration chat (any agent): nothing (keep going), confirm with you, switch agent, or stop until the window resets.
+- Claude Code plan rings show on every open chat (not only Claude / orchestration), and the usage fetch goes through Electron `net.fetch` so the meter can load behind a VPN.
+
+### Fixed
+
+- Desktop no longer dies with `write EPIPE` when a Node process warning writes to a closed electron-vite / Sideboard pipe.
+
 ## [0.1.199] - 2026-09-16
 
 ### Added

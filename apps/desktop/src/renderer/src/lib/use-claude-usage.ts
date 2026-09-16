@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { ClaudePlanUsage, Thread } from '@sideboard-ai/core';
-import { isOrchestratorThread } from './global-workspace';
 
-/** Worktree Claude chats, plus every Global / orchestration chat (account-level quota). */
+/** Account-level Claude Code quota — any open worktree or orchestration chat. */
 export function shouldShowClaudePlanUsage(
   thread: Pick<Thread, 'agent' | 'sourceType' | 'repoPath'> | null | undefined,
 ): boolean {
-  if (!thread) return false;
-  return thread.agent === 'claude' || isOrchestratorThread(thread);
+  return Boolean(thread);
 }
 
-/** Poll Claude Code plan windows while a Claude or orchestration chat is open. */
+/** Poll Claude Code plan windows while any chat is open. */
 export function useClaudePlanUsage(
   enabled: boolean,
   refreshNonce: string | number,

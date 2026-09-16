@@ -12,6 +12,7 @@ import type {
   Thread,
   Workspace,
 } from '@sideboard-ai/core';
+import { isUsageOnLimit, resolveUsageOnLimit } from '@sideboard/usage-on-limit';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { emptyPublicIntegrations } from '../lib/optional-services';
@@ -1706,39 +1707,42 @@ export function SettingsModal({
                 </div>
 
                 <div className="settings-section">
-                  <div className="settings-section-title">Orchestration session limit</div>
+                  <div className="settings-section-title">On usage / session limit</div>
                   <p className="settings-hint">
-                    When a Global orchestration chat hits a provider session/usage limit (not
-                    context size), Sideboard continues automatically.
+                    When a Claude Code plan window is exhausted, or a worktree or orchestration
+                    turn hits a provider session/usage limit (not context size). Applies to every
+                    agent.
                   </p>
                   <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
-                    <label className="settings-hint" htmlFor="orch-quota-action">
-                      On limit
+                    <label className="settings-hint" htmlFor="usage-on-limit">
+                      When over the limit
                     </label>
                     <select
-                      id="orch-quota-action"
-                      value={advanced.orchestrationQuotaOnLimit ?? 'switch_agent'}
+                      id="usage-on-limit"
+                      value={resolveUsageOnLimit(advanced)}
                       disabled={busy}
                       onChange={(e) => {
                         const v = e.target.value;
-                        if (v !== 'switch_agent' && v !== 'wait_reset') return;
-                        void saveAdvancedPatch({ orchestrationQuotaOnLimit: v });
+                        if (!isUsageOnLimit(v)) return;
+                        void saveAdvancedPatch({ usageOnLimit: v });
                       }}
                     >
-                      <option value="switch_agent">Continue on another agent (Auto)</option>
-                      <option value="wait_reset">Wait for reset, then retry</option>
+                      <option value="keep_going">Nothing — keep going</option>
+                      <option value="confirm">Confirm with me</option>
+                      <option value="switch_agent">Switch agent</option>
+                      <option value="wait_reset">Stop until the window resets</option>
                     </select>
                   </div>
-                  {(advanced.orchestrationQuotaOnLimit ?? 'switch_agent') === 'switch_agent' && (
+                  {resolveUsageOnLimit(advanced) === 'switch_agent' && (
                     <div
                       className="settings-key-row"
                       style={{ marginTop: '0.5rem', gap: '0.75rem' }}
                     >
-                      <label className="settings-hint" htmlFor="orch-quota-fallback">
+                      <label className="settings-hint" htmlFor="usage-limit-fallback">
                         Fallback agent
                       </label>
                       <select
-                        id="orch-quota-fallback"
+                        id="usage-limit-fallback"
                         value={advanced.orchestrationQuotaFallbackAgent ?? 'cursor'}
                         disabled={busy}
                         onChange={(e) => {
@@ -1757,35 +1761,6 @@ export function SettingsModal({
                       </select>
                     </div>
                   )}
-                </div>
-
-                <div className="settings-section">
-                  <div className="settings-toggle-row">
-                    <div>
-                      <div className="settings-section-title">
-                        Confirm send when Claude usage is over the limit
-                      </div>
-                      <p className="settings-hint">
-                        When a Claude Code plan window (5-hour, weekly, or per-model) is
-                        exhausted, ask before sending in Claude and orchestration chats. Off by
-                        default.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`settings-switch${advanced.confirmClaudeUsageOverLimit ? ' on' : ''}`}
-                      role="switch"
-                      aria-checked={Boolean(advanced.confirmClaudeUsageOverLimit)}
-                      disabled={busy}
-                      onClick={() =>
-                        void saveAdvancedPatch({
-                          confirmClaudeUsageOverLimit: !advanced.confirmClaudeUsageOverLimit,
-                        })
-                      }
-                    >
-                      <span className="settings-switch-knob" />
-                    </button>
-                  </div>
                 </div>
 
                 <div className="settings-section">

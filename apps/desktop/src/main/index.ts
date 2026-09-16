@@ -1,3 +1,4 @@
+import './ignore-epipe';
 import {
   app,
   BrowserWindow,

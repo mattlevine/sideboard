@@ -13,6 +13,7 @@ import type {
   Thread,
   ThreadAttachment,
 } from '@sideboard-ai/core';
+import { resolveUsageOnLimit } from '@sideboard/usage-on-limit';
 import {
   extractPendingPlanQuestions,
   formatPlanQuestionsForChat,
@@ -68,6 +69,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import {
   claudeUsageOverLimitWindows,
   formatClaudeUsageOverLimitConfirm,
+  formatClaudeUsageOverLimitWait,
 } from '@sideboard/claude-usage';
 import { isSetupLastError } from '../lib/pane-progress';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
@@ -333,6 +335,7 @@ export function ThreadPanel({
   const [queueEditText, setQueueEditText] = useState('');
   const [queueBusyIndex, setQueueBusyIndex] = useState<number | null>(null);
   const [usageLimitConfirm, setUsageLimitConfirm] = useState<{
+    mode: 'confirm' | 'wait';
     message: string;
     resolve: (ok: boolean) => void;
   } | null>(null);
@@ -1039,16 +1042,23 @@ export function ThreadPanel({
   }
 
   async function confirmSendDespiteClaudeUsage(): Promise<boolean> {
-    if (!shouldShowClaudePlanUsage(thread)) return true;
+    if (!thread) return true;
     try {
       const settings = await window.sideboard.getAppSettings();
-      if (!settings.advanced?.confirmClaudeUsageOverLimit) return true;
+      const action = resolveUsageOnLimit(settings.advanced);
+      if (action === 'keep_going' || action === 'switch_agent') return true;
       const usage = await window.sideboard.getClaudeUsage(true);
       const over = claudeUsageOverLimitWindows(usage);
       if (over.length === 0) return true;
+      if (action === 'wait_reset') {
+        const message = formatClaudeUsageOverLimitWait(over);
+        return await new Promise<boolean>((resolve) => {
+          setUsageLimitConfirm({ mode: 'wait', message, resolve });
+        });
+      }
       const message = formatClaudeUsageOverLimitConfirm(over);
       return await new Promise<boolean>((resolve) => {
-        setUsageLimitConfirm({ message, resolve });
+        setUsageLimitConfirm({ mode: 'confirm', message, resolve });
       });
     } catch {
       return true;
@@ -1605,14 +1615,19 @@ export function ThreadPanel({
     <section className="panel thread-main">
       {usageLimitConfirm ? (
         <ConfirmDialog
-          title="Claude usage is over the limit"
+          title={
+            usageLimitConfirm.mode === 'wait'
+              ? 'Stopped until usage resets'
+              : 'Claude usage is over the limit'
+          }
           message={usageLimitConfirm.message}
-          confirmLabel="Send anyway"
-          cancelLabel="Cancel"
+          confirmLabel={usageLimitConfirm.mode === 'wait' ? 'OK' : 'Send anyway'}
+          cancelLabel={usageLimitConfirm.mode === 'wait' ? 'Close' : 'Cancel'}
           onConfirm={() => {
             const resolve = usageLimitConfirm.resolve;
+            const sendAnyway = usageLimitConfirm.mode === 'confirm';
             setUsageLimitConfirm(null);
-            resolve(true);
+            resolve(sendAnyway);
           }}
           onCancel={() => {
             const resolve = usageLimitConfirm.resolve;

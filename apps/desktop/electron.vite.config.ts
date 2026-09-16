@@ -48,6 +48,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/agents/claude-usage.ts',
         ),
+        '@sideboard/usage-on-limit': resolve(
+          __dirname,
+          '../../packages/core/src/store/usage-on-limit.ts',
+        ),
         '@sideboard/context-estimate': resolve(
           __dirname,
           '../../packages/core/src/composer/context-estimate.ts',

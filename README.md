@@ -320,7 +320,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Connectors** | Optional project services: Vercel, Supabase, PostHog, Sentry |
 | **Environment** | Extra env vars injected into agent runs |
 | **Schedules** | Local jobs that wake an orchestration chat |
-| **Advanced** | Cowboy mode, caffeinate, show cost, confirm send when Claude usage is over the limit, Brightsy MCP inject |
+| **Advanced** | Cowboy mode, caffeinate, show cost, on usage/session limit (keep going, confirm, switch agent, or wait for reset), Brightsy MCP inject |
 | **History** | Archived chats |
 
 Ask the orchestrator **find me some work** to list matching tickets (`list_issues`) and review PRs (`list_prs queue=review`) from that profile. **Find me work and start it** lists, then creates the worktrees. Same split for reviews. The orchestrator stays contextually aware of that profile in every chat.

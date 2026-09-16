@@ -64,6 +64,7 @@ export {
   hottestClaudeWindow,
   claudeUsageOverLimitWindows,
   formatClaudeUsageOverLimitConfirm,
+  formatClaudeUsageOverLimitWait,
 } from './claude-usage.js';
 export type {
   ClaudePlanUsage,

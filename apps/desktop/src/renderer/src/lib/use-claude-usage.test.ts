@@ -12,14 +12,21 @@ describe('shouldShowClaudePlanUsage', () => {
     ).toBe(true);
   });
 
-  it('hides on worktree chats that are not Claude', () => {
+  it('shows on worktree chats for every agent', () => {
     expect(
       shouldShowClaudePlanUsage({
         agent: 'cursor',
         sourceType: 'prompt',
         repoPath: '/repo',
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      shouldShowClaudePlanUsage({
+        agent: 'codex',
+        sourceType: 'branch',
+        repoPath: '/repo',
+      }),
+    ).toBe(true);
   });
 
   it('shows on Global / orchestration chats even when the coordinator is not Claude', () => {

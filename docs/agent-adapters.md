@@ -53,7 +53,7 @@ Reference implementations:
 - Use `permissionMode()` from `types.ts` when the agent supports plan / autonomy modes.
 - Map usage to Claude-shaped `TokenUsage` (`inputTokens` uncached; cache extra). OpenAI-shaped CLIs (Codex, Brightsy) use `fromInclusiveInputUsage` — do not add cache or reasoning on top of inclusive totals.
 - When the agent CLI reports turn-scoped USD (`modelUsage.*.costUSD` on Claude — not session-cumulative `total_cost_usd` after `--resume` — `cost` on OpenCode steps / Brightsy usage), set `TokenUsage.costUsd`. Codex `turn.completed` is tokens-only on the JSONL stream Sideboard reads. Cursor stream `usage` messages are tokens-only; after each turn the runner best-effort calls `agent.getUsage()` when the billing API is available for the account.
-- Claude Code **plan** remaining (5-hour / weekly / per-model) is not `TokenUsage`. `getClaudePlanUsage` reads the local Claude login and returns percentages only. Show it on Claude worktree chats and on every Global / orchestration chat (account-level). Hide the meter when the account is API-key-only or the fetch fails — do not invent numbers.
+- Claude Code **plan** remaining (5-hour / weekly / per-model) is not `TokenUsage`. `getClaudePlanUsage` reads the local Claude login and returns percentages only. Show it on every open worktree or orchestration chat (account-level). Hide the meter when the account is API-key-only or the fetch fails — do not invent numbers. Use `httpFetch` (Electron `net.fetch`) — Node undici often fails the oauth usage call the same way Linear does behind a VPN.
 - Nested Task / Agent / `spawn_agent` streams should set `parentId` so the board can nest them under the parent tool. Nested stdout is not the parent answer.
 
 ## Out of scope for a first PR
