@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.197] - 2026-09-15
+
 ### Fixed
 
 - Closing several chat tabs on one worktree at once (sidebar close, multi-select, workspace remove) now tears down the shared shell PTY on the last one instead of leaking it. Terminal teardown runs after archive/purge settle.
