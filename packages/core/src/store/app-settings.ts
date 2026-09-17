@@ -1912,7 +1912,7 @@ export function saveAbleTimeConnection(input: {
   return saveAppSettings({ ...current, integrations });
 }
 
-/** Clear AbleTime PAT and viewer. Does not revoke remotely. */
+/** Clear AbleTime PAT, host, and viewer. Does not revoke remotely. */
 export function disconnectAbleTimeConnection(): AppSettings {
   const current = loadAppSettings();
   const integrations: IntegrationsSettings = { ...current.integrations };
@@ -1920,6 +1920,7 @@ export function disconnectAbleTimeConnection(): AppSettings {
   delete integrations.abletimeRefreshToken;
   delete integrations.abletimeTokenExpiresAt;
   delete integrations.abletimeViewerName;
+  delete integrations.abletimeHost;
   return saveAppSettings({ ...current, integrations });
 }
 

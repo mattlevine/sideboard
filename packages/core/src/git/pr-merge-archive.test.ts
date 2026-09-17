@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
+  shouldPersistFetchedPrMeta,
   threadPrMetaPatch,
 } from './pr-merge-archive.js';
 
@@ -96,5 +97,44 @@ describe('threadPrMetaPatch', () => {
       prState: 'OPEN',
       skipAutoArchiveOnMerge: false,
     });
+  });
+});
+
+describe('shouldPersistFetchedPrMeta', () => {
+  it('persists only the current-head PR when head lookup succeeded', () => {
+    expect(
+      shouldPersistFetchedPrMeta({
+        metaUrl: 'https://github.com/acme/app/pull/9',
+        livePrUrl: 'https://github.com/acme/app/pull/22',
+        headPrUrl: 'https://github.com/acme/app/pull/22',
+      }),
+    ).toBe(false);
+    expect(
+      shouldPersistFetchedPrMeta({
+        metaUrl: 'https://github.com/acme/app/pull/22/',
+        livePrUrl: 'https://github.com/acme/app/pull/9',
+        headPrUrl: 'https://github.com/acme/app/pull/22',
+      }),
+    ).toBe(true);
+  });
+
+  it('does not persist a fallback selector that disagrees with live prUrl', () => {
+    expect(
+      shouldPersistFetchedPrMeta({
+        metaUrl: 'https://github.com/acme/app/pull/9',
+        livePrUrl: 'https://github.com/acme/app/pull/22',
+        headPrUrl: null,
+      }),
+    ).toBe(false);
+  });
+
+  it('allows first discovery when nothing is persisted yet', () => {
+    expect(
+      shouldPersistFetchedPrMeta({
+        metaUrl: 'https://github.com/acme/app/pull/22',
+        livePrUrl: null,
+        headPrUrl: null,
+      }),
+    ).toBe(true);
   });
 });

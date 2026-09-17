@@ -190,6 +190,7 @@ function restTaskToRaw(
     description: textFromAbleTimeDoc(rec.description) || asString(rec.descriptionSanitized),
     projectId: asString(rec.projectId),
     categoryId: asString(rec.projectCategoryId) || asString(rec.categoryId),
+    parentId: asString(rec.parentTaskId) || asString(rec.parentId),
     tags: rec.tags,
     comments,
     createdAt: asString(rec.dateCreated) || asString(rec.createdAt),
@@ -296,6 +297,32 @@ function firstStringArg(args: Record<string, unknown>, keys: string[]): string {
   return '';
 }
 
+function isNoneToken(value: string): boolean {
+  return value.trim().toLowerCase() === 'none';
+}
+
+function findRestProject(
+  projects: Record<string, unknown>[],
+  projectId: string,
+): Record<string, unknown> | null {
+  const wanted = projectId.trim().toLowerCase();
+  return (
+    projects.find(
+      (item) =>
+        asString(item.id).toLowerCase() === wanted ||
+        asString(item.name).toLowerCase() === wanted,
+    ) ?? null
+  );
+}
+
+async function resolveRestParentTaskId(
+  parent: string,
+  opts: RestOpts,
+): Promise<string | null> {
+  if (isNoneToken(parent)) return null;
+  return resolveTaskId(parent, opts);
+}
+
 /**
  * Organization API keys (`atk_…`) and JWT access tokens authenticate REST.
  * Hosted MCP accepts `apt_…` and browser-OAuth `acn_…`. Returns payloads the
@@ -354,12 +381,7 @@ export async function callAbleTimeRestTool<T = unknown>(
       const projectId = firstStringArg(args, ['project_id', 'projectId', 'project']);
       if (!projectId) throw new Error('AbleTime project is required');
       const projects = await listProjectsRaw(requestOpts);
-      const project =
-        projects.find(
-          (item) =>
-            String(item.id).toLowerCase() === projectId.toLowerCase() ||
-            String(item.name).toLowerCase() === projectId.toLowerCase(),
-        ) ?? projects[0];
+      const project = findRestProject(projects, projectId) ?? projects[0];
       if (!project) throw new Error('AbleTime has no projects to create a task in');
       const categories = asList(project.categories);
       const wantedCategory = firstStringArg(args, ['category_id', 'categoryId', 'category']);
@@ -373,13 +395,18 @@ export async function callAbleTimeRestTool<T = unknown>(
               asString(item.name).toLowerCase() === wantedCategory.toLowerCase()
             );
           }) ?? asRecord(categories[0]);
+      const parentArg = firstStringArg(args, ['parent', 'parent_id', 'parentId', 'related_task_id']);
+      const parentTaskId = parentArg
+        ? await resolveRestParentTaskId(parentArg, requestOpts)
+        : undefined;
       const created = await abletimeRestRequest('/tasks', {
         ...requestOpts,
         method: 'POST',
         body: {
-          projectId: project.id,
+          projectId: asString(project.id),
           projectCategoryId: category ? asString(category.id) : undefined,
           title,
+          ...(parentTaskId ? { parentTaskId } : {}),
         },
       });
       const state = firstStringArg(args, ['state']);
@@ -414,6 +441,21 @@ export async function callAbleTimeRestTool<T = unknown>(
       }
       if (args.tags !== undefined || args.labels !== undefined) {
         patch.tags = args.tags ?? args.labels ?? args.tag_names;
+      }
+      const projectArg = firstStringArg(args, ['project', 'project_id', 'projectId']);
+      if (projectArg) {
+        if (isNoneToken(projectArg)) {
+          throw new Error('AbleTime tasks stay in a project — pass a project name or id');
+        }
+        const projects = await listProjectsRaw(requestOpts);
+        const project = findRestProject(projects, projectArg);
+        const nextProjectId = project ? asString(project.id) : '';
+        if (!nextProjectId) throw new Error(`AbleTime project not found: ${projectArg}`);
+        patch.projectId = nextProjectId;
+      }
+      const parentArg = firstStringArg(args, ['parent', 'parent_id', 'parentId', 'related_task_id']);
+      if (parentArg) {
+        patch.parentTaskId = await resolveRestParentTaskId(parentArg, requestOpts);
       }
       if (Object.keys(patch).length > 0) {
         await abletimeRestRequest(`/tasks/${encodeURIComponent(id)}`, {

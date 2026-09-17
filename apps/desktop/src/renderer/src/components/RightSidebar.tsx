@@ -271,6 +271,9 @@ export function RightSidebar({
   const worktreeKey = thread.worktreePath.replace(/\/$/, '') || thread.id;
   const worktreeKeyRef = useRef(worktreeKey);
   worktreeKeyRef.current = worktreeKey;
+  const connectedPrKey = `${thread.prUrl ?? ''}\0${thread.branchName}`;
+  const connectedPrKeyRef = useRef(connectedPrKey);
+  connectedPrKeyRef.current = connectedPrKey;
 
   useEffect(() => {
     setGitMetaReady(false);
@@ -643,12 +646,13 @@ export function RightSidebar({
   }, [thread.id, worktreeKey]);
 
   const loadPrMeta = useCallback(async () => {
-    const forWorktree = worktreeKey;
+    const forPr = connectedPrKey;
     try {
       const meta = await window.sideboard.getPrMeta(thread.id);
-      if (worktreeKeyRef.current !== forWorktree) return;
+      if (connectedPrKeyRef.current !== forPr) return;
       if (!meta) {
-        setPrMeta(null);
+        // Keep the follow stub when a PR is already connected.
+        if (!forPr.split('\0')[0]) setPrMeta(null);
         return;
       }
       setPrMeta({
@@ -664,10 +668,10 @@ export function RightSidebar({
         mergeStateStatus: meta.mergeStateStatus ?? null,
       });
     } catch {
-      if (worktreeKeyRef.current !== forWorktree) return;
-      setPrMeta(null);
+      if (connectedPrKeyRef.current !== forPr) return;
+      if (!forPr.split('\0')[0]) setPrMeta(null);
     }
-  }, [thread.id, worktreeKey]);
+  }, [thread.id, connectedPrKey]);
 
   useEffect(() => {
     setPrMeta((prev) => followThreadPrMeta(prev, thread));
@@ -732,7 +736,6 @@ export function RightSidebar({
     isCurrentWorktree,
   ]);
 
-  const connectedPrKey = `${thread.prUrl ?? ''}\0${thread.branchName}`;
   const lastConnectedPrKey = useRef(connectedPrKey);
   useEffect(() => {
     if (lastConnectedPrKey.current !== connectedPrKey) {

@@ -12,6 +12,7 @@ import {
   createAbleTimePkce,
   hasBakedAbleTimeOAuth,
   parseAbleTimeOAuthCallbackUrl,
+  resolveAbleTimeOAuthHost,
 } from './abletime-oauth.js';
 
 describe('abletime OAuth URL', () => {
@@ -32,6 +33,22 @@ describe('abletime OAuth URL', () => {
     expect(ABLETIME_OAUTH_REDIRECT).toBe('https://www.sideboard.cloud/oauth/abletime/callback');
     expect(ABLETIME_OAUTH_REDIRECT.startsWith('https://')).toBe(true);
     expect(url).toContain(encodeURIComponent(ABLETIME_OAUTH_REDIRECT));
+  });
+
+  it('points authorize + resource at a custom host', () => {
+    const url = ableTimeOAuthAuthorizeUrl(
+      BAKED_ABLETIME_OAUTH_CLIENT_ID,
+      'state123',
+      'challengeABC',
+      'https://crm.example.com',
+    );
+    expect(url).toContain('https://crm.example.com/oauth/authorize?');
+    expect(url).toContain(encodeURIComponent('https://crm.example.com/api/public/v2/mcp'));
+    expect(resolveAbleTimeOAuthHost('https://crm.example.com', 'https://track.abletime.com')).toBe(
+      'https://crm.example.com',
+    );
+    expect(resolveAbleTimeOAuthHost('', 'https://crm.example.com')).toBe('https://crm.example.com');
+    expect(resolveAbleTimeOAuthHost(null, null)).toBeUndefined();
   });
 
   it('PKCE verifier is base64url and challenge is SHA-256 of it', () => {

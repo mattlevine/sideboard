@@ -1069,7 +1069,7 @@ function registerIpc(): void {
     },
   );
   let abletimeOauthAbort: AbortController | null = null;
-  ipcMain.handle('startAbleTimeOAuth', async () => {
+  ipcMain.handle('startAbleTimeOAuth', async (_e, host?: string | null) => {
     abletimeOauthAbort?.abort();
     const ac = new AbortController();
     abletimeOauthAbort = ac;
@@ -1077,6 +1077,7 @@ function registerIpc(): void {
       const saved = await startAbleTimeOAuth({
         openUrl: (url) => shell.openExternal(url),
         signal: ac.signal,
+        host,
       });
       return toPublicAppSettings(saved);
     } catch (err) {

@@ -587,6 +587,14 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
         alreadyIsolated: true,
       }),
     ).toBe(false);
+    expect(looksLikeCodexMcpError('MCP server error: unauthorized')).toBe(false);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail: 'MCP server error: unauthorized',
+        assistantText: 'Checking Linear',
+        partsCount: 2,
+      }),
+    ).toBe(false);
   });
 
   it('keeps exit code for opaque CLI failures', () => {

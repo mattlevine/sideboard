@@ -31,6 +31,7 @@ import {
 import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
+  shouldPersistFetchedPrMeta,
   threadPrMetaPatch,
 } from '../git/pr-merge-archive.js';
 import { runWorkspaceSetup, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
@@ -1539,7 +1540,11 @@ export class Orchestrator {
       const isolateCodexPluginRetry =
         liveThread.agent === 'codex' &&
         shouldRetryCodexPluginIsolate(detail, {
-          alreadyIsolated: liveThread.isolateCodexPlugins === true,
+          // Coordinators already pass toCodexUnattendedAppsArgs — a second
+          // isolate exec keeps sessionId and burns the crash/OOM retry.
+          alreadyIsolated:
+            liveThread.isolateCodexPlugins === true ||
+            isOrchestratorThread(liveThread),
         });
       if (isolateCodexPluginRetry) {
         updateThread(threadId, { isolateCodexPlugins: true });
@@ -2549,6 +2554,7 @@ export class Orchestrator {
     thread: Thread;
     selectors: string[];
     cwd: string;
+    headUrl: string | null;
   }> {
     const thread = this.requireThread(threadRef);
     const cwd = thread.worktreePath;
@@ -2562,7 +2568,7 @@ export class Orchestrator {
     } catch {
       headUrl = null;
     }
-    return { thread, selectors: connectedPrSelectors(thread, headUrl), cwd };
+    return { thread, selectors: connectedPrSelectors(thread, headUrl), cwd, headUrl };
   }
 
   async getPrChecks(threadRef: string): Promise<PrCheckRun[] | null> {
@@ -2575,13 +2581,22 @@ export class Orchestrator {
   }
 
   async getPrMeta(threadRef: string): Promise<PrMeta | null> {
-    const { thread, selectors, cwd } = await this.withPrSelector(threadRef);
+    const { thread, selectors, cwd, headUrl } = await this.withPrSelector(threadRef);
     for (const selector of selectors) {
       const meta = await fetchPrMeta(cwd, selector);
-      if (meta) {
-        await this.persistPrMetaAndMaybeArchive(thread, meta);
-        return meta;
+      if (!meta) continue;
+      const live = this.requireThread(thread.id);
+      if (
+        !shouldPersistFetchedPrMeta({
+          metaUrl: meta.url,
+          livePrUrl: live.prUrl,
+          headPrUrl: headUrl,
+        })
+      ) {
+        continue;
       }
+      await this.persistPrMetaAndMaybeArchive(live, meta);
+      return meta;
     }
     return null;
   }
