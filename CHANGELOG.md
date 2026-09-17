@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.206] - 2026-09-17
+
+### Fixed
+
+- Codex exec no longer invents `-c mcp_servers.posthog.enabled=false` (that stub has no transport and Codex rejects the config). Worktree Codex keeps ChatGPT Apps / plugins, same as worktree Claude keeps claude.ai connectors. If a plugin MCP is fatal (`AuthRequired` / invalid transport), Sideboard retries the same turn with Apps/plugins isolated instead of parking the thread. Orchestration turns still disable Apps/plugins on the first exec. Settings → Connectors HTTP API stays the fallback.
+
 ## [0.1.205] - 2026-09-17
 
 ### Fixed

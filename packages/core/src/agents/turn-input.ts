@@ -19,6 +19,11 @@ export interface AgentTurnInput {
    * already carries the full playbook in `cachedPrefix`.
    */
   systemPrompt?: string;
+  /**
+   * Codex: disable ChatGPT Apps / plugins for this exec (after a fatal
+   * plugin MCP). Coordinators also isolate via `isOrchestratorThread`.
+   */
+  isolateCodexPlugins?: boolean;
 }
 
 export function normalizeTurnInput(
@@ -29,6 +34,7 @@ export function normalizeTurnInput(
     prompt: input.prompt,
     cachedPrefix: input.cachedPrefix?.trim() || undefined,
     systemPrompt: input.systemPrompt?.trim() || undefined,
+    ...(input.isolateCodexPlugins ? { isolateCodexPlugins: true } : {}),
   };
 }
 
@@ -42,9 +48,11 @@ export function dropCachedPrefixOnResume(
 ): AgentTurnInput {
   const turn = normalizeTurnInput(input);
   if (sessionId) {
-    return turn.systemPrompt
-      ? { prompt: turn.prompt, systemPrompt: turn.systemPrompt }
-      : { prompt: turn.prompt };
+    return {
+      prompt: turn.prompt,
+      ...(turn.systemPrompt ? { systemPrompt: turn.systemPrompt } : {}),
+      ...(turn.isolateCodexPlugins ? { isolateCodexPlugins: true } : {}),
+    };
   }
   return turn;
 }

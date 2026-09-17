@@ -117,13 +117,19 @@ export function toCodexDisableUserMcpArgs(names: string[]): string[] {
 }
 
 /**
- * ChatGPT Apps **and** plugins (PostHog ships as a plugin that bundles an App)
- * attach streamable-HTTP MCP with OAuth. In `codex exec`, `AuthRequired` is
- * fatal: rmcp quits the transport worker and the turn dies — even when
- * Settings → Connectors already injected `POSTHOG_PERSONAL_API_KEY`.
- * `features.apps=false` is not enough: a plugin-bundled app still loads.
- * Disable Apps + plugins on every Sideboard-launched exec; keep injected
- * stdio `mcp_servers`. Do not re-enable PostHog MCP — use the HTTP API.
+ * Orchestrator-only ChatGPT Apps / plugin isolation (Claude's
+ * `--strict-mcp-config` + `ENABLE_CLAUDEAI_MCP_SERVERS=false`).
+ * Worktree Codex keeps plugins so a connected PostHog (or other) plugin
+ * can run — same as worktree Claude keeping claude.ai connectors.
+ * Coordinators still disable Apps + plugins: those attach streamable-HTTP
+ * MCP with OAuth, and `AuthRequired` in `codex exec` is fatal (rmcp quits
+ * the transport worker). `features.apps=false` is not enough: a
+ * plugin-bundled app still loads. Keep injected stdio `mcp_servers`.
+ * Do not pass `-c mcp_servers.posthog.enabled=false`: that override
+ * creates a stub with no command/url, and Codex fails the whole exec
+ * (`invalid transport in mcp_servers.posthog`) even when
+ * ~/.codex/config.toml has no PostHog block. Settings → Connectors HTTP
+ * API remains the fallback when the plugin is not signed in.
  */
 export function toCodexUnattendedAppsArgs(): string[] {
   return [
@@ -135,7 +141,5 @@ export function toCodexUnattendedAppsArgs(): string[] {
     'apps.posthog.enabled=false',
     '-c',
     'features.plugins=false',
-    '-c',
-    'mcp_servers.posthog.enabled=false',
   ];
 }

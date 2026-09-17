@@ -22,6 +22,12 @@ describe('normalizeTurnInput', () => {
       cachedPrefix: undefined,
     });
   });
+
+  it('keeps isolateCodexPlugins', () => {
+    expect(
+      normalizeTurnInput({ prompt: 'next', isolateCodexPlugins: true }).isolateCodexPlugins,
+    ).toBe(true);
+  });
 });
 
 describe('dropCachedPrefixOnResume', () => {
@@ -38,6 +44,12 @@ describe('dropCachedPrefixOnResume', () => {
         null,
       ).cachedPrefix,
     ).toBe('worktree playbook');
+    expect(
+      dropCachedPrefixOnResume(
+        { cachedPrefix: 'playbook', prompt: 'next', isolateCodexPlugins: true },
+        'sess-1',
+      ),
+    ).toEqual({ prompt: 'next', isolateCodexPlugins: true });
   });
 });
 

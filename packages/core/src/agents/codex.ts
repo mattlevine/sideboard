@@ -20,7 +20,7 @@ import {
   userMcpNamesToDisable,
 } from './orch-mcp-isolation.js';
 import type { AgentModelInfo } from './model-info.js';
-import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
+import { flattenTurnInput, dropCachedPrefixOnResume, normalizeTurnInput } from './turn-input.js';
 import { permissionMode } from './types.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 
@@ -244,8 +244,15 @@ export const codexAdapter: AgentAdapter = {
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
     });
+    const isolatePlugins =
+      isOrchestrator ||
+      Boolean(thread.isolateCodexPlugins) ||
+      Boolean(normalizeTurnInput(input).isolateCodexPlugins);
     const mcpOverrides = [
-      ...toCodexUnattendedAppsArgs(),
+      // Worktree first try keeps plugins (Claude connectors). Coordinators
+      // isolate. After a fatal plugin MCP, the orchestrator retries with
+      // isolateCodexPlugins so the turn continues. Never invent mcp_servers.posthog.
+      ...(isolatePlugins ? toCodexUnattendedAppsArgs() : []),
       ...toCodexMcpConfigArgs(injected),
       ...(isOrchestrator
         ? toCodexDisableUserMcpArgs(

@@ -15,6 +15,7 @@ import {
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
   looksLikeCodexMcpError,
+  shouldRetryCodexPluginIsolate,
   shouldRetryFailedAgentTurn,
   shouldFeedErrorBackToAgent,
   formatAgentErrorContinuePrompt,
@@ -576,6 +577,16 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(
       humanizeAgentFailDetail('PostHog MCP OAuth AuthRequired'),
     ).toMatch(/HTTP API/);
+    expect(
+      shouldRetryCodexPluginIsolate(
+        'Error loading config.toml: invalid transport in mcp_servers.posthog',
+      ),
+    ).toBe(true);
+    expect(
+      shouldRetryCodexPluginIsolate('AuthRequired from posthog', {
+        alreadyIsolated: true,
+      }),
+    ).toBe(false);
   });
 
   it('keeps exit code for opaque CLI failures', () => {

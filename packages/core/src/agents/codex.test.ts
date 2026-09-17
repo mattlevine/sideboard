@@ -120,7 +120,7 @@ describe('codexAdapter.buildTurn', () => {
     expect(cmd.args[cmd.args.indexOf('--sandbox') + 1]).toBe('danger-full-access');
   });
 
-  it('disables ChatGPT Apps on worktree and orchestration turns', async () => {
+  it('keeps Codex plugins on worktree turns; isolates Apps/plugins on orchestration', async () => {
     const work = await codexAdapter.buildTurn(baseThread, { prompt: 'find work' });
     const orch = await codexAdapter.buildTurn(
       { ...baseThread, sourceType: 'orchestration' } as typeof baseThread & {
@@ -128,13 +128,25 @@ describe('codexAdapter.buildTurn', () => {
       },
       { prompt: 'find work' },
     );
-    for (const cmd of [work, orch]) {
-      expect(cmd.args).toContain('features.apps=false');
-      expect(cmd.args).toContain('apps._default.enabled=false');
-      expect(cmd.args).toContain('features.plugins=false');
-      expect(cmd.args).toContain('apps.posthog.enabled=false');
-      expect(cmd.args).toContain('mcp_servers.posthog.enabled=false');
-    }
+    expect(work.args).not.toContain('features.plugins=false');
+    expect(work.args).not.toContain('features.apps=false');
+    expect(work.args).not.toContain('apps.posthog.enabled=false');
+    expect(work.args).not.toContain('mcp_servers.posthog.enabled=false');
+    expect(orch.args).toContain('features.apps=false');
+    expect(orch.args).toContain('apps._default.enabled=false');
+    expect(orch.args).toContain('features.plugins=false');
+    expect(orch.args).toContain('apps.posthog.enabled=false');
+    expect(orch.args).not.toContain('mcp_servers.posthog.enabled=false');
+  });
+
+  it('isolates Apps/plugins on a worktree turn after isolateCodexPlugins', async () => {
+    const cmd = await codexAdapter.buildTurn(
+      { ...baseThread, isolateCodexPlugins: true },
+      { prompt: 'continue without the plugin' },
+    );
+    expect(cmd.args).toContain('features.plugins=false');
+    expect(cmd.args).toContain('features.apps=false');
+    expect(cmd.args).not.toContain('mcp_servers.posthog.enabled=false');
   });
 
   it('disables user Codex MCP servers on orchestration turns only', async () => {
