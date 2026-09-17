@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import type { Thread } from '../types/thread.js';
-import { planOrchestrationQuotaFailover } from './quota-failover.js';
+import {
+  isolateQuotaFailover,
+  planOrchestrationQuotaFailover,
+} from './quota-failover.js';
 
 function orchThread(over: Partial<Thread> = {}): Thread {
   return {
@@ -97,5 +100,20 @@ describe('planOrchestrationQuotaFailover', () => {
     expect(
       planOrchestrationQuotaFailover(orchThread(), 'Prompt is too long'),
     ).toBeNull();
+  });
+});
+
+describe('isolateQuotaFailover', () => {
+  it('returns the handler result when failover succeeds', async () => {
+    expect(await isolateQuotaFailover(async () => true)).toBe(true);
+    expect(await isolateQuotaFailover(async () => false)).toBe(false);
+  });
+
+  it('treats sibling-create or appendMessage throws as handled', async () => {
+    await expect(
+      isolateQuotaFailover(async () => {
+        throw new Error('appendMessage failed after sibling create');
+      }),
+    ).resolves.toBe(true);
   });
 });

@@ -166,6 +166,22 @@ export const QUOTA_CONTINUE_PROMPT = (fromAgent: AgentKind, fallback: AgentKind)
 export const QUOTA_RESUME_PROMPT =
   'Session/usage limit window should have reset. Continue this chat from where you left off.';
 
+/**
+ * Isolate host quota failover from `runTurn`'s try/catch.
+ * A throw from sibling create or `appendMessage` must not emit a second
+ * `turn_finished` or `notifyParentOfChildHalt` after a sibling exists.
+ * Unknown throws are treated as handled so the parent is not woken.
+ */
+export async function isolateQuotaFailover(
+  run: () => Promise<boolean>,
+): Promise<boolean> {
+  try {
+    return await run();
+  } catch {
+    return true;
+  }
+}
+
 /** Sibling chat on the fallback agent (same worktree or Global home) with a compact handoff. */
 export function createQuotaFailoverChat(
   from: Thread,

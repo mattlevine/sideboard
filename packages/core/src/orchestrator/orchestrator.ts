@@ -120,6 +120,7 @@ import {
 } from '../threads/worktree-runtime.js';
 import {
   createQuotaFailoverChat,
+  isolateQuotaFailover,
   planOrchestrationQuotaFailover,
   QUOTA_CONTINUE_PROMPT,
   QUOTA_RESUME_PROMPT,
@@ -643,53 +644,66 @@ export class Orchestrator {
       // Don't keep draining prompts against the limited account.
       this.haltDrain.add(threadId);
       this.scheduleQuotaResume(threadId, plan.resumeAt);
-      setStatus(threadId, 'idle', null);
-      appendMessage(threadId, {
-        role: 'agent',
-        text: `Sideboard will auto-retry this chat around ${plan.resumeAt.toLocaleString()} when the session limit resets.`,
-        ts: new Date().toISOString(),
-      });
-      this.emit({
-        type: 'quota_failover',
-        threadId,
-        action: 'wait_reset',
-        message: plan.reason,
-        resumeAt: plan.resumeAt.toISOString(),
-      });
-      this.emit({ type: 'status_changed', threadId, status: 'idle' });
+      try {
+        setStatus(threadId, 'idle', null);
+        appendMessage(threadId, {
+          role: 'agent',
+          text: `Sideboard will auto-retry this chat around ${plan.resumeAt.toLocaleString()} when the session limit resets.`,
+          ts: new Date().toISOString(),
+        });
+        this.emit({
+          type: 'quota_failover',
+          threadId,
+          action: 'wait_reset',
+          message: plan.reason,
+          resumeAt: plan.resumeAt.toISOString(),
+        });
+        this.emit({ type: 'status_changed', threadId, status: 'idle' });
+      } catch {
+        // Wait is already scheduled — do not rethrow into runTurn.
+      }
       return true;
     }
 
     if (plan.action === 'switch_agent' && plan.fallbackAgent) {
       this.haltDrain.add(threadId);
-      const next = createQuotaFailoverChat(
-        thread,
-        plan.fallbackAgent,
-        plan.limitText,
-      );
+      let next: Thread;
+      try {
+        next = createQuotaFailoverChat(
+          thread,
+          plan.fallbackAgent,
+          plan.limitText,
+        );
+      } catch {
+        return false;
+      }
       this.clearQuotaResumeTimer(threadId);
       try {
         updateThread(threadId, { quotaResumeAt: null });
       } catch {
         // ignore
       }
-      appendMessage(threadId, {
-        role: 'agent',
-        text: `Session limit on ${thread.agent}. Sideboard continued on ${plan.fallbackAgent} (Auto) in [${next.title}](sideboard://thread/${next.id}).`,
-        ts: new Date().toISOString(),
-      });
-      this.emit({
-        type: 'quota_failover',
-        threadId,
-        action: 'switch_agent',
-        toThreadId: next.id,
-        message: plan.reason,
-      });
-      this.emit({
-        type: 'status_changed',
-        threadId: next.id,
-        status: next.status,
-      });
+      try {
+        appendMessage(threadId, {
+          role: 'agent',
+          text: `Session limit on ${thread.agent}. Sideboard continued on ${plan.fallbackAgent} (Auto) in [${next.title}](sideboard://thread/${next.id}).`,
+          ts: new Date().toISOString(),
+        });
+        this.emit({
+          type: 'quota_failover',
+          threadId,
+          action: 'switch_agent',
+          toThreadId: next.id,
+          message: plan.reason,
+        });
+        this.emit({
+          type: 'status_changed',
+          threadId: next.id,
+          status: next.status,
+        });
+      } catch {
+        // Sibling already exists — do not rethrow into runTurn.
+      }
       // Do not await — turn cleanup must finish so the sibling can start.
       void this.send(
         next.id,
@@ -1700,9 +1714,8 @@ export class Orchestrator {
           this.maybeEnqueueJobContinue(threadId, chatText, parts);
         } else {
           const blob = [chatText, detail].filter(Boolean).join('\n');
-          const failedOver = await this.maybeHandleOrchestrationQuotaFailover(
-            threadId,
-            blob,
+          const failedOver = await isolateQuotaFailover(() =>
+            this.maybeHandleOrchestrationQuotaFailover(threadId, blob),
           );
           this.maybeEnqueueCrashContinue(threadId, {
             detail: detail || failDetail,
@@ -1738,9 +1751,8 @@ export class Orchestrator {
           this.emit({ type: 'status_changed', threadId, status: 'error' });
         }
         this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
-        const failedOver = await this.maybeHandleOrchestrationQuotaFailover(
-          threadId,
-          message,
+        const failedOver = await isolateQuotaFailover(() =>
+          this.maybeHandleOrchestrationQuotaFailover(threadId, message),
         );
         this.maybeEnqueueCrashContinue(threadId, {
           detail: message,
