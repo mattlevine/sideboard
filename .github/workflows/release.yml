@@ -115,8 +115,51 @@ jobs:
           # electron-builder + electron-updater publish to GitHub Releases
           # Signing/notarization require the imported identity + APPLE_* secrets;
           # unsigned builds still upload artifacts but cannot auto-update on macOS.
+          # uploads.github.com often 500s "Error saving asset" on the ~250MB zip
+          # after the dmg landed (v0.1.204). Keep the local zip and retry via gh.
+          set +e
           if [ -n "$SIDEBOARD_MAC_SIGNED" ]; then
             pnpm exec electron-builder --mac --publish always -c.forceCodeSigning=true
           else
             pnpm exec electron-builder --mac --publish always -c.mac.identity=null
           fi
+          eb=$?
+          set -e
+
+          TAG="${GITHUB_REF_NAME}"
+          ZIP=""
+          for f in release/Sideboard-*-arm64-mac.zip; do
+            [ -f "$f" ] || continue
+            ZIP="$f"
+            break
+          done
+          if [ -z "$ZIP" ]; then
+            echo "electron-builder exited ${eb:-1} and produced no zip"
+            exit "${eb:-1}"
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "${TAG#v}" --verify-tag --notes "Sideboard ${TAG}"
+          fi
+          upload_missing() {
+            local file="$1"
+            local name i
+            name=$(basename "$file")
+            [ -f "$file" ] || return 0
+            for i in 1 2 3 4 5 6; do
+              if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+                echo "$name already on GitHub Release"
+                return 0
+              fi
+              echo "gh release upload $name (attempt $i)"
+              if gh release upload "$TAG" "$file" --clobber; then
+                return 0
+              fi
+              sleep $((i * 20))
+            done
+            echo "failed to upload $name" >&2
+            return 1
+          }
+          upload_missing "$ZIP"
+          upload_missing "${ZIP}.blockmap"
+          upload_missing release/latest-mac.yml
+          gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$(basename "$ZIP")"

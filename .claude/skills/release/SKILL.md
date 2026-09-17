@@ -111,7 +111,7 @@ Two jobs, both on the same tag push:
 | Job | Runner | What it does |
 |---|---|---|
 | `release-cli` | `ubuntu-latest` | Builds/tests, then publishes `@sideboard-ai/core` + `@sideboard-ai/cli` via **npm trusted publishing (OIDC)**. |
-| `release-desktop-mac` | `macos-latest` | Import Developer ID into a runner keychain, Vite + stage Node/MCP/Cursor runtime, then `electron-builder --mac --publish always` without `CSC_LINK` (GitHub Release + `latest-mac.yml`). |
+| `release-desktop-mac` | `macos-latest` | Import Developer ID into a runner keychain, Vite + stage Node/MCP/Cursor runtime, then `electron-builder --mac --publish always` without `CSC_LINK` (GitHub Release + `latest-mac.yml`). If the ~250MB zip 500s on `uploads.github.com` (`Error saving asset`), the same step retries that file (and `latest-mac.yml`) with `gh release upload`. |
 
 `release-cli` uses `permissions: id-token: write`. Do **not** gate it on `if: secrets.NPM_TOKEN` — GitHub rejects the `secrets` context in `if` (`Unrecognized named-value: 'secrets'`). Do **not** set `NODE_AUTH_TOKEN` or `setup-node` `registry-url` on that job; both skip the OIDC exchange. Trusted publisher on npmjs.com: `mattlevine/sideboard`, workflow file `.github/workflows/release.yml`, **no Environment name**. The `NPM_TOKEN` repo secret is unused for this job.
 
