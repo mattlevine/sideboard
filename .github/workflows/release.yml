@@ -128,9 +128,15 @@ jobs:
 
           TAG="${GITHUB_REF_NAME}"
           ZIP=""
+          DMG=""
           for f in release/Sideboard-*-arm64-mac.zip; do
             [ -f "$f" ] || continue
             ZIP="$f"
+            break
+          done
+          for f in release/Sideboard-*-arm64.dmg; do
+            [ -f "$f" ] || continue
+            DMG="$f"
             break
           done
           if [ -z "$ZIP" ]; then
@@ -159,7 +165,14 @@ jobs:
             echo "failed to upload $name" >&2
             return 1
           }
+          # electron-builder often times out on the dmg after the blockmap lands
+          # (v0.1.206). Retry dmg + zip + latest-mac.yml via gh.
+          upload_missing "$DMG"
+          upload_missing "${DMG}.blockmap"
           upload_missing "$ZIP"
           upload_missing "${ZIP}.blockmap"
           upload_missing release/latest-mac.yml
           gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$(basename "$ZIP")"
+          if [ -n "$DMG" ]; then
+            gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$(basename "$DMG")"
+          fi
