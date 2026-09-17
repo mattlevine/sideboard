@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.207] - 2026-09-17
+
+### Fixed
+
+- Orchestrator Codex no longer burns the crash/OOM retry on a redundant Apps/plugin isolate when those flags are already off. Generic vendor MCP `unauthorized` stays parked instead of auto-continuing.
+- Sidebar PR meta no longer snaps back to a stale number when a new PR is connected; `getPrMeta` will not persist a fallback selector onto sibling tabs.
+- Mac release fails if `latest-mac.yml` is missing after a zip, so a GitHub upload timeout cannot go green without an auto-update feed.
+- AbleTime browser connect uses the Settings host (and clears it on disconnect). REST create/update send `parentTaskId` / `projectId` for org-key spin-offs and project moves.
+
 ## [0.1.206] - 2026-09-17
 
 ### Fixed
