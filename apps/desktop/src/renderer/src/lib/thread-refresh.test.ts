@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyThreadToLists,
   createThreadRefreshScheduler,
+  isFresherFullThread,
   mergeFullThreadIntoLists,
   threadListsUnchanged,
 } from './thread-refresh';
@@ -118,6 +119,46 @@ describe('mergeFullThreadIntoLists', () => {
     const next = mergeFullThreadIntoLists({ threads: [slim], archived: [] }, full);
     expect(next.threads[0]?.messages).toHaveLength(2);
     expect(next.threads[0]?.messages[1]?.text).toBe('long answer');
+  });
+});
+
+describe('isFresherFullThread', () => {
+  it('rejects an older updatedAt snapshot', () => {
+    const newer = thread({
+      id: 'a',
+      status: 'idle',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      messages: [{ role: 'user', text: 'hi', ts: 't' }],
+    });
+    const older = thread({
+      id: 'a',
+      status: 'idle',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      messages: [],
+    });
+    expect(isFresherFullThread(newer, older)).toBe(false);
+    expect(isFresherFullThread(older, newer)).toBe(true);
+    expect(isFresherFullThread(undefined, older)).toBe(true);
+  });
+
+  it('at the same clock prefers the longer transcript', () => {
+    const short = thread({
+      id: 'a',
+      status: 'idle',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      messages: [{ role: 'user', text: 'hi', ts: 't' }],
+    });
+    const long = thread({
+      id: 'a',
+      status: 'idle',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      messages: [
+        { role: 'user', text: 'hi', ts: 't' },
+        { role: 'agent', text: 'ok', ts: 't2' },
+      ],
+    });
+    expect(isFresherFullThread(long, short)).toBe(false);
+    expect(isFresherFullThread(short, long)).toBe(true);
   });
 });
 

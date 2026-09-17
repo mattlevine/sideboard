@@ -20,6 +20,14 @@ export function childHaltNotice(child: Thread, status: ThreadStatus): string {
   ].join('\n');
 }
 
+/** Failover / crash-continue already kept the work alive — do not wake the parent. */
+export function shouldNotifyParentAfterTurnError(opts: {
+  quotaFailoverHandled: boolean;
+  crashContinued: boolean;
+}): boolean {
+  return !opts.quotaFailoverHandled && !opts.crashContinued;
+}
+
 export function shouldNotifyParentOfChildHalt(opts: {
   child: Thread;
   parent: Thread | null | undefined;

@@ -15,6 +15,16 @@ import {
 } from './message-parts.js';
 
 describe('applyAgentEvent', () => {
+  it('caps a single first thinking snapshot', () => {
+    const parts = applyAgentEvent([], {
+      type: 'thinking',
+      data: 'x'.repeat(THINKING_PART_MAX_CHARS + 80),
+    });
+    const th = parts[0] as { type: 'thinking'; text: string };
+    expect(th.text.length).toBeLessThanOrEqual(THINKING_PART_MAX_CHARS);
+    expect(th.text.startsWith('…(earlier thinking trimmed)')).toBe(true);
+  });
+
   it('caps a streaming thinking part at the newest tail', () => {
     let parts = applyAgentEvent([], { type: 'thinking', data: 'a'.repeat(THINKING_PART_MAX_CHARS) });
     parts = applyAgentEvent(parts, { type: 'thinking', data: 'END' });

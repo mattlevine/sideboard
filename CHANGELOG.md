@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.202] - 2026-09-16
+
+### Fixed
+
+- Check for Updates stays quiet while a GitHub Release is still publishing instead of showing a bogus failure.
+- Selecting an orchestrator child or quota-failover chat loads the full transcript instead of a preview stub; older `getThread` results cannot overwrite a newer cache.
+- Quota failover that continues or waits no longer tells the parent orchestrator the child died.
+- Composer usage confirm cannot start a second send, and canceling the dialog no longer drops plan-question answers.
+- A single first thinking snapshot is clipped to the same 64k tail as later deltas.
+
 ## [0.1.201] - 2026-09-16
 
 ### Fixed
