@@ -55,6 +55,7 @@ export * from './integrations/linear-oauth.js';
 export * from './integrations/github-issues.js';
 export * from './integrations/abletime.js';
 export * from './integrations/abletime-mcp.js';
+export * from './integrations/abletime-oauth.js';
 export * from './integrations/issues.js';
 export * from './integrations/optional-services.js';
 export * from './integrations/optional-cli.js';

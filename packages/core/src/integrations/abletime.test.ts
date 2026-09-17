@@ -13,7 +13,10 @@ import {
 } from './abletime.js';
 import {
   abletimeMcpUrl,
+  ableTimeCredentialKind,
+  assertAbleTimeMcpCredential,
   callAbleTimeTool,
+  normalizeAbleTimeCredential,
   normalizeAbleTimeHost,
   rewriteAbleTimeError,
 } from './abletime-mcp.js';
@@ -33,7 +36,40 @@ describe('abletime helpers', () => {
   it('rewrites agent-access and PAT errors', () => {
     expect(rewriteAbleTimeError('INTEGRATION_AGENT_ACCESS_DISABLED')).toMatch(/Agent access/);
     expect(rewriteAbleTimeError('INTEGRATION_PAT_REQUIRED')).toMatch(/apt_/);
-    expect(rewriteAbleTimeError('401 unauthorized')).toMatch(/Reconnect AbleTime/);
+    expect(rewriteAbleTimeError('INTEGRATION_PAT_REQUIRED')).toMatch(/atk_/);
+    const invalid = rewriteAbleTimeError('AbleTime MCP error 401: INTEGRATION_KEY_INVALID');
+    expect(invalid).toMatch(/unknown, revoked, or expired/);
+    expect(invalid).toMatch(/apt_/);
+    expect(rewriteAbleTimeError(invalid)).toBe(invalid);
+  });
+
+  it('normalizes pasted credentials and keeps org keys off MCP', () => {
+    expect(normalizeAbleTimeCredential('  Bearer apt_secret  ')).toBe('apt_secret');
+    expect(ableTimeCredentialKind('apt_secret')).toBe('pat');
+    expect(ableTimeCredentialKind('atk_org')).toBe('org');
+    expect(assertAbleTimeMcpCredential('Bearer apt_secret')).toBe('apt_secret');
+    expect(() => assertAbleTimeMcpCredential('atk_org')).toThrow(/atk_/);
+  });
+
+  it('maps REST camelCase task and project fields', () => {
+    const task = mapAbleTimeTask({
+      timeflowTaskId: '01TASKREST0000000000000001',
+      taskRef: 'DP-1',
+      title: 'REST task',
+      taskState: 'todo',
+      projectId: '01PROJ',
+      lastUpdate: '2026-09-16T00:00:00.000Z',
+      tags: ['sideboard'],
+    });
+    expect(task).toMatchObject({
+      id: '01TASKREST0000000000000001',
+      identifier: 'DP-1',
+      title: 'REST task',
+      state: 'todo',
+      projectId: '01PROJ',
+      labels: ['sideboard'],
+      updatedAt: '2026-09-16T00:00:00.000Z',
+    });
   });
 
   it('maps task payloads with AbleTime field aliases', () => {
@@ -88,6 +124,11 @@ describe('abletime helpers', () => {
 });
 
 describe('callAbleTimeTool', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('posts tools/call with a bearer token', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -117,6 +158,54 @@ describe('callAbleTimeTool', () => {
       method: 'tools/call',
       params: { name: 'list_tasks', arguments: {} },
     });
+  });
+
+  it('strips a pasted Bearer prefix on MCP and uses REST for organization keys', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      const href = String(url);
+      if (href.includes('/api/public/v2/mcp')) {
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          text: async () =>
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              result: { content: [{ type: 'text', text: '{"ok":true}' }] },
+            }),
+        };
+      }
+      const payload = href.includes('/users')
+        ? { data: [{ userId: 'u1', username: 'matt', role: 'owner' }], page: {} }
+        : href.includes('/projects')
+          ? { data: [{ projectId: 'p1', projectName: 'Default', categories: [] }], page: {} }
+          : { data: [], page: {} };
+      return {
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => JSON.stringify(payload),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await callAbleTimeTool(
+      'orientation',
+      {},
+      { token: 'Bearer apt_test', host: 'https://track.abletime.com' },
+    );
+    const mcpInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/public/v2/mcp');
+    expect((mcpInit.headers as Record<string, string>).Authorization).toBe('Bearer apt_test');
+
+    fetchMock.mockClear();
+    const orientation = await callAbleTimeTool(
+      'orientation',
+      {},
+      { token: 'atk_orgkey', host: 'https://track.abletime.com' },
+    );
+    expect(orientation).toMatchObject({ viewer: { name: 'matt' } });
+    const restUrls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(restUrls.some((url) => url.includes('/api/public/v2/projects'))).toBe(true);
+    expect(restUrls.some((url) => url.includes('/api/public/v2/mcp'))).toBe(false);
   });
 });
 
@@ -269,6 +358,35 @@ describe('AbleTime settings connection', () => {
   afterEach(() => {
     process.env.HOME = prevHome;
     vi.resetModules();
+  });
+
+  it('connects an organization API key over REST', async () => {
+    process.env.HOME = mkdtempSync(join(tmpdir(), 'sb-abletime-org-'));
+    vi.resetModules();
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      const href = String(url);
+      const payload = href.includes('/users')
+        ? { data: [{ userId: 'u1', username: 'matt', role: 'owner' }], page: {} }
+        : href.includes('/projects')
+          ? { data: [{ projectId: 'p1', projectName: 'Default', categories: [] }], page: {} }
+          : { data: [], page: {} };
+      return {
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => JSON.stringify(payload),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { verifyAbleTimeConnection: verify } = await import('./abletime.js');
+    const { isAbleTimeConnected, disconnectAbleTimeConnection, loadAppSettings } =
+      await import('../store/app-settings.js');
+    const viewer = await verify({ token: 'atk_orgkey' });
+    expect(viewer.name).toBe('matt');
+    expect(isAbleTimeConnected()).toBe(true);
+    expect(loadAppSettings().integrations.abletimeAccessToken).toBe('atk_orgkey');
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/mcp'))).toBe(false);
+    disconnectAbleTimeConnection();
+    vi.unstubAllGlobals();
   });
 
   it('persists a PAT and treats AbleTime as connected', async () => {

@@ -4,10 +4,12 @@ import {
 } from '../store/app-settings.js';
 import type { IssueInfo, ThreadAttachment } from '../types/thread.js';
 import {
+  assertAbleTimeCredential,
   callAbleTimeTool,
   normalizeAbleTimeHost,
   rewriteAbleTimeError,
 } from './abletime-mcp.js';
+import { textFromAbleTimeDoc } from './abletime-rest.js';
 
 const CLOSED_STATES = new Set([
   'done',
@@ -116,13 +118,15 @@ function commentsOf(record: Record<string, unknown>): AbleTimeComment[] {
   for (const item of asList(raw)) {
     const rec = asRecord(item);
     if (!rec) continue;
-    const body = firstString(rec, ['body', 'text', 'comment', 'content', 'message']);
+    const body =
+      firstString(rec, ['body', 'text', 'comment', 'message', 'contentSanitized']) ||
+      textFromAbleTimeDoc(rec.content);
     if (!body) continue;
     const user =
-      firstString(asRecord(rec.user) ?? asRecord(rec.author), ['name', 'display_name']) ||
-      firstString(rec, ['user_name', 'author']);
+      firstString(asRecord(rec.user) ?? asRecord(rec.author), ['name', 'display_name', 'username']) ||
+      firstString(rec, ['user_name', 'author', 'username']);
     const comment: AbleTimeComment = { body };
-    const id = firstString(rec, ['id', 'comment_id']);
+    const id = firstString(rec, ['id', 'comment_id', 'commentId']);
     if (id) comment.id = id;
     const url = firstString(rec, ['url', 'permalink']);
     if (url) comment.url = url;
@@ -154,9 +158,10 @@ export function mapAbleTimeTask(raw: unknown, host?: string | null): AbleTimeTas
   const record = asRecord(raw);
   if (!record) return null;
   const nested = firstRecord(record, ['task', 'data']) ?? record;
-  const id = firstString(nested, ['id', 'task_id', 'taskId']);
+  const id = firstString(nested, ['id', 'task_id', 'taskId', 'timeflowTaskId']);
   const identifier =
-    firstString(nested, ['reference', 'ref', 'identifier', 'key', 'code', 'number']) || id;
+    firstString(nested, ['reference', 'ref', 'identifier', 'key', 'code', 'number', 'taskRef']) ||
+    id;
   const title = firstString(nested, ['title', 'name']);
   if (!id && !identifier && !title) return null;
   const resolvedId = id || identifier;
@@ -169,18 +174,23 @@ export function mapAbleTimeTask(raw: unknown, host?: string | null): AbleTimeTas
     identifier: resolvedIdentifier,
     title: title || resolvedIdentifier,
     url,
-    description: firstString(nested, ['description', 'body', 'details']) || undefined,
-    state: firstString(nested, ['state', 'board_state', 'boardState', 'status']) || undefined,
+    description:
+      firstString(nested, ['description', 'body', 'details', 'descriptionSanitized']) ||
+      textFromAbleTimeDoc(nested.description) ||
+      undefined,
+    state:
+      firstString(nested, ['state', 'board_state', 'boardState', 'status', 'taskState']) ||
+      undefined,
     projectId: firstString(nested, ['project_id', 'projectId']) || firstString(asRecord(nested.project), ['id']) || undefined,
     categoryId:
-      firstString(nested, ['category_id', 'categoryId']) ||
+      firstString(nested, ['category_id', 'categoryId', 'projectCategoryId']) ||
       firstString(asRecord(nested.category), ['id']) ||
       undefined,
     assignee: assigneeOf(nested),
     labels: labelsOf(nested),
     comments: commentsOf(nested),
     createdAt:
-      firstString(nested, ['created_at', 'createdAt', 'created']) || undefined,
+      firstString(nested, ['created_at', 'createdAt', 'created', 'dateCreated']) || undefined,
     updatedAt:
       firstString(nested, [
         'updated_at',
@@ -189,6 +199,7 @@ export function mapAbleTimeTask(raw: unknown, host?: string | null): AbleTimeTas
         'modifiedAt',
         'last_activity_at',
         'lastActivityAt',
+        'lastUpdate',
       ]) || undefined,
   };
 }
@@ -226,15 +237,15 @@ export function issueAttachmentForAbleTimeTask(task: AbleTimeTask): ThreadAttach
 function mapProject(raw: unknown): AbleTimeProject | null {
   const record = asRecord(raw);
   if (!record) return null;
-  const id = firstString(record, ['id', 'project_id']);
-  const name = firstString(record, ['name', 'title']);
+  const id = firstString(record, ['id', 'project_id', 'projectId']);
+  const name = firstString(record, ['name', 'title', 'projectName']);
   if (!id && !name) return null;
   const categories = asList(record.categories ?? record.category)
     .map((item) => {
       const rec = asRecord(item);
       if (!rec) return null;
-      const categoryId = firstString(rec, ['id', 'category_id']);
-      const categoryName = firstString(rec, ['name', 'title']);
+      const categoryId = firstString(rec, ['id', 'category_id', 'projectCategoryId', 'categoryId']);
+      const categoryName = firstString(rec, ['name', 'title', 'categoryName']);
       if (!categoryId && !categoryName) return null;
       return { id: categoryId || categoryName, name: categoryName || categoryId };
     })
@@ -656,8 +667,7 @@ export async function verifyAbleTimeConnection(input: {
   token: string;
   host?: string | null;
 }): Promise<AbleTimeViewer> {
-  const token = input.token.trim();
-  if (!token) throw new Error('AbleTime personal access token is required');
+  const token = assertAbleTimeCredential(input.token);
   const host = input.host?.trim() || undefined;
   const orientation = await getAbleTimeOrientation({ token, host });
   saveAbleTimeConnection({

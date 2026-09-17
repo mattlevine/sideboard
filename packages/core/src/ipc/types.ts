@@ -215,12 +215,16 @@ export interface IpcApi {
   cancelLinearOAuth(): Promise<void>;
   /** Revoke Linear OAuth (best-effort) and clear stored Linear credentials. */
   disconnectLinear(): Promise<PublicAppSettings>;
-  /** Verify an AbleTime PAT via MCP orientation and store it. */
+  /** Verify an AbleTime PAT / org key and store it. */
   connectAbleTime(input: {
     token: string;
     host?: string | null;
   }): Promise<PublicAppSettings>;
-  /** Clear the stored AbleTime personal access token. */
+  /** Browser OAuth — opens AbleTime, waits for localhost callback. */
+  startAbleTimeOAuth(): Promise<PublicAppSettings>;
+  /** Abort an in-progress AbleTime browser sign-in. */
+  cancelAbleTimeOAuth(): Promise<void>;
+  /** Clear the stored AbleTime token. */
   disconnectAbleTime(): Promise<PublicAppSettings>;
   /** Verify and store a Vercel / Supabase / PostHog / Sentry token. */
   connectOptionalService(input: {
