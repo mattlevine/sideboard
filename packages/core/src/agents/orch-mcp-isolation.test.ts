@@ -76,7 +76,7 @@ command = "node"
     ]);
   });
 
-  it('disables ChatGPT Apps and plugins so PostHog OAuth MCP cannot kill unattended exec', () => {
+  it('disables ChatGPT Apps and plugins for orchestration isolation only', () => {
     expect(toCodexUnattendedAppsArgs()).toEqual([
       '-c',
       'features.apps=false',
@@ -86,8 +86,7 @@ command = "node"
       'apps.posthog.enabled=false',
       '-c',
       'features.plugins=false',
-      '-c',
-      'mcp_servers.posthog.enabled=false',
     ]);
+    expect(toCodexUnattendedAppsArgs().join('\0')).not.toContain('mcp_servers.posthog');
   });
 });

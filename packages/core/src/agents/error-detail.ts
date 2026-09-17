@@ -528,6 +528,18 @@ export function turnFailChatText(opts: {
  * AuthRequired / rmcp transport failure. That is not a Codex login failure —
  * the worktree should continue without that vendor MCP.
  */
+/**
+ * Codex plugin/App MCP died this exec and we have not isolated yet — retry
+ * the same turn with Apps/plugins off instead of looping AuthRequired.
+ */
+export function shouldRetryCodexPluginIsolate(
+  detail: string,
+  opts?: { alreadyIsolated?: boolean },
+): boolean {
+  if (opts?.alreadyIsolated) return false;
+  return looksLikeCodexMcpError(detail);
+}
+
 export function looksLikeCodexMcpError(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (!t) return false;

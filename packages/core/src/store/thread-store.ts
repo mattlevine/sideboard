@@ -40,6 +40,7 @@ export function normalizeThread(raw: Thread): Thread {
     effort: resolveThreadEffort(raw),
     fast: Boolean(raw.fast),
     planMode: Boolean(raw.planMode),
+    isolateCodexPlugins: raw.isolateCodexPlugins === true ? true : undefined,
     autonomy: raw.autonomy ?? 'default',
     lastError: raw.lastError ?? null,
     agentPid: raw.agentPid ?? null,

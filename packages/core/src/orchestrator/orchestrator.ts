@@ -4,7 +4,7 @@ import {
   pendingSlackExternalReplies,
 } from '../slack/outbound-watch.js';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
 import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
@@ -1418,7 +1418,12 @@ export class Orchestrator {
       const stderrTail: string[] = [];
       const handle = await spawnAgentTurn(
         fresh,
-        { cachedPrefix, prompt: agentPrompt, systemPrompt: turnReminders },
+        {
+          cachedPrefix,
+          prompt: agentPrompt,
+          systemPrompt: turnReminders,
+          isolateCodexPlugins: fresh.isolateCodexPlugins === true,
+        },
         (event) => {
           this.emit({ type: 'turn_output', threadId, event });
           noteTurnLiveEvent(threadId, event);
@@ -1528,16 +1533,30 @@ export class Orchestrator {
       // session (cursor-runner also recovers checkpoints in-process). Homebrew
       // Current may die again on the retry; first-turn indexing OOM (no
       // session) is not retried. Then lastError reaches the orchestrator.
+      // Codex plugin/App MCP (PostHog OAuth) is process-fatal — trap it by
+      // isolating Apps/plugins and retrying the same prompt so work continues.
+      const liveThread = this.requireThread(threadId);
+      const isolateCodexPluginRetry =
+        liveThread.agent === 'codex' &&
+        shouldRetryCodexPluginIsolate(detail, {
+          alreadyIsolated: liveThread.isolateCodexPlugins === true,
+        });
+      if (isolateCodexPluginRetry) {
+        updateThread(threadId, { isolateCodexPlugins: true });
+      }
       if (
         exitCode !== 0 &&
         !assistantText &&
         parts.length === 0 &&
         !this.stoppedTurns.has(threadId) &&
-        shouldRetryFailedAgentTurn(detail, {
-          hasSession: Boolean(this.requireThread(threadId).sessionId),
-        })
+        (isolateCodexPluginRetry ||
+          shouldRetryFailedAgentTurn(detail, {
+            hasSession: Boolean(this.requireThread(threadId).sessionId),
+          }))
       ) {
-        updateThread(threadId, { sessionId: null });
+        if (!isolateCodexPluginRetry) {
+          updateThread(threadId, { sessionId: null });
+        }
         // A dead git child (e.g. a commit killed mid-write by the same OOM/crash)
         // can leave index.lock behind, which blocks every further git command —
         // Sideboard's own actions and the user's own terminal git alike. We just
@@ -1552,11 +1571,13 @@ export class Orchestrator {
         } catch {
           // Best-effort — a real git repo check will surface any remaining lock.
         }
-        const retryNote = looksLikeInvalidAgentSession(detail)
-          ? 'Agent session missing — starting a fresh session'
-          : looksLikeV8Oom(detail)
-            ? 'Agent ran out of memory — starting a fresh session'
-            : 'Agent runner crashed — restarting Node once';
+        const retryNote = isolateCodexPluginRetry
+          ? 'Codex plugin/MCP failed — continuing without that vendor plugin (Settings → Connectors + HTTP API)'
+          : looksLikeInvalidAgentSession(detail)
+            ? 'Agent session missing — starting a fresh session'
+            : looksLikeV8Oom(detail)
+              ? 'Agent ran out of memory — starting a fresh session'
+              : 'Agent runner crashed — restarting Node once';
         pushTurnStderr(stderrTail, retryNote);
         this.emit({
           type: 'turn_output',
@@ -1584,7 +1605,13 @@ export class Orchestrator {
           .join('\n\n---\n\n');
         const retryHandle = await spawnAgentTurn(
           retryThread,
-          { cachedPrefix: retryPrefix, prompt: agentPrompt, systemPrompt: turnReminders },
+          {
+            cachedPrefix: retryPrefix,
+            prompt: agentPrompt,
+            systemPrompt: turnReminders,
+            isolateCodexPlugins:
+              isolateCodexPluginRetry || retryThread.isolateCodexPlugins === true,
+          },
           (event) => {
             this.emit({ type: 'turn_output', threadId, event });
             if (event.type === 'session_id') {

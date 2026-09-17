@@ -116,6 +116,12 @@ export interface Thread {
   fast: boolean;
   /** Plan-only turns — analyze and plan without editing files (Conductor-style). */
   planMode: boolean;
+  /**
+   * After a Codex plugin/App MCP kills `codex exec` (AuthRequired / invalid
+   * transport), later turns isolate Apps/plugins so the same fatal error
+   * cannot loop. Worktree first tries with plugins on.
+   */
+  isolateCodexPlugins?: boolean;
   sessionId: string | null;
   autonomy: Autonomy;
   sourceIsFork: boolean;
