@@ -14,6 +14,7 @@ import {
 import {
   abletimeMcpUrl,
   ableTimeCredentialKind,
+  ableTimeUsesRest,
   assertAbleTimeMcpCredential,
   callAbleTimeTool,
   normalizeAbleTimeCredential,
@@ -39,7 +40,7 @@ describe('abletime helpers', () => {
     expect(rewriteAbleTimeError('INTEGRATION_PAT_REQUIRED')).toMatch(/atk_/);
     const invalid = rewriteAbleTimeError('AbleTime MCP error 401: INTEGRATION_KEY_INVALID');
     expect(invalid).toMatch(/unknown, revoked, or expired/);
-    expect(invalid).toMatch(/apt_/);
+    expect(invalid).toMatch(/Reconnect via browser|apt_/);
     expect(rewriteAbleTimeError(invalid)).toBe(invalid);
   });
 
@@ -47,6 +48,12 @@ describe('abletime helpers', () => {
     expect(normalizeAbleTimeCredential('  Bearer apt_secret  ')).toBe('apt_secret');
     expect(ableTimeCredentialKind('apt_secret')).toBe('pat');
     expect(ableTimeCredentialKind('atk_org')).toBe('org');
+    expect(ableTimeCredentialKind('acn_connect')).toBe('oauth');
+    expect(ableTimeCredentialKind('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1In0.sig')).toBe('oauth');
+    expect(ableTimeUsesRest('apt_secret')).toBe(false);
+    expect(ableTimeUsesRest('acn_connect')).toBe(false);
+    expect(ableTimeUsesRest('atk_org')).toBe(true);
+    expect(ableTimeUsesRest('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1In0.sig')).toBe(true);
     expect(assertAbleTimeMcpCredential('Bearer apt_secret')).toBe('apt_secret');
     expect(() => assertAbleTimeMcpCredential('atk_org')).toThrow(/atk_/);
   });
@@ -206,6 +213,30 @@ describe('callAbleTimeTool', () => {
     const restUrls = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(restUrls.some((url) => url.includes('/api/public/v2/projects'))).toBe(true);
     expect(restUrls.some((url) => url.includes('/api/public/v2/mcp'))).toBe(false);
+
+    fetchMock.mockClear();
+    const oauthOrientation = await callAbleTimeTool(
+      'orientation',
+      {},
+      {
+        token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1In0.sig',
+        host: 'https://track.abletime.com',
+      },
+    );
+    expect(oauthOrientation).toMatchObject({ viewer: { name: 'matt' } });
+    const oauthUrls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(oauthUrls.some((url) => url.includes('/api/public/v2/projects'))).toBe(true);
+    expect(oauthUrls.some((url) => url.includes('/api/public/v2/mcp'))).toBe(false);
+
+    fetchMock.mockClear();
+    await callAbleTimeTool(
+      'orientation',
+      {},
+      { token: 'acn_connect', host: 'https://track.abletime.com' },
+    );
+    const connectUrls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(connectUrls.some((url) => url.includes('/api/public/v2/mcp'))).toBe(true);
+    expect(connectUrls.some((url) => url.includes('/api/public/v2/projects'))).toBe(false);
   });
 });
 

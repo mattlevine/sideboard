@@ -3,6 +3,8 @@ import { setHttpFetchImpl } from '../http/fetch.js';
 import {
   accessTokenFromCredentialsJson,
   CLAUDE_OAUTH_USAGE_URL,
+  CLAUDE_USAGE_ERROR_TTL_MS,
+  CLAUDE_USAGE_STALE_OK_MS,
   CLAUDE_USAGE_TTL_MS,
   getClaudePlanUsage,
   resetClaudeUsageCacheForTests,
@@ -118,6 +120,53 @@ describe('getClaudePlanUsage', () => {
     });
     expect(first?.windows[0]?.usedPercent).toBe(10);
     expect(second).toEqual(first);
+  });
+
+  it('reuses last on 429 even after the stale window, and does not refetch while backing off', async () => {
+    let called = 0;
+    let status = 200;
+    const fetch = async () => {
+      called += 1;
+      return {
+        ok: status === 200,
+        status,
+        json: async () => ({
+          five_hour: { utilization: 10, resets_at: '2026-04-08T18:00:00Z' },
+        }),
+      };
+    };
+    const first = await getClaudePlanUsage({
+      now: 1_000,
+      readAccessToken: async () => 'sk-ant-oat01-test',
+      userAgent: 'claude-code/2.1.80',
+      fetch,
+    });
+    status = 429;
+    const afterStale = await getClaudePlanUsage({
+      now: 1_000 + CLAUDE_USAGE_STALE_OK_MS + CLAUDE_USAGE_TTL_MS + 1,
+      readAccessToken: async () => 'sk-ant-oat01-test',
+      userAgent: 'claude-code/2.1.80',
+      fetch,
+    });
+    const forced = await getClaudePlanUsage({
+      now: 1_000 + CLAUDE_USAGE_STALE_OK_MS + CLAUDE_USAGE_TTL_MS + 2,
+      readAccessToken: async () => 'sk-ant-oat01-test',
+      userAgent: 'claude-code/2.1.80',
+      fetch,
+      force: true,
+    });
+    const stillBackingOff = await getClaudePlanUsage({
+      now: 1_000 + CLAUDE_USAGE_STALE_OK_MS + CLAUDE_USAGE_TTL_MS + CLAUDE_USAGE_ERROR_TTL_MS - 1,
+      readAccessToken: async () => 'sk-ant-oat01-test',
+      userAgent: 'claude-code/2.1.80',
+      fetch,
+      force: true,
+    });
+    expect(first?.windows[0]?.usedPercent).toBe(10);
+    expect(afterStale).toEqual(first);
+    expect(forced).toEqual(first);
+    expect(stillBackingOff).toEqual(first);
+    expect(called).toBe(2);
   });
 
   it('uses injected httpFetch when no fetch opt is passed', async () => {

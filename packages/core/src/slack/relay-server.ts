@@ -20,6 +20,10 @@ import {
 } from './relay-protocol.js';
 import { SlackRelayHub } from './relay-hub.js';
 import { hostnameAllowed, requestHostname, tryServeStatic } from './relay-static.js';
+import {
+  ableTimeOAuthBouncePage,
+  ableTimeOAuthLocalBounceUrl,
+} from '../integrations/abletime-oauth.js';
 
 export interface SlackRelayServerOptions {
   appToken: string;
@@ -167,6 +171,16 @@ export async function startSlackRelayServer(
       const reqUrl = req.url || '/';
       if (await handleCallback(reqUrl, res)) return;
       if (handleResult(reqUrl, res)) return;
+      const ableTimeBounce = ableTimeOAuthLocalBounceUrl(reqUrl);
+      if (ableTimeBounce && (req.method === 'GET' || req.method === 'HEAD')) {
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          Refresh: `0;url=${ableTimeBounce}`,
+        });
+        res.end(req.method === 'HEAD' ? '' : ableTimeOAuthBouncePage(ableTimeBounce));
+        return;
+      }
       if (req.url === '/health') {
         sendJson(res, 200, {
           ok: true,

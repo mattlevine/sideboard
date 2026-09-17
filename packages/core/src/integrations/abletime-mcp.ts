@@ -72,15 +72,18 @@ export function abletimeMcpUrl(
   return `${normalizeAbleTimeHost(host)}${path}`;
 }
 
-/** Official prefixes: PAT `apt_…` (MCP), org key `atk_…` (REST only). */
+/** Official prefixes: PAT `apt_…` (MCP), browser-OAuth `acn_…` (MCP), org key `atk_…` (REST only). */
 export const ABLETIME_PAT_PREFIX = 'apt_';
 export const ABLETIME_ORG_KEY_PREFIX = 'atk_';
+export const ABLETIME_OAUTH_TOKEN_PREFIX = 'acn_';
+
+export type AbleTimeCredentialKind = 'pat' | 'org' | 'oauth' | 'unknown';
 
 const ORG_KEY_HINT =
   'AbleTime MCP needs a personal access token (apt_…) from Edit Profile → API Access, not an organization API key (atk_…) from Settings → Integrations → API Keys.';
 
 const REJECTED_CREDENTIAL_HINT =
-  'AbleTime rejected this credential (unknown, revoked, or expired). Use a personal access token (apt_…) from Edit Profile → API Access — organization API keys (atk_…) cannot call MCP. Tokens are shown once; rotating replaces the previous one.';
+  'AbleTime rejected this credential (unknown, revoked, or expired). Reconnect via browser, or paste a personal access token (apt_…) from Edit Profile → API Access. Organization API keys (atk_…) use REST, not MCP.';
 
 const REWRITE_APPLIED =
   /— Enable Agent access \(MCP\)|— AbleTime MCP needs a personal access token|— AbleTime plan does not include API access|— AbleTime rejected this credential/;
@@ -90,13 +93,29 @@ export function normalizeAbleTimeCredential(raw: string): string {
   return raw.trim().replace(/^bearer\s+/i, '').trim();
 }
 
-export function ableTimeCredentialKind(
-  raw: string,
-): 'pat' | 'org' | 'unknown' {
-  const token = normalizeAbleTimeCredential(raw).toLowerCase();
-  if (token.startsWith(ABLETIME_PAT_PREFIX)) return 'pat';
-  if (token.startsWith(ABLETIME_ORG_KEY_PREFIX)) return 'org';
+export function ableTimeCredentialKind(raw: string): AbleTimeCredentialKind {
+  const token = normalizeAbleTimeCredential(raw);
+  const lower = token.toLowerCase();
+  if (lower.startsWith(ABLETIME_PAT_PREFIX)) return 'pat';
+  if (lower.startsWith(ABLETIME_ORG_KEY_PREFIX)) return 'org';
+  // Connect-via-browser now mints `acn_…` (hosted MCP). Older JWTs still appear.
+  if (lower.startsWith(ABLETIME_OAUTH_TOKEN_PREFIX) || token.startsWith('eyJ')) return 'oauth';
   return 'unknown';
+}
+
+/** Hosted MCP accepts `apt_…` and `acn_…`. Org keys and JWT access tokens use REST. */
+export function ableTimeUsesRest(raw: string): boolean {
+  const token = normalizeAbleTimeCredential(raw);
+  const kind = ableTimeCredentialKind(token);
+  if (kind === 'org') return true;
+  if (kind === 'oauth') return token.startsWith('eyJ');
+  return kind === 'unknown';
+}
+
+export function isAbleTimeRejectedCredential(message: string): boolean {
+  return /INTEGRATION_KEY_INVALID|INTEGRATION_KEY_MISSING|INTEGRATION_PAT_REQUIRED|\b401\b/i.test(
+    message,
+  );
 }
 
 /** MCP accepts personal access tokens only. Organization keys use REST. */
@@ -306,7 +325,7 @@ export async function callAbleTimeTool<T = unknown>(
 
   const rawToken =
     opts?.token ?? (await import('./abletime-oauth.js').then((m) => m.ensureAbleTimeAccessToken()));
-  if (rawToken && ableTimeCredentialKind(rawToken) === 'org') {
+  if (rawToken && ableTimeUsesRest(rawToken)) {
     const { callAbleTimeRestTool } = await import('./abletime-rest.js');
     return callAbleTimeRestTool<T>(name, args, { ...opts, token: rawToken });
   }
@@ -324,6 +343,11 @@ export async function callAbleTimeTool<T = unknown>(
     if (/initialize|session|not initialized|-32000/i.test(message)) {
       await initializeIfNeeded(requestOpts);
       return await call();
+    }
+    // JWT / org credentials authenticate REST, not hosted MCP.
+    if (rawToken && ableTimeUsesRest(rawToken) && isAbleTimeRejectedCredential(message)) {
+      const { callAbleTimeRestTool } = await import('./abletime-rest.js');
+      return callAbleTimeRestTool<T>(name, args, { ...opts, token: rawToken });
     }
     throw err instanceof Error ? new Error(rewriteAbleTimeError(err.message)) : err;
   }

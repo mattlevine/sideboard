@@ -2,7 +2,7 @@
   "client_id": "https://www.sideboard.cloud/oauth/abletime-client.json",
   "client_name": "Sideboard",
   "client_uri": "https://www.sideboard.cloud",
-  "redirect_uris": ["http://127.0.0.1:19849/callback"],
+  "redirect_uris": ["https://www.sideboard.cloud/oauth/abletime/callback"],
   "grant_types": ["authorization_code", "refresh_token"],
   "response_types": ["code"],
   "token_endpoint_auth_method": "none"

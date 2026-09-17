@@ -71,4 +71,24 @@ describe('Slack relay OAuth exchange', () => {
       error: 'Slack OAuth: access_denied',
     });
   });
+
+  it('bounces AbleTime HTTPS callback onto the desktop listener', async () => {
+    const handle = await startSlackRelayServer({
+      appToken: 'xapp-test',
+      skipSocketMode: true,
+    });
+    handles.push(handle);
+    const origin = `http://127.0.0.1:${handle.port}`;
+    const cb = await fetch(
+      `${origin}/oauth/abletime/callback?code=from-abletime&state=s1&extra=drop`,
+    );
+    expect(cb.status).toBe(200);
+    expect(cb.headers.get('refresh')).toBe(
+      '0;url=http://127.0.0.1:19849/callback?code=from-abletime&state=s1',
+    );
+    const html = await cb.text();
+    expect(html).toContain('Returning to Sideboard');
+    expect(html).toContain('http://127.0.0.1:19849/callback?code=from-abletime');
+    expect(html).not.toContain('extra=drop');
+  });
 });
