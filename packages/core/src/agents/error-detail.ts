@@ -555,8 +555,9 @@ export function looksLikeCodexMcpError(text: string): boolean {
   if (/\brmcp\b/.test(t) && /fatal|quit|transport|error|died|kill|auth/.test(t)) {
     return true;
   }
-  return /mcp[_ -]?(server|tool|error|transport|client)/.test(t) &&
-    /fail|error|timeout|disconnect|auth|unauthorized/.test(t);
+  // Codex invents `mcp_servers.<plugin>` stubs (no command/url). Do not treat
+  // a generic vendor MCP "unauthorized" / needsAuth as a recoverable plugin slip.
+  return /invalid transport in mcp_servers/.test(t);
 }
 
 /**

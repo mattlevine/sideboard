@@ -5,6 +5,36 @@ export function normalizePrState(state: string | null | undefined): string {
   return (state ?? '').trim().toUpperCase();
 }
 
+/** Same GitHub pull, ignoring trailing slashes or host/path noise. */
+export function samePrIdentity(a?: string | null, b?: string | null): boolean {
+  const left = (a ?? '').trim().replace(/\/+$/, '');
+  const right = (b ?? '').trim().replace(/\/+$/, '');
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const ln = left.match(/\/pull\/(\d+)/i)?.[1];
+  const rn = right.match(/\/pull\/(\d+)/i)?.[1];
+  return Boolean(ln && rn && ln === rn);
+}
+
+/**
+ * Persist GraphQL meta only for the PR this worktree is on right now.
+ * A fallback selector (stale persisted URL / create-from sourceRef) must not
+ * overwrite a newer `prUrl` on every sibling tab.
+ */
+export function shouldPersistFetchedPrMeta(opts: {
+  metaUrl?: string | null;
+  livePrUrl?: string | null;
+  headPrUrl?: string | null;
+}): boolean {
+  const meta = opts.metaUrl?.trim() || '';
+  if (!meta) return false;
+  const head = opts.headPrUrl?.trim() || '';
+  if (head) return samePrIdentity(meta, head);
+  const live = opts.livePrUrl?.trim() || '';
+  if (live) return samePrIdentity(meta, live);
+  return true;
+}
+
 function sameLoginList(a?: string[] | null, b?: string[] | null): boolean {
   const left = [...(a ?? [])].map((s) => s.trim().toLowerCase()).filter(Boolean).sort();
   const right = [...(b ?? [])].map((s) => s.trim().toLowerCase()).filter(Boolean).sort();

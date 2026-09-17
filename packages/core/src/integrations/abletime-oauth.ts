@@ -94,6 +94,17 @@ export function ableTimeOAuthResource(host?: string | null): string {
   return `${normalizeAbleTimeHost(host)}/api/public/v2/mcp`;
 }
 
+/** Browser connect uses the Settings host field, then a leftover saved host. */
+export function resolveAbleTimeOAuthHost(
+  requested?: string | null,
+  saved?: string | null,
+): string | undefined {
+  const fromRequest = requested?.trim();
+  if (fromRequest) return fromRequest;
+  const fromSaved = saved?.trim();
+  return fromSaved || undefined;
+}
+
 export function createAbleTimePkce(): { verifier: string; challenge: string } {
   const verifier = randomBytes(32).toString('base64url');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -248,7 +259,10 @@ export async function startAbleTimeOAuth(opts?: {
       `AbleTime browser sign-in needs a Client ID Metadata Document URL. Host ${BAKED_ABLETIME_OAUTH_CLIENT_ID} (see site/oauth/abletime-client.json), or set SIDEBOARD_ABLETIME_OAUTH_CLIENT_ID.`,
     );
   }
-  const host = opts?.host?.trim() || undefined;
+  const host = resolveAbleTimeOAuthHost(
+    opts?.host,
+    loadAppSettings().integrations.abletimeHost,
+  );
   const state = randomBytes(16).toString('hex');
   const pkce = createAbleTimePkce();
   const authorizeUrl = ableTimeOAuthAuthorizeUrl(clientId, state, pkce.challenge, host);

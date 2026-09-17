@@ -167,12 +167,19 @@ jobs:
           }
           # electron-builder often times out on the dmg after the blockmap lands
           # (v0.1.206). Retry dmg + zip + latest-mac.yml via gh.
+          # upload_missing skips absent files — latest-mac.yml is required for
+          # auto-update. A zip-upload 500 can exit before builder writes it.
+          if [ ! -f release/latest-mac.yml ]; then
+            echo "electron-builder produced no latest-mac.yml (auto-update feed missing)" >&2
+            exit 1
+          fi
           upload_missing "$DMG"
           upload_missing "${DMG}.blockmap"
           upload_missing "$ZIP"
           upload_missing "${ZIP}.blockmap"
           upload_missing release/latest-mac.yml
           gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$(basename "$ZIP")"
+          gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "latest-mac.yml"
           if [ -n "$DMG" ]; then
             gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$(basename "$DMG")"
           fi

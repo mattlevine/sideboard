@@ -238,6 +238,79 @@ describe('callAbleTimeTool', () => {
     expect(connectUrls.some((url) => url.includes('/api/public/v2/mcp'))).toBe(true);
     expect(connectUrls.some((url) => url.includes('/api/public/v2/projects'))).toBe(false);
   });
+
+  it('sends parent and project on REST create/update', async () => {
+    const parentId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+    const taskId = '01ARZ3NDEKTSV4RRFFQ69G5FBW';
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const href = String(url);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      let payload: unknown = { data: [], page: {} };
+      if (href.includes('/projects')) {
+        payload = {
+          data: [
+            { projectId: 'p1', projectName: 'Acme', categories: [] },
+            { projectId: 'p2', projectName: 'Ops', categories: [] },
+          ],
+          page: {},
+        };
+      } else if (href.includes('/users')) {
+        payload = { data: [{ userId: 'u1', username: 'matt' }], page: {} };
+      } else if (method === 'POST' && /\/tasks\/?(\?|$)/.test(href)) {
+        payload = {
+          timeflowTaskId: taskId,
+          taskRef: 'CRM-241',
+          title: 'Follow-up',
+          projectId: 'p1',
+          parentTaskId: parentId,
+        };
+      } else if (href.includes('/tasks/')) {
+        payload = {
+          timeflowTaskId: taskId,
+          taskRef: 'CRM-241',
+          title: 'Follow-up',
+          projectId: 'p2',
+          parentTaskId: parentId,
+        };
+      }
+      return {
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => JSON.stringify(payload),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await callAbleTimeTool(
+      'create_task',
+      { title: 'Follow-up', project: 'Acme', parent: parentId },
+      { token: 'atk_orgkey', host: 'https://track.abletime.com' },
+    );
+    const createCall = fetchMock.mock.calls.find((call) => {
+      const href = String(call[0]);
+      const method = (call[1] as RequestInit | undefined)?.method;
+      return method === 'POST' && href.includes('/tasks') && !href.includes('/comments');
+    });
+    expect(JSON.parse(String((createCall?.[1] as RequestInit).body))).toMatchObject({
+      projectId: 'p1',
+      title: 'Follow-up',
+      parentTaskId: parentId,
+    });
+
+    fetchMock.mockClear();
+    await callAbleTimeTool(
+      'update_task',
+      { id: taskId, project: 'Ops', parent: parentId },
+      { token: 'atk_orgkey', host: 'https://track.abletime.com' },
+    );
+    const updateCall = fetchMock.mock.calls.find(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'PATCH',
+    );
+    expect(JSON.parse(String((updateCall?.[1] as RequestInit).body))).toMatchObject({
+      projectId: 'p2',
+      parentTaskId: parentId,
+    });
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('ensureAbleTimeTask', () => {
@@ -438,8 +511,11 @@ describe('AbleTime settings connection', () => {
       (pub.integrations as { abletimeAccessToken?: string }).abletimeAccessToken,
     ).toBeUndefined();
 
+    settings.updateIntegrationsSettings({ abletimeHost: 'https://crm.example.com' });
+    expect(settings.loadAppSettings().integrations.abletimeHost).toBe('https://crm.example.com');
     settings.disconnectAbleTimeConnection();
     expect(settings.isAbleTimeConnected()).toBe(false);
+    expect(settings.loadAppSettings().integrations.abletimeHost).toBeUndefined();
     expect(settings.resolveEffectiveIssueSource()).toBe('github');
   });
 });

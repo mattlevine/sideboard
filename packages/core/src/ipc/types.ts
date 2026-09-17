@@ -221,7 +221,7 @@ export interface IpcApi {
     host?: string | null;
   }): Promise<PublicAppSettings>;
   /** Browser OAuth — opens AbleTime, waits for localhost callback. */
-  startAbleTimeOAuth(): Promise<PublicAppSettings>;
+  startAbleTimeOAuth(host?: string | null): Promise<PublicAppSettings>;
   /** Abort an in-progress AbleTime browser sign-in. */
   cancelAbleTimeOAuth(): Promise<void>;
   /** Clear the stored AbleTime token. */

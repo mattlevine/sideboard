@@ -255,7 +255,7 @@ export function IssuesSettings({
                   setAbletimeOauthBusy(true);
                   setError(null);
                   void window.sideboard
-                    .startAbleTimeOAuth()
+                    .startAbleTimeOAuth(abletimeHostDraft.trim() || null)
                     .then((next) => applySettings(next))
                     .catch((err) => {
                       if (isOauthCancelled(err)) return;
