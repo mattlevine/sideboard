@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.205] - 2026-09-17
+
+### Fixed
+
+- Republish desktop after GitHub 500 `Error saving asset` on the v0.1.204 Mac zip. Same app as 0.1.204; new asset names so the upload is not stuck on that zip.
+
 ## [0.1.204] - 2026-09-17
 
 ### Fixed
