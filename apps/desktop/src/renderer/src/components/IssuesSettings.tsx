@@ -25,6 +25,7 @@ export function IssuesSettings({
   const [showAbletimeToken, setShowAbletimeToken] = useState(false);
   const [abletimeHostDraft, setAbletimeHostDraft] = useState('');
   const [abletimeBusy, setAbletimeBusy] = useState(false);
+  const [abletimeOauthBusy, setAbletimeOauthBusy] = useState(false);
   const [linearOauthBusy, setLinearOauthBusy] = useState(false);
 
   useEffect(() => {
@@ -196,11 +197,10 @@ export function IssuesSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">AbleTime</div>
         <p className="settings-hint">
-          List tasks and auto-create one when you start work without a ticket. Paste an
-          organization API key (<code>atk_…</code>) from Settings → Integrations → API Keys, or a
-          personal access token (<code>apt_…</code>) from Edit Profile → API Access. MCP accepts
-          only <code>apt_…</code>; Sideboard uses AbleTime&apos;s public REST API for{' '}
-          <code>atk_…</code>.
+          List tasks and auto-create one when you start work without a ticket. Sign in with your
+          browser — AbleTime MCP OAuth (same pattern as Linear). An admin must enable{' '}
+          <strong>Agent access (MCP)</strong>. You can still paste an <code>apt_…</code> token or{' '}
+          <code>atk_…</code> organization API key.
         </p>
         {settings.integrations.hasAbleTimeToken ? (
           <div className="settings-toggle-row" style={{ marginTop: 10 }}>
@@ -210,19 +210,26 @@ export function IssuesSettings({
                   className="settings-dot ok"
                   style={{ display: 'inline-block', marginRight: 8 }}
                 />
-                {[
-                  'Connected',
-                  settings.integrations.abletimeViewerName,
-                  settings.integrations.abletimeHost,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {settings.integrations.hasAbleTimeOAuth
+                  ? [
+                      'Connected',
+                      settings.integrations.abletimeViewerName,
+                      settings.integrations.abletimeHost,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : [
+                      'Connected · key saved on this Mac',
+                      settings.integrations.abletimeViewerName,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
               </p>
             </div>
             <div className="row" style={{ gap: 8, margin: 0 }}>
               <button
                 type="button"
-                disabled={busy || abletimeBusy}
+                disabled={busy || abletimeBusy || abletimeOauthBusy}
                 onClick={() => {
                   setBusy(true);
                   setError(null);
@@ -240,25 +247,46 @@ export function IssuesSettings({
         ) : (
           <div style={{ marginTop: 10 }}>
             <div className="row" style={{ gap: 8 }}>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy || abletimeBusy || abletimeOauthBusy}
+                onClick={() => {
+                  setAbletimeOauthBusy(true);
+                  setError(null);
+                  void window.sideboard
+                    .startAbleTimeOAuth()
+                    .then((next) => applySettings(next))
+                    .catch((err) => {
+                      if (isOauthCancelled(err)) return;
+                      setError(err instanceof Error ? err.message : String(err));
+                    })
+                    .finally(() => setAbletimeOauthBusy(false));
+                }}
+              >
+                {abletimeOauthBusy ? 'Waiting for AbleTime…' : 'Connect via browser'}
+              </button>
+              {abletimeOauthBusy ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void window.sideboard.cancelAbleTimeOAuth();
+                  }}
+                >
+                  Cancel
+                </button>
+              ) : null}
               <input
                 type={showAbletimeToken ? 'text' : 'password'}
                 value={abletimeTokenDraft}
                 onChange={(e) => setAbletimeTokenDraft(e.target.value)}
-                placeholder="atk_… or apt_…"
+                placeholder="or paste apt_… / atk_…"
                 style={{ flex: 1 }}
                 autoComplete="off"
               />
               <button
                 type="button"
-                className="settings-inline-btn"
-                onClick={() => setShowAbletimeToken((v) => !v)}
-              >
-                {showAbletimeToken ? 'Hide' : 'Show'}
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={busy || abletimeBusy || !abletimeTokenDraft.trim()}
+                disabled={busy || abletimeBusy || abletimeOauthBusy || !abletimeTokenDraft.trim()}
                 onClick={() => {
                   setAbletimeBusy(true);
                   setError(null);

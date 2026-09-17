@@ -214,10 +214,14 @@ export interface IntegrationsSettings {
   /** Fine-grained or classic PAT when mode is `token` (vaulted). */
   githubPat?: string;
   /**
-   * AbleTime organization API key (`atk_…`, REST) or personal access token
-   * (`apt_…`, hosted MCP). Vaulted.
+   * AbleTime organization API key (`atk_…`, REST), personal access token
+   * (`apt_…`, hosted MCP), or OAuth access token. Vaulted.
    */
   abletimeAccessToken?: string;
+  /** AbleTime OAuth refresh token (rotated on each refresh). */
+  abletimeRefreshToken?: string;
+  /** Epoch ms when {@link IntegrationsSettings.abletimeAccessToken} expires. */
+  abletimeTokenExpiresAt?: number;
   /** AbleTime host (default https://track.abletime.com). */
   abletimeHost?: string;
   /** Display name of the connected AbleTime user (non-secret). */
@@ -389,6 +393,7 @@ export type PublicIntegrationsSettings = Omit<
   | 'slackAppToken'
   | 'githubPat'
   | 'abletimeAccessToken'
+  | 'abletimeRefreshToken'
   | 'vercelToken'
   | 'supabaseAccessToken'
   | 'posthogPersonalApiKey'
@@ -401,8 +406,9 @@ export type PublicIntegrationsSettings = Omit<
   hasSlackAppToken: boolean;
   /** True when a GitHub PAT is stored (token mode). */
   hasGithubPat: boolean;
-  /** True when an AbleTime personal access token is stored. */
+  /** True when an AbleTime token is stored (OAuth, PAT, or org key). */
   hasAbleTimeToken: boolean;
+  hasAbleTimeOAuth: boolean;
   hasVercelToken: boolean;
   hasSupabaseToken: boolean;
   hasPosthogToken: boolean;
@@ -418,6 +424,7 @@ export function emptyPublicIntegrations(): PublicIntegrationsSettings {
     hasSlackAppToken: false,
     hasGithubPat: false,
     hasAbleTimeToken: false,
+    hasAbleTimeOAuth: false,
     hasVercelToken: false,
     hasSupabaseToken: false,
     hasPosthogToken: false,
@@ -450,6 +457,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   const slackAppToken = integrations.slackAppToken;
   const githubPat = integrations.githubPat;
   const abletimeAccessToken = integrations.abletimeAccessToken;
+  const abletimeRefreshToken = integrations.abletimeRefreshToken;
   const vercelToken = integrations.vercelToken;
   const supabaseAccessToken = integrations.supabaseAccessToken;
   const posthogPersonalApiKey = integrations.posthogPersonalApiKey;
@@ -462,6 +470,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   delete integrations.slackAppToken;
   delete integrations.githubPat;
   delete integrations.abletimeAccessToken;
+  delete integrations.abletimeRefreshToken;
   delete integrations.vercelToken;
   delete integrations.supabaseAccessToken;
   delete integrations.posthogPersonalApiKey;
@@ -476,7 +485,8 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
       hasSlackClientSecret: Boolean(slackClientSecret?.trim()),
       hasSlackAppToken: Boolean(slackAppToken?.trim()),
       hasGithubPat: Boolean(githubPat?.trim()),
-      hasAbleTimeToken: Boolean(abletimeAccessToken?.trim()),
+      hasAbleTimeToken: Boolean(abletimeAccessToken?.trim() || abletimeRefreshToken?.trim()),
+      hasAbleTimeOAuth: Boolean(abletimeRefreshToken?.trim()),
       hasVercelToken: Boolean(vercelToken?.trim()),
       hasSupabaseToken: Boolean(supabaseAccessToken?.trim()),
       hasPosthogToken: Boolean(posthogPersonalApiKey?.trim()),
@@ -640,6 +650,16 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (typeof source.abletimeAccessToken === 'string') {
     const token = source.abletimeAccessToken.trim();
     if (token) out.abletimeAccessToken = token;
+  }
+  if (typeof source.abletimeRefreshToken === 'string') {
+    const token = source.abletimeRefreshToken.trim();
+    if (token) out.abletimeRefreshToken = token;
+  }
+  if (typeof source.abletimeTokenExpiresAt === 'number' && Number.isFinite(source.abletimeTokenExpiresAt)) {
+    out.abletimeTokenExpiresAt = source.abletimeTokenExpiresAt;
+  } else if (typeof source.abletimeTokenExpiresAt === 'string') {
+    const n = Number(source.abletimeTokenExpiresAt);
+    if (Number.isFinite(n)) out.abletimeTokenExpiresAt = n;
   }
   if (typeof source.abletimeHost === 'string') {
     const host = source.abletimeHost.trim();
@@ -974,6 +994,7 @@ function diskHoldsSecrets(disk: AppSettings): boolean {
       disk.integrations.slackAppToken ||
       disk.integrations.githubPat ||
       disk.integrations.abletimeAccessToken ||
+      disk.integrations.abletimeRefreshToken ||
       disk.integrations.vercelToken ||
       disk.integrations.supabaseAccessToken ||
       disk.integrations.posthogPersonalApiKey ||
@@ -1010,6 +1031,9 @@ function mergeVault(disk: AppSettings): AppSettings {
   if (vault.abletimeAccessToken && !integrations.abletimeAccessToken) {
     integrations.abletimeAccessToken = vault.abletimeAccessToken;
   }
+  if (vault.abletimeRefreshToken && !integrations.abletimeRefreshToken) {
+    integrations.abletimeRefreshToken = vault.abletimeRefreshToken;
+  }
   if (vault.vercelToken && !integrations.vercelToken) {
     integrations.vercelToken = vault.vercelToken;
   }
@@ -1035,6 +1059,7 @@ function persistSplit(settings: AppSettings): void {
   const slackAppToken = integrations.slackAppToken;
   const githubPat = integrations.githubPat;
   const abletimeAccessToken = integrations.abletimeAccessToken;
+  const abletimeRefreshToken = integrations.abletimeRefreshToken;
   const vercelToken = integrations.vercelToken;
   const supabaseAccessToken = integrations.supabaseAccessToken;
   const posthogPersonalApiKey = integrations.posthogPersonalApiKey;
@@ -1047,6 +1072,7 @@ function persistSplit(settings: AppSettings): void {
   delete integrations.slackAppToken;
   delete integrations.githubPat;
   delete integrations.abletimeAccessToken;
+  delete integrations.abletimeRefreshToken;
   delete integrations.vercelToken;
   delete integrations.supabaseAccessToken;
   delete integrations.posthogPersonalApiKey;
@@ -1064,6 +1090,7 @@ function persistSplit(settings: AppSettings): void {
     slackAppToken,
     githubPat,
     abletimeAccessToken,
+    abletimeRefreshToken,
     vercelToken,
     supabaseAccessToken,
     posthogPersonalApiKey,
@@ -1304,6 +1331,8 @@ export function updateIntegrationsSettings(
   if ('abletimeAccessToken' in patch) {
     if (patch.abletimeAccessToken == null || patch.abletimeAccessToken.trim() === '') {
       delete integrations.abletimeAccessToken;
+      delete integrations.abletimeRefreshToken;
+      delete integrations.abletimeTokenExpiresAt;
       delete integrations.abletimeViewerName;
     } else {
       integrations.abletimeAccessToken = patch.abletimeAccessToken.trim();
@@ -1834,11 +1863,14 @@ export function disconnectLinearConnection(): AppSettings {
   return saveAppSettings({ ...current, integrations });
 }
 
-/** True when Sideboard has an AbleTime personal access token stored. */
+/** True when Sideboard has an AbleTime OAuth token, PAT, or org key stored. */
 export function isAbleTimeConnected(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
-  return Boolean(settings.integrations.abletimeAccessToken?.trim());
+  return Boolean(
+    settings.integrations.abletimeAccessToken?.trim() ||
+      settings.integrations.abletimeRefreshToken?.trim(),
+  );
 }
 
 export function getAbleTimeAccessToken(
@@ -1854,15 +1886,23 @@ export function getAbleTimeHost(
   return settings.integrations.abletimeHost?.trim() || 'https://track.abletime.com';
 }
 
-/** Persist AbleTime PAT after a successful MCP orientation. */
+/** Persist AbleTime PAT / org key / OAuth tokens after a successful connect. */
 export function saveAbleTimeConnection(input: {
   accessToken: string;
+  refreshToken?: string | null;
+  expiresIn?: number;
   host?: string | null;
   viewerName?: string | null;
 }): AppSettings {
   const current = loadAppSettings();
   const integrations: IntegrationsSettings = { ...current.integrations };
   integrations.abletimeAccessToken = input.accessToken.trim();
+  if (input.refreshToken?.trim()) {
+    integrations.abletimeRefreshToken = input.refreshToken.trim();
+  }
+  if (typeof input.expiresIn === 'number' && Number.isFinite(input.expiresIn)) {
+    integrations.abletimeTokenExpiresAt = Date.now() + Math.max(0, input.expiresIn) * 1000;
+  }
   if (input.host?.trim()) {
     integrations.abletimeHost = input.host.trim();
   }
@@ -1877,6 +1917,8 @@ export function disconnectAbleTimeConnection(): AppSettings {
   const current = loadAppSettings();
   const integrations: IntegrationsSettings = { ...current.integrations };
   delete integrations.abletimeAccessToken;
+  delete integrations.abletimeRefreshToken;
+  delete integrations.abletimeTokenExpiresAt;
   delete integrations.abletimeViewerName;
   return saveAppSettings({ ...current, integrations });
 }

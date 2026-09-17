@@ -1,9 +1,5 @@
 import { httpFetch } from '../http/fetch.js';
-import {
-  getAbleTimeAccessToken,
-  getAbleTimeHost,
-  isAbleTimeConnected,
-} from '../store/app-settings.js';
+import { getAbleTimeHost, isAbleTimeConnected } from '../store/app-settings.js';
 
 export const DEFAULT_ABLETIME_HOST = 'https://track.abletime.com';
 export const ABLETIME_MCP_PATH = '/api/public/v2/mcp';
@@ -217,7 +213,8 @@ export async function abletimeMcpRequest(
   params?: unknown,
   opts?: { token?: string | null; host?: string | null; pm?: boolean },
 ): Promise<unknown> {
-  const rawToken = opts?.token ?? getAbleTimeAccessToken();
+  const rawToken =
+    opts?.token ?? (await import('./abletime-oauth.js').then((m) => m.ensureAbleTimeAccessToken()));
   if (!rawToken?.trim()) {
     throw new Error('AbleTime is not connected — paste a personal access token in Account settings');
   }
@@ -307,7 +304,8 @@ export async function callAbleTimeTool<T = unknown>(
     throw new Error('AbleTime is not connected — paste a personal access token in Account settings');
   }
 
-  const rawToken = opts?.token ?? getAbleTimeAccessToken();
+  const rawToken =
+    opts?.token ?? (await import('./abletime-oauth.js').then((m) => m.ensureAbleTimeAccessToken()));
   if (rawToken && ableTimeCredentialKind(rawToken) === 'org') {
     const { callAbleTimeRestTool } = await import('./abletime-rest.js');
     return callAbleTimeRestTool<T>(name, args, { ...opts, token: rawToken });

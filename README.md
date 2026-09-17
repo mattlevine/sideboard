@@ -346,7 +346,9 @@ Desktop Connect uses Chromium networking so corporate VPNs/proxies that break No
 
 ## AbleTime
 
-**Settings → Issues → AbleTime.** Paste an organization API key (`atk_…` from Settings → Integrations → API Keys) or a personal access token (`apt_…` from Edit Profile → API Access). AbleTime’s hosted MCP (`POST /api/public/v2/mcp`) accepts PATs only; Sideboard uses the public REST API (`/api/public/v2/…`) for organization keys. An admin still needs **Agent access (MCP)** if you connect with `apt_…`.
+**Settings → Issues → AbleTime → Connect via browser.** Sideboard uses AbleTime’s MCP OAuth (PKCE + Client ID Metadata Document at `https://www.sideboard.cloud/oauth/abletime-client.json`). An admin must enable **Agent access (MCP)**. You can still paste a personal access token (`apt_…`) or an organization API key (`atk_…`). MCP accepts OAuth/PAT; org keys use the public REST API.
+
+Callback: `http://127.0.0.1:19849/callback`. Override the client metadata URL with `SIDEBOARD_ABLETIME_OAUTH_CLIENT_ID` (the document’s `client_id` must match that URL exactly).
 
 Set **Issue source** to AbleTime. Create-from / Home list AbleTime tasks. Starting a thread from the default branch (no ticket) auto-creates an AbleTime task and attaches it. Orchestration tools: `abletime_orientation`, `abletime_ensure_task`, `abletime_create_task`, and the list/search/get variants.
 

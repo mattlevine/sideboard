@@ -91,6 +91,8 @@ import {
   isSlackOAuthCancelled,
   startLinearOAuth,
   isLinearOAuthCancelled,
+  startAbleTimeOAuth,
+  isAbleTimeOAuthCancelled,
   disconnectLinear,
   disconnectAbleTimeConnection,
   verifyAbleTimeConnection,
@@ -1066,6 +1068,29 @@ function registerIpc(): void {
       return toPublicAppSettings(loadAppSettings());
     },
   );
+  let abletimeOauthAbort: AbortController | null = null;
+  ipcMain.handle('startAbleTimeOAuth', async () => {
+    abletimeOauthAbort?.abort();
+    const ac = new AbortController();
+    abletimeOauthAbort = ac;
+    try {
+      const saved = await startAbleTimeOAuth({
+        openUrl: (url) => shell.openExternal(url),
+        signal: ac.signal,
+      });
+      return toPublicAppSettings(saved);
+    } catch (err) {
+      if (isAbleTimeOAuthCancelled(err)) {
+        throw new Error('AbleTime sign-in cancelled');
+      }
+      throw err;
+    } finally {
+      if (abletimeOauthAbort === ac) abletimeOauthAbort = null;
+    }
+  });
+  ipcMain.handle('cancelAbleTimeOAuth', () => {
+    abletimeOauthAbort?.abort();
+  });
   ipcMain.handle('disconnectAbleTime', () =>
     toPublicAppSettings(disconnectAbleTimeConnection()),
   );

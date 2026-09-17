@@ -11,6 +11,7 @@ export interface SettingsSecretVault {
   slackAppToken?: string;
   githubPat?: string;
   abletimeAccessToken?: string;
+  abletimeRefreshToken?: string;
   vercelToken?: string;
   supabaseAccessToken?: string;
   posthogPersonalApiKey?: string;
@@ -57,6 +58,9 @@ function normalizeVault(raw: SettingsSecretVault): SettingsSecretVault {
   }
   if (typeof raw.abletimeAccessToken === 'string' && raw.abletimeAccessToken.trim()) {
     out.abletimeAccessToken = raw.abletimeAccessToken.trim();
+  }
+  if (typeof raw.abletimeRefreshToken === 'string' && raw.abletimeRefreshToken.trim()) {
+    out.abletimeRefreshToken = raw.abletimeRefreshToken.trim();
   }
   if (typeof raw.vercelToken === 'string' && raw.vercelToken.trim()) {
     out.vercelToken = raw.vercelToken.trim();

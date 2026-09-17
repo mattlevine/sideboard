@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- AbleTime Connect accepts organization API keys (`atk_…`) over the public REST API. Hosted MCP still accepts only personal access tokens (`apt_…`); `INTEGRATION_KEY_INVALID` on MCP is expected for `atk_…`.
+- AbleTime Connect via browser uses MCP OAuth (PKCE + Client ID Metadata Document). Organization API keys (`atk_…`) still use the public REST API; pasted `apt_…` tokens still use MCP.
 
 ## [0.1.202] - 2026-09-16
 
