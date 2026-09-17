@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.204] - 2026-09-17
+
 ### Fixed
 
 - When the worktree’s connected PR changes, the right-sidebar pill and left-sidebar hover card follow that PR’s number and status instead of keeping the previous one.
