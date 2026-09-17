@@ -437,6 +437,9 @@ export function humanizeAgentFailDetail(detail: string): string {
   if (/\[resource_exhausted\]|resource_exhausted|findfileswithripgrep/.test(lower)) {
     return 'Cursor local file search failed (ripgrep / resource_exhausted). Wait a minute and retry; if it keeps happening, check Cursor usage.';
   }
+  if (looksLikeCodexMcpError(raw)) {
+    return `${raw} — skip that vendor MCP and continue (PostHog: Settings → Connectors + HTTP API).`;
+  }
   if (
     /invalid user api key|invalid api key|not logged in|not authenticated|unauthorized|authentication|please run.*login|codex login|claude auth|cursor api/.test(
       lower,
@@ -521,6 +524,30 @@ export function turnFailChatText(opts: {
 }
 
 /**
+ * Codex `codex exec` dies when a plugin/App HTTP MCP (PostHog, …) hits
+ * AuthRequired / rmcp transport failure. That is not a Codex login failure —
+ * the worktree should continue without that vendor MCP.
+ */
+export function looksLikeCodexMcpError(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (
+    /authrequired|authorization required/.test(t) &&
+    /mcp|posthog|rmcp|connector|plugin/.test(t)
+  ) {
+    return true;
+  }
+  if (/\bposthog\b/.test(t) && /mcp|oauth|auth|unauthorized|401|plugin|app/.test(t)) {
+    return true;
+  }
+  if (/\brmcp\b/.test(t) && /fatal|quit|transport|error|died|kill|auth/.test(t)) {
+    return true;
+  }
+  return /mcp[_ -]?(server|tool|error|transport|client)/.test(t) &&
+    /fail|error|timeout|disconnect|auth|unauthorized/.test(t);
+}
+
+/**
  * True when the host should start a follow-up turn that feeds the crash/error
  * back to the same agent (Cursor-style), instead of leaving the thread parked
  * on lastError for a human to retry.
@@ -532,6 +559,8 @@ export function shouldFeedErrorBackToAgent(opts: {
 }): boolean {
   const detail = opts.detail.trim();
   const chat = (opts.assistantText ?? '').trim();
+  // Before auth/quota: PostHog MCP AuthRequired looks "unauthorized" but is recoverable.
+  if (looksLikeCodexMcpError(detail)) return true;
   if (looksLikeAgentFailureMessage(detail) || looksLikeAgentFailureMessage(chat)) {
     return false;
   }

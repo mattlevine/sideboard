@@ -299,15 +299,17 @@ describe('getPrForHeadBranch', () => {
     });
   });
 
-  it('returns the PR from gh pr view', async () => {
+  it('returns the open PR from gh pr list --head', async () => {
     ghMock.mockResolvedValue({
-      stdout: JSON.stringify({
-        number: 111,
-        title: 'Draft work',
-        headRefName: 'feat/existing',
-        url: 'https://github.com/acme/widgets/pull/111',
-        isCrossRepository: false,
-      }),
+      stdout: JSON.stringify([
+        {
+          number: 111,
+          title: 'Draft work',
+          headRefName: 'feat/existing',
+          url: 'https://github.com/acme/widgets/pull/111',
+          isCrossRepository: false,
+        },
+      ]),
       stderr: '',
       exitCode: 0,
     });
@@ -315,34 +317,56 @@ describe('getPrForHeadBranch', () => {
       number: 111,
       url: 'https://github.com/acme/widgets/pull/111',
     });
+    const listArgs = ghMock.mock.calls[0]?.[0] as string[];
+    expect(listArgs).toContain('--head');
+    expect(listArgs).toContain('acme:feat/existing');
+    expect(listArgs).toContain('--state');
+    expect(listArgs).toContain('open');
   });
 
-  it('falls back to gh pr list --head owner:branch', async () => {
+  it('falls back to gh pr view when list is empty and that PR is open', async () => {
     ghMock
       .mockResolvedValueOnce({
-        stdout: '',
-        stderr: 'no pull requests found',
-        exitCode: 1,
+        stdout: '[]',
+        stderr: '',
+        exitCode: 0,
       })
       .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 111,
-            title: 'Draft work',
-            headRefName: 'feat/existing',
-            url: 'https://github.com/acme/widgets/pull/111',
-            isCrossRepository: false,
-          },
-        ]),
+        stdout: JSON.stringify({
+          number: 111,
+          title: 'Draft work',
+          headRefName: 'feat/existing',
+          url: 'https://github.com/acme/widgets/pull/111',
+          isCrossRepository: false,
+          state: 'OPEN',
+        }),
         stderr: '',
         exitCode: 0,
       });
     await expect(getPrForHeadBranch('/repo', 'feat/existing')).resolves.toMatchObject({
       number: 111,
     });
-    const listArgs = ghMock.mock.calls[1]?.[0] as string[];
-    expect(listArgs).toContain('--head');
-    expect(listArgs).toContain('acme:feat/existing');
+  });
+
+  it('ignores a merged view result so a newer open PR can attach', async () => {
+    ghMock
+      .mockResolvedValueOnce({
+        stdout: '[]',
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 9,
+          title: 'Old',
+          headRefName: 'feat/existing',
+          url: 'https://github.com/acme/widgets/pull/9',
+          state: 'MERGED',
+        }),
+        stderr: '',
+        exitCode: 0,
+      });
+    await expect(getPrForHeadBranch('/repo', 'feat/existing')).resolves.toBeNull();
   });
 
   it('skips default branch names', async () => {

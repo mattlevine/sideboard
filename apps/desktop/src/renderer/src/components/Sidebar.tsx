@@ -22,6 +22,11 @@ import {
   GLOBAL_WORKSPACE_ID,
   threadDisplayTitle,
 } from '../lib/global-workspace';
+import {
+  followThreadPrMeta,
+  sidebarPrHasKnownStatus,
+  type SidebarPrMeta,
+} from '../lib/follow-thread-pr';
 import { classifyMergeIssue, prPillModifier, prPillStatusLabel } from '../lib/pr-format';
 import {
   isWorktreeUnread,
@@ -95,34 +100,24 @@ function prNumberFromUrl(url: string | null | undefined): string | null {
   return m?.[1] ?? null;
 }
 
-type HoverPrMeta = {
-  number: number;
-  url: string;
-  state: string;
-  isDraft: boolean;
-  reviewDecision: string | null;
-  isInMergeQueue: boolean;
-  mergeable: string | null;
-  mergeStateStatus: string | null;
-  baseRefName: string;
-};
-
 function hoverPrFromIpc(meta: {
   number: number;
   url: string;
   state: string;
   isDraft: boolean;
+  title?: string;
   reviewDecision: string | null;
   isInMergeQueue?: boolean;
   mergeable?: string | null;
   mergeStateStatus?: string | null;
   baseRefName?: string;
-}): HoverPrMeta {
+}): SidebarPrMeta {
   return {
     number: meta.number,
     url: meta.url,
     state: meta.state,
     isDraft: meta.isDraft,
+    title: meta.title ?? '',
     reviewDecision: meta.reviewDecision,
     isInMergeQueue: Boolean(meta.isInMergeQueue),
     mergeable: meta.mergeable ?? null,
@@ -131,7 +126,7 @@ function hoverPrFromIpc(meta: {
   };
 }
 
-function hoverPillOpts(prMeta: HoverPrMeta | null) {
+function hoverPillOpts(prMeta: SidebarPrMeta | null) {
   const prState = (prMeta?.state ?? '').toUpperCase();
   const prMerged = prState === 'MERGED';
   const prClosed = prState === 'CLOSED';
@@ -221,11 +216,11 @@ function WorktreeEditCard({
   const showCost = useShowCost();
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
-  const [prMeta, setPrMeta] = useState<HoverPrMeta | null>(null);
+  const [prMeta, setPrMeta] = useState<SidebarPrMeta | null>(null);
   const slug = worktreeSlug(thread);
   const prUrl = prMeta?.url ?? thread.prUrl ?? null;
   const prNum =
-    prMeta?.number != null
+    prMeta?.number != null && prMeta.number > 0
       ? String(prMeta.number)
       : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
@@ -264,6 +259,10 @@ function WorktreeEditCard({
     };
   }, [open, anchorRef, thread.id]);
 
+  useEffect(() => {
+    setPrMeta((prev) => followThreadPrMeta(prev, thread));
+  }, [thread.prUrl, thread.prState, thread.prIsDraft]);
+
   // Fetch live PR lifecycle (draft / open / merged / review) when the card opens.
   useEffect(() => {
     if (!open) return;
@@ -284,7 +283,7 @@ function WorktreeEditCard({
     return () => {
       cancelled = true;
     };
-  }, [open, thread.id, thread.prUrl]);
+  }, [open, thread.id, thread.prUrl, thread.branchName, thread.prState, thread.prIsDraft]);
 
   async function createPr() {
     if (prBusy) return;
@@ -311,9 +310,13 @@ function WorktreeEditCard({
       : 'clean';
 
   const pillOpts = hoverPillOpts(prMeta);
-  // Only show a status pill once GitHub PR meta is loaded — never invent "Open".
-  const prStatusLabel = prMeta ? prPillStatusLabel(pillOpts) : null;
-  const prStatusMod = prMeta ? prPillModifier(pillOpts) : '';
+  // Don't invent "Needs approval" from a URL-only stub — follow draft/merged/closed.
+  const prStatusLabel = sidebarPrHasKnownStatus(prMeta)
+    ? prPillStatusLabel(pillOpts)
+    : null;
+  const prStatusMod = sidebarPrHasKnownStatus(prMeta)
+    ? prPillModifier(pillOpts)
+    : '';
 
   return createPortal(
     <div
@@ -373,7 +376,7 @@ function WorktreeEditCard({
         <p className="worktree-hover-card-preview">{preview}</p>
       ) : null}
       <div className="worktree-hover-card-footer">
-        {prMeta && prNum ? (
+        {prNum ? (
           <button
             type="button"
             className={`worktree-hover-card-btn${prStatusMod ? ` ${prStatusMod}` : ''}`}

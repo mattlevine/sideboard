@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
+  threadPrMetaPatch,
 } from './pr-merge-archive.js';
 
 describe('normalizePrState', () => {
@@ -47,5 +48,53 @@ describe('shouldAutoArchiveOnPrMerge', () => {
       shouldAutoArchiveOnPrMerge({ ...base, threadStatus: 'archived' }),
     ).toBe(false);
     expect(shouldAutoArchiveOnPrMerge({ ...base, isGlobal: true })).toBe(false);
+  });
+});
+
+describe('threadPrMetaPatch', () => {
+  const base = {
+    prUrl: 'https://github.com/acme/app/pull/9',
+    prTitle: 'Old',
+    prState: 'OPEN',
+    prIsDraft: true,
+    prAuthorLogin: 'sam',
+    prReviewerLogins: ['matt'],
+    skipAutoArchiveOnMerge: false,
+  };
+
+  it('follows a newly connected PR URL and lifecycle', () => {
+    expect(
+      threadPrMetaPatch(base, {
+        url: 'https://github.com/acme/app/pull/22',
+        title: 'New work',
+        state: 'OPEN',
+        isDraft: false,
+        authorLogin: 'sam',
+        reviewerLogins: ['matt'],
+      }),
+    ).toEqual({
+      prUrl: 'https://github.com/acme/app/pull/22',
+      prTitle: 'New work',
+      prIsDraft: false,
+    });
+  });
+
+  it('clears the restore skip flag when the PR is open again', () => {
+    expect(
+      threadPrMetaPatch(
+        { ...base, skipAutoArchiveOnMerge: true, prState: 'MERGED' },
+        {
+          url: base.prUrl,
+          title: base.prTitle,
+          state: 'OPEN',
+          isDraft: true,
+          authorLogin: 'sam',
+          reviewerLogins: ['matt'],
+        },
+      ),
+    ).toMatchObject({
+      prState: 'OPEN',
+      skipAutoArchiveOnMerge: false,
+    });
   });
 });

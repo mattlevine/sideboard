@@ -20,6 +20,7 @@ import { PrChecksPanel } from './PrChecksPanel';
 import { StackMap } from './StackMap';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
 import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
+import { followThreadPrMeta } from '../lib/follow-thread-pr';
 import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks, hasBranchBehindChecks, classifyMergeIssue, checksFromRuns, checksTabShortLabel } from '../lib/pr-format';
 import {
   primaryGitAction,
@@ -669,6 +670,10 @@ export function RightSidebar({
   }, [thread.id, worktreeKey]);
 
   useEffect(() => {
+    setPrMeta((prev) => followThreadPrMeta(prev, thread));
+  }, [thread.prUrl, thread.prState, thread.prIsDraft]);
+
+  useEffect(() => {
     void loadPrMeta();
     // Intentionally omit thread.updatedAt — agent turns must not re-hit GraphQL.
   }, [loadPrMeta, thread.prUrl, thread.branchName, thread.sourceRef, thread.sourceType]);
@@ -727,9 +732,15 @@ export function RightSidebar({
     isCurrentWorktree,
   ]);
 
+  const connectedPrKey = `${thread.prUrl ?? ''}\0${thread.branchName}`;
+  const lastConnectedPrKey = useRef(connectedPrKey);
   useEffect(() => {
+    if (lastConnectedPrKey.current !== connectedPrKey) {
+      lastConnectedPrKey.current = connectedPrKey;
+      setPrChecks(null);
+    }
     void loadPrChecks();
-  }, [thread.id, thread.prUrl, thread.branchName, loadPrChecks]);
+  }, [thread.id, connectedPrKey, loadPrChecks]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

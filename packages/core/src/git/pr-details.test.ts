@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parsePrDetailsView, resolvePrSelector, resolvePrSelectors } from './worktree.js';
+import {
+  connectedPrSelectors,
+  parsePrDetailsView,
+  resolvePrSelector,
+  resolvePrSelectors,
+} from './worktree.js';
 
 describe('resolvePrSelector', () => {
   it('prefers prUrl', () => {
@@ -57,6 +62,41 @@ describe('resolvePrSelectors', () => {
         branchName: 'thread/paris',
       }),
     ).toEqual(['thread/paris']);
+  });
+});
+
+describe('connectedPrSelectors', () => {
+  it('puts the current-branch open PR ahead of a stale persisted URL', () => {
+    expect(
+      connectedPrSelectors(
+        {
+          prUrl: 'https://github.com/a/b/pull/9',
+          sourceType: 'pr',
+          sourceRef: '9',
+          branchName: 'feat/new',
+        },
+        'https://github.com/a/b/pull/22',
+      ),
+    ).toEqual([
+      'https://github.com/a/b/pull/22',
+      'https://github.com/a/b/pull/9',
+      '9',
+      'feat/new',
+    ]);
+  });
+
+  it('falls back to persisted selectors when the current branch has no PR', () => {
+    expect(
+      connectedPrSelectors(
+        {
+          prUrl: 'https://github.com/a/b/pull/9',
+          sourceType: 'pr',
+          sourceRef: '9',
+          branchName: 'thread/ajax',
+        },
+        null,
+      ),
+    ).toEqual(['https://github.com/a/b/pull/9', '9', 'thread/ajax']);
   });
 });
 
