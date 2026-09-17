@@ -103,7 +103,7 @@ export function ableTimeCredentialKind(
   return 'unknown';
 }
 
-/** MCP accepts personal access tokens only (AbleTime docs). */
+/** MCP accepts personal access tokens only. Organization keys use REST. */
 export function assertAbleTimeMcpCredential(raw: string): string {
   const token = normalizeAbleTimeCredential(raw);
   if (!token) {
@@ -111,6 +111,14 @@ export function assertAbleTimeMcpCredential(raw: string): string {
   }
   if (ableTimeCredentialKind(token) === 'org') {
     throw new Error(ORG_KEY_HINT);
+  }
+  return token;
+}
+
+export function assertAbleTimeCredential(raw: string): string {
+  const token = normalizeAbleTimeCredential(raw);
+  if (!token) {
+    throw new Error('AbleTime API key or personal access token is required');
   }
   return token;
 }
@@ -297,6 +305,12 @@ export async function callAbleTimeTool<T = unknown>(
 ): Promise<T> {
   if (!opts?.token && !isAbleTimeConnected()) {
     throw new Error('AbleTime is not connected — paste a personal access token in Account settings');
+  }
+
+  const rawToken = opts?.token ?? getAbleTimeAccessToken();
+  if (rawToken && ableTimeCredentialKind(rawToken) === 'org') {
+    const { callAbleTimeRestTool } = await import('./abletime-rest.js');
+    return callAbleTimeRestTool<T>(name, args, { ...opts, token: rawToken });
   }
 
   const requestOpts = { ...opts, pm: opts?.pm ?? abletimeToolUsesPm(name) };

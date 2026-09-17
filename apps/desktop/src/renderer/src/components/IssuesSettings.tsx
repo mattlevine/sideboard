@@ -196,12 +196,11 @@ export function IssuesSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">AbleTime</div>
         <p className="settings-hint">
-          List tasks and auto-create one when you start work without a ticket. Uses
-          AbleTime&apos;s hosted MCP (<code>POST /api/public/v2/mcp</code>
-          ). An admin enables <strong>Agent access (MCP)</strong> under Settings → Integrations →
-          API Keys, then you paste a personal access token from <strong>Edit Profile → API
-          Access</strong> (<code>apt_…</code>). Organization API keys (<code>atk_…</code>) from
-          that same Integrations page cannot connect.
+          List tasks and auto-create one when you start work without a ticket. Paste an
+          organization API key (<code>atk_…</code>) from Settings → Integrations → API Keys, or a
+          personal access token (<code>apt_…</code>) from Edit Profile → API Access. MCP accepts
+          only <code>apt_…</code>; Sideboard uses AbleTime&apos;s public REST API for{' '}
+          <code>atk_…</code>.
         </p>
         {settings.integrations.hasAbleTimeToken ? (
           <div className="settings-toggle-row" style={{ marginTop: 10 }}>
@@ -245,7 +244,7 @@ export function IssuesSettings({
                 type={showAbletimeToken ? 'text' : 'password'}
                 value={abletimeTokenDraft}
                 onChange={(e) => setAbletimeTokenDraft(e.target.value)}
-                placeholder="apt_…"
+                placeholder="atk_… or apt_…"
                 style={{ flex: 1 }}
                 autoComplete="off"
               />

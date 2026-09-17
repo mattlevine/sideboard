@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- AbleTime Connect rejects organization API keys (`atk_…`) and explains `INTEGRATION_KEY_INVALID` as an unknown/revoked personal access token (`apt_…` from Edit Profile → API Access).
+- AbleTime Connect accepts organization API keys (`atk_…`) over the public REST API. Hosted MCP still accepts only personal access tokens (`apt_…`); `INTEGRATION_KEY_INVALID` on MCP is expected for `atk_…`.
 
 ## [0.1.202] - 2026-09-16
 

@@ -214,8 +214,8 @@ export interface IntegrationsSettings {
   /** Fine-grained or classic PAT when mode is `token` (vaulted). */
   githubPat?: string;
   /**
-   * AbleTime personal access token (`apt_…`) for hosted MCP
-   * (`POST {host}/api/public/v2/mcp`). Vaulted.
+   * AbleTime organization API key (`atk_…`, REST) or personal access token
+   * (`apt_…`, hosted MCP). Vaulted.
    */
   abletimeAccessToken?: string;
   /** AbleTime host (default https://track.abletime.com). */
