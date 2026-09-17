@@ -297,8 +297,9 @@ function firstStringArg(args: Record<string, unknown>, keys: string[]): string {
 }
 
 /**
- * Organization API keys (`atk_…`) authenticate REST, not hosted MCP.
- * Returns payloads the existing AbleTime mappers already understand.
+ * Organization API keys (`atk_…`) and JWT access tokens authenticate REST.
+ * Hosted MCP accepts `apt_…` and browser-OAuth `acn_…`. Returns payloads the
+ * existing AbleTime mappers already understand.
  */
 export async function callAbleTimeRestTool<T = unknown>(
   name: AbleTimeMcpToolName,
@@ -306,8 +307,11 @@ export async function callAbleTimeRestTool<T = unknown>(
   opts?: RestOpts,
 ): Promise<T> {
   const token = normalizeAbleTimeCredential(opts?.token ?? getAbleTimeAccessToken() ?? '');
-  if (ableTimeCredentialKind(token) !== 'org') {
-    throw new Error('AbleTime REST transport is for organization API keys (atk_…)');
+  if (!token) {
+    throw new Error('AbleTime is not connected — paste an API key or connect via browser');
+  }
+  if (ableTimeCredentialKind(token) === 'pat') {
+    throw new Error('AbleTime REST transport is for organization keys and OAuth tokens, not apt_…');
   }
   const requestOpts: RestOpts = { ...opts, token };
 

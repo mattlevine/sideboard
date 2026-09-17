@@ -122,6 +122,11 @@ function staleOk(now: number): ClaudePlanUsage | null {
   return lastGood.value;
 }
 
+/** Rate-limited: keep showing the last good reading (no age cap). */
+function reuseLast(): ClaudePlanUsage | null {
+  return lastGood?.value ?? null;
+}
+
 /**
  * Live Claude Code plan utilization (5-hour / weekly / per-model).
  * Returns null for API-key accounts, missing login, or fetch failures.
@@ -131,9 +136,11 @@ export async function getClaudePlanUsage(
   opts: ClaudeUsageClientOpts = {},
 ): Promise<ClaudePlanUsage | null> {
   const now = opts.now ?? Date.now();
+  // Honor 429 / transient backoff even for composer `force` — retrying a
+  // rate-limited usage URL is what hid the meter and made the 429 worse.
+  if (now < errorUntil) return reuseLast() ?? staleOk(now);
   if (!opts.force) {
     if (cache && now - cache.at < CLAUDE_USAGE_TTL_MS) return cache.value;
-    if (now < errorUntil) return staleOk(now);
   }
   if (inflight) return inflight;
 
@@ -164,6 +171,12 @@ export async function getClaudePlanUsage(
       if (res.status === 401 || res.status === 403) {
         cache = { at: now, value: null };
         return null;
+      }
+      if (res.status === 429) {
+        errorUntil = now + CLAUDE_USAGE_ERROR_TTL_MS;
+        const last = reuseLast();
+        if (last) cache = { at: now, value: last };
+        return last;
       }
       if (!res.ok) {
         errorUntil = now + CLAUDE_USAGE_ERROR_TTL_MS;

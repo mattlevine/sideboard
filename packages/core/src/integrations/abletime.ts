@@ -265,7 +265,7 @@ export async function getAbleTimeOrientation(opts?: {
   const raw = await callAbleTimeTool('orientation', {}, opts);
   const record = asRecord(raw);
   const viewerRec =
-    firstRecord(record, ['viewer', 'user', 'actor', 'me', 'person']) ?? record;
+    firstRecord(record, ['viewer', 'principal', 'user', 'actor', 'me', 'person']) ?? record;
   const viewer: AbleTimeViewer = {
     id: firstString(viewerRec, ['id', 'user_id']) || undefined,
     name:

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { shouldShowClaudePlanUsage } from './use-claude-usage';
+import {
+  CLAUDE_USAGE_DEBOUNCE_MS,
+  claudeUsageLoadDelay,
+  shouldShowClaudePlanUsage,
+} from './use-claude-usage';
 
 describe('shouldShowClaudePlanUsage', () => {
   it('shows on worktree Claude chats', () => {
@@ -48,5 +52,15 @@ describe('shouldShowClaudePlanUsage', () => {
 
   it('is false when no thread is open', () => {
     expect(shouldShowClaudePlanUsage(null)).toBe(false);
+  });
+});
+
+describe('claudeUsageLoadDelay', () => {
+  it('fetches immediately before the first reading', () => {
+    expect(claudeUsageLoadDelay(false)).toBe(0);
+  });
+
+  it('debounces later nonce-triggered reloads', () => {
+    expect(claudeUsageLoadDelay(true)).toBe(CLAUDE_USAGE_DEBOUNCE_MS);
   });
 });

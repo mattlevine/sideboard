@@ -10,9 +10,66 @@ import {
 } from '../store/app-settings.js';
 import { DEFAULT_ABLETIME_HOST, normalizeAbleTimeHost } from './abletime-mcp.js';
 
-/** Local callback — must match `site/oauth/abletime-client.json` redirect_uris. */
+/** Hosted HTTPS return — AbleTime rejects loopback `http://` redirect_uris. */
+export const ABLETIME_OAUTH_CALLBACK_PATH = '/oauth/abletime/callback';
 export const ABLETIME_OAUTH_PORT = 19849;
-export const ABLETIME_OAUTH_REDIRECT = `http://127.0.0.1:${ABLETIME_OAUTH_PORT}/callback`;
+/** Local listener the marketing-site bounce sends the browser to. */
+export const ABLETIME_OAUTH_LOCAL_CALLBACK = `http://127.0.0.1:${ABLETIME_OAUTH_PORT}/callback`;
+/** Registered redirect — must match `site/oauth/abletime-client.json` redirect_uris. */
+export const ABLETIME_OAUTH_REDIRECT = `https://www.sideboard.cloud${ABLETIME_OAUTH_CALLBACK_PATH}`;
+
+export function ableTimeOAuthRedirectUri(): string {
+  return process.env.SIDEBOARD_ABLETIME_OAUTH_REDIRECT?.trim() || ABLETIME_OAUTH_REDIRECT;
+}
+
+const BOUNCE_QUERY_KEYS = ['code', 'state', 'error', 'error_description'] as const;
+
+export function parseAbleTimeOAuthCallbackUrl(reqUrl: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(reqUrl, ABLETIME_OAUTH_REDIRECT);
+  } catch {
+    return null;
+  }
+  if (url.pathname !== ABLETIME_OAUTH_CALLBACK_PATH) return null;
+  return url;
+}
+
+/** Map the hosted callback onto the desktop listener (query: code / state / error). */
+export function ableTimeOAuthLocalBounceUrl(reqUrl: string): string | null {
+  const url = parseAbleTimeOAuthCallbackUrl(reqUrl);
+  if (!url) return null;
+  const dest = new URL(ABLETIME_OAUTH_LOCAL_CALLBACK);
+  for (const key of BOUNCE_QUERY_KEYS) {
+    const value = url.searchParams.get(key);
+    if (value) dest.searchParams.set(key, value);
+  }
+  return dest.toString();
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Marketing-site page that immediately opens the desktop listener. */
+export function ableTimeOAuthBouncePage(localUrl: string): string {
+  const safe = escapeHtml(localUrl);
+  return `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="0;url=${safe}">
+<title>Returning to Sideboard</title>
+<script>location.replace(${JSON.stringify(localUrl)})</script>
+<style>body{font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;max-width:36rem;margin:0 auto;color:#1a1a1a}
+h1{font-size:1.25rem}p{line-height:1.5;color:#444}a{color:#0f7ed4}</style>
+</head><body>
+<h1>Returning to Sideboard</h1>
+<p>AbleTime authorized. Opening the app…</p>
+<p><a href="${safe}">Open Sideboard</a> if it does not appear.</p>
+</body></html>`;
+}
 
 /** Client ID Metadata Document (AbleTime advertises CIMD, not DCR). */
 export const BAKED_ABLETIME_OAUTH_CLIENT_ID =
@@ -53,7 +110,7 @@ export function ableTimeOAuthAuthorizeUrl(
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
-    redirect_uri: ABLETIME_OAUTH_REDIRECT,
+    redirect_uri: ableTimeOAuthRedirectUri(),
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     state,
@@ -172,8 +229,9 @@ export function isAbleTimeOAuthCancelled(err: unknown): boolean {
 }
 
 /**
- * Open AbleTime OAuth in the browser (MCP CIMD + PKCE), listen on localhost,
- * store tokens, then run orientation for the viewer name.
+ * Open AbleTime OAuth in the browser (MCP CIMD + PKCE). AbleTime redirects to
+ * the HTTPS marketing-site callback; that page opens the desktop listener. Store
+ * tokens, then run orientation for the viewer name.
  */
 export async function startAbleTimeOAuth(opts?: {
   openUrl?: (url: string) => void | Promise<void>;
@@ -282,7 +340,7 @@ export async function startAbleTimeOAuth(opts?: {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: ABLETIME_OAUTH_REDIRECT,
+    redirect_uri: ableTimeOAuthRedirectUri(),
     client_id: clientId,
     code_verifier: pkce.verifier,
     resource: ableTimeOAuthResource(host),

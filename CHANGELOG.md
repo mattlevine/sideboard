@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Right-sidebar Setup and Run stay visible after opening Terminal. The parked xterm host no longer paints over those tabs.
 - AbleTime Connect via browser uses MCP OAuth (PKCE + Client ID Metadata Document). Organization API keys (`atk_…`) still use the public REST API; pasted `apt_…` tokens still use MCP.
+- AbleTime OAuth redirect is HTTPS (`https://www.sideboard.cloud/oauth/abletime/callback`). AbleTime rejects loopback `http://`; the site page then opens the desktop app.
+- AbleTime browser sign-in tokens use the public REST API. Hosted MCP accepts `apt_…` only, so an OAuth JWT was getting `INTEGRATION_KEY_INVALID`.
+- Claude Code plan meter: a 429 from the usage API keeps the last reading instead of hiding the rings; nonce-triggered refetches debounce so status/message churn does not stampede Anthropic.
 
 ## [0.1.202] - 2026-09-16
 

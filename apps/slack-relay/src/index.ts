@@ -19,8 +19,9 @@ import { startSlackRelayServer } from '@sideboard-ai/core';
  * Desktop clients connect to wss://relay.sideboard.cloud/slack/desktop (or
  * SIDEBOARD_SLACK_RELAY_URL for local testing). GET /slack/callback exchanges
  * the Slack OAuth code. Desktops poll GET /slack/oauth/result?state=…
- * GET / on www.sideboard.cloud serves the marketing site. relay.sideboard.cloud
- * stays Slack + JSON. GET /health stays JSON for Fly checks.
+ * GET / on www.sideboard.cloud serves the marketing site. GET
+ * /oauth/abletime/callback bounces AbleTime OAuth to the desktop listener.
+ * relay.sideboard.cloud stays Slack + JSON. GET /health stays JSON for Fly checks.
  */
 async function main(): Promise<void> {
   const appToken = process.env.SIDEBOARD_SLACK_APP_TOKEN?.trim() ?? '';

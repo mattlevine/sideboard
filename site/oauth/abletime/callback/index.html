@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Returning to Sideboard</title>
+<meta name="robots" content="noindex">
+<style>
+body{font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;max-width:36rem;margin:0 auto;color:#1a1a1a}
+h1{font-size:1.25rem}p{line-height:1.5;color:#444}a{color:#0f7ed4}
+</style>
+</head>
+<body>
+<h1>Returning to Sideboard</h1>
+<p>AbleTime authorized. Opening the app…</p>
+<p><a id="open" href="http://127.0.0.1:19849/callback">Open Sideboard</a> if it does not appear.</p>
+<script>
+(function () {
+  var dest = 'http://127.0.0.1:19849/callback' + location.search + location.hash;
+  var link = document.getElementById('open');
+  if (link) link.href = dest;
+  location.replace(dest);
+})();
+</script>
+</body>
+</html>
