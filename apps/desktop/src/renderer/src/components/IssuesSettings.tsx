@@ -198,8 +198,10 @@ export function IssuesSettings({
         <p className="settings-hint">
           List tasks and auto-create one when you start work without a ticket. Uses
           AbleTime&apos;s hosted MCP (<code>POST /api/public/v2/mcp</code>
-          ). Enable <strong>Agent access (MCP)</strong> in AbleTime, then paste a personal access
-          token from Profile → API Access (<code>apt_…</code>).
+          ). An admin enables <strong>Agent access (MCP)</strong> under Settings → Integrations →
+          API Keys, then you paste a personal access token from <strong>Edit Profile → API
+          Access</strong> (<code>apt_…</code>). Organization API keys (<code>atk_…</code>) from
+          that same Integrations page cannot connect.
         </p>
         {settings.integrations.hasAbleTimeToken ? (
           <div className="settings-toggle-row" style={{ marginTop: 10 }}>
@@ -284,6 +286,9 @@ export function IssuesSettings({
               style={{ marginTop: 8, width: '100%' }}
               autoComplete="off"
             />
+            <p className="settings-hint" style={{ marginTop: 6 }}>
+              AbleTime site URL. Leave blank for https://track.abletime.com.
+            </p>
           </div>
         )}
       </div>

@@ -10,10 +10,14 @@ import {
   mapAbleTimeTask,
   toAbleTimeIssueInfo,
   updateAbleTimeTask,
+  verifyAbleTimeConnection,
 } from './abletime.js';
 import {
   abletimeMcpUrl,
+  ableTimeCredentialKind,
+  assertAbleTimeMcpCredential,
   callAbleTimeTool,
+  normalizeAbleTimeCredential,
   normalizeAbleTimeHost,
   rewriteAbleTimeError,
 } from './abletime-mcp.js';
@@ -33,7 +37,19 @@ describe('abletime helpers', () => {
   it('rewrites agent-access and PAT errors', () => {
     expect(rewriteAbleTimeError('INTEGRATION_AGENT_ACCESS_DISABLED')).toMatch(/Agent access/);
     expect(rewriteAbleTimeError('INTEGRATION_PAT_REQUIRED')).toMatch(/apt_/);
-    expect(rewriteAbleTimeError('401 unauthorized')).toMatch(/Reconnect AbleTime/);
+    expect(rewriteAbleTimeError('INTEGRATION_PAT_REQUIRED')).toMatch(/atk_/);
+    const invalid = rewriteAbleTimeError('AbleTime MCP error 401: INTEGRATION_KEY_INVALID');
+    expect(invalid).toMatch(/unknown, revoked, or expired/);
+    expect(invalid).toMatch(/apt_/);
+    expect(rewriteAbleTimeError(invalid)).toBe(invalid);
+  });
+
+  it('normalizes pasted credentials and rejects organization API keys', () => {
+    expect(normalizeAbleTimeCredential('  Bearer apt_secret  ')).toBe('apt_secret');
+    expect(ableTimeCredentialKind('apt_secret')).toBe('pat');
+    expect(ableTimeCredentialKind('atk_org')).toBe('org');
+    expect(assertAbleTimeMcpCredential('Bearer apt_secret')).toBe('apt_secret');
+    expect(() => assertAbleTimeMcpCredential('atk_org')).toThrow(/atk_/);
   });
 
   it('maps task payloads with AbleTime field aliases', () => {
@@ -88,6 +104,11 @@ describe('abletime helpers', () => {
 });
 
 describe('callAbleTimeTool', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('posts tools/call with a bearer token', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -117,6 +138,33 @@ describe('callAbleTimeTool', () => {
       method: 'tools/call',
       params: { name: 'list_tasks', arguments: {} },
     });
+  });
+
+  it('strips a pasted Bearer prefix and rejects organization API keys', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      text: async () =>
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: { content: [{ type: 'text', text: '{"ok":true}' }] },
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await callAbleTimeTool(
+      'orientation',
+      {},
+      { token: 'Bearer apt_test', host: 'https://track.abletime.com' },
+    );
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer apt_test');
+
+    fetchMock.mockClear();
+    await expect(
+      callAbleTimeTool('orientation', {}, { token: 'atk_orgkey' }),
+    ).rejects.toThrow(/atk_/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -269,6 +317,14 @@ describe('AbleTime settings connection', () => {
   afterEach(() => {
     process.env.HOME = prevHome;
     vi.resetModules();
+  });
+
+  it('rejects an organization API key before calling MCP', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(verifyAbleTimeConnection({ token: 'atk_orgkey' })).rejects.toThrow(/atk_/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it('persists a PAT and treats AbleTime as connected', async () => {

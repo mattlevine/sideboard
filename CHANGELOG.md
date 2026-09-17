@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- AbleTime Connect rejects organization API keys (`atk_…`) and explains `INTEGRATION_KEY_INVALID` as an unknown/revoked personal access token (`apt_…` from Edit Profile → API Access).
+
 ## [0.1.202] - 2026-09-16
 
 ### Fixed

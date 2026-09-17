@@ -346,7 +346,7 @@ Desktop Connect uses Chromium networking so corporate VPNs/proxies that break No
 
 ## AbleTime
 
-**Settings → Issues → AbleTime.** Enable **Agent access (MCP)** in AbleTime (Settings → Integrations → API Keys), then paste a personal access token from Profile → API Access (`apt_…`). Sideboard talks to AbleTime’s hosted MCP (`POST https://track.abletime.com/api/public/v2/mcp`) — list/search/create tasks, and **ensure** a task exists to track against.
+**Settings → Issues → AbleTime.** An admin enables **Agent access (MCP)** in AbleTime (Settings → Integrations → API Keys). Then paste a **personal access token** from Edit Profile → API Access (`apt_…`) — not an organization API key (`atk_…`) from that Integrations page. MCP accepts PATs only (`Authorization: Bearer apt_…`). Sideboard talks to AbleTime’s hosted MCP (`POST https://track.abletime.com/api/public/v2/mcp`) — list/search/create tasks, and **ensure** a task exists to track against.
 
 Set **Issue source** to AbleTime. Create-from / Home list AbleTime tasks. Starting a thread from the default branch (no ticket) auto-creates an AbleTime task and attaches it. Orchestration tools: `abletime_orientation`, `abletime_ensure_task`, `abletime_create_task`, and the list/search/get variants.
 

@@ -4,6 +4,7 @@ import {
 } from '../store/app-settings.js';
 import type { IssueInfo, ThreadAttachment } from '../types/thread.js';
 import {
+  assertAbleTimeMcpCredential,
   callAbleTimeTool,
   normalizeAbleTimeHost,
   rewriteAbleTimeError,
@@ -656,8 +657,7 @@ export async function verifyAbleTimeConnection(input: {
   token: string;
   host?: string | null;
 }): Promise<AbleTimeViewer> {
-  const token = input.token.trim();
-  if (!token) throw new Error('AbleTime personal access token is required');
+  const token = assertAbleTimeMcpCredential(input.token);
   const host = input.host?.trim() || undefined;
   const orientation = await getAbleTimeOrientation({ token, host });
   saveAbleTimeConnection({

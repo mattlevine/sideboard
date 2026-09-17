@@ -76,18 +76,58 @@ export function abletimeMcpUrl(
   return `${normalizeAbleTimeHost(host)}${path}`;
 }
 
+/** Official prefixes: PAT `apt_…` (MCP), org key `atk_…` (REST only). */
+export const ABLETIME_PAT_PREFIX = 'apt_';
+export const ABLETIME_ORG_KEY_PREFIX = 'atk_';
+
+const ORG_KEY_HINT =
+  'AbleTime MCP needs a personal access token (apt_…) from Edit Profile → API Access, not an organization API key (atk_…) from Settings → Integrations → API Keys.';
+
+const REJECTED_CREDENTIAL_HINT =
+  'AbleTime rejected this credential (unknown, revoked, or expired). Use a personal access token (apt_…) from Edit Profile → API Access — organization API keys (atk_…) cannot call MCP. Tokens are shown once; rotating replaces the previous one.';
+
+const REWRITE_APPLIED =
+  /— Enable Agent access \(MCP\)|— AbleTime MCP needs a personal access token|— AbleTime plan does not include API access|— AbleTime rejected this credential/;
+
+/** Strip a pasted `Bearer ` prefix and surrounding whitespace. */
+export function normalizeAbleTimeCredential(raw: string): string {
+  return raw.trim().replace(/^bearer\s+/i, '').trim();
+}
+
+export function ableTimeCredentialKind(
+  raw: string,
+): 'pat' | 'org' | 'unknown' {
+  const token = normalizeAbleTimeCredential(raw).toLowerCase();
+  if (token.startsWith(ABLETIME_PAT_PREFIX)) return 'pat';
+  if (token.startsWith(ABLETIME_ORG_KEY_PREFIX)) return 'org';
+  return 'unknown';
+}
+
+/** MCP accepts personal access tokens only (AbleTime docs). */
+export function assertAbleTimeMcpCredential(raw: string): string {
+  const token = normalizeAbleTimeCredential(raw);
+  if (!token) {
+    throw new Error('AbleTime personal access token is required');
+  }
+  if (ableTimeCredentialKind(token) === 'org') {
+    throw new Error(ORG_KEY_HINT);
+  }
+  return token;
+}
+
 export function rewriteAbleTimeError(message: string): string {
-  if (/INTEGRATION_AGENT_ACCESS_DISABLED|agent access/i.test(message)) {
+  if (REWRITE_APPLIED.test(message)) return message;
+  if (/INTEGRATION_AGENT_ACCESS_DISABLED/i.test(message)) {
     return `${message} — Enable Agent access (MCP) in AbleTime Settings → Integrations → API Keys.`;
   }
-  if (/INTEGRATION_PAT_REQUIRED|organization api key/i.test(message)) {
-    return `${message} — AbleTime MCP needs a personal access token (apt_…), not an organization API key.`;
+  if (/INTEGRATION_PAT_REQUIRED/i.test(message)) {
+    return `${message} — ${ORG_KEY_HINT}`;
   }
   if (/INTEGRATION_PLAN_REQUIRED/i.test(message)) {
     return `${message} — AbleTime plan does not include API access.`;
   }
   if (/INTEGRATION_KEY_INVALID|INTEGRATION_KEY_MISSING|401|unauthorized|invalid token/i.test(message)) {
-    return `${message} — Reconnect AbleTime from Account settings (Profile → API Access).`;
+    return `${message} — ${REJECTED_CREDENTIAL_HINT}`;
   }
   return message;
 }
@@ -169,10 +209,11 @@ export async function abletimeMcpRequest(
   params?: unknown,
   opts?: { token?: string | null; host?: string | null; pm?: boolean },
 ): Promise<unknown> {
-  const token = (opts?.token ?? getAbleTimeAccessToken())?.trim();
-  if (!token) {
+  const rawToken = opts?.token ?? getAbleTimeAccessToken();
+  if (!rawToken?.trim()) {
     throw new Error('AbleTime is not connected — paste a personal access token in Account settings');
   }
+  const token = assertAbleTimeMcpCredential(rawToken);
   const url = abletimeMcpUrl(
     opts?.host ?? (opts?.token ? DEFAULT_ABLETIME_HOST : getAbleTimeHost()),
     { pm: opts?.pm },
