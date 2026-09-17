@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- When the worktree’s connected PR changes, the right-sidebar pill and left-sidebar hover card follow that PR’s number and status instead of keeping the previous one.
+- Codex `codex exec` now disables plugins as well as ChatGPT Apps (`features.plugins=false`, `apps.posthog.enabled=false`). PostHog ships as a plugin-bundled App, so Apps-only isolation still loaded OAuth MCP and `AuthRequired` killed the turn. If that still slips through, the error is fed back so Codex continues; PostHog stays on Settings → Connectors + the HTTP API.
+
 ## [0.1.203] - 2026-09-16
 
 ### Fixed

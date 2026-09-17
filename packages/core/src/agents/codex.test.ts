@@ -131,6 +131,9 @@ describe('codexAdapter.buildTurn', () => {
     for (const cmd of [work, orch]) {
       expect(cmd.args).toContain('features.apps=false');
       expect(cmd.args).toContain('apps._default.enabled=false');
+      expect(cmd.args).toContain('features.plugins=false');
+      expect(cmd.args).toContain('apps.posthog.enabled=false');
+      expect(cmd.args).toContain('mcp_servers.posthog.enabled=false');
     }
   });
 

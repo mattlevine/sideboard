@@ -10,15 +10,16 @@ import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
 import { getAdapter } from '../agents/index.js';
 import {
+  connectedPrSelectors,
   getPrChecks,
   getPrDetails,
+  getPrForHeadBranch,
   getPrMeta as fetchPrMeta,
   markPrReady as markGithubPrReady,
   mergePr as mergeGithubPr,
   removeWorktree,
   resolveGithubRepoSlug,
   resolvePrSelector,
-  resolvePrSelectors,
 } from '../git/worktree.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
@@ -30,6 +31,7 @@ import {
 import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
+  threadPrMetaPatch,
 } from '../git/pr-merge-archive.js';
 import { runWorkspaceSetup, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
 import {
@@ -238,12 +240,6 @@ export function isPidAlive(pid: number): boolean {
   } catch {
     return false;
   }
-}
-
-function sameLoginList(a?: string[] | null, b?: string[] | null): boolean {
-  const left = [...(a ?? [])].map((s) => s.trim().toLowerCase()).filter(Boolean).sort();
-  const right = [...(b ?? [])].map((s) => s.trim().toLowerCase()).filter(Boolean).sort();
-  return left.length === right.length && left.every((login, i) => login === right[i]);
 }
 
 /** Wait until pid exits, or `timeoutMs` elapses. */
@@ -2528,12 +2524,18 @@ export class Orchestrator {
     cwd: string;
   }> {
     const thread = this.requireThread(threadRef);
-    const selectors = resolvePrSelectors(thread);
     const cwd = thread.worktreePath;
     if (!cwd?.trim()) {
       throw new Error(`Thread ${threadRef} has no worktreePath`);
     }
-    return { thread, selectors, cwd };
+    let headUrl: string | null = null;
+    try {
+      const head = await getPrForHeadBranch(cwd, thread.branchName);
+      headUrl = head?.url?.trim() || null;
+    } catch {
+      headUrl = null;
+    }
+    return { thread, selectors: connectedPrSelectors(thread, headUrl), cwd };
   }
 
   async getPrChecks(threadRef: string): Promise<PrCheckRun[] | null> {
@@ -2567,35 +2569,17 @@ export class Orchestrator {
   ): Promise<void> {
     const prevState = normalizePrState(thread.prState);
     const nextState = normalizePrState(meta.state);
-    const patch: Partial<Thread> = {};
-    if (meta.url && meta.url !== thread.prUrl) patch.prUrl = meta.url;
-    if (meta.title && meta.title !== thread.prTitle) patch.prTitle = meta.title;
-    if (nextState && nextState !== prevState) patch.prState = nextState;
-    const nextDraft =
-      Boolean(meta.isDraft) && nextState !== 'MERGED' && nextState !== 'CLOSED';
-    if (nextDraft !== Boolean(thread.prIsDraft)) patch.prIsDraft = nextDraft;
-    const nextAuthor = meta.authorLogin?.trim() || '';
-    if (nextAuthor && nextAuthor !== (thread.prAuthorLogin ?? '').trim()) {
-      patch.prAuthorLogin = nextAuthor;
+    // PR identity/lifecycle is worktree-scoped — every live chat tab follows.
+    const siblings = threadsSharingWorktree(thread.worktreePath);
+    const targets = siblings.length > 0 ? siblings : [thread];
+    for (const t of targets) {
+      const patch = threadPrMetaPatch(t, meta);
+      if (Object.keys(patch).length === 0) continue;
+      updateThread(t.id, patch);
     }
-    const nextReviewers = meta.reviewerLogins ?? [];
-    if (!sameLoginList(nextReviewers, thread.prReviewerLogins)) {
-      patch.prReviewerLogins = nextReviewers;
-    }
-    if (
-      thread.skipAutoArchiveOnMerge &&
-      nextState &&
-      nextState !== 'MERGED' &&
-      nextState !== 'CLOSED'
-    ) {
-      patch.skipAutoArchiveOnMerge = false;
-    }
-    if (Object.keys(patch).length > 0) {
-      updateThread(thread.id, patch);
-      const latest = this.requireThread(thread.id);
-      if (!latest.userSetTitle && meta.title && latest.title !== meta.title) {
-        updateThread(thread.id, { title: meta.title });
-      }
+    const titled = this.requireThread(thread.id);
+    if (!titled.userSetTitle && meta.title && titled.title !== meta.title) {
+      updateThread(thread.id, { title: meta.title });
     }
 
     const { autoArchiveOnMergeEnabled } = await import('../store/app-settings.js');
@@ -2613,23 +2597,7 @@ export class Orchestrator {
       return;
     }
 
-    // Mark siblings merged first so restore later sees prState=MERGED.
-    const siblings = threadsSharingWorktree(latest.worktreePath);
-    for (const t of siblings) {
-      const sibPatch: Partial<Thread> = { prState: 'MERGED', prIsDraft: false };
-      if (meta.url && meta.url !== t.prUrl) sibPatch.prUrl = meta.url;
-      if (meta.title && meta.title !== t.prTitle) sibPatch.prTitle = meta.title;
-      const sibAuthor = meta.authorLogin?.trim() || '';
-      if (sibAuthor && sibAuthor !== (t.prAuthorLogin ?? '').trim()) {
-        sibPatch.prAuthorLogin = sibAuthor;
-      }
-      const sibReviewers = meta.reviewerLogins ?? [];
-      if (!sameLoginList(sibReviewers, t.prReviewerLogins)) {
-        sibPatch.prReviewerLogins = sibReviewers;
-      }
-      if (Object.keys(sibPatch).length > 0) updateThread(t.id, sibPatch);
-    }
-    for (const t of siblings) {
+    for (const t of threadsSharingWorktree(latest.worktreePath)) {
       if (this.requireThread(t.id).status === 'archived') continue;
       await this.archive(t.id);
     }

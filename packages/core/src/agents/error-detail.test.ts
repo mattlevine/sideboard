@@ -14,6 +14,7 @@ import {
   looksLikeCursorHttp2StreamClose,
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
+  looksLikeCodexMcpError,
   shouldRetryFailedAgentTurn,
   shouldFeedErrorBackToAgent,
   formatAgentErrorContinuePrompt,
@@ -556,6 +557,25 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
       }),
     ).toBe(true);
     expect(formatAgentErrorContinuePrompt('segfault at 0x0')).toMatch(/Continue from where you left off/);
+  });
+
+  it('feeds Codex PostHog / MCP AuthRequired back even after tools already ran', () => {
+    expect(
+      looksLikeCodexMcpError(
+        'MCP error: AuthRequired from posthog (rmcp transport worker quit)',
+      ),
+    ).toBe(true);
+    expect(looksLikeCodexMcpError('Invalid User API Key')).toBe(false);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail: 'turn failed: AuthRequired connecting to PostHog MCP',
+        assistantText: 'I was about to query feature flags.',
+        partsCount: 3,
+      }),
+    ).toBe(true);
+    expect(
+      humanizeAgentFailDetail('PostHog MCP OAuth AuthRequired'),
+    ).toMatch(/HTTP API/);
   });
 
   it('keeps exit code for opaque CLI failures', () => {

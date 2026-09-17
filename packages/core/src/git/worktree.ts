@@ -460,10 +460,10 @@ export function isDefaultishSourceRef(ref: string | null | undefined): boolean {
 }
 
 /**
- * Ordered `gh pr view` / checks selectors.
- * Create-from-branch still forks `thread/<team>`, so the worktree branch is not
- * the GitHub head. Prefer persisted URL, then the worktree branch (PRs opened
- * from this chat), then the source branch (existing PR you created from).
+ * Fallback `gh pr view` / checks selectors when the current branch has no open
+ * PR. Create-from-branch still forks `thread/<team>`, so that name is not the
+ * GitHub head. Prefer persisted URL, then the worktree branch, then the source
+ * branch. {@link connectedPrSelectors} prepends the current-branch open PR.
  */
 export function resolvePrSelectors(
   thread: Pick<Thread, 'prUrl' | 'sourceType' | 'sourceRef' | 'branchName'>,
@@ -496,6 +496,26 @@ export function resolvePrSelector(thread: Pick<
   return resolvePrSelectors(thread)[0] ?? null;
 }
 
+/**
+ * Selectors for the PR connected to this worktree right now.
+ * An open PR whose head is the current branch wins so a newly opened PR
+ * replaces a stale persisted URL (create-from-PR / source-branch leftover).
+ */
+export function connectedPrSelectors(
+  thread: Pick<Thread, 'prUrl' | 'sourceType' | 'sourceRef' | 'branchName'>,
+  currentHeadPrUrl?: string | null,
+): string[] {
+  const out: string[] = [];
+  const push = (value: string | null | undefined) => {
+    const v = value?.trim();
+    if (!v || out.includes(v)) return;
+    out.push(v);
+  };
+  push(currentHeadPrUrl);
+  for (const selector of resolvePrSelectors(thread)) push(selector);
+  return out;
+}
+
 /** Open PR whose head is this branch (create-from-branch / sidebar attach). */
 export async function getPrForHeadBranch(
   repoPath: string,
@@ -505,23 +525,6 @@ export async function getPrForHeadBranch(
   if (!head || isDefaultishSourceRef(head)) return null;
 
   const slug = await resolveGithubRepoSlug(repoPath);
-  const viewArgs = [
-    'pr',
-    'view',
-    head,
-    '--json',
-    'number,title,headRefName,url,isCrossRepository,author',
-  ];
-  if (slug) viewArgs.push('--repo', slug);
-  const viewed = await gh(viewArgs, repoPath, { reject: false });
-  if (viewed.exitCode === 0 && viewed.stdout.trim()) {
-    try {
-      return JSON.parse(viewed.stdout) as PrInfo;
-    } catch {
-      return null;
-    }
-  }
-
   const listHead = slug ? ghHeadRef(slug, head) : head;
   const listArgs = [
     'pr',
@@ -537,10 +540,30 @@ export async function getPrForHeadBranch(
   ];
   if (slug) listArgs.push('--repo', slug);
   const listed = await gh(listArgs, repoPath, { reject: false });
-  if (listed.exitCode !== 0 || !listed.stdout.trim()) return null;
+  if (listed.exitCode === 0 && listed.stdout.trim()) {
+    try {
+      const rows = JSON.parse(listed.stdout) as PrInfo[];
+      if (rows[0]) return rows[0];
+    } catch {
+      // fall through to `pr view`
+    }
+  }
+
+  const viewArgs = [
+    'pr',
+    'view',
+    head,
+    '--json',
+    'number,title,headRefName,url,isCrossRepository,author,state',
+  ];
+  if (slug) viewArgs.push('--repo', slug);
+  const viewed = await gh(viewArgs, repoPath, { reject: false });
+  if (viewed.exitCode !== 0 || !viewed.stdout.trim()) return null;
   try {
-    const rows = JSON.parse(listed.stdout) as PrInfo[];
-    return rows[0] ?? null;
+    const info = JSON.parse(viewed.stdout) as PrInfo & { state?: string };
+    const state = (info.state ?? 'OPEN').trim().toUpperCase();
+    if (state !== 'OPEN') return null;
+    return info;
   } catch {
     return null;
   }
