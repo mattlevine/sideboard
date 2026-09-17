@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { xtermHostVisibility } from '../lib/xterm-host-visibility';
 
 interface Props {
   /** Any live chat in the worktree — main uses it to resolve cwd. */
@@ -203,7 +204,7 @@ export function EmbeddedTerminal({
         ref={hostRef}
         className="embedded-terminal-xterm"
         style={{
-          visibility: xtermState === 'ready' ? 'visible' : 'hidden',
+          visibility: xtermHostVisibility(xtermState === 'ready', active),
           display: xtermState === 'fallback' ? 'none' : undefined,
         }}
       />

@@ -8703,12 +8703,20 @@ button.linkish:hover {
 }
 
 /* Keep xterm mounted (and sized) when Setup/Run is showing so the canvas
-   does not go blank. Overlay the lower body instead of display:none. */
+   does not go blank. Overlay the lower body instead of display:none.
+   A child `visibility: visible` (xterm host while ready) wins over a hidden
+   ancestor — hide every descendant and drop opacity so the PTY cannot
+   cover Setup/Run. */
 .terminal-panel.is-parked {
   position: absolute;
   inset: 0;
-  visibility: hidden;
+  opacity: 0;
   pointer-events: none;
+}
+
+.terminal-panel.is-parked,
+.terminal-panel.is-parked * {
+  visibility: hidden !important;
 }
 
 .embedded-terminal {

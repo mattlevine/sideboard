@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.203] - 2026-09-16
+
 ### Fixed
 
+- Right-sidebar Setup and Run stay visible after opening Terminal. The parked xterm host no longer paints over those tabs.
 - AbleTime Connect via browser uses MCP OAuth (PKCE + Client ID Metadata Document). Organization API keys (`atk_…`) still use the public REST API; pasted `apt_…` tokens still use MCP.
 
 ## [0.1.202] - 2026-09-16
