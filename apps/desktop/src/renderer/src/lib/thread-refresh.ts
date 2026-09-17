@@ -37,6 +37,21 @@ export function mergeFullThreadIntoLists(
   return applyThreadToLists(state, full, full.id);
 }
 
+/**
+ * Keep the newest full transcript. An in-flight older `getThread` must not
+ * replace a live stream or a later refresh (updatedAt, then message count).
+ */
+export function isFresherFullThread(prev: Thread | undefined, next: Thread): boolean {
+  if (!prev) return true;
+  const prevTs = Date.parse(prev.updatedAt) || 0;
+  const nextTs = Date.parse(next.updatedAt) || 0;
+  if (nextTs !== prevTs) return nextTs > prevTs;
+  if (next.messages.length !== prev.messages.length) {
+    return next.messages.length > prev.messages.length;
+  }
+  return true;
+}
+
 /** Skip React setState when a slim/full refresh did not change list identity. */
 export function threadListsUnchanged(a: ThreadLists, b: ThreadLists): boolean {
   return listSignature(a.threads) === listSignature(b.threads)

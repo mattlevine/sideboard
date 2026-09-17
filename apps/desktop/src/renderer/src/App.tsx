@@ -24,6 +24,7 @@ import type { LivePaintOp } from './lib/live-paint';
 import {
   applyThreadToLists,
   createThreadRefreshScheduler,
+  isFresherFullThread,
   mergeFullThreadIntoLists,
   threadListsUnchanged,
 } from './lib/thread-refresh';
@@ -125,8 +126,9 @@ export function App() {
   const [archived, setArchived] = useState<Thread[]>([]);
   const threadsRef = useRef<Thread[]>([]);
   const archivedRef = useRef<Thread[]>([]);
-  threadsRef.current = threads;
-  archivedRef.current = archived;
+  // Do not copy state back onto these refs each render: an urgent
+  // setSelectedId can re-render before startTransition commits and restore
+  // the pre-refresh lists so a following refreshThread reapplies onto stale data.
   /** Full transcripts for the open chat (list IPC is preview-only). */
   const fullByIdRef = useRef(new Map<string, Thread>());
   const [selectedRev, setSelectedRev] = useState(0);
@@ -345,6 +347,7 @@ export function App() {
   const rememberFull = useCallback((thread: Thread | null) => {
     if (!thread) return;
     const prev = fullByIdRef.current.get(thread.id);
+    if (!isFresherFullThread(prev, thread)) return;
     fullByIdRef.current.set(thread.id, thread);
     if (
       thread.id === selectedIdRef.current &&
@@ -400,7 +403,11 @@ export function App() {
             ? window.sideboard.getThread(selectedId).catch(() => null)
             : Promise.resolve(null),
         ]);
-        rememberFull(selectedFull);
+        if (selectedId && !selectedFull) {
+          fullByIdRef.current.delete(selectedId);
+        } else {
+          rememberFull(selectedFull);
+        }
         const live = all.filter((t) => t.status !== 'archived');
         const archivedThreads = all.filter((t) => t.status === 'archived');
         commitThreadLists({ threads: live, archived: archivedThreads });
@@ -486,8 +493,14 @@ export function App() {
 
   const upsertThread = useCallback((thread: Thread) => {
     rememberFull(thread);
-    setThreads((prev) => [...prev.filter((t) => t.id !== thread.id), thread]);
-  }, [rememberFull]);
+    commitThreadLists(
+      applyThreadToLists(
+        { threads: threadsRef.current, archived: archivedRef.current },
+        thread,
+        thread.id,
+      ),
+    );
+  }, [commitThreadLists, rememberFull]);
 
   const selectCreatedThread = useCallback(
     (thread: Thread) => {
@@ -574,7 +587,9 @@ export function App() {
       }
       if (event.type === 'quota_failover') {
         void refresh().then(() => {
-          if (event.toThreadId) setSelectedId(event.toThreadId);
+          if (!event.toThreadId) return;
+          setSelectedId(event.toThreadId);
+          void refreshThread(event.toThreadId);
         });
         return;
       }
@@ -1222,6 +1237,7 @@ export function App() {
                 setSelectedId(id);
                 setView('thread');
                 setMultiSelected(new Set([id]));
+                void refreshThread(id);
               }}
               onSelectChat={(id, created) => {
                 if (created) {

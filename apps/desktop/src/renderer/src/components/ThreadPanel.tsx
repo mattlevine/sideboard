@@ -63,6 +63,7 @@ import {
 } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { useFollowUpBehavior } from '../lib/follow-up-behavior';
+import { createUsageSendGate } from '../lib/usage-send-gate';
 import { useLiveThread } from '../lib/live-paint-context';
 import { shouldShowClaudePlanUsage, useClaudePlanUsage } from '../lib/use-claude-usage';
 import { AgentMessage } from './AgentMessage';
@@ -607,6 +608,8 @@ export function ThreadPanel({
     message: string;
     resolve: (ok: boolean) => void;
   } | null>(null);
+  const sendGateRef = useRef(createUsageSendGate());
+  const sendGate = sendGateRef.current;
   const [plusOpen, setPlusOpen] = useState(false);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(null);
@@ -1310,27 +1313,29 @@ export function ThreadPanel({
   }
 
   async function confirmSendDespiteClaudeUsage(): Promise<boolean> {
-    if (!thread) return true;
-    try {
-      const settings = await window.sideboard.getAppSettings();
-      const action = resolveUsageOnLimit(settings.advanced);
-      if (action === 'keep_going' || action === 'switch_agent') return true;
-      const usage = await window.sideboard.getClaudeUsage(true);
-      const over = claudeUsageOverLimitWindows(usage);
-      if (over.length === 0) return true;
-      if (action === 'wait_reset') {
-        const message = formatClaudeUsageOverLimitWait(over);
+    return sendGate.shareConfirm(async () => {
+      if (!thread) return true;
+      try {
+        const settings = await window.sideboard.getAppSettings();
+        const action = resolveUsageOnLimit(settings.advanced);
+        if (action === 'keep_going' || action === 'switch_agent') return true;
+        const usage = await window.sideboard.getClaudeUsage(true);
+        const over = claudeUsageOverLimitWindows(usage);
+        if (over.length === 0) return true;
+        if (action === 'wait_reset') {
+          const message = formatClaudeUsageOverLimitWait(over);
+          return await new Promise<boolean>((resolve) => {
+            setUsageLimitConfirm({ mode: 'wait', message, resolve });
+          });
+        }
+        const message = formatClaudeUsageOverLimitConfirm(over);
         return await new Promise<boolean>((resolve) => {
-          setUsageLimitConfirm({ mode: 'wait', message, resolve });
+          setUsageLimitConfirm({ mode: 'confirm', message, resolve });
         });
+      } catch {
+        return true;
       }
-      const message = formatClaudeUsageOverLimitConfirm(over);
-      return await new Promise<boolean>((resolve) => {
-        setUsageLimitConfirm({ mode: 'confirm', message, resolve });
-      });
-    } catch {
-      return true;
-    }
+    });
   }
 
   async function send() {
@@ -1338,30 +1343,35 @@ export function ThreadPanel({
     if (!text) return;
     const queueing = followUpBusy && !steeringFollowUp;
     if (!followUpBusy && busy) return;
-    if (!(await confirmSendDespiteClaudeUsage())) return;
-    const snapshotAttachments = [...(thread.attachments ?? [])];
-    beginPendingSend(text, snapshotAttachments);
-    setPrompt('');
-    setCursor(0);
-    suppressArtifactAutoOpen.current = false;
-    if (!followUpBusy) setBusy(true);
+    if (!sendGate.tryBegin()) return;
     try {
-      await window.sideboard.sendToThread(thread.id, text);
-    } catch (err) {
-      if (queueing) {
-        setPendingFollowUps((prev) => {
-          const idx = [...prev].reverse().findIndex((p) => p.text === text);
-          if (idx < 0) return prev;
-          const i = prev.length - 1 - idx;
-          return prev.filter((_, j) => j !== i);
-        });
-      } else {
-        clearPendingSend();
+      if (!(await confirmSendDespiteClaudeUsage())) return;
+      const snapshotAttachments = [...(thread.attachments ?? [])];
+      beginPendingSend(text, snapshotAttachments);
+      setPrompt('');
+      setCursor(0);
+      suppressArtifactAutoOpen.current = false;
+      if (!followUpBusy) setBusy(true);
+      try {
+        await window.sideboard.sendToThread(thread.id, text);
+      } catch (err) {
+        if (queueing) {
+          setPendingFollowUps((prev) => {
+            const idx = [...prev].reverse().findIndex((p) => p.text === text);
+            if (idx < 0) return prev;
+            const i = prev.length - 1 - idx;
+            return prev.filter((_, j) => j !== i);
+          });
+        } else {
+          clearPendingSend();
+        }
+        setPrompt(text);
+        window.alert(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!followUpBusy) setBusy(false);
       }
-      setPrompt(text);
-      window.alert(err instanceof Error ? err.message : String(err));
     } finally {
-      if (!followUpBusy) setBusy(false);
+      sendGate.end();
     }
   }
 
@@ -1452,27 +1462,32 @@ export function ThreadPanel({
 
   async function implementPlan() {
     if (busy) return;
-    if (!(await confirmSendDespiteClaudeUsage())) return;
-    const notes = prompt.trim();
-    await window.sideboard.setThreadOptions(thread.id, { planMode: false });
-    setBusy(true);
-    const text = notes
-      ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
-      : `Implement the plan in ${PLAN_FILE_REL}.`;
-    setPendingUser(text);
-    setPendingInTranscript(
-      steeringFollowUp || (!turnBusy && thread.queue.length === 0),
-    );
-    setPrompt('');
+    if (!sendGate.tryBegin()) return;
     try {
-      await window.sideboard.sendToThread(thread.id, text);
-      onRefresh();
-    } catch (err) {
-      setPendingUser(null);
-      setPendingInTranscript(false);
-      window.alert(err instanceof Error ? err.message : String(err));
+      if (!(await confirmSendDespiteClaudeUsage())) return;
+      const notes = prompt.trim();
+      await window.sideboard.setThreadOptions(thread.id, { planMode: false });
+      setBusy(true);
+      const text = notes
+        ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
+        : `Implement the plan in ${PLAN_FILE_REL}.`;
+      setPendingUser(text);
+      setPendingInTranscript(
+        steeringFollowUp || (!turnBusy && thread.queue.length === 0),
+      );
+      setPrompt('');
+      try {
+        await window.sideboard.sendToThread(thread.id, text);
+        onRefresh();
+      } catch (err) {
+        setPendingUser(null);
+        setPendingInTranscript(false);
+        window.alert(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
     } finally {
-      setBusy(false);
+      sendGate.end();
     }
   }
 
@@ -1492,27 +1507,32 @@ export function ThreadPanel({
   /** Fork a new same-worktree chat with the plan history, then implement there. */
   async function handOffPlan() {
     if (busy) return;
-    if (!(await confirmSendDespiteClaudeUsage())) return;
-    const notes = prompt.trim();
-    setBusy(true);
+    if (!sendGate.tryBegin()) return;
     try {
-      const throughIndex = Math.max(0, thread.messages.length - 1);
-      const t = await window.sideboard.forkChatTab({
-        threadId: thread.id,
-        throughIndex,
-      });
-      await window.sideboard.setThreadOptions(t.id, { planMode: false });
-      const text = notes
-        ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
-        : `Implement the plan in ${PLAN_FILE_REL}.`;
-      setPrompt('');
-      await window.sideboard.sendToThread(t.id, text);
-      onSelectChat(t.id, t);
-      onRefresh();
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : String(err));
+      if (!(await confirmSendDespiteClaudeUsage())) return;
+      const notes = prompt.trim();
+      setBusy(true);
+      try {
+        const throughIndex = Math.max(0, thread.messages.length - 1);
+        const t = await window.sideboard.forkChatTab({
+          threadId: thread.id,
+          throughIndex,
+        });
+        await window.sideboard.setThreadOptions(t.id, { planMode: false });
+        const text = notes
+          ? `Implement the plan in ${PLAN_FILE_REL}.\n\nNotes:\n${notes}`
+          : `Implement the plan in ${PLAN_FILE_REL}.`;
+        setPrompt('');
+        await window.sideboard.sendToThread(t.id, text);
+        onSelectChat(t.id, t);
+        onRefresh();
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
     } finally {
-      setBusy(false);
+      sendGate.end();
     }
   }
 
@@ -2485,20 +2505,25 @@ export function ThreadPanel({
               busy={busy}
               onDismiss={() => setDismissedPlanQuestionsId(pendingPlanQuestions.signature)}
               onSubmit={(message) => {
-                setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
                 void (async () => {
-                  if (!(await confirmSendDespiteClaudeUsage())) return;
-                  setBusy(true);
-                  beginPendingSend(message);
+                  if (!sendGate.tryBegin()) return;
                   try {
-                    await window.sideboard.sendToThread(thread.id, message);
-                    setPrompt('');
-                    onRefresh();
-                  } catch (err) {
-                    clearPendingSend();
-                    window.alert(err instanceof Error ? err.message : String(err));
+                    if (!(await confirmSendDespiteClaudeUsage())) return;
+                    setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
+                    setBusy(true);
+                    beginPendingSend(message);
+                    try {
+                      await window.sideboard.sendToThread(thread.id, message);
+                      setPrompt('');
+                      onRefresh();
+                    } catch (err) {
+                      clearPendingSend();
+                      window.alert(err instanceof Error ? err.message : String(err));
+                    } finally {
+                      setBusy(false);
+                    }
                   } finally {
-                    setBusy(false);
+                    sendGate.end();
                   }
                 })();
               }}

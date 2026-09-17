@@ -9,6 +9,7 @@ import {
   isIncompleteChildStatus,
   notifyParentOfChildHalt,
   resetChildHaltNotifications,
+  shouldNotifyParentAfterTurnError,
   shouldNotifyParentOfChildHalt,
 } from './child-halt.js';
 
@@ -24,6 +25,27 @@ describe('child halt notice', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('skips parent notify when quota failover or crash-continue already handled the turn', () => {
+    expect(
+      shouldNotifyParentAfterTurnError({
+        quotaFailoverHandled: true,
+        crashContinued: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldNotifyParentAfterTurnError({
+        quotaFailoverHandled: false,
+        crashContinued: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldNotifyParentAfterTurnError({
+        quotaFailoverHandled: false,
+        crashContinued: false,
+      }),
+    ).toBe(true);
   });
 
   it('treats stopped/error/broken as incomplete', () => {

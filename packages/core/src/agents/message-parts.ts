@@ -547,7 +547,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       next.push(
         withPartTimes({
           type: 'thinking',
-          text: data,
+          text: clipThinkingForStore(data),
           ...(event.parentId ? { parentId: event.parentId } : {}),
         }),
       );

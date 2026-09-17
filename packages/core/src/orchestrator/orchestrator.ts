@@ -79,7 +79,10 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
-import { notifyParentOfChildHalt } from './child-halt.js';
+import {
+  notifyParentOfChildHalt,
+  shouldNotifyParentAfterTurnError,
+} from './child-halt.js';
 import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
@@ -630,11 +633,11 @@ export class Orchestrator {
   private async maybeHandleOrchestrationQuotaFailover(
     threadId: string,
     limitText: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const thread = findThreadByRef(threadId);
-    if (!thread) return;
+    if (!thread) return false;
     const plan = planOrchestrationQuotaFailover(thread, limitText);
-    if (!plan || plan.action === 'none') return;
+    if (!plan || plan.action === 'none') return false;
 
     if (plan.action === 'wait_reset' && plan.resumeAt) {
       // Don't keep draining prompts against the limited account.
@@ -654,7 +657,7 @@ export class Orchestrator {
         resumeAt: plan.resumeAt.toISOString(),
       });
       this.emit({ type: 'status_changed', threadId, status: 'idle' });
-      return;
+      return true;
     }
 
     if (plan.action === 'switch_agent' && plan.fallbackAgent) {
@@ -687,11 +690,14 @@ export class Orchestrator {
         threadId: next.id,
         status: next.status,
       });
-      await this.send(
+      // Do not await — turn cleanup must finish so the sibling can start.
+      void this.send(
         next.id,
         QUOTA_CONTINUE_PROMPT(thread.agent, plan.fallbackAgent),
       );
+      return true;
     }
+    return false;
   }
 
   /**
@@ -1694,13 +1700,21 @@ export class Orchestrator {
           this.maybeEnqueueJobContinue(threadId, chatText, parts);
         } else {
           const blob = [chatText, detail].filter(Boolean).join('\n');
-          void this.maybeHandleOrchestrationQuotaFailover(threadId, blob);
+          const failedOver = await this.maybeHandleOrchestrationQuotaFailover(
+            threadId,
+            blob,
+          );
           this.maybeEnqueueCrashContinue(threadId, {
             detail: detail || failDetail,
             assistantText: chatText,
             partsCount: parts.length,
           });
-          if (!this.crashContinued.has(threadId)) {
+          if (
+            shouldNotifyParentAfterTurnError({
+              quotaFailoverHandled: failedOver,
+              crashContinued: this.crashContinued.has(threadId),
+            })
+          ) {
             const failed = readThread(threadId);
             if (failed) {
               notifyParentOfChildHalt(failed, 'error', (id, prompt) => this.send(id, prompt));
@@ -1724,13 +1738,21 @@ export class Orchestrator {
           this.emit({ type: 'status_changed', threadId, status: 'error' });
         }
         this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
-        void this.maybeHandleOrchestrationQuotaFailover(threadId, message);
+        const failedOver = await this.maybeHandleOrchestrationQuotaFailover(
+          threadId,
+          message,
+        );
         this.maybeEnqueueCrashContinue(threadId, {
           detail: message,
           assistantText: '',
           partsCount: 0,
         });
-        if (!this.crashContinued.has(threadId)) {
+        if (
+          shouldNotifyParentAfterTurnError({
+            quotaFailoverHandled: failedOver,
+            crashContinued: this.crashContinued.has(threadId),
+          })
+        ) {
           const failed = readThread(threadId);
           if (failed) {
             notifyParentOfChildHalt(failed, 'error', (id, prompt) => this.send(id, prompt));
