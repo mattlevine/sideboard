@@ -6,6 +6,7 @@ import {
   createEmptyThread,
   invalidateThreadListCache,
   invalidateThreadRecord,
+  isSelfWrittenRecord,
   isThreadRecordFile,
   listThreads,
   readThread,
@@ -66,6 +67,35 @@ describe('thread list cache', () => {
     });
     writeThread(second);
     expect(listThreads().map((t) => t.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it('isSelfWrittenRecord is true until another process rewrites the file', () => {
+    const thread = createEmptyThread({
+      title: 'mine',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/mine',
+      worktreePath: '/tmp/mine',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    expect(isSelfWrittenRecord(thread.id)).toBe(false);
+    writeThread(thread);
+    expect(isSelfWrittenRecord(thread.id)).toBe(true);
+    // Reading back does not change ownership.
+    expect(readThread(thread.id)?.id).toBe(thread.id);
+    expect(isSelfWrittenRecord(thread.id)).toBe(true);
+
+    const path = threadFilePath(thread.id);
+    const later = new Date(Date.now() + 1000);
+    utimesSync(path, later, later); // foreign rewrite → new mtime
+    expect(isSelfWrittenRecord(thread.id)).toBe(false);
+
+    // Invalidation (store watcher on a foreign change) forgets the marker.
+    writeThread(thread);
+    expect(isSelfWrittenRecord(thread.id)).toBe(true);
+    invalidateThreadRecord(thread.id);
+    expect(isSelfWrittenRecord(thread.id)).toBe(false);
   });
 
   it('picks up another process rewriting a thread file (MCP vs desktop)', () => {

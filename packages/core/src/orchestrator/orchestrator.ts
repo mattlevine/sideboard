@@ -301,6 +301,9 @@ export function resolveOrchChildFollowUp(
 /** After Send now / Stop, do not pin drainQueue on a wedged agent child. */
 const STALE_AGENT_PID_WAIT_MS = 2_500;
 
+/** Creating several worktrees in a row runs one light reconcile per repo, not one each. */
+export const LIGHT_RECONCILE_THROTTLE_MS = 10_000;
+
 /** Persist status unless the thread was archived or purged mid-turn. */
 function writeLiveStatus(
   threadId: string,
@@ -329,6 +332,8 @@ export class Orchestrator {
   private readonly startingTurns = new Set<string>();
   /** Last sync thread-file read for false-stop heal (throttled per thread). */
   private readonly lastReconcileHealAt = new Map<string, number>();
+  /** Per-repo timestamp of the last `reconcile(repo, { light: true })`. */
+  private readonly lightReconcileAt = new Map<string, number>();
   /**
    * Threads intentionally force-stopped. Prevents runTurn from re-asserting
    * `running` after spawn, and from overwriting `stopped` with idle/error when
@@ -446,10 +451,33 @@ export class Orchestrator {
        * Default true for desktop/CLI.
        */
       drainQueues?: boolean;
+      /**
+       * Hot-path variant for "about to add a worktree to this repo": only the
+       * repo-scoped checks (missing worktrees → broken, orphan discovery /
+       * cleanup), throttled per repo. Skips the global heal loop, History
+       * cleanup, queue adoption and timer re-arming — startup and the store
+       * watcher own those. Requires `repoPath`.
+       */
+      light?: boolean;
     },
   ): Promise<void> {
     const reclaimStaleTurns = opts?.reclaimStaleTurns === true;
     const drainQueues = opts?.drainQueues !== false;
+
+    if (opts?.light && repoPath) {
+      const last = this.lightReconcileAt.get(repoPath) ?? 0;
+      if (Date.now() - last < LIGHT_RECONCILE_THROTTLE_MS) return;
+      this.lightReconcileAt.set(repoPath, Date.now());
+      for (const thread of listThreads()) {
+        if (isGlobalThread(thread) || thread.repoPath !== repoPath) continue;
+        if (!existsSync(thread.worktreePath)) {
+          setStatus(thread.id, 'broken', 'Worktree missing on disk');
+          this.emit({ type: 'status_changed', threadId: thread.id, status: 'broken' });
+        }
+      }
+      await this.reconcileOrphans([repoPath]);
+      return;
+    }
 
     // Soccer nicknames for orchestration chats (incl. legacy cloud-goal titles).
     healOrchestrationSoccerTitles();
@@ -494,6 +522,27 @@ export class Orchestrator {
         : [...new Set(listThreads({ includeArchived: true }).map((t) => t.repoPath))]
     ).filter((p) => !isGlobalRepoPath(p));
 
+    await this.reconcileOrphans(repoPaths);
+
+    try {
+      if (shouldRunHistoryCleanup()) {
+        cleanupArchivedHistory();
+      }
+    } catch {
+      // Best-effort History cap
+    }
+
+    if (drainQueues) {
+      this.adoptPersistedQueues();
+    }
+
+    // Re-arm session-quota wait timers (and fire any that are already due).
+    this.schedulePendingQuotaResumes();
+    armSchedules();
+  }
+
+  /** Surface (and, when enabled, clean up) worktrees git knows about but no thread owns. */
+  private async reconcileOrphans(repoPaths: string[]): Promise<void> {
     try {
       const orphans = await findOrphanWorktrees(repoPaths);
       if (orphans.length) {
@@ -513,22 +562,6 @@ export class Orchestrator {
     } catch {
       // Best-effort orphan discovery
     }
-
-    try {
-      if (shouldRunHistoryCleanup()) {
-        cleanupArchivedHistory();
-      }
-    } catch {
-      // Best-effort History cap
-    }
-
-    if (drainQueues) {
-      this.adoptPersistedQueues();
-    }
-
-    // Re-arm session-quota wait timers (and fire any that are already due).
-    this.schedulePendingQuotaResumes();
-    armSchedules();
   }
 
   /**

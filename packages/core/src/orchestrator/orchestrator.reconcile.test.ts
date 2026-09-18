@@ -7,7 +7,12 @@ import {
   readThread,
   writeThread,
 } from '../store/thread-store.js';
-import { isPidAlive, Orchestrator, waitForPidExit } from './orchestrator.js';
+import {
+  isPidAlive,
+  LIGHT_RECONCILE_THROTTLE_MS,
+  Orchestrator,
+  waitForPidExit,
+} from './orchestrator.js';
 import { spawn } from 'node:child_process';
 
 describe('Orchestrator.reconcile reclaim', () => {
@@ -126,6 +131,70 @@ describe('Orchestrator.reconcile reclaim', () => {
     expect(readThread(thread.id)?.status).toBe('queued');
     expect(readThread(thread.id)?.queue).toEqual(['review this pr']);
     drainSpy.mockRestore();
+  });
+
+  describe('light (create hot path)', () => {
+    function seedIdle(repo: string, name: string, opts?: { missing?: boolean; queue?: string[] }) {
+      const worktreePath = join(dataDir, `wt-${name}`);
+      if (!opts?.missing) mkdirSync(worktreePath, { recursive: true });
+      const thread = createEmptyThread({
+        title: name,
+        sourceType: 'branch',
+        sourceRef: 'main',
+        branchName: `thread/${name}`,
+        worktreePath,
+        repoPath: join(dataDir, repo),
+        agent: 'claude',
+        status: opts?.queue ? 'queued' : 'idle',
+      });
+      if (opts?.queue) thread.queue = opts.queue;
+      writeThread(thread);
+      return thread;
+    }
+
+    it('marks missing worktrees broken only for the target repo', async () => {
+      const here = seedIdle('repo-a', 'a-missing', { missing: true });
+      const elsewhere = seedIdle('repo-b', 'b-missing', { missing: true });
+      const orch = new Orchestrator();
+      await orch.reconcile(join(dataDir, 'repo-a'), { light: true });
+      expect(readThread(here.id)?.status).toBe('broken');
+      expect(readThread(elsewhere.id)?.status).toBe('idle');
+    });
+
+    it('does not adopt or drain queues, and throttles per repo', async () => {
+      vi.useFakeTimers();
+      try {
+        const queued = seedIdle('repo-a', 'a-queued', { queue: ['review this pr'] });
+        const orch = new Orchestrator();
+        const drainSpy = vi
+          .spyOn(orch as unknown as { drainQueue: (id: string) => Promise<void> }, 'drainQueue')
+          .mockResolvedValue(undefined);
+        const adoptSpy = vi.spyOn(orch, 'adoptPersistedQueues');
+        const repo = join(dataDir, 'repo-a');
+
+        await orch.reconcile(repo, { light: true });
+        expect(drainSpy).not.toHaveBeenCalled();
+        expect(adoptSpy).not.toHaveBeenCalled();
+        expect(readThread(queued.id)?.status).toBe('queued');
+
+        // A worktree that vanishes right after is not re-checked inside the window…
+        const late = seedIdle('repo-a', 'a-late', { missing: true });
+        await orch.reconcile(repo, { light: true });
+        expect(readThread(late.id)?.status).toBe('idle');
+        // …but a different repo is not throttled by the first.
+        const other = seedIdle('repo-b', 'b-late', { missing: true });
+        await orch.reconcile(join(dataDir, 'repo-b'), { light: true });
+        expect(readThread(other.id)?.status).toBe('broken');
+
+        vi.advanceTimersByTime(LIGHT_RECONCILE_THROTTLE_MS + 1);
+        await orch.reconcile(repo, { light: true });
+        expect(readThread(late.id)?.status).toBe('broken');
+        drainSpy.mockRestore();
+        adoptSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('does not SIGTERM a live handle when disk agentPid is a stale dead pid', () => {
