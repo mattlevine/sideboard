@@ -28,6 +28,7 @@ import {
   mergeFullThreadIntoLists,
   threadListsUnchanged,
 } from './lib/thread-refresh';
+import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
 import { ShowCostProvider } from './lib/show-cost';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
@@ -126,6 +127,9 @@ export function App() {
   const [archived, setArchived] = useState<Thread[]>([]);
   const threadsRef = useRef<Thread[]>([]);
   const archivedRef = useRef<Thread[]>([]);
+  const archivedHydratedRef = useRef(false);
+  const settingsOpenRef = useRef(false);
+  const seenOpenPrWorktrees = useRef(new Set<string>());
   // Do not copy state back onto these refs each render: an urgent
   // setSelectedId can re-render before startTransition commits and restore
   // the pre-refresh lists so a following refreshThread reapplies onto stale data.
@@ -302,6 +306,7 @@ export function App() {
     setPrPageOpen(false);
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
+  settingsOpenRef.current = settingsOpen;
   const [settingsInitialNav, setSettingsInitialNav] = useState<SettingsNavId>('agents');
   /** Settings → Advanced → Show cost (when available) (default off). */
   const [showCost, setShowCost] = useState(false);
@@ -395,8 +400,10 @@ export function App() {
       do {
         refreshQueued.current = false;
         const selectedId = selectedIdRef.current;
+        const includeArchived =
+          settingsOpenRef.current || !archivedHydratedRef.current;
         const [all, rt, ws, selectedFull] = await Promise.all([
-          window.sideboard.getThreads(true),
+          window.sideboard.getThreads(includeArchived),
           window.sideboard.getRuntime(),
           window.sideboard.listWorkspaces().catch(() => [] as Workspace[]),
           selectedId
@@ -409,7 +416,10 @@ export function App() {
           rememberFull(selectedFull);
         }
         const live = all.filter((t) => t.status !== 'archived');
-        const archivedThreads = all.filter((t) => t.status === 'archived');
+        const archivedThreads = includeArchived
+          ? all.filter((t) => t.status === 'archived')
+          : archivedRef.current;
+        if (includeArchived) archivedHydratedRef.current = true;
         commitThreadLists({ threads: live, archived: archivedThreads });
         startTransition(() => {
           setRuntime(rt);
@@ -476,6 +486,11 @@ export function App() {
       window.clearInterval(interval);
     };
   }, [settingsOpen]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    void refresh();
+  }, [settingsOpen, refresh]);
 
   const notifySoccerNickname = useCallback((title: string | null | undefined) => {
     if (!title?.trim()) return;
@@ -662,18 +677,13 @@ export function App() {
     let cancelled = false;
     let running = false;
 
-    async function syncOpenPrStates() {
+    async function syncOpenPrStates(mode: 'new' | 'all') {
       if (cancelled || running) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      // Dedupe by worktree; prefer first thread id per worktree.
-      const seenWt = new Set<string>();
-      const ids: string[] = [];
-      for (const entry of openPrSyncKey.split('|')) {
-        const [id, wt = ''] = entry.split(':');
-        if (!id || seenWt.has(wt)) continue;
-        seenWt.add(wt);
-        ids.push(id);
-      }
+      const ids =
+        mode === 'new'
+          ? newOpenPrSyncIds(openPrSyncKey, seenOpenPrWorktrees.current)
+          : openPrWorktreesFromKey(openPrSyncKey).map((row) => row.id);
       if (ids.length === 0) return;
       running = true;
       try {
@@ -690,12 +700,12 @@ export function App() {
       }
     }
 
-    void syncOpenPrStates();
+    void syncOpenPrStates('new');
     const onVis = () => {
-      if (document.visibilityState === 'visible') void syncOpenPrStates();
+      if (document.visibilityState === 'visible') void syncOpenPrStates('all');
     };
     document.addEventListener('visibilitychange', onVis);
-    const interval = window.setInterval(() => void syncOpenPrStates(), 60_000);
+    const interval = window.setInterval(() => void syncOpenPrStates('all'), 60_000);
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onVis);

@@ -148,6 +148,7 @@ import {
   captureTurnBaseline,
   getDiff,
   getDiffSummary,
+  getUncommittedDiffStat,
   initializeGitRepository,
   listWorktreeFiles,
   readWorktreeFile,
@@ -2467,6 +2468,12 @@ export class Orchestrator {
       path: opts?.path,
       lastTurnBase: this.turnBaselines.get(thread.id) ?? null,
     });
+  }
+
+  async uncommittedDiffStat(threadRef: string) {
+    const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Diff');
+    return getUncommittedDiffStat(thread.worktreePath);
   }
 
   async diffSummary(threadRef: string) {

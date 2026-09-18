@@ -136,6 +136,8 @@ const api: IpcApi = {
     ipcRenderer.invoke('ensureCloudCoordinator', agent),
   stopThread: (threadRef) => ipcRenderer.invoke('stopThread', threadRef),
   getDiff: (threadRef, opts) => ipcRenderer.invoke('getDiff', threadRef, opts),
+  getWorktreeDirtyStat: (threadRef) =>
+    ipcRenderer.invoke('getWorktreeDirtyStat', threadRef),
   initializeGit: (threadRef) => ipcRenderer.invoke('initializeGit', threadRef),
   getPrChecks: (threadRef) => ipcRenderer.invoke('getPrChecks', threadRef),
   getPrMeta: (threadRef) => ipcRenderer.invoke('getPrMeta', threadRef),

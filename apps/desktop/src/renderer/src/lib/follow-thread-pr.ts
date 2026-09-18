@@ -65,6 +65,37 @@ export function followThreadPrMeta(
 }
 
 /**
+ * Parse the open-PR sync key (`id:worktree|…`) into one thread id per worktree.
+ */
+export function openPrWorktreesFromKey(key: string): Array<{ id: string; worktree: string }> {
+  if (!key.trim()) return [];
+  const seenWt = new Set<string>();
+  const out: Array<{ id: string; worktree: string }> = [];
+  for (const entry of key.split('|')) {
+    const [id, wt = ''] = entry.split(':');
+    if (!id || seenWt.has(wt)) continue;
+    seenWt.add(wt);
+    out.push({ id, worktree: wt });
+  }
+  return out;
+}
+
+/** New worktrees only — creating two review PRs must not refetch every open PR. */
+export function newOpenPrSyncIds(key: string, seenWorktrees: Set<string>): string[] {
+  const current = openPrWorktreesFromKey(key);
+  const currentWts = new Set(current.map((row) => row.worktree));
+  for (const wt of [...seenWorktrees]) {
+    if (!currentWts.has(wt)) seenWorktrees.delete(wt);
+  }
+  const ids: string[] = [];
+  for (const row of current) {
+    if (!seenWorktrees.has(row.worktree)) ids.push(row.id);
+    seenWorktrees.add(row.worktree);
+  }
+  return ids;
+}
+
+/**
  * Left-sidebar hover must not invent "Needs approval" / "Open" from a URL-only
  * stub. Show a status once GitHub fields landed, or when persisted lifecycle
  * is already draft / merged / closed / queued.

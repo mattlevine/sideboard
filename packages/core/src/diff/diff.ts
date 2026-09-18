@@ -1007,6 +1007,47 @@ export function writeWorktreeFile(
   return { path: relativePath };
 }
 
+/** Line counts for a sidebar/board dirty glyph — not a Changes payload. */
+export type UncommittedDiffStat = {
+  additions: number;
+  deletions: number;
+  dirty: boolean;
+};
+
+/**
+ * Cheap working-tree dirt for every sidebar/board row.
+ * Do not call {@link getDiff} here: includeMeta walks merge-base + branch
+ * commits (the full PR vs main), and the default untracked walk races
+ * `git worktree add` / setup when several review worktrees are created.
+ */
+export async function getUncommittedDiffStat(
+  worktreePath: string,
+): Promise<UncommittedDiffStat> {
+  const status = await inspectGitWorktree(worktreePath);
+  if (status !== 'ok') {
+    return { additions: 0, deletions: 0, dirty: false };
+  }
+
+  const head = await git(['rev-parse', '--verify', 'HEAD'], worktreePath, {
+    reject: false,
+    timeoutMs: 4_000,
+  });
+  if (head.exitCode !== 0) {
+    return { additions: 0, deletions: 0, dirty: await isDirty(worktreePath) };
+  }
+
+  const [num, dirty] = await Promise.all([
+    gitDiff(['--numstat', 'HEAD'], worktreePath, { timeoutMs: 4_000 }),
+    isDirty(worktreePath),
+  ]);
+  const counts = statFromNumstat(num.stdout);
+  return {
+    additions: counts.additions,
+    deletions: counts.deletions,
+    dirty: dirty || counts.additions > 0 || counts.deletions > 0,
+  };
+}
+
 /** Compact summary for MCP token-frugal payloads */
 export async function getDiffSummary(
   worktreePath: string,

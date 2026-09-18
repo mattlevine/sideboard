@@ -677,6 +677,16 @@ export function Sidebar({
     );
   }, [threads, repoPath, workspaces, q]);
 
+  const groupedByRepo = useMemo(() => {
+    return byRepo.map(([path, repoThreads]) => ({
+      path,
+      repoThreads,
+      groups: groupHomeBoardWorktrees(repoThreads, worktreeSort).filter((group) =>
+        worktreeMatchesOwnership(group, ownership, githubLogin ?? ''),
+      ),
+    }));
+  }, [byRepo, worktreeSort, ownership, githubLogin]);
+
   return (
     <aside className="sidebar">
       <div className="sidebar-chrome">
@@ -872,8 +882,8 @@ export function Sidebar({
           </div>
         )}
 
-        {byRepo.length === 0 && <div className="empty">No workspaces yet</div>}
-        {byRepo.map(([path, repoThreads]) => (
+        {groupedByRepo.length === 0 && <div className="empty">No workspaces yet</div>}
+        {groupedByRepo.map(({ path, repoThreads, groups }) => (
           <div key={path} className="workspace-group">
             <div className="workspace-header">
               <div className="workspace-label">
@@ -920,11 +930,7 @@ export function Sidebar({
                 No threads
               </div>
             )}
-            {groupHomeBoardWorktrees(repoThreads, worktreeSort)
-              .filter((group) =>
-                worktreeMatchesOwnership(group, ownership, githubLogin ?? ''),
-              )
-              .map((group) => {
+            {groups.map((group) => {
               const primary =
                 pickWorktreeChat(group, selectedId) ?? group[0]!;
               const worktreeLabel = worktreeDisplayLabelForGroup(group);
