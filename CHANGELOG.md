@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.211] - 2026-09-18
+
+### Fixed
+
+- Settings → History Clear older than uses the archived-at clock, so a later row touch cannot hide chats the cleanup would delete.
+- Composer images stay with the queued prompt: a file dropped after send is not stolen, and removing that follow-up does not leak the screenshot onto a later turn.
+
 ## [0.1.210] - 2026-09-17
 
 ### Changed
