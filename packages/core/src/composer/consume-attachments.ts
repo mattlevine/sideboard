@@ -19,16 +19,13 @@ export function consumeComposerAttachments(thread: {
 
 /**
  * Attachments the next non-continue turn should send, then drop.
- * A parked send snapshot wins. Leftover composer files arrived after send
- * and belong to the next message — do not steal them.
+ * Only the parked send snapshot counts. Leftover composer files arrived
+ * after send and belong to the next message — do not steal them.
  */
 export function takePendingTurnAttachments(thread: {
-  attachments: ThreadAttachment[];
   pendingTurnAttachments?: ThreadAttachment[];
 }): ThreadAttachment[] {
-  const pending = thread.pendingTurnAttachments ?? [];
-  if (pending.length > 0) return [...pending];
-  return thread.attachments.length > 0 ? [...thread.attachments] : [];
+  return [...(thread.pendingTurnAttachments ?? [])];
 }
 
 /** Keep `queueAttachments` the same length as `queue`. Missing slots are empty. */

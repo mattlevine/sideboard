@@ -1019,9 +1019,11 @@ export class Orchestrator {
       const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
       updateThread(thread.id, {
         ...removed,
-        // Old sends parked on pendingTurnAttachments; drop that bag when the
-        // follow-up that owned it is gone so a later turn cannot inherit it.
-        ...(stillQueued ? {} : { pendingTurnAttachments: [] }),
+        // Follow-up files live on queueAttachments. pendingTurnAttachments is
+        // the in-flight / just-dequeued snapshot — do not wipe it when a
+        // later follow-up is removed. Only drop a leftover bag when nothing
+        // is running and the queue is empty (legacy sends that never drained).
+        ...(stillQueued || inFlight ? {} : { pendingTurnAttachments: [] }),
         status: !stillQueued && !inFlight && current.status === 'queued' ? 'idle' : current.status,
       });
       this.emit({ type: 'queue_changed', threadId: thread.id, queue: removed.queue });
@@ -1125,9 +1127,9 @@ export class Orchestrator {
         updateThread(threadId, {
           queue: shifted.queue,
           queueAttachments: shifted.queueAttachments,
-          ...(shifted.attachments.length > 0
-            ? { pendingTurnAttachments: shifted.attachments }
-            : {}),
+          // Always write the snapshot, including [] for text-only, so
+          // takePending cannot fall back to leftover pending or composer files.
+          pendingTurnAttachments: shifted.attachments,
         });
         this.emit({ type: 'queue_changed', threadId, queue: shifted.queue });
         await this.runTurn(threadId, shifted.prompt);
@@ -1191,7 +1193,6 @@ export class Orchestrator {
     const autoContinue =
       isJobContinuePrompt(prompt) ||
       prompt.trim().startsWith('The previous agent process ended before it finished.');
-    const parkedSnapshot = thread.pendingTurnAttachments ?? [];
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
     appendMessage(threadId, {
@@ -1211,7 +1212,7 @@ export class Orchestrator {
       thread.worktreePath,
       gitPrompt,
       {
-        attachments: autoContinue ? [] : (sentAttachments ?? thread.attachments),
+        attachments: autoContinue ? [] : (sentAttachments ?? []),
       },
     );
     // Re-assert on every turn (incl. Claude --resume, which drops cachedPrefix).
@@ -1313,12 +1314,7 @@ export class Orchestrator {
     // Drop only the snapshot this turn sent. Composer files dropped after
     // send() stay for the next message.
     if (!autoContinue && sentAttachments) {
-      updateThread(
-        threadId,
-        parkedSnapshot.length > 0
-          ? { pendingTurnAttachments: [] }
-          : { attachments: [], pendingTurnAttachments: [] },
-      );
+      updateThread(threadId, { pendingTurnAttachments: [] });
     }
 
     // Re-resolve session before turn

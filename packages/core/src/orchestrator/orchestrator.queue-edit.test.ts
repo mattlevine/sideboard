@@ -194,6 +194,40 @@ describe('Orchestrator queued-message editing', () => {
     expect(updated.pendingTurnAttachments).toEqual([]);
   });
 
+  it('keeps in-flight pending images when the last follow-up is removed', async () => {
+    const thread = seedThread([]);
+    const running = readThread(thread.id)!;
+    running.status = 'running';
+    running.pendingTurnAttachments = [
+      {
+        id: 'img-live',
+        name: 'live.png',
+        kind: 'file',
+        content: 'Image attached: live.png',
+        previewDataUrl: 'data:image/png;base64,yy',
+      },
+    ];
+    writeThread(running);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    internal.drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill: vi.fn(),
+      done: new Promise(() => {}),
+    });
+
+    await orch.send(thread.id, 'follow up without an image');
+    const updated = await orch.removeQueuedMessage(thread.id, 0);
+    expect(updated.queue).toEqual([]);
+    expect(updated.pendingTurnAttachments).toEqual([
+      expect.objectContaining({ id: 'img-live', name: 'live.png' }),
+    ]);
+  });
+
   it('does not drain send() when another live process is the desktop host', async () => {
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',

@@ -17,8 +17,6 @@ const img: ThreadAttachment = {
   previewDataUrl: 'data:image/png;base64,xx',
 };
 
-const extra: ThreadAttachment = { ...img, id: 'img-2', name: 'two.png' };
-
 describe('consumeComposerAttachments', () => {
   it('leaves an empty composer alone', () => {
     expect(consumeComposerAttachments({ attachments: [] })).toEqual({
@@ -39,15 +37,14 @@ describe('takePendingTurnAttachments', () => {
   it('does not steal leftover composer files after a parked send', () => {
     expect(
       takePendingTurnAttachments({
-        attachments: [extra],
         pendingTurnAttachments: [img],
       }),
     ).toEqual([img]);
   });
 
-  it('falls back to composer staging when nothing is parked', () => {
-    expect(takePendingTurnAttachments({ attachments: [img] })).toEqual([img]);
-    expect(takePendingTurnAttachments({ attachments: [] })).toEqual([]);
+  it('does not fall back to composer staging when nothing is parked', () => {
+    expect(takePendingTurnAttachments({ pendingTurnAttachments: [] })).toEqual([]);
+    expect(takePendingTurnAttachments({})).toEqual([]);
   });
 });
 
