@@ -127,6 +127,7 @@ import {
   splitTurnQueue,
   type PendingFollowUp,
 } from '../lib/visible-follow-up-queue';
+import { getComposerDraft, rememberComposerDraft } from '../lib/composer-draft';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -594,7 +595,10 @@ export function ThreadPanel({
   const turnStartedAt = live.startedAt;
   const showCost = useShowCost();
   const followUpBehavior = useFollowUpBehavior();
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(() => getComposerDraft(thread.id));
+  useEffect(() => {
+    rememberComposerDraft(thread.id, prompt);
+  }, [thread.id, prompt]);
   const [busy, setBusy] = useState(false);
   const [setupRunning, setSetupRunning] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
