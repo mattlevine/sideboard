@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.216] - 2026-09-18
+
+### Fixed
+
+- Find in chat paints matches with CSS highlights instead of wrapping React text, so streaming bubbles no longer duplicate or lose glyphs when find closes.
+- The find-bar count and next/prev walk the same visible spans (tool names that are not on screen no longer create empty hits).
+- ⌘F in a file tab or terminal opens editor/terminal find; the Edit menu **Find in Chat** item still opens the chat bar.
+- Opening find no longer leftover-reopens after switching threads.
+
 ## [0.1.215] - 2026-09-18
 
 ### Changed
