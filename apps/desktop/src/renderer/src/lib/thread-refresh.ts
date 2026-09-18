@@ -75,6 +75,18 @@ export function vanishedLiveThreadIds(prevLive: Thread[], nextLive: Thread[]): s
   return prevLive.filter((t) => !next.has(t.id)).map((t) => t.id);
 }
 
+/**
+ * The reverse of `vanishedLiveThreadIds`: a thread restored by another
+ * process (MCP / CLI unarchive) is back in the live list, so its stale
+ * History copy must go. Returns the same array when nothing changed.
+ */
+export function withoutLiveThreads(archived: Thread[], live: Thread[]): Thread[] {
+  if (archived.length === 0 || live.length === 0) return archived;
+  const liveIds = new Set(live.map((t) => t.id));
+  const next = archived.filter((t) => !liveIds.has(t.id));
+  return next.length === archived.length ? archived : next;
+}
+
 export type ThreadRefreshReason = 'full' | 'status';
 
 /**

@@ -276,6 +276,12 @@ export interface IpcApi {
   resolveRepoRoot(cwd: string): Promise<string>;
   getThreads(includeArchived?: boolean): Promise<Thread[]>;
   getThread(idOrRef: string): Promise<Thread | null>;
+  /**
+   * One record in the same slim shape as `getThreads` (list-row messages,
+   * no attachments). For list bookkeeping — e.g. a thread that left the live
+   * list on a live-only refresh — never for the open chat.
+   */
+  getThreadSlim(idOrRef: string): Promise<Thread | null>;
   getRuntime(): Promise<OrchestratorRuntime>;
   setMaxConcurrent(n: number): Promise<void>;
   createThread(input: CreateThreadInput): Promise<Thread>;

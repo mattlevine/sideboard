@@ -6,6 +6,7 @@ import {
   mergeFullThreadIntoLists,
   threadListsUnchanged,
   vanishedLiveThreadIds,
+  withoutLiveThreads,
 } from './thread-refresh';
 import type { Thread } from '@sideboard-ai/core';
 
@@ -34,6 +35,22 @@ describe('vanishedLiveThreadIds', () => {
     expect(vanishedLiveThreadIds([a, b, c], [a, c])).toEqual(['b']);
     expect(vanishedLiveThreadIds([a], [a, b])).toEqual([]);
     expect(vanishedLiveThreadIds([], [a])).toEqual([]);
+  });
+});
+
+describe('withoutLiveThreads', () => {
+  it('drops archived rows that came back live (restored elsewhere)', () => {
+    const a = thread({ id: 'a', status: 'archived' });
+    const b = thread({ id: 'b', status: 'archived' });
+    const aLive = thread({ id: 'a', status: 'idle' });
+    expect(withoutLiveThreads([a, b], [aLive])).toEqual([b]);
+  });
+
+  it('returns the same array when nothing overlaps', () => {
+    const a = thread({ id: 'a', status: 'archived' });
+    const archived = [a];
+    expect(withoutLiveThreads(archived, [thread({ id: 'b', status: 'idle' })])).toBe(archived);
+    expect(withoutLiveThreads(archived, [])).toBe(archived);
   });
 });
 

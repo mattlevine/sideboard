@@ -1298,6 +1298,10 @@ function registerIpc(): void {
     orch.getThreads(Boolean(includeArchived)).map(slimThreadForUiList),
   );
   ipcMain.handle('getThread', (_e, id: string) => orch.getThread(id));
+  ipcMain.handle('getThreadSlim', (_e, id: string) => {
+    const thread = orch.getThread(id);
+    return thread ? slimThreadForUiList(thread) : null;
+  });
   ipcMain.handle('getRuntime', () => orch.getRuntime());
   ipcMain.handle('setMaxConcurrent', (_e, n: number) => {
     orch.setMaxConcurrent(n);

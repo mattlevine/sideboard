@@ -88,6 +88,7 @@ const api: IpcApi = {
   resolveRepoRoot: (cwd) => ipcRenderer.invoke('resolveRepoRoot', cwd),
   getThreads: (includeArchived) => ipcRenderer.invoke('getThreads', includeArchived),
   getThread: (idOrRef) => ipcRenderer.invoke('getThread', idOrRef),
+  getThreadSlim: (idOrRef) => ipcRenderer.invoke('getThreadSlim', idOrRef),
   getRuntime: () => ipcRenderer.invoke('getRuntime'),
   setMaxConcurrent: (n) => ipcRenderer.invoke('setMaxConcurrent', n),
   createThread: (input) => ipcRenderer.invoke('createThread', input),

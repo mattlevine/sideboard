@@ -28,6 +28,7 @@ import {
   mergeFullThreadIntoLists,
   threadListsUnchanged,
   vanishedLiveThreadIds,
+  withoutLiveThreads,
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
 import { ShowCostProvider } from './lib/show-cost';
@@ -423,13 +424,16 @@ export function App() {
         if (includeArchived) {
           archivedHydratedRef.current = true;
         } else {
-          // Live-only pass: a thread that left the live list was archived
-          // (desktop, MCP, or auto-archive on merge). Refetch just those so
-          // `archived` stays correct without slimming every History record.
+          // Live-only pass: a thread restored elsewhere (MCP / CLI) is live
+          // again — drop its stale History copy. A thread that left the live
+          // list was archived (desktop, MCP, or auto-archive on merge) —
+          // refetch just those, slim (no transcript), so `archived` stays
+          // correct without slimming every History record.
+          archivedThreads = withoutLiveThreads(archivedThreads, live);
           const vanished = vanishedLiveThreadIds(threadsRef.current, live);
           if (vanished.length > 0) {
             const fetched = await Promise.all(
-              vanished.map((id) => window.sideboard.getThread(id).catch(() => null)),
+              vanished.map((id) => window.sideboard.getThreadSlim(id).catch(() => null)),
             );
             let lists = { threads: live, archived: archivedThreads };
             fetched.forEach((t, i) => {
