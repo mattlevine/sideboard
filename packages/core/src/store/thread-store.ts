@@ -45,6 +45,9 @@ export function normalizeThread(raw: Thread): Thread {
     lastError: raw.lastError ?? null,
     agentPid: raw.agentPid ?? null,
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    pendingTurnAttachments: Array.isArray(raw.pendingTurnAttachments)
+      ? raw.pendingTurnAttachments
+      : [],
     prTitle: raw.prTitle ?? null,
     prState: raw.prState ?? null,
     prIsDraft: Boolean(raw.prIsDraft),
@@ -118,6 +121,7 @@ export function createEmptyThread(
         | 'stackLayer'
         | 'userSetTitle'
         | 'attachments'
+        | 'pendingTurnAttachments'
       >
     >,
 ): Thread {
@@ -149,6 +153,7 @@ export function createEmptyThread(
     userSetTitle: partial.userSetTitle ?? false,
     messages: partial.messages ?? [],
     attachments: partial.attachments ?? [],
+    pendingTurnAttachments: partial.pendingTurnAttachments ?? [],
     createdAt: ts,
     updatedAt: ts,
     title: partial.title,

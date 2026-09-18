@@ -153,6 +153,10 @@ import {
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
 import { expandComposerPrompt } from '../composer/expand.js';
 import {
+  consumeComposerAttachments,
+  takePendingTurnAttachments,
+} from '../composer/consume-attachments.js';
+import {
   attachmentsFromWorktreePaths,
   stageAbsolutePathsAsAttachments,
   stageBuffersAsAttachments,
@@ -925,6 +929,11 @@ export class Orchestrator {
       // Skip the inbox (in-flight turn or already-parked follow-ups).
       shouldSteer = followUp === 'steer' && (inFlight || current.queue.length > 0);
       const patch: Parameters<typeof updateThread>[1] = { queue };
+      if (current.attachments.length > 0) {
+        const consumed = consumeComposerAttachments(current);
+        patch.attachments = consumed.attachments;
+        patch.pendingTurnAttachments = consumed.pendingTurnAttachments;
+      }
       if (!inFlight) patch.status = 'queued';
       // Stale agentPid from a dead MCP/desktop child can pin drainQueue forever.
       const pid = current.agentPid;
@@ -1154,10 +1163,8 @@ export class Orchestrator {
     const autoContinue =
       isJobContinuePrompt(prompt) ||
       prompt.trim().startsWith('The previous agent process ended before it finished.');
-    const sentAttachments =
-      !autoContinue && thread.attachments.length > 0
-        ? [...thread.attachments]
-        : undefined;
+    const parked = takePendingTurnAttachments(thread);
+    const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
     appendMessage(threadId, {
       role: 'user',
       text: prompt,
@@ -1274,10 +1281,11 @@ export class Orchestrator {
     ]
       .filter(Boolean)
       .join('\n\n');
-    // Attachments are consumed on the first user turn (like Conductor transcript chips).
-    // Auto-continues leave the composer staging area alone.
-    if (!autoContinue && thread.attachments.length > 0) {
-      updateThread(threadId, { attachments: [] });
+    // Composer staging is emptied on send(); drop the parked snapshot here so
+    // the next user message does not reuse this turn's images.
+    // Auto-continues leave parked attachments for the next real user turn.
+    if (!autoContinue && sentAttachments) {
+      updateThread(threadId, { attachments: [], pendingTurnAttachments: [] });
     }
 
     // Re-resolve session before turn
