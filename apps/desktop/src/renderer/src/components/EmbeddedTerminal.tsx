@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { shouldApplyPtyResize } from '../lib/pty-resize';
 import { xtermHostVisibility } from '../lib/xterm-host-visibility';
 
 interface Props {
@@ -120,33 +121,52 @@ export function EmbeddedTerminal({
           const fit = new FitAddon();
           term.loadAddon(fit);
           term.open(hostRef.current);
-          fit.fit();
           term.onData((data) => {
             void window.sideboard.terminal.write(id, data);
           });
-          const ro = new ResizeObserver(() => {
+          let lastPtySize: { cols: number; rows: number } | null = null;
+          let fitting = false;
+          let fitRaf = 0;
+          const applyFit = (alsoRefresh = false) => {
+            if (fitting) return;
+            fitting = true;
             try {
               fit.fit();
-              void window.sideboard.terminal.resize(id, term.cols, term.rows);
+              if (alsoRefresh) {
+                term.refresh(0, Math.max(0, term.rows - 1));
+              }
+              const next = { cols: term.cols, rows: term.rows };
+              if (shouldApplyPtyResize(lastPtySize, next)) {
+                lastPtySize = next;
+                void window.sideboard.terminal.resize(id, next.cols, next.rows);
+              }
             } catch {
               // ignore
+            } finally {
+              fitting = false;
             }
+          };
+          const scheduleFit = () => {
+            if (fitRaf) return;
+            fitRaf = requestAnimationFrame(() => {
+              fitRaf = 0;
+              applyFit();
+            });
+          };
+          applyFit();
+          const ro = new ResizeObserver(() => {
+            scheduleFit();
           });
           ro.observe(hostRef.current);
           termRef.current = {
             write: (d) => term.write(d),
             dispose: () => {
+              if (fitRaf) cancelAnimationFrame(fitRaf);
               ro.disconnect();
               term.dispose();
             },
             refresh: () => {
-              try {
-                fit.fit();
-                term.refresh(0, Math.max(0, term.rows - 1));
-                void window.sideboard.terminal.resize(id, term.cols, term.rows);
-              } catch {
-                // ignore
-              }
+              applyFit(true);
             },
           };
           const first = await snapshot();
