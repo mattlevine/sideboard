@@ -69,7 +69,7 @@ describe('buildTextContextMenuItems', () => {
       buildTextContextMenuItems(
         { selectionText: 'x', isEditable: false },
         { inChatText: false, skipNativeMenu: true },
-        { isMac: true, showInspect: false },
+        { isMac: true },
       ),
     ).toBeNull();
   });
@@ -79,7 +79,7 @@ describe('buildTextContextMenuItems', () => {
       buildTextContextMenuItems(
         { selectionText: '', isEditable: false },
         { inChatText: false, skipNativeMenu: false },
-        { isMac: true, showInspect: false },
+        { isMac: true },
       ),
     ).toBeNull();
   });
@@ -88,11 +88,12 @@ describe('buildTextContextMenuItems', () => {
     const items = buildTextContextMenuItems(
       { selectionText: 'ship the menu', isEditable: false },
       { inChatText: true, skipNativeMenu: false },
-      { isMac: true, showInspect: false },
+      { isMac: true },
     );
     expect(items?.map((i) => ('role' in i ? i.role : i.type))).toEqual([
       'copy',
       'quote',
+      'searchChat',
       'selectChatText',
     ]);
   });
@@ -101,16 +102,16 @@ describe('buildTextContextMenuItems', () => {
     const items = buildTextContextMenuItems(
       { selectionText: '', isEditable: false },
       { inChatText: true, skipNativeMenu: false },
-      { isMac: true, showInspect: false },
+      { isMac: true },
     );
-    expect(items).toEqual([{ type: 'selectChatText' }]);
+    expect(items).toEqual([{ type: 'searchChat' }, { type: 'selectChatText' }]);
   });
 
   it('does not quote outside chat', () => {
     const items = buildTextContextMenuItems(
       { selectionText: 'settings copy', isEditable: false },
       { inChatText: false, skipNativeMenu: false },
-      { isMac: false, showInspect: false },
+      { isMac: false },
     );
     expect(items?.map((i) => ('role' in i ? i.role : i.type))).toEqual(['copy', 'selectAll']);
   });
@@ -123,7 +124,7 @@ describe('buildTextContextMenuItems', () => {
         editFlags: { canUndo: false, canRedo: false, canCut: true, canCopy: true, canPaste: true },
       },
       { inChatText: false, skipNativeMenu: false },
-      { isMac: true, showInspect: false },
+      { isMac: true },
     );
     expect(items?.some((i) => i.type === 'quote')).toBe(false);
     expect(items?.map((i) => ('role' in i ? i.role : i.type))).toEqual([
@@ -142,21 +143,13 @@ describe('buildTextContextMenuItems', () => {
     const items = buildTextContextMenuItems(
       { selectionText: '', isEditable: false, linkURL: 'https://github.com/mattlevine/sideboard' },
       { inChatText: false, skipNativeMenu: false },
-      { isMac: true, showInspect: false },
+      { isMac: true },
     );
     expect(items).toEqual([
       { type: 'copyLink', url: 'https://github.com/mattlevine/sideboard' },
     ]);
   });
 
-  it('appends inspect in dev without a leading separator-only menu', () => {
-    const items = buildTextContextMenuItems(
-      { selectionText: '', isEditable: false },
-      { inChatText: false, skipNativeMenu: false },
-      { isMac: true, showInspect: true },
-    );
-    expect(items).toEqual([{ type: 'inspect' }]);
-  });
 });
 
 describe('injected scripts', () => {

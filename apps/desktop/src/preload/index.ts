@@ -320,4 +320,11 @@ contextBridge.exposeInMainWorld('sideboardUpdate', {
     ipcRenderer.on('menu:quote-selection', handler);
     return () => ipcRenderer.removeListener('menu:quote-selection', handler);
   },
+  onFindChat: (listener: (text: string) => void) => {
+    const handler = (_event: IpcRendererEvent, text: string) => {
+      listener(typeof text === 'string' ? text : '');
+    };
+    ipcRenderer.on('menu:find-chat', handler);
+    return () => ipcRenderer.removeListener('menu:find-chat', handler);
+  },
 });

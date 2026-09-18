@@ -1,5 +1,4 @@
 import {
-  app,
   clipboard,
   Menu,
   type BrowserWindow,
@@ -49,20 +48,20 @@ function toElectronItem(
       },
     };
   }
-  if (item.type === 'selectChatText') {
+  if (item.type === 'searchChat') {
     return {
-      label: 'Select All',
+      label: 'Search Chat',
       click: () => {
         if (win.isDestroyed()) return;
-        void win.webContents.executeJavaScript(selectChatTextScript(params.x, params.y));
+        win.webContents.send('menu:find-chat', (params.selectionText ?? '').trim().slice(0, 200));
       },
     };
   }
   return {
-    label: 'Inspect Element',
+    label: 'Select All',
     click: () => {
       if (win.isDestroyed()) return;
-      win.webContents.inspectElement(params.x, params.y);
+      void win.webContents.executeJavaScript(selectChatTextScript(params.x, params.y));
     },
   };
 }
@@ -87,7 +86,6 @@ async function popupTextContextMenu(win: BrowserWindow, params: ContextMenuParam
 
   const items = buildTextContextMenuItems(params, target, {
     isMac: process.platform === 'darwin',
-    showInspect: !app.isPackaged || Boolean(process.env.ELECTRON_RENDERER_URL),
   });
   if (!items?.length || win.isDestroyed()) return;
 

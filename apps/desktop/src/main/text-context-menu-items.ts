@@ -26,8 +26,8 @@ export type TextContextMenuItem =
     }
   | { type: 'copyLink'; url: string }
   | { type: 'quote' }
-  | { type: 'selectChatText' }
-  | { type: 'inspect' };
+  | { type: 'searchChat' }
+  | { type: 'selectChatText' };
 
 export function formatQuotedComposerText(selection: string): string {
   const trimmed = selection.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/^\n+/, '').replace(/\n+$/, '');
@@ -118,7 +118,7 @@ export function buildTextContextMenuItems(
     };
   },
   target: TextContextTarget,
-  opts: { isMac: boolean; showInspect: boolean },
+  opts: { isMac: boolean },
 ): TextContextMenuItem[] | null {
   if (target.skipNativeMenu) return null;
 
@@ -127,7 +127,7 @@ export function buildTextContextMenuItems(
   const link = safeContextLinkUrl(params.linkURL);
   const flags = params.editFlags ?? {};
 
-  if (!params.isEditable && !hasSelection && !target.inChatText && !link && !opts.showInspect) {
+  if (!params.isEditable && !hasSelection && !target.inChatText && !link) {
     return null;
   }
 
@@ -152,7 +152,7 @@ export function buildTextContextMenuItems(
       items.push({ type: 'quote' });
     }
     if (target.inChatText) {
-      items.push({ type: 'selectChatText' });
+      items.push({ type: 'searchChat' }, { type: 'selectChatText' });
     } else if (hasSelection) {
       items.push({ type: 'role', role: 'selectAll', enabled: flags.canSelectAll ?? true });
     }
@@ -160,10 +160,6 @@ export function buildTextContextMenuItems(
 
   if (link) {
     items.push({ type: 'separator' }, { type: 'copyLink', url: link });
-  }
-
-  if (opts.showInspect) {
-    items.push({ type: 'separator' }, { type: 'inspect' });
   }
 
   const compacted = compactMenu(items);

@@ -23,6 +23,13 @@ function sendOpenSettings(win: BrowserWindow | null): void {
   win.webContents.send('menu:open-settings');
 }
 
+function sendFindChat(win: BrowserWindow | null): void {
+  if (!win || win.isDestroyed()) return;
+  win.show();
+  win.focus();
+  win.webContents.send('menu:find-chat', '');
+}
+
 async function showUpToDate(): Promise<void> {
   await dialog.showMessageBox({
     type: 'info',
@@ -211,6 +218,13 @@ export function setupApplicationMenu(getMainWindow: () => BrowserWindow | null):
             { type: 'separator' as const },
             { role: 'selectAll' as const },
           ] satisfies MenuItemConstructorOptions[])),
+      { type: 'separator' },
+      {
+        label: 'Find in Chat',
+        accelerator: 'CmdOrCtrl+F',
+        registerAccelerator: false,
+        click: () => sendFindChat(getMainWindow()),
+      },
     ],
   };
 
