@@ -4,6 +4,7 @@ import {
   chatSearchQuery,
   findChatSearchHits,
   nextChatSearchIndex,
+  seedChatSearchQuery,
 } from './chat-search';
 
 describe('chatMessageSearchText', () => {
@@ -72,6 +73,17 @@ describe('chatSearchQuery', () => {
   it('trims and caps length', () => {
     expect(chatSearchQuery('  hi  ')).toBe('hi');
     expect(chatSearchQuery('x'.repeat(250)).length).toBe(200);
+  });
+});
+
+describe('seedChatSearchQuery', () => {
+  it('prefers a non-empty seed over the selection', () => {
+    expect(seedChatSearchQuery('  seed  ', 'selected')).toBe('seed');
+  });
+
+  it('falls back to the selection when the seed is blank', () => {
+    expect(seedChatSearchQuery('', '  selected  ')).toBe('selected');
+    expect(seedChatSearchQuery(undefined, 'picked')).toBe('picked');
   });
 });
 

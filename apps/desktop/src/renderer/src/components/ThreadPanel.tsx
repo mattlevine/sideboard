@@ -118,10 +118,10 @@ import {
   snapshotComposerDrop,
 } from '../lib/composer-file-drop';
 import {
-  chatSearchQuery,
   findChatSearchHits,
   nextChatSearchIndex,
   scrollChatToSearchKey,
+  seedChatSearchQuery,
   shouldDeferChatFind,
 } from '../lib/chat-search';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
@@ -1748,9 +1748,7 @@ export function ThreadPanel({
   );
 
   function openChatSearch(seed?: string) {
-    const fromSeed = seed != null ? chatSearchQuery(seed) : '';
-    const fromSel = chatSearchQuery(window.getSelection()?.toString() ?? '');
-    const next = fromSeed || fromSel;
+    const next = seedChatSearchQuery(seed, window.getSelection()?.toString() ?? '');
     setChatSearchOpen(true);
     if (next !== chatSearchQuery) {
       setChatSearchQuery(next);
@@ -2257,7 +2255,7 @@ export function ThreadPanel({
       <div
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
-        <div className={`thread-chat-column${chatSearchOpen ? ' has-chat-search' : ''}`}>
+        <div className="thread-chat-column">
       {chatSearchOpen ? (
         <ChatSearchBar
           query={chatSearchQuery}

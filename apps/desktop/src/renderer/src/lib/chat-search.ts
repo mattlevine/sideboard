@@ -28,6 +28,11 @@ export function chatSearchQuery(raw: string): string {
   return raw.trim().slice(0, 200);
 }
 
+/** Seed from a menu/IPC query, else the current text selection. */
+export function seedChatSearchQuery(seed?: string | null, selection = ''): string {
+  return chatSearchQuery(seed ?? '') || chatSearchQuery(selection);
+}
+
 function matches(haystack: string, query: string): boolean {
   if (!query) return false;
   return haystack.toLowerCase().includes(query.toLowerCase());
