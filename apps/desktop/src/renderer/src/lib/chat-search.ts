@@ -33,14 +33,31 @@ export function seedChatSearchQuery(seed?: string | null, selection = ''): strin
   return chatSearchQuery(seed ?? '') || chatSearchQuery(selection);
 }
 
-function matches(haystack: string, query: string): boolean {
-  if (!query) return false;
-  return haystack.toLowerCase().includes(query.toLowerCase());
+/** Non-overlapping, case-insensitive start offsets. */
+export function findQueryOffsets(haystack: string, query: string): number[] {
+  const q = chatSearchQuery(query);
+  if (!q) return [];
+  const h = haystack.toLowerCase();
+  const needle = q.toLowerCase();
+  const offsets: number[] = [];
+  let from = 0;
+  let index = h.indexOf(needle, from);
+  while (index !== -1) {
+    offsets.push(index);
+    from = index + needle.length;
+    index = h.indexOf(needle, from);
+  }
+  return offsets;
+}
+
+function pushOccurrenceHits(hits: string[], key: string, haystack: string, query: string): void {
+  const n = findQueryOffsets(haystack, query).length;
+  for (let i = 0; i < n; i++) hits.push(key);
 }
 
 /**
  * Message keys in transcript order (`msg-0`, `pending`, `live`).
- * One hit per matching bubble — jump between messages, not every occurrence.
+ * One entry per occurrence so next/prev walks each match.
  */
 export function findChatSearchHits(
   query: string,
@@ -55,11 +72,83 @@ export function findChatSearchHits(
   if (!q) return [];
   const hits: string[] = [];
   messages.forEach((message, i) => {
-    if (matches(chatMessageSearchText(message), q)) hits.push(`msg-${i}`);
+    pushOccurrenceHits(hits, `msg-${i}`, chatMessageSearchText(message), q);
   });
-  if (extras?.pending && matches(extras.pending, q)) hits.push('pending');
-  if (extras?.live && matches(extras.live, q)) hits.push('live');
+  if (extras?.pending) pushOccurrenceHits(hits, 'pending', extras.pending, q);
+  if (extras?.live) pushOccurrenceHits(hits, 'live', extras.live, q);
   return hits;
+}
+
+const SEARCH_TEXT_SCOPE = '[data-chat-text], .turn-summary-text';
+const SEARCH_TEXT_SKIP = '.chat-search-bar, .msg-continue, script, style, svg';
+
+export function collectChatSearchRanges(root: HTMLElement, query: string): Range[] {
+  const q = chatSearchQuery(query);
+  if (!q || typeof document === 'undefined') return [];
+  const ranges: Range[] = [];
+  for (const scope of root.querySelectorAll(SEARCH_TEXT_SCOPE)) {
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const parent = (node as Text).parentElement;
+        if (!parent || parent.closest(SEARCH_TEXT_SKIP)) return NodeFilter.FILTER_REJECT;
+        return node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent ?? '';
+      for (const start of findQueryOffsets(text, q)) {
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, start + q.length);
+        ranges.push(range);
+      }
+    }
+  }
+  return ranges;
+}
+
+const SEARCH_MARK = 'chat-search-hit';
+const SEARCH_MARK_CURRENT = 'chat-search-current';
+
+export function clearChatSearchHighlights(root?: HTMLElement | null): void {
+  if (!root) return;
+  for (const mark of [...root.querySelectorAll(`mark.${SEARCH_MARK}`)]) {
+    const parent = mark.parentNode;
+    if (!parent) continue;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  }
+}
+
+function wrapRange(range: Range): HTMLMarkElement | null {
+  const mark = document.createElement('mark');
+  mark.className = SEARCH_MARK;
+  try {
+    range.surroundContents(mark);
+    return mark;
+  } catch {
+    return null;
+  }
+}
+
+/** Wrap each visible match. Later ranges first so earlier offsets stay valid. */
+export function applyChatSearchHighlightRanges(
+  root: HTMLElement,
+  ranges: Range[],
+  currentIndex: number,
+): HTMLElement | null {
+  clearChatSearchHighlights(root);
+  const marks: Array<HTMLMarkElement | null> = new Array(ranges.length).fill(null);
+  for (let i = ranges.length - 1; i >= 0; i--) {
+    marks[i] = wrapRange(ranges[i]);
+  }
+  const current = ranges.length
+    ? marks[Math.min(Math.max(currentIndex, 0), ranges.length - 1)]
+    : null;
+  if (current) current.classList.add(SEARCH_MARK_CURRENT);
+  return current;
 }
 
 export function nextChatSearchIndex(current: number, total: number, delta: 1 | -1): number {
@@ -79,6 +168,10 @@ export function scrollChatToSearchKey(chatEl: HTMLElement, key: string): void {
   const safeKey = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(key) : key;
   const hit = chatEl.querySelector(`[data-chat-search-key="${safeKey}"]`);
   if (!(hit instanceof HTMLElement)) return;
+  scrollChatToElement(chatEl, hit);
+}
+
+export function scrollChatToElement(chatEl: HTMLElement, hit: HTMLElement): void {
   const chatRect = chatEl.getBoundingClientRect();
   const hitRect = hit.getBoundingClientRect();
   chatEl.scrollTop += hitRect.top - chatRect.top - Math.max(24, chatEl.clientHeight / 4);

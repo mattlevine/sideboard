@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.215] - 2026-09-18
+
+### Changed
+
+- Find in chat highlights each matching span of text and steps next/previous through those matches, instead of outlining the whole message.
+
 ## [0.1.214] - 2026-09-18
 
 ### Added

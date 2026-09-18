@@ -2575,15 +2575,18 @@ body.resizing-panels webview {
   position: relative;
 }
 
-.msg.chat-search-hit {
-  outline: 1px solid var(--accent-dim);
-  outline-offset: 4px;
-  border-radius: 6px;
+mark.chat-search-hit {
+  background: #7a5f14;
+  color: #fff6cc;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
-.msg.chat-search-current {
-  outline-color: var(--accent);
-  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+mark.chat-search-hit.chat-search-current {
+  background: #e6c200;
+  color: #1a1a1a;
 }
 
 .chat-empty {

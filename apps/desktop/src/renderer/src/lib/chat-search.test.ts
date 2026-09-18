@@ -3,6 +3,7 @@ import {
   chatMessageSearchText,
   chatSearchQuery,
   findChatSearchHits,
+  findQueryOffsets,
   nextChatSearchIndex,
   seedChatSearchQuery,
 } from './chat-search';
@@ -66,6 +67,18 @@ describe('findChatSearchHits', () => {
     expect(
       findChatSearchHits('job', [{ text: 'Detached job still running', origin: 'continue' }]),
     ).toEqual([]);
+  });
+
+  it('counts every occurrence in a message', () => {
+    expect(findChatSearchHits('foo', [{ text: 'foo then foo again' }])).toEqual(['msg-0', 'msg-0']);
+  });
+});
+
+describe('findQueryOffsets', () => {
+  it('finds non-overlapping case-insensitive matches', () => {
+    expect(findQueryOffsets('Ship the SHIP', 'ship')).toEqual([0, 9]);
+    expect(findQueryOffsets('aaaa', 'aa')).toEqual([0, 2]);
+    expect(findQueryOffsets('hello', 'x')).toEqual([]);
   });
 });
 
