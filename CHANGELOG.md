@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.212] - 2026-09-18
+
+### Fixed
+
+- Removing the last queued follow-up no longer drops images already parked for the in-flight turn.
+- A text-only dequeue writes an empty attachment snapshot, so a file dropped after send cannot attach to that message.
+
 ## [0.1.211] - 2026-09-18
 
 ### Fixed
