@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.214] - 2026-09-18
+
+### Added
+
+- Right-click selected chat text for Copy, Select All, Quote in composer, and Search Chat. The same menu covers the composer and links, and stays out of file-tree / Monaco / terminal menus.
+- Find in chat (⌘F, the tab search button, or right-click Search Chat) jumps between matching messages.
+
+### Changed
+
+- Inspect Element is gone from the text context menu.
+
 ## [0.1.213] - 2026-09-18
 
 ### Fixed

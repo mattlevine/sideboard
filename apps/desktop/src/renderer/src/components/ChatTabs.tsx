@@ -71,6 +71,7 @@ interface Props {
   onCloseTab?: (id: string) => void;
   /** Persist a new agent/orchestration tab order (leave/return uses the same list). */
   onReorderChats?: (ids: string[]) => void;
+  onFindChat?: () => void;
 }
 
 function basename(path: string): string {
@@ -114,6 +115,7 @@ export function ChatTabs({
   onRename,
   onCloseTab,
   onReorderChats,
+  onFindChat,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -494,6 +496,22 @@ export function ChatTabs({
           </span>
         )}
         {planUsage}
+        {onFindChat && (
+          <button
+            type="button"
+            className="chat-tab-open chat-tab-find"
+            title="Find in chat"
+            aria-label="Find in chat"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onFindChat();
+            }}
+          >
+            <span className="nav-glyph search" aria-hidden />
+          </button>
+        )}
         {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}
         {rightSidebarToggle}
         {openMenu}

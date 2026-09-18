@@ -106,6 +106,7 @@ import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';
 import { ComposerAttachmentChips } from './ComposerOptionsToolbar';
 import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
+import { ChatSearchBar } from './ChatSearchBar';
 import { MarkdownMessage } from './MarkdownMessage';
 import { PrPage } from './PrPage';
 import { UrlPreview } from './UrlPreview';
@@ -116,6 +117,13 @@ import {
   preventComposerFileDrag,
   snapshotComposerDrop,
 } from '../lib/composer-file-drop';
+import {
+  findChatSearchHits,
+  nextChatSearchIndex,
+  scrollChatToSearchKey,
+  seedChatSearchQuery,
+  shouldDeferChatFind,
+} from '../lib/chat-search';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
 import {
@@ -173,6 +181,7 @@ interface Props {
   ) => void | Promise<void>;
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
+  findChatCmd?: { nonce: number; query: string } | null;
   openFilePath?: string | null;
   openFiles?: string[];
   openFileView?: 'edit' | 'diff';
@@ -278,7 +287,7 @@ function UserMessageText({
   onThreadLinkClick?: (threadRef: string) => void;
 }) {
   return (
-    <div className="msg-body msg-body-md">
+    <div className="msg-body msg-body-md" data-chat-text="">
       <MarkdownMessage
         text={userTextToMarkdown(text)}
         onThreadLinkClick={onThreadLinkClick}
@@ -367,6 +376,7 @@ const ChatTranscript = memo(function ChatTranscript({
           <div
             key={`${m.ts}-${i}`}
             className={`msg ${m.origin === 'continue' ? 'continue' : m.role}`}
+            data-chat-search-key={`msg-${i}`}
           >
             {m.role === 'agent' ? (
               <>
@@ -404,6 +414,7 @@ const ChatTranscript = memo(function ChatTranscript({
                     pendingPlanQuestions.signature && (
                     <div
                       className="plan-questions-chat-brief"
+                      data-chat-text=""
                       key={pendingPlanQuestions.signature}
                     >
                       <MarkdownMessage
@@ -415,7 +426,7 @@ const ChatTranscript = memo(function ChatTranscript({
                   )}
               </>
             ) : m.role === 'summary' ? (
-              <div className="msg-summary">
+              <div className="msg-summary" data-chat-text="">
                 <div className="msg-summary-label">Context summarized</div>
                 <MarkdownMessage
                   text={m.text}
@@ -450,6 +461,7 @@ const ChatTranscript = memo(function ChatTranscript({
       {pendingTranscript && (
         <div
           className={`msg ${looksLikeAutoContinuePrompt(pendingTranscript) ? 'continue' : 'user'} pending`}
+          data-chat-search-key="pending"
         >
           {looksLikeAutoContinuePrompt(pendingTranscript) ? (
             <div className="msg-continue" title={pendingTranscript}>
@@ -478,6 +490,7 @@ const ChatTranscript = memo(function ChatTranscript({
       {showStreaming && (
         <div
           className={`msg agent streaming${liveOutput || liveParts.length ? '' : ' waiting'}`}
+          data-chat-search-key="live"
         >
           {liveOutput || liveParts.length || turnStartedAt ? (
             <AgentMessage
@@ -537,6 +550,7 @@ const ChatTranscript = memo(function ChatTranscript({
               pendingPlanQuestions.signature && (
               <div
                 className="plan-questions-chat-brief"
+                data-chat-text=""
                 key={pendingPlanQuestions.signature}
               >
                 <MarkdownMessage
@@ -562,6 +576,7 @@ export function ThreadPanel({
   onArchiveThread,
   composerPrefill,
   onComposerPrefillConsumed,
+  findChatCmd,
   openFilePath = null,
   openFiles = [],
   openFileView = 'edit',
@@ -628,6 +643,11 @@ export function ThreadPanel({
   const [issuePickerOpen, setIssuePickerOpen] = useState(false);
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [chatSearchIndex, setChatSearchIndex] = useState(0);
+  const lastScrolledSearchKey = useRef<string | null>(null);
+  const lastFindNonce = useRef<number | null>(null);
   /** Optimistic effort so the chip updates before refresh lands. */
   const [optimisticEffort, setOptimisticEffort] = useState<ThinkingEffort | null>(null);
   const [filePaths, setFilePaths] = useState<string[]>([]);
@@ -897,8 +917,8 @@ export function ThreadPanel({
 
   useEffect(() => {
     if (composerPrefill) {
-      const next = composerPrefill.trim();
-      if (next) {
+      const next = composerPrefill.trimStart();
+      if (next.trim()) {
         setPrompt((prev) => {
           const existing = prev.trimEnd();
           return existing ? `${existing}\n${next}` : next;
@@ -997,6 +1017,9 @@ export function ThreadPanel({
     setPendingInTranscript(false);
     setPendingFollowUps([]);
     setPendingAttachments([]);
+    setChatSearchOpen(false);
+    setChatSearchQuery('');
+    setChatSearchIndex(0);
   }, [thread.id]);
 
   useEffect(() => {
@@ -1715,6 +1738,88 @@ export function ThreadPanel({
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
 
+  const chatSearchHits = useMemo(
+    () =>
+      findChatSearchHits(chatSearchQuery, thread.messages, {
+        pending: pendingTranscript,
+        live: showStreaming ? liveOutput : null,
+      }),
+    [chatSearchQuery, thread.messages, pendingTranscript, showStreaming, liveOutput],
+  );
+
+  function openChatSearch(seed?: string) {
+    const next = seedChatSearchQuery(seed, window.getSelection()?.toString() ?? '');
+    setChatSearchOpen(true);
+    if (next !== chatSearchQuery) {
+      setChatSearchQuery(next);
+      setChatSearchIndex(0);
+      lastScrolledSearchKey.current = null;
+    }
+  }
+
+  function stepChatSearch(delta: 1 | -1) {
+    setChatSearchIndex((i) => nextChatSearchIndex(i, chatSearchHits.length, delta));
+  }
+
+  useEffect(() => {
+    if (chatSearchHits.length > 0 && chatSearchIndex >= chatSearchHits.length) {
+      setChatSearchIndex(chatSearchHits.length - 1);
+    }
+  }, [chatSearchHits, chatSearchIndex]);
+
+  useEffect(() => {
+    const root = chatRef.current;
+    if (!root) return;
+    if (!chatSearchOpen) {
+      for (const el of root.querySelectorAll('.chat-search-hit, .chat-search-current')) {
+        el.classList.remove('chat-search-hit', 'chat-search-current');
+      }
+      return;
+    }
+    const currentKey = chatSearchHits[chatSearchIndex];
+    for (const el of root.querySelectorAll('[data-chat-search-key]')) {
+      const key = (el as HTMLElement).dataset.chatSearchKey;
+      el.classList.toggle('chat-search-hit', Boolean(key && chatSearchHits.includes(key)));
+      el.classList.toggle('chat-search-current', Boolean(currentKey && key === currentKey));
+    }
+    if (!currentKey) return;
+    const token = `${chatSearchQuery}:${currentKey}:${chatSearchIndex}`;
+    if (lastScrolledSearchKey.current === token) return;
+    lastScrolledSearchKey.current = token;
+    stickToBottomRef.current = false;
+    scrollChatToSearchKey(root, currentKey);
+  }, [chatSearchOpen, chatSearchHits, chatSearchIndex, chatSearchQuery]);
+
+  useEffect(() => {
+    if (!findChatCmd || lastFindNonce.current === findChatCmd.nonce) return;
+    lastFindNonce.current = findChatCmd.nonce;
+    openChatSearch(findChatCmd.query);
+  }, [findChatCmd]);
+
+  useEffect(() => {
+    const onFindKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === 'f') {
+        if (shouldDeferChatFind(e.target)) return;
+        e.preventDefault();
+        openChatSearch();
+        return;
+      }
+      if (!chatSearchOpen) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setChatSearchOpen(false);
+        return;
+      }
+      if ((meta && e.key.toLowerCase() === 'g') || e.key === 'F3') {
+        e.preventDefault();
+        stepChatSearch(e.shiftKey ? -1 : 1);
+      }
+    };
+    window.addEventListener('keydown', onFindKey);
+    return () => window.removeEventListener('keydown', onFindKey);
+  }, [chatSearchOpen, chatSearchHits.length, chatSearchQuery]);
+
   function openRightPane(next: RightPaneContent) {
     suppressArtifactAutoOpen.current = false;
     setRightPaneSuppressed(thread.id, false);
@@ -2085,6 +2190,7 @@ export function ThreadPanel({
           });
         }}
         onReorderChats={onReorderChats}
+        onFindChat={() => openChatSearch()}
       />
 
       {forkWorkspaceConfirm && (
@@ -2150,6 +2256,21 @@ export function ThreadPanel({
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
         <div className="thread-chat-column">
+      {chatSearchOpen ? (
+        <ChatSearchBar
+          query={chatSearchQuery}
+          current={chatSearchHits.length ? chatSearchIndex + 1 : 0}
+          total={chatSearchHits.length}
+          onQueryChange={(next) => {
+            setChatSearchQuery(next);
+            setChatSearchIndex(0);
+            lastScrolledSearchKey.current = null;
+          }}
+          onNext={() => stepChatSearch(1)}
+          onPrev={() => stepChatSearch(-1)}
+          onClose={() => setChatSearchOpen(false)}
+        />
+      ) : null}
       {prPageOpen ? (
         <PrPage threadId={thread.id} onAddToChat={attachToChat} />
       ) : changesOpen && changesPath ? (

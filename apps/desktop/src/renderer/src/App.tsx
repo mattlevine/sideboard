@@ -167,6 +167,7 @@ export function App() {
   } | null>(null);
   const [teamToasts, setTeamToasts] = useState<TeamToastItem[]>([]);
   const [prefill, setPrefill] = useState<string | undefined>();
+  const [findChatCmd, setFindChatCmd] = useState<{ nonce: number; query: string } | null>(null);
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
@@ -667,6 +668,13 @@ export function App() {
       setSettingsInitialNav('agents');
       setSettingsOpen(true);
     });
+    const offQuoteSelection = window.sideboardUpdate.onQuoteSelection?.((text) => {
+      if (!text.trim()) return;
+      setPrefill(text);
+    });
+    const offFindChat = window.sideboardUpdate.onFindChat?.((text) => {
+      setFindChatCmd({ nonce: Date.now(), query: typeof text === 'string' ? text : '' });
+    });
     return () => {
       if (liveRaf) cancelAnimationFrame(liveRaf);
       scheduler.dispose();
@@ -676,6 +684,8 @@ export function App() {
       offReady();
       offUpdateError();
       offOpenSettings();
+      offQuoteSelection?.();
+      offFindChat?.();
     };
   }, [refresh, refreshThread, livePaintStore]);
 
@@ -1241,6 +1251,7 @@ export function App() {
                 archiveThreadsAndRefresh([id], meta),
               composerPrefill: prefill,
               onComposerPrefillConsumed: () => setPrefill(undefined),
+              findChatCmd,
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
@@ -1289,6 +1300,7 @@ export function App() {
               onLeaveThread={showBoard}
               composerPrefill={prefill}
               onComposerPrefillConsumed={() => setPrefill(undefined)}
+              findChatCmd={findChatCmd}
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
               onOpenThreadLink={openThreadByRef}

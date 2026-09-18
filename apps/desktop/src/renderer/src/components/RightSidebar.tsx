@@ -1552,7 +1552,7 @@ export function RightSidebar({
                 </div>
               )}
               {diff && diff.files.length > 0 && (
-                <div className="right-file-list changes-file-list">
+                <div className="right-file-list changes-file-list" data-skip-native-text-menu="">
                   {diff.files.map((f) => (
                     <div
                       key={f.path}

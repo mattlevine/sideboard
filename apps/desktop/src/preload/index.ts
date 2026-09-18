@@ -313,4 +313,18 @@ contextBridge.exposeInMainWorld('sideboardUpdate', {
     ipcRenderer.on('menu:open-settings', handler);
     return () => ipcRenderer.removeListener('menu:open-settings', handler);
   },
+  onQuoteSelection: (listener: (text: string) => void) => {
+    const handler = (_event: IpcRendererEvent, text: string) => {
+      if (typeof text === 'string') listener(text);
+    };
+    ipcRenderer.on('menu:quote-selection', handler);
+    return () => ipcRenderer.removeListener('menu:quote-selection', handler);
+  },
+  onFindChat: (listener: (text: string) => void) => {
+    const handler = (_event: IpcRendererEvent, text: string) => {
+      listener(typeof text === 'string' ? text : '');
+    };
+    ipcRenderer.on('menu:find-chat', handler);
+    return () => ipcRenderer.removeListener('menu:find-chat', handler);
+  },
 });

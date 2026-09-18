@@ -11,6 +11,8 @@ declare global {
       check: () => Promise<void>;
       getVersion: () => Promise<string>;
       onOpenSettings: (listener: () => void) => () => void;
+      onQuoteSelection: (listener: (text: string) => void) => () => void;
+      onFindChat: (listener: (text: string) => void) => () => void;
     };
   }
 }
