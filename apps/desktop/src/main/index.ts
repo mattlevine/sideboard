@@ -134,6 +134,7 @@ import {
   threadsDir,
   isThreadRecordFile,
   isSelfWrittenRecord,
+  readThread,
   invalidateThreadListCache,
   invalidateThreadRecord,
   slimThreadForUiList,
@@ -726,13 +727,15 @@ function setupStoreWatcher(): void {
   const flushNotify = () => {
     notifyTimer = null;
     // Records this process wrote last are already coherent in the store cache
-    // and cannot carry a foreign queue — only foreign (or deleted) records need
-    // a cache drop and a queue-adoption pass. Check before invalidating: the
-    // invalidation forgets the self-write marker.
+    // — only foreign (or deleted) records need a cache drop and a
+    // queue-adoption pass. Check before invalidating: the invalidation
+    // forgets the self-write marker. A self-written record that still carries
+    // a queue is the one race worth paying for: an MCP enqueue landed inside
+    // this debounce window and our own rewrite carried it forward, so adopt.
     let foreign = pendingRecordIds.size === 0;
     if (pendingRecordIds.size > 0) {
       for (const id of pendingRecordIds) {
-        if (isSelfWrittenRecord(id)) continue;
+        if (isSelfWrittenRecord(id) && !readThread(id)?.queue.length) continue;
         foreign = true;
         invalidateThreadRecord(id);
       }
