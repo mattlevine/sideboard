@@ -42,7 +42,6 @@ import { GlobalBoard } from './components/GlobalBoard';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
-import { shouldDeferChatFind } from './lib/chat-search';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
 import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
@@ -689,22 +688,6 @@ export function App() {
       offFindChat?.();
     };
   }, [refresh, refreshThread, livePaintStore]);
-
-  useEffect(() => {
-    if (view !== 'thread') return;
-    const onFindKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'f') return;
-      if (shouldDeferChatFind(e.target)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setFindChatCmd({
-        nonce: Date.now(),
-        query: window.getSelection()?.toString() ?? '',
-      });
-    };
-    window.addEventListener('keydown', onFindKey, true);
-    return () => window.removeEventListener('keydown', onFindKey, true);
-  }, [view]);
 
   // Conductor-style: lightly follow open PRs so external merges purple + auto-archive.
   const openPrSyncKey = useMemo(() => {

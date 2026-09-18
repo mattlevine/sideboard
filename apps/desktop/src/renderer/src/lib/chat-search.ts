@@ -71,7 +71,8 @@ export function shouldDeferChatFind(target: EventTarget | null): boolean {
 }
 
 export function scrollChatToSearchKey(chatEl: HTMLElement, key: string): void {
-  const hit = chatEl.querySelector(`[data-chat-search-key="${CSS.escape(key)}"]`);
+  const safeKey = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(key) : key;
+  const hit = chatEl.querySelector(`[data-chat-search-key="${safeKey}"]`);
   if (!(hit instanceof HTMLElement)) return;
   const chatRect = chatEl.getBoundingClientRect();
   const hitRect = hit.getBoundingClientRect();

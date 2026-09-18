@@ -2510,11 +2510,19 @@ body.resizing-panels webview {
   gap: 12px;
 }
 
+.thread-chat-column.has-chat-search > .chat {
+  padding-top: 48px;
+}
+
 .chat-search-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);

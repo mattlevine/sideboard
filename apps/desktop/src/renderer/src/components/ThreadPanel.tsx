@@ -122,6 +122,7 @@ import {
   findChatSearchHits,
   nextChatSearchIndex,
   scrollChatToSearchKey,
+  shouldDeferChatFind,
 } from '../lib/chat-search';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
@@ -645,8 +646,8 @@ export function ThreadPanel({
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [chatSearchIndex, setChatSearchIndex] = useState(0);
-  const [chatSearchFocus, setChatSearchFocus] = useState(0);
   const lastScrolledSearchKey = useRef<string | null>(null);
+  const lastFindNonce = useRef<number | null>(null);
   /** Optimistic effort so the chip updates before refresh lands. */
   const [optimisticEffort, setOptimisticEffort] = useState<ThinkingEffort | null>(null);
   const [filePaths, setFilePaths] = useState<string[]>([]);
@@ -1747,12 +1748,10 @@ export function ThreadPanel({
   );
 
   function openChatSearch(seed?: string) {
-    onShowChat?.();
     const fromSeed = seed != null ? chatSearchQuery(seed) : '';
     const fromSel = chatSearchQuery(window.getSelection()?.toString() ?? '');
     const next = fromSeed || fromSel;
     setChatSearchOpen(true);
-    setChatSearchFocus((n) => n + 1);
     if (next !== chatSearchQuery) {
       setChatSearchQuery(next);
       setChatSearchIndex(0);
@@ -1765,8 +1764,8 @@ export function ThreadPanel({
   }
 
   useEffect(() => {
-    if (chatSearchIndex >= chatSearchHits.length) {
-      setChatSearchIndex(chatSearchHits.length ? chatSearchHits.length - 1 : 0);
+    if (chatSearchHits.length > 0 && chatSearchIndex >= chatSearchHits.length) {
+      setChatSearchIndex(chatSearchHits.length - 1);
     }
   }, [chatSearchHits, chatSearchIndex]);
 
@@ -1794,26 +1793,34 @@ export function ThreadPanel({
   }, [chatSearchOpen, chatSearchHits, chatSearchIndex, chatSearchQuery]);
 
   useEffect(() => {
-    if (!findChatCmd) return;
+    if (!findChatCmd || lastFindNonce.current === findChatCmd.nonce) return;
+    lastFindNonce.current = findChatCmd.nonce;
     openChatSearch(findChatCmd.query);
   }, [findChatCmd]);
 
   useEffect(() => {
-    if (!chatSearchOpen) return;
     const onFindKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === 'f') {
+        if (shouldDeferChatFind(e.target)) return;
+        e.preventDefault();
+        openChatSearch();
+        return;
+      }
+      if (!chatSearchOpen) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         setChatSearchOpen(false);
         return;
       }
-      if (((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') || e.key === 'F3') {
+      if ((meta && e.key.toLowerCase() === 'g') || e.key === 'F3') {
         e.preventDefault();
         stepChatSearch(e.shiftKey ? -1 : 1);
       }
     };
     window.addEventListener('keydown', onFindKey);
     return () => window.removeEventListener('keydown', onFindKey);
-  }, [chatSearchOpen, chatSearchHits.length]);
+  }, [chatSearchOpen, chatSearchHits.length, chatSearchQuery]);
 
   function openRightPane(next: RightPaneContent) {
     suppressArtifactAutoOpen.current = false;
@@ -2187,22 +2194,6 @@ export function ThreadPanel({
         onReorderChats={onReorderChats}
         onFindChat={() => openChatSearch()}
       />
-      {chatSearchOpen ? (
-        <ChatSearchBar
-          key={chatSearchFocus}
-          query={chatSearchQuery}
-          current={chatSearchHits.length ? chatSearchIndex + 1 : 0}
-          total={chatSearchHits.length}
-          onQueryChange={(next) => {
-            setChatSearchQuery(next);
-            setChatSearchIndex(0);
-            lastScrolledSearchKey.current = null;
-          }}
-          onNext={() => stepChatSearch(1)}
-          onPrev={() => stepChatSearch(-1)}
-          onClose={() => setChatSearchOpen(false)}
-        />
-      ) : null}
 
       {forkWorkspaceConfirm && (
         <div
@@ -2266,7 +2257,22 @@ export function ThreadPanel({
       <div
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
-        <div className="thread-chat-column">
+        <div className={`thread-chat-column${chatSearchOpen ? ' has-chat-search' : ''}`}>
+      {chatSearchOpen ? (
+        <ChatSearchBar
+          query={chatSearchQuery}
+          current={chatSearchHits.length ? chatSearchIndex + 1 : 0}
+          total={chatSearchHits.length}
+          onQueryChange={(next) => {
+            setChatSearchQuery(next);
+            setChatSearchIndex(0);
+            lastScrolledSearchKey.current = null;
+          }}
+          onNext={() => stepChatSearch(1)}
+          onPrev={() => stepChatSearch(-1)}
+          onClose={() => setChatSearchOpen(false)}
+        />
+      ) : null}
       {prPageOpen ? (
         <PrPage threadId={thread.id} onAddToChat={attachToChat} />
       ) : changesOpen && changesPath ? (

@@ -30,7 +30,7 @@ export function ChatSearchBar({
     <div className="chat-search-bar" role="search">
       <input
         ref={inputRef}
-        type="search"
+        type="text"
         className="chat-search-input"
         value={query}
         placeholder="Find in chat"
