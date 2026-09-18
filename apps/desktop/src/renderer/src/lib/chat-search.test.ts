@@ -6,6 +6,7 @@ import {
   findQueryOffsets,
   nextChatSearchIndex,
   seedChatSearchQuery,
+  shouldDeferChatFind,
 } from './chat-search';
 
 describe('chatMessageSearchText', () => {
@@ -28,13 +29,13 @@ describe('chatMessageSearchText', () => {
     );
   });
 
-  it('indexes tool labels when the message body is empty', () => {
+  it('does not index tool names or descriptions', () => {
     expect(
       chatMessageSearchText({
         text: '',
         parts: [{ type: 'tool', name: 'present_plan', description: 'Draft the rollout' }],
       }),
-    ).toBe('Draft the rollout\npresent_plan');
+    ).toBe('');
   });
 });
 
@@ -66,6 +67,14 @@ describe('findChatSearchHits', () => {
   it('does not match continue rows', () => {
     expect(
       findChatSearchHits('job', [{ text: 'Detached job still running', origin: 'continue' }]),
+    ).toEqual([]);
+  });
+
+  it('does not count tool-only messages as hits', () => {
+    expect(
+      findChatSearchHits('present_plan', [
+        { text: '', parts: [{ type: 'tool', name: 'present_plan', description: 'Draft' }] },
+      ]),
     ).toEqual([]);
   });
 
@@ -106,5 +115,11 @@ describe('nextChatSearchIndex', () => {
     expect(nextChatSearchIndex(2, 3, 1)).toBe(0);
     expect(nextChatSearchIndex(0, 3, -1)).toBe(2);
     expect(nextChatSearchIndex(0, 0, 1)).toBe(0);
+  });
+});
+
+describe('shouldDeferChatFind', () => {
+  it('does not defer a missing target', () => {
+    expect(shouldDeferChatFind(null)).toBe(false);
   });
 });

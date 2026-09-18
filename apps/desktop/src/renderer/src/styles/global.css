@@ -2575,6 +2575,16 @@ body.resizing-panels webview {
   position: relative;
 }
 
+::highlight(chat-search) {
+  background-color: #7a5f14;
+  color: #fff6cc;
+}
+
+::highlight(chat-search-current) {
+  background-color: #e6c200;
+  color: #1a1a1a;
+}
+
 mark.chat-search-hit {
   background: #7a5f14;
   color: #fff6cc;

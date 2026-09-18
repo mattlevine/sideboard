@@ -121,10 +121,8 @@ import {
   applyChatSearchHighlightRanges,
   clearChatSearchHighlights,
   collectChatSearchRanges,
-  findChatSearchHits,
   nextChatSearchIndex,
   scrollChatToElement,
-  scrollChatToSearchKey,
   seedChatSearchQuery,
   shouldDeferChatFind,
 } from '../lib/chat-search';
@@ -186,6 +184,7 @@ interface Props {
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
   findChatCmd?: { nonce: number; query: string } | null;
+  onFindChatConsumed?: () => void;
   openFilePath?: string | null;
   openFiles?: string[];
   openFileView?: 'edit' | 'diff';
@@ -581,6 +580,7 @@ export function ThreadPanel({
   composerPrefill,
   onComposerPrefillConsumed,
   findChatCmd,
+  onFindChatConsumed,
   openFilePath = null,
   openFiles = [],
   openFileView = 'edit',
@@ -1741,15 +1741,7 @@ export function ThreadPanel({
   );
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
-
-  const chatSearchHits = useMemo(
-    () =>
-      findChatSearchHits(chatSearchQuery, thread.messages, {
-        pending: pendingTranscript,
-        live: showStreaming ? liveOutput : null,
-      }),
-    [chatSearchQuery, thread.messages, pendingTranscript, showStreaming, liveOutput],
-  );
+  const [chatSearchHitCount, setChatSearchHitCount] = useState(0);
 
   function openChatSearch(seed?: string) {
     const next = seedChatSearchQuery(seed, window.getSelection()?.toString() ?? '');
@@ -1762,42 +1754,56 @@ export function ThreadPanel({
   }
 
   function stepChatSearch(delta: 1 | -1) {
-    setChatSearchIndex((i) => nextChatSearchIndex(i, chatSearchHits.length, delta));
+    setChatSearchIndex((i) => nextChatSearchIndex(i, chatSearchHitCount, delta));
   }
 
   useEffect(() => {
-    if (chatSearchHits.length > 0 && chatSearchIndex >= chatSearchHits.length) {
-      setChatSearchIndex(chatSearchHits.length - 1);
+    if (chatSearchHitCount > 0 && chatSearchIndex >= chatSearchHitCount) {
+      setChatSearchIndex(chatSearchHitCount - 1);
     }
-  }, [chatSearchHits, chatSearchIndex]);
+  }, [chatSearchHitCount, chatSearchIndex]);
 
   useLayoutEffect(() => {
     const root = chatRef.current;
-    if (!root) return;
-    if (!chatSearchOpen) {
+    if (!root || !chatViewOpen) {
       clearChatSearchHighlights(root);
       return;
     }
+    if (!chatSearchOpen) {
+      clearChatSearchHighlights(root);
+      setChatSearchHitCount(0);
+      return;
+    }
     const ranges = collectChatSearchRanges(root, chatSearchQuery);
-    const currentMark = applyChatSearchHighlightRanges(root, ranges, chatSearchIndex);
-    const currentKey = chatSearchHits[chatSearchIndex];
-    if (currentMark || currentKey) {
-      const token = `${chatSearchQuery}:${chatSearchIndex}:${ranges.length}:${currentKey ?? ''}`;
+    if (ranges.length !== chatSearchHitCount) setChatSearchHitCount(ranges.length);
+    const currentEl = applyChatSearchHighlightRanges(root, ranges, chatSearchIndex);
+    if (currentEl) {
+      const token = `${chatSearchQuery}:${chatSearchIndex}:${ranges.length}`;
       if (lastScrolledSearchKey.current !== token) {
         lastScrolledSearchKey.current = token;
         stickToBottomRef.current = false;
-        if (currentMark) scrollChatToElement(root, currentMark);
-        else if (currentKey) scrollChatToSearchKey(root, currentKey);
+        scrollChatToElement(root, currentEl);
       }
     }
     return () => clearChatSearchHighlights(root);
-  }, [chatSearchOpen, chatSearchHits, chatSearchIndex, chatSearchQuery]);
+  }, [
+    chatSearchOpen,
+    chatSearchHitCount,
+    chatSearchIndex,
+    chatSearchQuery,
+    chatViewOpen,
+    liveOutput,
+    pendingTranscript,
+    showStreaming,
+    thread.messages,
+  ]);
 
   useEffect(() => {
     if (!findChatCmd || lastFindNonce.current === findChatCmd.nonce) return;
     lastFindNonce.current = findChatCmd.nonce;
     openChatSearch(findChatCmd.query);
-  }, [findChatCmd]);
+    onFindChatConsumed?.();
+  }, [findChatCmd, onFindChatConsumed]);
 
   useEffect(() => {
     const onFindKey = (e: KeyboardEvent) => {
@@ -1821,7 +1827,7 @@ export function ThreadPanel({
     };
     window.addEventListener('keydown', onFindKey);
     return () => window.removeEventListener('keydown', onFindKey);
-  }, [chatSearchOpen, chatSearchHits.length, chatSearchQuery]);
+  }, [chatSearchOpen, chatSearchHitCount, chatSearchQuery]);
 
   function openRightPane(next: RightPaneContent) {
     suppressArtifactAutoOpen.current = false;
@@ -2262,8 +2268,8 @@ export function ThreadPanel({
       {chatSearchOpen ? (
         <ChatSearchBar
           query={chatSearchQuery}
-          current={chatSearchHits.length ? chatSearchIndex + 1 : 0}
-          total={chatSearchHits.length}
+          current={chatSearchHitCount ? chatSearchIndex + 1 : 0}
+          total={chatSearchHitCount}
           onQueryChange={(next) => {
             setChatSearchQuery(next);
             setChatSearchIndex(0);
