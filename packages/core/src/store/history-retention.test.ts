@@ -13,6 +13,7 @@ import {
 function archived(partial: {
   id?: string;
   updatedAt: string;
+  archivedAt?: string;
   messages?: Thread['messages'];
   attachments?: Thread['attachments'];
 }): Thread {
@@ -30,6 +31,7 @@ function archived(partial: {
     ...thread,
     id: partial.id ?? thread.id,
     updatedAt: partial.updatedAt,
+    archivedAt: partial.archivedAt,
     messages: partial.messages ?? [
       { role: 'user', text: 'ship it', ts: partial.updatedAt },
     ],
@@ -67,6 +69,21 @@ describe('planHistoryRetention', () => {
     );
     expect(plan.stripIds).toEqual([]);
     expect(plan.purgeIds).toEqual(['stub']);
+  });
+
+  it('ages from archivedAt even if updatedAt moved later', () => {
+    const plan = planHistoryRetention(
+      [
+        archived({
+          id: 'stamped',
+          updatedAt: '2026-02-20T00:00:00.000Z',
+          archivedAt: '2025-01-01T00:00:00.000Z',
+        }),
+      ],
+      { maxCount: 200, maxDays: 30, nowMs: Date.parse('2026-03-01T00:00:00.000Z') },
+    );
+    expect(plan.purgeIds).toEqual(['stamped']);
+    expect(plan.stripIds).toEqual([]);
   });
 
   it('purges age-expired rows even when under the count cap', () => {

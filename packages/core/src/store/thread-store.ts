@@ -61,6 +61,10 @@ export function normalizeThread(raw: Thread): Thread {
     activeRuns: Array.isArray(raw.activeRuns) ? raw.activeRuns : [],
     quotaResumeAt: raw.quotaResumeAt ?? null,
     quotaContinuedFromId: raw.quotaContinuedFromId ?? null,
+    archivedAt:
+      typeof raw.archivedAt === 'string' && raw.archivedAt.trim()
+        ? raw.archivedAt.trim()
+        : undefined,
   };
 }
 
@@ -124,6 +128,7 @@ export function createEmptyThread(
         | 'userSetTitle'
         | 'attachments'
         | 'pendingTurnAttachments'
+        | 'archivedAt'
       >
     >,
 ): Thread {
@@ -158,6 +163,10 @@ export function createEmptyThread(
     pendingTurnAttachments: partial.pendingTurnAttachments ?? [],
     createdAt: ts,
     updatedAt: ts,
+    archivedAt:
+      typeof partial.archivedAt === 'string' && partial.archivedAt.trim()
+        ? partial.archivedAt.trim()
+        : undefined,
     title: partial.title,
     sourceType: partial.sourceType,
     sourceRef: partial.sourceRef,
@@ -322,7 +331,15 @@ export function updateThread(
 ): Thread {
   const current = readThread(id);
   if (!current) throw new Error(`Thread not found: ${id}`);
-  const next = { ...current, ...patch, id: current.id, updatedAt: nowIso() };
+  const next: Thread = { ...current, ...patch, id: current.id, updatedAt: nowIso() };
+  if (next.status === 'archived') {
+    next.archivedAt =
+      (typeof next.archivedAt === 'string' && next.archivedAt.trim()) ||
+      current.archivedAt ||
+      nowIso();
+  } else {
+    delete next.archivedAt;
+  }
   writeThread(next);
   return next;
 }

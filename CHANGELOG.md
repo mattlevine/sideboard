@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- History age uses the time a chat was archived, not later row updates, so optional days-based cleanup stays honest.
+
 ## [0.1.209] - 2026-09-17
 
 ### Added
