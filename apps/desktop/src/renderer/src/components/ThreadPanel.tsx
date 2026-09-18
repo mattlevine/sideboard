@@ -118,8 +118,12 @@ import {
   snapshotComposerDrop,
 } from '../lib/composer-file-drop';
 import {
+  applyChatSearchHighlightRanges,
+  clearChatSearchHighlights,
+  collectChatSearchRanges,
   findChatSearchHits,
   nextChatSearchIndex,
+  scrollChatToElement,
   scrollChatToSearchKey,
   seedChatSearchQuery,
   shouldDeferChatFind,
@@ -1767,27 +1771,26 @@ export function ThreadPanel({
     }
   }, [chatSearchHits, chatSearchIndex]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = chatRef.current;
     if (!root) return;
     if (!chatSearchOpen) {
-      for (const el of root.querySelectorAll('.chat-search-hit, .chat-search-current')) {
-        el.classList.remove('chat-search-hit', 'chat-search-current');
-      }
+      clearChatSearchHighlights(root);
       return;
     }
+    const ranges = collectChatSearchRanges(root, chatSearchQuery);
+    const currentMark = applyChatSearchHighlightRanges(root, ranges, chatSearchIndex);
     const currentKey = chatSearchHits[chatSearchIndex];
-    for (const el of root.querySelectorAll('[data-chat-search-key]')) {
-      const key = (el as HTMLElement).dataset.chatSearchKey;
-      el.classList.toggle('chat-search-hit', Boolean(key && chatSearchHits.includes(key)));
-      el.classList.toggle('chat-search-current', Boolean(currentKey && key === currentKey));
+    if (currentMark || currentKey) {
+      const token = `${chatSearchQuery}:${chatSearchIndex}:${ranges.length}:${currentKey ?? ''}`;
+      if (lastScrolledSearchKey.current !== token) {
+        lastScrolledSearchKey.current = token;
+        stickToBottomRef.current = false;
+        if (currentMark) scrollChatToElement(root, currentMark);
+        else if (currentKey) scrollChatToSearchKey(root, currentKey);
+      }
     }
-    if (!currentKey) return;
-    const token = `${chatSearchQuery}:${currentKey}:${chatSearchIndex}`;
-    if (lastScrolledSearchKey.current === token) return;
-    lastScrolledSearchKey.current = token;
-    stickToBottomRef.current = false;
-    scrollChatToSearchKey(root, currentKey);
+    return () => clearChatSearchHighlights(root);
   }, [chatSearchOpen, chatSearchHits, chatSearchIndex, chatSearchQuery]);
 
   useEffect(() => {
