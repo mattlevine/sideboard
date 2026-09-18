@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.217] - 2026-09-18
+
+### Fixed
+
+- The worktree terminal no longer reprints the current prompt on every focus or layout tick. Same-size PTY resizes are skipped so macOS SIGWINCH does not make zsh duplicate the line.
+
 ## [0.1.216] - 2026-09-18
 
 ### Fixed
