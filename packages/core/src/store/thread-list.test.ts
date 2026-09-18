@@ -62,6 +62,7 @@ describe('slimThreadForUiList', () => {
     const slim = slimThreadForUiList(full);
     expect(slim.attachments).toEqual([]);
     expect(slim.pendingTurnAttachments).toEqual([]);
+    expect(slim.queueAttachments).toEqual([]);
     expect(slim.messages.some((m) => m.parts)).toBe(false);
     expect(slim.messages.join('')).not.toContain('x'.repeat(50));
     expect(latestVisibleMessageText(slim.messages)).toBe('follow up please');

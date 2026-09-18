@@ -157,7 +157,12 @@ import {
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
 import { expandComposerPrompt } from '../composer/expand.js';
 import {
+  appendQueuedItem,
   consumeComposerAttachments,
+  moveQueuedItemToFront,
+  prependQueuedItem,
+  removeQueuedItem,
+  shiftQueuedItem,
   takePendingTurnAttachments,
 } from '../composer/consume-attachments.js';
 import {
@@ -750,9 +755,9 @@ export class Orchestrator {
     if (!thread || thread.status === 'archived') return;
     this.crashContinued.add(threadId);
     const prompt = formatAgentErrorContinuePrompt(opts.detail);
-    const queue = [prompt, ...thread.queue];
-    updateThread(threadId, { queue });
-    this.emit({ type: 'queue_changed', threadId, queue });
+    const next = prependQueuedItem(thread.queue, thread.queueAttachments, prompt);
+    updateThread(threadId, next);
+    this.emit({ type: 'queue_changed', threadId, queue: next.queue });
     this.haltDrain.delete(threadId);
   }
 
@@ -786,9 +791,9 @@ export class Orchestrator {
     }
     if (decision.action === 'nudge') this.jobContinueNudged.add(threadId);
     else this.jobContinueCount.set(threadId, (this.jobContinueCount.get(threadId) ?? 0) + 1);
-    const queue = [decision.prompt, ...thread.queue];
-    updateThread(threadId, { queue });
-    this.emit({ type: 'queue_changed', threadId, queue });
+    const next = prependQueuedItem(thread.queue, thread.queueAttachments, decision.prompt);
+    updateThread(threadId, next);
+    this.emit({ type: 'queue_changed', threadId, queue: next.queue });
     this.haltDrain.delete(threadId);
   }
 
@@ -929,7 +934,13 @@ export class Orchestrator {
         throw new Error(`Thread is archived: ${thread.id}`);
       }
       const followUp = resolveSendFollowUp(current, opts?.followUp);
-      const queue = [...current.queue, prompt];
+      const consumed = consumeComposerAttachments(current);
+      const queued = appendQueuedItem(
+        current.queue,
+        current.queueAttachments,
+        prompt,
+        consumed.consumed,
+      );
       this.crashContinued.delete(thread.id);
       this.jobContinueCount.delete(thread.id);
       this.jobContinueNudged.delete(thread.id);
@@ -940,11 +951,9 @@ export class Orchestrator {
         current.status === 'running';
       // Skip the inbox (in-flight turn or already-parked follow-ups).
       shouldSteer = followUp === 'steer' && (inFlight || current.queue.length > 0);
-      const patch: Parameters<typeof updateThread>[1] = { queue };
-      if (current.attachments.length > 0) {
-        const consumed = consumeComposerAttachments(current);
+      const patch: Parameters<typeof updateThread>[1] = queued;
+      if (consumed.consumed.length > 0) {
         patch.attachments = consumed.attachments;
-        patch.pendingTurnAttachments = consumed.pendingTurnAttachments;
       }
       if (!inFlight) patch.status = 'queued';
       // Stale agentPid from a dead MCP/desktop child can pin drainQueue forever.
@@ -953,7 +962,7 @@ export class Orchestrator {
         patch.agentPid = null;
       }
       updateThread(thread.id, patch);
-      this.emit({ type: 'queue_changed', threadId: thread.id, queue });
+      this.emit({ type: 'queue_changed', threadId: thread.id, queue: queued.queue });
       if (!inFlight) {
         this.emit({ type: 'status_changed', threadId: thread.id, status: 'queued' });
       }
@@ -1005,14 +1014,17 @@ export class Orchestrator {
     return withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       if (index < 0 || index >= current.queue.length) return current;
-      const queue = current.queue.filter((_, i) => i !== index);
-      const stillQueued = queue.length > 0;
+      const removed = removeQueuedItem(current.queue, current.queueAttachments, index);
+      const stillQueued = removed.queue.length > 0;
       const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
       updateThread(thread.id, {
-        queue,
+        ...removed,
+        // Old sends parked on pendingTurnAttachments; drop that bag when the
+        // follow-up that owned it is gone so a later turn cannot inherit it.
+        ...(stillQueued ? {} : { pendingTurnAttachments: [] }),
         status: !stillQueued && !inFlight && current.status === 'queued' ? 'idle' : current.status,
       });
-      this.emit({ type: 'queue_changed', threadId: thread.id, queue });
+      this.emit({ type: 'queue_changed', threadId: thread.id, queue: removed.queue });
       const next = this.requireThread(thread.id);
       this.emit({ type: 'status_changed', threadId: thread.id, status: next.status });
       return next;
@@ -1029,12 +1041,10 @@ export class Orchestrator {
     const promoted = await withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       if (index < 0 || index >= current.queue.length) return false;
-      const item = current.queue[index]!;
-      const rest = current.queue.filter((_, i) => i !== index);
-      const queue = [item, ...rest];
+      const next = moveQueuedItemToFront(current.queue, current.queueAttachments, index);
       this.haltDrain.delete(thread.id);
-      updateThread(thread.id, { queue });
-      this.emit({ type: 'queue_changed', threadId: thread.id, queue });
+      updateThread(thread.id, next);
+      this.emit({ type: 'queue_changed', threadId: thread.id, queue: next.queue });
       return true;
     });
     if (!promoted) return this.requireThread(thread.id);
@@ -1110,11 +1120,17 @@ export class Orchestrator {
           continue;
         }
 
-        const prompt = thread.queue[0]!;
-        const remaining = thread.queue.slice(1);
-        updateThread(threadId, { queue: remaining });
-        this.emit({ type: 'queue_changed', threadId, queue: remaining });
-        await this.runTurn(threadId, prompt);
+        const shifted = shiftQueuedItem(thread.queue, thread.queueAttachments);
+        if (!shifted) break;
+        updateThread(threadId, {
+          queue: shifted.queue,
+          queueAttachments: shifted.queueAttachments,
+          ...(shifted.attachments.length > 0
+            ? { pendingTurnAttachments: shifted.attachments }
+            : {}),
+        });
+        this.emit({ type: 'queue_changed', threadId, queue: shifted.queue });
+        await this.runTurn(threadId, shifted.prompt);
       }
     } finally {
       this.draining.delete(threadId);
@@ -1175,6 +1191,7 @@ export class Orchestrator {
     const autoContinue =
       isJobContinuePrompt(prompt) ||
       prompt.trim().startsWith('The previous agent process ended before it finished.');
+    const parkedSnapshot = thread.pendingTurnAttachments ?? [];
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
     appendMessage(threadId, {
@@ -1293,11 +1310,15 @@ export class Orchestrator {
     ]
       .filter(Boolean)
       .join('\n\n');
-    // Composer staging is emptied on send(); drop the parked snapshot here so
-    // the next user message does not reuse this turn's images.
-    // Auto-continues leave parked attachments for the next real user turn.
+    // Drop only the snapshot this turn sent. Composer files dropped after
+    // send() stay for the next message.
     if (!autoContinue && sentAttachments) {
-      updateThread(threadId, { attachments: [], pendingTurnAttachments: [] });
+      updateThread(
+        threadId,
+        parkedSnapshot.length > 0
+          ? { pendingTurnAttachments: [] }
+          : { attachments: [], pendingTurnAttachments: [] },
+      );
     }
 
     // Re-resolve session before turn
@@ -1862,7 +1883,7 @@ export class Orchestrator {
     }
     if (clearQueue && thread.queue.length > 0) {
       this.haltDrain.delete(thread.id);
-      updateThread(thread.id, { queue: [] });
+      updateThread(thread.id, { queue: [], queueAttachments: [] });
       this.emit({ type: 'queue_changed', threadId: thread.id, queue: [] });
     } else if (!clearQueue && !continueQueue) {
       // Preserve queue but do not auto-start the next prompt after this stop.

@@ -128,6 +128,22 @@ describe('planHistoryAgePurge', () => {
       planHistoryAgePurge([archived({ id: 'x', updatedAt: '2020-01-01T00:00:00.000Z' })], 0),
     ).toEqual([]);
   });
+
+  it('ages from archivedAt even if updatedAt moved later', () => {
+    expect(
+      planHistoryAgePurge(
+        [
+          archived({
+            id: 'touched',
+            updatedAt: '2026-02-20T00:00:00.000Z',
+            archivedAt: '2025-01-01T00:00:00.000Z',
+          }),
+        ],
+        30,
+        Date.parse('2026-03-01T00:00:00.000Z'),
+      ),
+    ).toEqual(['touched']);
+  });
 });
 
 describe('history retention stub', () => {

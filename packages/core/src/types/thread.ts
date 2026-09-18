@@ -190,6 +190,12 @@ export interface Thread {
    * Keeps the chip tray empty after submit while `runTurn` still has the files.
    */
   pendingTurnAttachments?: ThreadAttachment[];
+  /**
+   * Files parked with each queued prompt (same length as `queue`).
+   * Remove / reorder / Send now must move these with the text so a later
+   * turn does not inherit images from a discarded follow-up.
+   */
+  queueAttachments?: ThreadAttachment[][];
   lastError?: string | null;
   /**
    * OS pid of the in-flight agent child while status is `running`.

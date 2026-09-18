@@ -50,6 +50,7 @@ export function normalizeThread(raw: Thread): Thread {
     pendingTurnAttachments: Array.isArray(raw.pendingTurnAttachments)
       ? raw.pendingTurnAttachments
       : [],
+    queueAttachments: Array.isArray(raw.queueAttachments) ? raw.queueAttachments : [],
     prTitle: raw.prTitle ?? null,
     prState: raw.prState ?? null,
     prIsDraft: Boolean(raw.prIsDraft),
@@ -128,6 +129,7 @@ export function createEmptyThread(
         | 'userSetTitle'
         | 'attachments'
         | 'pendingTurnAttachments'
+        | 'queueAttachments'
         | 'archivedAt'
       >
     >,
@@ -161,6 +163,7 @@ export function createEmptyThread(
     messages: partial.messages ?? [],
     attachments: partial.attachments ?? [],
     pendingTurnAttachments: partial.pendingTurnAttachments ?? [],
+    queueAttachments: partial.queueAttachments ?? [],
     createdAt: ts,
     updatedAt: ts,
     archivedAt:
