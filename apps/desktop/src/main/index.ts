@@ -1434,7 +1434,7 @@ function registerIpc(): void {
     ) => orch.diff(ref, opts),
   );
   ipcMain.handle('getWorktreeDirtyStat', (_e, ref: string) =>
-    orch.uncommittedDiffStat(ref),
+    orch.worktreeDirtyStat(ref),
   );
   ipcMain.handle('initializeGit', (_e, ref: string) => orch.initializeGit(ref));
   ipcMain.handle('getPrChecks', (_e, ref: string) => orch.getPrChecks(ref));

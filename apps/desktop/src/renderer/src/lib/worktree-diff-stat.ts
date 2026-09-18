@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import type { WorktreeDirtyStat } from '@sideboard-ai/core';
 
-export type WorktreeDiffStat = {
-  additions: number;
-  deletions: number;
-  dirty: boolean;
-};
+export type { WorktreeDirtyStat };
 
 /** Statuses that mean the agent is done writing — reload the dirty glyph. */
 const RELOAD_ON_STATUS = new Set(['idle', 'error', 'stopped', 'broken']);
@@ -13,18 +10,22 @@ const BUSY_STATUS = new Set(['queued', 'running']);
 /** Let `git worktree add` / fetch finish before the first porcelain. */
 const CREATE_DEFER_MS = 1_500;
 
+const CLEAN: WorktreeDirtyStat = { additions: 0, deletions: 0, dirty: false };
+
 /**
  * Uncommitted dirty stat for a sidebar/board worktree row.
  * Uses the cheap glyph IPC — not full `getDiff` (merge-base + PR-vs-main
- * + untracked walk). Skips git while queued/running, and defers the first
- * fetch so a pair of review-PR creates does not stampede the repo lock.
+ * + untracked walk). The first fetch is deferred so a pair of review-PR
+ * creates does not stampede the repo lock; when the row mounts while the
+ * agent is already queued/running it paints once immediately (last count
+ * on remount) and the periodic reload waits for the turn to end.
  */
 export function useWorktreeDirtyStat(
   threadId: string,
   worktreePath: string,
   status: string,
-): { stat: WorktreeDiffStat | null; loaded: boolean } {
-  const [stat, setStat] = useState<WorktreeDiffStat | null>(null);
+): { stat: WorktreeDirtyStat | null; loaded: boolean } {
+  const [stat, setStat] = useState<WorktreeDirtyStat | null>(null);
   const [loaded, setLoaded] = useState(false);
   const fetchGen = useRef(0);
   const prevStatus = useRef<string | null>(null);
@@ -34,8 +35,8 @@ export function useWorktreeDirtyStat(
   useEffect(() => {
     prevStatus.current = null;
     let cancelled = false;
-    const load = async () => {
-      if (BUSY_STATUS.has(statusRef.current)) return;
+    const load = async (opts?: { skipWhenBusy?: boolean }) => {
+      if (opts?.skipWhenBusy && BUSY_STATUS.has(statusRef.current)) return;
       const gen = ++fetchGen.current;
       try {
         const next = await window.sideboard.getWorktreeDirtyStat(threadId);
@@ -44,12 +45,19 @@ export function useWorktreeDirtyStat(
         setLoaded(true);
       } catch {
         if (cancelled || gen !== fetchGen.current) return;
-        setStat({ additions: 0, deletions: 0, dirty: false });
+        setStat(CLEAN);
         setLoaded(true);
       }
     };
+    // First paint: one fetch after the create window, even mid-turn, so a
+    // remounted row shows its count instead of "…" for the whole turn.
     const first = window.setTimeout(() => void load(), CREATE_DEFER_MS);
-    const interval = window.setInterval(() => void load(), 12_000);
+    // Periodic: skip while the agent is writing — the status effect below
+    // reloads once the turn ends.
+    const interval = window.setInterval(
+      () => void load({ skipWhenBusy: true }),
+      12_000,
+    );
     return () => {
       cancelled = true;
       window.clearTimeout(first);
@@ -76,7 +84,7 @@ export function useWorktreeDirtyStat(
         })
         .catch(() => {
           if (cancelled || gen !== fetchGen.current) return;
-          setStat({ additions: 0, deletions: 0, dirty: false });
+          setStat(CLEAN);
           setLoaded(true);
         });
     }, 400);

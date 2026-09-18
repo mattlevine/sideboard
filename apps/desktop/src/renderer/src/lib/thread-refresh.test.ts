@@ -5,6 +5,7 @@ import {
   isFresherFullThread,
   mergeFullThreadIntoLists,
   threadListsUnchanged,
+  vanishedLiveThreadIds,
 } from './thread-refresh';
 import type { Thread } from '@sideboard-ai/core';
 
@@ -24,6 +25,17 @@ function thread(partial: Partial<Thread> & { id: string; status: Thread['status'
     ...partial,
   } as Thread;
 }
+
+describe('vanishedLiveThreadIds', () => {
+  it('lists live ids missing from a live-only refresh (archived elsewhere)', () => {
+    const a = thread({ id: 'a', status: 'idle' });
+    const b = thread({ id: 'b', status: 'running' });
+    const c = thread({ id: 'c', status: 'idle' });
+    expect(vanishedLiveThreadIds([a, b, c], [a, c])).toEqual(['b']);
+    expect(vanishedLiveThreadIds([a], [a, b])).toEqual([]);
+    expect(vanishedLiveThreadIds([], [a])).toEqual([]);
+  });
+});
 
 describe('applyThreadToLists', () => {
   it('upserts an active thread and drops it from archived', () => {

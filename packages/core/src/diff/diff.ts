@@ -6,6 +6,7 @@ import type {
   DiffResult,
   DiffScope,
   DiffScopeStat,
+  WorktreeDirtyStat,
 } from '../types/thread.js';
 import { git } from '../git/run.js';
 import { isDirty, resolveDefaultBranch, resolveDiffBaseRef, isSideboardScratchPath } from '../git/worktree.js';
@@ -1007,22 +1008,15 @@ export function writeWorktreeFile(
   return { path: relativePath };
 }
 
-/** Line counts for a sidebar/board dirty glyph — not a Changes payload. */
-export type UncommittedDiffStat = {
-  additions: number;
-  deletions: number;
-  dirty: boolean;
-};
-
 /**
  * Cheap working-tree dirt for every sidebar/board row.
  * Do not call {@link getDiff} here: includeMeta walks merge-base + branch
  * commits (the full PR vs main), and the default untracked walk races
  * `git worktree add` / setup when several review worktrees are created.
  */
-export async function getUncommittedDiffStat(
+export async function getWorktreeDirtyStat(
   worktreePath: string,
-): Promise<UncommittedDiffStat> {
+): Promise<WorktreeDirtyStat> {
   const status = await inspectGitWorktree(worktreePath);
   if (status !== 'ok') {
     return { additions: 0, deletions: 0, dirty: false };

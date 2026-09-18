@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execa } from 'execa';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getDiff, getUncommittedDiffStat } from './diff.js';
+import { getDiff, getWorktreeDirtyStat } from './diff.js';
 
 async function git(cwd: string, args: string[]) {
   await execa('git', args, { cwd });
@@ -102,10 +102,10 @@ describe('getDiff', () => {
 
   it('sidebar dirty stat ignores commits-vs-main (review PR worktree)', async () => {
     await repoWithPushedBranchChange();
-    const stat = await getUncommittedDiffStat(root);
+    const stat = await getWorktreeDirtyStat(root);
     expect(stat).toEqual({ additions: 0, deletions: 0, dirty: false });
     writeFileSync(join(root, 'a.txt'), 'a-dirty\n');
-    const dirty = await getUncommittedDiffStat(root);
+    const dirty = await getWorktreeDirtyStat(root);
     expect(dirty.dirty).toBe(true);
     expect(dirty.additions + dirty.deletions).toBeGreaterThan(0);
   });

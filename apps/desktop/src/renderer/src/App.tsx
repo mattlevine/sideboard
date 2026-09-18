@@ -27,6 +27,7 @@ import {
   isFresherFullThread,
   mergeFullThreadIntoLists,
   threadListsUnchanged,
+  vanishedLiveThreadIds,
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
 import { ShowCostProvider } from './lib/show-cost';
@@ -416,10 +417,27 @@ export function App() {
           rememberFull(selectedFull);
         }
         const live = all.filter((t) => t.status !== 'archived');
-        const archivedThreads = includeArchived
+        let archivedThreads = includeArchived
           ? all.filter((t) => t.status === 'archived')
           : archivedRef.current;
-        if (includeArchived) archivedHydratedRef.current = true;
+        if (includeArchived) {
+          archivedHydratedRef.current = true;
+        } else {
+          // Live-only pass: a thread that left the live list was archived
+          // (desktop, MCP, or auto-archive on merge). Refetch just those so
+          // `archived` stays correct without slimming every History record.
+          const vanished = vanishedLiveThreadIds(threadsRef.current, live);
+          if (vanished.length > 0) {
+            const fetched = await Promise.all(
+              vanished.map((id) => window.sideboard.getThread(id).catch(() => null)),
+            );
+            let lists = { threads: live, archived: archivedThreads };
+            fetched.forEach((t, i) => {
+              lists = applyThreadToLists(lists, t, vanished[i]!);
+            });
+            archivedThreads = lists.archived;
+          }
+        }
         commitThreadLists({ threads: live, archived: archivedThreads });
         startTransition(() => {
           setRuntime(rt);
@@ -673,7 +691,12 @@ export function App() {
   }, [threads]);
 
   useEffect(() => {
-    if (!openPrSyncKey) return;
+    if (!openPrSyncKey) {
+      // No open PRs — forget every worktree so a PR that reappears on the
+      // same path is treated as new instead of waiting for the 60s pass.
+      seenOpenPrWorktrees.current.clear();
+      return;
+    }
     let cancelled = false;
     let running = false;
 

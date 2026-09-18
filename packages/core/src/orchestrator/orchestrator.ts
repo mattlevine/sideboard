@@ -71,6 +71,7 @@ import type {
   ThreadAttachment,
   ThreadOptionsPatch,
   TokenUsage,
+  WorktreeDirtyStat,
 } from '../types/thread.js';
 import { clipAgentEventForPaint, isInternalAgentStatusText } from '../agents/message-parts.js';
 import { sumUsageList } from '../agents/usage.js';
@@ -148,7 +149,7 @@ import {
   captureTurnBaseline,
   getDiff,
   getDiffSummary,
-  getUncommittedDiffStat,
+  getWorktreeDirtyStat,
   initializeGitRepository,
   listWorktreeFiles,
   readWorktreeFile,
@@ -2470,10 +2471,10 @@ export class Orchestrator {
     });
   }
 
-  async uncommittedDiffStat(threadRef: string) {
+  async worktreeDirtyStat(threadRef: string): Promise<WorktreeDirtyStat> {
     const thread = this.requireThread(threadRef);
     this.assertNotGlobal(thread, 'Diff');
-    return getUncommittedDiffStat(thread.worktreePath);
+    return getWorktreeDirtyStat(thread.worktreePath);
   }
 
   async diffSummary(threadRef: string) {
