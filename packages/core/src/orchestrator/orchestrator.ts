@@ -108,6 +108,7 @@ import {
   threadsSharingWorktree,
 } from '../threads/chat-tabs.js';
 import { enqueueByKey } from '../util/enqueue-by-key.js';
+import { createLineCoalescer } from '../util/line-coalescer.js';
 import { git } from '../git/run.js';
 import { withRepoGitLock } from '../git/repo-git-lock.js';
 import { clearTurnLive, noteTurnLiveEvent, readTurnLive } from '../store/turn-live.js';
@@ -804,7 +805,10 @@ export class Orchestrator {
   }
 
   getThread(idOrRef: string): Thread | null {
-    return findThreadByRef(idOrRef) ?? readThread(idOrRef);
+    // Exact id first: one stat + cache hit. `findThreadByRef` lists every
+    // record including archived (readdir + stat per file) — reserve it for
+    // prefixes, branch names and titles.
+    return readThread(idOrRef) ?? findThreadByRef(idOrRef);
   }
 
   async createThread(input: CreateThreadInput): Promise<Thread> {
@@ -1968,17 +1972,19 @@ export class Orchestrator {
       }
     }
 
+    // Same batching as setup output — dev servers log per-request lines.
+    const runOutput = createLineCoalescer((chunk) => {
+      this.emit({
+        type: 'run_output',
+        threadId: thread.id,
+        scriptName: resolvedName,
+        line: chunk,
+      });
+    });
     const handle = await startDevServer(
       thread.repoPath,
       thread.worktreePath,
-      (line) => {
-        this.emit({
-          type: 'run_output',
-          threadId: thread.id,
-          scriptName: resolvedName,
-          line,
-        });
-      },
+      runOutput.push,
       { scriptName: resolvedName },
     );
     if (!handle) {
@@ -2030,6 +2036,7 @@ export class Orchestrator {
       scriptName: resolvedName,
     });
     void handle.done.then(() => {
+      runOutput.flush();
       this.processes.delete(runKey);
       if (isDefault) this.processes.delete(worktreeDevProcessKey(thread.worktreePath));
       const latest = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath));
@@ -2132,13 +2139,14 @@ export class Orchestrator {
     );
   }
 
-  private writeSetupLog(
-    threadId: string,
-    worktreePath: string,
-    fn: (key: string) => void,
-  ): void {
+  /**
+   * The worktree-keyed log is canonical (`resolveWorktreeSetupLog` prefers it
+   * whenever it has output/running/exitCode); per-chat keys only exist for
+   * records that predate it. Writing one key halves the sync persists during
+   * `pnpm install`.
+   */
+  private writeSetupLog(worktreePath: string, fn: (key: string) => void): void {
     fn(setupLogKeyForWorktree(worktreePath));
-    fn(threadId);
   }
 
   async runSetup(
@@ -2158,14 +2166,24 @@ export class Orchestrator {
       startedAt: new Date().toISOString(),
       kill: () => abort.abort(),
     });
-    this.writeSetupLog(thread.id, thread.worktreePath, beginSetupLog);
+    this.writeSetupLog(thread.worktreePath, beginSetupLog);
     this.emit({ type: 'setup_started', threadId: thread.id });
+
+    // `pnpm install` streams thousands of lines; one log append + one IPC
+    // frame per tick instead of per line keeps the main thread responsive
+    // while several worktrees are set up at once. `line` in the event is a
+    // `\n`-joined chunk — every consumer already joins on `\n`.
+    const output = createLineCoalescer((chunk) => {
+      this.writeSetupLog(thread.worktreePath, (logKey) => appendSetupLog(logKey, chunk));
+      this.emit({ type: 'setup_output', threadId: thread.id, line: chunk });
+    });
 
     let finished = false;
     const finish = (exitCode: number | null, source?: string | null) => {
       if (finished) return;
       finished = true;
-      this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
+      output.flush();
+      this.writeSetupLog(thread.worktreePath, (logKey) =>
         finishSetupLog(logKey, exitCode, source),
       );
       this.emit({ type: 'setup_finished', threadId: thread.id, exitCode });
@@ -2175,22 +2193,14 @@ export class Orchestrator {
       const setup = await runWorkspaceSetup(
         thread.repoPath,
         thread.worktreePath,
-        (line) => {
-          this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
-            appendSetupLog(logKey, line),
-          );
-          this.emit({ type: 'setup_output', threadId: thread.id, line });
-        },
+        output.push,
         { signal: abort.signal },
       );
 
       if (!setup.ran) {
         const line =
           'No setup script in .sideboard/settings.toml, .conductor/settings.toml, .cursor/worktrees.json, or script/setup (bin/setup, scripts/setup)';
-        this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
-          appendSetupLog(logKey, line),
-        );
-        this.emit({ type: 'setup_output', threadId: thread.id, line });
+        output.push(line);
         finish(null, null);
         throw new Error(line);
       }

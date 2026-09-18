@@ -164,18 +164,37 @@ function sameWorktreePath(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
+/**
+ * Sibling-thread worktree paths, so a setup/run output stream from another
+ * tab on the same worktree costs one IPC per thread instead of one per
+ * chunk. A thread's worktree does not move, but keep a short TTL so a stale
+ * entry can never pin the wrong pane for long.
+ */
+const WORKTREE_PATH_TTL_MS = 60_000;
+const worktreePathByThread = new Map<
+  string,
+  { at: number; path: Promise<string | null> }
+>();
+
+function lookupWorktreePath(threadId: string): Promise<string | null> {
+  const now = Date.now();
+  const hit = worktreePathByThread.get(threadId);
+  if (hit && now - hit.at < WORKTREE_PATH_TTL_MS) return hit.path;
+  const path = window.sideboard
+    .getThread(threadId)
+    .then((t) => t?.worktreePath ?? null)
+    .catch(() => null);
+  worktreePathByThread.set(threadId, { at: now, path });
+  return path;
+}
+
 async function eventOnWorktree(
   eventThreadId: string,
   currentThreadId: string,
   isCurrentWorktree: (path: string | null | undefined) => boolean,
 ): Promise<boolean> {
   if (eventThreadId === currentThreadId) return true;
-  try {
-    const other = await window.sideboard.getThread(eventThreadId);
-    return Boolean(other && isCurrentWorktree(other.worktreePath));
-  } catch {
-    return false;
-  }
+  return isCurrentWorktree(await lookupWorktreePath(eventThreadId));
 }
 
 function isNotGitError(message: string): boolean {

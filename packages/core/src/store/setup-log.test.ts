@@ -66,6 +66,25 @@ describe('setup log', () => {
     expect(setupLogKeyForWorktree('/wt/paris')).not.toBe(setupLogKeyForWorktree('/wt/lyon'));
   });
 
+  it('accepts multi-line chunks and keeps line order', () => {
+    beginSetupLog('t-chunk');
+    appendSetupLog('t-chunk', 'a\nb');
+    appendSetupLog('t-chunk', 'c');
+    expect(readSetupLog('t-chunk').output).toBe('a\nb\nc');
+  });
+
+  it('does not rebuild the joined string on every append', () => {
+    beginSetupLog('t-many');
+    const line = 'x'.repeat(200);
+    // ~3× the cap in 200-char lines — must stay fast (O(1) append + lazy compaction).
+    const started = Date.now();
+    for (let i = 0; i < (MAX_SETUP_LOG_CHARS * 3) / 200; i++) appendSetupLog('t-many', line);
+    const snap = readSetupLog('t-many');
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(snap.output.length).toBeLessThanOrEqual(MAX_SETUP_LOG_CHARS);
+    expect(snap.output.endsWith(line)).toBe(true);
+  });
+
   it('marks a new run as running with a cleared buffer', () => {
     appendSetupLog('t1', 'old');
     finishSetupLog('t1', 0);

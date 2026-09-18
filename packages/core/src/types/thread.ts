@@ -613,9 +613,11 @@ export type OrchestratorEvent =
       type: 'run_output';
       threadId: string;
       scriptName: string;
+      /** One line, or several `\n`-joined lines coalesced within one tick. */
       line: string;
     }
   | { type: 'setup_started'; threadId: string }
+  /** `line` may be a `\n`-joined chunk — consumers append with `\n`. */
   | { type: 'setup_output'; threadId: string; line: string }
   | { type: 'setup_finished'; threadId: string; exitCode: number | null }
   | {

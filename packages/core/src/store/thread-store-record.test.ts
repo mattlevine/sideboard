@@ -22,6 +22,8 @@ describe('isThreadRecordFile', () => {
     expect(isThreadRecordFile('/data/threads/abc.live.json')).toBe(false);
     expect(isThreadRecordFile('abc.live.json.12.tmp')).toBe(false);
     expect(isThreadRecordFile('abc.json.12.tmp')).toBe(false);
+    expect(isThreadRecordFile('abc.setup.log.json')).toBe(false);
+    expect(isThreadRecordFile('/data/threads/wt-0123abcd.setup.log.json')).toBe(false);
   });
 });
 

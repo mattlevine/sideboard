@@ -140,6 +140,26 @@ describe('Orchestrator.runSetup lastError', () => {
     expect(log.output).toContain('ok');
   });
 
+  it('coalesces a burst of setup lines into one event and keeps them in the log', async () => {
+    const lines = Array.from({ length: 50 }, (_, i) => `line ${i}`);
+    runWorkspaceSetup.mockImplementation(async (_repo, _wt, onLine: (line: string) => void) => {
+      for (const line of lines) onLine(line);
+      return { ran: true, exitCode: 0, source: 'script/setup' };
+    });
+    const thread = seedThread('idle');
+    const orch = new Orchestrator();
+    const outputs: string[] = [];
+    const off = orch.on((event) => {
+      if (event.type === 'setup_output') outputs.push(event.line);
+    });
+    await orch.runSetup(thread.id);
+    off();
+    // One synchronous burst → one chunk, flushed before setup_finished.
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0]).toBe(lines.join('\n'));
+    expect(orch.getSetupLog(thread.id).output).toBe(lines.join('\n'));
+  });
+
   it('replays the same setup log on a sibling chat tab', async () => {
     runWorkspaceSetup.mockImplementation(async (_repo, _wt, onLine: (line: string) => void) => {
       onLine('shared setup');

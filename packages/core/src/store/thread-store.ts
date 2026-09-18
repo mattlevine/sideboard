@@ -276,12 +276,19 @@ function idPath(id: string): string {
   return id;
 }
 
-/** True for `threads/<id>.json` — not live sidecars or atomic `*.tmp` writes. */
+/** True for `threads/<id>.json` — not live / setup-log sidecars or atomic `*.tmp` writes. */
 export function isThreadRecordFile(nameOrPath: string): boolean {
   const name = basename(nameOrPath);
-  // Turn-progress sidecars are `threads/<id>.live.json` — they also end in
-  // `.json`, but they are not Thread records (no id / worktreePath).
-  return name.endsWith('.json') && !name.endsWith('.live.json');
+  // Turn-progress sidecars are `threads/<id>.live.json` and setup output is
+  // `threads/<key>.setup.log.json` — both end in `.json` but are not Thread
+  // records (no id / worktreePath). The setup log is rewritten every ~100ms
+  // during `pnpm install`; treating it as a record fired `threads:changed`
+  // (full renderer refresh) for the whole install.
+  return (
+    name.endsWith('.json') &&
+    !name.endsWith('.live.json') &&
+    !name.endsWith('.setup.log.json')
+  );
 }
 
 export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {
