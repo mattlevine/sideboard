@@ -122,7 +122,6 @@ import {
   findChatSearchHits,
   nextChatSearchIndex,
   scrollChatToSearchKey,
-  shouldDeferChatFind,
 } from '../lib/chat-search';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
@@ -181,6 +180,7 @@ interface Props {
   ) => void | Promise<void>;
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
+  findChatCmd?: { nonce: number; query: string } | null;
   openFilePath?: string | null;
   openFiles?: string[];
   openFileView?: 'edit' | 'diff';
@@ -575,6 +575,7 @@ export function ThreadPanel({
   onArchiveThread,
   composerPrefill,
   onComposerPrefillConsumed,
+  findChatCmd,
   openFilePath = null,
   openFiles = [],
   openFileView = 'edit',
@@ -1752,7 +1753,7 @@ export function ThreadPanel({
     const next = fromSeed || fromSel;
     setChatSearchOpen(true);
     setChatSearchFocus((n) => n + 1);
-    if (next && next !== chatSearchQuery) {
+    if (next !== chatSearchQuery) {
       setChatSearchQuery(next);
       setChatSearchIndex(0);
       lastScrolledSearchKey.current = null;
@@ -1793,35 +1794,26 @@ export function ThreadPanel({
   }, [chatSearchOpen, chatSearchHits, chatSearchIndex, chatSearchQuery]);
 
   useEffect(() => {
+    if (!findChatCmd) return;
+    openChatSearch(findChatCmd.query);
+  }, [findChatCmd]);
+
+  useEffect(() => {
+    if (!chatSearchOpen) return;
     const onFindKey = (e: KeyboardEvent) => {
-      const meta = e.metaKey || e.ctrlKey;
-      if (meta && e.key.toLowerCase() === 'f') {
-        if (!chatViewOpen && shouldDeferChatFind(e.target)) return;
-        if (!chatViewOpen && !chatSearchOpen) return;
-        e.preventDefault();
-        openChatSearch();
-        return;
-      }
-      if (!chatSearchOpen) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         setChatSearchOpen(false);
         return;
       }
-      if ((meta && e.key.toLowerCase() === 'g') || e.key === 'F3') {
+      if (((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') || e.key === 'F3') {
         e.preventDefault();
         stepChatSearch(e.shiftKey ? -1 : 1);
       }
     };
     window.addEventListener('keydown', onFindKey);
     return () => window.removeEventListener('keydown', onFindKey);
-  }, [chatViewOpen, chatSearchOpen, chatSearchHits.length, chatSearchQuery]);
-
-  useEffect(() => {
-    return window.sideboardUpdate.onFindChat((text) => {
-      openChatSearch(text);
-    });
-  }, [chatSearchQuery]);
+  }, [chatSearchOpen, chatSearchHits.length]);
 
   function openRightPane(next: RightPaneContent) {
     suppressArtifactAutoOpen.current = false;
@@ -2195,6 +2187,22 @@ export function ThreadPanel({
         onReorderChats={onReorderChats}
         onFindChat={() => openChatSearch()}
       />
+      {chatSearchOpen ? (
+        <ChatSearchBar
+          key={chatSearchFocus}
+          query={chatSearchQuery}
+          current={chatSearchHits.length ? chatSearchIndex + 1 : 0}
+          total={chatSearchHits.length}
+          onQueryChange={(next) => {
+            setChatSearchQuery(next);
+            setChatSearchIndex(0);
+            lastScrolledSearchKey.current = null;
+          }}
+          onNext={() => stepChatSearch(1)}
+          onPrev={() => stepChatSearch(-1)}
+          onClose={() => setChatSearchOpen(false)}
+        />
+      ) : null}
 
       {forkWorkspaceConfirm && (
         <div
@@ -2259,22 +2267,6 @@ export function ThreadPanel({
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
         <div className="thread-chat-column">
-      {chatSearchOpen && chatViewOpen ? (
-        <ChatSearchBar
-          key={chatSearchFocus}
-          query={chatSearchQuery}
-          current={chatSearchHits.length ? chatSearchIndex + 1 : 0}
-          total={chatSearchHits.length}
-          onQueryChange={(next) => {
-            setChatSearchQuery(next);
-            setChatSearchIndex(0);
-            lastScrolledSearchKey.current = null;
-          }}
-          onNext={() => stepChatSearch(1)}
-          onPrev={() => stepChatSearch(-1)}
-          onClose={() => setChatSearchOpen(false)}
-        />
-      ) : null}
       {prPageOpen ? (
         <PrPage threadId={thread.id} onAddToChat={attachToChat} />
       ) : changesOpen && changesPath ? (

@@ -42,6 +42,7 @@ import { GlobalBoard } from './components/GlobalBoard';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
+import { shouldDeferChatFind } from './lib/chat-search';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
 import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
@@ -167,6 +168,7 @@ export function App() {
   } | null>(null);
   const [teamToasts, setTeamToasts] = useState<TeamToastItem[]>([]);
   const [prefill, setPrefill] = useState<string | undefined>();
+  const [findChatCmd, setFindChatCmd] = useState<{ nonce: number; query: string } | null>(null);
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
@@ -667,9 +669,12 @@ export function App() {
       setSettingsInitialNav('agents');
       setSettingsOpen(true);
     });
-    const offQuoteSelection = window.sideboardUpdate.onQuoteSelection((text) => {
+    const offQuoteSelection = window.sideboardUpdate.onQuoteSelection?.((text) => {
       if (!text.trim()) return;
       setPrefill(text);
+    });
+    const offFindChat = window.sideboardUpdate.onFindChat?.((text) => {
+      setFindChatCmd({ nonce: Date.now(), query: typeof text === 'string' ? text : '' });
     });
     return () => {
       if (liveRaf) cancelAnimationFrame(liveRaf);
@@ -680,9 +685,26 @@ export function App() {
       offReady();
       offUpdateError();
       offOpenSettings();
-      offQuoteSelection();
+      offQuoteSelection?.();
+      offFindChat?.();
     };
   }, [refresh, refreshThread, livePaintStore]);
+
+  useEffect(() => {
+    if (view !== 'thread') return;
+    const onFindKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'f') return;
+      if (shouldDeferChatFind(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setFindChatCmd({
+        nonce: Date.now(),
+        query: window.getSelection()?.toString() ?? '',
+      });
+    };
+    window.addEventListener('keydown', onFindKey, true);
+    return () => window.removeEventListener('keydown', onFindKey, true);
+  }, [view]);
 
   // Conductor-style: lightly follow open PRs so external merges purple + auto-archive.
   const openPrSyncKey = useMemo(() => {
@@ -1246,6 +1268,7 @@ export function App() {
                 archiveThreadsAndRefresh([id], meta),
               composerPrefill: prefill,
               onComposerPrefillConsumed: () => setPrefill(undefined),
+              findChatCmd,
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
@@ -1294,6 +1317,7 @@ export function App() {
               onLeaveThread={showBoard}
               composerPrefill={prefill}
               onComposerPrefillConsumed={() => setPrefill(undefined)}
+              findChatCmd={findChatCmd}
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
               onOpenThreadLink={openThreadByRef}

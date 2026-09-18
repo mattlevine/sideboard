@@ -502,7 +502,12 @@ export function ChatTabs({
             className="chat-tab-open chat-tab-find"
             title="Find in chat"
             aria-label="Find in chat"
-            onClick={onFindChat}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onFindChat();
+            }}
           >
             <span className="nav-glyph search" aria-hidden />
           </button>

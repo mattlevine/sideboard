@@ -15,6 +15,7 @@ interface Props {
   onLeaveThread?: () => void;
   composerPrefill?: string;
   onComposerPrefillConsumed?: () => void;
+  findChatCmd?: { nonce: number; query: string } | null;
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
   /** Open another thread from a sideboard://thread/<id> markdown link. */
@@ -46,6 +47,7 @@ export function OrchestratorPanel({
   onLeaveThread,
   composerPrefill,
   onComposerPrefillConsumed,
+  findChatCmd,
   leftSidebarToggle,
   rightSidebarToggle,
   onOpenThreadLink,
@@ -123,6 +125,7 @@ export function OrchestratorPanel({
           onLeaveThread={onLeaveThread}
           composerPrefill={composerPrefill}
           onComposerPrefillConsumed={onComposerPrefillConsumed}
+          findChatCmd={findChatCmd}
           leftSidebarToggle={leftSidebarToggle}
           rightSidebarToggle={rightSidebarToggle}
           onOpenThreadLink={onOpenThreadLink ?? onSelectChild}

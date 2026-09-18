@@ -222,7 +222,6 @@ export function setupApplicationMenu(getMainWindow: () => BrowserWindow | null):
       {
         label: 'Find in Chat',
         accelerator: 'CmdOrCtrl+F',
-        registerAccelerator: false,
         click: () => sendFindChat(getMainWindow()),
       },
     ],

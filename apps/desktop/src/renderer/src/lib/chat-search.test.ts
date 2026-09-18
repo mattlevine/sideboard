@@ -25,6 +25,15 @@ describe('chatMessageSearchText', () => {
       '',
     );
   });
+
+  it('indexes tool labels when the message body is empty', () => {
+    expect(
+      chatMessageSearchText({
+        text: '',
+        parts: [{ type: 'tool', name: 'present_plan', description: 'Draft the rollout' }],
+      }),
+    ).toBe('Draft the rollout\npresent_plan');
+  });
 });
 
 describe('findChatSearchHits', () => {

@@ -2518,6 +2518,7 @@ body.resizing-panels webview {
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
+  -webkit-app-region: no-drag;
 }
 
 .chat-search-input {
@@ -2567,6 +2568,7 @@ body.resizing-panels webview {
 .chat-tab-find {
   width: 28px;
   justify-content: center;
+  -webkit-app-region: no-drag;
 }
 
 .chat-tab-find .nav-glyph.search {

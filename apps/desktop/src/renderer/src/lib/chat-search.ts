@@ -2,14 +2,23 @@
 export function chatMessageSearchText(message: {
   text?: string;
   origin?: string;
-  parts?: Array<{ type: string; text?: string }>;
+  parts?: Array<{ type: string; text?: string; description?: string; name?: string }>;
 }): string {
   if (message.origin === 'continue') return '';
   const chunks: string[] = [];
-  if (message.text?.trim()) chunks.push(message.text);
+  const seen = new Set<string>();
+  const add = (value?: string) => {
+    const text = value?.trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    chunks.push(text);
+  };
+  add(message.text);
   for (const part of message.parts ?? []) {
-    if (part.type === 'text' && part.text?.trim() && part.text !== message.text) {
-      chunks.push(part.text);
+    if (part.type === 'text') add(part.text);
+    if (part.type === 'tool') {
+      add(part.description);
+      add(part.name);
     }
   }
   return chunks.join('\n');
@@ -33,7 +42,7 @@ export function findChatSearchHits(
   messages: Array<{
     text?: string;
     origin?: string;
-    parts?: Array<{ type: string; text?: string }>;
+    parts?: Array<{ type: string; text?: string; description?: string; name?: string }>;
   }>,
   extras?: { pending?: string | null; live?: string | null },
 ): string[] {
