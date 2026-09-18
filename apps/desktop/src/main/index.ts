@@ -1539,6 +1539,13 @@ function registerIpc(): void {
     ) => orch.cleanupOrphans(opts),
   );
   ipcMain.handle(
+    'cleanupHistory',
+    (
+      _e,
+      opts?: { dryRun?: boolean; purgeOlderThanDays?: number; force?: boolean },
+    ) => orch.cleanupHistory(opts),
+  );
+  ipcMain.handle(
     'bestOfN',
     (
       _e,

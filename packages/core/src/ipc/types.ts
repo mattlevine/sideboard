@@ -492,6 +492,11 @@ export interface IpcApi {
     maxCount?: number;
     repoPath?: string;
   }): Promise<{ removed: string[]; kept: string[] }>;
+  cleanupHistory(opts?: {
+    dryRun?: boolean;
+    purgeOlderThanDays?: number;
+    force?: boolean;
+  }): Promise<{ stripped: string[]; purged: string[] }>;
   bestOfN(opts: {
     prompt: string;
     agents: AgentKind[];

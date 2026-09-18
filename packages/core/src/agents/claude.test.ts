@@ -279,6 +279,45 @@ describe('claudeAdapter.parseEvent', () => {
     expect(event).toEqual({ type: 'session_id', data: 'sess-123' });
   });
 
+  it('hides vendor / claude.ai needsAuth from system/init thinking', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sess-123',
+          mcp_servers: [
+            { name: 'sideboard', status: 'connected' },
+            { name: 'claude.ai Slack', status: 'needs-auth' },
+            { name: 'claude.ai Linear', status: 'needsAuth' },
+            { name: 'gmail', status: 'needs authentication' },
+            { name: 'linear', status: 'unauthorized' },
+          ],
+        }),
+      ),
+    ).toEqual({ type: 'session_id', data: 'sess-123' });
+  });
+
+  it('still surfaces Sideboard or a crashed user MCP from system/init', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sess-123',
+          mcp_servers: [
+            { name: 'sideboard', status: 'failed' },
+            { name: 'claude.ai Slack', status: 'needs-auth' },
+            { name: 'filesystem', status: 'failed' },
+          ],
+        }),
+      ),
+    ).toEqual([
+      { type: 'session_id', data: 'sess-123' },
+      { type: 'thinking', data: 'MCP: sideboard failed, filesystem failed', replace: true },
+    ]);
+  });
+
   it('surfaces failed MCP servers from system/init so a flap is not silent', () => {
     expect(
       claudeAdapter.parseEvent(

@@ -13,6 +13,12 @@ import type {
   Workspace,
 } from '@sideboard-ai/core';
 import { isUsageOnLimit, resolveUsageOnLimit } from '@sideboard/usage-on-limit';
+import {
+  HISTORY_MAX_COUNT_DEFAULT,
+  HISTORY_MAX_COUNT_MAX,
+  HISTORY_MAX_COUNT_MIN,
+  HISTORY_MAX_DAYS_MAX,
+} from '@sideboard/history-retention';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { emptyPublicIntegrations } from '../lib/optional-services';
@@ -200,6 +206,8 @@ interface Props {
   archived?: Thread[];
   onRestoreArchived?: (id: string) => void;
   onOpenArchived?: (id: string) => void;
+  onPurgeArchived?: (id: string) => void;
+  onClearOlderArchived?: (days: number) => Promise<{ purged: number } | void>;
   /** Fired when settings are loaded or saved (so the board can react to Advanced toggles). */
   onSettingsChange?: (settings: PublicAppSettings) => void;
 }
@@ -273,6 +281,8 @@ export function SettingsModal({
   archived = [],
   onRestoreArchived,
   onOpenArchived,
+  onPurgeArchived,
+  onClearOlderArchived,
   onSettingsChange,
 }: Props) {
   const [nav, setNav] = useState<NavId>(initialNav);
@@ -283,6 +293,9 @@ export function SettingsModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [maxConcurrentDraft, setMaxConcurrentDraft] = useState('5');
+  const [historyMaxCountDraft, setHistoryMaxCountDraft] = useState(String(HISTORY_MAX_COUNT_DEFAULT));
+  const [historyMaxDaysDraft, setHistoryMaxDaysDraft] = useState('0');
+  const [clearOlderDaysDraft, setClearOlderDaysDraft] = useState('365');
   const [draftKey, setDraftKey] = useState('');
   const [draftValue, setDraftValue] = useState('');
   const [editingEnvKey, setEditingEnvKey] = useState<string | null>(null);
@@ -525,6 +538,8 @@ export function SettingsModal({
     const normalized = normalizeSettings(next);
     setSettings(normalized);
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 5));
+    setHistoryMaxCountDraft(String(next.advanced?.historyMaxCount ?? HISTORY_MAX_COUNT_DEFAULT));
+    setHistoryMaxDaysDraft(String(next.advanced?.historyMaxDays ?? 0));
     if (!accountNotesFocused.current) {
       setAccountNotesDraft(normalized.defaults?.notes ?? '');
     }
@@ -1684,6 +1699,34 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-toggle-row">
                     <div>
+                      <div className="settings-section-title">Limit archived history</div>
+                      <p className="settings-hint">
+                        Keep Settings → History from growing forever. Newest archived chats stay;
+                        older ones lose their transcript, then the row. Off disables automatic
+                        cleanup — Delete and Clear older than still work. Configure the cap on
+                        History.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.autoCleanupHistory !== false ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={advanced.autoCleanupHistory !== false}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          autoCleanupHistory: advanced.autoCleanupHistory === false,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
                       <div className="settings-section-title">Auto-clean orphan worktrees</div>
                       <p className="settings-hint">
                         Remove Sideboard worktrees with no thread record when over the machine max
@@ -1922,8 +1965,133 @@ export function SettingsModal({
               <div className="settings-body">
                 <p className="settings-lead">
                   Archived chats and worktrees. Restore one to bring it back to the sidebar, or open
-                  it read-only from here.
+                  it read-only from here. Delete removes the record (not the git branch).
                 </p>
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">History cap</div>
+                  <p className="settings-hint">
+                    Keep at most this many archived chats (newest stay). Older rows lose their
+                    transcript first, then the row. Days = 0 means no automatic age delete.
+                    Automatic cleanup is the Advanced → Limit archived history switch
+                    {advanced.autoCleanupHistory === false ? ' (currently off)' : ''}.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.65rem' }}>
+                    <label className="settings-hint" htmlFor="history-max-count">
+                      Keep at most
+                    </label>
+                    <input
+                      id="history-max-count"
+                      type="number"
+                      min={HISTORY_MAX_COUNT_MIN}
+                      max={HISTORY_MAX_COUNT_MAX}
+                      step={1}
+                      value={historyMaxCountDraft}
+                      disabled={busy}
+                      onChange={(e) => setHistoryMaxCountDraft(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        busy ||
+                        !historyMaxCountDraft.trim() ||
+                        Number(historyMaxCountDraft) ===
+                          (advanced.historyMaxCount ?? HISTORY_MAX_COUNT_DEFAULT)
+                      }
+                      onClick={() => {
+                        const n = Number(historyMaxCountDraft);
+                        if (!Number.isFinite(n)) {
+                          setError('History cap must be a number');
+                          return;
+                        }
+                        void saveAdvancedPatch({ historyMaxCount: n });
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem' }}>
+                    <label className="settings-hint" htmlFor="history-max-days">
+                      Delete after days
+                    </label>
+                    <input
+                      id="history-max-days"
+                      type="number"
+                      min={0}
+                      max={HISTORY_MAX_DAYS_MAX}
+                      step={1}
+                      value={historyMaxDaysDraft}
+                      disabled={busy}
+                      onChange={(e) => setHistoryMaxDaysDraft(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        busy ||
+                        historyMaxDaysDraft.trim() === '' ||
+                        Number(historyMaxDaysDraft) === (advanced.historyMaxDays ?? 0)
+                      }
+                      onClick={() => {
+                        const n = Number(historyMaxDaysDraft);
+                        if (!Number.isFinite(n)) {
+                          setError('History days must be a number');
+                          return;
+                        }
+                        void saveAdvancedPatch({ historyMaxDays: n });
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem' }}>
+                    <label className="settings-hint" htmlFor="history-clear-older">
+                      Clear older than
+                    </label>
+                    <input
+                      id="history-clear-older"
+                      type="number"
+                      min={1}
+                      max={HISTORY_MAX_DAYS_MAX}
+                      step={1}
+                      value={clearOlderDaysDraft}
+                      disabled={busy}
+                      onChange={(e) => setClearOlderDaysDraft(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="settings-history-delete"
+                      disabled={busy || !clearOlderDaysDraft.trim()}
+                      onClick={() => {
+                        const days = Number(clearOlderDaysDraft);
+                        if (!Number.isFinite(days) || days < 1) {
+                          setError('Clear-older days must be at least 1');
+                          return;
+                        }
+                        const cutoff = Date.now() - days * 86_400_000;
+                        const count = archived.filter(
+                          (t) => Date.parse(t.updatedAt) < cutoff,
+                        ).length;
+                        if (count === 0) {
+                          setError(null);
+                          return;
+                        }
+                        if (
+                          !window.confirm(
+                            `Delete ${count} archived chat${count === 1 ? '' : 's'} older than ${days} days? This cannot be undone.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        void Promise.resolve(onClearOlderArchived?.(days)).catch((err: unknown) => {
+                          setError(err instanceof Error ? err.message : String(err));
+                        });
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
                 <div className="settings-section settings-section-card">
                   <label className="settings-section-title" htmlFor="history-search">
                     Search history
@@ -1970,6 +2138,23 @@ export function SettingsModal({
                               onClick={() => onRestoreArchived?.(t.id)}
                             >
                               Restore
+                            </button>
+                            <button
+                              type="button"
+                              className="settings-history-delete"
+                              onClick={() => {
+                                const label = threadDisplayLabel(t);
+                                if (
+                                  !window.confirm(
+                                    `Delete “${label}” from History? The transcript is removed. The git branch is kept.`,
+                                  )
+                                ) {
+                                  return;
+                                }
+                                onPurgeArchived?.(t.id);
+                              }}
+                            >
+                              Delete
                             </button>
                           </div>
                         );

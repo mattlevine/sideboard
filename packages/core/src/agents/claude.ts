@@ -279,8 +279,9 @@ type ClaudeMcpServerStatus = {
 
 /**
  * Claude Code `system/init` lists user + claude.ai MCP servers as `mcp_servers`
- * (array or map). Statuses that are not a clean connect become a thinking line
- * so a flapping Linear/Slack connector is visible instead of a silent hang.
+ * (array or map). Only paint a thinking line when it can hide a real hang:
+ * Sideboard not connected, or a user stdio MCP that failed. Vendor / claude.ai
+ * `needsAuth` is noise — agents ignore those and use Sideboard issue tools.
  */
 export function mcpStatusThinkingFromClaudeInit(
   obj: Record<string, unknown>,
@@ -318,13 +319,35 @@ export function mcpStatusThinkingFromClaudeInit(
       }
     }
   }
-  const notable = servers.filter((s) => !isCleanMcpConnect(s.status));
+  const notable = servers.filter(isNotableMcpInitStatus);
   if (notable.length === 0) return null;
   return `MCP: ${notable.map((s) => `${s.name} ${s.status}`).join(', ')}`;
 }
 
 function isCleanMcpConnect(status: string): boolean {
   return /^(connected|ok|ready|success)$/i.test(status.trim());
+}
+
+function isMcpAuthStatus(status: string): boolean {
+  return /needs[_-]?auth|needs authentication|unauthorized|not authenticated|authrequired/i.test(
+    status,
+  );
+}
+
+function isSideboardMcpName(name: string): boolean {
+  return /^sideboard$/i.test(name.trim()) || /^mcp__sideboard$/i.test(name.trim());
+}
+
+function isVendorClaudeAiMcpName(name: string): boolean {
+  return /^claude\.ai\b/i.test(name.trim()) || /^mcp__claude_ai_/i.test(name.trim());
+}
+
+function isNotableMcpInitStatus(server: ClaudeMcpServerStatus): boolean {
+  if (isCleanMcpConnect(server.status)) return false;
+  if (isSideboardMcpName(server.name)) return true;
+  if (isVendorClaudeAiMcpName(server.name)) return false;
+  if (isMcpAuthStatus(server.status)) return false;
+  return true;
 }
 
 function eventsFromClaudeSystem(obj: Record<string, unknown>): AgentEvent | AgentEvent[] | null {

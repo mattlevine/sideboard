@@ -1467,6 +1467,30 @@ export function App() {
               void refresh();
             });
           }}
+          onPurgeArchived={(id) => {
+            void window.sideboard.purgeThread(id, { deleteBranch: false }).then(() => {
+              if (selectedIdRef.current === id) {
+                setSelectedId(null);
+                setView('thread');
+                setMultiSelected(new Set());
+              }
+              fullByIdRef.current.delete(id);
+              void refresh();
+            });
+          }}
+          onClearOlderArchived={async (days) => {
+            const result = await window.sideboard.cleanupHistory({
+              purgeOlderThanDays: days,
+            });
+            if (selectedIdRef.current && result.purged.includes(selectedIdRef.current)) {
+              setSelectedId(null);
+              setView('thread');
+              setMultiSelected(new Set());
+            }
+            for (const id of result.purged) fullByIdRef.current.delete(id);
+            void refresh();
+            return { purged: result.purged.length };
+          }}
           onOpenArchived={(id) => {
             setSettingsOpen(false);
             setSettingsInitialNav('agents');
