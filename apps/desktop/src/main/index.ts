@@ -133,6 +133,8 @@ import {
   getRepoSetupInfo,
   threadsDir,
   isThreadRecordFile,
+  isSelfWrittenRecord,
+  readThread,
   invalidateThreadListCache,
   invalidateThreadRecord,
   slimThreadForUiList,
@@ -724,13 +726,25 @@ function setupStoreWatcher(): void {
   const pendingRecordIds = new Set<string>();
   const flushNotify = () => {
     notifyTimer = null;
+    // Records this process wrote last are already coherent in the store cache
+    // — only foreign (or deleted) records need a cache drop and a
+    // queue-adoption pass. Check before invalidating: the invalidation
+    // forgets the self-write marker. A self-written record that still carries
+    // a queue is the one race worth paying for: an MCP enqueue landed inside
+    // this debounce window and our own rewrite carried it forward, so adopt.
+    let foreign = pendingRecordIds.size === 0;
     if (pendingRecordIds.size > 0) {
-      for (const id of pendingRecordIds) invalidateThreadRecord(id);
+      for (const id of pendingRecordIds) {
+        if (isSelfWrittenRecord(id) && !readThread(id)?.queue.length) continue;
+        foreign = true;
+        invalidateThreadRecord(id);
+      }
       pendingRecordIds.clear();
     } else {
       invalidateThreadListCache();
     }
     mainWindow?.webContents.send('threads:changed');
+    if (!foreign) return;
     // MCP stdio (separate process) enqueues via send_to_thread; when that child
     // exits mid-wait, queues stay on disk. Adopt them into the desktop drain.
     if (adoptTimer) clearTimeout(adoptTimer);
@@ -1284,13 +1298,20 @@ function registerIpc(): void {
     orch.getThreads(Boolean(includeArchived)).map(slimThreadForUiList),
   );
   ipcMain.handle('getThread', (_e, id: string) => orch.getThread(id));
+  ipcMain.handle('getThreadSlim', (_e, id: string) => {
+    const thread = orch.getThread(id);
+    return thread ? slimThreadForUiList(thread) : null;
+  });
   ipcMain.handle('getRuntime', () => orch.getRuntime());
   ipcMain.handle('setMaxConcurrent', (_e, n: number) => {
     orch.setMaxConcurrent(n);
     updateAdvancedSettings({ maxConcurrent: n });
   });
   ipcMain.handle('createThread', async (_e, input: CreateThreadInput) => {
-    await orch.reconcile(input.repoPath);
+    // Light: repo-scoped worktree sanity only. The full routine (global heal
+    // loop, History cleanup, queue adoption) on every create blocked the main
+    // thread while several review worktrees were being added at once.
+    await orch.reconcile(input.repoPath, { light: true });
     return orch.createThread(input);
   });
   ipcMain.handle('createChatTab', (_e, input) => orch.createChatTab(input));
@@ -1298,7 +1319,7 @@ function registerIpc(): void {
   ipcMain.handle('forkChatTab', (_e, input) => orch.forkChatTab(input));
   ipcMain.handle('forkThreadWorktree', async (_e, input) => {
     const source = orch.getThread(input.threadId);
-    if (source) await orch.reconcile(source.repoPath);
+    if (source) await orch.reconcile(source.repoPath, { light: true });
     return orch.forkThreadWorktree(input);
   });
   ipcMain.handle('renameThread', (_e, ref: string, title: string) =>
@@ -1432,6 +1453,9 @@ function registerIpc(): void {
         path?: string;
       },
     ) => orch.diff(ref, opts),
+  );
+  ipcMain.handle('getWorktreeDirtyStat', (_e, ref: string) =>
+    orch.worktreeDirtyStat(ref),
   );
   ipcMain.handle('initializeGit', (_e, ref: string) => orch.initializeGit(ref));
   ipcMain.handle('getPrChecks', (_e, ref: string) => orch.getPrChecks(ref));

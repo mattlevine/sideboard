@@ -35,9 +35,11 @@ function labelFor(
     case 'archived':
       return 'Archived';
     case 'dirty':
-      return opts.dirtyLoaded
-        ? `Uncommitted +${opts.additions} −${opts.deletions}`
-        : 'Uncommitted changes';
+      // `getWorktreeDirtyStat` counts tracked lines only (numstat vs HEAD);
+      // porcelain dirt with 0/0 means the change is untracked files.
+      if (!opts.dirtyLoaded) return 'Uncommitted changes';
+      if (opts.additions === 0 && opts.deletions === 0) return 'Uncommitted untracked files';
+      return `Uncommitted +${opts.additions} −${opts.deletions}`;
     default:
       return 'Idle';
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   followThreadPrMeta,
+  newOpenPrSyncIds,
   sidebarPrHasKnownStatus,
   type SidebarPrMeta,
 } from './follow-thread-pr';
@@ -76,5 +77,27 @@ describe('followThreadPrMeta', () => {
     expect(sidebarPrHasKnownStatus(stub)).toBe(false);
     expect(sidebarPrHasKnownStatus(meta({ state: 'MERGED' }))).toBe(true);
     expect(sidebarPrHasKnownStatus(meta({ isDraft: true }))).toBe(true);
+  });
+});
+
+describe('newOpenPrSyncIds', () => {
+  it('returns every id on the first pass, then only newly added worktrees', () => {
+    const seen = new Set<string>();
+    expect(
+      newOpenPrSyncIds('aaa:/wt/one|bbb:/wt/two', seen),
+    ).toEqual(['aaa', 'bbb']);
+    expect(newOpenPrSyncIds('aaa:/wt/one|bbb:/wt/two|ccc:/wt/three', seen)).toEqual([
+      'ccc',
+    ]);
+    expect(newOpenPrSyncIds('aaa:/wt/one|bbb:/wt/two|ccc:/wt/three', seen)).toEqual(
+      [],
+    );
+  });
+
+  it('forgets worktrees that left the key so they can re-enter', () => {
+    const seen = new Set<string>();
+    newOpenPrSyncIds('aaa:/wt/one', seen);
+    expect(newOpenPrSyncIds('bbb:/wt/two', seen)).toEqual(['bbb']);
+    expect(seen.has('/wt/one')).toBe(false);
   });
 });

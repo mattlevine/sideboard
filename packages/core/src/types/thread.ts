@@ -493,6 +493,13 @@ export interface DiffScopeStat {
   deletions: number;
 }
 
+/** Sidebar/board dirty glyph — `numstat HEAD` counts + porcelain dirt. Not a Changes payload. */
+export interface WorktreeDirtyStat {
+  additions: number;
+  deletions: number;
+  dirty: boolean;
+}
+
 /** One commit on the branch (for the Changes → Commits submenu). */
 export interface DiffCommit {
   sha: string;
@@ -606,9 +613,11 @@ export type OrchestratorEvent =
       type: 'run_output';
       threadId: string;
       scriptName: string;
+      /** One line, or several `\n`-joined lines coalesced within one tick. */
       line: string;
     }
   | { type: 'setup_started'; threadId: string }
+  /** `line` may be a `\n`-joined chunk — consumers append with `\n`. */
   | { type: 'setup_output'; threadId: string; line: string }
   | { type: 'setup_finished'; threadId: string; exitCode: number | null }
   | {

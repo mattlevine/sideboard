@@ -64,6 +64,29 @@ function listSignature(list: Thread[]): string {
     .join('\n');
 }
 
+/**
+ * Ids that were live before a live-only `getThreads(false)` pass but are not
+ * in the new list — archived elsewhere (desktop, MCP, auto-archive on merge).
+ * Caller refetches each one so the archived list does not go stale until
+ * Settings → History forces a full pass.
+ */
+export function vanishedLiveThreadIds(prevLive: Thread[], nextLive: Thread[]): string[] {
+  const next = new Set(nextLive.map((t) => t.id));
+  return prevLive.filter((t) => !next.has(t.id)).map((t) => t.id);
+}
+
+/**
+ * The reverse of `vanishedLiveThreadIds`: a thread restored by another
+ * process (MCP / CLI unarchive) is back in the live list, so its stale
+ * History copy must go. Returns the same array when nothing changed.
+ */
+export function withoutLiveThreads(archived: Thread[], live: Thread[]): Thread[] {
+  if (archived.length === 0 || live.length === 0) return archived;
+  const liveIds = new Set(live.map((t) => t.id));
+  const next = archived.filter((t) => !liveIds.has(t.id));
+  return next.length === archived.length ? archived : next;
+}
+
 export type ThreadRefreshReason = 'full' | 'status';
 
 /**

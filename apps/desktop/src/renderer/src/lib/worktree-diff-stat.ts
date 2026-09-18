@@ -1,57 +1,66 @@
 import { useEffect, useRef, useState } from 'react';
+import type { WorktreeDirtyStat } from '@sideboard-ai/core';
 
-export type WorktreeDiffStat = {
-  additions: number;
-  deletions: number;
-  dirty: boolean;
-};
+export type { WorktreeDirtyStat };
 
 /** Statuses that mean the agent is done writing — reload the dirty glyph. */
 const RELOAD_ON_STATUS = new Set(['idle', 'error', 'stopped', 'broken']);
+const BUSY_STATUS = new Set(['queued', 'running']);
+
+/** Let `git worktree add` / fetch finish before the first porcelain. */
+const CREATE_DEFER_MS = 1_500;
+
+const CLEAN: WorktreeDirtyStat = { additions: 0, deletions: 0, dirty: false };
 
 /**
  * Uncommitted dirty stat for a sidebar/board worktree row.
- * Skips git while the agent is queued/running so a 5-worktree fan-out
- * does not stampede `getDiff` on every status tick.
+ * Uses the cheap glyph IPC — not full `getDiff` (merge-base + PR-vs-main
+ * + untracked walk). The first fetch is deferred so a pair of review-PR
+ * creates does not stampede the repo lock; when the row mounts while the
+ * agent is already queued/running it paints once immediately (last count
+ * on remount) and the periodic reload waits for the turn to end.
  */
 export function useWorktreeDirtyStat(
   threadId: string,
   worktreePath: string,
   status: string,
-): { stat: WorktreeDiffStat | null; loaded: boolean } {
-  const [stat, setStat] = useState<WorktreeDiffStat | null>(null);
+): { stat: WorktreeDirtyStat | null; loaded: boolean } {
+  const [stat, setStat] = useState<WorktreeDirtyStat | null>(null);
   const [loaded, setLoaded] = useState(false);
   const fetchGen = useRef(0);
   const prevStatus = useRef<string | null>(null);
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   useEffect(() => {
     prevStatus.current = null;
     let cancelled = false;
-    const load = async () => {
+    const load = async (opts?: { skipWhenBusy?: boolean }) => {
+      if (opts?.skipWhenBusy && BUSY_STATUS.has(statusRef.current)) return;
       const gen = ++fetchGen.current;
       try {
-        const diff = await window.sideboard.getDiff(threadId, {
-          scope: 'uncommitted',
-          includePatches: false,
-        });
+        const next = await window.sideboard.getWorktreeDirtyStat(threadId);
         if (cancelled || gen !== fetchGen.current) return;
-        const s = diff.scopeStats?.uncommitted;
-        setStat({
-          additions: s?.additions ?? 0,
-          deletions: s?.deletions ?? 0,
-          dirty: Boolean(diff.dirty) || (s != null && (s.additions > 0 || s.deletions > 0)),
-        });
+        setStat(next);
         setLoaded(true);
       } catch {
         if (cancelled || gen !== fetchGen.current) return;
-        setStat({ additions: 0, deletions: 0, dirty: false });
+        setStat(CLEAN);
         setLoaded(true);
       }
     };
-    void load();
-    const interval = window.setInterval(() => void load(), 12_000);
+    // First paint: one fetch after the create window, even mid-turn, so a
+    // remounted row shows its count instead of "…" for the whole turn.
+    const first = window.setTimeout(() => void load(), CREATE_DEFER_MS);
+    // Periodic: skip while the agent is writing — the status effect below
+    // reloads once the turn ends.
+    const interval = window.setInterval(
+      () => void load({ skipWhenBusy: true }),
+      12_000,
+    );
     return () => {
       cancelled = true;
+      window.clearTimeout(first);
       window.clearInterval(interval);
     };
   }, [threadId, worktreePath]);
@@ -67,20 +76,15 @@ export function useWorktreeDirtyStat(
       if (cancelled) return;
       const gen = ++fetchGen.current;
       void window.sideboard
-        .getDiff(threadId, { scope: 'uncommitted', includePatches: false })
-        .then((diff) => {
+        .getWorktreeDirtyStat(threadId)
+        .then((next) => {
           if (cancelled || gen !== fetchGen.current) return;
-          const s = diff.scopeStats?.uncommitted;
-          setStat({
-            additions: s?.additions ?? 0,
-            deletions: s?.deletions ?? 0,
-            dirty: Boolean(diff.dirty) || (s != null && (s.additions > 0 || s.deletions > 0)),
-          });
+          setStat(next);
           setLoaded(true);
         })
         .catch(() => {
           if (cancelled || gen !== fetchGen.current) return;
-          setStat({ additions: 0, deletions: 0, dirty: false });
+          setStat(CLEAN);
           setLoaded(true);
         });
     }, 400);

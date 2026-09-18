@@ -234,6 +234,7 @@ function forgetThread(id: string): void {
   const cache = cacheForDir();
   cache.byId.delete(id);
   cache.mtimeMs.delete(id);
+  selfWriteMtimes.delete(id);
 }
 
 /** Drop the in-memory thread list (other-process writes, tests, store watcher). */
@@ -263,25 +264,50 @@ export function readThread(id: string): Thread | null {
   return thread;
 }
 
+/** mtime of the last record *this process* wrote, per id (see `isSelfWrittenRecord`). */
+const selfWriteMtimes = new Map<string, number>();
+
 export function writeThread(thread: Thread, opts?: { touch?: boolean }): void {
   const path = threadFilePath(idPath(thread.id));
   const tmp = `${path}.${process.pid}.tmp`;
   const next = opts?.touch === false ? { ...thread } : { ...thread, updatedAt: nowIso() };
   writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf8');
   renameSync(tmp, path);
-  rememberThread(next, fileMtimeMs(path) ?? Date.now());
+  const mtimeMs = fileMtimeMs(path) ?? Date.now();
+  rememberThread(next, mtimeMs);
+  selfWriteMtimes.set(thread.id, mtimeMs);
+}
+
+/**
+ * True when the record on disk is still the one this process wrote last —
+ * i.e. no other process (MCP stdio, CLI) has rewritten it since. The desktop
+ * store watcher uses this to skip `adoptPersistedQueues` for its own writes:
+ * during a turn the orchestrator rewrites the record many times a second, and
+ * each one was re-listing every thread to look for foreign queues.
+ */
+export function isSelfWrittenRecord(id: string): boolean {
+  const ours = selfWriteMtimes.get(id);
+  if (ours == null) return false;
+  return fileMtimeMs(threadFilePath(id)) === ours;
 }
 
 function idPath(id: string): string {
   return id;
 }
 
-/** True for `threads/<id>.json` — not live sidecars or atomic `*.tmp` writes. */
+/** True for `threads/<id>.json` — not live / setup-log sidecars or atomic `*.tmp` writes. */
 export function isThreadRecordFile(nameOrPath: string): boolean {
   const name = basename(nameOrPath);
-  // Turn-progress sidecars are `threads/<id>.live.json` — they also end in
-  // `.json`, but they are not Thread records (no id / worktreePath).
-  return name.endsWith('.json') && !name.endsWith('.live.json');
+  // Turn-progress sidecars are `threads/<id>.live.json` and setup output is
+  // `threads/<key>.setup.log.json` — both end in `.json` but are not Thread
+  // records (no id / worktreePath). The setup log is rewritten every ~100ms
+  // during `pnpm install`; treating it as a record fired `threads:changed`
+  // (full renderer refresh) for the whole install.
+  return (
+    name.endsWith('.json') &&
+    !name.endsWith('.live.json') &&
+    !name.endsWith('.setup.log.json')
+  );
 }
 
 export function listThreads(opts?: { includeArchived?: boolean }): Thread[] {

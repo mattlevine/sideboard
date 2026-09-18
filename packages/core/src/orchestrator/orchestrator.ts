@@ -71,6 +71,7 @@ import type {
   ThreadAttachment,
   ThreadOptionsPatch,
   TokenUsage,
+  WorktreeDirtyStat,
 } from '../types/thread.js';
 import { clipAgentEventForPaint, isInternalAgentStatusText } from '../agents/message-parts.js';
 import { sumUsageList } from '../agents/usage.js';
@@ -107,6 +108,7 @@ import {
   threadsSharingWorktree,
 } from '../threads/chat-tabs.js';
 import { enqueueByKey } from '../util/enqueue-by-key.js';
+import { createLineCoalescer } from '../util/line-coalescer.js';
 import { git } from '../git/run.js';
 import { withRepoGitLock } from '../git/repo-git-lock.js';
 import { clearTurnLive, noteTurnLiveEvent, readTurnLive } from '../store/turn-live.js';
@@ -148,6 +150,7 @@ import {
   captureTurnBaseline,
   getDiff,
   getDiffSummary,
+  getWorktreeDirtyStat,
   initializeGitRepository,
   listWorktreeFiles,
   readWorktreeFile,
@@ -298,6 +301,9 @@ export function resolveOrchChildFollowUp(
 /** After Send now / Stop, do not pin drainQueue on a wedged agent child. */
 const STALE_AGENT_PID_WAIT_MS = 2_500;
 
+/** Creating several worktrees in a row runs one light reconcile per repo, not one each. */
+export const LIGHT_RECONCILE_THROTTLE_MS = 10_000;
+
 /** Persist status unless the thread was archived or purged mid-turn. */
 function writeLiveStatus(
   threadId: string,
@@ -326,6 +332,8 @@ export class Orchestrator {
   private readonly startingTurns = new Set<string>();
   /** Last sync thread-file read for false-stop heal (throttled per thread). */
   private readonly lastReconcileHealAt = new Map<string, number>();
+  /** Per-repo timestamp of the last `reconcile(repo, { light: true })`. */
+  private readonly lightReconcileAt = new Map<string, number>();
   /**
    * Threads intentionally force-stopped. Prevents runTurn from re-asserting
    * `running` after spawn, and from overwriting `stopped` with idle/error when
@@ -443,10 +451,33 @@ export class Orchestrator {
        * Default true for desktop/CLI.
        */
       drainQueues?: boolean;
+      /**
+       * Hot-path variant for "about to add a worktree to this repo": only the
+       * repo-scoped checks (missing worktrees → broken, orphan discovery /
+       * cleanup), throttled per repo. Skips the global heal loop, History
+       * cleanup, queue adoption and timer re-arming — startup and the store
+       * watcher own those. Requires `repoPath`.
+       */
+      light?: boolean;
     },
   ): Promise<void> {
     const reclaimStaleTurns = opts?.reclaimStaleTurns === true;
     const drainQueues = opts?.drainQueues !== false;
+
+    if (opts?.light && repoPath) {
+      const last = this.lightReconcileAt.get(repoPath) ?? 0;
+      if (Date.now() - last < LIGHT_RECONCILE_THROTTLE_MS) return;
+      this.lightReconcileAt.set(repoPath, Date.now());
+      for (const thread of listThreads()) {
+        if (isGlobalThread(thread) || thread.repoPath !== repoPath) continue;
+        if (!existsSync(thread.worktreePath)) {
+          setStatus(thread.id, 'broken', 'Worktree missing on disk');
+          this.emit({ type: 'status_changed', threadId: thread.id, status: 'broken' });
+        }
+      }
+      await this.reconcileOrphans([repoPath]);
+      return;
+    }
 
     // Soccer nicknames for orchestration chats (incl. legacy cloud-goal titles).
     healOrchestrationSoccerTitles();
@@ -491,6 +522,27 @@ export class Orchestrator {
         : [...new Set(listThreads({ includeArchived: true }).map((t) => t.repoPath))]
     ).filter((p) => !isGlobalRepoPath(p));
 
+    await this.reconcileOrphans(repoPaths);
+
+    try {
+      if (shouldRunHistoryCleanup()) {
+        cleanupArchivedHistory();
+      }
+    } catch {
+      // Best-effort History cap
+    }
+
+    if (drainQueues) {
+      this.adoptPersistedQueues();
+    }
+
+    // Re-arm session-quota wait timers (and fire any that are already due).
+    this.schedulePendingQuotaResumes();
+    armSchedules();
+  }
+
+  /** Surface (and, when enabled, clean up) worktrees git knows about but no thread owns. */
+  private async reconcileOrphans(repoPaths: string[]): Promise<void> {
     try {
       const orphans = await findOrphanWorktrees(repoPaths);
       if (orphans.length) {
@@ -510,22 +562,6 @@ export class Orchestrator {
     } catch {
       // Best-effort orphan discovery
     }
-
-    try {
-      if (shouldRunHistoryCleanup()) {
-        cleanupArchivedHistory();
-      }
-    } catch {
-      // Best-effort History cap
-    }
-
-    if (drainQueues) {
-      this.adoptPersistedQueues();
-    }
-
-    // Re-arm session-quota wait timers (and fire any that are already due).
-    this.schedulePendingQuotaResumes();
-    armSchedules();
   }
 
   /**
@@ -802,7 +838,10 @@ export class Orchestrator {
   }
 
   getThread(idOrRef: string): Thread | null {
-    return findThreadByRef(idOrRef) ?? readThread(idOrRef);
+    // Exact id first: one stat + cache hit. `findThreadByRef` lists every
+    // record including archived (readdir + stat per file) — reserve it for
+    // prefixes, branch names and titles.
+    return readThread(idOrRef) ?? findThreadByRef(idOrRef);
   }
 
   async createThread(input: CreateThreadInput): Promise<Thread> {
@@ -1966,17 +2005,19 @@ export class Orchestrator {
       }
     }
 
+    // Same batching as setup output — dev servers log per-request lines.
+    const runOutput = createLineCoalescer((chunk) => {
+      this.emit({
+        type: 'run_output',
+        threadId: thread.id,
+        scriptName: resolvedName,
+        line: chunk,
+      });
+    });
     const handle = await startDevServer(
       thread.repoPath,
       thread.worktreePath,
-      (line) => {
-        this.emit({
-          type: 'run_output',
-          threadId: thread.id,
-          scriptName: resolvedName,
-          line,
-        });
-      },
+      runOutput.push,
       { scriptName: resolvedName },
     );
     if (!handle) {
@@ -2028,6 +2069,7 @@ export class Orchestrator {
       scriptName: resolvedName,
     });
     void handle.done.then(() => {
+      runOutput.flush();
       this.processes.delete(runKey);
       if (isDefault) this.processes.delete(worktreeDevProcessKey(thread.worktreePath));
       const latest = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath));
@@ -2130,13 +2172,14 @@ export class Orchestrator {
     );
   }
 
-  private writeSetupLog(
-    threadId: string,
-    worktreePath: string,
-    fn: (key: string) => void,
-  ): void {
+  /**
+   * The worktree-keyed log is canonical (`resolveWorktreeSetupLog` prefers it
+   * whenever it has output/running/exitCode); per-chat keys only exist for
+   * records that predate it. Writing one key halves the sync persists during
+   * `pnpm install`.
+   */
+  private writeSetupLog(worktreePath: string, fn: (key: string) => void): void {
     fn(setupLogKeyForWorktree(worktreePath));
-    fn(threadId);
   }
 
   async runSetup(
@@ -2156,14 +2199,24 @@ export class Orchestrator {
       startedAt: new Date().toISOString(),
       kill: () => abort.abort(),
     });
-    this.writeSetupLog(thread.id, thread.worktreePath, beginSetupLog);
+    this.writeSetupLog(thread.worktreePath, beginSetupLog);
     this.emit({ type: 'setup_started', threadId: thread.id });
+
+    // `pnpm install` streams thousands of lines; one log append + one IPC
+    // frame per tick instead of per line keeps the main thread responsive
+    // while several worktrees are set up at once. `line` in the event is a
+    // `\n`-joined chunk — every consumer already joins on `\n`.
+    const output = createLineCoalescer((chunk) => {
+      this.writeSetupLog(thread.worktreePath, (logKey) => appendSetupLog(logKey, chunk));
+      this.emit({ type: 'setup_output', threadId: thread.id, line: chunk });
+    });
 
     let finished = false;
     const finish = (exitCode: number | null, source?: string | null) => {
       if (finished) return;
       finished = true;
-      this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
+      output.flush();
+      this.writeSetupLog(thread.worktreePath, (logKey) =>
         finishSetupLog(logKey, exitCode, source),
       );
       this.emit({ type: 'setup_finished', threadId: thread.id, exitCode });
@@ -2173,22 +2226,14 @@ export class Orchestrator {
       const setup = await runWorkspaceSetup(
         thread.repoPath,
         thread.worktreePath,
-        (line) => {
-          this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
-            appendSetupLog(logKey, line),
-          );
-          this.emit({ type: 'setup_output', threadId: thread.id, line });
-        },
+        output.push,
         { signal: abort.signal },
       );
 
       if (!setup.ran) {
         const line =
           'No setup script in .sideboard/settings.toml, .conductor/settings.toml, .cursor/worktrees.json, or script/setup (bin/setup, scripts/setup)';
-        this.writeSetupLog(thread.id, thread.worktreePath, (logKey) =>
-          appendSetupLog(logKey, line),
-        );
-        this.emit({ type: 'setup_output', threadId: thread.id, line });
+        output.push(line);
         finish(null, null);
         throw new Error(line);
       }
@@ -2467,6 +2512,12 @@ export class Orchestrator {
       path: opts?.path,
       lastTurnBase: this.turnBaselines.get(thread.id) ?? null,
     });
+  }
+
+  async worktreeDirtyStat(threadRef: string): Promise<WorktreeDirtyStat> {
+    const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Diff');
+    return getWorktreeDirtyStat(thread.worktreePath);
   }
 
   async diffSummary(threadRef: string) {

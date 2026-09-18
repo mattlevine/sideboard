@@ -24,6 +24,7 @@ import type {
   PrStack,
   Thread,
   ThreadOptionsPatch,
+  WorktreeDirtyStat,
 } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
@@ -275,6 +276,12 @@ export interface IpcApi {
   resolveRepoRoot(cwd: string): Promise<string>;
   getThreads(includeArchived?: boolean): Promise<Thread[]>;
   getThread(idOrRef: string): Promise<Thread | null>;
+  /**
+   * One record in the same slim shape as `getThreads` (list-row messages,
+   * no attachments). For list bookkeeping — e.g. a thread that left the live
+   * list on a live-only refresh — never for the open chat.
+   */
+  getThreadSlim(idOrRef: string): Promise<Thread | null>;
   getRuntime(): Promise<OrchestratorRuntime>;
   setMaxConcurrent(n: number): Promise<void>;
   createThread(input: CreateThreadInput): Promise<Thread>;
@@ -362,6 +369,11 @@ export interface IpcApi {
       path?: string;
     },
   ): Promise<DiffResult>;
+  /**
+   * Sidebar/board dirty glyph only — numstat vs HEAD + porcelain.
+   * Do not use getDiff for that path (merge-base / untracked walk).
+   */
+  getWorktreeDirtyStat(threadRef: string): Promise<WorktreeDirtyStat>;
   /** `git init` in the thread worktree when Changes has no Git repo (Cursor-style). */
   initializeGit(threadRef: string): Promise<void>;
   /** CI checks for the thread's linked PR (`gh pr checks`). `null` = no PR. */
