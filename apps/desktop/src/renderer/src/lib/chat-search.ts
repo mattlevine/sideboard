@@ -16,10 +16,6 @@ export function chatMessageSearchText(message: {
   add(message.text);
   for (const part of message.parts ?? []) {
     if (part.type === 'text') add(part.text);
-    if (part.type === 'tool') {
-      add(part.description);
-      add(part.name);
-    }
   }
   return chunks.join('\n');
 }
@@ -108,10 +104,20 @@ export function collectChatSearchRanges(root: HTMLElement, query: string): Range
   return ranges;
 }
 
+const SEARCH_HIGHLIGHT = 'chat-search';
+const SEARCH_HIGHLIGHT_CURRENT = 'chat-search-current';
 const SEARCH_MARK = 'chat-search-hit';
-const SEARCH_MARK_CURRENT = 'chat-search-current';
 
+function cssHighlightRegistry(): HighlightRegistry | null {
+  const css = typeof CSS !== 'undefined' ? CSS : undefined;
+  return css && 'highlights' in css ? css.highlights : null;
+}
+
+/** Paint via CSS Custom Highlight API — do not wrap React text nodes. */
 export function clearChatSearchHighlights(root?: HTMLElement | null): void {
+  const registry = cssHighlightRegistry();
+  registry?.delete(SEARCH_HIGHLIGHT);
+  registry?.delete(SEARCH_HIGHLIGHT_CURRENT);
   if (!root) return;
   for (const mark of [...root.querySelectorAll(`mark.${SEARCH_MARK}`)]) {
     const parent = mark.parentNode;
@@ -122,33 +128,29 @@ export function clearChatSearchHighlights(root?: HTMLElement | null): void {
   }
 }
 
-function wrapRange(range: Range): HTMLMarkElement | null {
-  const mark = document.createElement('mark');
-  mark.className = SEARCH_MARK;
-  try {
-    range.surroundContents(mark);
-    return mark;
-  } catch {
-    return null;
-  }
+function rangeAnchor(range: Range): HTMLElement | null {
+  const node = range.startContainer;
+  if (node instanceof HTMLElement) return node;
+  return node.parentElement;
 }
 
-/** Wrap each visible match. Later ranges first so earlier offsets stay valid. */
+/** Highlight visible matches without mutating the transcript DOM. */
 export function applyChatSearchHighlightRanges(
   root: HTMLElement,
   ranges: Range[],
   currentIndex: number,
 ): HTMLElement | null {
   clearChatSearchHighlights(root);
-  const marks: Array<HTMLMarkElement | null> = new Array(ranges.length).fill(null);
-  for (let i = ranges.length - 1; i >= 0; i--) {
-    marks[i] = wrapRange(ranges[i]);
+  if (!ranges.length) return null;
+  const idx = Math.min(Math.max(currentIndex, 0), ranges.length - 1);
+  const current = ranges[idx];
+  const registry = cssHighlightRegistry();
+  if (registry && typeof Highlight !== 'undefined') {
+    const rest = ranges.filter((_, i) => i !== idx);
+    if (rest.length) registry.set(SEARCH_HIGHLIGHT, new Highlight(...rest));
+    if (current) registry.set(SEARCH_HIGHLIGHT_CURRENT, new Highlight(current));
   }
-  const current = ranges.length
-    ? marks[Math.min(Math.max(currentIndex, 0), ranges.length - 1)]
-    : null;
-  if (current) current.classList.add(SEARCH_MARK_CURRENT);
-  return current;
+  return current ? rangeAnchor(current) : null;
 }
 
 export function nextChatSearchIndex(current: number, total: number, delta: 1 | -1): number {
@@ -157,7 +159,7 @@ export function nextChatSearchIndex(current: number, total: number, delta: 1 | -
 }
 
 export function shouldDeferChatFind(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
+  if (typeof Element === 'undefined' || !(target instanceof Element)) return false;
   if (target.closest('.chat-search-bar, .composer-shell')) return false;
   return Boolean(
     target.closest('.monaco-editor, .xterm, .xterm-helper-textarea, input, textarea, [contenteditable="true"]'),

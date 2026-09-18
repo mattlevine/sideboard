@@ -1252,6 +1252,7 @@ export function App() {
               composerPrefill: prefill,
               onComposerPrefillConsumed: () => setPrefill(undefined),
               findChatCmd,
+              onFindChatConsumed: () => setFindChatCmd(null),
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
@@ -1301,6 +1302,7 @@ export function App() {
               composerPrefill={prefill}
               onComposerPrefillConsumed={() => setPrefill(undefined)}
               findChatCmd={findChatCmd}
+              onFindChatConsumed={() => setFindChatCmd(null)}
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
               onOpenThreadLink={openThreadByRef}

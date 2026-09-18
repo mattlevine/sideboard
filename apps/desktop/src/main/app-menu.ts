@@ -222,6 +222,8 @@ export function setupApplicationMenu(getMainWindow: () => BrowserWindow | null):
       {
         label: 'Find in Chat',
         accelerator: 'CmdOrCtrl+F',
+        // Renderer handles ⌘F so Monaco/xterm keep their own find.
+        registerAccelerator: false,
         click: () => sendFindChat(getMainWindow()),
       },
     ],
