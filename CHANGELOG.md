@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.208] - 2026-09-17
+
+### Fixed
+
+- Chat composer drafts survive leaving a thread (Home, another tab, create overlay) and come back when you reopen that chat.
+- Sending a message with an image clears the composer chip immediately; the screenshot stays on the sent message instead of lingering in the box.
+- Five streaming worktrees no longer lock the UI: huge tool dumps are clipped before renderer IPC, live text stays a bounded tail, and running Home cards use a plain preview instead of re-parsing markdown on every token.
+
 ## [0.1.207] - 2026-09-17
 
 ### Fixed
