@@ -463,11 +463,14 @@ function ChatCard({
   onRefresh: () => void;
 }) {
   const live = useLiveThread(t.id);
+  const streaming = t.status === 'running' || t.status === 'queued';
   const { text: previewText, markdown: previewIsMarkdown } = previewForThread(t, live.parts);
+  // Streaming cards update every animation frame — skip remark-gfm so five
+  // live worktrees cannot block clicks on Home.
   const preview = previewText
-    ? previewIsMarkdown
-      ? markdownPreviewSource(previewText)
-      : compactPreview(previewText)
+    ? streaming || !previewIsMarkdown
+      ? compactPreview(previewText)
+      : markdownPreviewSource(previewText)
     : '';
   const canStop = t.status === 'running' || t.status === 'queued';
   return (
@@ -505,7 +508,7 @@ function ChatCard({
       </div>
       {preview ? (
         <div className="board-preview board-preview-compact">
-          {previewIsMarkdown ? (
+          {previewIsMarkdown && !streaming ? (
             <MarkdownMessage
               text={preview}
               className="md md-compact"

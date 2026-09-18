@@ -68,7 +68,7 @@ import type {
   ThreadOptionsPatch,
   TokenUsage,
 } from '../types/thread.js';
-import { isInternalAgentStatusText } from '../agents/message-parts.js';
+import { clipAgentEventForPaint, isInternalAgentStatusText } from '../agents/message-parts.js';
 import { sumUsageList } from '../agents/usage.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import {
@@ -1434,8 +1434,9 @@ export class Orchestrator {
           isolateCodexPlugins: fresh.isolateCodexPlugins === true,
         },
         (event) => {
-          this.emit({ type: 'turn_output', threadId, event });
-          noteTurnLiveEvent(threadId, event);
+          const paint = clipAgentEventForPaint(event);
+          this.emit({ type: 'turn_output', threadId, event: paint });
+          noteTurnLiveEvent(threadId, paint);
           if (event.type === 'session_id') {
             updateThread(threadId, { sessionId: event.data });
           }
@@ -1626,7 +1627,8 @@ export class Orchestrator {
               isolateCodexPluginRetry || retryThread.isolateCodexPlugins === true,
           },
           (event) => {
-            this.emit({ type: 'turn_output', threadId, event });
+            const paint = clipAgentEventForPaint(event);
+            this.emit({ type: 'turn_output', threadId, event: paint });
             if (event.type === 'session_id') {
               updateThread(threadId, { sessionId: event.data });
             }

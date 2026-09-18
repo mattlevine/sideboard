@@ -51,6 +51,11 @@ export function createLivePaintStore(): LivePaintStore {
       state = foldLivePaintOps(state, ops, now);
       const changed = new Set(ops.map((op) => op.threadId));
       for (const threadId of changed) {
+        if (!state.startedAt[threadId] && !state.parts[threadId] && !state.output[threadId]) {
+          snapshots.delete(threadId);
+          notify(threadId);
+          continue;
+        }
         snapshots.set(threadId, {
           output: state.output[threadId] ?? '',
           parts: state.parts[threadId] ?? EMPTY_LIVE_PARTS,
