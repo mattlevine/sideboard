@@ -667,6 +667,10 @@ export function App() {
       setSettingsInitialNav('agents');
       setSettingsOpen(true);
     });
+    const offQuoteSelection = window.sideboardUpdate.onQuoteSelection((text) => {
+      if (!text.trim()) return;
+      setPrefill(text);
+    });
     return () => {
       if (liveRaf) cancelAnimationFrame(liveRaf);
       scheduler.dispose();
@@ -676,6 +680,7 @@ export function App() {
       offReady();
       offUpdateError();
       offOpenSettings();
+      offQuoteSelection();
     };
   }, [refresh, refreshThread, livePaintStore]);
 

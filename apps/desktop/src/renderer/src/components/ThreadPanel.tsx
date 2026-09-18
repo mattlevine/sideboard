@@ -278,7 +278,7 @@ function UserMessageText({
   onThreadLinkClick?: (threadRef: string) => void;
 }) {
   return (
-    <div className="msg-body msg-body-md">
+    <div className="msg-body msg-body-md" data-chat-text="">
       <MarkdownMessage
         text={userTextToMarkdown(text)}
         onThreadLinkClick={onThreadLinkClick}
@@ -404,6 +404,7 @@ const ChatTranscript = memo(function ChatTranscript({
                     pendingPlanQuestions.signature && (
                     <div
                       className="plan-questions-chat-brief"
+                      data-chat-text=""
                       key={pendingPlanQuestions.signature}
                     >
                       <MarkdownMessage
@@ -415,7 +416,7 @@ const ChatTranscript = memo(function ChatTranscript({
                   )}
               </>
             ) : m.role === 'summary' ? (
-              <div className="msg-summary">
+              <div className="msg-summary" data-chat-text="">
                 <div className="msg-summary-label">Context summarized</div>
                 <MarkdownMessage
                   text={m.text}
@@ -537,6 +538,7 @@ const ChatTranscript = memo(function ChatTranscript({
               pendingPlanQuestions.signature && (
               <div
                 className="plan-questions-chat-brief"
+                data-chat-text=""
                 key={pendingPlanQuestions.signature}
               >
                 <MarkdownMessage
@@ -897,8 +899,8 @@ export function ThreadPanel({
 
   useEffect(() => {
     if (composerPrefill) {
-      const next = composerPrefill.trim();
-      if (next) {
+      const next = composerPrefill.trimStart();
+      if (next.trim()) {
         setPrompt((prev) => {
           const existing = prev.trimEnd();
           return existing ? `${existing}\n${next}` : next;

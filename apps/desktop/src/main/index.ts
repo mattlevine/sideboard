@@ -25,6 +25,7 @@ import {
   registerArtifactPreviewScheme,
 } from './artifact-preview';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
+import { setupTextContextMenu } from './text-context-menu';
 import { formatUpdaterCheckError } from './updater-error';
 import { initDesktopSecretVault } from './secret-vault';
 import {
@@ -666,6 +667,8 @@ function createWindow(): void {
   } else {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
+
+  setupTextContextMenu(mainWindow);
 
   mainWindow.on('closed', () => {
     hideUrlPreview(mainWindow);

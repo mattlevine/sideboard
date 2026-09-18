@@ -528,7 +528,7 @@ export function AgentMessage({
         if (phase.kind === 'text') {
           if (hideAnswer) return null;
           return (
-            <div key={`text-${i}`} className="msg-body">
+            <div key={`text-${i}`} className="msg-body" data-chat-text="">
               <MarkdownMessage
                 text={phase.text}
                 knownFilePaths={knownFilePaths}
@@ -578,7 +578,7 @@ export function AgentMessage({
       })}
 
       {!hasTextPhase && answer && !hideAnswer && (
-        <div className="msg-body">
+        <div className="msg-body" data-chat-text="">
           <MarkdownMessage
             text={answer}
             knownFilePaths={knownFilePaths}

@@ -204,7 +204,7 @@ export function FileTree({
   if (!tree.length) return <div className="empty">No files</div>;
 
   return (
-    <div className="file-tree">
+    <div className="file-tree" data-skip-native-text-menu="">
       {tree.map((n) => renderNode(n, 0))}
       {menu && onAddReference && (
         <AddReferenceMenu
