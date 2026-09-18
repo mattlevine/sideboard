@@ -124,6 +124,22 @@ export type { WorkspaceInventoryEntry } from './orchestrator/coordinator-prompt.
 export * from './git/apply-into-main.js';
 export * from './git/clone-repo.js';
 export * from './git/orphan-cleanup.js';
+export {
+  HISTORY_MAX_COUNT_DEFAULT,
+  HISTORY_MAX_COUNT_MAX,
+  HISTORY_MAX_COUNT_MIN,
+  HISTORY_MAX_DAYS_DEFAULT,
+  HISTORY_MAX_DAYS_MAX,
+  HISTORY_DISCARDED_TEXT,
+  clampHistoryMaxCount,
+  clampHistoryMaxDays,
+  isHistoryRetentionStub,
+  planHistoryAgePurge,
+  planHistoryRetention,
+} from './store/history-retention.js';
+export type { HistoryRetentionPlan } from './store/history-retention.js';
+export { cleanupArchivedHistory, shouldRunHistoryCleanup } from './store/history-cleanup.js';
+export type { HistoryCleanupResult } from './store/history-cleanup.js';
 export { startMcpServer } from './mcp/server.js';
 export {
   sideboardMcpProfile,

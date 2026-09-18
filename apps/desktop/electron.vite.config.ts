@@ -116,6 +116,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/threads/implied-first-prompt.ts',
         ),
+        '@sideboard/history-retention': resolve(
+          __dirname,
+          '../../packages/core/src/store/history-retention.ts',
+        ),
 
       },
     },

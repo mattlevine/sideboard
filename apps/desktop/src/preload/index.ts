@@ -190,6 +190,7 @@ const api: IpcApi = {
   cloneRepo: (url, name) => ipcRenderer.invoke('cloneRepo', url, name),
   listOrphanWorktrees: (repoPath) => ipcRenderer.invoke('listOrphanWorktrees', repoPath),
   cleanupOrphans: (opts) => ipcRenderer.invoke('cleanupOrphans', opts),
+  cleanupHistory: (opts) => ipcRenderer.invoke('cleanupHistory', opts),
   bestOfN: (opts) => ipcRenderer.invoke('bestOfN', opts),
   attachThread: (threadRef) => ipcRenderer.invoke('attachThread', threadRef),
   terminal: {

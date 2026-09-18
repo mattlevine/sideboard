@@ -3,6 +3,7 @@ import {
   existsSync,
   readFileSync,
   renameSync,
+  rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -12,6 +13,7 @@ import { basename } from 'node:path';
 import lockfile from 'proper-lockfile';
 import type { Thread, ThreadMessage, ThreadStatus } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
+import { cursorSdkStoreDir } from '../agents/cursor-store.js';
 import { threadFilePath, threadLockPath, threadsDir } from './paths.js';
 
 function nowIso(): string {
@@ -249,10 +251,10 @@ export function readThread(id: string): Thread | null {
   return thread;
 }
 
-export function writeThread(thread: Thread): void {
+export function writeThread(thread: Thread, opts?: { touch?: boolean }): void {
   const path = threadFilePath(idPath(thread.id));
   const tmp = `${path}.${process.pid}.tmp`;
-  const next = { ...thread, updatedAt: nowIso() };
+  const next = opts?.touch === false ? { ...thread } : { ...thread, updatedAt: nowIso() };
   writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf8');
   renameSync(tmp, path);
   rememberThread(next, fileMtimeMs(path) ?? Date.now());
@@ -306,6 +308,11 @@ export function deleteThreadRecord(id: string): void {
     } catch {
       // ignore
     }
+  }
+  try {
+    rmSync(cursorSdkStoreDir(id), { recursive: true, force: true });
+  } catch {
+    // Catalog may not exist.
   }
 }
 

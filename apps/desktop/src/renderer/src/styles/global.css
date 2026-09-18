@@ -11898,3 +11898,9 @@ body:has(.update-banner) .team-toast-stack {
   flex-shrink: 0;
   font-size: 12px;
 }
+
+.settings-history-delete {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--danger, #c45c5c);
+}

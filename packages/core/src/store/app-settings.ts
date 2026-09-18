@@ -19,6 +19,12 @@ import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
 import { loadSecretVault, saveSecretVault } from './secret-vault.js';
 import { sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 import {
+  clampHistoryMaxCount,
+  clampHistoryMaxDays,
+  HISTORY_MAX_COUNT_DEFAULT,
+  HISTORY_MAX_DAYS_DEFAULT,
+} from './history-retention.js';
+import {
   isUsageOnLimit,
   resolveUsageOnLimit,
   type UsageOnLimit,
@@ -344,6 +350,19 @@ export interface AdvancedAppSettings {
   worktreeLastCleanupAt?: string;
   /** When true, reconcile auto-removes excess orphan worktrees. */
   autoCleanupOrphans?: boolean;
+  /**
+   * Cap Settings → History. Default on (`!== false`): keep the newest
+   * {@link historyMaxCount} archived chats; older rows are stripped then purged.
+   */
+  autoCleanupHistory?: boolean;
+  /** Max archived chats to keep (default 200). */
+  historyMaxCount?: number;
+  /** Purge archived chats older than this many days. 0 = no age purge (default). */
+  historyMaxDays?: number;
+  /** Hours between automatic History cleanup passes (default 6). */
+  historyCleanupIntervalHours?: number;
+  /** ISO timestamp of last successful History cleanup. */
+  historyLastCleanupAt?: string;
   /**
    * @deprecated Prefer {@link AdvancedAppSettings.usageOnLimit}.
    * Still read on load for migration.
@@ -878,6 +897,27 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.autoCleanupOrphans === 'boolean') {
     out.autoCleanupOrphans = source.autoCleanupOrphans;
+  }
+  if (typeof source.autoCleanupHistory === 'boolean') {
+    out.autoCleanupHistory = source.autoCleanupHistory;
+  }
+  if (typeof source.historyMaxCount === 'number' && Number.isFinite(source.historyMaxCount)) {
+    out.historyMaxCount = clampHistoryMaxCount(source.historyMaxCount);
+  }
+  if (typeof source.historyMaxDays === 'number' && Number.isFinite(source.historyMaxDays)) {
+    out.historyMaxDays = clampHistoryMaxDays(source.historyMaxDays);
+  }
+  if (
+    typeof source.historyCleanupIntervalHours === 'number' &&
+    Number.isFinite(source.historyCleanupIntervalHours)
+  ) {
+    out.historyCleanupIntervalHours = Math.max(
+      1,
+      Math.min(168, Math.floor(source.historyCleanupIntervalHours)),
+    );
+  }
+  if (typeof source.historyLastCleanupAt === 'string' && source.historyLastCleanupAt.trim()) {
+    out.historyLastCleanupAt = source.historyLastCleanupAt.trim();
   }
   if (
     source.orchestrationQuotaOnLimit === 'switch_agent' ||
@@ -2140,6 +2180,27 @@ export function updateAdvancedSettings(
   if (typeof patch.autoCleanupOrphans === 'boolean') {
     advanced.autoCleanupOrphans = patch.autoCleanupOrphans;
   }
+  if (typeof patch.autoCleanupHistory === 'boolean') {
+    advanced.autoCleanupHistory = patch.autoCleanupHistory;
+  }
+  if (typeof patch.historyMaxCount === 'number' && Number.isFinite(patch.historyMaxCount)) {
+    advanced.historyMaxCount = clampHistoryMaxCount(patch.historyMaxCount);
+  }
+  if (typeof patch.historyMaxDays === 'number' && Number.isFinite(patch.historyMaxDays)) {
+    advanced.historyMaxDays = clampHistoryMaxDays(patch.historyMaxDays);
+  }
+  if (
+    typeof patch.historyCleanupIntervalHours === 'number' &&
+    Number.isFinite(patch.historyCleanupIntervalHours)
+  ) {
+    advanced.historyCleanupIntervalHours = Math.max(
+      1,
+      Math.min(168, Math.floor(patch.historyCleanupIntervalHours)),
+    );
+  }
+  if (typeof patch.historyLastCleanupAt === 'string') {
+    advanced.historyLastCleanupAt = patch.historyLastCleanupAt;
+  }
   if (
     patch.orchestrationQuotaOnLimit === 'switch_agent' ||
     patch.orchestrationQuotaOnLimit === 'wait_reset'
@@ -2242,6 +2303,25 @@ export function autoCleanupOrphansEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.autoCleanupOrphans);
+}
+
+/** Settings → History cap. Default on so the archive cannot grow forever. */
+export function autoCleanupHistoryEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return settings.advanced.autoCleanupHistory !== false;
+}
+
+export function historyMaxCount(
+  settings: AppSettings = loadAppSettings(),
+): number {
+  return clampHistoryMaxCount(settings.advanced.historyMaxCount ?? HISTORY_MAX_COUNT_DEFAULT);
+}
+
+export function historyMaxDays(
+  settings: AppSettings = loadAppSettings(),
+): number {
+  return clampHistoryMaxDays(settings.advanced.historyMaxDays ?? HISTORY_MAX_DAYS_DEFAULT);
 }
 
 /** Unified over-limit policy (default: keep going). */

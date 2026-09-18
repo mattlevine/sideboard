@@ -567,6 +567,9 @@ describe('app settings', () => {
     expect(mod.usageOnLimit()).toBe('keep_going');
     expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
+    expect(mod.autoCleanupHistoryEnabled()).toBe(true);
+    expect(mod.historyMaxCount()).toBe(200);
+    expect(mod.historyMaxDays()).toBe(0);
     expect(mod.maxConcurrentAgents()).toBe(5);
     expect(mod.followUpBehavior()).toBe('steer');
 
@@ -619,6 +622,23 @@ describe('app settings', () => {
     expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(true);
     expect(mod.usageOnLimit()).toBe('confirm');
     expect(mod.maxConcurrentAgents()).toBe(8);
+  });
+
+  it('round-trips History retention caps', async () => {
+    const mod = await load();
+    const saved = mod.updateAdvancedSettings({
+      autoCleanupHistory: false,
+      historyMaxCount: 50,
+      historyMaxDays: 90,
+    });
+    expect(saved.advanced.autoCleanupHistory).toBe(false);
+    expect(saved.advanced.historyMaxCount).toBe(50);
+    expect(saved.advanced.historyMaxDays).toBe(90);
+    expect(mod.autoCleanupHistoryEnabled()).toBe(false);
+    expect(mod.historyMaxCount()).toBe(50);
+    expect(mod.historyMaxDays()).toBe(90);
+    expect(mod.updateAdvancedSettings({ historyMaxDays: 0 }).advanced.historyMaxDays).toBe(0);
+    expect(mod.historyMaxDays()).toBe(0);
   });
 
   it('migrates legacy confirm and orchestration quota fields into usageOnLimit', async () => {

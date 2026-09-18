@@ -48,6 +48,10 @@ import {
   findOrphanWorktrees,
   shouldRunWorktreeCleanup,
 } from '../git/orphan-cleanup.js';
+import {
+  cleanupArchivedHistory,
+  shouldRunHistoryCleanup,
+} from '../store/history-cleanup.js';
 import { applyThreadIntoMain } from '../git/apply-into-main.js';
 import { cloneRepoIntoSideboard } from '../git/clone-repo.js';
 import type { RunScript } from '../hook/settings.js';
@@ -500,6 +504,14 @@ export class Orchestrator {
       }
     } catch {
       // Best-effort orphan discovery
+    }
+
+    try {
+      if (shouldRunHistoryCleanup()) {
+        cleanupArchivedHistory();
+      }
+    } catch {
+      // Best-effort History cap
     }
 
     if (drainQueues) {
@@ -2231,6 +2243,23 @@ export class Orchestrator {
     });
   }
 
+  /** Bound Settings → History. After archive always; reconcile is interval-gated. */
+  private enforceHistoryRetention(): void {
+    try {
+      cleanupArchivedHistory();
+    } catch {
+      // Best-effort — next archive or reconcile retries.
+    }
+  }
+
+  cleanupHistory(opts?: { dryRun?: boolean; purgeOlderThanDays?: number; force?: boolean }) {
+    return cleanupArchivedHistory({
+      dryRun: opts?.dryRun,
+      purgeOlderThanDays: opts?.purgeOlderThanDays,
+      force: opts?.force,
+    });
+  }
+
   /**
    * Best-of-n / fanout: create N threads (one per agent) with the same prompt.
    */
@@ -2973,6 +3002,7 @@ export class Orchestrator {
     if (isGlobalThread(thread)) {
       const archived = setStatus(thread.id, 'archived');
       this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
+      this.enforceHistoryRetention();
       return archived;
     }
     const siblings = threadsSharingWorktree(thread.worktreePath).filter((t) => t.id !== thread.id);
@@ -2996,6 +3026,7 @@ export class Orchestrator {
     }
     const archived = setStatus(thread.id, 'archived');
     this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
+    this.enforceHistoryRetention();
     // Archiving the last worktree must not unregister the project — keep it in
     // the sidebar so the user can create a new thread without re-adding it.
     if (thread.repoPath && !isGlobalRepoPath(thread.repoPath)) {
