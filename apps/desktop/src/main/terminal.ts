@@ -10,6 +10,7 @@ import {
 import {
   appendTerminalScrollback,
   findReusableTerminalSession,
+  shouldApplyPtyResize,
   shouldTeardownTerminalSession,
   teardownInputAfterArchive,
   terminalReuseKey,
@@ -33,6 +34,8 @@ interface PtySession {
   kind: TerminalSessionKind;
   pty: PtyLike;
   scrollback: string;
+  cols: number;
+  rows: number;
 }
 
 const sessions = new Map<string, PtySession>();
@@ -150,6 +153,15 @@ function spawnScriptPty(
   };
 }
 
+function applySessionResize(session: PtySession, cols: number, rows: number): void {
+  if (!shouldApplyPtyResize({ cols: session.cols, rows: session.rows }, { cols, rows })) {
+    return;
+  }
+  session.cols = cols;
+  session.rows = rows;
+  session.pty.resize?.(cols, rows);
+}
+
 function bindSession(
   id: string,
   threadRef: string,
@@ -157,6 +169,8 @@ function bindSession(
   reuseKey: string,
   kind: TerminalSessionKind,
   pty: PtyLike,
+  cols: number,
+  rows: number,
 ): void {
   const session: PtySession = {
     id,
@@ -166,6 +180,8 @@ function bindSession(
     kind,
     pty,
     scrollback: '',
+    cols,
+    rows,
   };
   pty.onData((data) => {
     session.scrollback = appendTerminalScrollback(session.scrollback, data);
@@ -193,7 +209,7 @@ export async function startTerminalSession(
   const reuseKey = terminalReuseKey(kind, worktreeKey, threadRef);
   const existing = findReusableTerminalSession(sessions.values(), reuseKey, kind);
   if (existing) {
-    existing.pty.resize?.(cols, rows);
+    applySessionResize(existing, cols, rows);
     return { id: existing.id, scrollback: existing.scrollback };
   }
 
@@ -228,7 +244,7 @@ async function startNewTerminalSession(
 ): Promise<{ id: string; scrollback: string }> {
   const reused = findReusableTerminalSession(sessions.values(), reuseKey, kind);
   if (reused) {
-    reused.pty.resize?.(cols, rows);
+    applySessionResize(reused, cols, rows);
     return { id: reused.id, scrollback: reused.scrollback };
   }
 
@@ -255,7 +271,7 @@ async function startNewTerminalSession(
         cwd: thread.worktreePath,
         env,
       });
-      bindSession(id, threadRef, worktreeKey, reuseKey, kind, pty);
+      bindSession(id, threadRef, worktreeKey, reuseKey, kind, pty, cols, rows);
       return { id, scrollback: '' };
     } catch (err) {
       console.warn('[terminal] node-pty spawn failed, trying fallbacks:', err);
@@ -265,13 +281,13 @@ async function startNewTerminalSession(
   // 2) macOS script(1) — allocates a PTY without native addons
   const scriptPty = spawnScriptPty(file, args, thread.worktreePath, env);
   if (scriptPty) {
-    bindSession(id, threadRef, worktreeKey, reuseKey, kind, scriptPty);
+    bindSession(id, threadRef, worktreeKey, reuseKey, kind, scriptPty, cols, rows);
     return { id, scrollback: '' };
   }
 
   // 3) Last resort: plain pipes (limited interactivity)
   const pipe = spawnPipeShell(file, args, thread.worktreePath, env);
-  bindSession(id, threadRef, worktreeKey, reuseKey, kind, pipe);
+  bindSession(id, threadRef, worktreeKey, reuseKey, kind, pipe, cols, rows);
   return { id, scrollback: '' };
 }
 
@@ -288,7 +304,7 @@ export function writeTerminal(id: string, data: string): void {
 export function resizeTerminal(id: string, cols: number, rows: number): void {
   const session = sessions.get(id);
   if (!session) return;
-  session.pty.resize?.(cols, rows);
+  applySessionResize(session, cols, rows);
 }
 
 export function killTerminal(id: string): void {

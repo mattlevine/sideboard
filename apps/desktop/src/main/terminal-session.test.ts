@@ -3,11 +3,27 @@ import {
   MAX_TERMINAL_SCROLLBACK,
   appendTerminalScrollback,
   findReusableTerminalSession,
+  shouldApplyPtyResize,
   shouldTeardownTerminalSession,
   teardownInputAfterArchive,
   terminalReuseKey,
   terminalSessionKind,
 } from './terminal-session';
+
+describe('shouldApplyPtyResize', () => {
+  it('skips unchanged and invalid sizes so zsh is not SIGWINCHed', () => {
+    expect(shouldApplyPtyResize(null, { cols: 80, rows: 24 })).toBe(true);
+    expect(shouldApplyPtyResize({ cols: 80, rows: 24 }, { cols: 80, rows: 24 })).toBe(
+      false,
+    );
+    expect(shouldApplyPtyResize({ cols: 80, rows: 24 }, { cols: 100, rows: 24 })).toBe(
+      true,
+    );
+    expect(shouldApplyPtyResize(null, { cols: 0, rows: 24 })).toBe(false);
+    expect(shouldApplyPtyResize(null, { cols: 80, rows: 0 })).toBe(false);
+    expect(shouldApplyPtyResize(null, { cols: Number.NaN, rows: 24 })).toBe(false);
+  });
+});
 
 describe('appendTerminalScrollback', () => {
   it('concatenates chunks and no-ops empty data', () => {

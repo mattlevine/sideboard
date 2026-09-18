@@ -2,6 +2,33 @@ export const MAX_TERMINAL_SCROLLBACK = 256_000;
 
 export type TerminalSessionKind = 'shell' | 'attach';
 
+export type PtySize = { cols: number; rows: number };
+
+/**
+ * Whether a PTY ioctl should run. macOS `TIOCSWINSZ` SIGWINCHs even when the
+ * size is unchanged, and zsh reprints the prompt on every signal — a
+ * ResizeObserver / tab-focus fit loop then duplicates the current line.
+ *
+ * Keep in sync with the renderer helper in `apps/desktop/src/renderer/src/lib/pty-resize.ts`.
+ */
+export function shouldApplyPtyResize(
+  prev: PtySize | null | undefined,
+  next: PtySize,
+): boolean {
+  if (
+    !Number.isFinite(next.cols) ||
+    !Number.isFinite(next.rows) ||
+    next.cols < 1 ||
+    next.rows < 1
+  ) {
+    return false;
+  }
+  if (prev && prev.cols === next.cols && prev.rows === next.rows) {
+    return false;
+  }
+  return true;
+}
+
 /** Cap in-memory PTY scrollback so reconnect can replay without unbounded growth. */
 export function appendTerminalScrollback(
   prev: string,
