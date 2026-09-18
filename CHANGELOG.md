@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.213] - 2026-09-18
+
+### Fixed
+
+- Creating several review worktrees no longer freezes the sidebar and board: dirty glyphs use a cheap working-tree stat instead of a full PR-vs-main diff, setup/`pnpm install` output is batched instead of one IPC frame per line, and create no longer runs the full startup reconcile on the main thread.
+
 ## [0.1.212] - 2026-09-18
 
 ### Fixed
