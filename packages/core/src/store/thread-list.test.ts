@@ -24,6 +24,9 @@ function threadWithMessages(
   return {
     ...t,
     attachments: [{ id: 'a', name: 'note.md', kind: 'file' as const, content: 'huge' }],
+    pendingTurnAttachments: [
+      { id: 'img', name: 'shot.png', kind: 'file' as const, content: 'huge-preview' },
+    ],
     messages: messages.map((m, i) => ({
       role: m.role,
       text: m.text,
@@ -58,6 +61,7 @@ describe('slimThreadForUiList', () => {
 
     const slim = slimThreadForUiList(full);
     expect(slim.attachments).toEqual([]);
+    expect(slim.pendingTurnAttachments).toEqual([]);
     expect(slim.messages.some((m) => m.parts)).toBe(false);
     expect(slim.messages.join('')).not.toContain('x'.repeat(50));
     expect(latestVisibleMessageText(slim.messages)).toBe('follow up please');

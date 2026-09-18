@@ -470,6 +470,39 @@ export function clipThinkingForStore(text: string, max = THINKING_PART_MAX_CHARS
   return marker + text.slice(text.length - Math.max(1, max - marker.length));
 }
 
+/** Per-frame stdout/stderr over IPC — coalesced tokens are small; dumps are not. */
+export const STDOUT_EVENT_MAX_CHARS = 16_000;
+export const STDERR_EVENT_MAX_CHARS = 4_000;
+
+function clipEventTail(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const marker = '…(truncated)\n';
+  return marker + text.slice(text.length - Math.max(1, max - marker.length));
+}
+
+/**
+ * Shrink a stream event before renderer IPC. Persist still uses the raw event
+ * in `spawnAgentTurn`; this only protects the board when several worktrees
+ * stream at once (huge tool dumps serialize on the UI thread).
+ */
+export function clipAgentEventForPaint(event: AgentEvent): AgentEvent {
+  if (event.type === 'tool_result' && event.content) {
+    const content = clipToolResultForStore(event.content);
+    if (content === event.content) return event;
+    return { ...event, content };
+  }
+  if (event.type === 'thinking' && event.data.length > THINKING_PART_MAX_CHARS) {
+    return { ...event, data: clipThinkingForStore(event.data) };
+  }
+  if (event.type === 'stdout' && event.data.length > STDOUT_EVENT_MAX_CHARS) {
+    return { ...event, data: clipEventTail(event.data, STDOUT_EVENT_MAX_CHARS) };
+  }
+  if (event.type === 'stderr' && event.data.length > STDERR_EVENT_MAX_CHARS) {
+    return { ...event, data: clipEventTail(event.data, STDERR_EVENT_MAX_CHARS) };
+  }
+  return event;
+}
+
 /** Apply a structured agent event onto an accumulated parts list. */
 function withPartTimes<T extends MessagePart>(next: T, prev?: MessagePart | null): T {
   const now = Date.now();

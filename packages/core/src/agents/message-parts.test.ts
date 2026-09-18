@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   THINKING_PART_MAX_CHARS,
+  STDOUT_EVENT_MAX_CHARS,
   applyAgentEvent,
+  clipAgentEventForPaint,
   clipThinkingForStore,
   isInternalAgentStatusText,
   lastAssistantMessageText,
@@ -43,6 +45,29 @@ describe('applyAgentEvent', () => {
       THINKING_PART_MAX_CHARS,
     );
     expect(clipThinkingForStore('short')).toBe('short');
+  });
+
+  it('clips huge stream events before renderer IPC', () => {
+    const dumped = clipAgentEventForPaint({
+      type: 'tool_result',
+      id: 't',
+      content: `${'x'.repeat(20_000)}`,
+    });
+    expect(dumped.type).toBe('tool_result');
+    if (dumped.type === 'tool_result') {
+      expect(dumped.content?.length ?? 0).toBeLessThan(20_000);
+    }
+    const stdout = clipAgentEventForPaint({
+      type: 'stdout',
+      data: 'Z'.repeat(STDOUT_EVENT_MAX_CHARS + 80),
+    });
+    expect(stdout.type).toBe('stdout');
+    if (stdout.type === 'stdout') {
+      expect(stdout.data.length).toBeLessThanOrEqual(STDOUT_EVENT_MAX_CHARS);
+      expect(stdout.data.endsWith('Z')).toBe(true);
+    }
+    const small = { type: 'stdout' as const, data: 'hi' };
+    expect(clipAgentEventForPaint(small)).toBe(small);
   });
 
   it('accumulates text, thinking, and tools', () => {

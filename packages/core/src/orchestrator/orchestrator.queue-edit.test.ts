@@ -129,6 +129,32 @@ describe('Orchestrator queued-message editing', () => {
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 
+  it('clears composer attachments on send so the image chip does not linger', async () => {
+    const thread = seedThread([]);
+    const idle = readThread(thread.id)!;
+    idle.status = 'idle';
+    idle.attachments = [
+      {
+        id: 'img-1',
+        name: 'shot.png',
+        kind: 'file',
+        content: 'Image attached: shot.png',
+        previewDataUrl: 'data:image/png;base64,xx',
+      },
+    ];
+    writeThread(idle);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
+    internal.drainQueue = vi.fn().mockResolvedValue(undefined);
+
+    const updated = await orch.send(thread.id, 'look at this screenshot');
+    expect(updated.attachments).toEqual([]);
+    expect(updated.pendingTurnAttachments).toEqual([
+      expect.objectContaining({ id: 'img-1', name: 'shot.png' }),
+    ]);
+    expect(readThread(thread.id)?.attachments).toEqual([]);
+  });
+
   it('does not drain send() when another live process is the desktop host', async () => {
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',

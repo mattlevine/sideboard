@@ -127,6 +127,8 @@ import {
   splitTurnQueue,
   type PendingFollowUp,
 } from '../lib/visible-follow-up-queue';
+import { visibleComposerAttachments } from '../lib/composer-attachments';
+import { getComposerDraft, rememberComposerDraft } from '../lib/composer-draft';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -594,7 +596,10 @@ export function ThreadPanel({
   const turnStartedAt = live.startedAt;
   const showCost = useShowCost();
   const followUpBehavior = useFollowUpBehavior();
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(() => getComposerDraft(thread.id));
+  useEffect(() => {
+    rememberComposerDraft(thread.id, prompt);
+  }, [thread.id, prompt]);
   const [busy, setBusy] = useState(false);
   const [setupRunning, setSetupRunning] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
@@ -1354,6 +1359,7 @@ export function ThreadPanel({
       if (!followUpBusy) setBusy(true);
       try {
         await window.sideboard.sendToThread(thread.id, text);
+        onRefresh();
       } catch (err) {
         if (queueing) {
           setPendingFollowUps((prev) => {
@@ -1643,7 +1649,10 @@ export function ThreadPanel({
   }
 
   const chats = worktreeChats.length > 0 ? worktreeChats : [thread];
-  const attachments = thread.attachments ?? [];
+  const attachments = visibleComposerAttachments(thread.attachments ?? [], {
+    pending: pendingAttachments,
+    messages: thread.messages,
+  });
 
   async function archiveChatTab(id: string) {
     const removesWorktree =

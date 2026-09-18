@@ -183,6 +183,11 @@ export interface Thread {
   messages: ThreadMessage[];
   /** Pending composer attachments (forked transcripts, etc.). */
   attachments: ThreadAttachment[];
+  /**
+   * Composer attachments consumed on send, waiting for the next user turn.
+   * Keeps the chip tray empty after submit while `runTurn` still has the files.
+   */
+  pendingTurnAttachments?: ThreadAttachment[];
   lastError?: string | null;
   /**
    * OS pid of the in-flight agent child while status is `running`.

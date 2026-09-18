@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { foldLivePaintOps, stdoutCountsAsLivePreview } from './live-paint';
+import type { MessagePart } from '@sideboard-ai/core';
+import {
+  LIVE_OUTPUT_MAX_CHARS,
+  LIVE_PARTS_MAX,
+  foldLivePaintOps,
+  slimLiveParts,
+  stdoutCountsAsLivePreview,
+} from './live-paint';
 
 describe('stdoutCountsAsLivePreview', () => {
   it('keeps plain assistant text and drops nested/json dumps', () => {
@@ -96,9 +103,37 @@ describe('foldLivePaintOps', () => {
       [{ kind: 'clear', threadId: 'a' }],
       2,
     );
-    expect(next.output.a).toBe('');
-    expect(next.parts.a).toEqual([]);
+    expect(next.output.a).toBeUndefined();
+    expect(next.parts.a).toBeUndefined();
     expect(next.startedAt.a).toBeUndefined();
     expect(next.usage.a).toBeUndefined();
+  });
+
+  it('caps live preview text and drops old parts so five streams stay bounded', () => {
+    const started = foldLivePaintOps(
+      { output: {}, parts: {}, startedAt: {}, usage: {} },
+      [{ kind: 'started', threadId: 'a' }],
+      1,
+    );
+    const next = foldLivePaintOps(
+      started,
+      [
+        {
+          kind: 'output',
+          threadId: 'a',
+          event: { type: 'stdout', data: 'Z'.repeat(LIVE_OUTPUT_MAX_CHARS + 200) },
+        },
+      ],
+      2,
+    );
+    expect(next.output.a?.length).toBeLessThanOrEqual(LIVE_OUTPUT_MAX_CHARS);
+    expect(next.output.a?.endsWith('Z')).toBe(true);
+
+    const many: MessagePart[] = Array.from({ length: LIVE_PARTS_MAX + 20 }, (_, i) => ({
+      type: 'text' as const,
+      text: `p${i}`,
+    }));
+    expect(slimLiveParts(many).length).toBeLessThanOrEqual(LIVE_PARTS_MAX);
+    expect(slimLiveParts(many).at(-1)?.type).toBe('text');
   });
 });
