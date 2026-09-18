@@ -37,7 +37,11 @@ export function clampHistoryMaxDays(value: number): number {
   return Math.min(HISTORY_MAX_DAYS_MAX, Math.floor(value));
 }
 
-export function archivedUpdatedMs(thread: Pick<Thread, 'updatedAt' | 'createdAt'>): number {
+export function archivedUpdatedMs(
+  thread: Pick<Thread, 'updatedAt' | 'createdAt' | 'archivedAt'>,
+): number {
+  const stamped = thread.archivedAt ? Date.parse(thread.archivedAt) : NaN;
+  if (Number.isFinite(stamped)) return stamped;
   const updated = Date.parse(thread.updatedAt);
   if (Number.isFinite(updated)) return updated;
   const created = Date.parse(thread.createdAt);
@@ -66,7 +70,9 @@ export function historyRetentionStubMessage(thread: Pick<Thread, 'messages' | 'u
   };
 }
 
-function sortArchivedOldestFirst<T extends Pick<Thread, 'updatedAt' | 'createdAt'>>(
+function sortArchivedOldestFirst<
+  T extends Pick<Thread, 'updatedAt' | 'createdAt' | 'archivedAt'>,
+>(
   threads: T[],
 ): T[] {
   return [...threads].sort((a, b) => archivedUpdatedMs(a) - archivedUpdatedMs(b));
@@ -78,7 +84,7 @@ function sortArchivedOldestFirst<T extends Pick<Thread, 'updatedAt' | 'createdAt
  * Age-expired rows are purged. Count overflow is stripped first (keep the
  * searchable row) and purged on a later pass once it is already a stub.
  */
-export function planHistoryRetention<T extends Pick<Thread, 'id' | 'updatedAt' | 'createdAt' | 'messages' | 'attachments'>>(
+export function planHistoryRetention<T extends Pick<Thread, 'id' | 'updatedAt' | 'createdAt' | 'archivedAt' | 'messages' | 'attachments'>>(
   archived: T[],
   thresholds: HistoryRetentionThresholds = {},
 ): HistoryRetentionPlan {
@@ -117,7 +123,7 @@ export function planHistoryRetention<T extends Pick<Thread, 'id' | 'updatedAt' |
 }
 
 /** Manual History “Clear older than…” — purge those rows, do not strip. */
-export function planHistoryAgePurge<T extends Pick<Thread, 'id' | 'updatedAt' | 'createdAt'>>(
+export function planHistoryAgePurge<T extends Pick<Thread, 'id' | 'updatedAt' | 'createdAt' | 'archivedAt'>>(
   archived: T[],
   olderThanDays: number,
   nowMs = Date.now(),

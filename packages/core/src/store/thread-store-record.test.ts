@@ -9,6 +9,7 @@ import {
   isThreadRecordFile,
   listThreads,
   readThread,
+  setStatus,
   writeThread,
 } from './thread-store.js';
 import { threadFilePath } from './paths.js';
@@ -128,5 +129,25 @@ describe('thread list cache', () => {
     invalidateThreadRecord(first.id);
     expect(readThread(first.id)?.title).toBe('renamed');
     expect(readThread(second.id)?.title).toBe('two');
+  });
+
+  it('stamps archivedAt on archive and clears it on restore', () => {
+    const thread = createEmptyThread({
+      title: 'one',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/one',
+      worktreePath: '/tmp/one',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    writeThread(thread);
+    const archived = setStatus(thread.id, 'archived');
+    expect(archived.archivedAt).toBeTruthy();
+    const firstStamp = archived.archivedAt;
+    const again = setStatus(thread.id, 'archived');
+    expect(again.archivedAt).toBe(firstStamp);
+    const restored = setStatus(thread.id, 'idle');
+    expect(restored.archivedAt).toBeUndefined();
   });
 });

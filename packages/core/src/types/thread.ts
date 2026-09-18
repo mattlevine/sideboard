@@ -180,6 +180,8 @@ export interface Thread {
   userSetTitle: boolean;
   createdAt: string;
   updatedAt: string;
+  /** When this chat was archived. History age uses this, not later row updates. */
+  archivedAt?: string;
   messages: ThreadMessage[];
   /** Pending composer attachments (forked transcripts, etc.). */
   attachments: ThreadAttachment[];
