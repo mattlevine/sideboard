@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.209] - 2026-09-17
+
 ### Added
 
 - Settings → History is capped like worktrees: keep the newest 200 archived chats by default (Advanced → Limit archived history, on). Overflow loses the transcript first, then the row. Optional days-based delete (0 = off so existing accounts are not wiped on upgrade). History has Delete and Clear older than…; neither deletes the git branch.
