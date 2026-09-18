@@ -18,6 +18,7 @@ import {
   HISTORY_MAX_COUNT_MAX,
   HISTORY_MAX_COUNT_MIN,
   HISTORY_MAX_DAYS_MAX,
+  planHistoryAgePurge,
 } from '@sideboard/history-retention';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
@@ -2068,10 +2069,7 @@ export function SettingsModal({
                           setError('Clear-older days must be at least 1');
                           return;
                         }
-                        const cutoff = Date.now() - days * 86_400_000;
-                        const count = archived.filter(
-                          (t) => Date.parse(t.updatedAt) < cutoff,
-                        ).length;
+                        const count = planHistoryAgePurge(archived, days).length;
                         if (count === 0) {
                           setError(null);
                           return;

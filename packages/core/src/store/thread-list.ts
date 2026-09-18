@@ -22,6 +22,7 @@ export function slimThreadForUiList(thread: Thread): Thread {
     ...thread,
     attachments: [],
     pendingTurnAttachments: [],
+    queueAttachments: [],
     messages: slimMessagesForUiList(messages, thread.updatedAt),
   };
 }
