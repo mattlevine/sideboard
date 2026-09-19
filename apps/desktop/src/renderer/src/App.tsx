@@ -332,6 +332,10 @@ export function App() {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
     readRightSidebarWidth(null, RIGHT_SIDEBAR_DEFAULT),
   );
+  const [revealDirectory, setRevealDirectory] = useState<{
+    path: string;
+    nonce: number;
+  } | null>(null);
 
   const persistLeftSidebarWidth = useCallback((width: number) => {
     writeSidebarWidth('sideboard.leftSidebarWidth', width);
@@ -806,7 +810,17 @@ export function App() {
   useEffect(() => {
     setOpenFiles([]);
     setOpenFilePath(null);
+    setRevealDirectory(null);
   }, [selected?.worktreePath]);
+
+  const revealDirectoryInFiles = useCallback(
+    (path: string) => {
+      setRightSidebarOpen(true);
+      writeRightSidebarOpen(rightSidebarWorktreeKey, true);
+      setRevealDirectory({ path, nonce: Date.now() });
+    },
+    [rightSidebarWorktreeKey],
+  );
 
   const children = useMemo(
     () => (selected ? threads.filter((t) => t.parentThreadId === selected.id) : []),
@@ -1321,6 +1335,7 @@ export function App() {
               changesCommitSha={changesCommitSha}
               changesDiffBase={changesDiffBase}
               onSelectFile={openFile}
+              onRevealDirectory={revealDirectoryInFiles}
               onCloseFile={closeFile}
               onSelectChanges={selectChangesTab}
               onCloseChanges={closeChanges}
@@ -1351,6 +1366,7 @@ export function App() {
                 openFilePath={openFilePath}
                 changesPath={changesPath}
                 onOpenFile={openFile}
+                revealDirectory={revealDirectory}
                 onFileChanges={onFileChanges}
                 onSelectChat={(id, created) => {
                   if (created) {

@@ -1,4 +1,11 @@
-import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import { setSideboardFileDrag } from '../lib/sideboard-file-drag';
 import {
   AddReferenceButton,
@@ -15,7 +22,31 @@ export interface TreeNode {
   children?: TreeNode[];
 }
 
-export function buildFileTree(paths: string[]): TreeNode[] {
+export function ancestorDirectories(path: string): string[] {
+  const parts = path.split('/').filter(Boolean);
+  const dirs: string[] = [];
+  let acc = '';
+  for (const part of parts) {
+    acc = acc ? `${acc}/${part}` : part;
+    dirs.push(acc);
+  }
+  return dirs;
+}
+
+const DEFAULT_EXPANDED = ['apps', 'packages', 'scripts'];
+
+export function expandedWithFocus(
+  base: Iterable<string>,
+  focusDirectory: string | null | undefined,
+): Set<string> {
+  const next = new Set(base);
+  if (focusDirectory && focusDirectory !== '.') {
+    for (const dir of ancestorDirectories(focusDirectory)) next.add(dir);
+  }
+  return next;
+}
+
+export function buildFileTree(paths: string[], extraDirs: string[] = []): TreeNode[] {
   const root: TreeNode = { name: '', path: '', kind: 'dir', children: [] };
 
   for (const full of paths) {
@@ -38,6 +69,25 @@ export function buildFileTree(paths: string[]): TreeNode[] {
         cur.children.push(next);
       } else if (!isFile && next.kind === 'file') {
         // unlikely path conflict
+        next.kind = 'dir';
+        next.children ??= [];
+      }
+      cur = next;
+    }
+  }
+
+  for (const dir of extraDirs) {
+    const parts = dir.split('/').filter(Boolean);
+    let cur = root;
+    let acc = '';
+    for (const part of parts) {
+      acc = acc ? `${acc}/${part}` : part;
+      cur.children ??= [];
+      let next = cur.children.find((c) => c.name === part);
+      if (!next) {
+        next = { name: part, path: acc, kind: 'dir', children: [] };
+        cur.children.push(next);
+      } else if (next.kind === 'file') {
         next.kind = 'dir';
         next.children ??= [];
       }
@@ -86,6 +136,10 @@ interface Props {
   threadId?: string;
   /** Add a file or folder as a composer reference. */
   onAddReference?: (target: PathRefTarget & { childPaths?: string[] }) => void;
+  /** Expand / highlight this folder (chat path clicks). */
+  focusDirectory?: string | null;
+  /** Bump to re-scroll when the same folder is clicked again. */
+  focusNonce?: number;
 }
 
 export function FileTree({
@@ -96,14 +150,43 @@ export function FileTree({
   changes = {},
   threadId,
   onAddReference,
+  focusDirectory = null,
+  focusNonce,
 }: Props) {
-  const tree = useMemo(() => buildFileTree(paths), [paths]);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['apps', 'packages', 'scripts']));
+  const extraDirs = useMemo(
+    () => (focusDirectory && focusDirectory !== '.' ? ancestorDirectories(focusDirectory) : []),
+    [focusDirectory],
+  );
+  const tree = useMemo(() => buildFileTree(paths, extraDirs), [paths, extraDirs]);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(() =>
+    expandedWithFocus(DEFAULT_EXPANDED, focusDirectory),
+  );
   const [menu, setMenu] = useState<{ target: PathRefTarget; x: number; y: number } | null>(
     null,
   );
 
   const q = filter.trim().toLowerCase();
+
+  useLayoutEffect(() => {
+    if (!focusDirectory || focusDirectory === '.') return;
+    setExpanded((prev) => {
+      const next = expandedWithFocus(prev, focusDirectory);
+      if (next.size === prev.size && [...next].every((d) => prev.has(d))) return prev;
+      return next;
+    });
+  }, [focusDirectory, focusNonce]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host || !focusDirectory) return;
+    if (focusDirectory === '.') {
+      host.scrollTop = 0;
+      return;
+    }
+    const row = host.querySelector(`[data-tree-path="${CSS.escape(focusDirectory)}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+  }, [focusDirectory, focusNonce, expanded]);
 
   function toggle(path: string) {
     setExpanded((prev) => {
@@ -122,7 +205,11 @@ export function FileTree({
   }
 
   function renderNode(node: TreeNode, depth: number): ReactNode {
-    if (q) {
+    const focused =
+      Boolean(focusDirectory) &&
+      (node.path === focusDirectory ||
+        Boolean(focusDirectory && focusDirectory.startsWith(`${node.path}/`)));
+    if (q && !focused) {
       // When filtering, show matching files and their ancestor dirs
       if (node.kind === 'file') {
         if (!node.path.toLowerCase().includes(q)) return null;
@@ -186,7 +273,8 @@ export function FileTree({
         >
           <button
             type="button"
-            className="tree-row dir"
+            className={`tree-row dir${focusDirectory === node.path ? ' active' : ''}`}
+            data-tree-path={node.path}
             style={{ paddingLeft: 8 + depth * 12 }}
             onClick={() => toggle(node.path)}
           >
@@ -204,7 +292,7 @@ export function FileTree({
   if (!tree.length) return <div className="empty">No files</div>;
 
   return (
-    <div className="file-tree" data-skip-native-text-menu="">
+    <div ref={hostRef} className="file-tree" data-skip-native-text-menu="">
       {tree.map((n) => renderNode(n, 0))}
       {menu && onAddReference && (
         <AddReferenceMenu

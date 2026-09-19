@@ -56,6 +56,16 @@ export function mcpAllowTools(servers: McpServerStatus[]): string[] {
   return out;
 }
 
+/** Allow-list from config-file names (no `claude mcp list` probe). */
+export function mcpAllowToolsFromNames(names: Iterable<string>): string[] {
+  return mcpAllowTools(
+    [...names]
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .map((name) => ({ name, connected: true, needsAuth: false })),
+  );
+}
+
 export function mcpAuthWarnings(servers: McpServerStatus[]): string[] {
   const needing = servers.filter((s) => s.needsAuth).map((s) => s.name);
   if (needing.length === 0) return [];

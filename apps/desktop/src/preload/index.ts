@@ -152,6 +152,8 @@ const api: IpcApi = {
   createPrStack: (input) => ipcRenderer.invoke('createPrStack', input),
   getPrDetails: (threadRef) => ipcRenderer.invoke('getPrDetails', threadRef),
   listFiles: (threadRef) => ipcRenderer.invoke('listFiles', threadRef),
+  statPath: (threadRef, relativePath) =>
+    ipcRenderer.invoke('statPath', threadRef, relativePath),
   readFile: (threadRef, relativePath) =>
     ipcRenderer.invoke('readFile', threadRef, relativePath),
   readFileForUpload: (threadRef, relativePath) =>

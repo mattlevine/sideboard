@@ -3,7 +3,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/vs2015.css';
-import { parseFilePathLink, type FilePathLink } from '../lib/file-path-link';
+import {
+  isKnownDirectoryPath,
+  parseFilePathLink,
+  type FilePathLink,
+} from '../lib/file-path-link';
 import {
   linkifyThreadUrls,
   markdownUrlTransform,
@@ -20,6 +24,7 @@ interface Props {
   text: string;
   className?: string;
   knownFilePaths?: string[];
+  worktreePath?: string;
   onFileReferenceClick?: (link: FilePathLink) => void;
   /** Open a Sideboard thread from a sideboard://thread/<id> markdown link. */
   onThreadLinkClick?: (threadRef: string) => void;
@@ -63,6 +68,7 @@ export function MarkdownMessage({
   text,
   className,
   knownFilePaths,
+  worktreePath,
   onFileReferenceClick,
   onThreadLinkClick,
   onUrlClick,
@@ -190,16 +196,17 @@ export function MarkdownMessage({
                 </code>
               );
             }
-            const link = parseFilePathLink(isBlock ? lang : raw, knownFilePaths);
+            const link = parseFilePathLink(isBlock ? lang : raw, knownFilePaths, worktreePath);
 
             if (link) {
               const label =
                 isBlock && link.startLine != null ? `${link.path}:${link.startLine}` : raw;
+              const dirHint = isKnownDirectoryPath(link.path, knownFilePaths);
               return (
                 <button
                   type="button"
                   className={`md-file-ref${isBlock ? ' block' : ''}`}
-                  title={`Preview ${link.path}`}
+                  title={dirHint ? `Show ${link.path} in files` : `Open ${link.path}`}
                   onClick={() => onFileReferenceClick(link)}
                 >
                   {isBlock ? link.path : label}

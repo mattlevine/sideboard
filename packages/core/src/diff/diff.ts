@@ -855,6 +855,22 @@ export async function getDiff(
   };
 }
 
+export type WorktreeStatKind = 'file' | 'dir' | 'missing';
+
+/** Classify a worktree-relative path without reading file bytes. */
+export function statWorktreePath(
+  worktreePath: string,
+  relativePath: string,
+): WorktreeStatKind {
+  assertSafeRelativePath(relativePath);
+  const abs = join(worktreePath, relativePath);
+  if (!existsSync(abs)) return 'missing';
+  const st = statSync(abs);
+  if (st.isDirectory()) return 'dir';
+  if (st.isFile()) return 'file';
+  return 'missing';
+}
+
 /** Tracked + untracked (non-ignored) files in a worktree. */
 export async function listWorktreeFiles(
   worktreePath: string,

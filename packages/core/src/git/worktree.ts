@@ -105,7 +105,20 @@ export { ticketSlugForBranch, worktreeSlugForTicket } from './worktree-labels.js
 
 export async function resolveRepoRoot(cwd: string): Promise<string> {
   const { stdout } = await git(['rev-parse', '--show-toplevel'], cwd);
-  return canonicalizeRepoPath(stdout.trim());
+  const toplevel = canonicalizeRepoPath(stdout.trim());
+  // `--show-toplevel` is the current checkout. A linked worktree must resolve
+  // to the primary working tree (the main repo) so `pnpm dev` from a Sideboard
+  // worktree does not register that worktree as the workspace — new chats
+  // would `git worktree add` from a worktree and land under the wrong
+  // ~/sideboard/workspaces/<worktree-folder>/ family.
+  try {
+    const listed = await listWorktrees(cwd);
+    const primary = listed[0]?.path;
+    if (primary) return canonicalizeRepoPath(primary);
+  } catch {
+    // fall through
+  }
+  return toplevel;
 }
 
 /** Resolve /var vs /private/var (and similar) so live-worktree reuse can match. */
@@ -141,6 +154,7 @@ async function slugFromGitRemote(
 ): Promise<string | null> {
   const result = await git(['remote', 'get-url', remote], repoPath, {
     reject: false,
+    timeoutMs: 5_000,
   });
   if (result.exitCode !== 0 || !result.stdout.trim()) return null;
   return parseGithubSlugFromRemoteUrl(result.stdout);
@@ -171,7 +185,7 @@ export async function resolveGithubRepoSlug(
     const viaGh = await gh(
       ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
       repoPath,
-      { reject: false },
+      { reject: false, timeoutMs: 8_000 },
     );
     if (viaGh.exitCode === 0 && viaGh.stdout.trim()) {
       return viaGh.stdout.trim();
@@ -1514,7 +1528,7 @@ export async function listWorktrees(repoPath: string): Promise<
   const { stdout } = await git(
     ['worktree', 'list', '--porcelain'],
     repoPath,
-    { reject: false },
+    { reject: false, timeoutMs: 8_000 },
   );
   if (!stdout.trim()) return [];
   const entries: Array<{ path: string; branch: string | null }> = [];

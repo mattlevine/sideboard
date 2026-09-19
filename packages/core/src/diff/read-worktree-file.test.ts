@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readWorktreeFile, readWorktreeFileForUpload } from './diff.js';
+import { readWorktreeFile, readWorktreeFileForUpload, statWorktreePath } from './diff.js';
 
 const dirs: string[] = [];
 
@@ -34,6 +34,19 @@ describe('readWorktreeFile images', () => {
     expect(r.binary).toBe(true);
     expect(r.encoding).toBe('utf8');
     expect(r.content).toMatch(/binary file/);
+  });
+});
+
+describe('statWorktreePath', () => {
+  it('classifies files, directories, and missing paths', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sideboard-stat-'));
+    dirs.push(dir);
+    mkdirSync(join(dir, 'jobs', 'typecheck'), { recursive: true });
+    writeFileSync(join(dir, 'jobs', 'typecheck', 'log.txt'), 'ok');
+
+    expect(statWorktreePath(dir, 'jobs')).toBe('dir');
+    expect(statWorktreePath(dir, 'jobs/typecheck/log.txt')).toBe('file');
+    expect(statWorktreePath(dir, 'jobs/missing')).toBe('missing');
   });
 });
 

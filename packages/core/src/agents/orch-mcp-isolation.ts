@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
-import { userCursorMcpConfigPath } from './user-mcp-config.js';
+import { userClaudeMcpConfigPath, userCursorMcpConfigPath } from './user-mcp-config.js';
 
 /**
  * MCP names Sideboard injects on orchestration turns. User Linear / Gmail / …
@@ -105,6 +105,14 @@ export function listUserCursorMcpNames(home = homedir()): string[] {
     home === homedir() ? userCursorMcpConfigPath() : join(home, '.cursor', 'mcp.json');
   if (!existsSync(cursorPath)) return [];
   return listMcpNamesFromJsonMap(readJsonObject(cursorPath), 'mcpServers');
+}
+
+/** Names from ~/.claude.json (`claude mcp add --scope user`). Keys only. */
+export function listUserClaudeMcpNames(home = homedir()): string[] {
+  const claudePath =
+    home === homedir() ? userClaudeMcpConfigPath() : join(home, '.claude.json');
+  if (!existsSync(claudePath)) return [];
+  return listMcpNamesFromJsonMap(readJsonObject(claudePath), 'mcpServers');
 }
 
 export function toCodexDisableUserMcpArgs(names: string[]): string[] {

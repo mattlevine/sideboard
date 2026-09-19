@@ -7,7 +7,8 @@ import {
   resolveClaudeExecutable,
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
-import { mcpAllowTools, parseMcpList } from './claude-mcp.js';
+import { mcpAllowToolsFromNames } from './claude-mcp.js';
+import { listUserClaudeMcpNames, userMcpNamesToDisable } from './orch-mcp-isolation.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
 import { withEventParentId } from './message-parts.js';
 import {
@@ -59,6 +60,13 @@ const BASE_ALLOWED_TOOLS = [
  */
 export const CLAUDE_PRINT_BG_WAIT_CEILING_MS = 7_200_000;
 
+/** `pnpm dev` scopes the store to `<worktree>/.sideboard/dev-app-data`. */
+export function isLocalDevAppDataDir(
+  dir = process.env.SIDEBOARD_APP_DATA,
+): boolean {
+  return /[/\\]\.sideboard[/\\]dev-app-data(?:[/\\]|$)/.test(dir ?? '');
+}
+
 /**
  * When Settings → Agents → Claude → Chrome is on, Sideboard passes `--chrome`
  * and auto-approves the Claude-in-Chrome MCP + skill (otherwise browser actions
@@ -73,20 +81,6 @@ export const CLAUDE_CHROME_ALLOWED_TOOLS = [
 /** macOS ARG_MAX ~256KiB — keep `-p` prompt args under this (stdin for larger). */
 export const CLAUDE_PROMPT_ARG_MAX = 200_000;
 
-let mcpListCache: { at: number; servers: ReturnType<typeof parseMcpList> } | null =
-  null;
-
-async function loadMcpServers() {
-  // `--json` is unsupported on current Claude CLI builds; always use text list.
-  if (mcpListCache && Date.now() - mcpListCache.at < 30_000) {
-    return mcpListCache.servers;
-  }
-  const claude = resolveClaudeExecutable();
-  const mcpText = await run(claude, ['mcp', 'list'], { reject: false });
-  const servers = parseMcpList(`${mcpText.stdout}\n${mcpText.stderr}`);
-  mcpListCache = { at: Date.now(), servers };
-  return servers;
-}
 
 type ContentBlock = {
   type?: string;
@@ -527,9 +521,10 @@ export const claudeAdapter: AgentAdapter = {
     });
     const authenticated = auth.exitCode === 0;
 
-    // Do not spawn `claude mcp list` during detect — nested under an active
-    // Claude/Codex turn (MCP create_thread → requireAgent) it can block forever.
-    // Ticket sources use Sideboard Account integrations, not agent Linear MCP.
+    // Do not spawn `claude mcp list` during detect or buildTurn — it connects
+    // to every server using process.cwd(). `pnpm dev` from a Sideboard worktree
+    // makes that the Sideboard repo, so the probe nests Sideboard MCP and
+    // never returns. Ticket sources use Account integrations, not agent Linear.
     return {
       agent: 'claude',
       installed: true,
@@ -588,10 +583,13 @@ export const claudeAdapter: AgentAdapter = {
     } else {
       // Only Linear was previously allowed, so other Connected MCP servers (Brightsy,
       // Gmail, …) looked "not logged in" when Claude hit a permission denial.
-      const servers = await loadMcpServers();
+      // Read ~/.claude.json names — never `claude mcp list` (blocks forever when
+      // this Electron cwd is a Sideboard worktree; see detect() above).
+      // Drop sideboard/brightsy: worktree chats already allow present_* / issues,
+      // not the full Sideboard wildcard.
       allowedTools = [
         ...BASE_ALLOWED_TOOLS,
-        ...mcpAllowTools(servers),
+        ...mcpAllowToolsFromNames(userMcpNamesToDisable({ names: listUserClaudeMcpNames() })),
         ...sideboardWorktreeAllowedTools({
           github: true,
           linear: isLinearConnected(),
@@ -623,12 +621,13 @@ export const claudeAdapter: AgentAdapter = {
     const mcpConfigPath = writeMcpServersConfig(injectedServers);
     if (mcpConfigPath) {
       args.push('--mcp-config', mcpConfigPath);
-      // Coordinators already have Sideboard linear_* / list_issues. Merging
-      // ~/.claude + claude.ai Linear (HTTP) on the first turn is what hangs
-      // “find me work” while that connector flaps.
-      if (isOrchestrator) {
-        args.push('--strict-mcp-config');
-      }
+      // Always strict: worktree turns otherwise merge ~/.claude.json (user
+      // `sideboard` → Sideboard.app) plus project MCP from inherited Electron
+      // PWD (`pnpm dev` cwd is apps/desktop). That nests MCP and never
+      // returns — same hang as `claude mcp list`. Orchestrators already
+      // needed this so Linear/Gmail HTTP connectors could not flap the
+      // first “find me work” turn.
+      args.push('--strict-mcp-config');
     }
     if (chromeOn) {
       args.push('--chrome');
@@ -662,8 +661,12 @@ export const claudeAdapter: AgentAdapter = {
           process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS ??
           String(CLAUDE_PRINT_BG_WAIT_CEILING_MS),
         // `--strict-mcp-config` still fetches claude.ai connectors on some CLI
-        // builds (anthropics/claude-code#60252). Coordinators do not need them.
-        ...(isOrchestrator ? { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' } : {}),
+        // builds (anthropics/claude-code#60252). Coordinators never need them.
+        // Local `pnpm dev` also disables them: those HTTP connectors hang the
+        // first worktree turn when Electron's cwd is this Sideboard repo.
+        ...(isOrchestrator || isLocalDevAppDataDir()
+          ? { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' }
+          : {}),
       },
     };
   },

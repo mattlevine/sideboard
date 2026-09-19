@@ -1481,6 +1481,9 @@ function registerIpc(): void {
   ipcMain.handle('createPrStack', (_e, input) => orch.createPrStack(input));
   ipcMain.handle('getPrDetails', (_e, ref: string) => orch.getPrDetails(ref));
   ipcMain.handle('listFiles', (_e, ref: string) => orch.listFiles(ref));
+  ipcMain.handle('statPath', (_e, ref: string, relativePath: string) =>
+    orch.statPath(ref, relativePath),
+  );
   ipcMain.handle('readFile', (_e, ref: string, relativePath: string) =>
     orch.readFile(ref, relativePath),
   );

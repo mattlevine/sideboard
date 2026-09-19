@@ -67,4 +67,16 @@ describe('resolveDetachedJobScript', () => {
     );
     expect(formatDetachedJobInvoke(null)).toBe('node scripts/detached-job.cjs');
   });
+
+  it('does not call fileURLToPath on an empty import.meta.url (CJS Electron)', () => {
+    delete proc.resourcesPath;
+    expect(() => resolveDetachedJobScript()).not.toThrow();
+    expect(() => formatDetachedJobInvoke()).not.toThrow();
+  });
+
+  it('documents the CJS Electron crash we must not hit', () => {
+    expect(() => fileURLToPath(undefined as unknown as string)).toThrow(
+      /path.*undefined/i,
+    );
+  });
 });
