@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CLAUDE_PROMPT_ARG_MAX, claudeAdapter } from './claude.js';
+import { run } from '../git/run.js';
+import {
+  CLAUDE_PROMPT_ARG_MAX,
+  claudeAdapter,
+  isLocalDevAppDataDir,
+} from './claude.js';
 
 const claudeSettings = {
   executablePath: undefined as string | undefined,
@@ -37,11 +42,23 @@ vi.mock('../git/run.js', () => ({
   }),
 }));
 
+const userClaudeMcpNames: string[] = [];
+
+vi.mock('./orch-mcp-isolation.js', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('./orch-mcp-isolation.js')>();
+  return {
+    ...orig,
+    listUserClaudeMcpNames: () => [...userClaudeMcpNames],
+  };
+});
+
 beforeEach(() => {
   claudeSettings.executablePath = undefined;
   claudeSettings.chromeEnabled = false;
   claudeSettings.linearConnected = false;
   claudeSettings.abletimeConnected = false;
+  userClaudeMcpNames.length = 0;
+  vi.mocked(run).mockClear();
 });
 
 describe('claudeAdapter.buildTurn', () => {
@@ -173,6 +190,27 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cmd.file).toBe('/opt/custom/claude');
   });
 
+  it('does not spawn claude mcp list on worktree turns', async () => {
+    await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    const probed = vi.mocked(run).mock.calls.some(
+      ([cmd, args]) =>
+        (cmd === 'claude' || String(cmd).endsWith('/claude')) && args?.[0] === 'mcp',
+    );
+    expect(probed).toBe(false);
+  });
+
+  it('auto-approves user ~/.claude.json MCP tools but not the Sideboard wildcard', async () => {
+    userClaudeMcpNames.push('gmail', 'sideboard', 'brightsy');
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__gmail');
+    expect(allowed).toContain('mcp__gmail__*');
+    expect(allowed).not.toContain('mcp__sideboard__*');
+    expect(allowed).not.toContain('mcp__brightsy__*');
+  });
+
   it('worktree turns inject Sideboard MCP but only auto-approve present_* UI tools', async () => {
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'make a page' });
     const allowed = cmd.args
@@ -193,7 +231,7 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).not.toContain('mcp__sideboard__slack_post');
     expect(allowed).not.toContain('mcp__sideboard__list_teams');
     expect(allowed).not.toContain('mcp__sideboard__*');
-    expect(cmd.args).not.toContain('--strict-mcp-config');
+    expect(cmd.args).toContain('--strict-mcp-config');
     expect(cmd.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBeUndefined();
     const mcpIdx = cmd.args.indexOf('--mcp-config');
     expect(mcpIdx).toBeGreaterThan(-1);
@@ -207,6 +245,21 @@ describe('claudeAdapter.buildTurn', () => {
       (n) => n === 'brightsy' || n.startsWith('brightsy_'),
     );
     expect(brightsyServers).toEqual([]);
+  });
+
+  it('disables claude.ai MCP on worktree turns under pnpm dev app data', async () => {
+    const prev = process.env.SIDEBOARD_APP_DATA;
+    process.env.SIDEBOARD_APP_DATA =
+      '/tmp/sporting-jax/.sideboard/dev-app-data';
+    try {
+      expect(isLocalDevAppDataDir()).toBe(true);
+      const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
+      expect(cmd.args).toContain('--strict-mcp-config');
+      expect(cmd.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBe('false');
+    } finally {
+      if (prev === undefined) delete process.env.SIDEBOARD_APP_DATA;
+      else process.env.SIDEBOARD_APP_DATA = prev;
+    }
   });
 
   it('auto-approves Account Linear and AbleTime tools when those sources are connected', async () => {
@@ -268,6 +321,19 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('Bash');
     expect(cmd.args).toContain('--strict-mcp-config');
     expect(cmd.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBe('false');
+  });
+});
+
+describe('isLocalDevAppDataDir', () => {
+  it('matches worktree-local pnpm dev store paths', () => {
+    expect(
+      isLocalDevAppDataDir('/tmp/wt/.sideboard/dev-app-data'),
+    ).toBe(true);
+    expect(
+      isLocalDevAppDataDir('/tmp/wt/.sideboard/dev-app-data/threads'),
+    ).toBe(true);
+    expect(isLocalDevAppDataDir('/tmp/sideboard-dev-app-data')).toBe(false);
+    expect(isLocalDevAppDataDir(undefined)).toBe(false);
   });
 });
 

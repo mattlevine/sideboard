@@ -108,6 +108,8 @@ import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { ChatSearchBar } from './ChatSearchBar';
 import { MarkdownMessage } from './MarkdownMessage';
+import { type FilePathLink } from '../lib/file-path-link';
+import { openWorktreePathLink } from '../lib/reveal-worktree-path';
 import { PrPage } from './PrPage';
 import { UrlPreview } from './UrlPreview';
 import { prTabTitle } from '../lib/pr-activity';
@@ -205,6 +207,8 @@ interface Props {
       base?: string | null;
     },
   ) => void;
+  /** Focus a directory in the right-sidebar file tree. */
+  onRevealDirectory?: (path: string) => void;
   onCloseFile?: (path: string) => void;
   onSelectUrl?: (url: string) => void;
   onCloseUrl?: (url: string) => void;
@@ -284,15 +288,41 @@ function looksLikeAutoContinuePrompt(text: string): boolean {
 
 function UserMessageText({
   text,
+  threadId,
+  worktreePath,
+  knownFilePaths,
+  onOpenFile,
+  onRevealDirectory,
   onThreadLinkClick,
 }: {
   text: string;
+  threadId?: string;
+  worktreePath?: string;
+  knownFilePaths?: string[];
+  onOpenFile?: (path: string) => void;
+  onRevealDirectory?: (path: string) => void;
   onThreadLinkClick?: (threadRef: string) => void;
 }) {
+  const onFileReferenceClick =
+    onOpenFile || onRevealDirectory
+      ? (link: FilePathLink) => {
+          void openWorktreePathLink({
+            link,
+            threadId,
+            worktreePath,
+            knownFilePaths,
+            onOpenFile,
+            onRevealDirectory,
+          });
+        }
+      : undefined;
   return (
     <div className="msg-body msg-body-md" data-chat-text="">
       <MarkdownMessage
         text={userTextToMarkdown(text)}
+        knownFilePaths={knownFilePaths}
+        worktreePath={worktreePath}
+        onFileReferenceClick={onFileReferenceClick}
         onThreadLinkClick={onThreadLinkClick}
       />
     </div>
@@ -301,6 +331,7 @@ function UserMessageText({
 
 type ChatTranscriptHandlers = {
   onSelectFile?: Props['onSelectFile'];
+  onRevealDirectory?: (path: string) => void;
   attachToChat: (att: ThreadAttachment) => void;
   onOpenThreadLink?: (threadRef: string) => void;
   openRightPane: (next: RightPaneContent) => void;
@@ -400,7 +431,7 @@ const ChatTranscript = memo(function ChatTranscript({
                   worktreePath={worktreePath}
                   knownFilePaths={filePaths}
                   onOpenFile={h.onSelectFile}
-                  onCodeReference={h.attachToChat}
+                  onRevealDirectory={h.onRevealDirectory}
                   onOpenThread={h.onOpenThreadLink}
                   onOpenArtifact={h.openRightPane}
                   activeArtifactId={activeArtifactId}
@@ -453,6 +484,11 @@ const ChatTranscript = memo(function ChatTranscript({
                 {m.text ? (
                   <UserMessageText
                     text={m.text}
+                    threadId={threadId}
+                    worktreePath={worktreePath}
+                    knownFilePaths={filePaths}
+                    onOpenFile={h.onSelectFile}
+                    onRevealDirectory={h.onRevealDirectory}
                     onThreadLinkClick={h.onOpenThreadLink}
                   />
                 ) : null}
@@ -483,6 +519,11 @@ const ChatTranscript = memo(function ChatTranscript({
               {pendingTranscript ? (
                 <UserMessageText
                   text={pendingTranscript}
+                  threadId={threadId}
+                  worktreePath={worktreePath}
+                  knownFilePaths={filePaths}
+                  onOpenFile={h.onSelectFile}
+                  onRevealDirectory={h.onRevealDirectory}
                   onThreadLinkClick={h.onOpenThreadLink}
                 />
               ) : null}
@@ -509,7 +550,7 @@ const ChatTranscript = memo(function ChatTranscript({
               worktreePath={worktreePath}
               knownFilePaths={filePaths}
               onOpenFile={h.onSelectFile}
-              onCodeReference={h.attachToChat}
+              onRevealDirectory={h.onRevealDirectory}
               onOpenThread={h.onOpenThreadLink}
               onOpenArtifact={h.openRightPane}
               activeArtifactId={activeArtifactId}
@@ -592,6 +633,7 @@ export function ThreadPanel({
   changesCommitSha = null,
   changesDiffBase = null,
   onSelectFile,
+  onRevealDirectory,
   onCloseFile,
   onSelectUrl,
   onCloseUrl,
@@ -2024,6 +2066,7 @@ export function ThreadPanel({
 
   const chatHandlersRef = useRef<ChatTranscriptHandlers>({
     onSelectFile,
+    onRevealDirectory,
     attachToChat,
     onOpenThreadLink,
     openRightPane,
@@ -2032,6 +2075,7 @@ export function ThreadPanel({
   });
   chatHandlersRef.current = {
     onSelectFile,
+    onRevealDirectory,
     attachToChat,
     onOpenThreadLink,
     openRightPane,

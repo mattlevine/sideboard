@@ -8,6 +8,7 @@ import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnF
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
 import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
+import { traceTurn, withTimeout } from '../agents/turn-trace.js';
 import { getAdapter } from '../agents/index.js';
 import {
   connectedPrSelectors,
@@ -155,6 +156,7 @@ import {
   listWorktreeFiles,
   readWorktreeFile,
   readWorktreeFileForUpload,
+  statWorktreePath,
   writeWorktreeFile,
 } from '../diff/diff.js';
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
@@ -594,7 +596,7 @@ export class Orchestrator {
 
       if (thread.queue.length > 0) {
         this.haltDrain.delete(thread.id);
-        void this.drainQueue(thread.id);
+        this.armDrain(thread.id);
       }
     }
   }
@@ -1009,7 +1011,7 @@ export class Orchestrator {
       // runs in a stdio child with no renderer IPC (blank worktree chat).
       // Steer promotes via sendQueuedMessageNow after the lock.
       if (thisProcessShouldDrainAgentQueues() && !shouldSteer) {
-        void this.drainQueue(thread.id);
+        this.armDrain(thread.id);
       }
       return this.requireThread(thread.id);
     });
@@ -1108,8 +1110,15 @@ export class Orchestrator {
     }
     // Always arm drain. If a loop is already waiting on the dying child, this
     // is a no-op; if Stop left no drain running, Send now must start one.
-    void this.drainQueue(thread.id);
+    this.armDrain(thread.id);
     return this.requireThread(thread.id);
+  }
+
+  private armDrain(threadId: string): void {
+    void this.drainQueue(threadId).catch((err) => {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`[sideboard] drainQueue ${threadId}: ${detail}`);
+    });
   }
 
   private async drainQueue(threadId: string): Promise<void> {
@@ -1201,6 +1210,10 @@ export class Orchestrator {
     this.emit({ type: 'turn_started', threadId, prompt });
 
     try {
+    // Pre-spawn work (queue shape, git slug, directives) used to sit outside
+    // this try/finally. A throw there left startingTurns set forever, so
+    // later worktree sends spun in drainQueue and never spawned Claude.
+    try {
       const baseline = await captureTurnBaseline(thread.worktreePath);
       if (baseline) this.turnBaselines.set(threadId, baseline);
     } catch {
@@ -1229,24 +1242,30 @@ export class Orchestrator {
       thread = this.requireThread(threadId);
     }
 
+    const promptText = typeof prompt === 'string' ? prompt : '';
     const autoContinue =
-      isJobContinuePrompt(prompt) ||
-      prompt.trim().startsWith('The previous agent process ended before it finished.');
+      isJobContinuePrompt(promptText) ||
+      promptText.startsWith('The previous agent process ended before it finished.');
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
     appendMessage(threadId, {
       role: 'user',
-      text: prompt,
+      text: promptText,
       ...(sentAttachments ? { attachments: sentAttachments } : {}),
       ...(autoContinue ? { origin: 'continue' as const } : {}),
       ts: new Date().toISOString(),
+    });
+    traceTurn('runTurn.afterUserMessage', {
+      threadId,
+      agent: thread.agent,
+      orch: isOrchestratorThread(thread),
     });
 
     thread = this.requireThread(threadId);
     // Git-button phrases and PR-goal detection must see the raw user text.
     // Composer expansion appends attachments / @files / skills and would
     // both miss exact phrases and false-trigger on skill/file mentions of CI.
-    const gitPrompt = expandCanonicalGitRequest(prompt);
+    const gitPrompt = expandCanonicalGitRequest(promptText);
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
       thread.worktreePath,
       gitPrompt,
@@ -1338,7 +1357,7 @@ export class Orchestrator {
     const prGateDirective =
       thread.agent !== 'brightsy' &&
       !isOrchestratorThread(thread) &&
-      mentionsPrGoal(prompt)
+      mentionsPrGoal(promptText)
         ? formatPrGateDirective()
         : null;
     const agentPrompt = [
@@ -1382,9 +1401,11 @@ export class Orchestrator {
       isBrightsy || isOrchestration
         ? null
         : formatWorktreeDirective(fresh, {
-            githubSlug: await resolveGithubRepoSlug(fresh.worktreePath).catch(
-              () => null,
-            ),
+            githubSlug: await withTimeout(
+              resolveGithubRepoSlug(fresh.worktreePath),
+              8_000,
+              'resolveGithubRepoSlug',
+            ).catch(() => null),
             gitAuthMode,
           });
     const artifactDirective = isBrightsy ? null : formatArtifactDirective();
@@ -1491,8 +1512,8 @@ export class Orchestrator {
           .filter(Boolean)
           .join('\n\n---\n\n');
 
-    try {
       const stderrTail: string[] = [];
+      traceTurn('runTurn.beforeSpawn', { threadId, agent: fresh.agent });
       const handle = await spawnAgentTurn(
         fresh,
         {
@@ -2535,6 +2556,22 @@ export class Orchestrator {
   async listFiles(threadRef: string): Promise<string[]> {
     const thread = this.requireThread(threadRef);
     return listWorktreeFiles(thread.worktreePath);
+  }
+
+  async statPath(
+    threadRef: string,
+    relativePath: string,
+  ): Promise<'file' | 'dir' | 'missing'> {
+    const thread = this.requireThread(threadRef);
+    if (relativePath.includes('..') || relativePath.startsWith('/')) {
+      return 'missing';
+    }
+    if (!relativePath || relativePath === '.') return 'dir';
+    try {
+      return statWorktreePath(thread.worktreePath, relativePath);
+    } catch {
+      return 'missing';
+    }
   }
 
   async readFile(

@@ -1,5 +1,6 @@
 import { execa, type ExecaError } from 'execa';
 import { ensureAgentPath } from '../agents/path.js';
+import { stripNestedElectronEnv } from '../hook/nested-electron-env.js';
 import { githubAgentAuthReady, githubGhConfigEnv } from './github-agent-auth.js';
 import { clearStaleIndexLocks, isIndexLockError } from './stale-lock.js';
 
@@ -19,7 +20,7 @@ export async function run(
   try {
     const result = await execa(file, args, {
       cwd: opts?.cwd,
-      env: { ...process.env, ...opts?.env },
+      env: { ...stripNestedElectronEnv(process.env), ...opts?.env },
       reject: opts?.reject ?? true,
       ...(opts?.timeoutMs != null ? { timeout: opts.timeoutMs } : {}),
     });

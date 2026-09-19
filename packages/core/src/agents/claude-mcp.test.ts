@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   mcpAllowTools,
+  mcpAllowToolsFromNames,
   mcpAuthWarnings,
   parseMcpList,
   sanitizeMcpServerName,
@@ -41,6 +42,17 @@ describe('mcpAllowTools', () => {
       'mcp__claude_ai_Brightsy_Ai__*',
       'mcp__claude_ai_Gmail',
       'mcp__claude_ai_Gmail__*',
+    ]);
+  });
+});
+
+describe('mcpAllowToolsFromNames', () => {
+  it('treats config-file names as connected', () => {
+    expect(mcpAllowToolsFromNames(['gmail', 'claude.ai Slack', ''])).toEqual([
+      'mcp__gmail',
+      'mcp__gmail__*',
+      'mcp__claude_ai_Slack',
+      'mcp__claude_ai_Slack__*',
     ]);
   });
 });

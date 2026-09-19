@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.218] - 2026-09-18
+
+### Fixed
+
+- Chat folder paths (and the worktree root) are clickable and focus the Files tree instead of opening a file modal.
+- Worktree Claude in local `pnpm dev` no longer hangs before spawn: skip `claude mcp list`, pass `--strict-mcp-config`, strip host Electron/pnpm env, and time out git/`gh` waits so a stuck pre-spawn step cannot wedge later sends.
+- Resolving `detached-job.cjs` no longer throws `path argument … Received undefined` when Electron loads core as CJS.
+
 ## [0.1.217] - 2026-09-18
 
 ### Fixed

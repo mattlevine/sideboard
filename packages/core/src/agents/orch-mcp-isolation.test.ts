@@ -6,6 +6,7 @@ import {
   isInjectedOrchMcpName,
   listMcpNamesFromCodexToml,
   listMcpNamesFromJsonMap,
+  listUserClaudeMcpNames,
   listUserCodexMcpNames,
   listUserCursorMcpNames,
   listUserOpencodeMcpNames,
@@ -67,9 +68,14 @@ command = "node"
       join(home, '.cursor', 'mcp.json'),
       JSON.stringify({ mcpServers: { linear: { command: 'npx' } } }),
     );
+    writeFileSync(
+      join(home, '.claude.json'),
+      JSON.stringify({ mcpServers: { gmail: { command: 'npx' }, sideboard: { command: 'node' } } }),
+    );
     expect(listUserCodexMcpNames(home)).toEqual(['linear']);
     expect(listUserOpencodeMcpNames(home)).toEqual(['linear']);
     expect(listUserCursorMcpNames(home)).toEqual(['linear']);
+    expect(listUserClaudeMcpNames(home)).toEqual(['gmail', 'sideboard']);
     expect(toCodexDisableUserMcpArgs(['linear', 'bad.name'])).toEqual([
       '-c',
       'mcp_servers.linear.enabled=false',

@@ -167,6 +167,7 @@ export function looksLikeDeferredDonePromise(text: string | null | undefined): b
 
 /** Host-queued keep-alive — not something the human typed. */
 export function isJobContinuePrompt(text: string): boolean {
+  if (typeof text !== 'string') return false;
   const t = text.trim();
   return (
     t.startsWith('Detached job still running:') ||

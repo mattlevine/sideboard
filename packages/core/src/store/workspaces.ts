@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { appDataDir } from './paths.js';
 import { isGlobalRepoPath } from './global-workspace.js';
@@ -76,6 +76,20 @@ export function listWorkspaces(): Workspace[] {
   return valid.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** True when `path` is a linked git worktree of `mainRepo` (not the main checkout). */
+function isLinkedWorktreeOf(path: string, mainRepo: string): boolean {
+  if (!path || path === mainRepo) return false;
+  const git = join(path, '.git');
+  try {
+    if (!existsSync(git) || statSync(git).isDirectory()) return false;
+    const text = readFileSync(git, 'utf8');
+    const needle = `${mainRepo.replace(/\/+$/, '')}/.git`;
+    return text.includes(needle);
+  } catch {
+    return false;
+  }
+}
+
 export async function addWorkspace(repoPath: string): Promise<Workspace> {
   const root = await resolveRepoRoot(repoPath);
   if (!root || root === '/') throw new Error(`Invalid repo path: ${repoPath}`);
@@ -85,13 +99,16 @@ export async function addWorkspace(repoPath: string): Promise<Workspace> {
   await ensureGhPreferOrigin(root);
   const current = readAll();
   const existing = current.find((w) => w.path === root);
-  if (existing) return existing;
-  const next: Workspace = {
+  // Drop worktree-as-workspace leftovers (e.g. `pnpm dev` from a Sideboard
+  // worktree used to register that checkout instead of the main repo).
+  const withoutLinked = current.filter((w) => !isLinkedWorktreeOf(w.path, root));
+  if (existing && withoutLinked.length === current.length) return existing;
+  const next: Workspace = existing ?? {
     path: root,
     name: basename(root),
     addedAt: new Date().toISOString(),
   };
-  writeAll([...current, next]);
+  writeAll(existing ? withoutLinked : [...withoutLinked, next]);
   return next;
 }
 

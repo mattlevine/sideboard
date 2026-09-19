@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AgentKind, MessagePart, ThreadAttachment, TokenUsage } from '@sideboard-ai/core';
+import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
 import { isShellToolName, isSubagentToolName, messagePartParentId, toolActivityLine, visibleToolRowDetail } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
@@ -10,8 +10,8 @@ import {
 import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
-import type { FilePathLink } from '../lib/file-path-link';
-import { FileReferenceModal } from './FileReferenceModal';
+import { type FilePathLink } from '../lib/file-path-link';
+import { openWorktreePathLink } from '../lib/reveal-worktree-path';
 import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ActivityMark } from './ActivityMark';
@@ -44,8 +44,8 @@ interface Props {
   worktreePath?: string;
   knownFilePaths?: string[];
   onOpenFile?: (path: string) => void;
-  /** Attach a code selection from a file-reference preview to the composer. */
-  onCodeReference?: (attachment: ThreadAttachment) => void;
+  /** Focus a directory in the right-sidebar file tree. */
+  onRevealDirectory?: (path: string) => void;
   /** Navigate to another Sideboard thread from a markdown deep link. */
   onOpenThread?: (threadRef: string) => void;
   /** Open a document or schema pane in the side column. */
@@ -340,7 +340,7 @@ export function AgentMessage({
   worktreePath,
   knownFilePaths,
   onOpenFile,
-  onCodeReference,
+  onRevealDirectory,
   onOpenThread,
   onOpenArtifact,
   activeArtifactId = null,
@@ -355,14 +355,20 @@ export function AgentMessage({
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [diffTool, setDiffTool] = useState<ToolPart | null>(null);
-  const [fileRef, setFileRef] = useState<FilePathLink | null>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const diffAnchorRef = useRef<HTMLElement | null>(null);
   const userToggledPhases = useRef(new Set<number>());
   const windowTokens = resolveContextWindow(agent ?? 'claude', model);
 
   function openFileReference(link: FilePathLink) {
-    setFileRef(link);
+    void openWorktreePathLink({
+      link,
+      threadId,
+      worktreePath,
+      knownFilePaths,
+      onOpenFile,
+      onRevealDirectory,
+    });
   }
 
   const safeParts = parts ?? [];
@@ -532,6 +538,7 @@ export function AgentMessage({
               <MarkdownMessage
                 text={phase.text}
                 knownFilePaths={knownFilePaths}
+                worktreePath={worktreePath}
                 onFileReferenceClick={threadId ? openFileReference : undefined}
                 onThreadLinkClick={onOpenThread}
                 isStreaming={Boolean(streaming && i === phases.length - 1)}
@@ -582,6 +589,7 @@ export function AgentMessage({
           <MarkdownMessage
             text={answer}
             knownFilePaths={knownFilePaths}
+            worktreePath={worktreePath}
             onFileReferenceClick={threadId ? openFileReference : undefined}
             onThreadLinkClick={onOpenThread}
             isStreaming={streaming}
@@ -800,16 +808,6 @@ export function AgentMessage({
         </FloatingMenu>
       )}
 
-      {fileRef && threadId && onOpenFile && (
-        <FileReferenceModal
-          threadId={threadId}
-          link={fileRef}
-          worktreePath={worktreePath}
-          onClose={() => setFileRef(null)}
-          onOpenInTab={onOpenFile}
-          onCodeReference={onCodeReference}
-        />
-      )}
     </div>
   );
 }

@@ -414,6 +414,8 @@ export interface IpcApi {
   /** PR description / reviews for the Review tab. */
   getPrDetails(threadRef: string): Promise<PrDetails | null>;
   listFiles(threadRef: string): Promise<string[]>;
+  /** Classify a worktree path so chat links can preview files or reveal folders. */
+  statPath(threadRef: string, relativePath: string): Promise<'file' | 'dir' | 'missing'>;
   readFile(
     threadRef: string,
     relativePath: string,

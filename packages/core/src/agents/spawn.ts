@@ -1,9 +1,10 @@
 import { createInterface } from 'node:readline';
 import { execa } from 'execa';
-import { originGhRepoEnv } from '../git/worktree.js';
+import { resolveGithubRepoSlug } from '../git/worktree.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 import { childEnvWithAppSettings } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
+import { traceTurn, withTimeout } from './turn-trace.js';
 import type { AgentEvent, AgentKind, MessagePart, Thread, TokenUsage } from '../types/thread.js';
 import { adjustBrightsyTurnExit, parseBrightsyCliLine } from './brightsy.js';
 import { getAdapter } from './index.js';
@@ -16,6 +17,7 @@ import {
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
 } from './message-parts.js';
+import { sanitizeAgentHostEnv } from '../hook/agent-host-env.js';
 import { applyWorktreePkgCacheEnv } from '../hook/worktree-pkg-cache.js';
 import { applyAgentRunnerHeapEnv } from './node-launch.js';
 import { ensureAgentPath } from './path.js';
@@ -95,7 +97,21 @@ export async function spawnAgentTurn(
     assertOrchestratorCapableAgent(thread.agent);
   }
   const adapter = getAdapter(thread.agent);
-  const cmd = await adapter.buildTurn(thread, input);
+  const orch = isOrchestratorThread(thread);
+  traceTurn('spawn.buildTurn.start', {
+    threadId: thread.id,
+    agent: thread.agent,
+    orch,
+    cwd: thread.worktreePath,
+  });
+  // `pnpm dev` worktree turns were hanging forever in buildTurn / git auth
+  // (no Claude child, status=running, no agentPid). Fail instead of wedging.
+  const cmd = await withTimeout(
+    adapter.buildTurn(thread, input),
+    20_000,
+    'buildTurn',
+  );
+  traceTurn('spawn.buildTurn.done', { file: cmd.file, cwd: cmd.cwd });
   if (cmd.cwd !== thread.worktreePath) {
     throw new Error(
       `Agent cwd must be the thread worktree (got ${cmd.cwd}, expected ${thread.worktreePath})`,
@@ -105,19 +121,41 @@ export async function spawnAgentTurn(
   // Pin bare `gh` to this worktree's origin (not upstream) for dual-remote repos.
   // GitHub auth is a warmed credential store + GH_CONFIG_DIR — not GH_TOKEN in env.
   const env = childEnvWithAppSettings(cmd.env);
+  // `pnpm --filter desktop dev` from a Sideboard worktree leaks NODE_PATH,
+  // INIT_CWD, host node_modules/.bin, and SIDEBOARD_WORKSPACE_* into Claude.
+  // Packaged builds do not set those — worktree agents only hang in local Electron.
+  sanitizeAgentHostEnv(env, cmd.cwd);
+  ensureAgentPath(env);
   applyPromptCacheTtlEnv(thread.agent, env);
   applyAgentRunnerHeapEnv(env);
-  if (!isOrchestratorThread(thread)) {
+  if (!orch) {
     applyWorktreePkgCacheEnv(env, thread.worktreePath);
   }
   try {
-    if (isOrchestratorThread(thread)) {
-      mergeAgentGitAuthEnv(env, await resolveAgentGitAuthEnv(env));
-    } else {
-      mergeAgentGitAuthEnv(env, await originGhRepoEnv(thread.worktreePath, { env }));
+    // Same warmed helper as orchestration — do not call `gh repo set-default`
+    // here (that hung worktree turns under local Electron). GH_REPO is a
+    // timeout-bounded git-remote read.
+    traceTurn('spawn.gitAuth.start');
+    mergeAgentGitAuthEnv(
+      env,
+      await withTimeout(
+        resolveAgentGitAuthEnv(env, { cwd: thread.worktreePath }),
+        8_000,
+        'gitAuth',
+      ),
+    );
+    if (!orch) {
+      const slug = await withTimeout(
+        resolveGithubRepoSlug(thread.worktreePath),
+        8_000,
+        'resolveGithubRepoSlug',
+      );
+      if (slug) env.GH_REPO = slug;
     }
+    traceTurn('spawn.gitAuth.done', { ghRepo: env.GH_REPO ?? null });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
+    traceTurn('spawn.gitAuth.fail', { detail });
     console.warn(`[sideboard] git auth env failed (${thread.worktreePath}): ${detail}`);
   }
 
@@ -131,6 +169,7 @@ export async function spawnAgentTurn(
     // so Claude doesn't wait ~3s for an empty pipe.
     stdin: cmd.stdin != null ? 'pipe' : 'ignore',
   });
+  traceTurn('spawn.execa', { pid: child.pid ?? null, file: cmd.file });
 
   if (cmd.stdin != null && child.stdin) {
     child.stdin.write(cmd.stdin);

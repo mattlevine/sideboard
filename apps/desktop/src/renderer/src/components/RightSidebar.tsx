@@ -65,6 +65,8 @@ interface Props {
       base?: string | null;
     },
   ) => void;
+  /** Chat path click: switch to Files and highlight this folder. */
+  revealDirectory?: { path: string; nonce: number } | null;
   /** Select another chat tab in this worktree (e.g. after creating one for setup). */
   onSelectChat?: (id: string, created?: Thread) => void;
   /** Notify parent so file tabs can show the same git markers. */
@@ -239,6 +241,7 @@ export function RightSidebar({
   openFilePath = null,
   changesPath = null,
   onOpenFile,
+  revealDirectory = null,
   onSelectChat,
   onFileChanges,
   onAddReference,
@@ -312,6 +315,12 @@ export function RightSidebar({
   useEffect(() => {
     setGitMetaReady(false);
   }, [worktreeKey]);
+
+  useEffect(() => {
+    if (!revealDirectory) return;
+    setUpper('files');
+    setFilter('');
+  }, [revealDirectory]);
 
   useEffect(() => {
     writeRightSidebarLower(worktreeKey, lower);
@@ -1613,18 +1622,25 @@ export function RightSidebar({
                   {allFiles ? `${allFiles.length}` : '…'}
                 </span>
               </div>
-              <div className="worktree-path-bar" title={thread.worktreePath}>
+              <div
+                className={`worktree-path-bar${revealDirectory?.path === '.' ? ' active' : ''}`}
+                title={thread.worktreePath}
+              >
                 Worktree · {thread.worktreePath}
               </div>
               {filesError && <div className="empty">{filesError}</div>}
               {!filesError && !allFiles && <div className="empty">Loading files…</div>}
-              {allFiles && allFiles.length === 0 && <div className="empty">No tracked files</div>}
-              {allFiles && allFiles.length > 0 && (
+              {allFiles && allFiles.length === 0 && !revealDirectory && (
+                <div className="empty">No tracked files</div>
+              )}
+              {allFiles && (allFiles.length > 0 || revealDirectory) && (
                 <div className="right-file-list tall tree-scroll tree-fill">
                   <FileTree
                     paths={allFiles}
                     selected={openFilePath}
                     filter={filter}
+                    focusDirectory={revealDirectory?.path ?? null}
+                    focusNonce={revealDirectory?.nonce}
                     onSelect={(path) => onOpenFile?.(path)}
                     changes={changeByPath}
                     threadId={thread.id}

@@ -52,6 +52,24 @@ describe('workspaces store', () => {
     expect(listed.map((w) => w.path)).not.toContain(added.path);
   });
 
+  it('replaces a linked-worktree workspace with the main checkout', async () => {
+    const mod = await import('./workspaces.js');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: repoPath,
+    });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath });
+    execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: repoPath });
+    const wt = join(dataDir, 'sporting-jax');
+    execFileSync('git', ['worktree', 'add', wt, '-b', 'thread/sporting-jax'], {
+      cwd: repoPath,
+    });
+
+    await mod.addWorkspace(wt);
+    const paths = mod.listWorkspaces().map((w) => w.path);
+    expect(paths).toContain(repoPath);
+    expect(paths).not.toContain(realpathSync(wt));
+  });
+
   it('ensureWorkspace re-registers after remove', async () => {
     const mod = await import('./workspaces.js');
     const added = await mod.addWorkspace(repoPath);
