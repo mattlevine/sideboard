@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.221] - 2026-09-20
+
+### Changed
+
+- Cursor Fast mode is optional again (defaults off). Sideboard always sends an explicit `fast=true|false` to the Cursor SDK so Pro+ no longer bills Fast by omission, and the agent picker / composer / Settings expose the toggle for Cursor only.
+
 ## [0.1.220] - 2026-09-20
 
 ### Fixed

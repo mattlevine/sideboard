@@ -10,10 +10,12 @@ export type ThreadDefaults = {
   agent: AgentKind;
   model: string | null;
   effort: ThinkingEffort;
+  /** Cursor Fast speed tier (account / orchestrator defaults). */
+  fast: boolean;
 };
 
 function fallbackDefaults(): ThreadDefaults {
-  return { agent: 'claude', model: null, effort: 'high' };
+  return { agent: 'claude', model: null, effort: 'high', fast: false };
 }
 
 function coerceOrchestratorAgent(agent: AgentKind): AgentKind {
@@ -30,6 +32,7 @@ export function threadDefaultsFromSettings(
     agent: settings.defaults?.agent ?? 'claude',
     model: settings.defaults?.model?.trim() || null,
     effort: parseThinkingEffort(settings.defaults?.effort),
+    fast: settings.defaults?.fast === true,
   };
 }
 
@@ -52,6 +55,7 @@ export function orchestratorDefaultsFromSettings(
     agent,
     model,
     effort: orch?.effort ? parseThinkingEffort(orch.effort) : account.effort,
+    fast: orch?.fast === undefined ? account.fast : orch.fast === true,
   };
 }
 

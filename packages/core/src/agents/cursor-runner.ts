@@ -34,6 +34,7 @@ import {
   type CursorAgentUsageSnapshot,
   type CursorTurnRequest,
 } from './cursor-events.js';
+import { buildCursorModelSelection } from './cursor-model-selection.js';
 import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 
 // Electron-as-Node already started this process. Drop inherited ELECTRON_*/
@@ -45,37 +46,6 @@ ensureCursorRipgrepPath();
 
 function emit(event: unknown): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
-}
-
-function modelSelection(
-  model: string | null | undefined,
-  opts: { effort?: string | null; fast?: boolean },
-) {
-  // Cursor.models.list uses id "default" for Auto.
-  const raw = (model && model.trim()) || '';
-  const id =
-    !raw || raw.toLowerCase() === 'auto' || raw.toLowerCase() === 'default'
-      ? 'default'
-      : raw;
-  const params: Array<{ id: string; value: string }> = [];
-  const effort = (opts.effort ?? '').trim().toLowerCase();
-  const normalized =
-    effort === 'normal'
-      ? 'medium'
-      : effort === 'low' ||
-          effort === 'medium' ||
-          effort === 'high' ||
-          effort === 'xhigh' ||
-          effort === 'max'
-        ? effort
-        : '';
-  if (normalized) {
-    params.push({ id: 'effort', value: normalized });
-  }
-  if (opts.fast) {
-    params.push({ id: 'fast', value: 'true' });
-  }
-  return params.length > 0 ? { id, params } : { id };
 }
 
 /** Durable local agent metadata (Conductor-style JSONL, not SQLite). */
@@ -147,7 +117,7 @@ async function main(): Promise<number> {
   }
 
   const apiKey = (req.apiKey || process.env.CURSOR_API_KEY || '').trim() || undefined;
-  const model = modelSelection(req.model, {
+  const model = buildCursorModelSelection(req.model, {
     effort: req.effort,
     fast: Boolean(req.fast),
   });

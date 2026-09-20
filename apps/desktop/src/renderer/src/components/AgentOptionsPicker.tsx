@@ -41,6 +41,11 @@ export interface AgentOptionsValue {
   autonomy: Autonomy;
   /** Thinking / reasoning effort (Conductor-style). */
   effort: ThinkingEffort;
+  /**
+   * Cursor Fast speed tier (~2× usage for Grok / Composer Fast).
+   * Ignored for non-Cursor agents.
+   */
+  fast: boolean;
 }
 
 interface Props {
@@ -106,6 +111,7 @@ export function AgentOptionsPicker({
   const [model, setModel] = useState<string | null>(value.model);
   const [autonomy, setAutonomy] = useState<Autonomy>(value.autonomy);
   const [effort, setEffort] = useState<ThinkingEffort>(value.effort ?? 'high');
+  const [fast, setFast] = useState(Boolean(value.fast));
   const [query, setQuery] = useState('');
 
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(
@@ -123,9 +129,10 @@ export function AgentOptionsPicker({
     setModel(nextAgent === value.agent ? value.model : defaultModelFor(nextAgent));
     setAutonomy(value.autonomy);
     setEffort(value.effort ?? 'high');
+    setFast(Boolean(value.fast));
     setQuery('');
     prefetchAgentModels();
-  }, [open, value.agent, value.model, value.autonomy, value.effort, agents]);
+  }, [open, value.agent, value.model, value.autonomy, value.effort, value.fast, agents]);
 
   useEffect(() => {
     if (!open || agent !== 'brightsy') return;
@@ -267,7 +274,7 @@ export function AgentOptionsPicker({
   }
 
   function pickModel(id: string | null) {
-    commit({ agent, model: id, autonomy, effort });
+    commit({ agent, model: id, autonomy, effort, fast });
   }
 
   function pickBrightsy(target: BrightsyChatTarget) {
@@ -282,7 +289,7 @@ export function AgentOptionsPicker({
     } else {
       encoded = encodeBrightsyTarget(target.type, target.id, accountId);
     }
-    commit({ agent: 'brightsy', model: encoded, autonomy, effort });
+    commit({ agent: 'brightsy', model: encoded, autonomy, effort, fast });
   }
 
   const catalogLoading =
@@ -379,7 +386,7 @@ export function AgentOptionsPicker({
                 setEffort(level);
                 // Persist effort immediately without closing — change it without
                 // needing a model pick or Done.
-                onApply({ agent, model, autonomy, effort: level });
+                onApply({ agent, model, autonomy, effort: level, fast });
               }}
             >
               <ThinkingEffortIcon effort={level} />{' '}
@@ -387,6 +394,26 @@ export function AgentOptionsPicker({
             </button>
           ))}
         </div>
+
+        {agent === 'cursor' ? (
+          <div className="composer-picker-team-chips agent-options-fast-chips">
+            <button
+              type="button"
+              className={`composer-picker-team-chip${fast ? ' active' : ''}`}
+              title="Cursor Fast — ~2× usage for Grok and other models that support it. Off uses standard speed."
+              onClick={() => {
+                const next = !fast;
+                setFast(next);
+                onApply({ agent, model, autonomy, effort, fast: next });
+              }}
+            >
+              <span className="chip-bolt" aria-hidden>
+                ⚡
+              </span>{' '}
+              Fast
+            </button>
+          </div>
+        ) : null}
 
         {agent === 'brightsy' && showTeamNav && (
           <div className="composer-picker-teams">
@@ -587,7 +614,7 @@ export function AgentOptionsPicker({
           <button
             type="button"
             className="agent-options-picker-done"
-            onClick={() => commit({ agent, model, autonomy, effort })}
+            onClick={() => commit({ agent, model, autonomy, effort, fast })}
           >
             {confirmLabel}
           </button>
