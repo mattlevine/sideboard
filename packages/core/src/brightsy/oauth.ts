@@ -172,7 +172,8 @@ async function ensureBrightsyLocalConfigFreshOnce(opts?: {
     return null;
   }
 
-  if (!cfg.refresh_token || !brightsyAccessTokenNeedsRefresh(cfg.expires_at)) {
+  const refreshToken = cfg.refresh_token;
+  if (!refreshToken || !brightsyAccessTokenNeedsRefresh(cfg.expires_at)) {
     return cfg;
   }
 
@@ -189,7 +190,7 @@ async function ensureBrightsyLocalConfigFreshOnce(opts?: {
 
   const grant = await refreshBrightsyAccessToken({
     endpoint,
-    refreshToken: cfg.refresh_token,
+    refreshToken,
     clientId,
     fetchImpl: opts?.fetchImpl,
   });
