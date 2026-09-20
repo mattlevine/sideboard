@@ -188,6 +188,7 @@ interface Props {
   findChatCmd?: { nonce: number; query: string } | null;
   onFindChatConsumed?: () => void;
   openFilePath?: string | null;
+  openFileReveal?: { startLine?: number; endLine?: number } | null;
   openFiles?: string[];
   openFileView?: 'edit' | 'diff';
   openUrls?: string[];
@@ -205,6 +206,8 @@ interface Props {
       scope?: DiffScope;
       commitSha?: string | null;
       base?: string | null;
+      startLine?: number;
+      endLine?: number;
     },
   ) => void;
   /** Focus a directory in the right-sidebar file tree. */
@@ -299,7 +302,10 @@ function UserMessageText({
   threadId?: string;
   worktreePath?: string;
   knownFilePaths?: string[];
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (
+    path: string,
+    opts?: { startLine?: number; endLine?: number },
+  ) => void;
   onRevealDirectory?: (path: string) => void;
   onThreadLinkClick?: (threadRef: string) => void;
 }) {
@@ -623,6 +629,7 @@ export function ThreadPanel({
   findChatCmd,
   onFindChatConsumed,
   openFilePath = null,
+  openFileReveal = null,
   openFiles = [],
   openFileView = 'edit',
   openUrls = [],
@@ -2355,6 +2362,8 @@ export function ThreadPanel({
           path={openFilePath}
           worktreePath={thread.worktreePath}
           initialView={openFileView}
+          revealLine={openFileReveal?.startLine}
+          highlightEndLine={openFileReveal?.endLine}
           onClose={() => onCloseFile?.(openFilePath)}
           onSaved={onRefresh}
           onDiffComment={attachToChat}

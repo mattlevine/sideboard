@@ -107,12 +107,34 @@ export function listUserCursorMcpNames(home = homedir()): string[] {
   return listMcpNamesFromJsonMap(readJsonObject(cursorPath), 'mcpServers');
 }
 
-/** Names from ~/.claude.json (`claude mcp add --scope user`). Keys only. */
-export function listUserClaudeMcpNames(home = homedir()): string[] {
+function userClaudeMcpConfigObject(home = homedir()): Record<string, unknown> {
   const claudePath =
     home === homedir() ? userClaudeMcpConfigPath() : join(home, '.claude.json');
-  if (!existsSync(claudePath)) return [];
-  return listMcpNamesFromJsonMap(readJsonObject(claudePath), 'mcpServers');
+  if (!existsSync(claudePath)) return {};
+  return asObject(asObject(readJsonObject(claudePath)).mcpServers);
+}
+
+/** Names from ~/.claude.json (`claude mcp add --scope user`). Keys only. */
+export function listUserClaudeMcpNames(home = homedir()): string[] {
+  return Object.keys(userClaudeMcpConfigObject(home)).filter((n) => n.trim());
+}
+
+/**
+ * User MCP entries from ~/.claude.json, minus Sideboard/Brightsy (those are
+ * injected). Worktree `--strict-mcp-config` only loads what we write, so these
+ * must be copied into the temp config or the tools never appear.
+ */
+export function listUserClaudeMcpServerEntries(
+  home = homedir(),
+): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [rawName, value] of Object.entries(userClaudeMcpConfigObject(home))) {
+    const name = rawName.trim();
+    if (!name || isInjectedOrchMcpName(name)) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    out[name] = value as Record<string, unknown>;
+  }
+  return out;
 }
 
 export function toCodexDisableUserMcpArgs(names: string[]): string[] {

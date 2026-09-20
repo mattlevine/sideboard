@@ -175,6 +175,16 @@ describe('injected-mcp', () => {
     expect(claudeCfg.mcpServers.sideboard.env?.NODE_OPTIONS).toMatch(
       /--max-old-space-size=8192/,
     );
+
+    const withUser = writeMcpServersConfig(servers, {
+      gmail: { command: 'npx', args: ['-y', 'gmail'] },
+      sideboard: { command: 'should-not-clobber' },
+    });
+    const merged = JSON.parse(readFileSync(withUser!, 'utf8')) as {
+      mcpServers: Record<string, { command?: string }>;
+    };
+    expect(merged.mcpServers.gmail?.command).toBe('npx');
+    expect(merged.mcpServers.sideboard?.command).not.toBe('should-not-clobber');
   });
 
   it('resolves MCP entry without throwing when import.meta.url is unavailable', async () => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -66,6 +66,51 @@ describe('workspaces store', () => {
 
     await mod.addWorkspace(wt);
     const paths = mod.listWorkspaces().map((w) => w.path);
+    expect(paths).toContain(repoPath);
+    expect(paths).not.toContain(realpathSync(wt));
+  });
+
+  it('sync maps a leftover worktree repoPath to the main checkout', async () => {
+    const mod = await import('./workspaces.js');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: repoPath,
+    });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath });
+    execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: repoPath });
+    const wt = join(dataDir, 'sporting-jax');
+    execFileSync('git', ['worktree', 'add', wt, '-b', 'thread/sporting-jax'], {
+      cwd: repoPath,
+    });
+
+    const listed = mod.syncWorkspacesFromThreads([realpathSync(wt)]);
+    const paths = listed.map((w) => w.path);
+    expect(paths).toContain(repoPath);
+    expect(paths).not.toContain(realpathSync(wt));
+  });
+
+  it('rewrites a stored worktree workspace to the main checkout', async () => {
+    const mod = await import('./workspaces.js');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: repoPath,
+    });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath });
+    execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: repoPath });
+    const wt = join(dataDir, 'stored-wt');
+    execFileSync('git', ['worktree', 'add', wt, '-b', 'thread/stored-wt'], {
+      cwd: repoPath,
+    });
+    writeFileSync(
+      join(dataDir, 'workspaces.json'),
+      JSON.stringify([
+        {
+          path: realpathSync(wt),
+          name: 'stored-wt',
+          addedAt: new Date().toISOString(),
+        },
+      ]),
+    );
+    const listed = mod.syncWorkspacesFromThreads([]);
+    const paths = listed.map((w) => w.path);
     expect(paths).toContain(repoPath);
     expect(paths).not.toContain(realpathSync(wt));
   });

@@ -43,7 +43,10 @@ interface Props {
   threadId?: string;
   worktreePath?: string;
   knownFilePaths?: string[];
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (
+    path: string,
+    opts?: { startLine?: number; endLine?: number },
+  ) => void;
   /** Focus a directory in the right-sidebar file tree. */
   onRevealDirectory?: (path: string) => void;
   /** Navigate to another Sideboard thread from a markdown deep link. */

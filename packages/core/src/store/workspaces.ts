@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { basename, join } from 'node:path';
 import { appDataDir } from './paths.js';
 import { isGlobalRepoPath } from './global-workspace.js';
-import { ensureGhPreferOrigin, resolveRepoRoot } from '../git/worktree.js';
+import { canonicalizeRepoPath, ensureGhPreferOrigin, resolveRepoRoot } from '../git/worktree.js';
 
 export interface Workspace {
   path: string;
@@ -90,6 +90,40 @@ function isLinkedWorktreeOf(path: string, mainRepo: string): boolean {
   }
 }
 
+/**
+ * If `path` is a linked worktree, return the primary checkout. Used by thread
+ * sync so leftover worktree `repoPath` values do not re-register as projects.
+ */
+export function primaryCheckoutFromLinkedWorktree(path: string): string | null {
+  if (!path) return null;
+  const git = join(path, '.git');
+  try {
+    if (!existsSync(git) || statSync(git).isDirectory()) return null;
+    const text = readFileSync(git, 'utf8');
+    const match = /^\s*gitdir:\s*(.+)$/m.exec(text);
+    if (!match) return null;
+    const gitdir = match[1]!.trim().replace(/\/+$/, '');
+    const worktrees = gitdir.lastIndexOf('/.git/worktrees/');
+    const root =
+      worktrees > 0
+        ? gitdir.slice(0, worktrees)
+        : gitdir.endsWith('/.git')
+          ? gitdir.slice(0, -5)
+          : null;
+    if (!root) return null;
+    return canonicalizeRepoPath(root);
+  } catch {
+    return null;
+  }
+}
+
+function resolveSyncWorkspacePath(path: string): string | null {
+  if (!path || path === '/') return null;
+  const primary = primaryCheckoutFromLinkedWorktree(path);
+  if (primary) return primary;
+  return canonicalizeRepoPath(path);
+}
+
 export async function addWorkspace(repoPath: string): Promise<Workspace> {
   const root = await resolveRepoRoot(repoPath);
   if (!root || root === '/') throw new Error(`Invalid repo path: ${repoPath}`);
@@ -126,9 +160,24 @@ export async function ensureWorkspace(repoPath: string): Promise<Workspace> {
 export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
   const current = readAll();
   const removed = readRemoved();
-  const byPath = new Map(current.map((w) => [w.path, w]));
+  const byPath = new Map<string, Workspace>();
   let dirty = false;
-  for (const path of repoPaths) {
+  for (const w of current) {
+    const resolved = resolveSyncWorkspacePath(w.path) ?? w.path;
+    if (resolved !== w.path) dirty = true;
+    if (!resolved || resolved === '/' || isGlobalRepoPath(resolved) || removed.has(resolved)) {
+      dirty = true;
+      continue;
+    }
+    if (!byPath.has(resolved)) {
+      byPath.set(
+        resolved,
+        resolved === w.path ? w : { ...w, path: resolved, name: basename(resolved) },
+      );
+    }
+  }
+  for (const raw of repoPaths) {
+    const path = resolveSyncWorkspacePath(raw);
     if (!path || path === '/' || isGlobalRepoPath(path) || byPath.has(path) || removed.has(path)) {
       continue;
     }
@@ -140,6 +189,13 @@ export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
     };
     byPath.set(path, ws);
     dirty = true;
+  }
+  for (const [path] of byPath) {
+    const mains = [...byPath.keys()];
+    if (mains.some((main) => isLinkedWorktreeOf(path, main))) {
+      byPath.delete(path);
+      dirty = true;
+    }
   }
   // Never prune: an empty project (no active worktrees) must stay registered
   // until the user explicitly removes it.

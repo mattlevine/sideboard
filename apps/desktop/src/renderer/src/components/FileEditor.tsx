@@ -27,6 +27,9 @@ interface Props {
   commitSha?: string | null;
   diffBase?: string | null;
   onClose: () => void;
+  /** 1-based line range from a chat citation / #L link. */
+  revealLine?: number;
+  highlightEndLine?: number;
   onSaved?: () => void;
   /** Attach a line-anchored diff comment to the thread composer. */
   onDiffComment?: (attachment: ThreadAttachment) => void;
@@ -43,6 +46,8 @@ export function FileEditor({
   commitSha = null,
   diffBase = null,
   onClose,
+  revealLine,
+  highlightEndLine,
   onSaved,
   onDiffComment,
   onCodeReference,
@@ -369,10 +374,13 @@ export function FileEditor({
       {!error && content != null && mode === 'code' && !isImage && (
         <Suspense fallback={<PanePreloader label="Loading editor" />}>
           <CodeView
+            key={`${path}:${revealLine ?? ''}:${highlightEndLine ?? ''}`}
             path={path}
             worktreePath={worktreePath}
             value={content}
             readOnly={binary || truncated}
+            revealLine={revealLine}
+            highlightEndLine={highlightEndLine}
             onChange={setContent}
             onAddReference={
               onCodeReference
