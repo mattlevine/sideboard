@@ -181,9 +181,11 @@ function defaultAgentModelLabel(
   agent: AgentKind,
   model: string | null,
   effort: ThinkingEffort,
+  fast = false,
 ): string {
   const agentLabel = DEFAULT_AGENT_LABELS[agent] ?? agent;
   const thinking = thinkingEffortLabel(effort);
+  const fastSuffix = agent === 'cursor' && fast ? ' · Fast' : '';
   if (agent === 'claude') {
     if (!model) return `${agentLabel} · Auto · ${thinking}`;
     return `${agentLabel} · ${CLAUDE_DEFAULT_MODEL_LABELS[model] ?? model} · ${thinking}`;
@@ -191,9 +193,9 @@ function defaultAgentModelLabel(
   if (agent === 'cursor') {
     const m = (model ?? '').trim().toLowerCase();
     if (!m || m === 'default' || m === 'auto') {
-      return `${agentLabel} · Auto · ${thinking}`;
+      return `${agentLabel} · Auto · ${thinking}${fastSuffix}`;
     }
-    return `${agentLabel} · ${model} · ${thinking}`;
+    return `${agentLabel} · ${model} · ${thinking}${fastSuffix}`;
   }
   if (!model) return `${agentLabel} · Auto · ${thinking}`;
   return `${agentLabel} · ${model} · ${thinking}`;
@@ -551,11 +553,13 @@ export function SettingsModal({
     agent?: AgentKind | null;
     model?: string | null;
     effort?: ThinkingEffort | null;
+    fast?: boolean | null;
     notes?: string | null;
     orchestrator?: {
       agent?: AgentKind | null;
       model?: string | null;
       effort?: ThinkingEffort | null;
+      fast?: boolean | null;
     } | null;
   }) {
     setBusy(true);
@@ -623,11 +627,13 @@ export function SettingsModal({
   const defaultAgent: AgentKind = settings.defaults?.agent ?? 'claude';
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
+  const defaultFast = settings.defaults?.fast === true;
   const hasOrchDefaults = Boolean(settings.defaults?.orchestrator);
   const orchDefaults = orchestratorDefaultsFromSettings(settings);
   const orchAgent = orchDefaults.agent;
   const orchModel = orchDefaults.model;
   const orchEffort = orchDefaults.effort;
+  const orchFast = orchDefaults.fast;
   const deferredHistoryQuery = useDeferredValue(historyQuery);
   const filteredArchived = useMemo(() => {
     const q = deferredHistoryQuery.trim().toLowerCase();
@@ -884,10 +890,16 @@ export function SettingsModal({
                       <div className="settings-section-title">Default agent, model &amp; effort</div>
                       <p className="settings-hint">
                         Used for new workspace chats, chat tabs, and MCP-spawned worktrees (when
-                        agent/model are omitted).
+                        agent/model are omitted). For Cursor, Fast is optional (~2× usage for Grok)
+                        and off by default.
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
-                        {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort)}
+                        {defaultAgentModelLabel(
+                          defaultAgent,
+                          defaultModel,
+                          defaultEffort,
+                          defaultFast,
+                        )}
                       </p>
                     </div>
                     <button
@@ -912,8 +924,8 @@ export function SettingsModal({
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
                         {hasOrchDefaults
-                          ? defaultAgentModelLabel(orchAgent, orchModel, orchEffort)
-                          : `Same as default (${defaultAgentModelLabel(orchAgent, orchModel, orchEffort)})`}
+                          ? defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast)
+                          : `Same as default (${defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast)})`}
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -2172,6 +2184,7 @@ export function SettingsModal({
           model: defaultModel,
           autonomy: 'default' as Autonomy,
           effort: defaultEffort,
+          fast: defaultFast,
         }}
         title="Default agent, model & effort"
         confirmLabel="Save"
@@ -2181,6 +2194,7 @@ export function SettingsModal({
             agent: next.agent,
             model: next.model,
             effort: next.effort,
+            fast: next.agent === 'cursor' ? next.fast : false,
           });
         }}
       />
@@ -2191,6 +2205,7 @@ export function SettingsModal({
           model: orchModel,
           autonomy: 'default' as Autonomy,
           effort: orchEffort,
+          fast: orchFast,
         }}
         title="Default orchestrator agent, model & effort"
         confirmLabel="Save"
@@ -2202,6 +2217,7 @@ export function SettingsModal({
               agent: next.agent,
               model: next.model,
               effort: next.effort,
+              fast: next.agent === 'cursor' ? next.fast : false,
             },
           });
         }}

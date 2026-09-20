@@ -24,6 +24,8 @@ export interface ComposerDraftOptions {
   agent: AgentKind;
   model: string | null;
   effort: ThinkingEffort;
+  /** Cursor Fast speed tier (~2× for Grok). Ignored for other agents. */
+  fast: boolean;
   planMode: boolean;
   autonomy: Autonomy;
 }
@@ -367,6 +369,19 @@ export function ComposerOptionsToolbar({
             effort={options.effort}
             onChange={(effort) => patch({ effort })}
           />
+          {options.agent === 'cursor' ? (
+            <button
+              type="button"
+              className={`chip${options.fast ? ' active fast' : ''}`}
+              title="Cursor Fast — ~2× usage for Grok and other models that support it. Off uses standard speed."
+              onClick={() => patch({ fast: !options.fast })}
+            >
+              <span className="chip-bolt" aria-hidden>
+                ⚡
+              </span>{' '}
+              <span className="chip-label">Fast</span>
+            </button>
+          ) : null}
           <button
             type="button"
             className={`chip${options.planMode ? ' active plan' : ''}`}
@@ -488,6 +503,7 @@ export function ComposerOptionsToolbar({
           model: options.model,
           autonomy: options.autonomy,
           effort: options.effort,
+          fast: options.fast,
         }}
         title={isCreate ? 'Agent for new chat' : 'Choose agent'}
         allowedAgents={allowedAgents}
@@ -498,6 +514,7 @@ export function ComposerOptionsToolbar({
             model: next.model,
             autonomy: next.autonomy,
             effort: next.effort,
+            fast: next.fast,
           });
           if (next.agent === 'brightsy' && next.model) {
             void window.sideboard

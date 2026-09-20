@@ -20,6 +20,7 @@ export type NewChatTabOptions = {
   model?: string | null;
   autonomy?: Autonomy;
   effort?: ThinkingEffort;
+  fast?: boolean;
 };
 
 interface Props {
@@ -125,11 +126,13 @@ export function ChatTabs({
     model: string | null;
     autonomy: Autonomy;
     effort: ThinkingEffort;
+    fast: boolean;
   }>({
     agent: 'claude',
     model: null,
     autonomy: 'default',
     effort: 'high',
+    fast: false,
   });
   const caffeinateHold = useCaffeinateHold();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +169,7 @@ export function ChatTabs({
       model,
       autonomy: 'default',
       effort: defaults.effort,
+      fast: defaults.fast,
     });
     setNewOpen(true);
   }
@@ -477,6 +481,7 @@ export function ChatTabs({
               model: next.model,
               autonomy: next.autonomy,
               effort: next.effort,
+              fast: next.fast,
             });
           }}
         />

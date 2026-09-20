@@ -703,6 +703,8 @@ export function ThreadPanel({
   const lastFindNonce = useRef<number | null>(null);
   /** Optimistic effort so the chip updates before refresh lands. */
   const [optimisticEffort, setOptimisticEffort] = useState<ThinkingEffort | null>(null);
+  /** Optimistic Fast so the Cursor chip updates before refresh lands. */
+  const [optimisticFast, setOptimisticFast] = useState<boolean | null>(null);
   const [filePaths, setFilePaths] = useState<string[]>([]);
   const [skills, setSkills] = useState<
     Array<{ id: string; name: string; command: string; description: string; source: string }>
@@ -874,7 +876,12 @@ export function ThreadPanel({
     setOptimisticEffort(null);
   }, [thread.id, thread.effort]);
 
+  useEffect(() => {
+    setOptimisticFast(null);
+  }, [thread.id, thread.fast]);
+
   const displayEffort: ThinkingEffort = optimisticEffort ?? thread.effort ?? 'high';
+  const displayFast = optimisticFast ?? thread.fast;
 
   const modelLabel = useMemo(() => {
     if (thread.agent === 'brightsy') {
@@ -1173,6 +1180,7 @@ export function ThreadPanel({
       })
       .catch((err) => {
         setOptimisticEffort(null);
+        setOptimisticFast(null);
         window.alert(err instanceof Error ? err.message : String(err));
       });
   }
@@ -1181,6 +1189,7 @@ export function ThreadPanel({
   function toggleComposerOption(patch: Parameters<typeof window.sideboard.setThreadOptions>[1]) {
     setComposerFocused(true);
     if (patch.effort !== undefined) setOptimisticEffort(patch.effort);
+    if (patch.fast !== undefined) setOptimisticFast(patch.fast);
     patchOptions(patch);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
@@ -1197,18 +1206,26 @@ export function ThreadPanel({
 
     if (sameProvider) {
       setOptimisticEffort(next.effort);
-      patchOptions({ model: next.model, autonomy: next.autonomy, effort: next.effort });
+      setOptimisticFast(next.fast);
+      patchOptions({
+        model: next.model,
+        autonomy: next.autonomy,
+        effort: next.effort,
+        fast: next.fast,
+      });
       requestAnimationFrame(() => textareaRef.current?.focus());
       return;
     }
 
     if (!midChat) {
       setOptimisticEffort(next.effort);
+      setOptimisticFast(next.fast);
       patchOptions({
         agent: next.agent,
         model: next.model,
         autonomy: next.autonomy,
         effort: next.effort,
+        fast: next.fast,
       });
       requestAnimationFrame(() => textareaRef.current?.focus());
       return;
@@ -1221,6 +1238,7 @@ export function ThreadPanel({
         model: next.model,
         autonomy: next.autonomy,
         effort: next.effort,
+        fast: next.fast,
       });
       onSelectChat(t.id, t);
       onRefresh();
@@ -1623,6 +1641,7 @@ export function ThreadPanel({
     model?: string | null;
     autonomy?: Thread['autonomy'];
     effort?: ThinkingEffort;
+    fast?: boolean;
   }) {
     const t = await window.sideboard.createChatTab({
       fromThreadId: thread.id,
@@ -1630,6 +1649,7 @@ export function ThreadPanel({
       model: opts?.model,
       autonomy: opts?.autonomy,
       effort: opts?.effort,
+      fast: opts?.fast,
     });
     onSelectChat(t.id, t);
     onRefresh();
@@ -2877,6 +2897,19 @@ export function ThreadPanel({
                   effort={displayEffort}
                   onChange={(effort) => toggleComposerOption({ effort })}
                 />
+                {thread.agent === 'cursor' ? (
+                  <button
+                    type="button"
+                    className={`chip${displayFast ? ' active fast' : ''}`}
+                    title="Cursor Fast — ~2× usage for Grok and other models that support it. Off uses standard speed."
+                    onClick={() => toggleComposerOption({ fast: !displayFast })}
+                  >
+                    <span className="chip-bolt" aria-hidden>
+                      ⚡
+                    </span>{' '}
+                    <span className="chip-label">Fast</span>
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={`chip${thread.planMode ? ' active plan' : ''}`}
@@ -3044,6 +3077,7 @@ export function ThreadPanel({
           model: thread.model,
           autonomy: thread.autonomy,
           effort: displayEffort,
+          fast: displayFast,
         }}
         allowedAgents={
           isOrchestratorThread(thread) ? ORCHESTRATOR_AGENT_KINDS : undefined

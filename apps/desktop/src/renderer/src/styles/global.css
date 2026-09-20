@@ -4781,7 +4781,9 @@ button.worktree-hover-card-title:hover {
 }
 
 .agent-options-agent-chips,
-.agent-options-perm-chips {
+.agent-options-perm-chips,
+.agent-options-thinking-chips,
+.agent-options-fast-chips {
   padding: 0 2px;
   flex-wrap: wrap;
 }
@@ -4836,6 +4838,13 @@ button.worktree-hover-card-title:hover {
   flex: 1;
   min-width: 0;
   scrollbar-width: none;
+}
+
+/* Agent picker stacks these as column rows — don't share/shrink height when
+   Cursor adds the Fast row (would squash agents / permissions / effort). */
+.agent-options-picker > .composer-picker-team-chips {
+  flex: 0 0 auto;
+  min-height: auto;
 }
 
 .composer-picker-team-chips::-webkit-scrollbar {

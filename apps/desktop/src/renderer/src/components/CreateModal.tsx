@@ -106,6 +106,7 @@ const DEFAULT_OPTIONS: ComposerDraftOptions = {
   agent: 'claude',
   model: null,
   effort: 'high',
+  fast: false,
   planMode: false,
   autonomy: 'default',
 };
@@ -281,6 +282,7 @@ export function CreateModal({
             agent: defaults.agent,
             model: defaults.model,
             effort: defaults.effort,
+            fast: defaults.fast,
           },
           initialMode === 'orchestration' ? 'orchestration' : 'create',
         ),
@@ -382,6 +384,7 @@ export function CreateModal({
               agent: defaults.agent,
               model: defaults.model,
               effort: defaults.effort,
+              fast: defaults.fast,
             },
             next,
           ),
@@ -452,6 +455,7 @@ export function CreateModal({
         autonomy: options.autonomy,
         model: options.model,
         effort: options.effort,
+        fast: options.fast,
         planMode: options.planMode,
         attachments,
       };
