@@ -3083,6 +3083,12 @@ export function ThreadPanel({
           isOrchestratorThread(thread) ? ORCHESTRATOR_AGENT_KINDS : undefined
         }
         onClose={() => setAgentPickerOpen(false)}
+        onLiveChange={(next) => {
+          // Effort / Fast only — never fork via agent switch from a chip toggle.
+          setOptimisticEffort(next.effort);
+          setOptimisticFast(next.fast);
+          patchOptions({ effort: next.effort, fast: next.fast });
+        }}
         onApply={(next) => {
           void applyAgentOptions(next);
           if (next.agent === 'brightsy' && next.model) {

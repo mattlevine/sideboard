@@ -2189,6 +2189,12 @@ export function SettingsModal({
         title="Default agent, model & effort"
         confirmLabel="Save"
         onClose={() => setDefaultsPickerOpen(false)}
+        onLiveChange={(next) => {
+          void saveDefaultsPatch({
+            effort: next.effort,
+            fast: next.agent === 'cursor' ? next.fast : false,
+          });
+        }}
         onApply={(next) => {
           void saveDefaultsPatch({
             agent: next.agent,
@@ -2211,6 +2217,14 @@ export function SettingsModal({
         confirmLabel="Save"
         allowedAgents={ORCHESTRATOR_AGENT_KINDS}
         onClose={() => setOrchDefaultsPickerOpen(false)}
+        onLiveChange={(next) => {
+          void saveDefaultsPatch({
+            orchestrator: {
+              effort: next.effort,
+              fast: next.agent === 'cursor' ? next.fast : false,
+            },
+          });
+        }}
         onApply={(next) => {
           void saveDefaultsPatch({
             orchestrator: {

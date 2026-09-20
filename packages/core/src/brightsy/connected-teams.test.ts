@@ -67,6 +67,7 @@ describe('ensureConnectedBrightsyTeamTokens', () => {
             access_token: 'ok',
             refresh_token: 'r1',
             expires_at: Date.now() + 10 * 60_000,
+            oauth_client_id: 'already',
             endpoint: 'https://brightsy.ai',
           },
         ],
@@ -78,6 +79,43 @@ describe('ensureConnectedBrightsyTeamTokens', () => {
     const teams = await ensureConnectedBrightsyTeamTokens();
     expect(teams[0]?.access_token).toBe('ok');
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('backfills oauth_client_id via DCR when the access token is still valid', async () => {
+    writeFileSync(
+      join(dataDir, 'brightsy-teams.json'),
+      JSON.stringify({
+        teams: [
+          {
+            id: 'team-1',
+            slug: 'acme',
+            name: 'Acme',
+            access_token: 'ok',
+            refresh_token: 'r1',
+            expires_at: Date.now() + 10 * 60_000,
+            endpoint: 'https://brightsy.ai',
+          },
+        ],
+      }),
+    );
+    const fetchImpl = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/oauth/register')) {
+        return { ok: true, json: async () => ({ client_id: 'sideboard-dcr' }) };
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+    const { ensureConnectedBrightsyTeamTokens } = await import('./connected-teams.js');
+    const teams = await ensureConnectedBrightsyTeamTokens({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(teams[0]?.access_token).toBe('ok');
+    expect(teams[0]?.oauth_client_id).toBe('sideboard-dcr');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const saved = JSON.parse(readFileSync(join(dataDir, 'brightsy-teams.json'), 'utf8')) as {
+      teams: Array<{ oauth_client_id?: string }>;
+    };
+    expect(saved.teams[0]?.oauth_client_id).toBe('sideboard-dcr');
   });
 
   it('registers a DCR client before refreshing a team without oauth_client_id', async () => {

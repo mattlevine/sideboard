@@ -136,19 +136,41 @@ export async function ensureConnectedBrightsyTeamTokens(opts?: {
   );
   const teams = readStore();
   if (teams.length === 0) return [];
+  const cfg = (() => {
+    try {
+      return loadBrightsyConfig();
+    } catch {
+      return null;
+    }
+  })();
   const next: ConnectedBrightsyTeam[] = [];
   let changed = false;
   for (const team of teams) {
-    if (!team.refresh_token || !brightsyAccessTokenNeedsRefresh(team.expires_at)) {
-      next.push(team);
+    let current = team;
+    // Backfill DCR client id even when the access token is still valid — MCP
+    // env needs BRIGHTSY_OAUTH_CLIENT_ID before the hour-later refresh.
+    if (!current.oauth_client_id?.trim()) {
+      const endpoint = current.endpoint || 'https://brightsy.ai';
+      const clientId = await ensureBrightsyOAuthClientId({
+        endpoint,
+        clientId: cfg?.oauth_client_id,
+        fetchImpl: opts?.fetchImpl,
+      });
+      if (clientId && clientId !== current.oauth_client_id) {
+        current = { ...current, oauth_client_id: clientId };
+        changed = true;
+      }
+    }
+    if (!current.refresh_token || !brightsyAccessTokenNeedsRefresh(current.expires_at)) {
+      next.push(current);
       continue;
     }
-    const refreshed = await refreshTeamToken(team, opts);
+    const refreshed = await refreshTeamToken(current, opts);
     if (
-      refreshed.access_token !== team.access_token ||
-      refreshed.refresh_token !== team.refresh_token ||
-      refreshed.expires_at !== team.expires_at ||
-      refreshed.oauth_client_id !== team.oauth_client_id
+      refreshed.access_token !== current.access_token ||
+      refreshed.refresh_token !== current.refresh_token ||
+      refreshed.expires_at !== current.expires_at ||
+      refreshed.oauth_client_id !== current.oauth_client_id
     ) {
       changed = true;
     }

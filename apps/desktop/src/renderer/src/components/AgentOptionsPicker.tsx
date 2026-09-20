@@ -53,6 +53,11 @@ interface Props {
   value: AgentOptionsValue;
   onClose: () => void;
   onApply: (next: AgentOptionsValue) => void;
+  /**
+   * Live effort / Fast updates without committing the full picker (Done / model pick).
+   * Omit in create-tab flows so toggling Fast cannot spawn a chat before Create.
+   */
+  onLiveChange?: (next: AgentOptionsValue) => void;
   title?: string;
   /** Primary button label (e.g. "Create tab"). Defaults to "Done". */
   confirmLabel?: string;
@@ -97,6 +102,7 @@ export function AgentOptionsPicker({
   value,
   onClose,
   onApply,
+  onLiveChange,
   title = 'Choose agent',
   confirmLabel = 'Done',
   allowedAgents,
@@ -384,9 +390,9 @@ export function AgentOptionsPicker({
               title={`Thinking effort: ${thinkingEffortLabel(level)}`}
               onClick={() => {
                 setEffort(level);
-                // Persist effort immediately without closing — change it without
-                // needing a model pick or Done.
-                onApply({ agent, model, autonomy, effort: level, fast });
+                // Live persist when the host opts in — never via onApply (create-tab
+                // / mid-chat agent switch would spawn a chat from a chip click).
+                onLiveChange?.({ agent, model, autonomy, effort: level, fast });
               }}
             >
               <ThinkingEffortIcon effort={level} />{' '}
@@ -404,7 +410,7 @@ export function AgentOptionsPicker({
               onClick={() => {
                 const next = !fast;
                 setFast(next);
-                onApply({ agent, model, autonomy, effort, fast: next });
+                onLiveChange?.({ agent, model, autonomy, effort, fast: next });
               }}
             >
               <span className="chip-bolt" aria-hidden>
