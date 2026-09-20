@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  BRIGHTSY_OAUTH_CLIENT_ID,
+  BRIGHTSY_OAUTH_REDIRECT,
   brightsyAccessTokenNeedsRefresh,
   ensureBrightsyLocalConfigFresh,
+  ensureBrightsyOAuthClientId,
   refreshBrightsyAccessToken,
+  registerBrightsyOAuthClient,
 } from './oauth.js';
 
 describe('brightsyAccessTokenNeedsRefresh', () => {
@@ -45,6 +49,21 @@ describe('refreshBrightsyAccessToken', () => {
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
     expect(String(init.body)).toContain('grant_type=refresh_token');
     expect(String(init.body)).toContain('refresh_token=old-refresh');
+    expect(String(init.body)).toContain('client_id=brightsy-cli');
+  });
+
+  it('defaults to the Sideboard DCR client id', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: 'new-access', expires_in: 60 }),
+    });
+    await refreshBrightsyAccessToken({
+      endpoint: 'https://brightsy.ai',
+      refreshToken: 'old-refresh',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(String(init.body)).toContain(`client_id=${BRIGHTSY_OAUTH_CLIENT_ID}`);
   });
 
   it('returns null when the server rejects the grant', async () => {
@@ -118,5 +137,75 @@ describe('ensureBrightsyLocalConfigFresh', () => {
     });
     expect(next?.access_token).toBe('ok');
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('registers a public client via DCR then refreshes with that id', async () => {
+    writeFileSync(
+      process.env.BRIGHTSY_CONFIG!,
+      JSON.stringify({
+        access_token: 'stale',
+        refresh_token: 'r1',
+        account_id: 'acct',
+        endpoint: 'https://brightsy.ai',
+      }),
+    );
+    const fetchImpl = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/oauth/register')) {
+        return {
+          ok: true,
+          json: async () => ({ client_id: 'sideboard-dcr' }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: 'fresh',
+          refresh_token: 'r2',
+          expires_in: 3600,
+        }),
+      };
+    });
+    const next = await ensureBrightsyLocalConfigFresh({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(next?.oauth_client_id).toBe('sideboard-dcr');
+    expect(next?.access_token).toBe('fresh');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const [registerUrl, registerInit] = fetchImpl.mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(registerUrl).toBe('https://brightsy.ai/oauth/register');
+    const registered = JSON.parse(String(registerInit.body)) as {
+      client_id: string;
+      grant_types: string[];
+      token_endpoint_auth_method: string;
+      redirect_uris: string[];
+    };
+    expect(registered.client_id).toBe(BRIGHTSY_OAUTH_CLIENT_ID);
+    expect(registered.grant_types).toEqual(['authorization_code', 'refresh_token']);
+    expect(registered.token_endpoint_auth_method).toBe('none');
+    expect(registered.redirect_uris).toEqual([BRIGHTSY_OAUTH_REDIRECT]);
+    const [, tokenInit] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    expect(String(tokenInit.body)).toContain('client_id=sideboard-dcr');
+  });
+});
+
+describe('registerBrightsyOAuthClient', () => {
+  it('posts RFC 7591 metadata and returns the issued client_id', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ client_id: 'sideboard' }),
+    });
+    const reg = await registerBrightsyOAuthClient({
+      endpoint: 'https://brightsy.ai/',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(reg?.client_id).toBe('sideboard');
+    expect(await ensureBrightsyOAuthClientId({
+      endpoint: 'https://brightsy.ai',
+      clientId: 'already-there',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })).toBe('already-there');
   });
 });

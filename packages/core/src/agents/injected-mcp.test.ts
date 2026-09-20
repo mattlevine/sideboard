@@ -254,6 +254,58 @@ describe('injected-mcp', () => {
     expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBeUndefined();
   });
 
+  it('injects Brightsy refresh + DCR client id for each connected team', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'sb-brightsy-env-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+    vi.stubEnv('BRIGHTSY_CONFIG', join(dataDir, 'brightsy-config.json'));
+    writeFileSync(
+      process.env.BRIGHTSY_CONFIG!,
+      JSON.stringify({
+        access_token: 'ok',
+        refresh_token: 'refresh-1',
+        account_id: 'team-1',
+        account_slug: 'acme',
+        expires_at: Date.now() + 10 * 60_000,
+        oauth_client_id: 'sideboard-dcr',
+      }),
+    );
+    writeFileSync(
+      join(dataDir, 'brightsy-teams.json'),
+      JSON.stringify({
+        teams: [
+          {
+            id: 'team-1',
+            slug: 'acme',
+            name: 'Acme',
+            access_token: 'ok',
+            refresh_token: 'refresh-1',
+            expires_at: Date.now() + 10 * 60_000,
+            endpoint: 'https://brightsy.ai',
+            oauth_client_id: 'sideboard-dcr',
+          },
+        ],
+      }),
+    );
+    try {
+      const servers = await buildInjectedMcpServers({
+        includeSideboard: false,
+        includeBrightsy: true,
+      });
+      expect(servers).toHaveLength(1);
+      expect(servers[0]!.name).toBe('brightsy_acme');
+      expect(servers[0]!.env).toMatchObject({
+        BRIGHTSY_API_TOKEN: 'ok',
+        BRIGHTSY_REFRESH_TOKEN: 'refresh-1',
+        BRIGHTSY_OAUTH_CLIENT_ID: 'sideboard-dcr',
+        BRIGHTSY_ACCOUNT_ID: 'team-1',
+        BRIGHTSY_API_URL: 'https://brightsy.ai',
+      });
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
   it('skips brightsy when not connected', async () => {
     // If the developer machine has Brightsy logged in this still may include it —
     // assert shape only when connected, otherwise empty for Brightsy-only.

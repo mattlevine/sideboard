@@ -13,6 +13,7 @@ import {
 import {
   brightsyAccessTokenNeedsRefresh,
   ensureBrightsyLocalConfigFresh,
+  ensureBrightsyOAuthClientId,
   refreshBrightsyAccessToken,
 } from './oauth.js';
 
@@ -27,6 +28,8 @@ export interface ConnectedBrightsyTeam {
   refresh_token?: string;
   expires_at?: number;
   endpoint?: string;
+  /** RFC 7591 client id used to mint/refresh this team's tokens. */
+  oauth_client_id?: string;
 }
 
 export type { ConnectedBrightsyTeamInfo };
@@ -86,12 +89,13 @@ export function applyConnectedTeamToCli(team: ConnectedBrightsyTeam): void {
     account_id: team.id,
     account_slug: team.slug,
     endpoint: team.endpoint ?? base.endpoint ?? 'https://brightsy.ai',
-    oauth_client_id: base.oauth_client_id,
+    oauth_client_id: team.oauth_client_id ?? base.oauth_client_id,
   } as BrightsyLocalConfig);
 }
 
 async function refreshTeamToken(
   team: ConnectedBrightsyTeam,
+  opts?: { fetchImpl?: typeof fetch },
 ): Promise<ConnectedBrightsyTeam> {
   if (!team.refresh_token) return team;
   const cfg = (() => {
@@ -101,25 +105,35 @@ async function refreshTeamToken(
       return null;
     }
   })();
-  const grant = await refreshBrightsyAccessToken({
-    endpoint: team.endpoint || 'https://brightsy.ai',
-    refreshToken: team.refresh_token,
-    clientId: cfg?.oauth_client_id,
+  const endpoint = team.endpoint || 'https://brightsy.ai';
+  const clientId = await ensureBrightsyOAuthClientId({
+    endpoint,
+    clientId: team.oauth_client_id || cfg?.oauth_client_id,
+    fetchImpl: opts?.fetchImpl,
   });
-  if (!grant) return team;
+  const grant = await refreshBrightsyAccessToken({
+    endpoint,
+    refreshToken: team.refresh_token,
+    clientId,
+    fetchImpl: opts?.fetchImpl,
+  });
+  if (!grant) return { ...team, oauth_client_id: clientId || team.oauth_client_id };
   return {
     ...team,
     access_token: grant.access_token,
     refresh_token: grant.refresh_token || team.refresh_token,
     expires_at: grant.expires_at ?? team.expires_at,
+    oauth_client_id: clientId,
   };
 }
 
 /** Ensure stored team tokens are fresh; returns teams ready for MCP env injection. */
-export async function ensureConnectedBrightsyTeamTokens(): Promise<
-  ConnectedBrightsyTeam[]
-> {
-  await ensureBrightsyLocalConfigFresh().catch(() => null);
+export async function ensureConnectedBrightsyTeamTokens(opts?: {
+  fetchImpl?: typeof fetch;
+}): Promise<ConnectedBrightsyTeam[]> {
+  await ensureBrightsyLocalConfigFresh({ fetchImpl: opts?.fetchImpl }).catch(
+    () => null,
+  );
   const teams = readStore();
   if (teams.length === 0) return [];
   const next: ConnectedBrightsyTeam[] = [];
@@ -129,11 +143,12 @@ export async function ensureConnectedBrightsyTeamTokens(): Promise<
       next.push(team);
       continue;
     }
-    const refreshed = await refreshTeamToken(team);
+    const refreshed = await refreshTeamToken(team, opts);
     if (
       refreshed.access_token !== team.access_token ||
       refreshed.refresh_token !== team.refresh_token ||
-      refreshed.expires_at !== team.expires_at
+      refreshed.expires_at !== team.expires_at ||
+      refreshed.oauth_client_id !== team.oauth_client_id
     ) {
       changed = true;
     }
@@ -178,6 +193,7 @@ export function ensureCliTeamTracked(meta?: {
       refresh_token: cfg.refresh_token,
       expires_at: cfg.expires_at,
       endpoint: cfg.endpoint,
+      oauth_client_id: cfg.oauth_client_id,
     };
     writeStore([...existing, team]);
   } catch {
@@ -219,6 +235,7 @@ export async function connectBrightsyTeam(
     refresh_token: minted.refresh_token,
     expires_at: minted.expires_at,
     endpoint: minted.endpoint,
+    oauth_client_id: minted.oauth_client_id,
   };
   // ~/.brightsy is already on this team — one selection drives CLI and MCP.
   writeStore([...existing, team]);

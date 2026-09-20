@@ -199,6 +199,9 @@ function teamEnv(team: ConnectedBrightsyTeam): Record<string, string> {
   return {
     BRIGHTSY_API_TOKEN: team.access_token,
     ...(team.refresh_token ? { BRIGHTSY_REFRESH_TOKEN: team.refresh_token } : {}),
+    ...(team.oauth_client_id
+      ? { BRIGHTSY_OAUTH_CLIENT_ID: team.oauth_client_id }
+      : {}),
     BRIGHTSY_ACCOUNT_ID: team.id,
     BRIGHTSY_API_URL: endpoint,
   };
