@@ -245,6 +245,8 @@ export function App() {
       const next = prev.filter((p) => p !== path);
       setOpenFilePath((active) => {
         if (active !== path) return active;
+        // Drop citation reveal so the next remaining tab does not jump to it.
+        setOpenFileReveal(null);
         return next[next.length - 1] ?? null;
       });
       return next;

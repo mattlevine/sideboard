@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.222] - 2026-09-20
+
+### Fixed
+
+- Agent picker Fast/effort chips no longer call full `onApply` (new-tab create and mid-chat forks stay on Done / model pick).
+- Brightsy connected teams backfill `oauth_client_id` via DCR even when the access token is still valid; cloud refresh registers a client before exchanging the refresh token.
+- Closing a cited file clears the reveal range so the next tab does not jump to the wrong lines.
+
 ## [0.1.221] - 2026-09-20
 
 ### Changed

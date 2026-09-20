@@ -6,6 +6,7 @@ import {
 } from './config.js';
 import {
   brightsyAccessTokenNeedsRefresh,
+  ensureBrightsyOAuthClientId,
   refreshBrightsyAccessToken,
 } from './oauth.js';
 
@@ -115,16 +116,29 @@ export class BrightsySideboardApi {
     ) {
       return;
     }
-    const grant = await refreshBrightsyAccessToken({
+    const prevClientId = this.cfg.oauth_client_id;
+    const clientId = await ensureBrightsyOAuthClientId({
       endpoint: this.endpoint,
-      refreshToken: this.cfg.refresh_token,
       clientId: this.cfg.oauth_client_id,
       fetchImpl: this.fetchImpl,
     });
-    if (!grant) return;
+    if (clientId !== this.cfg.oauth_client_id) {
+      this.cfg.oauth_client_id = clientId;
+    }
+    const grant = await refreshBrightsyAccessToken({
+      endpoint: this.endpoint,
+      refreshToken: this.cfg.refresh_token,
+      clientId,
+      fetchImpl: this.fetchImpl,
+    });
+    if (!grant) {
+      if (this.cfg.oauth_client_id !== prevClientId) saveBrightsyConfig(this.cfg);
+      return;
+    }
     this.cfg.access_token = grant.access_token;
     if (grant.refresh_token) this.cfg.refresh_token = grant.refresh_token;
     if (grant.expires_at) this.cfg.expires_at = grant.expires_at;
+    this.cfg.oauth_client_id = clientId;
     saveBrightsyConfig(this.cfg);
   }
 

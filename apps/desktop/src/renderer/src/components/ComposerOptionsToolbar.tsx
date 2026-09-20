@@ -508,6 +508,9 @@ export function ComposerOptionsToolbar({
         title={isCreate ? 'Agent for new chat' : 'Choose agent'}
         allowedAgents={allowedAgents}
         onClose={() => setAgentPickerOpen(false)}
+        onLiveChange={(next) => {
+          patch({ effort: next.effort, fast: next.fast });
+        }}
         onApply={(next) => {
           patch({
             agent: next.agent,
