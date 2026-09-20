@@ -171,6 +171,10 @@ export function App() {
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
+  const [openFileReveal, setOpenFileReveal] = useState<{
+    startLine?: number;
+    endLine?: number;
+  } | null>(null);
   const [openUrls, setOpenUrls] = useState<string[]>([]);
   const [openUrl, setOpenUrl] = useState<string | null>(null);
   /** Dedicated Changes center tab (not a per-file name tab). */
@@ -196,6 +200,7 @@ export function App() {
     setChangesOpen(false);
     setChangesPath(null);
     setPrPageOpen(false);
+    setOpenFileReveal(null);
   }, [selectedId]);
 
   function openFile(
@@ -205,6 +210,8 @@ export function App() {
       scope?: DiffScope;
       commitSha?: string | null;
       base?: string | null;
+      startLine?: number;
+      endLine?: number;
     },
   ) {
     if (opts?.view === 'diff') {
@@ -214,6 +221,7 @@ export function App() {
       setChangesCommitSha(opts.commitSha ?? null);
       setChangesDiffBase(opts.base ?? null);
       setOpenFilePath(null);
+      setOpenFileReveal(null);
       setOpenUrl(null);
       setPrPageOpen(false);
       setOpenFileView('diff');
@@ -225,6 +233,11 @@ export function App() {
     setOpenFiles((prev) => (prev.includes(path) ? prev : [...prev, path]));
     setOpenFilePath(path);
     setOpenFileView('edit');
+    setOpenFileReveal(
+      opts?.startLine != null
+        ? { startLine: opts.startLine, endLine: opts.endLine }
+        : null,
+    );
   }
 
   function closeFile(path: string) {
@@ -1327,6 +1340,7 @@ export function App() {
               key={selected.id}
               thread={selected}
               openFilePath={openFilePath}
+              openFileReveal={openFileReveal}
               openFiles={openFiles}
               openFileView={openFileView}
               changesOpen={changesOpen}

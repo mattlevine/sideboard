@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.219] - 2026-09-19
+
+### Fixed
+
+- Worktree Claude `--strict-mcp-config` now copies user `~/.claude.json` servers (not Sideboard/Brightsy) into the injected config and only auto-approves those tools, so Gmail and other user MCP servers load again.
+- Startup workspace sync maps leftover worktree `repoPath` values to the primary checkout instead of re-adding the worktree as a project.
+- Chat file citations and `#L` links open the editor on the cited line range.
+
 ## [0.1.218] - 2026-09-18
 
 ### Fixed

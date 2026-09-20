@@ -483,14 +483,24 @@ export function toOpencodeMcpConfigContent(
   return JSON.stringify({ mcp });
 }
 
-/** Persist injected MCP servers to a temp Claude `--mcp-config` JSON. */
-export function writeMcpServersConfig(servers: InjectedMcpServer[]): string | null {
-  if (servers.length === 0) return null;
+function stripElectronFromUserMcpEntry(
+  entry: Record<string, unknown>,
+): Record<string, unknown> {
+  const next = { ...entry };
+  const env = next.env;
+  if (!env || typeof env !== 'object' || Array.isArray(env)) return next;
+  const cleaned = { ...(env as Record<string, unknown>) };
+  delete cleaned.ELECTRON_RUN_AS_NODE;
+  next.env = cleaned;
+  return next;
+}
 
-  const mcpServers: Record<
-    string,
-    { command: string; args?: string[]; env?: Record<string, string> }
-  > = {};
+/** Persist injected MCP servers to a temp Claude `--mcp-config` JSON. */
+export function writeMcpServersConfig(
+  servers: InjectedMcpServer[],
+  extraServers?: Record<string, Record<string, unknown>>,
+): string | null {
+  const mcpServers: Record<string, Record<string, unknown>> = {};
   for (const s of servers) {
     const env = mcpSpawnEnv(s.env);
     mcpServers[s.name] = {
@@ -499,6 +509,14 @@ export function writeMcpServersConfig(servers: InjectedMcpServer[]): string | nu
       ...(env ? { env } : {}),
     };
   }
+  if (extraServers) {
+    for (const [rawName, entry] of Object.entries(extraServers)) {
+      const name = rawName.trim();
+      if (!name || mcpServers[name] || !entry) continue;
+      mcpServers[name] = stripElectronFromUserMcpEntry(entry);
+    }
+  }
+  if (Object.keys(mcpServers).length === 0) return null;
 
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-mcp-'));
   const cfgPath = join(dir, 'mcp.json');

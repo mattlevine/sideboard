@@ -8,7 +8,7 @@ import {
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { mcpAllowToolsFromNames } from './claude-mcp.js';
-import { listUserClaudeMcpNames, userMcpNamesToDisable } from './orch-mcp-isolation.js';
+import { listUserClaudeMcpServerEntries } from './orch-mcp-isolation.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
 import { withEventParentId } from './message-parts.js';
 import {
@@ -573,6 +573,11 @@ export const claudeAdapter: AgentAdapter = {
     // plus Sideboard MCP for fleet control. Identity prompts forbid treating the
     // synthetic global cwd as a project worktree.
     const chromeOn = claudeChromeEnabled();
+    // `--strict-mcp-config` only loads the temp file. Copy user ~/.claude.json
+    // servers (not sideboard/brightsy) into it so Gmail/etc. still work, and
+    // only auto-approve names we actually wrote. Coordinators stay injected-only
+    // so HTTP connectors cannot hang the first find-work turn.
+    const userMcpEntries = isOrchestrator ? {} : listUserClaudeMcpServerEntries();
     let allowedTools: string[];
     if (isOrchestrator) {
       allowedTools = [
@@ -581,15 +586,9 @@ export const claudeAdapter: AgentAdapter = {
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
       ];
     } else {
-      // Only Linear was previously allowed, so other Connected MCP servers (Brightsy,
-      // Gmail, …) looked "not logged in" when Claude hit a permission denial.
-      // Read ~/.claude.json names — never `claude mcp list` (blocks forever when
-      // this Electron cwd is a Sideboard worktree; see detect() above).
-      // Drop sideboard/brightsy: worktree chats already allow present_* / issues,
-      // not the full Sideboard wildcard.
       allowedTools = [
         ...BASE_ALLOWED_TOOLS,
-        ...mcpAllowToolsFromNames(userMcpNamesToDisable({ names: listUserClaudeMcpNames() })),
+        ...mcpAllowToolsFromNames(Object.keys(userMcpEntries)),
         ...sideboardWorktreeAllowedTools({
           github: true,
           linear: isLinearConnected(),
@@ -618,7 +617,7 @@ export const claudeAdapter: AgentAdapter = {
     if (systemPrompt) {
       args.push('--append-system-prompt', systemPrompt);
     }
-    const mcpConfigPath = writeMcpServersConfig(injectedServers);
+    const mcpConfigPath = writeMcpServersConfig(injectedServers, userMcpEntries);
     if (mcpConfigPath) {
       args.push('--mcp-config', mcpConfigPath);
       // Always strict: worktree turns otherwise merge ~/.claude.json (user

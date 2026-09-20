@@ -42,13 +42,13 @@ vi.mock('../git/run.js', () => ({
   }),
 }));
 
-const userClaudeMcpNames: string[] = [];
+const userClaudeMcpEntries: Record<string, Record<string, unknown>> = {};
 
 vi.mock('./orch-mcp-isolation.js', async (importOriginal) => {
   const orig = await importOriginal<typeof import('./orch-mcp-isolation.js')>();
   return {
     ...orig,
-    listUserClaudeMcpNames: () => [...userClaudeMcpNames],
+    listUserClaudeMcpServerEntries: () => ({ ...userClaudeMcpEntries }),
   };
 });
 
@@ -57,7 +57,7 @@ beforeEach(() => {
   claudeSettings.chromeEnabled = false;
   claudeSettings.linearConnected = false;
   claudeSettings.abletimeConnected = false;
-  userClaudeMcpNames.length = 0;
+  for (const key of Object.keys(userClaudeMcpEntries)) delete userClaudeMcpEntries[key];
   vi.mocked(run).mockClear();
 });
 
@@ -199,8 +199,8 @@ describe('claudeAdapter.buildTurn', () => {
     expect(probed).toBe(false);
   });
 
-  it('auto-approves user ~/.claude.json MCP tools but not the Sideboard wildcard', async () => {
-    userClaudeMcpNames.push('gmail', 'sideboard', 'brightsy');
+  it('loads user ~/.claude.json MCP into the strict config and auto-approves those tools', async () => {
+    userClaudeMcpEntries.gmail = { command: 'npx', args: ['-y', 'gmail'] };
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
     const allowed = cmd.args
       .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
@@ -209,6 +209,12 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__gmail__*');
     expect(allowed).not.toContain('mcp__sideboard__*');
     expect(allowed).not.toContain('mcp__brightsy__*');
+    const mcpIdx = cmd.args.indexOf('--mcp-config');
+    const cfg = JSON.parse(readFileSync(cmd.args[mcpIdx + 1]!, 'utf8')) as {
+      mcpServers: Record<string, { command?: string }>;
+    };
+    expect(cfg.mcpServers.gmail?.command).toBe('npx');
+    expect(cfg.mcpServers.sideboard).toBeTruthy();
   });
 
   it('worktree turns inject Sideboard MCP but only auto-approve present_* UI tools', async () => {
@@ -275,6 +281,7 @@ describe('claudeAdapter.buildTurn', () => {
   });
 
   it('orchestrator turns get Sideboard MCP plus Bash/Read (fleet oversight)', async () => {
+    userClaudeMcpEntries.gmail = { command: 'npx' };
     const cmd = await claudeAdapter.buildTurn(
       {
         ...baseThread,
@@ -297,9 +304,11 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cmd.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBe('false');
     const mcpIdx = cmd.args.indexOf('--mcp-config');
     const cfg = JSON.parse(readFileSync(cmd.args[mcpIdx + 1]!, 'utf8')) as {
-      mcpServers: { sideboard: { env?: Record<string, string> } };
+      mcpServers: { sideboard: { env?: Record<string, string> }; gmail?: unknown };
     };
     expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_MCP_PROFILE).toBe('orchestration');
+    expect(cfg.mcpServers.gmail).toBeUndefined();
+    expect(allowed).not.toContain('mcp__gmail');
   });
 
   it('Global threads keep Sideboard MCP even if sourceType was demoted to branch', async () => {

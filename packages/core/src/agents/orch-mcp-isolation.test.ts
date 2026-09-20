@@ -7,6 +7,7 @@ import {
   listMcpNamesFromCodexToml,
   listMcpNamesFromJsonMap,
   listUserClaudeMcpNames,
+  listUserClaudeMcpServerEntries,
   listUserCodexMcpNames,
   listUserCursorMcpNames,
   listUserOpencodeMcpNames,
@@ -76,6 +77,9 @@ command = "node"
     expect(listUserOpencodeMcpNames(home)).toEqual(['linear']);
     expect(listUserCursorMcpNames(home)).toEqual(['linear']);
     expect(listUserClaudeMcpNames(home)).toEqual(['gmail', 'sideboard']);
+    expect(listUserClaudeMcpServerEntries(home)).toEqual({
+      gmail: { command: 'npx' },
+    });
     expect(toCodexDisableUserMcpArgs(['linear', 'bad.name'])).toEqual([
       '-c',
       'mcp_servers.linear.enabled=false',

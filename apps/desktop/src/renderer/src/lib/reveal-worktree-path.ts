@@ -4,13 +4,18 @@ import {
   type FilePathLink,
 } from './file-path-link';
 
+export type OpenWorktreeFileOpts = {
+  startLine?: number;
+  endLine?: number;
+};
+
 /** Open a file in the editor, or focus a folder in the right-sidebar file tree. */
 export async function openWorktreePathLink(opts: {
   link: FilePathLink;
   threadId?: string;
   worktreePath?: string;
   knownFilePaths?: string[];
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, fileOpts?: OpenWorktreeFileOpts) => void;
   onRevealDirectory?: (path: string) => void;
 }): Promise<void> {
   const { link, threadId, worktreePath, knownFilePaths, onOpenFile, onRevealDirectory } =
@@ -32,7 +37,12 @@ export async function openWorktreePathLink(opts: {
     return;
   }
   if (kind === 'file') {
-    onOpenFile?.(rel);
+    onOpenFile?.(
+      rel,
+      link.startLine != null
+        ? { startLine: link.startLine, endLine: link.endLine }
+        : undefined,
+    );
     return;
   }
   if (kind === 'dir' || isKnownDirectoryPath(rel, knownFilePaths)) {
