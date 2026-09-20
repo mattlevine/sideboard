@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.220] - 2026-09-20
+
+### Fixed
+
+- Brightsy MCP sessions refresh via OAuth 2.1 dynamic client registration instead of opening a browser every hour.
+
 ## [0.1.219] - 2026-09-19
 
 ### Fixed

@@ -79,4 +79,46 @@ describe('ensureConnectedBrightsyTeamTokens', () => {
     expect(teams[0]?.access_token).toBe('ok');
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it('registers a DCR client before refreshing a team without oauth_client_id', async () => {
+    writeFileSync(
+      join(dataDir, 'brightsy-teams.json'),
+      JSON.stringify({
+        teams: [
+          {
+            id: 'team-1',
+            slug: 'acme',
+            name: 'Acme',
+            access_token: 'stale',
+            refresh_token: 'r1',
+            endpoint: 'https://brightsy.ai',
+          },
+        ],
+      }),
+    );
+    const fetchImpl = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/oauth/register')) {
+        return { ok: true, json: async () => ({ client_id: 'sideboard-dcr' }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: 'fresh',
+          refresh_token: 'r2',
+          expires_in: 3600,
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+    const { ensureConnectedBrightsyTeamTokens } = await import('./connected-teams.js');
+    const teams = await ensureConnectedBrightsyTeamTokens({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(teams[0]?.access_token).toBe('fresh');
+    expect(teams[0]?.oauth_client_id).toBe('sideboard-dcr');
+    const [, tokenInit] = fetchImpl.mock.calls.find(
+      (call) => String(call[0]).endsWith('/oauth/token'),
+    ) as [string, RequestInit];
+    expect(String(tokenInit.body)).toContain('client_id=sideboard-dcr');
+  });
 });

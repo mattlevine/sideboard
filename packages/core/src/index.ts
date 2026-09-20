@@ -216,9 +216,14 @@ export {
   ensureConnectedBrightsyTeamTokens,
 } from './brightsy/connected-teams.js';
 export {
+  BRIGHTSY_OAUTH_CLIENT_ID,
+  BRIGHTSY_OAUTH_REDIRECT,
   brightsyAccessTokenNeedsRefresh,
   ensureBrightsyLocalConfigFresh,
+  ensureBrightsyOAuthClientId,
+  normalizeBrightsyEndpoint,
   refreshBrightsyAccessToken,
+  registerBrightsyOAuthClient,
 } from './brightsy/oauth.js';
 export {
   isBrightsyConnected,
