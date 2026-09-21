@@ -8316,7 +8316,15 @@ button.linkish:hover {
   }
 }
 
-.right-upper-body,
+.right-upper-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .right-lower-body {
   position: relative;
   flex: 1;
@@ -8324,6 +8332,9 @@ button.linkish:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Same surface as Setup / Run / Terminal — hosts can leave gaps while
+     siblings park absolute; never show the shell --bg (#1e1e1e) strip. */
+  background: #141210;
 }
 
 .right-file-list {
