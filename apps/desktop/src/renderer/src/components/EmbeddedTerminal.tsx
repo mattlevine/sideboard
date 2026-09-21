@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { shouldApplyPtyResize } from '../lib/pty-resize';
 import { xtermHostVisibility } from '../lib/xterm-host-visibility';
+import { writeXtermScrollback } from '../lib/xterm-scrollback-write';
 
 interface Props {
   /** Any live chat in the worktree — main uses it to resolve cwd. */
@@ -169,13 +170,22 @@ export function EmbeddedTerminal({
               applyFit(true);
             },
           };
+          const writeScrollback = (data: string) =>
+            writeXtermScrollback((chunk, next) => term.write(chunk, next), data, {
+              isCancelled: () => cancelled,
+            });
           const first = await snapshot();
           if (cancelled) {
             termRef.current.dispose();
             termRef.current = null;
             return;
           }
-          if (first) term.write(first);
+          await writeScrollback(first);
+          if (cancelled) {
+            termRef.current.dispose();
+            termRef.current = null;
+            return;
+          }
           const second = await snapshot();
           if (cancelled) {
             termRef.current.dispose();
@@ -183,7 +193,12 @@ export function EmbeddedTerminal({
             return;
           }
           if (second.length > first.length && second.startsWith(first)) {
-            term.write(second.slice(first.length));
+            await writeScrollback(second.slice(first.length));
+          }
+          if (cancelled) {
+            termRef.current.dispose();
+            termRef.current = null;
+            return;
           }
           attached = true;
           setXtermState('ready');

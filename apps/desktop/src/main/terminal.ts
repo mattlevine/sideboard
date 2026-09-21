@@ -11,6 +11,7 @@ import {
   appendTerminalScrollback,
   findReusableTerminalSession,
   shouldApplyPtyResize,
+  shouldResizeExistingTerminalOnStart,
   shouldTeardownTerminalSession,
   teardownInputAfterArchive,
   terminalReuseKey,
@@ -209,7 +210,10 @@ export async function startTerminalSession(
   const reuseKey = terminalReuseKey(kind, worktreeKey, threadRef);
   const existing = findReusableTerminalSession(sessions.values(), reuseKey, kind);
   if (existing) {
-    applySessionResize(existing, cols, rows);
+    // Do not ioctl with bootstrap cols/rows — see shouldResizeExistingTerminalOnStart.
+    if (shouldResizeExistingTerminalOnStart()) {
+      applySessionResize(existing, cols, rows);
+    }
     return { id: existing.id, scrollback: existing.scrollback };
   }
 
@@ -244,7 +248,9 @@ async function startNewTerminalSession(
 ): Promise<{ id: string; scrollback: string }> {
   const reused = findReusableTerminalSession(sessions.values(), reuseKey, kind);
   if (reused) {
-    applySessionResize(reused, cols, rows);
+    if (shouldResizeExistingTerminalOnStart()) {
+      applySessionResize(reused, cols, rows);
+    }
     return { id: reused.id, scrollback: reused.scrollback };
   }
 

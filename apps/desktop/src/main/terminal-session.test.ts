@@ -4,6 +4,7 @@ import {
   appendTerminalScrollback,
   findReusableTerminalSession,
   shouldApplyPtyResize,
+  shouldResizeExistingTerminalOnStart,
   shouldTeardownTerminalSession,
   teardownInputAfterArchive,
   terminalReuseKey,
@@ -22,6 +23,12 @@ describe('shouldApplyPtyResize', () => {
     expect(shouldApplyPtyResize(null, { cols: 0, rows: 24 })).toBe(false);
     expect(shouldApplyPtyResize(null, { cols: 80, rows: 0 })).toBe(false);
     expect(shouldApplyPtyResize(null, { cols: Number.NaN, rows: 24 })).toBe(false);
+  });
+});
+
+describe('shouldResizeExistingTerminalOnStart', () => {
+  it('never resizes on start/attach reuse (worktree remounts pass 100×24)', () => {
+    expect(shouldResizeExistingTerminalOnStart()).toBe(false);
   });
 });
 
