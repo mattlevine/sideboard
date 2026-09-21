@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.223] - 2026-09-21
+
+### Fixed
+
+- Running a chatty Node/Vite app in the Run panel no longer slows the whole UI: log output is isolated, RAF-batched, and rolled at a 256KB display cap (process stdout is unchanged).
+
 ## [0.1.222] - 2026-09-20
 
 ### Fixed
