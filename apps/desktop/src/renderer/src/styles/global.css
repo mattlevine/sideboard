@@ -8808,13 +8808,32 @@ button.linkish:hover {
   color: var(--text);
 }
 
+/* Keep Run/Setup/Terminal mounted while another lower tab is focused.
+   Hosts fill the pane so parked siblings do not leave a gray --bg strip. */
+.run-panel-host,
+.setup-panel-host,
 .terminal-panel {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #141210;
   overflow: hidden;
+  background: #141210;
+}
+
+.run-panel-host > .run-panel,
+.setup-panel-host > .setup-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.run-panel-host.is-parked,
+.setup-panel-host.is-parked {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* Keep xterm mounted (and sized) when Setup/Run is showing so the canvas
@@ -8832,41 +8851,6 @@ button.linkish:hover {
 .terminal-panel.is-parked,
 .terminal-panel.is-parked * {
   visibility: hidden !important;
-}
-
-/* Keep Run/Setup log state mounted while the other lower tab is focused —
-   same idea as the PTY panel. Host must fill the pane so parked siblings
-   do not leave a gray --bg strip under the #141210 run/setup surface. */
-.run-panel-host,
-.setup-panel-host {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: #141210;
-}
-
-.run-panel-host > .run-panel,
-.setup-panel-host > .setup-panel {
-  flex: 1;
-  min-height: 0;
-}
-
-.run-panel-host.is-parked {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  visibility: hidden;
-}
-
-.setup-panel-host.is-parked {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  visibility: hidden;
 }
 
 .embedded-terminal {
