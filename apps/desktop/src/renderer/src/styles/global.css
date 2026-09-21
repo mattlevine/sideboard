@@ -8823,8 +8823,25 @@ button.linkish:hover {
   visibility: hidden !important;
 }
 
-/* Keep Run log state mounted while Setup/Terminal is focused — same idea as
-   the PTY panel, without the xterm visibility carve-out. */
+/* Keep Run/Setup log state mounted while the other lower tab is focused —
+   same idea as the PTY panel. Host must fill the pane so parked siblings
+   do not leave a gray --bg strip under the #141210 run/setup surface. */
+.run-panel-host,
+.setup-panel-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #141210;
+}
+
+.run-panel-host > .run-panel,
+.setup-panel-host > .setup-panel {
+  flex: 1;
+  min-height: 0;
+}
+
 .run-panel-host.is-parked {
   position: absolute;
   inset: 0;
