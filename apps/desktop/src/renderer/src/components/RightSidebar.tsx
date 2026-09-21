@@ -42,6 +42,9 @@ import {
   readRightSidebarLower,
   writeRightSidebarLower,
 } from '../lib/right-sidebar-prefs';
+import { eventOnWorktree, sameWorktreePath } from '../lib/worktree-events';
+import { RunOutputPanel, type RunClearRequest } from './RunOutputPanel';
+import { SetupOutputStream } from './SetupOutputStream';
 
 interface Props {
   thread: Thread;
@@ -151,69 +154,6 @@ function mergeDiffResult(prev: DiffResult | null, next: DiffResult): DiffResult 
   return diffFilesEqual(prev.files, next.files) ? { ...next, files: prev.files } : next;
 }
 
-/** Combine a persisted setup snapshot with lines that arrived while it loaded. */
-function mergeSetupOutput(prev: string, incoming: string): string {
-  if (!prev) return incoming;
-  if (!incoming) return prev;
-  if (prev === incoming) return prev;
-  if (prev.startsWith(incoming) || prev.endsWith(incoming)) return prev;
-  if (incoming.startsWith(prev) || incoming.endsWith(prev)) return incoming;
-  return incoming.length >= prev.length ? incoming : prev;
-}
-
-function sameWorktreePath(a: string, b: string): boolean {
-  const norm = (p: string) => p.replace(/\/$/, '');
-  return norm(a) === norm(b);
-}
-
-/**
- * Sibling-thread worktree paths, so a setup/run output stream from another
- * tab on the same worktree costs one IPC per thread instead of one per
- * chunk. A thread's worktree does not move, but keep a short TTL so a stale
- * entry can never pin the wrong pane for long. Only resolved paths are
- * cached — a transient IPC failure / missing record must not mute a sibling
- * pane for the whole TTL — and the map is bounded so a long session does not
- * accumulate every thread id ever seen.
- */
-const WORKTREE_PATH_TTL_MS = 60_000;
-const WORKTREE_PATH_CACHE_MAX = 64;
-const worktreePathByThread = new Map<
-  string,
-  { at: number; path: Promise<string | null> }
->();
-
-function lookupWorktreePath(threadId: string): Promise<string | null> {
-  const now = Date.now();
-  const hit = worktreePathByThread.get(threadId);
-  if (hit && now - hit.at < WORKTREE_PATH_TTL_MS) return hit.path;
-  const path = window.sideboard
-    .getThreadSlim(threadId)
-    .then((t) => t?.worktreePath ?? null)
-    .catch(() => null)
-    .then((resolved) => {
-      if (resolved == null && worktreePathByThread.get(threadId)?.path === path) {
-        worktreePathByThread.delete(threadId);
-      }
-      return resolved;
-    });
-  if (worktreePathByThread.size >= WORKTREE_PATH_CACHE_MAX) {
-    // Map iterates in insertion order — drop the oldest entry.
-    const oldest = worktreePathByThread.keys().next().value;
-    if (oldest != null) worktreePathByThread.delete(oldest);
-  }
-  worktreePathByThread.set(threadId, { at: now, path });
-  return path;
-}
-
-async function eventOnWorktree(
-  eventThreadId: string,
-  currentThreadId: string,
-  isCurrentWorktree: (path: string | null | undefined) => boolean,
-): Promise<boolean> {
-  if (eventThreadId === currentThreadId) return true;
-  return isCurrentWorktree(await lookupWorktreePath(eventThreadId));
-}
-
 function isNotGitError(message: string): boolean {
   const m = message.toLowerCase();
   return (
@@ -262,6 +202,13 @@ export function RightSidebar({
       (!thread.cowboy && thread.messages.length === 0 ? 'setup' : 'run'),
   );
   const [terminalOpened, setTerminalOpened] = useState(() => lower === 'terminal');
+  const [runOpened, setRunOpened] = useState(
+    () =>
+      lower === 'run' ||
+      Boolean(thread.devPort) ||
+      (thread.activeRuns?.length ?? 0) > 0,
+  );
+  const [setupOpened, setSetupOpened] = useState(() => lower === 'setup');
   const [diff, setDiff] = useState<DiffResult | null>(null);
   /** True after the includeMeta pass — first paint reports unpushed: 0. */
   const [gitMetaReady, setGitMetaReady] = useState(false);
@@ -275,14 +222,12 @@ export function RightSidebar({
   const [filter, setFilter] = useState('');
   const [hasHook, setHasHook] = useState(false);
   const [setupInfo, setSetupInfo] = useState<RepoSetupInfo | null>(null);
-  const [setupOutput, setSetupOutput] = useState('');
+  const [setupHasOutput, setSetupHasOutput] = useState(false);
   const [setupRunning, setSetupRunning] = useState(false);
   const [agentSetupBusy, setAgentSetupBusy] = useState(false);
-  const setupOutputRef = useRef<HTMLPreElement>(null);
-  const liveSetupRef = useRef(false);
   const [runScripts, setRunScripts] = useState<RunScriptInfo[]>([]);
   const [busy, setBusy] = useState(false);
-  const [runLogs, setRunLogs] = useState<Record<string, string>>({});
+  const [runClearRequest, setRunClearRequest] = useState<RunClearRequest | null>(null);
   const [prMenuOpen, setPrMenuOpen] = useState(false);
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const prMenuRef = useRef<HTMLDivElement>(null);
@@ -314,6 +259,10 @@ export function RightSidebar({
 
   useEffect(() => {
     setGitMetaReady(false);
+    setRunOpened(Boolean(thread.devPort) || (thread.activeRuns?.length ?? 0) > 0);
+    setSetupOpened(false);
+    setSetupHasOutput(false);
+    setSetupRunning(false);
   }, [worktreeKey]);
 
   useEffect(() => {
@@ -325,7 +274,17 @@ export function RightSidebar({
   useEffect(() => {
     writeRightSidebarLower(worktreeKey, lower);
     if (lower === 'terminal') setTerminalOpened(true);
+    if (lower === 'run') setRunOpened(true);
+    if (lower === 'setup') setSetupOpened(true);
   }, [worktreeKey, lower]);
+
+  useEffect(() => {
+    if (thread.devPort || (thread.activeRuns?.length ?? 0) > 0) setRunOpened(true);
+  }, [thread.devPort, thread.activeRuns?.length]);
+
+  useEffect(() => {
+    if (setupRunning || setupHasOutput) setSetupOpened(true);
+  }, [setupRunning, setupHasOutput]);
 
   const isCurrentWorktree = useCallback(
     (path: string | null | undefined) =>
@@ -362,46 +321,19 @@ export function RightSidebar({
   }, [thread.worktreePath, thread.repoPath, thread.updatedAt, thread.id, reloadRunScripts]);
 
   useEffect(() => {
-    liveSetupRef.current = false;
-    setSetupOutput('');
-    setSetupRunning(false);
-    if (typeof window.sideboard.getSetupLog !== 'function') return;
-    let cancelled = false;
-    void window.sideboard.getSetupLog(thread.id).then((snap) => {
-      if (cancelled) return;
-      setSetupOutput((prev) => mergeSetupOutput(prev, snap.output));
-      if (!liveSetupRef.current) {
-        setSetupRunning(snap.running);
-        if (snap.running) setLower('setup');
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [worktreeKey]);
-
-  useEffect(() => {
     const off = window.sideboard.onEvent((event) => {
       if (event.type === 'setup_started') {
         void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
           if (!ok) return;
-          liveSetupRef.current = true;
-          setSetupOutput('');
+          setSetupHasOutput(true);
           setSetupRunning(true);
+          setSetupOpened(true);
           setLower('setup');
-        });
-      }
-      if (event.type === 'setup_output') {
-        void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
-          if (!ok) return;
-          liveSetupRef.current = true;
-          setSetupOutput((prev) => (prev ? `${prev}\n${event.line}` : event.line));
         });
       }
       if (event.type === 'setup_finished') {
         void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
           if (!ok) return;
-          liveSetupRef.current = true;
           setSetupRunning(false);
           void window.sideboard
             .getRepoSetupInfo(thread.worktreePath, thread.repoPath)
@@ -410,18 +342,6 @@ export function RightSidebar({
             .hasConductorHook(thread.worktreePath, thread.repoPath)
             .then(setHasHook);
           reloadRunScripts();
-        });
-      }
-      if (event.type === 'run_output') {
-        void eventOnWorktree(event.threadId, thread.id, isCurrentWorktree).then((ok) => {
-          if (!ok) return;
-          setRunLogs((prev) => {
-            const cur = prev[event.scriptName] ?? '';
-            return {
-              ...prev,
-              [event.scriptName]: cur ? `${cur}\n${event.line}` : event.line,
-            };
-          });
         });
       }
       if (event.type === 'dev_server_started' || event.type === 'dev_server_stopped') {
@@ -456,12 +376,6 @@ export function RightSidebar({
     reloadRunScripts,
     isCurrentWorktree,
   ]);
-
-  useEffect(() => {
-    const el = setupOutputRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [setupOutput]);
 
   useEffect(() => {
     if (!prMenuOpen) return;
@@ -1118,7 +1032,7 @@ export function RightSidebar({
       return;
     }
     try {
-      setRunLogs((prev) => ({ ...prev, [defaultRunScript.name]: '' }));
+      setRunClearRequest({ scriptName: defaultRunScript.name, token: Date.now() });
       await window.sideboard.runDevScript(thread.id, defaultRunScript.name);
       onRefresh();
     } catch (err) {
@@ -1137,7 +1051,7 @@ export function RightSidebar({
       if (active) {
         await window.sideboard.stopDevScript(thread.id, name);
       } else {
-        setRunLogs((prev) => ({ ...prev, [name]: '' }));
+        setRunClearRequest({ scriptName: name, token: Date.now() });
         await window.sideboard.runDevScript(thread.id, name);
       }
       onRefresh();
@@ -1873,109 +1787,101 @@ export function RightSidebar({
         </div>
 
         <div className="right-lower-body">
-          {lower === 'setup' && (
-            <div className={`setup-panel${setupOutput || setupRunning ? ' has-log' : ''}`}>
-              {!setupInfo ? (
-                <div className="panel-empty">
-                  <div className="panel-empty-title">Loading setup…</div>
-                </div>
-              ) : setupOutput || setupRunning ? (
-                <>
-                  <pre ref={setupOutputRef} className="setup-output has-output">
-                    {setupOutput || 'Running setup…'}
-                  </pre>
-                  {setupInfo.hasSetupScript ? (
-                    <div className="panel-footer-actions">
-                      <button
-                        type="button"
-                        className="ghost-action"
-                        disabled={setupRunning}
-                        onClick={() => void runSetupScript()}
-                      >
-                        {setupRunning ? 'Running…' : '▶ Run setup again'}
-                      </button>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="panel-empty">
-                  <div className="panel-empty-title">No setup script output</div>
-                  <p className="panel-empty-copy">
-                    {setupInfo.hasSetupScript
-                      ? 'Setup script output will appear here after running setup.'
-                      : setupInfo.hasConfig
-                        ? 'No setup script defined in settings.toml.'
-                        : 'No setup script in this worktree (.sideboard/settings.toml, .cursor/worktrees.json, or script/setup).'}
-                  </p>
-                  {setupInfo.hasSetupScript ? (
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      disabled={setupRunning}
-                      onClick={() => void runSetupScript()}
-                    >
-                      ▶ Run setup
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      disabled={agentSetupBusy}
-                      onClick={() => void useAgentSetup()}
-                    >
-                      {agentSetupBusy ? 'Starting agent…' : '▶ Use agent to set up'}
-                    </button>
-                  )}
-                </div>
-              )}
+          {setupOpened && (
+            <div
+              className={`setup-panel-host${lower === 'setup' ? '' : ' is-parked'}${
+                setupHasOutput || setupRunning ? ' has-log' : ''
+              }`}
+              aria-hidden={lower !== 'setup'}
+            >
+              <div className={`setup-panel${setupHasOutput || setupRunning ? ' has-log' : ''}`}>
+                {!setupInfo ? (
+                  <div className="panel-empty">
+                    <div className="panel-empty-title">Loading setup…</div>
+                  </div>
+                ) : (
+                  <>
+                    <SetupOutputStream
+                      threadId={thread.id}
+                      worktreeKey={worktreeKey}
+                      isCurrentWorktree={isCurrentWorktree}
+                      running={setupRunning}
+                      onLiveStarted={() => {
+                        setSetupHasOutput(true);
+                        setSetupRunning(true);
+                        setSetupOpened(true);
+                        setLower('setup');
+                      }}
+                      onHasOutput={() => setSetupHasOutput(true)}
+                    />
+                    {lower === 'setup' &&
+                      (setupHasOutput || setupRunning ? (
+                        setupInfo.hasSetupScript ? (
+                          <div className="panel-footer-actions">
+                            <button
+                              type="button"
+                              className="ghost-action"
+                              disabled={setupRunning}
+                              onClick={() => void runSetupScript()}
+                            >
+                              {setupRunning ? 'Running…' : '▶ Run setup again'}
+                            </button>
+                          </div>
+                        ) : null
+                      ) : (
+                        <div className="panel-empty">
+                          <div className="panel-empty-title">No setup script output</div>
+                          <p className="panel-empty-copy">
+                            {setupInfo.hasSetupScript
+                              ? 'Setup script output will appear here after running setup.'
+                              : setupInfo.hasConfig
+                                ? 'No setup script defined in settings.toml.'
+                                : 'No setup script in this worktree (.sideboard/settings.toml, .cursor/worktrees.json, or script/setup).'}
+                          </p>
+                          {setupInfo.hasSetupScript ? (
+                            <button
+                              type="button"
+                              className="ghost-action"
+                              disabled={setupRunning}
+                              onClick={() => void runSetupScript()}
+                            >
+                              ▶ Run setup
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="ghost-action"
+                              disabled={agentSetupBusy}
+                              onClick={() => void useAgentSetup()}
+                            >
+                              {agentSetupBusy ? 'Starting agent…' : '▶ Use agent to set up'}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                  </>
+                )}
+              </div>
             </div>
           )}
 
-          {lower === 'run' && (
+          {runOpened && (
             <div
-              className={`run-panel${
-                thread.devPort || Object.keys(runLogs).some((k) => runLogs[k])
-                  ? ' has-log'
-                  : ''
-              }`}
+              className={`run-panel-host${lower === 'run' ? '' : ' is-parked'}`}
+              aria-hidden={lower !== 'run'}
             >
-              {thread.devPort || Object.keys(runLogs).some((k) => runLogs[k]) ? (
-                <>
-                  <div className="run-log-header">
-                    Running{' '}
-                    {scriptDisplayName(
-                      primaryScriptName ??
-                        thread.activeRuns?.[0]?.scriptName ??
-                        defaultRunScript?.name ??
-                        'Dev',
-                    )}
-                  </div>
-                  <pre className="setup-output has-output run-log">
-                    {Object.entries(runLogs)
-                      .filter(([, log]) => log)
-                      .map(([name, log]) =>
-                        (thread.activeRuns?.length ?? 0) > 1 ? `[${name}]\n${log}` : log,
-                      )
-                      .join('\n\n') || 'Starting…'}
-                  </pre>
-                </>
-              ) : (
-                <div className="panel-empty">
-                  <div className="run-hero" aria-hidden>
-                    ▶
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-action run-start"
-                    disabled={!hasHook && runScripts.length === 0}
-                    onClick={() => void toggleDev()}
-                  >
-                    Start {defaultRunScript ? scriptDisplayName(defaultRunScript.name) : 'Dev'}{' '}
-                    <kbd>⌘R</kbd>
-                  </button>
-                  <p className="panel-empty-copy">Test your changes here.</p>
-                </div>
-              )}
+              <RunOutputPanel
+                threadId={thread.id}
+                worktreeKey={worktreeKey}
+                isCurrentWorktree={isCurrentWorktree}
+                running={Boolean(thread.devPort || (thread.activeRuns?.length ?? 0) > 0)}
+                activeRuns={thread.activeRuns ?? []}
+                primaryScriptName={primaryScriptName}
+                defaultScriptName={defaultRunScript?.name ?? null}
+                canStart={hasHook || runScripts.length > 0}
+                onStart={() => void toggleDev()}
+                clearRequest={runClearRequest}
+              />
             </div>
           )}
 

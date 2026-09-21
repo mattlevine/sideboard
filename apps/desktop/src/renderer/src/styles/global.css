@@ -8823,6 +8823,24 @@ button.linkish:hover {
   visibility: hidden !important;
 }
 
+/* Keep Run log state mounted while Setup/Terminal is focused — same idea as
+   the PTY panel, without the xterm visibility carve-out. */
+.run-panel-host.is-parked {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.setup-panel-host.is-parked {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .embedded-terminal {
   display: flex;
   flex-direction: column;
