@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.225] - 2026-09-21
+
+### Fixed
+
+- Switching worktrees no longer stacks duplicate Terminal prompts: reusing a live PTY ignores bootstrap `100×24` resizes that SIGWINCHed zsh.
+- Terminal remount scrollback replay is chunked with rAF yields so a sync write of the 256 KB cap does not block chat input.
+
 ## [0.1.224] - 2026-09-21
 
 ### Fixed
