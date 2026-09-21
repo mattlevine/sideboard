@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.224] - 2026-09-21
+
+### Fixed
+
+- Setup, Run, and Terminal lower panes share one continuous `#141210` background (no gray `--bg` band under empty states).
+
 ## [0.1.223] - 2026-09-21
 
 ### Fixed
