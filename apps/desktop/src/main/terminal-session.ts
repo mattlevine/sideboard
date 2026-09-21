@@ -29,6 +29,19 @@ export function shouldApplyPtyResize(
   return true;
 }
 
+/**
+ * Whether `terminal:start` / `terminal:attach` should ioctl an existing session.
+ *
+ * Always false. Remounts (worktree switch remounts `EmbeddedTerminal` via
+ * `key={worktreeKey}`) pass bootstrap placeholders like 100×24 before FitAddon
+ * measures. Applying those to a fitted live PTY SIGWINCHs zsh and stacks a
+ * duplicate prompt on every leave/return. FitAddon resizes after open if the
+ * window actually changed.
+ */
+export function shouldResizeExistingTerminalOnStart(): boolean {
+  return false;
+}
+
 /** Cap in-memory PTY scrollback so reconnect can replay without unbounded growth. */
 export function appendTerminalScrollback(
   prev: string,
