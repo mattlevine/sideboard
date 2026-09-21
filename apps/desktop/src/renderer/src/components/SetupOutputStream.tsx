@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { mergeSetupOutput } from '@sideboard-ai/core';
-import { createScriptOutputPainter } from '../lib/script-output-paint';
+import {
+  createScriptOutputPainter,
+  mergeScriptOutput,
+} from '../lib/script-output-paint';
 import { eventOnWorktree } from '../lib/worktree-events';
 
 interface Props {
@@ -53,7 +55,7 @@ export const SetupOutputStream = memo(function SetupOutputStream({
     void window.sideboard.getSetupLog(threadId).then((snap) => {
       if (cancelled) return;
       setOutput((prev) => {
-        const merged = mergeSetupOutput(prev, snap.output);
+        const merged = mergeScriptOutput(prev, snap.output);
         if (merged) onHasOutputRef.current?.();
         return merged;
       });

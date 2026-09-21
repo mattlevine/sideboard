@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Running a chatty Node/Vite app in the Run panel no longer slows the whole UI: log output is isolated, RAF-batched, and rolled at a 256KB display cap (process stdout is unchanged).
+- Desktop Vite build no longer pulls Node `fs` into the renderer via `@sideboard-ai/core` barrel imports for Run/Setup log helpers.
 
 ## [0.1.222] - 2026-09-20
 

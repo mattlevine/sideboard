@@ -1,14 +1,37 @@
-import { appendSetupOutput, MAX_SETUP_LOG_CHARS } from '@sideboard-ai/core';
+/** Rolling cap — same order as setup log / PTY scrollback (UI display only). */
+export const MAX_SCRIPT_OUTPUT_CHARS = 256_000;
 
-/** Same rolling cap as setup log / PTY scrollback — keep the newest bytes. */
-export const MAX_SCRIPT_OUTPUT_CHARS = MAX_SETUP_LOG_CHARS;
+/** Append a line, keeping the newest bytes once over the cap. */
+export function appendScriptOutput(
+  prev: string,
+  line: string,
+  max = MAX_SCRIPT_OUTPUT_CHARS,
+): string {
+  const next = prev ? `${prev}\n${line}` : line;
+  if (next.length <= max) return next;
+  const cut = next.slice(next.length - max);
+  // Start at a line boundary so the pane never opens mid-line.
+  const nl = cut.indexOf('\n');
+  return nl >= 0 && nl < cut.length - 1 ? cut.slice(nl + 1) : cut;
+}
 
-export { appendSetupOutput };
+/** Combine a persisted setup snapshot with lines that arrived while it loaded. */
+export function mergeScriptOutput(prev: string, incoming: string): string {
+  if (!prev) return incoming;
+  if (!incoming) return prev;
+  if (prev === incoming) return prev;
+  if (prev.startsWith(incoming) || prev.endsWith(incoming)) return prev;
+  if (incoming.startsWith(prev) || incoming.endsWith(prev)) return incoming;
+  return incoming.length >= prev.length ? incoming : prev;
+}
 
 /**
  * Batch script-output chunks to one React update per animation frame, with a
  * rolling char cap. Chatty Node/Vite servers would otherwise append into an
  * unbounded string and re-render the right sidebar on every coalesced IPC tick.
+ *
+ * Keep these helpers in the renderer — do not import from `@sideboard-ai/core`
+ * (that barrel pulls Node `fs` into the Vite client build).
  */
 export function createScriptOutputPainter(
   setOutput: (updater: (prev: string) => string) => void,
@@ -21,7 +44,7 @@ export function createScriptOutputPainter(
     if (pending.length === 0) return;
     const chunk = pending.join('\n');
     pending = [];
-    setOutput((prev) => appendSetupOutput(prev, chunk, MAX_SCRIPT_OUTPUT_CHARS));
+    setOutput((prev) => appendScriptOutput(prev, chunk, MAX_SCRIPT_OUTPUT_CHARS));
   };
 
   return {
@@ -68,7 +91,7 @@ export function createKeyedScriptOutputPainter(
       for (const [key, lines] of batch) {
         const chunk = lines.join('\n');
         const cur = (next ?? prev)[key] ?? '';
-        const updated = appendSetupOutput(cur, chunk, MAX_SCRIPT_OUTPUT_CHARS);
+        const updated = appendScriptOutput(cur, chunk, MAX_SCRIPT_OUTPUT_CHARS);
         if (updated === cur) continue;
         if (!next) next = { ...prev };
         next[key] = updated;

@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  appendSetupOutput,
+  appendScriptOutput,
   createKeyedScriptOutputPainter,
   createScriptOutputPainter,
   MAX_SCRIPT_OUTPUT_CHARS,
@@ -12,7 +12,7 @@ describe('script-output-paint', () => {
   });
 
   it('caps rolling append like setup log', () => {
-    const rolled = appendSetupOutput('aaaa\nbbbb\ncccc', 'dddd', 10);
+    const rolled = appendScriptOutput('aaaa\nbbbb\ncccc', 'dddd', 10);
     expect(rolled.length).toBeLessThanOrEqual(10);
     expect(rolled.endsWith('dddd')).toBe(true);
   });

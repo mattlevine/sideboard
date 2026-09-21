@@ -20,13 +20,7 @@ export {
 export * from './store/thread-store.js';
 export { slimThreadForUiList, slimMessagesForUiList } from './store/thread-list.js';
 export type { SetupLogSnapshot } from './store/setup-log.js';
-export {
-  appendSetupOutput,
-  emptySetupLog,
-  MAX_SETUP_LOG_CHARS,
-  mergeSetupOutput,
-  readSetupLog,
-} from './store/setup-log.js';
+export { emptySetupLog, mergeSetupOutput, readSetupLog } from './store/setup-log.js';
 export * from './store/schedules.js';
 export { armSchedules, fireSchedule, formatScheduledPrompt } from './orchestrator/schedule-runner.js';
 export {
