@@ -109,4 +109,134 @@ describe('Orchestrator run-script orphan reclaim', () => {
     expect(readThread(thread.id)?.activeRuns).toEqual([]);
     expect(readThread(thread.id)?.devPort).toBeNull();
   });
+
+  it('stops Run scripts when the worktree connects a different PR', async () => {
+    const worktreePath = join(dataDir, 'wt-retarget');
+    mkdirSync(worktreePath, { recursive: true });
+    const thread = createEmptyThread({
+      title: 'Retarget',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/retarget',
+      worktreePath,
+      repoPath: join(dataDir, 'repo'),
+      agent: 'claude',
+      status: 'idle',
+    });
+    thread.prUrl = 'https://github.com/acme/app/pull/9';
+    thread.prState = 'MERGED';
+    thread.activeRuns = [
+      {
+        scriptName: 'dev',
+        port: 41300,
+        ports: [41300],
+        startedAt: new Date().toISOString(),
+      },
+    ];
+    thread.devPort = 41300;
+    writeThread(thread);
+
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      processes: Map<string, { kind: string; kill: () => void; startedAt: string }>;
+      persistPrMetaAndMaybeArchive: (
+        t: typeof thread,
+        meta: {
+          number: number;
+          title: string;
+          url: string;
+          state: string;
+          isDraft: boolean;
+          reviewDecision: null;
+          baseRefName: string;
+          headRefName: string;
+          isInMergeQueue: boolean;
+          mergeable: null;
+          mergeStateStatus: null;
+        },
+      ) => Promise<void>;
+    };
+    let killed = false;
+    internal.processes.set(`wt:${worktreePath}:run:dev`, {
+      kind: 'dev',
+      startedAt: new Date().toISOString(),
+      kill: () => {
+        killed = true;
+      },
+    });
+
+    await internal.persistPrMetaAndMaybeArchive(thread, {
+      number: 22,
+      title: 'Next',
+      url: 'https://github.com/acme/app/pull/22',
+      state: 'OPEN',
+      isDraft: true,
+      reviewDecision: null,
+      baseRefName: 'main',
+      headRefName: 'thread/retarget',
+      isInMergeQueue: false,
+      mergeable: null,
+      mergeStateStatus: null,
+    });
+
+    expect(killed).toBe(true);
+    expect(readThread(thread.id)?.activeRuns).toEqual([]);
+    expect(readThread(thread.id)?.devPort).toBeNull();
+    expect(readThread(thread.id)?.prUrl).toBe('https://github.com/acme/app/pull/22');
+  });
+
+  it('does not stop Run scripts on same-PR state updates', async () => {
+    const thread = seedThreadWithRun(41301);
+    const live = readThread(thread.id)!;
+    live.prUrl = 'https://github.com/acme/app/pull/9';
+    live.prState = 'OPEN';
+    writeThread(live);
+
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      processes: Map<string, { kind: string; kill: () => void; startedAt: string }>;
+      persistPrMetaAndMaybeArchive: (
+        t: typeof live,
+        meta: {
+          number: number;
+          title: string;
+          url: string;
+          state: string;
+          isDraft: boolean;
+          reviewDecision: null;
+          baseRefName: string;
+          headRefName: string;
+          isInMergeQueue: boolean;
+          mergeable: null;
+          mergeStateStatus: null;
+        },
+      ) => Promise<void>;
+    };
+    let killed = false;
+    internal.processes.set(`wt:${live.worktreePath}:run:dev`, {
+      kind: 'dev',
+      startedAt: new Date().toISOString(),
+      kill: () => {
+        killed = true;
+      },
+    });
+
+    await internal.persistPrMetaAndMaybeArchive(live, {
+      number: 9,
+      title: live.title,
+      url: 'https://github.com/acme/app/pull/9',
+      state: 'MERGED',
+      isDraft: false,
+      reviewDecision: null,
+      baseRefName: 'main',
+      headRefName: live.branchName,
+      isInMergeQueue: false,
+      mergeable: null,
+      mergeStateStatus: null,
+    });
+
+    expect(killed).toBe(false);
+    expect(readThread(live.id)?.activeRuns).toHaveLength(1);
+    expect(readThread(live.id)?.prState).toBe('MERGED');
+  });
 });

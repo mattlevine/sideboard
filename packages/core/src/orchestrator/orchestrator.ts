@@ -33,6 +33,7 @@ import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
   shouldPersistFetchedPrMeta,
+  shouldStopRunOnPrRetarget,
   threadPrMetaPatch,
 } from '../git/pr-merge-archive.js';
 import {
@@ -2731,6 +2732,9 @@ export class Orchestrator {
     this.assertNotGlobal(thread, 'Land');
     const result = await confirmLand(thread, opts);
     if (result.prUrl) {
+      if (shouldStopRunOnPrRetarget(thread.prUrl, result.prUrl)) {
+        this.stopDev(thread.id);
+      }
       const patch: Partial<Thread> = { prUrl: result.prUrl };
       try {
         const meta = await fetchPrMeta(thread.worktreePath, result.prUrl);
@@ -2859,6 +2863,11 @@ export class Orchestrator {
   ): Promise<void> {
     const prevState = normalizePrState(thread.prState);
     const nextState = normalizePrState(meta.state);
+    // Same worktree, new PR (merge → continue → create): drop the old Run so
+    // it is not left serving a checkout that no longer matches the connected PR.
+    if (shouldStopRunOnPrRetarget(thread.prUrl, meta.url)) {
+      this.stopDev(thread.id);
+    }
     // PR identity/lifecycle is worktree-scoped — every live chat tab follows.
     const siblings = threadsSharingWorktree(thread.worktreePath);
     const targets = siblings.length > 0 ? siblings : [thread];
@@ -2906,6 +2915,9 @@ export class Orchestrator {
     }
     if (current?.position != null && thread.stackLayer !== current.position) {
       patch.stackLayer = current.position;
+    }
+    if (current?.prUrl && shouldStopRunOnPrRetarget(thread.prUrl, current.prUrl)) {
+      this.stopDev(thread.id);
     }
     if (current?.prUrl && current.prUrl !== thread.prUrl) patch.prUrl = current.prUrl;
     if (current?.title && current.title !== thread.prTitle) patch.prTitle = current.title;
