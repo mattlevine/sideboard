@@ -525,44 +525,102 @@ export function getRunMode(
   return loadWorkspaceSettings(worktreePath, repoPath)?.runMode ?? 'concurrent';
 }
 
-export async function allocatePort(): Promise<number> {
+export type PortReservation = {
+  port: number;
+  /** Stop holding the port so a child can bind it. Idempotent. */
+  release: () => Promise<void>;
+};
+
+/**
+ * Bind an ephemeral port and keep the socket open until `release()`.
+ * Closing then rebinding races other worktrees / agents (TOCTOU) — especially
+ * with Vite `strictPort: true`, which fails Start instead of falling back.
+ */
+export async function reservePort(): Promise<PortReservation> {
   return new Promise((resolve, reject) => {
     const server = createServer();
+    let released = false;
+    const release = (): Promise<void> =>
+      new Promise((res) => {
+        if (released) {
+          res();
+          return;
+        }
+        released = true;
+        server.close(() => res());
+      });
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address();
       if (!addr || typeof addr === 'string') {
-        server.close();
-        reject(new Error('Failed to allocate port'));
+        void release().then(() => reject(new Error('Failed to allocate port')));
         return;
       }
-      const port = addr.port;
-      server.close((err) => (err ? reject(err) : resolve(port)));
+      resolve({ port: addr.port, release });
     });
     server.on('error', reject);
   });
 }
 
-/** Allocate a contiguous block of ports (Conductor: CONDUCTOR_PORT … +9). */
+/** @deprecated Prefer reservePort — releasing immediately reopens the race. */
+export async function allocatePort(): Promise<number> {
+  const held = await reservePort();
+  await held.release();
+  return held.port;
+}
+
+async function tryReservePort(port: number): Promise<PortReservation | null> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    let released = false;
+    const release = (): Promise<void> =>
+      new Promise((res) => {
+        if (released) {
+          res();
+          return;
+        }
+        released = true;
+        server.close(() => res());
+      });
+    server.once('error', () => resolve(null));
+    server.listen(port, '127.0.0.1', () => {
+      resolve({ port, release });
+    });
+  });
+}
+
+/**
+ * Hold a block of ports (Conductor: CONDUCTOR_PORT … +9) until release.
+ * Callers must `release()` immediately before spawning the child that binds them.
+ */
+export async function reservePortRange(
+  size = PORT_RANGE_SIZE,
+): Promise<PortReservation[]> {
+  const held: PortReservation[] = [await reservePort()];
+  const base = held[0]!.port;
+  try {
+    for (let i = 1; i < size; i++) {
+      const candidate = base + i;
+      const next = await tryReservePort(candidate);
+      if (next) {
+        held.push(next);
+      } else {
+        held.push(await reservePort());
+      }
+    }
+    return held;
+  } catch (err) {
+    await Promise.all(held.map((h) => h.release()));
+    throw err;
+  }
+}
+
+/** Allocate a contiguous block, releasing holds immediately (legacy / tests). */
 export async function allocatePortRange(
   size = PORT_RANGE_SIZE,
 ): Promise<number[]> {
-  const base = await allocatePort();
-  const ports: number[] = [base];
-  for (let i = 1; i < size; i++) {
-    const candidate = base + i;
-    const free = await new Promise<boolean>((resolve) => {
-      const server = createServer();
-      server.once('error', () => resolve(false));
-      server.listen(candidate, '127.0.0.1', () => {
-        server.close(() => resolve(true));
-      });
-    });
-    if (free) {
-      ports.push(candidate);
-    } else {
-      ports.push(await allocatePort());
-    }
-  }
+  const held = await reservePortRange(size);
+  const ports = held.map((h) => h.port);
+  await Promise.all(held.map((h) => h.release()));
   return ports;
 }
 
@@ -584,21 +642,30 @@ export async function startDevServer(
   const script = getRunScript(worktreePath, repoPath, opts?.scriptName);
   if (!script) return null;
 
-  const ports = await allocatePortRange(PORT_RANGE_SIZE);
-  const handle = await spawnWorkspaceScript(script.command, {
-    worktreePath,
-    repoPath,
-    ports,
-    defaultBranch: opts?.defaultBranch,
-    onLine,
-  });
+  // Hold ports until the moment of spawn so another Start / worktree cannot
+  // steal SIDEBOARD_PORT (Vite strictPort then fails the Run console Start).
+  const held = await reservePortRange(PORT_RANGE_SIZE);
+  const ports = held.map((h) => h.port);
+  try {
+    await Promise.all(held.map((h) => h.release()));
+    const handle = await spawnWorkspaceScript(script.command, {
+      worktreePath,
+      repoPath,
+      ports,
+      defaultBranch: opts?.defaultBranch,
+      onLine,
+    });
 
-  return {
-    pid: handle.pid,
-    port: ports[0]!,
-    ports,
-    scriptName: script.name,
-    kill: handle.kill,
-    done: handle.done,
-  };
+    return {
+      pid: handle.pid,
+      port: ports[0]!,
+      ports,
+      scriptName: script.name,
+      kill: handle.kill,
+      done: handle.done,
+    };
+  } catch (err) {
+    await Promise.all(held.map((h) => h.release()));
+    throw err;
+  }
 }
