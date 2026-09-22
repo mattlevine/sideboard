@@ -1823,7 +1823,6 @@ app.whenReady().then(async () => {
     // Packaged launches often have cwd `/`, which is not a real project.
     if (root && root !== '/') {
       repoPath = root;
-      await orch.reconcile(repoPath, { reclaimStaleTurns: true });
       try {
         await orch.addWorkspace(repoPath);
       } catch {
@@ -1832,6 +1831,13 @@ app.whenReady().then(async () => {
     }
   } catch {
     // Leave repoPath empty when cwd is not inside a git repo (typical for Dock launches).
+  }
+  // Always reclaim stale agent turns + orphaned Run listeners — Dock launches
+  // skip the cwd-repo branch above but still have persisted activeRuns.
+  try {
+    await orch.reconcile(repoPath || undefined, { reclaimStaleTurns: true });
+  } catch {
+    // Best-effort; UI can still open.
   }
   armSchedules();
   syncCaffeinate();
