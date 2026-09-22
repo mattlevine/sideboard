@@ -8,6 +8,7 @@ import {
   getRunMode,
   killListenersOnPorts,
   listRunScripts,
+  reservePort,
   resolveFilesToCopy,
   runConventionSetup,
   runWorkspaceSetup,
@@ -208,5 +209,29 @@ describe('runConventionSetup / runWorkspaceSetup', () => {
 describe('killListenersOnPorts', () => {
   it('is a no-op for invalid ports', () => {
     expect(() => killListenersOnPorts([0, -1, Number.NaN])).not.toThrow();
+  });
+});
+
+describe('reservePort', () => {
+  it('holds the port until release so a second reserve cannot steal it', async () => {
+    const { createServer } = await import('node:net');
+    const held = await reservePort();
+    const conflict = await new Promise<boolean>((resolve) => {
+      const server = createServer();
+      server.once('error', () => resolve(true));
+      server.listen(held.port, '127.0.0.1', () => {
+        server.close(() => resolve(false));
+      });
+    });
+    expect(conflict).toBe(true);
+    await held.release();
+    const free = await new Promise<boolean>((resolve) => {
+      const server = createServer();
+      server.once('error', () => resolve(false));
+      server.listen(held.port, '127.0.0.1', () => {
+        server.close(() => resolve(true));
+      });
+    });
+    expect(free).toBe(true);
   });
 });

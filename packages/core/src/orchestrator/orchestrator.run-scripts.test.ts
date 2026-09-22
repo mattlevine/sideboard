@@ -240,3 +240,116 @@ describe('Orchestrator run-script orphan reclaim', () => {
     expect(readThread(live.id)?.prState).toBe('MERGED');
   });
 });
+
+describe('Orchestrator startDev coalescing', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sideboard-start-dev-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('coalesces concurrent startDev calls onto one spawn', async () => {
+    const worktreePath = join(dataDir, 'wt');
+    const repoPath = join(dataDir, 'repo');
+    mkdirSync(join(worktreePath, '.sideboard'), { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(
+      join(worktreePath, '.sideboard', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "sleep 30"\ndefault = true\n`,
+    );
+    const thread = createEmptyThread({
+      title: 'Start coalesce',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/start-coalesce',
+      worktreePath,
+      repoPath,
+      agent: 'claude',
+      status: 'idle',
+    });
+    writeThread(thread);
+
+    const conductor = await import('../hook/conductor.js');
+    let spawns = 0;
+    vi.spyOn(conductor, 'startDevServer').mockImplementation(async () => {
+      spawns += 1;
+      await new Promise((r) => setTimeout(r, 40));
+      return {
+        pid: 1,
+        port: 41999,
+        ports: [41999],
+        scriptName: 'dev',
+        kill: () => undefined,
+        done: new Promise(() => undefined),
+      };
+    });
+
+    const orch = new Orchestrator();
+    const [a, b] = await Promise.all([
+      orch.startDev(thread.id, 'dev'),
+      orch.startDev(thread.id, 'dev'),
+    ]);
+    expect(a.port).toBe(41999);
+    expect(b.port).toBe(41999);
+    expect(spawns).toBe(1);
+    orch.stopDev(thread.id, 'dev');
+  });
+
+  it('clears stale activeRuns without a handle before spawning', async () => {
+    const worktreePath = join(dataDir, 'wt-stale');
+    const repoPath = join(dataDir, 'repo-stale');
+    mkdirSync(join(worktreePath, '.sideboard'), { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(
+      join(worktreePath, '.sideboard', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "sleep 30"\ndefault = true\n`,
+    );
+    const thread = createEmptyThread({
+      title: 'Stale run',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/stale-run',
+      worktreePath,
+      repoPath,
+      agent: 'claude',
+      status: 'idle',
+    });
+    thread.activeRuns = [
+      {
+        scriptName: 'dev',
+        port: 41888,
+        ports: [41888],
+        startedAt: new Date().toISOString(),
+      },
+    ];
+    thread.devPort = 41888;
+    writeThread(thread);
+
+    const conductor = await import('../hook/conductor.js');
+    const killSpy = vi.spyOn(conductor, 'killListenersOnPorts').mockImplementation(() => undefined);
+    vi.spyOn(conductor, 'startDevServer').mockResolvedValue({
+      pid: 2,
+      port: 41889,
+      ports: [41889],
+      scriptName: 'dev',
+      kill: () => undefined,
+      done: new Promise(() => undefined),
+    });
+
+    const orch = new Orchestrator();
+    const result = await orch.startDev(thread.id, 'dev');
+    expect(killSpy).toHaveBeenCalledWith([41888]);
+    expect(result.port).toBe(41889);
+    expect(readThread(thread.id)?.devPort).toBe(41889);
+    orch.stopDev(thread.id, 'dev');
+  });
+});

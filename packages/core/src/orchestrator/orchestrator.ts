@@ -379,6 +379,9 @@ export class Orchestrator {
   /** Auto-continues after a worktree turn ended while a detached job still runs. */
   private readonly jobContinueCount = new Map<string, number>();
   private readonly jobContinueNudged = new Set<string>();
+  /** In-flight startDev per worktree run key — agent MCP + UI Start must not double-spawn. */
+  private readonly startingDev =
+    new Map<string, Promise<{ port: number; scriptName: string; ports: number[] }>>();
   private maxConcurrent: number;
   private runningCount = 0;
 
@@ -2017,9 +2020,28 @@ export class Orchestrator {
       );
     }
 
+    const runKey = worktreeRunProcessKey(thread.worktreePath, resolvedName);
+    const inFlight = this.startingDev.get(runKey);
+    if (inFlight) return inFlight;
+
+    const start = this.startDevUnlocked(thread, resolvedName, scriptName, scripts, runKey);
+    this.startingDev.set(runKey, start);
+    try {
+      return await start;
+    } finally {
+      this.startingDev.delete(runKey);
+    }
+  }
+
+  private async startDevUnlocked(
+    thread: Thread,
+    resolvedName: string,
+    scriptName: string | undefined,
+    scripts: RunScript[],
+    runKey: string,
+  ): Promise<{ port: number; scriptName: string; ports: number[] }> {
     const siblings = threadsSharingWorktree(thread.worktreePath);
     const shared = mergeWorktreeActiveRuns(siblings);
-    const runKey = worktreeRunProcessKey(thread.worktreePath, resolvedName);
     const existing =
       this.processes.get(runKey) ??
       siblings
@@ -2037,6 +2059,17 @@ export class Orchestrator {
       if (legacy && shared.devPort) {
         return { port: shared.devPort, scriptName: resolvedName, ports: [shared.devPort] };
       }
+    }
+
+    // Persisted activeRuns without a live handle (crash / race) — free those
+    // ports before allocating again so Start does not EADDRINUSE against ghosts.
+    if (active && !existing) {
+      killListenersOnPorts(collectActiveRunPorts([active]));
+      this.syncWorktreeRuns(
+        thread.worktreePath,
+        shared.activeRuns.filter((r) => r.scriptName !== resolvedName),
+        shared.devPort === active.port ? null : shared.devPort,
+      );
     }
 
     const mode = getRunMode(thread.worktreePath, thread.repoPath);
@@ -2095,6 +2128,7 @@ export class Orchestrator {
       });
     }
 
+    const latestShared = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath));
     const run: ActiveRun = {
       scriptName: resolvedName,
       port: handle.port,
@@ -2102,13 +2136,13 @@ export class Orchestrator {
       startedAt,
     };
     const nextRuns = [
-      ...shared.activeRuns.filter((r) => r.scriptName !== resolvedName),
+      ...latestShared.activeRuns.filter((r) => r.scriptName !== resolvedName),
       run,
     ];
     this.syncWorktreeRuns(
       thread.worktreePath,
       nextRuns,
-      isDefault ? handle.port : shared.devPort,
+      isDefault ? handle.port : latestShared.devPort,
     );
     this.emit({
       type: 'dev_server_started',
