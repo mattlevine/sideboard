@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.227] - 2026-09-22
+
+### Fixed
+
+- Connecting a worktree to a **new** PR stops the previous local Run script so Start works again after merge → continue.
+- Dock launches always reclaim orphaned `activeRuns` / listeners (not only when cwd is a git repo).
+- Port kill on Stop/quit uses `lsof` + `process.kill` instead of a login shell, so the main thread stays responsive.
+- Terminal remount buffers live PTY output during scrollback write instead of a fragile second snapshot catch-up.
+
 ## [0.1.226] - 2026-09-22
 
 ### Fixed
