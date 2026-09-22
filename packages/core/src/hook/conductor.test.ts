@@ -6,6 +6,7 @@ import {
   buildWorkspaceScriptEnv,
   copyConfiguredFiles,
   getRunMode,
+  killListenersOnPorts,
   listRunScripts,
   resolveFilesToCopy,
   runConventionSetup,
@@ -201,5 +202,11 @@ describe('runConventionSetup / runWorkspaceSetup', () => {
     expect(existsSync(join(wt, REVIEW_SKILL_PATH))).toBe(false);
     expect(readFileSync(join(wt, CONTEXT_REVIEW_PATH), 'utf8')).toContain('from repo');
     expect(existsSync(join(wt, REPO_REVIEW_PATH))).toBe(false);
+  });
+});
+
+describe('killListenersOnPorts', () => {
+  it('is a no-op for invalid ports', () => {
+    expect(() => killListenersOnPorts([0, -1, Number.NaN])).not.toThrow();
   });
 });

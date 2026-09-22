@@ -1854,6 +1854,12 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   try {
+    // Detached run/setup scripts outlive Electron unless we kill them here.
+    orch.stopAllRunScripts();
+  } catch {
+    // ignore
+  }
+  try {
     releaseDesktopHost();
   } catch {
     // ignore

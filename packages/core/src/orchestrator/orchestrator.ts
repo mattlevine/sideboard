@@ -35,7 +35,14 @@ import {
   shouldPersistFetchedPrMeta,
   threadPrMetaPatch,
 } from '../git/pr-merge-archive.js';
-import { runWorkspaceSetup, startDevServer, runArchiveScript, listRunScripts, getRunMode } from '../hook/conductor.js';
+import {
+  runWorkspaceSetup,
+  startDevServer,
+  runArchiveScript,
+  listRunScripts,
+  getRunMode,
+  killListenersOnPorts,
+} from '../hook/conductor.js';
 import {
   appendSetupLog,
   beginSetupLog,
@@ -325,6 +332,18 @@ interface RegisteredProcess {
   kill: () => void;
 }
 
+/** Ports recorded on ActiveRun (primary + SIDEBOARD_PORT_N range). */
+function collectActiveRunPorts(runs: readonly ActiveRun[]): number[] {
+  const ports = new Set<number>();
+  for (const run of runs) {
+    const list = run.ports?.length ? run.ports : run.port != null ? [run.port] : [];
+    for (const p of list) {
+      if (Number.isFinite(p) && p > 0) ports.add(p);
+    }
+  }
+  return [...ports];
+}
+
 export class Orchestrator {
   readonly events = new EventEmitter();
   private readonly processes = new Map<string, RegisteredProcess>();
@@ -516,6 +535,13 @@ export class Orchestrator {
         setStatus(thread.id, 'stopped', 'Process died (reconciled on startup)');
         this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       }
+    }
+
+    // Detached run scripts outlive the Electron process. After restart the
+    // in-memory handles are gone — free their ports and clear stale activeRuns
+    // so Start / Stop work without a manual kill.
+    if (reclaimStaleTurns) {
+      this.reapOrphanedRunScripts();
     }
 
     const repoPaths = (
@@ -2118,15 +2144,34 @@ export class Orchestrator {
         worktreeRunProcessKey(thread.worktreePath, scriptName),
         ...siblings.map((t) => `${t.id}:run:${scriptName}`),
       ];
+      let hadHandle = false;
       for (const key of keys) {
         const proc = this.processes.get(key);
-        if (proc) proc.kill();
+        if (proc) {
+          proc.kill();
+          hadHandle = true;
+        }
         this.processes.delete(key);
+      }
+      // Drop the legacy :dev alias when it points at this script.
+      const legacyKey = worktreeDevProcessKey(thread.worktreePath);
+      const legacy = this.processes.get(legacyKey);
+      if (legacy?.scriptName === scriptName || (!legacy?.scriptName && scriptName === 'dev')) {
+        if (legacy && !hadHandle) {
+          legacy.kill();
+          hadHandle = true;
+        }
+        this.processes.delete(legacyKey);
+      }
+      const run = shared.activeRuns.find((r) => r.scriptName === scriptName);
+      // After app restart, handles are gone — free ports from persisted metadata.
+      if (!hadHandle && run) {
+        killListenersOnPorts(collectActiveRunPorts([run]));
       }
       const remaining = shared.activeRuns.filter((r) => r.scriptName !== scriptName);
       const isPrimary =
         shared.devPort != null &&
-        shared.activeRuns.find((r) => r.scriptName === scriptName)?.port === shared.devPort;
+        run?.port === shared.devPort;
       this.syncWorktreeRuns(
         thread.worktreePath,
         remaining,
@@ -2135,17 +2180,76 @@ export class Orchestrator {
       this.emit({ type: 'dev_server_stopped', threadId: thread.id, scriptName });
       return;
     }
+    let hadHandle = false;
     for (const [key, proc] of [...this.processes.entries()]) {
       if (
         isWorktreeRunProcessKey(key, thread.worktreePath) ||
         siblings.some((t) => key.startsWith(`${t.id}:run:`) || key === `${t.id}:dev`)
       ) {
         proc.kill();
+        hadHandle = true;
         this.processes.delete(key);
       }
     }
+    if (!hadHandle && shared.activeRuns.length > 0) {
+      killListenersOnPorts(collectActiveRunPorts(shared.activeRuns));
+    }
     this.syncWorktreeRuns(thread.worktreePath, [], null);
     this.emit({ type: 'dev_server_stopped', threadId: thread.id });
+  }
+
+  /**
+   * App quit: tear down every registered run/setup child and free persisted
+   * ports so the next launch is not blocked by orphans.
+   */
+  stopAllRunScripts(): void {
+    for (const [key, proc] of [...this.processes.entries()]) {
+      if (proc.kind !== 'dev' && proc.kind !== 'setup') continue;
+      try {
+        proc.kill();
+      } catch {
+        // best-effort on quit
+      }
+      this.processes.delete(key);
+    }
+    this.reapOrphanedRunScripts({ force: true });
+  }
+
+  /**
+   * After restart (or force quit), in-memory handles are gone but `activeRuns`
+   * and OS listeners may remain. Kill by port and clear disk metadata.
+   * Skips worktrees that still have a live handle unless `force` (quit path).
+   */
+  reapOrphanedRunScripts(opts?: { force?: boolean }): void {
+    const force = opts?.force === true;
+    const seen = new Set<string>();
+    for (const thread of listThreads({ includeArchived: true })) {
+      if (thread.status === 'archived') continue;
+      if (isGlobalThread(thread)) continue;
+      const wt = normalizeWorktreePath(thread.worktreePath);
+      if (seen.has(wt)) continue;
+      seen.add(wt);
+
+      const siblings = threadsSharingWorktree(thread.worktreePath);
+      const shared = mergeWorktreeActiveRuns(siblings);
+      if (shared.activeRuns.length === 0 && shared.devPort == null) continue;
+
+      const hasLiveHandle = [...this.processes.keys()].some(
+        (k) =>
+          isWorktreeRunProcessKey(k, thread.worktreePath) ||
+          siblings.some((t) => k.startsWith(`${t.id}:run:`) || k === `${t.id}:dev`),
+      );
+      if (!force && hasLiveHandle) continue;
+
+      killListenersOnPorts(collectActiveRunPorts(shared.activeRuns));
+      if (shared.devPort != null) {
+        killListenersOnPorts([shared.devPort]);
+      }
+      this.syncWorktreeRuns(thread.worktreePath, [], null);
+      for (const sibling of siblings) {
+        this.emit({ type: 'dev_server_stopped', threadId: sibling.id });
+      }
+    }
   }
 
   private syncWorktreeRuns(

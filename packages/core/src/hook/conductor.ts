@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { basename, dirname, join } from 'node:path';
 import { execa, type ResultPromise } from 'execa';
@@ -236,6 +237,42 @@ export interface ScriptHandle {
   child: ResultPromise;
 }
 
+/**
+ * Free TCP listeners on ports we allocated for a run script.
+ * Used when the in-memory process handle is gone (app restart) or as a
+ * backstop when process-group kill leaves grandchildren bound.
+ * Synchronous so Stop / startup reap free the port before the next Start.
+ */
+export function killListenersOnPorts(ports: number[]): void {
+  for (const port of ports) {
+    if (!Number.isFinite(port) || port <= 0) continue;
+    try {
+      if (process.platform === 'win32') {
+        execFileSync(
+          'powershell',
+          [
+            '-NoProfile',
+            '-Command',
+            `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
+          ],
+          { stdio: 'ignore' },
+        );
+      } else {
+        execFileSync(
+          'zsh',
+          [
+            '-lc',
+            `pids=$(lsof -tiTCP:${port} -sTCP:LISTEN 2>/dev/null); [ -n "$pids" ] && kill -TERM $pids 2>/dev/null; true`,
+          ],
+          { stdio: 'ignore' },
+        );
+      }
+    } catch {
+      // Port already free or lsof unavailable — ignore.
+    }
+  }
+}
+
 /** Kill a workspace script and its descendants (pnpm → electron-vite → Electron, etc.). */
 function killScriptTree(child: ResultPromise, ports: number[] = []): void {
   const pid = child.pid;
@@ -264,26 +301,7 @@ function killScriptTree(child: ResultPromise, ports: number[] = []): void {
   }
   // Backstop: Electron sometimes leaves the shell's process group; free listeners
   // on the ports we allocated for this run.
-  for (const port of ports) {
-    if (!Number.isFinite(port) || port <= 0) continue;
-    if (process.platform === 'win32') {
-      void execa(
-        'powershell',
-        [
-          '-NoProfile',
-          '-Command',
-          `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
-        ],
-        { reject: false },
-      );
-    } else {
-      void execa(
-        'zsh',
-        ['-lc', `pids=$(lsof -tiTCP:${port} -sTCP:LISTEN 2>/dev/null); [ -n "$pids" ] && kill -TERM $pids 2>/dev/null; true`],
-        { reject: false },
-      );
-    }
-  }
+  killListenersOnPorts(ports);
 }
 
 async function spawnWorkspaceScript(
