@@ -54,6 +54,8 @@ export function EmbeddedTerminal({
     let offData: (() => void) | undefined;
     let offExit: (() => void) | undefined;
     let attached = false;
+    /** Live PTY bytes while scrollback is writing — flush after attach. */
+    const pendingLive: string[] = [];
 
     async function boot() {
       setError(null);
@@ -72,9 +74,19 @@ export function EmbeddedTerminal({
         if (cancelled) return;
         setSessionId(id);
 
+        const flushLive = (write: (data: string) => void) => {
+          if (pendingLive.length === 0) return;
+          const chunk = pendingLive.join('');
+          pendingLive.length = 0;
+          write(chunk);
+        };
+
         offData = window.sideboard.terminal.onData((payload) => {
           if (payload.id !== id) return;
-          if (!attached) return;
+          if (!attached) {
+            pendingLive.push(payload.data);
+            return;
+          }
           if (termRef.current) {
             termRef.current.write(payload.data);
           } else {
@@ -174,6 +186,8 @@ export function EmbeddedTerminal({
             writeXtermScrollback((chunk, next) => term.write(chunk, next), data, {
               isCancelled: () => cancelled,
             });
+          // One snapshot + live buffer: avoid a second snapshot that can fail
+          // startsWith once the 256 KB ring slides during chunked write.
           const first = await snapshot();
           if (cancelled) {
             termRef.current.dispose();
@@ -186,27 +200,15 @@ export function EmbeddedTerminal({
             termRef.current = null;
             return;
           }
-          const second = await snapshot();
-          if (cancelled) {
-            termRef.current.dispose();
-            termRef.current = null;
-            return;
-          }
-          if (second.length > first.length && second.startsWith(first)) {
-            await writeScrollback(second.slice(first.length));
-          }
-          if (cancelled) {
-            termRef.current.dispose();
-            termRef.current = null;
-            return;
-          }
           attached = true;
+          flushLive((d) => termRef.current?.write(d));
           setXtermState('ready');
           requestAnimationFrame(() => termRef.current?.refresh());
         } catch {
           const snap = await snapshot();
           if (!cancelled && snap) setLines([snap]);
           attached = true;
+          flushLive((d) => setLines((prev) => [...prev.slice(-500), d]));
           setXtermState('fallback');
         }
       } catch (err) {

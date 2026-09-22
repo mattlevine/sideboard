@@ -241,7 +241,8 @@ export interface ScriptHandle {
  * Free TCP listeners on ports we allocated for a run script.
  * Used when the in-memory process handle is gone (app restart) or as a
  * backstop when process-group kill leaves grandchildren bound.
- * Synchronous so Stop / startup reap free the port before the next Start.
+ * Uses `lsof`/`process.kill` directly (no login shell) so Stop / quit stay
+ * responsive on the Electron main thread.
  */
 export function killListenersOnPorts(ports: number[]): void {
   for (const port of ports) {
@@ -255,20 +256,32 @@ export function killListenersOnPorts(ports: number[]): void {
             '-Command',
             `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
           ],
-          { stdio: 'ignore' },
+          { stdio: 'ignore', timeout: 3_000 },
         );
-      } else {
-        execFileSync(
-          'zsh',
-          [
-            '-lc',
-            `pids=$(lsof -tiTCP:${port} -sTCP:LISTEN 2>/dev/null); [ -n "$pids" ] && kill -TERM $pids 2>/dev/null; true`,
-          ],
-          { stdio: 'ignore' },
-        );
+        continue;
+      }
+      let raw = '';
+      try {
+        raw = execFileSync('lsof', [`-tiTCP:${port}`, '-sTCP:LISTEN'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: 2_000,
+        });
+      } catch {
+        // No LISTEN on this port (lsof exits 1) — nothing to kill.
+        continue;
+      }
+      for (const token of raw.trim().split(/\s+/)) {
+        const pid = Number(token);
+        if (!Number.isFinite(pid) || pid <= 0) continue;
+        try {
+          process.kill(pid, 'SIGTERM');
+        } catch {
+          // already exited
+        }
       }
     } catch {
-      // Port already free or lsof unavailable — ignore.
+      // Port already free or tooling unavailable — ignore.
     }
   }
 }

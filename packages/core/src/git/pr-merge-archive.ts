@@ -17,6 +17,22 @@ export function samePrIdentity(a?: string | null, b?: string | null): boolean {
 }
 
 /**
+ * After merge-then-continue, the same worktree often attaches a new PR URL.
+ * A Run script started for the previous PR is still watching that checkout but
+ * is no longer tied to the connected PR — stop it so Start can reattach cleanly.
+ * First connect (no previous URL) and same-PR lifecycle updates do not stop.
+ */
+export function shouldStopRunOnPrRetarget(
+  previousPrUrl?: string | null,
+  nextPrUrl?: string | null,
+): boolean {
+  const prev = (previousPrUrl ?? '').trim();
+  const next = (nextPrUrl ?? '').trim();
+  if (!prev || !next) return false;
+  return !samePrIdentity(prev, next);
+}
+
+/**
  * Persist GraphQL meta only for the PR this worktree is on right now.
  * A fallback selector (stale persisted URL / create-from sourceRef) must not
  * overwrite a newer `prUrl` on every sibling tab.

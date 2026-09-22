@@ -3,6 +3,7 @@ import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
   shouldPersistFetchedPrMeta,
+  shouldStopRunOnPrRetarget,
   threadPrMetaPatch,
 } from './pr-merge-archive.js';
 
@@ -10,6 +11,29 @@ describe('normalizePrState', () => {
   it('uppercases and trims', () => {
     expect(normalizePrState(' merged ')).toBe('MERGED');
     expect(normalizePrState(null)).toBe('');
+  });
+});
+
+describe('shouldStopRunOnPrRetarget', () => {
+  it('stops when the connected PR number changes', () => {
+    expect(
+      shouldStopRunOnPrRetarget(
+        'https://github.com/acme/app/pull/9',
+        'https://github.com/acme/app/pull/22',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not stop on first connect or same-PR lifecycle', () => {
+    expect(shouldStopRunOnPrRetarget(null, 'https://github.com/acme/app/pull/9')).toBe(
+      false,
+    );
+    expect(
+      shouldStopRunOnPrRetarget(
+        'https://github.com/acme/app/pull/9',
+        'https://github.com/acme/app/pull/9/',
+      ),
+    ).toBe(false);
   });
 });
 
