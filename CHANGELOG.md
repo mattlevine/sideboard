@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.226] - 2026-09-22
+
+### Fixed
+
+- Local Run scripts no longer block Start after Sideboard restarts: quit tears down detached children, startup reaps listeners from persisted ports, and Stop frees ports even when in-memory handles are gone.
+
 ## [0.1.225] - 2026-09-21
 
 ### Fixed
