@@ -263,7 +263,20 @@ export function RightSidebar({
     setSetupOpened(false);
     setSetupHasOutput(false);
     setSetupRunning(false);
-  }, [worktreeKey]);
+    // SetupOutputStream only mounts once setupOpened — hydrate here so a
+    // mid-flight setup restores running chrome / the Setup tab on bind.
+    if (typeof window.sideboard.getSetupLog !== 'function') return;
+    const forWorktree = worktreeKey;
+    const forThread = thread.id;
+    void window.sideboard.getSetupLog(forThread).then((snap) => {
+      if (worktreeKeyRef.current !== forWorktree) return;
+      if (snap.output) setSetupHasOutput(true);
+      if (snap.running) {
+        setSetupRunning(true);
+        setLower('setup');
+      }
+    });
+  }, [worktreeKey, thread.id]);
 
   useEffect(() => {
     if (!revealDirectory) return;

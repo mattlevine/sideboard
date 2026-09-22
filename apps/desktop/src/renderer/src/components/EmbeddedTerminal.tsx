@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { shouldApplyPtyResize } from '../lib/pty-resize';
 import { xtermHostVisibility } from '../lib/xterm-host-visibility';
-import { writeXtermScrollback } from '../lib/xterm-scrollback-write';
+import {
+  stripScrollbackOverlap,
+  writeXtermScrollback,
+} from '../lib/xterm-scrollback-write';
 
 interface Props {
   /** Any live chat in the worktree — main uses it to resolve cwd. */
@@ -74,11 +77,11 @@ export function EmbeddedTerminal({
         if (cancelled) return;
         setSessionId(id);
 
-        const flushLive = (write: (data: string) => void) => {
+        const flushLive = (snapshotText: string, write: (data: string) => void) => {
           if (pendingLive.length === 0) return;
-          const chunk = pendingLive.join('');
+          const chunk = stripScrollbackOverlap(snapshotText, pendingLive.join(''));
           pendingLive.length = 0;
-          write(chunk);
+          if (chunk) write(chunk);
         };
 
         offData = window.sideboard.terminal.onData((payload) => {
@@ -201,14 +204,14 @@ export function EmbeddedTerminal({
             return;
           }
           attached = true;
-          flushLive((d) => termRef.current?.write(d));
+          flushLive(first, (d) => termRef.current?.write(d));
           setXtermState('ready');
           requestAnimationFrame(() => termRef.current?.refresh());
         } catch {
           const snap = await snapshot();
           if (!cancelled && snap) setLines([snap]);
           attached = true;
-          flushLive((d) => setLines((prev) => [...prev.slice(-500), d]));
+          flushLive(snap, (d) => setLines((prev) => [...prev.slice(-500), d]));
           setXtermState('fallback');
         }
       } catch (err) {

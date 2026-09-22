@@ -61,4 +61,25 @@ describe('script-output-paint', () => {
     expect(logs.dev!.endsWith('tail-line')).toBe(true);
     painter.dispose();
   });
+
+  it('clearing one script still paints sibling pending lines', () => {
+    const queued: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      queued.push(cb);
+      return queued.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+
+    let logs: Record<string, string> = {};
+    const painter = createKeyedScriptOutputPainter((updater) => {
+      logs = updater(logs);
+    });
+    painter.push('a', 'keep-me');
+    painter.push('b', 'drop-me');
+    painter.clear('b');
+    expect(queued).toHaveLength(1);
+    queued[0]!(0);
+    expect(logs).toEqual({ a: 'keep-me', b: '' });
+    painter.dispose();
+  });
 });

@@ -1,8 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   XTERM_SCROLLBACK_CHUNK,
+  stripScrollbackOverlap,
   writeXtermScrollback,
 } from './xterm-scrollback-write';
+
+describe('stripScrollbackOverlap', () => {
+  it('returns live when snapshot is empty', () => {
+    expect(stripScrollbackOverlap('', 'abc')).toBe('abc');
+  });
+
+  it('drops a live prefix that is already a snapshot suffix', () => {
+    expect(stripScrollbackOverlap('hello world', 'world!')).toBe('!');
+  });
+
+  it('keeps post-snapshot live bytes only', () => {
+    expect(stripScrollbackOverlap('prompt> ', 'prompt> ls\n')).toBe('ls\n');
+  });
+
+  it('returns full live when there is no overlap', () => {
+    expect(stripScrollbackOverlap('aaaa', 'bbbb')).toBe('bbbb');
+  });
+});
 
 describe('writeXtermScrollback', () => {
   it('no-ops empty data', async () => {
