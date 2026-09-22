@@ -1,0 +1,6 @@
+ CHANGELOG.md                                       |   4 +
+ packages/core/src/hook/conductor.test.ts           |  25 ++++
+ packages/core/src/hook/conductor.ts                | 143 +++++++++++++++------
+ .../orchestrator/orchestrator.run-scripts.test.ts  | 113 ++++++++++++++++
+ packages/core/src/orchestrator/orchestrator.ts     |  40 +++++-
+ 5 files changed, 284 insertions(+), 41 deletions(-)

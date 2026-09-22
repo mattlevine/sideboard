@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.228] - 2026-09-22
+
 ### Fixed
 
 - Run Start no longer loses its allocated port to a race (hold until spawn) or double-spawns when the agent and UI Start race; stale `activeRuns` without a live handle are reaped before retrying.

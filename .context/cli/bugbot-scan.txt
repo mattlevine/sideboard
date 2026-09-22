@@ -1,0 +1,190 @@
+===== #167 =====
+===== #166 =====
+===== #165 =====
+PR165 @cursor[bot] apps/desktop/src/renderer/src/components/EmbeddedTerminal.tsx:204
+### Terminal remount duplicates live output
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+`onData` starts buffering into `pendingLive` before `snapshot()` runs, and the main process appends those same bytes to the ring that `snapshot()` returns. Writing the snapshot and then flushing `pendingLive` therefore replays the overlap, so first attach and worktree remounts can show a doubled prompt or repeated log lines.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 03dc91f7-3db0-40e1-8a46-86b1015befad -->
+
+<!-- LOCATIONS START
+apps/desktop/src/renderer/src/components/EmbeddedTerminal.tsx#L83-L204
+LOCATIONS END -->
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmE1MTMzMGFhLTU0OTMtNDc5YS1hYWM1LThmZjdhYjBiZjI0MCIsImVuY3J5cHRpb25LZXkiOiJGOVNKc3ZJLU81elVFUHprdEdJcnJCQnJXYUtvRTl1Szg0WTl5RWJCRzNNIiwiYnJhbmNoIjoibWF0dC9maXgtc3RvcC1ydW4tb24tcHItcmV0YXJnZXQiLCJyZXBvT3duZXIiOiJtYXR0bGV2aW5lIiwicmVwb05hbWUiOiJzaWRlYm9hcmQiLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png
+---
+PR165 REVIEW @cursor[bot] COMMENTED
+<!-- BUGBOT_REVIEW -->
+Cursor Bugbot has reviewed your changes and found 1 potential issue.
+
+
+
+<!-- BUGBOT_FIX_ALL -->
+<a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9BTExfSU5fQ1VSU09SIiwiZGF0YSI6eyJyZWRpc0tleSI6ImJ1Z2JvdC1tdWx0aTpjMTQwYzdjOS02ODk0LTRmMGMtOWU1YS0zNjBkNWI5OTllODgiLCJlbmNyeXB0aW9uS2V5IjoibHlTSlpKSkNPNWpadVp2ZUIta2hTQXpuSEY3MW5pRzlSMkFJNGc2ZzhuayIsImJyYW5jaCI6Im1hdHQvZml4LXN0b3AtcnVuLW9uLXByLXJldGFyZ2V0IiwicmVwb093bmVyIjoibWF0dGxldmluZSIsInJlcG9OYW1lIjoic2lkZWJvYXJkIiwicHJvdmlkZXIiOiJnaXRodWIifX0" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fi
+---
+===== #164 =====
+===== #163 =====
+PR163 @cursor[bot] packages/core/src/orchestrator/orchestrator.ts:545
+### Startup reclaim skipped on typical launches
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+Orphan run reclaim is tied to `reclaimStaleTurns`, but the desktop app only passes that when cwd is a git repo. Packaged Dock launches skip that block, so after a crash or force-quit the UI can still show stale `activeRuns` and leftover listeners are not cleared until the user hits Stop.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 37284771-95df-400a-8548-d17e356adcbb -->
+
+<!-- LOCATIONS START
+packages/core/src/orchestrator/orchestrator.ts#L539-L545
+apps/desktop/src/main/index.ts#L1820-L1835
+LOCATIONS END -->
+<details>
+<summary>Additional Locations (1)</summary>
+
+- [`apps/desktop/src/main/index.ts#L1820-L1835`](https://github.com/mattlevine/sideboard/blob/aafceee44d7b531249bcd1b6fdcf92aa97cfbd57/apps/desktop/src/main/index.ts#L1820-L1835)
+
+</details>
+
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmYxZmExMjMzLTdiMDQtNDM5Ny1iNjdkLTgxN2IzNjQxYjU1NiIsImVuY3J5cHRpb25LZXkiOiI5SUR4LXpSREhMN0Vkd014QWVYYzk1MGs5V2tZRjRjNjNUdW9nZUhpY1BFIiwiYnJhbmNoIjoibWF0dC9maXgtb3JwaGFuLWRldi1pbnN0YW5jZXMtb24tcmVzdGFydCIsI
+---
+PR163 @cursor[bot] packages/core/src/hook/conductor.ts:274
+### Port kill blocks the main thread
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+`killListenersOnPorts` now uses `execFileSync` with a login `zsh` (or PowerShell) once per persisted port. Each run records a 10-port range, and Stop/quit invoke this on the Electron main thread, so the UI and `will-quit` can stall for seconds while shells source rc files.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 5beaff89-fa32-401a-854b-d6bae7f87930 -->
+
+<!-- LOCATIONS START
+packages/core/src/hook/conductor.ts#L245-L274
+packages/core/src/hook/conductor.ts#L301-L304
+LOCATIONS END -->
+<details>
+<summary>Additional Locations (1)</summary>
+
+- [`packages/core/src/hook/conductor.ts#L301-L304`](https://github.com/mattlevine/sideboard/blob/aafceee44d7b531249bcd1b6fdcf92aa97cfbd57/packages/core/src/hook/conductor.ts#L301-L304)
+
+</details>
+
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90Ojg4ZmViMTRkLTZmNmItNDNiZS04YWY1LWZiNDUzOWQ0NzNmMiIsImVuY3J5cHRpb25LZXkiOiJDakFPUm12cDhpT2tpVndaYnJySk4tSTRqb2YtWHFobFhzRE1HbTJFN2djIiwiYnJhbmNoIjoibWF0dC9maXgtb3JwaGFuLWRldi1pbnN0YW5jZXMtb24tcmVzdGFydCIsInJlcG9Pd25lciI6Im1hdHRsZXZpb
+---
+PR163 REVIEW @cursor[bot] COMMENTED
+<!-- BUGBOT_REVIEW -->
+Cursor Bugbot has reviewed your changes and found 2 potential issues.
+
+
+
+<!-- BUGBOT_FIX_ALL -->
+<a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9BTExfSU5fQ1VSU09SIiwiZGF0YSI6eyJyZWRpc0tleSI6ImJ1Z2JvdC1tdWx0aTo4MzcxYjQ0MC1kNDU1LTQ3YWQtYmEwNC0yYjA1MWQyYjczNmQiLCJlbmNyeXB0aW9uS2V5IjoiVmpPN0d6TlE1SGxaUWFzSUpObmJWR0UwdS0tQmtSUzhicmFOZ2hRMS1sTSIsImJyYW5jaCI6Im1hdHQvZml4LW9ycGhhbi1kZXYtaW5zdGFuY2VzLW9uLXJlc3RhcnQiLCJyZXBvT3duZXIiOiJtYXR0bGV2aW5lIiwicmVwb05hbWUiOiJzaWRlYm9hcmQiLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/asse
+---
+===== #162 =====
+===== #161 =====
+PR161 @cursor[bot] apps/desktop/src/renderer/src/components/EmbeddedTerminal.tsx:201
+### Replay drops output after async write
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+Chunked `writeXtermScrollback` stretches the window where `attached` is false, but catch-up is still a single follow-up `snapshot` that only applies when `second.startsWith(first)`. Live `onData` is dropped during those rAF yields. Once the 256 KB cap slides, the prefix check fails and the delta is skipped, so remount can show a gap until the next replay.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 15c400f9-4e31-40d5-a413-df97c5952ceb -->
+
+<!-- LOCATIONS START
+apps/desktop/src/renderer/src/components/EmbeddedTerminal.tsx#L182-L203
+LOCATIONS END -->
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmY0NTczZjYwLTZjMzAtNDlhZi1hYjZkLWQ0OTE1OGUxNzc0YyIsImVuY3J5cHRpb25LZXkiOiJ4WnhMcUxjSV8tanYxVGNGQ2hvWkQ1Nm5LN0lWZEVtcFdERko1WjlLdFlFIiwiYnJhbmNoIjoibWF0dC9maXgtdGVybWluYWwtcHJvbXB0LWR1cC1vbi13b3JrdHJlZS1zd2l0Y2giLCJyZXBvT3duZXIiOiJtYXR0bGV2aW5lIiwicmVwb05hbWUiOiJzaWRlYm9hcmQiLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https
+---
+PR161 REVIEW @cursor[bot] COMMENTED
+<!-- BUGBOT_REVIEW -->
+Cursor Bugbot has reviewed your changes and found 1 potential issue.
+
+
+
+<!-- BUGBOT_FIX_ALL -->
+<a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9BTExfSU5fQ1VSU09SIiwiZGF0YSI6eyJyZWRpc0tleSI6ImJ1Z2JvdC1tdWx0aTo5YTQ0MTM0OC1kMDY3LTRhYTgtYmM1NS05NDczYmM2ODg0MTciLCJlbmNyeXB0aW9uS2V5Ijoiek1Ta0FDdHZ5VXdPT0FaSllsN1V5bnkwVS14elN4MzJLX3NxbUt5UzFMNCIsImJyYW5jaCI6Im1hdHQvZml4LXRlcm1pbmFsLXByb21wdC1kdXAtb24td29ya3RyZWUtc3dpdGNoIiwicmVwb093bmVyIjoibWF0dGxldmluZSIsInJlcG9OYW1lIjoic2lkZWJvYXJkIiwicHJvdmlkZXIiOiJnaXRodWIifX0" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.
+---
+===== #160 =====
+===== #159 =====
+===== #158 =====
+===== #157 =====
+===== #156 =====
+PR156 @cursor[bot] apps/desktop/src/renderer/src/styles/global.css:8842
+### Parked log hosts do not fill
+
+**High Severity**
+
+<!-- DESCRIPTION START -->
+New `run-panel-host` and `setup-panel-host` wrappers sit in the flex `right-lower-body` without `flex: 1`, `min-height: 0`, or a column flex context. Only `.is-parked` is styled, so the visible pane no longer fills the lower sidebar. The log `pre` grows with text and is clipped by `overflow: hidden`, so verbose Run/Setup output cannot scroll and the latest lines stay off-screen.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 414aaa26-1f85-4a32-b6a2-c7c16c356fa0 -->
+
+<!-- LOCATIONS START
+apps/desktop/src/renderer/src/styles/global.css#L8827-L8842
+apps/desktop/src/renderer/src/components/RightSidebar.tsx#L1789-L1874
+LOCATIONS END -->
+<details>
+<summary>Additional Locations (1)</summary>
+
+- [`apps/desktop/src/renderer/src/components/RightSidebar.tsx#L1789-L1874`](https://github.com/mattlevine/sideboard/blob/05697d27e03f4fdf466dbbe7f8ff472c162b0ce8/apps/desktop/src/renderer/src/components/RightSidebar.tsx#L1789-L1874)
+
+</details>
+
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OjIzODFjMzZkLTBkMWYtNGRjNi05NTg1LWYwOGIwYThjY
+---
+PR156 @cursor[bot] apps/desktop/src/renderer/src/lib/script-output-paint.ts:105
+### Script clear drops sibling logs
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+`createKeyedScriptOutputPainter.clear(key)` cancels the shared animation frame and does not reschedule a flush for other scripts. Pending lines for concurrent runs stay in the map with `raf` cleared, so they are never painted until some later `push`. Starting one script while another is logging can stall or drop that other script’s output.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: fd444278-3fdd-4078-bcdf-26db4390bc88 -->
+
+<!-- LOCATIONS START
+apps/desktop/src/renderer/src/lib/script-output-paint.ts#L89-L105
+LOCATIONS END -->
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmI0OWEzODgzLWJmOTUtNGRjMi1iNjNiLTUwZTU0MmEwZTNmYSIsImVuY3J5cHRpb25LZXkiOiIzdFgzVXBxQ0xMYUx1SFV1RG9tdHRJNGxUWi1UQzZ4SFdvUXhEdmdrX2ZBIiwiYnJhbmNoIjoibWF0dC9maXgtcnVuLXBhbmVsLXVpLWphbmsiLCJyZXBvT3duZXIiOiJtYXR0bGV2aW5lIiwicmVwb05hbWUiOiJzaWRlYm9hcmQiLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><sou
+---
+PR156 @cursor[bot] apps/desktop/src/renderer/src/components/RightSidebar.tsx:265
+### Setup hydrate skipped until opened
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+`getSetupLog` now lives only inside `SetupOutputStream`, which mounts when `setupOpened` is true. The sidebar no longer hydrates on worktree bind, so a worktree whose setup is already running does not restore `setupRunning` or switch to Setup unless that tab was already selected. Returning to a worktree last left on Run/Terminal hides an in-flight setup until the user opens Setup.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 0574fd41-eed2-41f4-b596-cf305ffcf1a1 -->
+
+<!-- LOCATIONS START
+apps/desktop/src/renderer/src/components/RightSidebar.tsx#L259-L266
+apps/desktop/src/renderer/src/components/SetupOutputStream.tsx#L47-L65
+apps/desktop/src/renderer/src/components/RightSidebar.tsx#L1789-L1816
+LOCATIONS END -->
+<details>
+<summary>Additional Locations (2)</summary>
+
+- [`apps/desktop/src/renderer/src/components/SetupOutputStream.tsx#L47-L65`](https://github.com/mattlevine/sideboard/blob/05697d27e03f4fdf466dbbe7f8ff472c162b0ce8/apps/desktop/src/renderer/src/components/SetupOutputStream.tsx#L47-L65)
+- [`apps/desktop/src/renderer/src/components/RightSidebar.tsx#L1789-L1816`](https://github.com/mattlev
+---
+PR156 REVIEW @cursor[bot] COMMENTED
+<!-- BUGBOT_REVIEW -->
+Cursor Bugbot has reviewed your changes and found 3 potential issues.
+
+
+
+<!-- BUGBOT_FIX_ALL -->
+<a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9BTExfSU5fQ1VSU09SIiwiZGF0YSI6eyJyZWRpc0tleSI6ImJ1Z2JvdC1tdWx0aTpiNzdhYTAyMC0xOTQyLTQzNGItYmE0YS1kYTkxYTAxZmFhOTIiLCJlbmNyeXB0aW9uS2V5IjoiOEtlMDZsMlJQN2dfb3dia19Td0dVSmFyNGdmcHVKLXVUYVNFLUtURGZJVSIsImJyYW5jaCI6Im1hdHQvZml4LXJ1bi1wYW5lbC11aS1qYW5rIiwicmVwb093bmVyIjoibWF0dGxldmluZSIsInJlcG9OYW1lIjoic2lkZWJvYXJkIiwicHJvdmlkZXIiOiJnaXRodWIifX0" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cu
+---

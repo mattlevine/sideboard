@@ -1,0 +1,113 @@
+===== #165 =====
+===== #164 =====
+===== #163 =====
+PR163 @cursor[bot] packages/core/src/orchestrator/orchestrator.ts:545
+### Startup reclaim skipped on typical launches
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+Orphan run reclaim is tied to `reclaimStaleTurns`, but the desktop app only passes that when cwd is a git repo. Packaged Dock launches skip that block, so after a crash or force-quit the UI can still show stale `activeRuns` and leftover listeners are not cleared until the user hits Stop.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 37284771-95df-400a-8548-d17e356adcbb -->
+
+<!-- LOCATIONS START
+packages/core/src/orchestrator/orchestrator.ts#L539-L545
+apps/desktop/src/main/index.ts#L1820-L1835
+LOCATIONS END -->
+<details>
+<summary>Additional Locations (1)</summary>
+
+- [`apps/desktop/src/main/index.ts#L1820-L1835`](https://github.com/mattlevine/sideboard/blob/aafceee44d7b531249bcd1b6fdcf92aa97cfbd57/apps/desktop/src/main/index.ts#L1820-L1835)
+
+</details>
+
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmYxZmExMjMzLTdiMDQtNDM5Ny1iNjdkLTgxN2IzNjQxYjU1NiIsImVuY3J5cHRpb25LZXkiOiI5SUR4LXpSREhMN0Vkd014QWVYYzk1MGs5V2tZRjRjNjNUdW9nZUhpY1BFIiwiYnJhbmNoIjoibWF0dC9maXgtb3JwaGFuLWRldi1pbnN0YW5jZXMtb24tcmVzdGFydCIsInJlcG9Pd25lciI6Im1hdHRsZXZpbmUiLCJyZXBvTmFtZSI6InNpZGVib2FyZCIsInByb3ZpZGVyIjoiZ2l0aHViIn19" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a>&nbsp;<a href="https://cursor.com/agents?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9XRUIiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmYxZmExMjMzLTdiMDQtNDM5Ny1iNjdkLTgxN2IzNjQxYjU1NiIsImVuY3J5cHRpb25LZXkiOiI5SUR4LXpSREhMN0Vkd014QWVYYzk1MGs5V2tZRjRjNjNUdW9nZUhpY1BFIiwiYnJhbmNoIjoibWF0dC9maXgtb3JwaGFuLWRldi1pbnN0YW5jZXMtb24tcmVzdGFydCIsInJlcG9Pd25lciI6Im1hdHRsZXZpbmUiLCJyZXBvTmFtZSI6InNpZGVib2FyZCIsInByTnVtYmVyIjoxNjMsImNvbW1pdFNoYSI6ImFhZmNlZWU0NGQ3YjUzMTI0OWJjZDFiNmZkY2Y5MmFhOTdjZmJkNTciLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-web-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-web-light.png"><img alt="Fix in Web" width="99" height="28" src="https://cursor.com/assets/images/fix-in-web-dark.png"></picture></a></div>
+
+
+<sup>Reviewed by [Cursor Bugbot](https://cursor.com/bugbot) for commit aafceee44d7b531249bcd1b6fdcf92aa97cfbd57. Configure [here](https://www.cursor.com/dashboard/bugbot).</sup>
+
+---
+PR163 @cursor[bot] packages/core/src/hook/conductor.ts:274
+### Port kill blocks the main thread
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+`killListenersOnPorts` now uses `execFileSync` with a login `zsh` (or PowerShell) once per persisted port. Each run records a 10-port range, and Stop/quit invoke this on the Electron main thread, so the UI and `will-quit` can stall for seconds while shells source rc files.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 5beaff89-fa32-401a-854b-d6bae7f87930 -->
+
+<!-- LOCATIONS START
+packages/core/src/hook/conductor.ts#L245-L274
+packages/core/src/hook/conductor.ts#L301-L304
+LOCATIONS END -->
+<details>
+<summary>Additional Locations (1)</summary>
+
+- [`packages/core/src/hook/conductor.ts#L301-L304`](https://github.com/mattlevine/sideboard/blob/aafceee44d7b531249bcd1b6fdcf92aa97cfbd57/packages/core/src/hook/conductor.ts#L301-L304)
+
+</details>
+
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90Ojg4ZmViMTRkLTZmNmItNDNiZS04YWY1LWZiNDUzOWQ0NzNmMiIsImVuY3J5cHRpb25LZXkiOiJDakFPUm12cDhpT2tpVndaYnJySk4tSTRqb2YtWHFobFhzRE1HbTJFN2djIiwiYnJhbmNoIjoibWF0dC9maXgtb3JwaGFuLWRldi1pbnN0YW5jZXMtb24tcmVzdGFydCIsInJlcG9Pd25lciI6Im1hdHRsZXZpbmUiLCJyZXBvTmFtZSI6InNpZGVib2FyZCIsInByb3ZpZGVyIjoiZ2l0aHViIn19" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a>&nbsp;<a href="https://cursor.com/agents?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9XRUIiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90Ojg4ZmViMTRkLTZmNmItNDNiZS04YWY1LWZiNDUzOWQ0NzNmMiIsImVuY3J5cHRpb25LZXkiOiJDakFPUm12cDhpT2tpVndaYnJySk4tSTRqb2YtWHFobFhzRE1HbTJFN2djIiwiYnJhbmNoIjoibWF0dC9maXgtb3JwaGFuLWRldi1pbnN0YW5jZXMtb24tcmVzdGFydCIsInJlcG9Pd25lciI6Im1hdHRsZXZpbmUiLCJyZXBvTmFtZSI6InNpZGVib2FyZCIsInByTnVtYmVyIjoxNjMsImNvbW1pdFNoYSI6ImFhZmNlZWU0NGQ3YjUzMTI0OWJjZDFiNmZkY2Y5MmFhOTdjZmJkNTciLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-web-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-web-light.png"><img alt="Fix in Web" width="99" height="28" src="https://cursor.com/assets/images/fix-in-web-dark.png"></picture></a></div>
+
+
+<sup>Reviewed by [Cursor Bugbot](https://cursor.com/bugbot) for commit aafceee44d7b531249bcd1b6fdcf92aa97cfbd57. Configure [here](https://www.cursor.com/dashboard/bugbot).</sup>
+
+---
+PR163 REVIEW @cursor[bot] COMMENTED
+<!-- BUGBOT_REVIEW -->
+Cursor Bugbot has reviewed your changes and found 2 potential issues.
+
+
+
+<!-- BUGBOT_FIX_ALL -->
+<a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9BTExfSU5fQ1VSU09SIiwiZGF0YSI6eyJyZWRpc0tleSI6ImJ1Z2JvdC1tdWx0aTo4MzcxYjQ0MC1kNDU1LTQ3YWQtYmEwNC0yYjA1MWQyYjczNmQiLCJlbmNyeXB0aW9uS2V5IjoiVmpPN0d6TlE1SGxaUWFzSUpObmJWR0UwdS0tQmtSUzhicmFOZ2hRMS1sTSIsImJyYW5jaCI6Im1hdHQvZml4LW9ycGhhbi1kZXYtaW5zdGFuY2VzLW9uLXJlc3RhcnQiLCJyZXBvT3duZXIiOiJtYXR0bGV2aW5lIiwicmVwb05hbWUiOiJzaWRlYm9hcmQiLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix All in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a>
+<!-- /BUGBOT_FIX_ALL -->
+
+<!-- BUGBOT_AUTOFIX_REVIEW_FOOTNOTE_BEGIN -->
+<sup>❌ Bugbot Autofix is OFF. To automatically fix reported issues with cloud agents, enable autofix in the [Cursor dashboard](https://www.cursor.com/dashboard/bugbot).</sup>
+<!-- BUGBOT_AUTOFIX_REVIEW_FOOTNOTE_END -->
+
+<sup>Reviewed by [Cursor Bugbot](https://cursor.com/bugbot) for commit aafceee44d7b531249bcd1b6fdcf92aa97cfbd57. Configure [here](https://www.cursor.com/dashboard/bugbot).</sup>
+---
+===== #162 =====
+===== #161 =====
+PR161 @cursor[bot] apps/desktop/src/renderer/src/components/EmbeddedTerminal.tsx:201
+### Replay drops output after async write
+
+**Medium Severity**
+
+<!-- DESCRIPTION START -->
+Chunked `writeXtermScrollback` stretches the window where `attached` is false, but catch-up is still a single follow-up `snapshot` that only applies when `second.startsWith(first)`. Live `onData` is dropped during those rAF yields. Once the 256 KB cap slides, the prefix check fails and the delta is skipped, so remount can show a gap until the next replay.
+<!-- DESCRIPTION END -->
+
+<!-- BUGBOT_BUG_ID: 15c400f9-4e31-40d5-a413-df97c5952ceb -->
+
+<!-- LOCATIONS START
+apps/desktop/src/renderer/src/components/EmbeddedTerminal.tsx#L182-L203
+LOCATIONS END -->
+<div><a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9DVVJTT1IiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmY0NTczZjYwLTZjMzAtNDlhZi1hYjZkLWQ0OTE1OGUxNzc0YyIsImVuY3J5cHRpb25LZXkiOiJ4WnhMcUxjSV8tanYxVGNGQ2hvWkQ1Nm5LN0lWZEVtcFdERko1WjlLdFlFIiwiYnJhbmNoIjoibWF0dC9maXgtdGVybWluYWwtcHJvbXB0LWR1cC1vbi13b3JrdHJlZS1zd2l0Y2giLCJyZXBvT3duZXIiOiJtYXR0bGV2aW5lIiwicmVwb05hbWUiOiJzaWRlYm9hcmQiLCJwcm92aWRlciI6ImdpdGh1YiJ9fQ" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a>&nbsp;<a href="https://cursor.com/agents?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9JTl9XRUIiLCJkYXRhIjp7InJlZGlzS2V5IjoiYnVnYm90OmY0NTczZjYwLTZjMzAtNDlhZi1hYjZkLWQ0OTE1OGUxNzc0YyIsImVuY3J5cHRpb25LZXkiOiJ4WnhMcUxjSV8tanYxVGNGQ2hvWkQ1Nm5LN0lWZEVtcFdERko1WjlLdFlFIiwiYnJhbmNoIjoibWF0dC9maXgtdGVybWluYWwtcHJvbXB0LWR1cC1vbi13b3JrdHJlZS1zd2l0Y2giLCJyZXBvT3duZXIiOiJtYXR0bGV2aW5lIiwicmVwb05hbWUiOiJzaWRlYm9hcmQiLCJwck51bWJlciI6MTYxLCJjb21taXRTaGEiOiI2MzliYWQ4YjllODg2MWYzMGQ5NWQ5NGViNDliNjhmNWVjOTYxNzliIiwicHJvdmlkZXIiOiJnaXRodWIifX0" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-web-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-web-light.png"><img alt="Fix in Web" width="99" height="28" src="https://cursor.com/assets/images/fix-in-web-dark.png"></picture></a></div>
+
+
+<sup>Reviewed by [Cursor Bugbot](https://cursor.com/bugbot) for commit 639bad8b9e8861f30d95d94eb49b68f5ec96179b. Configure [here](https://www.cursor.com/dashboard/bugbot).</sup>
+
+---
+PR161 REVIEW @cursor[bot] COMMENTED
+<!-- BUGBOT_REVIEW -->
+Cursor Bugbot has reviewed your changes and found 1 potential issue.
+
+
+
+<!-- BUGBOT_FIX_ALL -->
+<a href="https://cursor.com/open?link=eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiQlVHQk9UX0ZJWF9BTExfSU5fQ1VSU09SIiwiZGF0YSI6eyJyZWRpc0tleSI6ImJ1Z2JvdC1tdWx0aTo5YTQ0MTM0OC1kMDY3LTRhYTgtYmM1NS05NDczYmM2ODg0MTciLCJlbmNyeXB0aW9uS2V5Ijoiek1Ta0FDdHZ5VXdPT0FaSllsN1V5bnkwVS14elN4MzJLX3NxbUt5UzFMNCIsImJyYW5jaCI6Im1hdHQvZml4LXRlcm1pbmFsLXByb21wdC1kdXAtb24td29ya3RyZWUtc3dpdGNoIiwicmVwb093bmVyIjoibWF0dGxldmluZSIsInJlcG9OYW1lIjoic2lkZWJvYXJkIiwicHJvdmlkZXIiOiJnaXRodWIifX0" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix All in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a>
+<!-- /BUGBOT_FIX_ALL -->
+
+<!-- BUGBOT_AUTOFIX_REVIEW_FOOTNOTE_BEGIN -->
+<sup>❌ Bugbot Autofix is OFF. To automatically fix reported issues with cloud agents, enable autofix in the [Cursor dashboard](https://www.cursor.com/dashboard/bugbot).</sup>
+<!-- BUGBOT_AUTOFIX_REVIEW_FOOTNOTE_END -->
+
+<sup>Reviewed by [Cursor Bugbot](https://cursor.com/bugbot) for commit 639bad8b9e8861f30d95d94eb49b68f5ec96179b. Configure [here](https://www.cursor.com/dashboard/bugbot).</sup>
+---

@@ -1,0 +1,9 @@
+{
+  "number": 165,
+  "title": "fix: stop local Run scripts when a worktree connects a new PR",
+  "isDraft": true,
+  "headRefName": "matt/fix-stop-run-on-pr-retarget",
+  "url": "https://github.com/mattlevine/sideboard/pull/165",
+  "commentCount": 0,
+  "reviews": []
+}

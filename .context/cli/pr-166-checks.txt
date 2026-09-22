@@ -1,0 +1,2 @@
+Cursor Bugbot	pending	0	https://cursor.com/docs/bugbot	
+core-and-cli	pending	0	https://github.com/mattlevine/sideboard/actions/runs/35775188281/job/106906503502	

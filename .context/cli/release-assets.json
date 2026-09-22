@@ -1,0 +1,12 @@
+{
+  "name": "0.1.226",
+  "tagName": "v0.1.226",
+  "isDraft": false,
+  "assets": [
+    "latest-mac.yml",
+    "Sideboard-0.1.226-arm64-mac.zip",
+    "Sideboard-0.1.226-arm64-mac.zip.blockmap",
+    "Sideboard-0.1.226-arm64.dmg",
+    "Sideboard-0.1.226-arm64.dmg.blockmap"
+  ]
+}
