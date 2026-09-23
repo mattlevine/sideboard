@@ -273,23 +273,38 @@ export const FOLLOW_UP_BEHAVIORS = ['steer', 'queue'] as const;
 /**
  * Sound played when an agent turn finishes.
  * - `none` (default): silent
- * - `goal`: soccer goal celebration (recommended when enabling sound)
+ * - `goal`: sports stadium score cheer (recommended when enabling sound)
  * - `bell`: short bell chime
- * - `train`: train whistle
+ * - `level` / `coin` / `fanfare` / `magic` / `rooster` / `whistle`: other bundled clips
  * - `custom`: user-imported audio file ({@link AdvancedAppSettings.agentDoneCustomSoundName})
  */
-export type AgentDoneSound = 'none' | 'goal' | 'bell' | 'train' | 'custom';
+export type AgentDoneSound =
+  | 'none'
+  | 'goal'
+  | 'bell'
+  | 'level'
+  | 'coin'
+  | 'fanfare'
+  | 'magic'
+  | 'rooster'
+  | 'whistle'
+  | 'custom';
 
-export const AGENT_DONE_SOUNDS = ['none', 'goal', 'bell', 'train', 'custom'] as const;
+export const AGENT_DONE_SOUNDS = [
+  'none',
+  'goal',
+  'bell',
+  'level',
+  'coin',
+  'fanfare',
+  'magic',
+  'rooster',
+  'whistle',
+  'custom',
+] as const;
 
 export function isAgentDoneSound(value: unknown): value is AgentDoneSound {
-  return (
-    value === 'none' ||
-    value === 'goal' ||
-    value === 'bell' ||
-    value === 'train' ||
-    value === 'custom'
-  );
+  return (AGENT_DONE_SOUNDS as readonly string[]).includes(value as string);
 }
 
 export interface AdvancedAppSettings {
@@ -400,7 +415,7 @@ export interface AdvancedAppSettings {
   /**
    * Sound when an agent turn finishes.
    * Omitted = {@link agentDoneSound} default (`none`).
-   * Prefer `goal` (soccer celebration) when enabling a built-in sound.
+   * Prefer `goal` (sports score cheer) when enabling a built-in sound.
    * Use `custom` with {@link agentDoneCustomSoundName} after importing a file.
    */
   agentDoneSound?: AgentDoneSound;

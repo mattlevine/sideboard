@@ -615,8 +615,8 @@ describe('app settings', () => {
       'bell',
     );
     expect(mod.agentDoneSound()).toBe('bell');
-    expect(mod.updateAdvancedSettings({ agentDoneSound: 'train' }).advanced.agentDoneSound).toBe(
-      'train',
+    expect(mod.updateAdvancedSettings({ agentDoneSound: 'rooster' }).advanced.agentDoneSound).toBe(
+      'rooster',
     );
     expect(mod.updateAdvancedSettings({ agentDoneSound: 'none' }).advanced.agentDoneSound).toBe(
       'none',

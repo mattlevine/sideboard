@@ -603,13 +603,46 @@ export function SettingsModal({
   }
 
   async function saveAdvancedPatch(patch: Partial<AdvancedAppSettings>) {
+    // Optimistic UI so the sound select does not snap back while IPC runs (or if
+    // the main process is briefly on a stale core build).
+    if (patch.agentDoneSound != null || 'agentDoneCustomSoundName' in patch) {
+      setSettings((prev) => ({
+        ...prev,
+        advanced: {
+          ...prev.advanced,
+          ...('agentDoneSound' in patch ? { agentDoneSound: patch.agentDoneSound } : {}),
+          ...('agentDoneCustomSoundName' in patch
+            ? {
+                agentDoneCustomSoundName:
+                  patch.agentDoneCustomSoundName === '' ||
+                  patch.agentDoneCustomSoundName == null
+                    ? undefined
+                    : patch.agentDoneCustomSoundName,
+              }
+            : {}),
+        },
+      }));
+    }
     setBusy(true);
     setError(null);
     try {
       const next = await window.sideboard.updateAdvancedSettings(patch);
+      if (
+        patch.agentDoneSound != null &&
+        next.advanced?.agentDoneSound !== patch.agentDoneSound
+      ) {
+        setError(
+          'Could not save that sound (desktop main process needs a restart). Quit and reopen the Sideboard dev window, then try again.',
+        );
+        // Keep the optimistic selection visible until reload succeeds.
+        return;
+      }
       applySettings(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      void reload().catch(() => {
+        /* ignore */
+      });
     } finally {
       setBusy(false);
     }
@@ -1543,9 +1576,9 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-section-title">Agent done sound</div>
                   <p className="settings-hint">
-                    Play a short sound when an agent turn finishes. Soccer goal is the
-                    recommended built-in; or import your own audio file (mp3, wav, m4a,
-                    …).
+                    Play a short sound when an agent turn finishes. Score cheer is the
+                    recommended built-in; other Mixkit clips and a custom import (mp3,
+                    wav, m4a, …) are available too.
                   </p>
                   <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
                     <label className="settings-hint" htmlFor="agent-done-sound">

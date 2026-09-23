@@ -309,13 +309,14 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
     '- Hanging, no useful output, or the wrong thing → `stop_job` (or the helper with `stop <id>`). Do not stop a pack/test/deploy that is clearly making progress.',
     '- Stay in the loop until stillRunning is false (or you stopped it). ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
+    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` — logs and Stop live in the thread UI. Do not detached-job or shell-spawn that same command.',
   ].join('\n');
 }
 
 /** Short long-job line on every worktree turn (survives CLI resume). */
 export function formatLongRunningReminder(opts?: { scriptPath?: string | null }): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
-  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn.`;
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn. Project Dev button: list_run_scripts / run_dev_script / stop_dev_script (UI-connected — not detached-job).`;
 }
 
 /**
@@ -340,5 +341,5 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button); stop_dev_script to stop.';
 }
