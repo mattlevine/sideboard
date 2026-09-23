@@ -587,4 +587,32 @@ describe('Orchestrator desktop run-script adoption', () => {
     replaceRequest(thread.id, { op: 'stop', fulfilledAt: new Date().toISOString() });
     await expect(stopped).resolves.toBeUndefined();
   });
+
+  it('MCP stopDev follows a later stop-all that covers its script', async () => {
+    const thread = seedThread();
+    const mcp = asMcp(new Orchestrator());
+    mcp.runScriptAdoptTimeoutMs = 5_000;
+    const stopped = mcp.stopDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    replaceRequest(thread.id, { op: 'stop', scriptName: null });
+    await new Promise((r) => setTimeout(r, 80));
+    replaceRequest(thread.id, {
+      op: 'stop',
+      scriptName: null,
+      fulfilledAt: new Date().toISOString(),
+    });
+    await expect(stopped).resolves.toBeUndefined();
+  });
+
+  it('MCP stopDev fails fast when a stop for another script replaces it', async () => {
+    const thread = seedThread();
+    const mcp = asMcp(new Orchestrator());
+    mcp.runScriptAdoptTimeoutMs = 5_000;
+    const began = Date.now();
+    const stopped = mcp.stopDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    replaceRequest(thread.id, { op: 'stop', scriptName: 'api' });
+    await expect(stopped).rejects.toThrow(/replaced by another run-script request/);
+    expect(Date.now() - began).toBeLessThan(1_000);
+  });
 });

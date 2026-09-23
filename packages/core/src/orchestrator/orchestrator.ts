@@ -2333,9 +2333,13 @@ export class Orchestrator {
         return null;
       } else if (requestGone) {
         // Desktop holds one request per thread and only fulfills the current
-        // one. A later stop covering this script takes over; anything else
-        // means this stop can never be confirmed — fail now, not at timeout.
-        if (req?.op === 'stop' && (req.scriptName ?? null) === (scriptName ?? null)) {
+        // one. A later stop covering this script (same name, or stop-all)
+        // takes over; anything else means this stop can never be confirmed —
+        // fail now, not at timeout.
+        const coversThisStop =
+          req?.op === 'stop' &&
+          (req.scriptName == null || req.scriptName === (scriptName ?? null));
+        if (req && coversThisStop) {
           request = req;
           continue;
         }
