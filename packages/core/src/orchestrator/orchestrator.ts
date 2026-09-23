@@ -84,7 +84,7 @@ import type {
   TokenUsage,
   WorktreeDirtyStat,
 } from '../types/thread.js';
-import { isUnclaimedRunScriptRequest } from '../types/thread.js';
+import { isAdoptableRunScriptRequest } from '../types/thread.js';
 import { clipAgentEventForPaint, isInternalAgentStatusText } from '../agents/message-parts.js';
 import { sumUsageList } from '../agents/usage.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
@@ -388,6 +388,8 @@ export class Orchestrator {
   /** In-flight startDev per worktree run key — agent MCP + UI Start must not double-spawn. */
   private readonly startingDev =
     new Map<string, Promise<{ port: number; scriptName: string; ports: number[] }>>();
+  /** Serialize desktop apply of `runScriptRequest` per thread (start then stop). */
+  private readonly applyingRunScriptThreads = new Set<string>();
   /**
    * MCP/CLI poll budget while Electron main adopts `runScriptRequest`.
    * Tests shorten this so a missing desktop does not wait 20s.
@@ -653,11 +655,23 @@ export class Orchestrator {
     for (const thread of listThreads()) {
       if (thread.status === 'archived') continue;
       const req = thread.runScriptRequest;
-      if (!isUnclaimedRunScriptRequest(req) || !req) continue;
-      const claimedAt = new Date().toISOString();
+      if (!isAdoptableRunScriptRequest(req) || !req) continue;
+      if (this.applyingRunScriptThreads.has(thread.id)) continue;
+      const claimedAt = req.claimedAt ?? new Date().toISOString();
       const claimed: RunScriptRequest = { ...req, claimedAt };
+      this.applyingRunScriptThreads.add(thread.id);
       updateThread(thread.id, { runScriptRequest: claimed });
-      void this.applyRunScriptRequest(thread.id, claimed);
+      void this.applyRunScriptRequest(thread.id, claimed).finally(() => {
+        this.applyingRunScriptThreads.delete(thread.id);
+        const latest = readThread(thread.id)?.runScriptRequest;
+        if (
+          latest &&
+          latest.requestId !== req.requestId &&
+          isAdoptableRunScriptRequest(latest)
+        ) {
+          this.adoptPersistedRunScripts();
+        }
+      });
     }
   }
 
@@ -2312,9 +2326,10 @@ export class Orchestrator {
         if (fulfilled && !run) {
           throw new Error('Desktop reported the run script started, but it is not active.');
         }
-      } else {
-        const gone = scriptName ? !run : shared.activeRuns.length === 0;
-        if (fulfilled || gone) return null;
+      } else if (fulfilled) {
+        // Do not treat missing activeRuns as success — a start may still be in
+        // flight and would keep running after MCP already reported stopped.
+        return null;
       }
       await new Promise((r) => setTimeout(r, 40));
     }
@@ -2325,12 +2340,30 @@ export class Orchestrator {
     );
   }
 
+  private async awaitStartingDev(worktreePath: string, scriptName?: string): Promise<void> {
+    const keys = scriptName
+      ? [worktreeRunProcessKey(worktreePath, scriptName)]
+      : [...this.startingDev.keys()].filter((k) => isWorktreeRunProcessKey(k, worktreePath));
+    await Promise.all(
+      keys.map(async (key) => {
+        const pending = this.startingDev.get(key);
+        if (!pending) return;
+        try {
+          await pending;
+        } catch {
+          // start failed; Stop can still reap leftovers
+        }
+      }),
+    );
+  }
+
   async stopDev(threadRef: string, scriptName?: string): Promise<void> {
     const thread = this.requireThread(threadRef);
     if (!this.shouldOwnRunScripts()) {
       await this.requestDesktopRunScript(thread, 'stop', scriptName);
       return;
     }
+    await this.awaitStartingDev(thread.worktreePath, scriptName);
     const siblings = threadsSharingWorktree(thread.worktreePath);
     const shared = mergeWorktreeActiveRuns(siblings);
     if (scriptName) {

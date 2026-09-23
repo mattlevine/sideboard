@@ -237,14 +237,28 @@ export interface ScriptHandle {
   child: ResultPromise;
 }
 
+/** Parse `lsof -ti` output, skipping this process (port reservations listen here). */
+export function killableListenerPids(raw: string, selfPid = process.pid): number[] {
+  const pids: number[] = [];
+  for (const token of raw.trim().split(/\s+/)) {
+    const pid = Number(token);
+    if (!Number.isFinite(pid) || pid <= 0 || pid === selfPid) continue;
+    pids.push(pid);
+  }
+  return pids;
+}
+
 /**
  * Free TCP listeners on ports we allocated for a run script.
  * Used when the in-memory process handle is gone (app restart) or as a
  * backstop when process-group kill leaves grandchildren bound.
  * Uses `lsof`/`process.kill` directly (no login shell) so Stop / quit stay
  * responsive on the Electron main thread.
+ * Never signals `process.pid` — reservations listen in this process, and a
+ * stale-port reap must not SIGTERM Sideboard (or steal another worktree's hold).
  */
 export function killListenersOnPorts(ports: number[]): void {
+  const selfPid = process.pid;
   for (const port of ports) {
     if (!Number.isFinite(port) || port <= 0) continue;
     try {
@@ -254,7 +268,7 @@ export function killListenersOnPorts(ports: number[]): void {
           [
             '-NoProfile',
             '-Command',
-            `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
+            `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne ${selfPid} } | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
           ],
           { stdio: 'ignore', timeout: 3_000 },
         );
@@ -271,9 +285,7 @@ export function killListenersOnPorts(ports: number[]): void {
         // No LISTEN on this port (lsof exits 1) — nothing to kill.
         continue;
       }
-      for (const token of raw.trim().split(/\s+/)) {
-        const pid = Number(token);
-        if (!Number.isFinite(pid) || pid <= 0) continue;
+      for (const pid of killableListenerPids(raw, selfPid)) {
         try {
           process.kill(pid, 'SIGTERM');
         } catch {
@@ -323,6 +335,7 @@ async function spawnWorkspaceScript(
     worktreePath: string;
     repoPath: string;
     ports?: number[];
+    heldPorts?: PortReservation[];
     workspaceName?: string;
     defaultBranch?: string;
     onLine?: (line: string) => void;
@@ -347,6 +360,12 @@ async function spawnWorkspaceScript(
     );
   } catch {
     /* best-effort — script still runs */
+  }
+
+  // Hold SIDEBOARD_PORT across login-env / git-auth awaits; release only now
+  // so another worktree Start cannot steal it before execa.
+  if (opts.heldPorts?.length) {
+    await Promise.all(opts.heldPorts.map((h) => h.release()));
   }
 
   const shell = process.platform === 'darwin' ? 'zsh' : 'bash';
@@ -647,11 +666,11 @@ export async function startDevServer(
   const held = await reservePortRange(PORT_RANGE_SIZE);
   const ports = held.map((h) => h.port);
   try {
-    await Promise.all(held.map((h) => h.release()));
     const handle = await spawnWorkspaceScript(script.command, {
       worktreePath,
       repoPath,
       ports,
+      heldPorts: held,
       defaultBranch: opts?.defaultBranch,
       onLine,
     });

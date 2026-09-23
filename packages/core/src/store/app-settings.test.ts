@@ -450,6 +450,22 @@ describe('app settings', () => {
     });
   });
 
+  it('merges orchestrator effort without dropping an existing model', async () => {
+    const mod = await load();
+    mod.updateDefaultsSettings({
+      orchestrator: { agent: 'claude', model: 'opus', effort: 'high' },
+    });
+    const saved = mod.updateDefaultsSettings({
+      orchestrator: { effort: 'xhigh', fast: false },
+    });
+    expect(saved.defaults.orchestrator).toEqual({
+      agent: 'claude',
+      model: 'opus',
+      effort: 'xhigh',
+      fast: false,
+    });
+  });
+
   it('coerces a non-orchestrator account default when resolving orchestrator defaults', async () => {
     const mod = await load();
     mod.updateDefaultsSettings({ agent: 'brightsy', model: 'team-1' });

@@ -6,6 +6,7 @@ import {
   buildWorkspaceScriptEnv,
   copyConfiguredFiles,
   getRunMode,
+  killableListenerPids,
   killListenersOnPorts,
   listRunScripts,
   reservePort,
@@ -209,6 +210,33 @@ describe('runConventionSetup / runWorkspaceSetup', () => {
 describe('killListenersOnPorts', () => {
   it('is a no-op for invalid ports', () => {
     expect(() => killListenersOnPorts([0, -1, Number.NaN])).not.toThrow();
+  });
+
+  it('does not include this process in the pids to signal', () => {
+    expect(killableListenerPids(`12\n${process.pid}\n34\n`, process.pid)).toEqual([12, 34]);
+    expect(killableListenerPids(String(process.pid), process.pid)).toEqual([]);
+  });
+
+  it('does not SIGTERM this process when it owns the listener', async () => {
+    const { createServer } = await import('node:net');
+    const server = createServer();
+    const port = await new Promise<number>((resolve, reject) => {
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        if (!addr || typeof addr === 'string') reject(new Error('no port'));
+        else resolve(addr.port);
+      });
+    });
+    expect(() => killListenersOnPorts([port])).not.toThrow();
+    const stillListening = await new Promise<boolean>((resolve) => {
+      const probe = createServer();
+      probe.once('error', () => resolve(true));
+      probe.listen(port, '127.0.0.1', () => {
+        probe.close(() => resolve(false));
+      });
+    });
+    expect(stillListening).toBe(true);
+    await new Promise<void>((res) => server.close(() => res()));
   });
 });
 

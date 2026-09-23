@@ -2366,6 +2366,8 @@ export function SettingsModal({
         onLiveChange={(next) => {
           void saveDefaultsPatch({
             orchestrator: {
+              agent: next.agent,
+              model: next.model,
               effort: next.effort,
               fast: next.agent === 'cursor' ? next.fast : false,
             },

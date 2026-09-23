@@ -58,10 +58,10 @@ describe('Orchestrator run-script orphan reclaim', () => {
     expect(next.devPort).toBeNull();
   });
 
-  it('stopDev clears persisted runs when no in-memory process handle exists', () => {
+  it('stopDev clears persisted runs when no in-memory process handle exists', async () => {
     const thread = seedThreadWithRun(41235);
     const orch = new Orchestrator();
-    orch.stopDev(thread.id, 'dev');
+    await orch.stopDev(thread.id, 'dev');
 
     const next = readThread(thread.id)!;
     expect(next.activeRuns).toEqual([]);
@@ -498,5 +498,56 @@ describe('Orchestrator desktop run-script adoption', () => {
     await stopped;
     expect(readThread(thread.id)?.activeRuns).toEqual([]);
     expect(readThread(thread.id)?.devPort).toBeNull();
+  });
+
+  it('desktop re-adopts a claimed but unfulfilled runScriptRequest', async () => {
+    const thread = seedThread();
+    const live = readThread(thread.id)!;
+    live.runScriptRequest = {
+      op: 'start',
+      scriptName: 'dev',
+      requestId: 'req-claimed',
+      requestedAt: new Date().toISOString(),
+      claimedAt: new Date().toISOString(),
+    };
+    writeThread(live);
+
+    const conductor = await import('../hook/conductor.js');
+    vi.spyOn(conductor, 'startDevServer').mockResolvedValue({
+      pid: 9,
+      port: 41903,
+      ports: [41903],
+      scriptName: 'dev',
+      kill: () => undefined,
+      done: new Promise(() => undefined),
+    });
+    const desktop = asDesktop(new Orchestrator());
+    desktop.adoptPersistedRunScripts();
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline && readThread(thread.id)?.devPort !== 41903) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(readThread(thread.id)?.devPort).toBe(41903);
+    await desktop.stopDev(thread.id, 'dev');
+  });
+
+  it('MCP stopDev waits for desktop fulfill when no run is active yet', async () => {
+    const thread = seedThread();
+    const mcp = asMcp(new Orchestrator());
+    mcp.runScriptAdoptTimeoutMs = 500;
+    const stopped = mcp.stopDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    expect(readThread(thread.id)?.runScriptRequest?.op).toBe('stop');
+    let done = false;
+    void stopped.then(() => {
+      done = true;
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(done).toBe(false);
+
+    const desktop = asDesktop(new Orchestrator());
+    desktop.adoptPersistedRunScripts();
+    await stopped;
+    expect(readThread(thread.id)?.runScriptRequest?.fulfilledAt).toBeTruthy();
   });
 });

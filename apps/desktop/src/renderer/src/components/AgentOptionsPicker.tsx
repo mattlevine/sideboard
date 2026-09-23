@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentKind, Autonomy, ThinkingEffort } from '@sideboard-ai/core';
+import { shouldSnapshotPickerFromHost } from '../lib/agent-options-picker-sync';
 import {
   decodeBrightsyTarget,
   encodeBrightsyTarget,
@@ -119,6 +120,7 @@ export function AgentOptionsPicker({
   const [effort, setEffort] = useState<ThinkingEffort>(value.effort ?? 'high');
   const [fast, setFast] = useState(Boolean(value.fast));
   const [query, setQuery] = useState('');
+  const snapshottedOpenRef = useRef(false);
 
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(
     null,
@@ -128,7 +130,14 @@ export function AgentOptionsPicker({
   const [brightsyError, setBrightsyError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      snapshottedOpenRef.current = false;
+      return;
+    }
+    // Snapshot host value once per open. Live effort/Fast writes must not
+    // reset in-progress agent / model / permissions / search.
+    if (!shouldSnapshotPickerFromHost(open, snapshottedOpenRef.current)) return;
+    snapshottedOpenRef.current = true;
     const nextAgent =
       agents.some((a) => a.id === value.agent) ? value.agent : (agents[0]?.id ?? 'claude');
     setAgent(nextAgent);

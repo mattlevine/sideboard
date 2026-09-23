@@ -4,6 +4,7 @@ import {
   readRightSidebarOpen,
   readRightSidebarWidth,
   RIGHT_SIDEBAR_WIDTH_FALLBACK,
+  shouldResetParkedSidebarPanes,
   writeRightSidebarLower,
   writeRightSidebarOpen,
   writeRightSidebarWidth,
@@ -81,5 +82,10 @@ describe('right-sidebar-prefs', () => {
     expect(localStorage.getItem('sideboard.rightSidebar')).toBe('1');
     writeRightSidebarOpen('/wt/monaco', false);
     expect(localStorage.getItem('sideboard.rightSidebar')).toBe('1');
+  });
+
+  it('does not reset parked panes when switching chats on the same worktree', () => {
+    expect(shouldResetParkedSidebarPanes('/wt/monaco', '/wt/monaco/')).toBe(false);
+    expect(shouldResetParkedSidebarPanes('/wt/monaco', '/wt/cruzeiro')).toBe(true);
   });
 });

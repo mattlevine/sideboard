@@ -22,6 +22,14 @@ function normalizeWorktreeKey(key: string): string {
   return key.replace(/\/+$/, '');
 }
 
+/** Parked Setup / Run / shell reset only when the worktree changes, not on chat tab switch. */
+export function shouldResetParkedSidebarPanes(
+  prevWorktreeKey: string,
+  nextWorktreeKey: string,
+): boolean {
+  return normalizeWorktreeKey(prevWorktreeKey) !== normalizeWorktreeKey(nextWorktreeKey);
+}
+
 function clampWidth(n: number): number {
   return Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, Math.round(n)));
 }
