@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { run } from '../git/run.js';
 import {
   resolveAgentExecutable,
@@ -25,6 +26,8 @@ export interface AgentSetupInfo {
   loginCommand: string | null;
   /** npm package for in-app `npm i -g` when install is npm-based. */
   npmPackage?: string;
+  /** Vendor self-update args when the CLI is already on PATH (`claude update`). */
+  updateArgs?: string[];
 }
 
 export interface AgentSetupActionResult {
@@ -47,6 +50,7 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
     installCommand: 'npm install -g @anthropic-ai/claude-code',
     loginCommand: 'claude auth login',
     npmPackage: '@anthropic-ai/claude-code',
+    updateArgs: ['update'],
   },
   codex: {
     agent: 'codex',
@@ -56,6 +60,7 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
     installCommand: 'npm install -g @openai/codex',
     loginCommand: 'codex login',
     npmPackage: '@openai/codex',
+    updateArgs: ['update'],
   },
   opencode: {
     agent: 'opencode',
@@ -66,6 +71,7 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
     installCommand: 'curl -fsSL https://opencode.ai/install | bash',
     loginCommand: 'opencode auth login',
     npmPackage: 'opencode-ai@latest',
+    updateArgs: ['upgrade'],
   },
   cursor: {
     agent: 'cursor',
@@ -80,7 +86,7 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
   brightsy: {
     agent: 'brightsy',
     kind: 'cli',
-    summary: 'Install the Brightsy CLI, then run `brightsy login`.',
+    summary: 'Install (or update) the Brightsy CLI with npm, then run `brightsy login`.',
     docsUrl: 'https://www.npmjs.com/package/@brightsy/cli',
     installCommand: 'npm install -g @brightsy/cli',
     loginCommand: 'brightsy login',
@@ -201,7 +207,8 @@ export async function whichOnPath(bin: string): Promise<string | null> {
 
 /**
  * `npm i -g` in-process; opens Terminal if npm needs a TTY or sudo.
- * Skips install when `cliBin` already resolves on PATH.
+ * Always runs npm (install or update) — callers that should use a vendor
+ * updater (`claude update`) must do that before calling this.
  */
 export async function installNpmGlobalPackage(opts: {
   npmPackage: string;
@@ -209,18 +216,6 @@ export async function installNpmGlobalPackage(opts: {
   cliBin: string | null;
 }): Promise<AgentSetupActionResult> {
   enrichPathWithNpmGlobalBin();
-  if (opts.cliBin) {
-    const existing = await whichOnPath(opts.cliBin);
-    if (existing) {
-      return {
-        ok: true,
-        command: existing,
-        message: isConductorBundledCli(existing)
-          ? `Using Conductor’s ${opts.cliBin} at ${existing}. No extra install — Log in only if auth is missing.`
-          : `Already on PATH: ${existing}`,
-      };
-    }
-  }
 
   const result = await run('npm', ['install', '-g', opts.npmPackage], { reject: false });
   const ok = result.exitCode === 0;
@@ -265,7 +260,45 @@ export async function installNpmGlobalPackage(opts: {
   };
 }
 
-/** Install a CLI agent: npm packages run in-process; curl installers open Terminal. */
+async function resolveExistingCli(agent: AgentKind): Promise<string | null> {
+  if (agent === 'cursor') return null;
+  const exe = resolveAgentExecutable(agent as CliAgentKind);
+  if ((exe.includes('/') || exe.includes('\\')) && existsSync(exe)) return exe;
+  enrichPathWithNpmGlobalBin();
+  return whichOnPath(CLI_BIN[agent]);
+}
+
+async function runVendorUpdate(
+  existing: string,
+  updateArgs: string[],
+): Promise<AgentSetupActionResult> {
+  const result = await run(existing, updateArgs, {
+    reject: false,
+    timeoutMs: 120_000,
+  });
+  const command = `${existing} ${updateArgs.join(' ')}`;
+  const ok = result.exitCode === 0;
+  const detail =
+    result.stdout.trim() || result.stderr.trim() || `exit ${result.exitCode}`;
+  return {
+    ok,
+    command,
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    message: ok
+      ? isConductorBundledCli(existing)
+        ? `Updated Conductor’s CLI at ${existing}. ${detail}`
+        : `Updated ${command}. ${detail}`
+      : `Update failed (${command}): ${detail}`,
+  };
+}
+
+function isCurlInstaller(command: string): boolean {
+  return /curl\s| \|\s*bash/.test(command);
+}
+
+/** Install or update a CLI agent. */
 export async function installAgent(agent: AgentKind): Promise<AgentSetupActionResult> {
   const info = getAgentSetupInfo(agent);
   if (info.kind === 'bundled-sdk' || info.kind === 'api-key') {
@@ -278,24 +311,27 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
     return { ok: false, message: `No install command for ${agent}` };
   }
 
-  // Curl / bash installers need a real TTY — open Terminal.
-  if (/curl\s| \|\s*bash/.test(info.installCommand) || !info.npmPackage) {
-    await openInSystemTerminal(info.installCommand);
-    return {
-      ok: true,
-      openedTerminal: true,
-      command: info.installCommand,
-      message: `Opened Terminal to run: ${info.installCommand}`,
-    };
+  const existing = await resolveExistingCli(agent);
+  if (existing && info.updateArgs?.length) {
+    return runVendorUpdate(existing, info.updateArgs);
   }
 
-  // Cursor has no CLI bin — Install always runs npm (install or update).
-  const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];
-  return installNpmGlobalPackage({
-    npmPackage: info.npmPackage,
-    installCommand: info.installCommand,
-    cliBin,
-  });
+  if (info.npmPackage && !isCurlInstaller(info.installCommand)) {
+    const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];
+    return installNpmGlobalPackage({
+      npmPackage: info.npmPackage,
+      installCommand: info.installCommand,
+      cliBin,
+    });
+  }
+
+  await openInSystemTerminal(info.installCommand);
+  return {
+    ok: true,
+    openedTerminal: true,
+    command: info.installCommand,
+    message: `Opened Terminal to run: ${info.installCommand}`,
+  };
 }
 
 /** Open the agent’s login/auth command in the system terminal. */

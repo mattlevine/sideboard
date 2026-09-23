@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Cursor is a user-installed `@cursor/sdk` (`Settings → Agents → Cursor → Install`, `npm i -g @cursor/sdk`) instead of a package Sideboard ships. Agents can update the SDK without a new Sideboard build.
+- Settings → Install also updates an already-installed CLI: `claude update`, `codex update`, `opencode upgrade`, and `npm i -g` for Brightsy / Cursor.
 
 ## [0.1.232] - 2026-09-23
 

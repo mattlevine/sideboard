@@ -1127,7 +1127,7 @@ export function SettingsModal({
                   <p className="settings-hint">
                     {activeAgent.hideLogin
                       ? 'Install (or update) @cursor/sdk with npm — Sideboard does not ship it. Then paste a CURSOR_API_KEY below. Install always runs npm so you can pick up a newer SDK without a new Sideboard build.'
-                      : 'If Conductor is installed, Sideboard reuses its Claude/Codex CLIs (no second copy). Otherwise: Install the CLI, then Log in. Install runs npm only when the CLI is missing. Log in opens Terminal — finish it there, then status updates.'}
+                      : 'Install installs or updates the CLI, then Log in. Claude / Codex / OpenCode use `claude update`, `codex update`, or `opencode upgrade` when already on PATH (including Conductor’s copy). Brightsy always runs `npm i -g`. Log in opens Terminal — finish it there, then status updates.'}
                   </p>
                   <div className="settings-actions">
                     <button
