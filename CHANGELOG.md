@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.235] - 2026-09-23
+
 ### Fixed
 
 - Settings → Cursor → Install reports `Installed @cursor/sdk` on success instead of "CLI not yet on PATH" (the SDK has no CLI).
