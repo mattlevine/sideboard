@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.231] - 2026-09-22
+
+### Fixed
+
+- Check for Updates treats Azure `BlobNotFound` (mid-upload GitHub Release assets) as still publishing instead of a raw XML error.
+- Terminal remount no longer doubles the prompt: live PTY bytes that overlap the scrollback snapshot are stripped before flush.
+- Clearing one Run script no longer cancels the shared paint frame, so a sibling script’s pending lines still appear.
+- Switching back to a worktree with setup already running restores the Setup tab without needing that pane open first.
+
 ## [0.1.230] - 2026-09-22
 
 ### Fixed
