@@ -15,7 +15,10 @@ import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js
 import { ensureCursorRipgrepPath } from './cursor-ripgrep.js';
 import {
   CURSOR_SDK_INSTALL_HINT,
+  cursorSdkHasExpectedExports,
+  cursorSdkMissingExportsMessage,
   importCursorSdk,
+  resolveCursorSdkRoot,
 } from './cursor-sdk-resolve.js';
 import { cursorSdkStoreDir } from './cursor-store.js';
 import {
@@ -129,6 +132,10 @@ async function main(): Promise<number> {
   const sdk = await importCursorSdk();
   if (!sdk) {
     emit({ type: 'stderr', data: CURSOR_SDK_INSTALL_HINT });
+    return 1;
+  }
+  if (!cursorSdkHasExpectedExports(sdk)) {
+    emit({ type: 'stderr', data: cursorSdkMissingExportsMessage(resolveCursorSdkRoot()) });
     return 1;
   }
   const { Agent, CursorAgentError, JsonlLocalAgentStore } = sdk;
