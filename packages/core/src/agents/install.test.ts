@@ -54,6 +54,8 @@ describe('agent install helpers', () => {
     const { installAgent } = await import('./install.js');
     const result = await installAgent('cursor');
     expect(result.ok).toBe(true);
+    // SDK has no CLI — success must not read as "CLI not yet on PATH".
+    expect(result.message).toBe('Installed @cursor/sdk');
     expect(runMock).toHaveBeenCalledWith(
       'npm',
       ['install', '-g', '@cursor/sdk'],
@@ -164,6 +166,18 @@ describe('agent install helpers', () => {
       ['install', '-g', '@openai/codex'],
       expect.objectContaining({ reject: false }),
     );
+  });
+
+  it('still flags a CLI package whose binary is not on PATH after npm install', async () => {
+    runMock.mockImplementation(async (file: string) => {
+      if (file === 'npm') return { stdout: 'ok', stderr: '', exitCode: 0 };
+      if (file === 'which') return { stdout: '', stderr: '', exitCode: 1 };
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('codex');
+    expect(result.ok).toBe(true);
+    expect(result.message).toBe('Installed @openai/codex (CLI not yet on PATH)');
   });
 
   it('runs opencode upgrade when OpenCode is already on PATH', async () => {
