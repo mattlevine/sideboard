@@ -36,6 +36,18 @@ describe('formatUpdaterCheckError', () => {
     expect(result.detail).toMatch(/still be publishing/);
   });
 
+  it('treats Azure BlobNotFound (mid-publish asset) as still publishing', () => {
+    const result = formatUpdaterCheckError(
+      new Error(
+        '<?xml version="1.0" encoding="utf-8"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:445e0ef2-501e-0095-30b4-4a2008000000\nTime:2026-09-22T17:04:06.5435317Z</Message></Error>',
+      ),
+    );
+    expect(result.kind).toBe('publishing');
+    expect(result.title).toBe('Update not ready yet');
+    expect(result.detail).toMatch(/still be publishing/);
+    expect(result.detail).not.toMatch(/BlobNotFound|RequestId|xml/i);
+  });
+
   it('treats a checksum race as still publishing', () => {
     const result = formatUpdaterCheckError(
       new Error(`sha512 checksum mismatch, expected ${'x'.repeat(88)}, got ${'y'.repeat(88)}`),
