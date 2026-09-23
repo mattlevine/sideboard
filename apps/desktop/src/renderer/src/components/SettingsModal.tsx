@@ -231,8 +231,8 @@ const AGENT_PANELS: Array<{
   envKey: string | null;
   blurb: string;
   docsUrl: string;
-  /** True when Sideboard embeds the runtime (no CLI package to install). */
-  bundled?: boolean;
+  /** True when this agent authenticates with an API key (no CLI login). */
+  hideLogin?: boolean;
 }> = [
   {
     id: 'claude',
@@ -260,9 +260,9 @@ const AGENT_PANELS: Array<{
     label: 'Cursor',
     envKey: 'CURSOR_API_KEY',
     blurb:
-      'No CLI to install — Sideboard ships the Cursor SDK (same as Conductor). Add a CURSOR_API_KEY from the Cursor dashboard.',
-    docsUrl: 'https://cursor.com/dashboard/integrations',
-    bundled: true,
+      'Install @cursor/sdk with npm (Settings → Install). Add a CURSOR_API_KEY from the Cursor dashboard. Updating the SDK does not require a new Sideboard build.',
+    docsUrl: 'https://www.npmjs.com/package/@cursor/sdk',
+    hideLogin: true,
   },
   {
     id: 'brightsy',
@@ -1074,15 +1074,11 @@ export function SettingsModal({
                           ? `Ready · ${connectedCount} team${connectedCount === 1 ? '' : 's'} connected`
                           : 'Ready · connect a team for schema and files'
                         : ready
-                          ? a.bundled
-                            ? 'Ready · SDK (no CLI install)'
-                            : 'Ready'
+                          ? 'Ready'
                           : st?.reason ||
                             (st?.installed
                               ? 'Needs auth'
-                              : a.bundled
-                                ? 'Needs API key'
-                                : 'Not installed');
+                              : 'Not installed');
                     return (
                       <button
                         key={a.id}
@@ -1113,9 +1109,7 @@ export function SettingsModal({
                     <div className="settings-label">Status</div>
                     <div className="settings-status-text">
                       {activeStatus?.installed && activeStatus.authenticated
-                        ? activeAgent.bundled
-                          ? 'Authenticated (Cursor SDK)'
-                          : 'Authenticated'
+                        ? 'Authenticated'
                         : activeStatus?.reason || 'Not ready'}
                     </div>
                   </div>
@@ -1131,22 +1125,20 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-section-title">Setup</div>
                   <p className="settings-hint">
-                    {activeAgent.bundled
-                      ? 'Cursor is bundled with Sideboard — paste a CURSOR_API_KEY below (no package install).'
-                      : 'If Conductor is installed, Sideboard reuses its Claude/Codex CLIs (no second copy). Otherwise: Install the CLI, then Log in. Install runs npm only when the CLI is missing. Log in opens Terminal — finish it there, then status updates.'}
+                    {activeAgent.hideLogin
+                      ? 'Install (or update) @cursor/sdk with npm — Sideboard does not ship it. Then paste a CURSOR_API_KEY below. Install always runs npm so you can pick up a newer SDK without a new Sideboard build.'
+                      : 'Install installs or updates the CLI, then Log in. Claude / Codex / OpenCode use `claude update`, `codex update`, or `opencode upgrade` when already on PATH (including Conductor’s copy). Brightsy always runs `npm i -g`. Log in opens Terminal — finish it there, then status updates.'}
                   </p>
                   <div className="settings-actions">
-                    {!activeAgent.bundled && (
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={busy || setupBusy != null}
-                        onClick={() => void runInstall()}
-                      >
-                        {setupBusy === 'install' ? 'Installing…' : 'Install'}
-                      </button>
-                    )}
-                    {!activeAgent.bundled && (
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busy || setupBusy != null}
+                      onClick={() => void runInstall()}
+                    >
+                      {setupBusy === 'install' ? 'Installing…' : 'Install'}
+                    </button>
+                    {!activeAgent.hideLogin && (
                       <button
                         type="button"
                         disabled={busy || setupBusy != null}
@@ -1170,7 +1162,7 @@ export function SettingsModal({
                       disabled={busy}
                       onClick={() => void window.sideboard.openExternal(activeAgent.docsUrl)}
                     >
-                      {activeAgent.bundled ? 'Get API key' : 'Docs'}
+                      Docs
                     </button>
                   </div>
                   {setupLog && (

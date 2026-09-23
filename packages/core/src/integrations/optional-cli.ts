@@ -51,6 +51,17 @@ export async function installOptionalServiceCli(
       message: `${spec.label} has no CLI to install. Use the HTTP API with the stored token.`,
     };
   }
+  // Connector CLIs stay skip-if-present. Agent Install is the path that
+  // always re-runs npm / vendor update.
+  enrichPathWithNpmGlobalBin();
+  const existing = await whichOnPath(spec.cli);
+  if (existing) {
+    return {
+      ok: true,
+      command: existing,
+      message: `Already on PATH: ${existing}`,
+    };
+  }
   return installNpmGlobalPackage({
     npmPackage: spec.npmPackage,
     installCommand: `npm install -g ${spec.npmPackage}`,

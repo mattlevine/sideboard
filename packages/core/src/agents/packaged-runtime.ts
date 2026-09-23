@@ -2,8 +2,9 @@
  * Paths inside the packaged Mac app's extraResources tree.
  *
  * electron-builder cannot `asarUnpack` pnpm workspace links that realpath
- * outside `apps/desktop`. Cursor's runner + `@cursor/sdk` + `rg` are copied
+ * outside `apps/desktop`. Cursor's runner + `execa` / `smol-toml` are copied
  * to `Contents/Resources/cursor-runtime` instead so a real `node` can exec them.
+ * `@cursor/sdk` is user-installed (`npm i -g`), not packed into the app.
  * Official Node 22 ships in `Contents/Resources/node/bin/node`.
  */
 import { existsSync } from 'node:fs';

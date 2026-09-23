@@ -32,7 +32,7 @@ Reference implementations:
 - Claude Code — `packages/core/src/agents/claude.ts`
 - Codex — `packages/core/src/agents/codex.ts`
 - OpenCode — `packages/core/src/agents/opencode.ts`
-- Cursor (SDK) — `packages/core/src/agents/cursor.ts`
+- Cursor (SDK) — `packages/core/src/agents/cursor.ts` (user-installed `@cursor/sdk`, not packed in Sideboard)
 - Brightsy (chat-only, optional) — `packages/core/src/agents/brightsy.ts`
 
 ## Checklist for a new agent

@@ -35,25 +35,76 @@ describe('agent install helpers', () => {
     }
   });
 
-  it('describes Cursor as a bundled SDK (no CLI install)', async () => {
+  it('describes Cursor as an npm-installable SDK (Install always updates)', async () => {
     const { getAgentSetupInfo } = await import('./install.js');
     const info = getAgentSetupInfo('cursor');
-    expect(info.kind).toBe('bundled-sdk');
-    expect(info.installCommand).toBeNull();
+    expect(info.kind).toBe('cli');
+    expect(info.npmPackage).toBe('@cursor/sdk');
+    expect(info.installCommand).toBe('npm install -g @cursor/sdk');
     expect(info.loginCommand).toBeNull();
   });
 
-  it('skips npm when Codex is already on PATH', async () => {
-    runMock.mockImplementation(async (file: string, args: string[]) => {
-      if (file === 'which' && args[0] === 'codex') {
+  it('always runs npm for Cursor (no CLI skip — install or update)', async () => {
+    runMock.mockImplementation(async (file: string) => {
+      if (file === 'npm') {
+        return { stdout: 'ok', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('cursor');
+    expect(result.ok).toBe(true);
+    expect(runMock).toHaveBeenCalledWith(
+      'npm',
+      ['install', '-g', '@cursor/sdk'],
+      expect.objectContaining({ reject: false }),
+    );
+    expect(runMock).not.toHaveBeenCalledWith(
+      'which',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('always runs npm for Brightsy even when already on PATH', async () => {
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'which' && args?.[0] === 'brightsy') {
+        return { stdout: '/opt/homebrew/bin/brightsy\n', stderr: '', exitCode: 0 };
+      }
+      if (file === 'npm') {
+        return { stdout: 'ok', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('brightsy');
+    expect(result.ok).toBe(true);
+    expect(runMock).toHaveBeenCalledWith(
+      'npm',
+      ['install', '-g', '@brightsy/cli'],
+      expect.objectContaining({ reject: false }),
+    );
+  });
+
+  it('runs codex update when Codex is already on PATH', async () => {
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'which' && args?.[0] === 'codex') {
         return { stdout: '/opt/homebrew/bin/codex\n', stderr: '', exitCode: 0 };
+      }
+      if (file === '/opt/homebrew/bin/codex' && args?.[0] === 'update') {
+        return { stdout: 'up to date\n', stderr: '', exitCode: 0 };
       }
       return { stdout: '', stderr: '', exitCode: 0 };
     });
     const { installAgent } = await import('./install.js');
     const result = await installAgent('codex');
     expect(result.ok).toBe(true);
-    expect(result.message).toContain('/opt/homebrew/bin/codex');
+    expect(result.message).toMatch(/Updated/);
+    expect(runMock).toHaveBeenCalledWith(
+      '/opt/homebrew/bin/codex',
+      ['update'],
+      expect.objectContaining({ reject: false, timeoutMs: 120_000 }),
+    );
     expect(runMock).not.toHaveBeenCalledWith(
       'npm',
       expect.anything(),
@@ -61,12 +112,15 @@ describe('agent install helpers', () => {
     );
   });
 
-  it('reuses Conductor-bundled Codex instead of npm installing another copy', async () => {
+  it('updates Conductor-bundled Codex in place instead of npm installing another copy', async () => {
     const conductor =
       '/Users/me/Library/Application Support/com.conductor.app/bin/codex';
-    runMock.mockImplementation(async (file: string, args: string[]) => {
-      if (file === 'which' && args[0] === 'codex') {
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'which' && args?.[0] === 'codex') {
         return { stdout: `${conductor}\n`, stderr: '', exitCode: 0 };
+      }
+      if (file === conductor && args?.[0] === 'update') {
+        return { stdout: 'updated\n', stderr: '', exitCode: 0 };
       }
       return { stdout: '', stderr: '', exitCode: 0 };
     });
@@ -75,6 +129,11 @@ describe('agent install helpers', () => {
     expect(result.ok).toBe(true);
     expect(result.message).toMatch(/Conductor/i);
     expect(result.message).toContain(conductor);
+    expect(runMock).toHaveBeenCalledWith(
+      conductor,
+      ['update'],
+      expect.objectContaining({ reject: false, timeoutMs: 120_000 }),
+    );
     expect(runMock).not.toHaveBeenCalledWith(
       'npm',
       expect.anything(),
@@ -104,6 +163,31 @@ describe('agent install helpers', () => {
       'npm',
       ['install', '-g', '@openai/codex'],
       expect.objectContaining({ reject: false }),
+    );
+  });
+
+  it('runs opencode upgrade when OpenCode is already on PATH', async () => {
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'which' && args?.[0] === 'opencode') {
+        return { stdout: '/opt/homebrew/bin/opencode\n', stderr: '', exitCode: 0 };
+      }
+      if (file === '/opt/homebrew/bin/opencode' && args?.[0] === 'upgrade') {
+        return { stdout: 'upgraded\n', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('opencode');
+    expect(result.ok).toBe(true);
+    expect(runMock).toHaveBeenCalledWith(
+      '/opt/homebrew/bin/opencode',
+      ['upgrade'],
+      expect.objectContaining({ reject: false, timeoutMs: 120_000 }),
+    );
+    expect(runMock).not.toHaveBeenCalledWith(
+      'osascript',
+      expect.anything(),
+      expect.anything(),
     );
   });
 

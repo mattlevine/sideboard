@@ -80,6 +80,16 @@ export function enrichPathWithNpmGlobalBin(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   ensureAgentPath(env);
+  const prefix = npmGlobalPrefix(env);
+  if (prefix) {
+    const binDir = process.platform === 'win32' ? prefix : join(prefix, 'bin');
+    prependPathDir(env, binDir);
+  }
+  return env.PATH ?? '';
+}
+
+/** `npm prefix -g` (where `npm i -g` writes). Null when npm is missing. */
+export function npmGlobalPrefix(env: NodeJS.ProcessEnv = process.env): string | null {
   try {
     const prefix = execFileSync('npm', ['prefix', '-g'], {
       encoding: 'utf8',
@@ -90,14 +100,21 @@ export function enrichPathWithNpmGlobalBin(
       .trim()
       .split(/\r?\n/)
       .find(Boolean);
-    if (prefix) {
-      const binDir = process.platform === 'win32' ? prefix : join(prefix, 'bin');
-      prependPathDir(env, binDir);
-    }
+    return prefix || null;
   } catch {
-    // npm missing — leave PATH as ensureAgentPath left it
+    return null;
   }
-  return env.PATH ?? '';
+}
+
+/** Global `node_modules` for packages like `@cursor/sdk` (`npm i -g`). */
+export function npmGlobalNodeModules(env: NodeJS.ProcessEnv = process.env): string | null {
+  const prefix = npmGlobalPrefix(env);
+  if (!prefix) return null;
+  const dir =
+    process.platform === 'win32'
+      ? join(prefix, 'node_modules')
+      : join(prefix, 'lib', 'node_modules');
+  return existsSync(dir) ? dir : null;
 }
 
 /** Escape a value for use inside a POSIX single-quoted string. */

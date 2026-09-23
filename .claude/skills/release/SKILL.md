@@ -85,11 +85,11 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
 
 Human at a real terminal: `pnpm release patch mac` is still fine for the Electron half; they still publish npm themselves unless they asked otherwise.
 
-## `@cursor/sdk` in a Sideboard worktree
+## `@cursor/sdk` (user-installed)
 
-Every desktop pack in a Sideboard `thread/*` worktree used to die at `stage-cursor-runtime.js` with `Cannot find module '@cursor/sdk'`.
+Sideboard does not pack `@cursor/sdk`. Users install it with Settings → Agents → Cursor → Install (`npm i -g @cursor/sdk`) so agents can update it without a new Sideboard build.
 
-pnpm does not hoist `@cursor/sdk` to the worktree root (only `packages/core` depends on it). The main checkout can look fine if a leftover root hoist exists. Staging must resolve `@cursor/sdk`, `execa`, and `smol-toml` from `packages/core/package.json` — same as `stage-sideboard-mcp.js`. Do not add `@cursor/sdk` to the root package to paper over it. See `docs/system/conventions.md` (Desktop pack in a Sideboard worktree).
+`stage-cursor-runtime.js` copies the runner plus `execa` / `smol-toml` from `packages/core/package.json` (same as `stage-sideboard-mcp.js`). Do not add `@cursor/sdk` to the root package or to core production dependencies. See `docs/system/conventions.md` (Desktop pack in a Sideboard worktree).
 
 Signing/notarization for the **local** pack reads `apps/desktop/.env` (`CSC_*`, `APPLE_*`). `GH_TOKEN` comes from that file or `gh auth token`.
 
