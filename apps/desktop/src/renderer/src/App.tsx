@@ -8,6 +8,7 @@ import {
   type CSSProperties,
 } from 'react';
 import type {
+  AgentDoneSound,
   DiffScope,
   FollowUpBehavior,
   OrchestratorEvent,
@@ -31,6 +32,7 @@ import {
   withoutLiveThreads,
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
+import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { ShowCostProvider } from './lib/show-cost';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
@@ -330,6 +332,10 @@ export function App() {
   const [showCost, setShowCost] = useState(false);
   /** Settings → Agents → Follow-up behavior (default steer). */
   const [followUpBehavior, setFollowUpBehavior] = useState<FollowUpBehavior>('steer');
+  /** Settings → Advanced → Agent done sound (default off; prefer goal when enabling). */
+  const [agentDoneSound, setAgentDoneSound] = useState<AgentDoneSound>('none');
+  const agentDoneSoundRef = useRef<AgentDoneSound>('none');
+  agentDoneSoundRef.current = agentDoneSound;
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -506,6 +512,9 @@ export function App() {
     void window.sideboard.getAppSettings().then((s) => {
       setShowCost(Boolean(s.advanced?.showCost));
       setFollowUpBehavior(s.advanced?.followUpBehavior === 'queue' ? 'queue' : 'steer');
+      setAgentDoneSound(
+        isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
+      );
     });
   }, []);
 
@@ -632,6 +641,7 @@ export function App() {
         return;
       }
       if (event.type === 'turn_finished') {
+        playAgentDoneSound(agentDoneSoundRef.current);
         // Keep the streamed bubble until this thread's persisted message lands
         void refreshThread(event.threadId).then(() => {
           queueLive({ kind: 'clear', threadId: event.threadId });
@@ -1585,6 +1595,9 @@ export function App() {
           onSettingsChange={(s) => {
             setShowCost(Boolean(s.advanced?.showCost));
             setFollowUpBehavior(s.advanced?.followUpBehavior === 'queue' ? 'queue' : 'steer');
+            setAgentDoneSound(
+              isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
+            );
           }}
           onClose={() => {
             setSettingsOpen(false);

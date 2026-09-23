@@ -162,6 +162,19 @@ export interface IpcApi {
     },
   ): Promise<PublicAppSettings>;
   updateAdvancedSettings(patch: Partial<AdvancedAppSettings>): Promise<PublicAppSettings>;
+  /**
+   * Native picker → copy audio into app data and select Custom agent-done sound.
+   * Returns null if the user cancels.
+   */
+  importAgentDoneSound(): Promise<PublicAppSettings | null>;
+  /** Remove the imported custom agent-done sound (and switch off Custom if selected). */
+  clearAgentDoneCustomSound(): Promise<PublicAppSettings>;
+  /** Bytes for Preview / playback of the imported custom sound. */
+  getAgentDoneCustomSound(): Promise<{
+    name: string;
+    mime: string;
+    dataBase64: string;
+  } | null>;
   updateIntegrationsSettings(patch: {
     linearApiKey?: string | null;
     issueSource?: IssueSource | null;

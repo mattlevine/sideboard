@@ -12,6 +12,9 @@ export const WORKTREE_MCP_TOOLS = [
   'present_files',
   'wait_for_job',
   'stop_job',
+  'list_run_scripts',
+  'run_dev_script',
+  'stop_dev_script',
   'get_viewer_context',
   'update_viewer_context',
 ] as const;

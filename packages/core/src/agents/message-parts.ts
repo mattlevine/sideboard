@@ -131,6 +131,13 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/stop_job$/i.test(name)) {
     return str(input?.id) ? `Stop ${str(input?.id)}` : 'Stop job';
   }
+  if (/list_run_scripts$/i.test(name)) return 'List run scripts';
+  if (/run_dev_script$/i.test(name)) {
+    return str(input?.name) ? `Start ${str(input?.name)}` : 'Start Dev script';
+  }
+  if (/stop_dev_script$/i.test(name)) {
+    return str(input?.name) ? `Stop ${str(input?.name)}` : 'Stop Dev script';
+  }
   if (isSubagentToolName(name)) {
     const desc = str(input?.description);
     const sub = asRecord(input?.subagentType);

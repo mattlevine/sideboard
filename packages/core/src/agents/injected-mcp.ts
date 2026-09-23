@@ -43,8 +43,8 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
 /**
  * Worktree Claude turns: auto-approve the UI tools that the worktree MCP
  * profile always registers (present_* / ask_user / wait_for_job / stop_job /
- * viewer context). Slack / list_* stay orchestration-only so they stay out of the
- * cached tools prefix.
+ * run_dev_script / stop_dev_script / viewer context). Slack / list_* stay
+ * orchestration-only so they stay out of the cached tools prefix.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_artifact',
@@ -54,6 +54,9 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_plan',
   'mcp__sideboard__wait_for_job',
   'mcp__sideboard__stop_job',
+  'mcp__sideboard__list_run_scripts',
+  'mcp__sideboard__run_dev_script',
+  'mcp__sideboard__stop_dev_script',
   'mcp__sideboard__get_viewer_context',
   'mcp__sideboard__update_viewer_context',
 ] as const;

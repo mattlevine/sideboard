@@ -50,6 +50,8 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/markdown table is enough|present_schema if they ask to edit/i);
     expect(text).toMatch(/not both for the same document/i);
     expect(text).toMatch(/type=log appends/);
+    expect(text).toMatch(/run_dev_script/);
+    expect(text).toMatch(/stop_dev_script/);
   });
 });
 
@@ -70,6 +72,9 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/stop_job/);
     expect(text).toMatch(/hanging|wrong thing/);
     expect(text).toMatch(/\.context\/\.sideboard\/detached-jobs/);
+    expect(text).toMatch(/run_dev_script/);
+    expect(text).toMatch(/stop_dev_script/);
+    expect(text).toMatch(/Dev button/);
   });
 });
 
@@ -83,6 +88,8 @@ describe('formatLongRunningReminder', () => {
     expect(text).toMatch(/present_artifact type=log/);
     expect(text).toMatch(/stop_job/);
     expect(text).toMatch(/let the user know later/);
+    expect(text).toMatch(/run_dev_script/);
+    expect(text).toMatch(/stop_dev_script/);
   });
 });
 

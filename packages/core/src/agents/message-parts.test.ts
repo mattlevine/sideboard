@@ -457,6 +457,10 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('TaskOutput', { task_id: 'task_1' })).toBe('Wait for task_1');
     expect(toolDescription('wait_for_job', { id: 'hang' })).toBe('Wait for hang');
     expect(toolDescription('stop_job', { id: 'hang' })).toBe('Stop hang');
+    expect(toolDescription('list_run_scripts', {})).toBe('List run scripts');
+    expect(toolDescription('run_dev_script', { name: 'dev' })).toBe('Start dev');
+    expect(toolDescription('stop_dev_script', {})).toBe('Stop Dev script');
+    expect(toolDescription('stop_dev_script', { name: 'dev' })).toBe('Stop dev');
   });
 });
 

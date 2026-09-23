@@ -155,6 +155,10 @@ import {
   updateDefaultsSettings,
   updateProjectProfileSettings,
   updateIntegrationsSettings,
+  importAgentDoneCustomSound,
+  clearAgentDoneCustomSoundFile,
+  readAgentDoneCustomSound,
+  AGENT_DONE_CUSTOM_SOUND_EXTENSIONS,
   type AdvancedAppSettings,
   type AgentKind,
   type AdoptInput,
@@ -985,6 +989,46 @@ function registerIpc(): void {
       syncCaffeinate();
     }
     return toPublicAppSettings(saved);
+  });
+  ipcMain.handle('importAgentDoneSound', async () => {
+    const filters = [
+      {
+        name: 'Audio',
+        extensions: AGENT_DONE_CUSTOM_SOUND_EXTENSIONS.map((ext) => ext.replace(/^\./, '')),
+      },
+    ];
+    const opts = {
+      title: 'Choose agent done sound',
+      properties: ['openFile' as const],
+      filters,
+      message: 'Select an audio file to play when an agent turn finishes',
+    };
+    // Attach to the main window so cancel always settles (detached dialogs can hang).
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, opts)
+      : await dialog.showOpenDialog(opts);
+    if (result.canceled || !result.filePaths[0]) return null;
+    const imported = importAgentDoneCustomSound(result.filePaths[0]);
+    const saved = updateAdvancedSettings({
+      agentDoneSound: 'custom',
+      agentDoneCustomSoundName: imported.name,
+    });
+    return toPublicAppSettings(saved);
+  });
+  ipcMain.handle('clearAgentDoneCustomSound', () => {
+    clearAgentDoneCustomSoundFile();
+    const current = loadAppSettings();
+    const saved = updateAdvancedSettings({
+      agentDoneCustomSoundName: '',
+      ...(current.advanced.agentDoneSound === 'custom'
+        ? { agentDoneSound: 'none' as const }
+        : {}),
+    });
+    return toPublicAppSettings(saved);
+  });
+  ipcMain.handle('getAgentDoneCustomSound', () => {
+    const settings = loadAppSettings();
+    return readAgentDoneCustomSound(settings.advanced.agentDoneCustomSoundName);
   });
   ipcMain.handle(
     'updateIntegrationsSettings',

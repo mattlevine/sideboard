@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdvancedAppSettings,
+  AgentDoneSound,
   AgentKind,
   AgentSetupActionResult,
   AgentStatus,
@@ -22,6 +23,11 @@ import {
 } from '@sideboard/history-retention';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
+import {
+  AGENT_DONE_SOUND_OPTIONS,
+  isAgentDoneSound,
+  playAgentDoneSound,
+} from '../lib/agent-done-sound';
 import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ConnectorsSettings } from './ConnectorsSettings';
@@ -597,15 +603,64 @@ export function SettingsModal({
   }
 
   async function saveAdvancedPatch(patch: Partial<AdvancedAppSettings>) {
+    // Optimistic UI so the sound select does not snap back while IPC runs (or if
+    // the main process is briefly on a stale core build).
+    if (patch.agentDoneSound != null || 'agentDoneCustomSoundName' in patch) {
+      setSettings((prev) => ({
+        ...prev,
+        advanced: {
+          ...prev.advanced,
+          ...('agentDoneSound' in patch ? { agentDoneSound: patch.agentDoneSound } : {}),
+          ...('agentDoneCustomSoundName' in patch
+            ? {
+                agentDoneCustomSoundName:
+                  patch.agentDoneCustomSoundName === '' ||
+                  patch.agentDoneCustomSoundName == null
+                    ? undefined
+                    : patch.agentDoneCustomSoundName,
+              }
+            : {}),
+        },
+      }));
+    }
     setBusy(true);
     setError(null);
     try {
       const next = await window.sideboard.updateAdvancedSettings(patch);
+      if (
+        patch.agentDoneSound != null &&
+        next.advanced?.agentDoneSound !== patch.agentDoneSound
+      ) {
+        setError(
+          'Could not save that sound (desktop main process needs a restart). Quit and reopen the Sideboard dev window, then try again.',
+        );
+        // Keep the optimistic selection visible until reload succeeds.
+        return;
+      }
       applySettings(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      void reload().catch(() => {
+        /* ignore */
+      });
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Opens the native file picker; returns true if a custom sound was imported. */
+  async function importCustomAgentDoneSound(): Promise<boolean> {
+    setError(null);
+    try {
+      const next = await window.sideboard.importAgentDoneSound();
+      if (next) {
+        applySettings(next);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
     }
   }
 
@@ -1515,6 +1570,97 @@ export function SettingsModal({
                     >
                       <span className="settings-switch-knob" />
                     </button>
+                  </div>
+                </div>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Agent done sound</div>
+                  <p className="settings-hint">
+                    Play a short sound when an agent turn finishes. Score cheer is the
+                    recommended built-in; other Mixkit clips and a custom import (mp3,
+                    wav, m4a, …) are available too.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
+                    <label className="settings-hint" htmlFor="agent-done-sound">
+                      Sound
+                    </label>
+                    <select
+                      id="agent-done-sound"
+                      value={
+                        isAgentDoneSound(advanced.agentDoneSound)
+                          ? advanced.agentDoneSound
+                          : 'none'
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!isAgentDoneSound(v)) return;
+                        const current = isAgentDoneSound(advanced.agentDoneSound)
+                          ? advanced.agentDoneSound
+                          : 'none';
+                        if (v === 'custom' && !advanced.agentDoneCustomSoundName) {
+                          // Keep the previous selection until a file is chosen.
+                          e.currentTarget.value = current;
+                          void importCustomAgentDoneSound();
+                          return;
+                        }
+                        void saveAdvancedPatch({ agentDoneSound: v });
+                      }}
+                    >
+                      {AGENT_DONE_SOUND_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                          {opt.value === 'custom' && advanced.agentDoneCustomSoundName
+                            ? ` — ${advanced.agentDoneCustomSoundName}`
+                            : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="settings-inline-btn"
+                      onClick={() => {
+                        void importCustomAgentDoneSound();
+                      }}
+                    >
+                      Import…
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-inline-btn"
+                      disabled={
+                        !isAgentDoneSound(advanced.agentDoneSound) ||
+                        advanced.agentDoneSound === 'none' ||
+                        (advanced.agentDoneSound === 'custom' &&
+                          !advanced.agentDoneCustomSoundName)
+                      }
+                      onClick={() => {
+                        const sound: AgentDoneSound = isAgentDoneSound(advanced.agentDoneSound)
+                          ? advanced.agentDoneSound
+                          : 'none';
+                        playAgentDoneSound(sound);
+                      }}
+                    >
+                      Preview
+                    </button>
+                    {advanced.agentDoneCustomSoundName ? (
+                      <button
+                        type="button"
+                        className="settings-inline-btn"
+                        onClick={() => {
+                          void (async () => {
+                            setError(null);
+                            try {
+                              const next = await window.sideboard.clearAgentDoneCustomSound();
+                              applySettings(next);
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : String(err));
+                            }
+                          })();
+                        }}
+                      >
+                        Clear custom
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 

@@ -16,6 +16,7 @@ import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
+import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import {
   mcpWaitFinishedHint,
   mcpWaitStillRunningHint,
@@ -250,9 +251,9 @@ export async function startMcpServer(): Promise<void> {
     version: '0.1.0',
   });
   // Worktree profile: present_* / ask_user / wait_for_job / stop_job /
-  // viewer context + Account issue tools (GitHub / Linear / AbleTime).
-  // Fleet list_*, Slack, and create/send stay on orchestration (tools
-  // are the cached prefix).
+  // list_run_scripts / run_dev_script / stop_dev_script / viewer context +
+  // Account issue tools (GitHub / Linear / AbleTime). Fleet list_*, Slack,
+  // and create/send stay on orchestration (tools are the cached prefix).
   const worktreeProfile = sideboardMcpProfile() === 'worktree';
   registerViewerContextTools(server);
   if (worktreeProfile) {
@@ -659,11 +660,89 @@ export async function startMcpServer(): Promise<void> {
       reason: z
         .string()
         .optional()
-        .describe('Why you are stopping (hanging, no progress, wrong output, already have the error)'),
+        .describe('Why you are stopping (hanging, no progress, wrong output, already have the answer)'),
     },
     async ({ id, reason }) => {
       const result = await stopDetachedJob(process.cwd(), id, { reason });
       return mcpJson(result);
+    },
+  );
+
+  server.tool(
+    'list_run_scripts',
+    'List .sideboard/.conductor run scripts for this thread (same menu as the desktop Dev button) and which are active. Worktree turns may omit ref (uses cwd).',
+    {
+      ref: z
+        .string()
+        .optional()
+        .describe('Thread id. Omit on a worktree turn (uses cwd).'),
+    },
+    async ({ ref }) => {
+      try {
+        const threadRef = resolveRunScriptThreadRef(ref);
+        const scripts = orch.listThreadRunScripts(threadRef);
+        const active = orch.getActiveRuns(threadRef);
+        return mcpJson({ scripts, active, ref: threadRef });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    'run_dev_script',
+    'Start a .sideboard/.conductor run script (same as the desktop Dev / play button). Logs and Stop appear in the thread UI — do not detached-job or shell-spawn the same command. Returns the allocated port. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
+    {
+      ref: z
+        .string()
+        .optional()
+        .describe('Thread id. Omit on a worktree turn (uses cwd).'),
+      name: z
+        .string()
+        .optional()
+        .describe('Script name from list_run_scripts (default script if omitted).'),
+    },
+    async ({ ref, name }) => {
+      try {
+        const threadRef = resolveRunScriptThreadRef(ref);
+        const result = await orch.startDev(threadRef, name);
+        return mcpJson({
+          port: result.port,
+          scriptName: result.scriptName,
+          ports: result.ports,
+          url: `http://localhost:${result.port}`,
+          ref: threadRef,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    'stop_dev_script',
+    'Stop a run script started with run_dev_script or the desktop Dev button (same as UI Stop). Omit name to stop all scripts on this worktree. Worktree turns may omit ref (uses cwd).',
+    {
+      ref: z
+        .string()
+        .optional()
+        .describe('Thread id. Omit on a worktree turn (uses cwd).'),
+      name: z
+        .string()
+        .optional()
+        .describe('Script name to stop; omit to stop all active scripts.'),
+    },
+    async ({ ref, name }) => {
+      try {
+        const threadRef = resolveRunScriptThreadRef(ref);
+        orch.stopDev(threadRef, name);
+        return mcpJson({ ok: true, ref: threadRef, stopped: name ?? 'all' });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
     },
   );
 
@@ -1216,48 +1295,6 @@ export async function startMcpServer(): Promise<void> {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: message }], isError: true };
       }
-    },
-  );
-
-  server.tool(
-    'run_dev_script',
-    'Start a .sideboard/.conductor run script for a thread (default script if name omitted); returns port',
-    {
-      ref: z.string(),
-      name: z.string().optional(),
-    },
-    async ({ ref, name }) => {
-      const result = await orch.startDev(ref, name);
-      return mcpJson({
-        port: result.port,
-        scriptName: result.scriptName,
-        ports: result.ports,
-        url: `http://localhost:${result.port}`,
-      });
-    },
-  );
-
-  server.tool(
-    'list_run_scripts',
-    'List named run scripts available for a thread',
-    { ref: z.string() },
-    async ({ ref }) => {
-      const scripts = orch.listThreadRunScripts(ref);
-      const active = orch.getActiveRuns(ref);
-      return mcpJson({ scripts, active });
-    },
-  );
-
-  server.tool(
-    'stop_dev_script',
-    'Stop a running script for a thread (all scripts if name omitted)',
-    {
-      ref: z.string(),
-      name: z.string().optional(),
-    },
-    async ({ ref, name }) => {
-      orch.stopDev(ref, name);
-      return { content: [{ type: 'text', text: 'ok' }] };
     },
   );
 
