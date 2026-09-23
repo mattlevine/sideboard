@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Settings → Cursor → Install reports `Installed @cursor/sdk` on success instead of "CLI not yet on PATH" (the SDK has no CLI).
+- MCP `stop_dev_script` no longer waits out the full timeout when a newer Run request replaces its stop: it follows a later stop for the same script, or fails right away if a start replaced it.
 
 ## [0.1.234] - 2026-09-23
 

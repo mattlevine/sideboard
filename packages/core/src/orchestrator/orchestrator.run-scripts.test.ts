@@ -7,6 +7,7 @@ import {
   readThread,
   writeThread,
 } from '../store/thread-store.js';
+import type { RunScriptRequest } from '../types/thread.js';
 import { Orchestrator } from './orchestrator.js';
 
 describe('Orchestrator run-script orphan reclaim', () => {
@@ -549,5 +550,41 @@ describe('Orchestrator desktop run-script adoption', () => {
     desktop.adoptPersistedRunScripts();
     await stopped;
     expect(readThread(thread.id)?.runScriptRequest?.fulfilledAt).toBeTruthy();
+  });
+
+  function replaceRequest(id: string, req: Partial<RunScriptRequest>) {
+    const live = readThread(id)!;
+    live.runScriptRequest = {
+      op: 'start',
+      scriptName: 'dev',
+      requestId: 'req-replacement',
+      requestedAt: new Date().toISOString(),
+      ...req,
+    };
+    writeThread(live);
+  }
+
+  it('MCP stopDev fails fast when a newer start replaces its request', async () => {
+    const thread = seedThread();
+    const mcp = asMcp(new Orchestrator());
+    mcp.runScriptAdoptTimeoutMs = 5_000;
+    const began = Date.now();
+    const stopped = mcp.stopDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    replaceRequest(thread.id, { op: 'start' });
+    await expect(stopped).rejects.toThrow(/newer start request/);
+    expect(Date.now() - began).toBeLessThan(1_000);
+  });
+
+  it('MCP stopDev follows a later stop for the same script', async () => {
+    const thread = seedThread();
+    const mcp = asMcp(new Orchestrator());
+    mcp.runScriptAdoptTimeoutMs = 5_000;
+    const stopped = mcp.stopDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    replaceRequest(thread.id, { op: 'stop' });
+    await new Promise((r) => setTimeout(r, 80));
+    replaceRequest(thread.id, { op: 'stop', fulfilledAt: new Date().toISOString() });
+    await expect(stopped).resolves.toBeUndefined();
   });
 });

@@ -2299,10 +2299,11 @@ export class Orchestrator {
 
   private async waitForDesktopRunScript(
     threadId: string,
-    request: RunScriptRequest,
+    initialRequest: RunScriptRequest,
     op: 'start' | 'stop',
     scriptName?: string,
   ): Promise<{ port: number; scriptName: string; ports: number[] } | null> {
+    let request = initialRequest;
     const deadline = Date.now() + this.runScriptAdoptTimeoutMs;
     while (Date.now() < deadline) {
       const latest = readThread(threadId);
@@ -2330,6 +2331,19 @@ export class Orchestrator {
         // Do not treat missing activeRuns as success — a start may still be in
         // flight and would keep running after MCP already reported stopped.
         return null;
+      } else if (requestGone) {
+        // Desktop holds one request per thread and only fulfills the current
+        // one. A later stop covering this script takes over; anything else
+        // means this stop can never be confirmed — fail now, not at timeout.
+        if (req?.op === 'stop' && (req.scriptName ?? null) === (scriptName ?? null)) {
+          request = req;
+          continue;
+        }
+        throw new Error(
+          req?.op === 'start'
+            ? 'Stop was replaced by a newer start request before desktop applied it.'
+            : 'Stop was replaced by another run-script request before desktop applied it.',
+        );
       }
       await new Promise((r) => setTimeout(r, 40));
     }
