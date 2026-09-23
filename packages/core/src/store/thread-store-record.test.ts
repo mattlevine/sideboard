@@ -14,6 +14,7 @@ import {
   writeThread,
 } from './thread-store.js';
 import { threadFilePath } from './paths.js';
+import { isUnclaimedRunScriptRequest } from '../types/thread.js';
 
 describe('isThreadRecordFile', () => {
   it('accepts thread records and rejects live sidecars and tmp writes', () => {
@@ -181,5 +182,34 @@ describe('thread list cache', () => {
     expect(again.archivedAt).toBe(firstStamp);
     const restored = setStatus(thread.id, 'idle');
     expect(restored.archivedAt).toBeUndefined();
+  });
+
+  it('persists and normalizes runScriptRequest', () => {
+    const thread = createEmptyThread({
+      title: 'run req',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/run-req',
+      worktreePath: '/tmp/run-req',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    thread.runScriptRequest = {
+      op: 'start',
+      scriptName: 'dev',
+      requestId: 'req-1',
+      requestedAt: '2026-01-01T00:00:00.000Z',
+    };
+    writeThread(thread);
+    const next = readThread(thread.id)!;
+    expect(next.runScriptRequest?.op).toBe('start');
+    expect(next.runScriptRequest?.scriptName).toBe('dev');
+    expect(isUnclaimedRunScriptRequest(next.runScriptRequest)).toBe(true);
+
+    next.runScriptRequest = { ...next.runScriptRequest!, claimedAt: '2026-01-01T00:00:01.000Z' };
+    writeThread(next);
+    expect(isUnclaimedRunScriptRequest(readThread(thread.id)?.runScriptRequest)).toBe(
+      false,
+    );
   });
 });
