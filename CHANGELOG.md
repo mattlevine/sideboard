@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.232] - 2026-09-23
+
 ### Fixed
 
 - MCP `stop_dev_script` waits until desktop applies the stop instead of succeeding while Start is still in flight.
