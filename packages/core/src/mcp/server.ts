@@ -737,7 +737,7 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref, name }) => {
       try {
         const threadRef = resolveRunScriptThreadRef(ref);
-        orch.stopDev(threadRef, name);
+        await orch.stopDev(threadRef, name);
         return mcpJson({ ok: true, ref: threadRef, stopped: name ?? 'all' });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

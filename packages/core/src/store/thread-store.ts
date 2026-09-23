@@ -11,7 +11,12 @@ import {
 } from 'node:fs';
 import { basename } from 'node:path';
 import lockfile from 'proper-lockfile';
-import type { Thread, ThreadMessage, ThreadStatus } from '../types/thread.js';
+import type {
+  RunScriptRequest,
+  Thread,
+  ThreadMessage,
+  ThreadStatus,
+} from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { cursorSdkStoreDir } from '../agents/cursor-store.js';
 import { threadFilePath, threadLockPath, threadsDir } from './paths.js';
@@ -33,6 +38,25 @@ export function resolveThreadEffort(
   if (fromField) return fromField;
   if (raw.fast) return 'low';
   return 'high';
+}
+
+function normalizeRunScriptRequest(
+  raw: Thread['runScriptRequest'] | unknown,
+): RunScriptRequest | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const req = raw as RunScriptRequest;
+  if (req.op !== 'start' && req.op !== 'stop') return undefined;
+  if (typeof req.requestId !== 'string' || !req.requestId.trim()) return undefined;
+  if (typeof req.requestedAt !== 'string' || !req.requestedAt.trim()) return undefined;
+  return {
+    op: req.op,
+    scriptName: req.scriptName ?? null,
+    requestId: req.requestId,
+    requestedAt: req.requestedAt,
+    claimedAt: req.claimedAt ?? null,
+    fulfilledAt: req.fulfilledAt ?? null,
+    error: req.error ?? null,
+  };
 }
 
 export function normalizeThread(raw: Thread): Thread {
@@ -60,6 +84,7 @@ export function normalizeThread(raw: Thread): Thread {
     stackLayer: raw.stackLayer ?? null,
     userSetTitle: Boolean(raw.userSetTitle),
     activeRuns: Array.isArray(raw.activeRuns) ? raw.activeRuns : [],
+    runScriptRequest: normalizeRunScriptRequest(raw.runScriptRequest),
     quotaResumeAt: raw.quotaResumeAt ?? null,
     quotaContinuedFromId: raw.quotaContinuedFromId ?? null,
     archivedAt:

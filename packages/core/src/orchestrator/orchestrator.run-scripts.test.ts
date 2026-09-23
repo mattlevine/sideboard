@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -351,5 +351,152 @@ describe('Orchestrator startDev coalescing', () => {
     expect(result.port).toBe(41889);
     expect(readThread(thread.id)?.devPort).toBe(41889);
     orch.stopDev(thread.id, 'dev');
+  });
+});
+
+describe('Orchestrator desktop run-script adoption', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sideboard-run-adopt-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  function seedThread() {
+    const worktreePath = join(dataDir, 'wt');
+    const repoPath = join(dataDir, 'repo');
+    mkdirSync(join(worktreePath, '.sideboard'), { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
+    writeFileSync(
+      join(worktreePath, '.sideboard', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "sleep 30"\ndefault = true\n`,
+    );
+    const thread = createEmptyThread({
+      title: 'Adopt run',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/adopt-run',
+      worktreePath,
+      repoPath,
+      agent: 'claude',
+      status: 'idle',
+    });
+    writeThread(thread);
+    return thread;
+  }
+
+  function asMcp(orch: Orchestrator): Orchestrator {
+    (orch as unknown as { shouldOwnRunScripts: () => boolean }).shouldOwnRunScripts =
+      () => false;
+    orch.runScriptAdoptTimeoutMs = 2_000;
+    return orch;
+  }
+
+  function asDesktop(orch: Orchestrator): Orchestrator {
+    (orch as unknown as { shouldOwnRunScripts: () => boolean }).shouldOwnRunScripts =
+      () => true;
+    return orch;
+  }
+
+  async function waitForRequest(id: string) {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      if (readThread(id)?.runScriptRequest?.op) return;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    throw new Error('runScriptRequest was not written');
+  }
+
+  it('does not spawn from MCP — persists runScriptRequest instead', async () => {
+    const thread = seedThread();
+    const conductor = await import('../hook/conductor.js');
+    const spawn = vi.spyOn(conductor, 'startDevServer').mockResolvedValue({
+      pid: 1,
+      port: 41910,
+      ports: [41910],
+      scriptName: 'dev',
+      kill: () => undefined,
+      done: new Promise(() => undefined),
+    });
+    const mcp = asMcp(new Orchestrator());
+    mcp.runScriptAdoptTimeoutMs = 120;
+
+    await expect(mcp.startDev(thread.id, 'dev')).rejects.toThrow(/did not start/);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(readThread(thread.id)?.runScriptRequest?.op).toBe('start');
+    expect(readThread(thread.id)?.runScriptRequest?.scriptName).toBe('dev');
+    expect(readThread(thread.id)?.devPort).toBeNull();
+  });
+
+  it('desktop adoptPersistedRunScripts spawns and unblocks MCP startDev', async () => {
+    const thread = seedThread();
+    const conductor = await import('../hook/conductor.js');
+    vi.spyOn(conductor, 'startDevServer').mockResolvedValue({
+      pid: 3,
+      port: 41901,
+      ports: [41901],
+      scriptName: 'dev',
+      kill: () => undefined,
+      done: new Promise(() => undefined),
+    });
+    const mcp = asMcp(new Orchestrator());
+    const desktop = asDesktop(new Orchestrator());
+
+    const started = mcp.startDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    desktop.adoptPersistedRunScripts();
+    const result = await started;
+    expect(result.port).toBe(41901);
+    expect(readThread(thread.id)?.devPort).toBe(41901);
+    expect(readThread(thread.id)?.activeRuns?.[0]?.scriptName).toBe('dev');
+    await desktop.stopDev(thread.id, 'dev');
+  });
+
+  it('desktop adopt surfaces startDev failures onto the MCP wait', async () => {
+    const thread = seedThread();
+    const conductor = await import('../hook/conductor.js');
+    vi.spyOn(conductor, 'startDevServer').mockRejectedValue(new Error('spawn failed'));
+    const mcp = asMcp(new Orchestrator());
+    const desktop = asDesktop(new Orchestrator());
+
+    const started = mcp.startDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    desktop.adoptPersistedRunScripts();
+    await expect(started).rejects.toThrow('spawn failed');
+    expect(readThread(thread.id)?.runScriptRequest?.error).toBe('spawn failed');
+  });
+
+  it('MCP stopDev waits until desktop clears activeRuns', async () => {
+    const thread = seedThread();
+    const live = readThread(thread.id)!;
+    live.activeRuns = [
+      {
+        scriptName: 'dev',
+        port: 41902,
+        ports: [41902],
+        startedAt: new Date().toISOString(),
+      },
+    ];
+    live.devPort = 41902;
+    writeThread(live);
+
+    const conductor = await import('../hook/conductor.js');
+    vi.spyOn(conductor, 'killListenersOnPorts').mockImplementation(() => undefined);
+
+    const mcp = asMcp(new Orchestrator());
+    const desktop = asDesktop(new Orchestrator());
+    const stopped = mcp.stopDev(thread.id, 'dev');
+    await waitForRequest(thread.id);
+    expect(readThread(thread.id)?.runScriptRequest?.op).toBe('stop');
+    desktop.adoptPersistedRunScripts();
+    await stopped;
+    expect(readThread(thread.id)?.activeRuns).toEqual([]);
+    expect(readThread(thread.id)?.devPort).toBeNull();
   });
 });

@@ -348,7 +348,7 @@ async function main(): Promise<void> {
     .option('--stop', 'stop the run script')
     .action(async (thread, script, opts) => {
       if (opts.stop) {
-        orch.stopDev(thread, script);
+        await orch.stopDev(thread, script);
         console.log(chalk.yellow(script ? `Stopped ${script}` : 'Run scripts stopped'));
         return;
       }

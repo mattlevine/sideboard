@@ -3,6 +3,7 @@ import {
   formatSlackRepliesForTurn,
   pendingSlackExternalReplies,
 } from '../slack/outbound-watch.js';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
@@ -76,12 +77,14 @@ import type {
   PrDetails,
   PrMeta,
   PrStack,
+  RunScriptRequest,
   Thread,
   ThreadAttachment,
   ThreadOptionsPatch,
   TokenUsage,
   WorktreeDirtyStat,
 } from '../types/thread.js';
+import { isUnclaimedRunScriptRequest } from '../types/thread.js';
 import { clipAgentEventForPaint, isInternalAgentStatusText } from '../agents/message-parts.js';
 import { sumUsageList } from '../agents/usage.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
@@ -258,6 +261,9 @@ import {
 /** Status may be `running` for this long before `agentPid` is written. */
 export const LIVE_TURN_SPAWN_GRACE_MS = 15_000;
 
+/** MCP/CLI wait for desktop to adopt a run-script request (under the ~60s MCP kill). */
+export const RUN_SCRIPT_DESKTOP_ADOPT_MS = 20_000;
+
 /** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
 export function isPidAlive(pid: number): boolean {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -382,6 +388,11 @@ export class Orchestrator {
   /** In-flight startDev per worktree run key — agent MCP + UI Start must not double-spawn. */
   private readonly startingDev =
     new Map<string, Promise<{ port: number; scriptName: string; ports: number[] }>>();
+  /**
+   * MCP/CLI poll budget while Electron main adopts `runScriptRequest`.
+   * Tests shorten this so a missing desktop does not wait 20s.
+   */
+  runScriptAdoptTimeoutMs = RUN_SCRIPT_DESKTOP_ADOPT_MS;
   private maxConcurrent: number;
   private runningCount = 0;
 
@@ -629,6 +640,64 @@ export class Orchestrator {
         this.armDrain(thread.id);
       }
     }
+    this.adoptPersistedRunScripts();
+  }
+
+  /**
+   * Adopt run-script start/stop persisted by MCP/CLI while this process owns
+   * live children (desktop host). Spawning in stdio leaves the Run tab on
+   * "Starting…" with no logs — `run_output` never reaches the renderer.
+   */
+  adoptPersistedRunScripts(): void {
+    if (!this.shouldOwnRunScripts()) return;
+    for (const thread of listThreads()) {
+      if (thread.status === 'archived') continue;
+      const req = thread.runScriptRequest;
+      if (!isUnclaimedRunScriptRequest(req) || !req) continue;
+      const claimedAt = new Date().toISOString();
+      const claimed: RunScriptRequest = { ...req, claimedAt };
+      updateThread(thread.id, { runScriptRequest: claimed });
+      void this.applyRunScriptRequest(thread.id, claimed);
+    }
+  }
+
+  private async applyRunScriptRequest(
+    threadId: string,
+    req: RunScriptRequest,
+  ): Promise<void> {
+    try {
+      if (req.op === 'start') {
+        await this.startDev(threadId, req.scriptName ?? undefined);
+      } else {
+        await this.stopDev(threadId, req.scriptName ?? undefined);
+      }
+      const latest = readThread(threadId);
+      const current = latest?.runScriptRequest;
+      if (current?.requestId === req.requestId && !current.error) {
+        updateThread(threadId, {
+          runScriptRequest: {
+            ...current,
+            fulfilledAt: new Date().toISOString(),
+          },
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const latest = readThread(threadId);
+      const current = latest?.runScriptRequest;
+      if (!current || current.requestId !== req.requestId) return;
+      updateThread(threadId, {
+        runScriptRequest: { ...current, error: message },
+      });
+    }
+  }
+
+  /**
+   * Same rule as agent-queue drain: MCP stdio must not own Electron children
+   * while Sideboard.app is alive.
+   */
+  shouldOwnRunScripts(): boolean {
+    return thisProcessShouldDrainAgentQueues();
   }
 
   /**
@@ -2020,6 +2089,14 @@ export class Orchestrator {
       );
     }
 
+    if (!this.shouldOwnRunScripts()) {
+      const result = await this.requestDesktopRunScript(thread, 'start', resolvedName);
+      if (!result) {
+        throw new Error('Desktop did not return a run script port.');
+      }
+      return result;
+    }
+
     const runKey = worktreeRunProcessKey(thread.worktreePath, resolvedName);
     const inFlight = this.startingDev.get(runKey);
     if (inFlight) return inFlight;
@@ -2170,8 +2247,90 @@ export class Orchestrator {
     return { port: handle.port, scriptName: resolvedName, ports: handle.ports };
   }
 
-  stopDev(threadRef: string, scriptName?: string): void {
+  /**
+   * Persist a run-script intent for the desktop host (MCP/CLI while the board
+   * is alive). Polls until Electron main adopts and fulfills it.
+   */
+  private async requestDesktopRunScript(
+    thread: Thread,
+    op: 'start' | 'stop',
+    scriptName?: string,
+  ): Promise<{ port: number; scriptName: string; ports: number[] } | null> {
+    const latest = readThread(thread.id) ?? thread;
+    const pending = latest.runScriptRequest;
+    const claimedAt = pending?.claimedAt;
+    const staleClaim =
+      typeof claimedAt === 'string' &&
+      Date.now() - Date.parse(claimedAt) > this.runScriptAdoptTimeoutMs;
+    const sameIntent =
+      pending &&
+      pending.op === op &&
+      (pending.scriptName ?? null) === (scriptName ?? null) &&
+      !pending.error &&
+      !pending.fulfilledAt &&
+      !staleClaim;
+    const request: RunScriptRequest = sameIntent
+      ? pending!
+      : {
+          op,
+          scriptName: scriptName ?? null,
+          requestId: randomUUID(),
+          requestedAt: new Date().toISOString(),
+        };
+    if (!sameIntent) {
+      updateThread(thread.id, { runScriptRequest: request });
+    }
+    return this.waitForDesktopRunScript(thread.id, request, op, scriptName);
+  }
+
+  private async waitForDesktopRunScript(
+    threadId: string,
+    request: RunScriptRequest,
+    op: 'start' | 'stop',
+    scriptName?: string,
+  ): Promise<{ port: number; scriptName: string; ports: number[] } | null> {
+    const deadline = Date.now() + this.runScriptAdoptTimeoutMs;
+    while (Date.now() < deadline) {
+      const latest = readThread(threadId);
+      if (!latest) {
+        throw new Error('Thread disappeared while waiting for the desktop run script.');
+      }
+      const req = latest.runScriptRequest;
+      if (req?.requestId === request.requestId && req.error) {
+        throw new Error(req.error);
+      }
+      const shared = mergeWorktreeActiveRuns(threadsSharingWorktree(latest.worktreePath));
+      const run = scriptName
+        ? shared.activeRuns.find((r) => r.scriptName === scriptName)
+        : shared.activeRuns[0];
+      const fulfilled = req?.requestId === request.requestId && Boolean(req.fulfilledAt);
+      const requestGone = !req || req.requestId !== request.requestId;
+      if (op === 'start') {
+        if (run && (fulfilled || requestGone || run.startedAt >= request.requestedAt)) {
+          return { port: run.port, scriptName: run.scriptName, ports: run.ports };
+        }
+        if (fulfilled && !run) {
+          throw new Error('Desktop reported the run script started, but it is not active.');
+        }
+      } else {
+        const gone = scriptName ? !run : shared.activeRuns.length === 0;
+        if (fulfilled || gone) return null;
+      }
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    throw new Error(
+      op === 'start'
+        ? 'Desktop did not start the run script in time. Is Sideboard.app running this worktree?'
+        : 'Desktop did not stop the run script in time.',
+    );
+  }
+
+  async stopDev(threadRef: string, scriptName?: string): Promise<void> {
     const thread = this.requireThread(threadRef);
+    if (!this.shouldOwnRunScripts()) {
+      await this.requestDesktopRunScript(thread, 'stop', scriptName);
+      return;
+    }
     const siblings = threadsSharingWorktree(thread.worktreePath);
     const shared = mergeWorktreeActiveRuns(siblings);
     if (scriptName) {

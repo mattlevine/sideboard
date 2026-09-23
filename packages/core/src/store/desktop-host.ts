@@ -49,9 +49,10 @@ export function isThisProcessDesktopHost(): boolean {
 }
 
 /**
- * MCP/CLI must not spawn worktree turns when the board is running — those
- * children have no renderer IPC, so the chat stays blank, and Stop/Send now
- * in the desktop cannot see `activeTurns`. Desktop adopts persisted queues.
+ * MCP/CLI must not spawn worktree turns or run scripts when the board is
+ * running — those children have no renderer IPC, so the chat/Run tab stays
+ * blank, and Stop cannot see in-memory handles. Desktop adopts persisted
+ * queues and `runScriptRequest`.
  */
 export function thisProcessShouldDrainAgentQueues(): boolean {
   if (isThisProcessDesktopHost()) return true;

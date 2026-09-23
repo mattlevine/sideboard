@@ -135,6 +135,7 @@ import {
   threadsDir,
   isThreadRecordFile,
   isSelfWrittenRecord,
+  isUnclaimedRunScriptRequest,
   readThread,
   invalidateThreadListCache,
   invalidateThreadRecord,
@@ -735,14 +736,21 @@ function setupStoreWatcher(): void {
     notifyTimer = null;
     // Records this process wrote last are already coherent in the store cache
     // — only foreign (or deleted) records need a cache drop and a
-    // queue-adoption pass. Check before invalidating: the invalidation
-    // forgets the self-write marker. A self-written record that still carries
-    // a queue is the one race worth paying for: an MCP enqueue landed inside
-    // this debounce window and our own rewrite carried it forward, so adopt.
+    // queue / run-script adoption pass. Check before invalidating: the
+    // invalidation forgets the self-write marker. A self-written record that
+    // still carries a queue or unclaimed `runScriptRequest` is the one race
+    // worth paying for: an MCP enqueue landed inside this debounce window.
     let foreign = pendingRecordIds.size === 0;
     if (pendingRecordIds.size > 0) {
       for (const id of pendingRecordIds) {
-        if (isSelfWrittenRecord(id) && !readThread(id)?.queue.length) continue;
+        const record = readThread(id);
+        if (
+          isSelfWrittenRecord(id) &&
+          !record?.queue.length &&
+          !isUnclaimedRunScriptRequest(record?.runScriptRequest)
+        ) {
+          continue;
+        }
         foreign = true;
         invalidateThreadRecord(id);
       }
@@ -752,8 +760,9 @@ function setupStoreWatcher(): void {
     }
     mainWindow?.webContents.send('threads:changed');
     if (!foreign) return;
-    // MCP stdio (separate process) enqueues via send_to_thread; when that child
-    // exits mid-wait, queues stay on disk. Adopt them into the desktop drain.
+    // MCP stdio (separate process) enqueues via send_to_thread / run_dev_script;
+    // when that child exits mid-wait, queues and runScriptRequest stay on disk.
+    // Adopt them into the desktop drain / startDev.
     if (adoptTimer) clearTimeout(adoptTimer);
     adoptTimer = setTimeout(() => {
       adoptTimer = null;
@@ -1584,9 +1593,9 @@ function registerIpc(): void {
   ipcMain.handle('runDevScript', (_e, ref: string, scriptName?: string) =>
     orch.startDev(ref, scriptName),
   );
-  ipcMain.handle('stopDevScript', (_e, ref: string, scriptName?: string) => {
-    orch.stopDev(ref, scriptName);
-  });
+  ipcMain.handle('stopDevScript', (_e, ref: string, scriptName?: string) =>
+    orch.stopDev(ref, scriptName),
+  );
   ipcMain.handle('listRunScripts', (_e, ref: string) =>
     orch.listThreadRunScripts(ref),
   );
