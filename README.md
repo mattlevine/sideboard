@@ -54,7 +54,7 @@ Mechanical control (list, send, diff, land) stays on the CLI — zero tokens. Us
 
 Also true, and useful on the way:
 
-- **Agent-agnostic** — Claude Code, Codex, OpenCode, Cursor (via `@cursor/sdk`, Conductor-style)
+- **Agent-agnostic** — Claude Code, Codex, OpenCode, Cursor (user-installed `@cursor/sdk`)
 - **Schema-agnostic / CMS-optional** — render any JSON Schema + `schemaUi`. CMS is a use case, not the category
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
@@ -139,9 +139,9 @@ Docs: [opencode.ai/docs](https://opencode.ai/docs)
 
 #### Cursor
 
-Local Cursor agents via the official SDK (same approach Conductor uses — not a CLI spawn).
+Local Cursor agents via the official SDK (same approach Conductor uses — not a CLI spawn). Sideboard does **not** ship `@cursor/sdk`; install or update it from **Settings → Agents → Cursor → Install** (or `npm i -g @cursor/sdk`).
 
-Set the key in the desktop app under **Settings → Agents → Cursor** (also appears under **Settings → Environment** as `CURSOR_API_KEY`), or in your shell:
+Then set the key in the desktop app under **Settings → Agents → Cursor** (also appears under **Settings → Environment** as `CURSOR_API_KEY`), or in your shell:
 
 ```bash
 export CURSOR_API_KEY="cursor_..."   # https://cursor.com/dashboard/integrations

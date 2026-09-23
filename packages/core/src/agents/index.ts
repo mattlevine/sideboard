@@ -83,12 +83,19 @@ export type { OrchestratorAgentKind } from './orchestrator-capable.js';
 export {
   ensureAgentPath,
   enrichPathWithNpmGlobalBin,
+  npmGlobalPrefix,
+  npmGlobalNodeModules,
   conductorBundledBinDir,
   isConductorBundledCli,
   resolveCommandBinarySync,
   withExportedPath,
   posixShellSingleQuote,
 } from './path.js';
+export {
+  CURSOR_SDK_INSTALL_HINT,
+  isCursorSdkInstalled,
+  resolveCursorSdkRoot,
+} from './cursor-sdk-resolve.js';
 export {
   getAgentSetupInfo,
   listAgentSetupInfo,

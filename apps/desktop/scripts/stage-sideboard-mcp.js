@@ -6,7 +6,7 @@
  * Sideboard.app as Node.
  *
  * Copying only `better-sqlite3` is not enough: tsup leaves `@modelcontextprotocol/sdk`,
- * `execa`, `zod`, `@cursor/sdk`, etc. as runtime imports. Those resolve in the
+ * `execa`, `zod`, etc. as runtime imports. Those resolve in the
  * repo by walking up to root node_modules; inside Sideboard.app that walk
  * stops at Resources/. Rebuild sqlite for the **bundled** official Node ABI
  * (not Homebrew Current on PATH) after the copy.

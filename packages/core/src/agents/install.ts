@@ -69,12 +69,13 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
   },
   cursor: {
     agent: 'cursor',
-    kind: 'bundled-sdk',
+    kind: 'cli',
     summary:
-      'No CLI install — Sideboard ships the Cursor SDK. Add a CURSOR_API_KEY from the Cursor dashboard.',
-    docsUrl: 'https://cursor.com/dashboard/integrations',
-    installCommand: null,
+      'Install (or update) @cursor/sdk with npm — Sideboard does not pin it in the app. Then add a CURSOR_API_KEY.',
+    docsUrl: 'https://www.npmjs.com/package/@cursor/sdk',
+    installCommand: 'npm install -g @cursor/sdk',
     loginCommand: null,
+    npmPackage: '@cursor/sdk',
   },
   brightsy: {
     agent: 'brightsy',
@@ -288,6 +289,7 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
     };
   }
 
+  // Cursor has no CLI bin — Install always runs npm (install or update).
   const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];
   return installNpmGlobalPackage({
     npmPackage: info.npmPackage,

@@ -190,9 +190,6 @@ importers:
 
   packages/core:
     dependencies:
-      '@cursor/sdk':
-        specifier: ^1.0.28
-        version: 1.0.28
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.30.0(zod@3.25.76)
@@ -221,6 +218,9 @@ importers:
         specifier: ^3.24.2
         version: 3.25.76
     devDependencies:
+      '@cursor/sdk':
+        specifier: ^1.0.28
+        version: 1.0.28
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13

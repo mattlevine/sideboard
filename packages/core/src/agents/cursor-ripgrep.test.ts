@@ -87,4 +87,24 @@ describe('resolveCursorRipgrepPath', () => {
 
     expect(resolveCursorRipgrepPath({ env: {}, startFile: runner })).toBe(rg);
   });
+
+  it('uses rg next to SIDEBOARD_CURSOR_SDK when the runner tree has none', () => {
+    root = mkdtempSync(join(tmpdir(), 'sideboard-rg-user-sdk-'));
+    const sdk = join(root, 'nm', '@cursor/sdk');
+    const rg = join(root, 'nm', pkg, 'bin', binName);
+    const runner = join(root, 'empty-runtime', 'cursor-runner.js');
+    mkdirSync(sdk, { recursive: true });
+    writeFileSync(join(sdk, 'package.json'), JSON.stringify({ name: '@cursor/sdk' }));
+    mkdirSync(join(rg, '..'), { recursive: true });
+    writeFileSync(rg, '');
+    mkdirSync(join(runner, '..'), { recursive: true });
+    writeFileSync(runner, '');
+
+    expect(
+      resolveCursorRipgrepPath({
+        env: { SIDEBOARD_CURSOR_SDK: sdk },
+        startFile: runner,
+      }),
+    ).toBe(rg);
+  });
 });

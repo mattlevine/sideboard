@@ -35,12 +35,35 @@ describe('agent install helpers', () => {
     }
   });
 
-  it('describes Cursor as a bundled SDK (no CLI install)', async () => {
+  it('describes Cursor as an npm-installable SDK (Install always updates)', async () => {
     const { getAgentSetupInfo } = await import('./install.js');
     const info = getAgentSetupInfo('cursor');
-    expect(info.kind).toBe('bundled-sdk');
-    expect(info.installCommand).toBeNull();
+    expect(info.kind).toBe('cli');
+    expect(info.npmPackage).toBe('@cursor/sdk');
+    expect(info.installCommand).toBe('npm install -g @cursor/sdk');
     expect(info.loginCommand).toBeNull();
+  });
+
+  it('always runs npm for Cursor (no CLI skip — install or update)', async () => {
+    runMock.mockImplementation(async (file: string) => {
+      if (file === 'npm') {
+        return { stdout: 'ok', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('cursor');
+    expect(result.ok).toBe(true);
+    expect(runMock).toHaveBeenCalledWith(
+      'npm',
+      ['install', '-g', '@cursor/sdk'],
+      expect.objectContaining({ reject: false }),
+    );
+    expect(runMock).not.toHaveBeenCalledWith(
+      'which',
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('skips npm when Codex is already on PATH', async () => {

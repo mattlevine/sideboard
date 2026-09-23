@@ -236,13 +236,10 @@ if (doDesktop) {
     appResources,
     'cursor-runtime/core-dist/agents/cursor-runner.js',
   );
-  const cursorRg = path.join(
-    appResources,
-    `cursor-runtime/node_modules/@cursor/sdk-darwin-arm64/bin/rg`,
-  );
-  if (!fs.existsSync(cursorRunner) || !fs.existsSync(cursorRg)) {
+  const cursorExeca = path.join(appResources, 'cursor-runtime/node_modules/execa/index.js');
+  if (!fs.existsSync(cursorRunner) || !fs.existsSync(cursorExeca)) {
     throw new Error(
-      'Packaged extraResources cursor-runtime is incomplete (runner or rg missing). Aborting release.',
+      'Packaged extraResources cursor-runtime is incomplete (runner or execa missing). Aborting release.',
     );
   }
   console.log('✅ Verified extraResources cursor-runtime');

@@ -1,23 +1,22 @@
 #!/usr/bin/env node
 /**
- * Copy Cursor runner + production deps onto a real filesystem tree under
+ * Copy Cursor runner + its Node deps onto a real filesystem tree under
  * apps/desktop/build/cursor-runtime. Do not use asarUnpack — any unpack
  * glob still calls getRelativePath on pnpm workspace files outside
  * apps/desktop and aborts pack. extraResources ships this folder next
  * to the asar so a real node can exec the runner without nested Chromium.
  *
- * Copying only `@cursor/sdk` is not enough: the runner's ESM graph also
- * imports `execa` / `smol-toml`, and the SDK imports `@bufbuild/protobuf`,
- * `zod`, etc. Those resolve in the repo by walking up to root node_modules;
- * inside Sideboard.app that walk stops at Resources/. Flattening by package
- * name is not enough either (execa@9 vs extract-zip's get-stream@5).
+ * `@cursor/sdk` is user-installed (`npm i -g`), not staged here. The runner
+ * still imports `execa` / `smol-toml` from this tree. Those resolve in the
+ * repo by walking up to root node_modules; inside Sideboard.app that walk
+ * stops at Resources/. Flattening by package name is not enough either
+ * (execa@9 vs extract-zip's get-stream@5).
  *
  * MCP stdio lives in a separate extraResources tree (`sideboard-mcp`), not
  * this Cursor runner copy.
  *
- * Resolve deps from packages/core/package.json, not the repo root. A Sideboard
- * thread worktree does not hoist @cursor/sdk to root node_modules — only core
- * depends on it — so createRequire(root package.json) throws every pack.
+ * Resolve deps from packages/core/package.json, not the repo root — same as
+ * `stage-sideboard-mcp.js`.
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -78,17 +77,13 @@ fs.writeFileSync(
 const packageCount = copyProductionDeps({
   destNm,
   fromFile: corePkg,
-  names: ['@cursor/sdk', 'execa', 'smol-toml'],
+  names: ['execa', 'smol-toml'],
   platformSdk,
 });
 
 const runner = path.join(dest, 'core-dist', 'agents', 'cursor-runner.js');
 if (!fs.existsSync(runner)) {
   throw new Error(`stage-cursor-runtime: runner not built (${runner})`);
-}
-const rg = path.join(destNm, platformSdk, 'bin', process.platform === 'win32' ? 'rg.exe' : 'rg');
-if (!fs.existsSync(rg)) {
-  throw new Error(`stage-cursor-runtime: missing ${rg}`);
 }
 
 assertIsolatedRunnerLoads();

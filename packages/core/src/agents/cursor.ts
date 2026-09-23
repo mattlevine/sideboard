@@ -2,11 +2,15 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Cursor } from '@cursor/sdk';
 import { run } from '../git/run.js';
 import { loadAppSettings } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus } from '../types/thread.js';
+import {
+  CURSOR_SDK_INSTALL_HINT,
+  importCursorSdk,
+  isCursorSdkInstalled,
+} from './cursor-sdk-resolve.js';
 import {
   parseCursorRunnerLine,
   type CursorTurnRequest,
@@ -69,9 +73,11 @@ export async function listCursorModels(): Promise<AgentModelInfo[]> {
 
   const apiKey = resolveCursorApiKey();
   if (!apiKey) return FALLBACK_CURSOR_MODELS;
+  const sdk = await importCursorSdk();
+  if (!sdk) return FALLBACK_CURSOR_MODELS;
 
   try {
-    const listed = await Cursor.models.list({ apiKey });
+    const listed = await sdk.Cursor.models.list({ apiKey });
     const models: AgentModelInfo[] = listed
       .map((m) => ({
         id: m.id,
@@ -139,7 +145,17 @@ export const cursorAdapter: AgentAdapter = {
   async detect(): Promise<AgentStatus> {
     // Do not call Cursor.models.list here — create_thread (esp. under a Codex
     // orchestrator MCP child) would hang the whole stdio server on a network
-    // wait. Presence of an API key is enough; turns fail later if auth is bad.
+    // wait. Presence of the SDK + API key is enough; turns fail later if auth is bad.
+    if (!isCursorSdkInstalled()) {
+      return {
+        agent: 'cursor',
+        installed: false,
+        authenticated: false,
+        linearMcp: false,
+        warnings: [],
+        reason: CURSOR_SDK_INSTALL_HINT,
+      };
+    }
     const apiKey = resolveCursorApiKey();
     if (!apiKey) {
       return {

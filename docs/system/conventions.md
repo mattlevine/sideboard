@@ -16,9 +16,7 @@ In a Sideboard worktree, setup and agent env already point `pnpm install` at `.c
 
 ## Desktop pack in a Sideboard worktree
 
-A Sideboard `thread/*` worktree (this repo checked out by Sideboard, not the main folder) does **not** hoist `@cursor/sdk` to the repo-root `node_modules`. pnpm leaves it under `packages/core/node_modules/@cursor/sdk` only.
-
-`apps/desktop/scripts/stage-cursor-runtime.js` must resolve `@cursor/sdk` / `execa` / `smol-toml` from `packages/core/package.json`. Resolving from the root `package.json` throws `Cannot find module '@cursor/sdk'` on every `pnpm release` / `dist` in a worktree. The main checkout can hide this if a leftover hoist exists at the root. `stage-sideboard-mcp.js` already uses core's `package.json` — keep cursor-runtime the same. Do not “fix” it by installing `@cursor/sdk` on the root package.
+`apps/desktop/scripts/stage-cursor-runtime.js` copies the Cursor runner plus `execa` / `smol-toml` from `packages/core/package.json`. `@cursor/sdk` is **not** packed — users install it with `npm i -g @cursor/sdk` (Settings → Agents → Cursor → Install). Resolving deps from the repo-root `package.json` still fails in a Sideboard worktree; keep `fromFile` on core's `package.json` (same as `stage-sideboard-mcp.js`). Do not add `@cursor/sdk` to the root package or to core production dependencies.
 
 ## Code
 

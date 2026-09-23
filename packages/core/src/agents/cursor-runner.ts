@@ -8,11 +8,15 @@
  * Uses {@link JsonlLocalAgentStore} instead of the SDK's default SQLite store:
  * Electron's embedded Node (used via ELECTRON_RUN_AS_NODE) lacks `node:sqlite`.
  */
-import { Agent, CursorAgentError, JsonlLocalAgentStore, type LocalAgentOptions } from '@cursor/sdk';
+import type { LocalAgentOptions } from '@cursor/sdk';
 import { mkdirSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
 import { ensureCursorRipgrepPath } from './cursor-ripgrep.js';
+import {
+  CURSOR_SDK_INSTALL_HINT,
+  importCursorSdk,
+} from './cursor-sdk-resolve.js';
 import { cursorSdkStoreDir } from './cursor-store.js';
 import {
   CURSOR_STREAM_IDLE_MS,
@@ -41,18 +45,23 @@ import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 // CHROME_* so the Cursor local agent and MCP children do not attach to
 // Sideboard.app's GPU/crashpad (HasCustomHostObject / ICU startup crash).
 dropNestedElectronEnvFromProcess();
-// Local indexing uses rg; asar paths are not executable — pin unpacked/bin/rg.
-ensureCursorRipgrepPath();
+
+type CursorSdk = NonNullable<Awaited<ReturnType<typeof importCursorSdk>>>;
+type AgentApi = CursorSdk['Agent'];
+type StoreCtor = CursorSdk['JsonlLocalAgentStore'];
 
 function emit(event: unknown): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
 /** Durable local agent metadata (Conductor-style JSONL, not SQLite). */
-function localAgentStore(threadId?: string | null): JsonlLocalAgentStore {
+function localAgentStore(
+  Store: StoreCtor,
+  threadId?: string | null,
+): InstanceType<StoreCtor> {
   const root = cursorSdkStoreDir(threadId);
   mkdirSync(root, { recursive: true });
-  return new JsonlLocalAgentStore(root);
+  return new Store(root);
 }
 
 /**
@@ -60,8 +69,9 @@ function localAgentStore(threadId?: string | null): JsonlLocalAgentStore {
  * Happens when a previous runner process died without waiting/cancelling.
  */
 async function cancelStaleLocalRuns(
+  Agent: AgentApi,
   agentId: string,
-  opts: { cwd: string; store: JsonlLocalAgentStore },
+  opts: { cwd: string; store: InstanceType<StoreCtor> },
 ): Promise<number> {
   const listed = await Agent.listRuns(agentId, {
     runtime: 'local',
@@ -116,13 +126,23 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  const sdk = await importCursorSdk();
+  if (!sdk) {
+    emit({ type: 'stderr', data: CURSOR_SDK_INSTALL_HINT });
+    return 1;
+  }
+  const { Agent, CursorAgentError, JsonlLocalAgentStore } = sdk;
+  // Local indexing uses rg; asar paths are not executable — pin unpacked/bin/rg
+  // (or rg next to the user-installed SDK) before Agent.create.
+  ensureCursorRipgrepPath();
+
   const apiKey = (req.apiKey || process.env.CURSOR_API_KEY || '').trim() || undefined;
   const model = buildCursorModelSelection(req.model, {
     effort: req.effort,
     fast: Boolean(req.fast),
   });
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
-  const store = localAgentStore(req.threadId);
+  const store = localAgentStore(JsonlLocalAgentStore, req.threadId);
   const isolateSources: NonNullable<LocalAgentOptions['settingSources']> = [];
   const local = withCursorLocalHangGuards({
     cwd: req.cwd,
@@ -189,7 +209,7 @@ async function main(): Promise<number> {
       return await retryTransport(() => agent.send(req.prompt, sendOpts));
     } catch (err) {
       if (!isAgentBusyError(err)) throw err;
-      const n = await cancelStaleLocalRuns(agent.agentId, {
+      const n = await cancelStaleLocalRuns(Agent, agent.agentId, {
         cwd: req.cwd,
         store,
       });

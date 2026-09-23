@@ -49,6 +49,37 @@ describe('cursor model helpers', () => {
   });
 });
 
+describe('cursorAdapter.detect', () => {
+  it('reports not installed when SIDEBOARD_CURSOR_SDK is not a real tree', async () => {
+    vi.stubEnv('SIDEBOARD_CURSOR_SDK', '/no/such/cursor-sdk');
+    try {
+      const status = await cursorAdapter.detect();
+      expect(status.installed).toBe(false);
+      expect(status.authenticated).toBe(false);
+      expect(status.reason).toMatch(/Install/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('reports installed without a key when the SDK override is valid', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-cursor-detect-'));
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@cursor/sdk' }));
+    vi.stubEnv('SIDEBOARD_CURSOR_SDK', root);
+    vi.stubEnv('CURSOR_API_KEY', '');
+    vi.stubEnv('SIDEBOARD_APP_DATA', mkdtempSync(join(tmpdir(), 'sideboard-cursor-app-')));
+    try {
+      const status = await cursorAdapter.detect();
+      expect(status.installed).toBe(true);
+      expect(status.authenticated).toBe(false);
+      expect(status.reason).toMatch(/CURSOR_API_KEY/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
 describe('cursorAdapter.buildTurn', () => {
   beforeEach(() => {
     vi.stubEnv('SIDEBOARD_APP_DATA', mkdtempSync(join(tmpdir(), 'sideboard-cursor-')));
