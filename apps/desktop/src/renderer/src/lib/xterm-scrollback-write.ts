@@ -4,6 +4,23 @@ export const XTERM_SCROLLBACK_CHUNK = 16_384;
 export type XtermWrite = (data: string, next?: () => void) => void;
 
 /**
+ * Drop live PTY bytes that are already in a scrollback snapshot.
+ *
+ * Remount attaches `onData` before `snapshot()` so nothing is lost during the
+ * chunked write, but main also appends those bytes to the ring — flushing the
+ * raw buffer would replay the overlap (doubled prompt / repeated lines).
+ */
+export function stripScrollbackOverlap(snapshot: string, live: string): string {
+  if (!live) return '';
+  if (!snapshot) return live;
+  const max = Math.min(snapshot.length, live.length);
+  for (let n = max; n > 0; n--) {
+    if (snapshot.endsWith(live.slice(0, n))) return live.slice(n);
+  }
+  return live;
+}
+
+/**
  * Replay PTY scrollback into xterm without saturating the main thread.
  *
  * Worktree switches remount `EmbeddedTerminal` and can push up to ~256 KB at

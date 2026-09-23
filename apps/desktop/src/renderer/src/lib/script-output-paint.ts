@@ -111,15 +111,17 @@ export function createKeyedScriptOutputPainter(
       if (!raf) raf = requestAnimationFrame(flush);
     },
     clear(key?: string) {
-      if (raf) {
-        cancelAnimationFrame(raf);
-        raf = 0;
-      }
       if (key == null) {
+        if (raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
         pending.clear();
         setLogs(() => ({}));
         return;
       }
+      // Keep the shared rAF — cancelling it would strand sibling scripts that
+      // still have pending lines until a later push.
       pending.delete(key);
       setLogs((prev) => {
         if (prev[key] === '') return prev;
