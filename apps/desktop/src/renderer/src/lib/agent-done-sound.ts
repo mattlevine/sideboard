@@ -1,5 +1,12 @@
 import type { AgentDoneSound } from '@sideboard-ai/core';
 
+/** Runtime guard — keep out of `@sideboard-ai/core` barrel imports in the renderer. */
+export function isAgentDoneSound(value: unknown): value is AgentDoneSound {
+  return (
+    value === 'none' || value === 'goal' || value === 'bell' || value === 'train'
+  );
+}
+
 /** Labels for Settings → Advanced → Agent done sound. */
 export const AGENT_DONE_SOUND_OPTIONS: ReadonlyArray<{
   value: AgentDoneSound;

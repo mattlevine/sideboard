@@ -17,7 +17,6 @@ import type {
   ThreadAttachment,
   Workspace,
 } from '@sideboard-ai/core';
-import { isAgentDoneSound } from '@sideboard-ai/core';
 import type { BoardOwnershipFilter, WorktreeSortMode } from '@sideboard/home-board';
 import { lookupSoccerTeam } from '@sideboard/teams';
 import { LivePaintProvider } from './lib/live-paint-context';
@@ -33,7 +32,7 @@ import {
   withoutLiveThreads,
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
-import { playAgentDoneSound } from './lib/agent-done-sound';
+import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { ShowCostProvider } from './lib/show-cost';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';

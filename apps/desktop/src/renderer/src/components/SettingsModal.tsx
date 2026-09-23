@@ -13,7 +13,6 @@ import type {
   Thread,
   Workspace,
 } from '@sideboard-ai/core';
-import { isAgentDoneSound } from '@sideboard-ai/core';
 import { isUsageOnLimit, resolveUsageOnLimit } from '@sideboard/usage-on-limit';
 import {
   HISTORY_MAX_COUNT_DEFAULT,
@@ -26,6 +25,7 @@ import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import {
   AGENT_DONE_SOUND_OPTIONS,
+  isAgentDoneSound,
   playAgentDoneSound,
 } from '../lib/agent-done-sound';
 import { emptyPublicIntegrations } from '../lib/optional-services';
