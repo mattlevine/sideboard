@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.233] - 2026-09-23
+
 ### Changed
 
 - Cursor is a user-installed `@cursor/sdk` (`Settings → Agents → Cursor → Install`, `npm i -g @cursor/sdk`) instead of a package Sideboard ships. Agents can update the SDK without a new Sideboard build.
