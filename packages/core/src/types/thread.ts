@@ -655,11 +655,21 @@ export interface RunScriptRequest {
   error?: string | null;
 }
 
-/** True when desktop should `startDev`/`stopDev` this persisted request. */
+/** True when desktop should first-claim this persisted request. */
 export function isUnclaimedRunScriptRequest(
   req: RunScriptRequest | null | undefined,
 ): boolean {
   return Boolean(req && !req.claimedAt && !req.fulfilledAt && !req.error);
+}
+
+/**
+ * True when desktop should `startDev`/`stopDev` this request — including a
+ * claimed-but-unfulfilled row left behind after Electron restarted.
+ */
+export function isAdoptableRunScriptRequest(
+  req: RunScriptRequest | null | undefined,
+): boolean {
+  return Boolean(req && !req.fulfilledAt && !req.error);
 }
 
 /** Live snapshot for the global orchestrator board. */

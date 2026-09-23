@@ -276,7 +276,9 @@ export function RightSidebar({
         setLower('setup');
       }
     });
-  }, [worktreeKey, thread.id]);
+    // worktreeKey only: chat tabs share parked Setup / Run / shell. Resetting
+    // on thread.id unmounts those panes and drops in-memory Run logs.
+  }, [worktreeKey]);
 
   useEffect(() => {
     if (!revealDirectory) return;

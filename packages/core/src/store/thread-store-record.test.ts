@@ -14,7 +14,7 @@ import {
   writeThread,
 } from './thread-store.js';
 import { threadFilePath } from './paths.js';
-import { isUnclaimedRunScriptRequest } from '../types/thread.js';
+import { isAdoptableRunScriptRequest, isUnclaimedRunScriptRequest } from '../types/thread.js';
 
 describe('isThreadRecordFile', () => {
   it('accepts thread records and rejects live sidecars and tmp writes', () => {
@@ -209,6 +209,18 @@ describe('thread list cache', () => {
     next.runScriptRequest = { ...next.runScriptRequest!, claimedAt: '2026-01-01T00:00:01.000Z' };
     writeThread(next);
     expect(isUnclaimedRunScriptRequest(readThread(thread.id)?.runScriptRequest)).toBe(
+      false,
+    );
+    expect(isAdoptableRunScriptRequest(readThread(thread.id)?.runScriptRequest)).toBe(
+      true,
+    );
+
+    next.runScriptRequest = {
+      ...readThread(thread.id)!.runScriptRequest!,
+      fulfilledAt: '2026-01-01T00:00:02.000Z',
+    };
+    writeThread(next);
+    expect(isAdoptableRunScriptRequest(readThread(thread.id)?.runScriptRequest)).toBe(
       false,
     );
   });

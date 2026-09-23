@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- MCP `stop_dev_script` waits until desktop applies the stop instead of succeeding while Start is still in flight.
+- Desktop re-adopts a claimed-but-unfulfilled Run request after Electron restarts.
+- Run Start holds reserved ports through login-env capture until spawn, and stale-port reap no longer SIGTERMs Sideboard.
+- Switching chats on the same worktree keeps parked Setup / Run / Terminal panes mounted.
+- Agent picker Fast/effort chips no longer reset in-progress agent or model; orchestrator live save keeps the current agent and model.
+
 ## [0.1.231] - 2026-09-22
 
 ### Fixed
