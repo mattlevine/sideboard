@@ -615,6 +615,22 @@ export function SettingsModal({
     }
   }
 
+  /** Opens the native file picker; returns true if a custom sound was imported. */
+  async function importCustomAgentDoneSound(): Promise<boolean> {
+    setError(null);
+    try {
+      const next = await window.sideboard.importAgentDoneSound();
+      if (next) {
+        applySettings(next);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  }
+
   async function saveBrightsyPatch(patch: { injectWorktreeMcp?: boolean }) {
     setBusy(true);
     setError(null);
@@ -1542,23 +1558,16 @@ export function SettingsModal({
                           ? advanced.agentDoneSound
                           : 'none'
                       }
-                      disabled={busy}
                       onChange={(e) => {
                         const v = e.target.value;
                         if (!isAgentDoneSound(v)) return;
+                        const current = isAgentDoneSound(advanced.agentDoneSound)
+                          ? advanced.agentDoneSound
+                          : 'none';
                         if (v === 'custom' && !advanced.agentDoneCustomSoundName) {
-                          void (async () => {
-                            setBusy(true);
-                            setError(null);
-                            try {
-                              const next = await window.sideboard.importAgentDoneSound();
-                              if (next) applySettings(next);
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : String(err));
-                            } finally {
-                              setBusy(false);
-                            }
-                          })();
+                          // Keep the previous selection until a file is chosen.
+                          e.currentTarget.value = current;
+                          void importCustomAgentDoneSound();
                           return;
                         }
                         void saveAdvancedPatch({ agentDoneSound: v });
@@ -1576,20 +1585,8 @@ export function SettingsModal({
                     <button
                       type="button"
                       className="settings-inline-btn"
-                      disabled={busy}
                       onClick={() => {
-                        void (async () => {
-                          setBusy(true);
-                          setError(null);
-                          try {
-                            const next = await window.sideboard.importAgentDoneSound();
-                            if (next) applySettings(next);
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : String(err));
-                          } finally {
-                            setBusy(false);
-                          }
-                        })();
+                        void importCustomAgentDoneSound();
                       }}
                     >
                       Import…
@@ -1598,7 +1595,6 @@ export function SettingsModal({
                       type="button"
                       className="settings-inline-btn"
                       disabled={
-                        busy ||
                         !isAgentDoneSound(advanced.agentDoneSound) ||
                         advanced.agentDoneSound === 'none' ||
                         (advanced.agentDoneSound === 'custom' &&
@@ -1617,18 +1613,14 @@ export function SettingsModal({
                       <button
                         type="button"
                         className="settings-inline-btn"
-                        disabled={busy}
                         onClick={() => {
                           void (async () => {
-                            setBusy(true);
                             setError(null);
                             try {
                               const next = await window.sideboard.clearAgentDoneCustomSound();
                               applySettings(next);
                             } catch (err) {
                               setError(err instanceof Error ? err.message : String(err));
-                            } finally {
-                              setBusy(false);
                             }
                           })();
                         }}

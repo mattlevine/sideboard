@@ -997,12 +997,16 @@ function registerIpc(): void {
         extensions: AGENT_DONE_CUSTOM_SOUND_EXTENSIONS.map((ext) => ext.replace(/^\./, '')),
       },
     ];
-    const result = await dialog.showOpenDialog({
+    const opts = {
       title: 'Choose agent done sound',
-      properties: ['openFile'],
+      properties: ['openFile' as const],
       filters,
       message: 'Select an audio file to play when an agent turn finishes',
-    });
+    };
+    // Attach to the main window so cancel always settles (detached dialogs can hang).
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, opts)
+      : await dialog.showOpenDialog(opts);
     if (result.canceled || !result.filePaths[0]) return null;
     const imported = importAgentDoneCustomSound(result.filePaths[0]);
     const saved = updateAdvancedSettings({
