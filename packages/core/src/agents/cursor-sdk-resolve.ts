@@ -66,16 +66,73 @@ export function isCursorSdkInstalled(opts?: { env?: NodeJS.ProcessEnv }): boolea
   return Boolean(resolveCursorSdkRoot(opts));
 }
 
+type CursorSdkModule = typeof import('@cursor/sdk');
+
+function exportTarget(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const v = value as Record<string, unknown>;
+    return exportTarget(v.import) ?? exportTarget(v.default);
+  }
+  return null;
+}
+
+/**
+ * ESM entry of the SDK package (`exports["."].import` → `.default` → `module`).
+ * `createRequire().resolve` picks the `require` condition — a webpack CJS bundle
+ * whose dynamic `import()` exposes only `default`, not the named exports.
+ */
+export function cursorSdkEsmEntry(root: string): string | null {
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      exports?: unknown;
+      module?: unknown;
+    };
+    const exp = pkg.exports;
+    const dot =
+      exp && typeof exp === 'object' && !Array.isArray(exp) && '.' in exp
+        ? (exp as Record<string, unknown>)['.']
+        : exp;
+    const rel =
+      exportTarget(dot) ?? (typeof pkg.module === 'string' ? pkg.module : null);
+    if (!rel) return null;
+    const entry = join(root, rel);
+    return existsSync(entry) ? entry : null;
+  } catch {
+    return null;
+  }
+}
+
+/** CJS bundles imported from ESM put the named exports under `default`. */
+export function unwrapCursorSdkModule(mod: unknown): CursorSdkModule {
+  const m = mod as Partial<CursorSdkModule> & { default?: Partial<CursorSdkModule> };
+  if (m && !m.Agent && m.default?.Agent) return m.default as CursorSdkModule;
+  return m as CursorSdkModule;
+}
+
+/** True when the loaded SDK has what cursor-runner constructs. */
+export function cursorSdkHasExpectedExports(mod: unknown): boolean {
+  const m = mod as Partial<CursorSdkModule> | null;
+  return typeof m?.Agent === 'function' && typeof m?.JsonlLocalAgentStore === 'function';
+}
+
+export function cursorSdkMissingExportsMessage(root: string | null): string {
+  return `Cursor SDK at ${root ?? '(unknown)'} is missing expected exports (Agent, JsonlLocalAgentStore) — reinstall with \`npm i -g @cursor/sdk\`.`;
+}
+
 /** Dynamic import of the user-installed SDK (ESM; not NODE_PATH). */
 export async function importCursorSdk(
   opts?: { env?: NodeJS.ProcessEnv },
-): Promise<typeof import('@cursor/sdk') | null> {
+): Promise<CursorSdkModule | null> {
   const root = resolveCursorSdkRoot(opts);
   if (!root) return null;
   try {
-    const req = createRequire(join(root, 'package.json'));
-    const entry = req.resolve('@cursor/sdk');
-    return (await import(pathToFileURL(entry).href)) as typeof import('@cursor/sdk');
+    let entry = cursorSdkEsmEntry(root);
+    if (!entry) {
+      const req = createRequire(join(root, 'package.json'));
+      entry = req.resolve('@cursor/sdk');
+    }
+    return unwrapCursorSdkModule(await import(pathToFileURL(entry).href));
   } catch {
     return null;
   }

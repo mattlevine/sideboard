@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.234] - 2026-09-23
+
+### Fixed
+
+- Cursor agent no longer fails every turn with "Store is not a constructor": Sideboard loads the user-installed `@cursor/sdk` from its ESM entry, so `Agent` / `JsonlLocalAgentStore` resolve. If the SDK is still missing those exports, the runner says to reinstall with `npm i -g @cursor/sdk`.
+
 ## [0.1.233] - 2026-09-23
 
 ### Changed
