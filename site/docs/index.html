@@ -58,10 +58,11 @@ sideboard detect</pre>
 </div>
 <div style="padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
 <h3 style="font-weight:700;font-size:22px;margin:0 0 10px">Agent CLIs</h3>
-<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Sideboard shells out to each agent's own CLI. Install the ones you want on your PATH and authenticate; Cursor uses the official SDK key instead.</p>
+<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Sideboard shells out to each agent's own CLI. Install the ones you want on your PATH and authenticate; Cursor uses a user-installed <code style="font-size:14px;color:#8cc8f5">@cursor/sdk</code> plus a <code style="font-size:14px;color:#8cc8f5">CURSOR_API_KEY</code> (Settings → Agents → Cursor → Install).</p>
 <pre style="margin:0;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto">npm i -g @anthropic-ai/claude-code
 npm i -g @openai/codex
 npm i -g opencode-ai@latest
+npm i -g @cursor/sdk
 export CURSOR_API_KEY="cursor_..."</pre>
 </div>
 </div>
