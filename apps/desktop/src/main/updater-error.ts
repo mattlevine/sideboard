@@ -83,6 +83,12 @@ function isPublishingInProgress(text: string, raw: string): boolean {
     return true;
   }
 
+  // GitHub serves release assets via Azure; mid-upload curls get BlobNotFound XML
+  // ("blobnotfound" — no space, so it misses the "not found" check above).
+  if (text.includes('blobnotfound') || text.includes('specified blob does not exist')) {
+    return true;
+  }
+
   // GitHub often 403s assets that exist in the release but are still processing.
   if (/\b403\b/.test(text) || text.includes('forbidden')) {
     return true;
