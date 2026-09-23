@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.229] - 2026-09-22
+
+### Added
+
+- Settings → Advanced → Agent done sound: built-in Mixkit clips (Score cheer default recommendation), Preview, and custom audio import (mp3/wav/m4a).
+- Worktree MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` so agents can start and stop the same Dev path as the UI button.
+
 ## [0.1.228] - 2026-09-22
 
 ### Fixed
