@@ -1528,7 +1528,8 @@ export function SettingsModal({
                   <div className="settings-section-title">Agent done sound</div>
                   <p className="settings-hint">
                     Play a short sound when an agent turn finishes. Soccer goal is the
-                    recommended choice when enabling sound.
+                    recommended built-in; or import your own audio file (mp3, wav, m4a,
+                    …).
                   </p>
                   <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
                     <label className="settings-hint" htmlFor="agent-done-sound">
@@ -1545,22 +1546,63 @@ export function SettingsModal({
                       onChange={(e) => {
                         const v = e.target.value;
                         if (!isAgentDoneSound(v)) return;
+                        if (v === 'custom' && !advanced.agentDoneCustomSoundName) {
+                          void (async () => {
+                            setBusy(true);
+                            setError(null);
+                            try {
+                              const next = await window.sideboard.importAgentDoneSound();
+                              if (next) applySettings(next);
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : String(err));
+                            } finally {
+                              setBusy(false);
+                            }
+                          })();
+                          return;
+                        }
                         void saveAdvancedPatch({ agentDoneSound: v });
                       }}
                     >
                       {AGENT_DONE_SOUND_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
+                          {opt.value === 'custom' && advanced.agentDoneCustomSoundName
+                            ? ` — ${advanced.agentDoneCustomSoundName}`
+                            : ''}
                         </option>
                       ))}
                     </select>
                     <button
                       type="button"
                       className="settings-inline-btn"
+                      disabled={busy}
+                      onClick={() => {
+                        void (async () => {
+                          setBusy(true);
+                          setError(null);
+                          try {
+                            const next = await window.sideboard.importAgentDoneSound();
+                            if (next) applySettings(next);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : String(err));
+                          } finally {
+                            setBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      Import…
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-inline-btn"
                       disabled={
                         busy ||
                         !isAgentDoneSound(advanced.agentDoneSound) ||
-                        advanced.agentDoneSound === 'none'
+                        advanced.agentDoneSound === 'none' ||
+                        (advanced.agentDoneSound === 'custom' &&
+                          !advanced.agentDoneCustomSoundName)
                       }
                       onClick={() => {
                         const sound: AgentDoneSound = isAgentDoneSound(advanced.agentDoneSound)
@@ -1571,6 +1613,29 @@ export function SettingsModal({
                     >
                       Preview
                     </button>
+                    {advanced.agentDoneCustomSoundName ? (
+                      <button
+                        type="button"
+                        className="settings-inline-btn"
+                        disabled={busy}
+                        onClick={() => {
+                          void (async () => {
+                            setBusy(true);
+                            setError(null);
+                            try {
+                              const next = await window.sideboard.clearAgentDoneCustomSound();
+                              applySettings(next);
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : String(err));
+                            } finally {
+                              setBusy(false);
+                            }
+                          })();
+                        }}
+                      >
+                        Clear custom
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 

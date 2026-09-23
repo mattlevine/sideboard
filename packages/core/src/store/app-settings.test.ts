@@ -622,6 +622,20 @@ describe('app settings', () => {
       'none',
     );
     expect(mod.agentDoneSound()).toBe('none');
+    expect(
+      mod.updateAdvancedSettings({
+        agentDoneSound: 'custom',
+        agentDoneCustomSoundName: 'my-goal.mp3',
+      }).advanced,
+    ).toMatchObject({
+      agentDoneSound: 'custom',
+      agentDoneCustomSoundName: 'my-goal.mp3',
+    });
+    expect(mod.agentDoneSound()).toBe('custom');
+    expect(
+      mod.updateAdvancedSettings({ agentDoneCustomSoundName: '' }).advanced
+        .agentDoneCustomSoundName,
+    ).toBeUndefined();
     expect(mod.updateAdvancedSettings({ branchPrefix: 'Matt/extra' }).advanced.branchPrefix).toBe(
       'matt',
     );

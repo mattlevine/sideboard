@@ -276,14 +276,19 @@ export const FOLLOW_UP_BEHAVIORS = ['steer', 'queue'] as const;
  * - `goal`: soccer goal celebration (recommended when enabling sound)
  * - `bell`: short bell chime
  * - `train`: train whistle
+ * - `custom`: user-imported audio file ({@link AdvancedAppSettings.agentDoneCustomSoundName})
  */
-export type AgentDoneSound = 'none' | 'goal' | 'bell' | 'train';
+export type AgentDoneSound = 'none' | 'goal' | 'bell' | 'train' | 'custom';
 
-export const AGENT_DONE_SOUNDS = ['none', 'goal', 'bell', 'train'] as const;
+export const AGENT_DONE_SOUNDS = ['none', 'goal', 'bell', 'train', 'custom'] as const;
 
 export function isAgentDoneSound(value: unknown): value is AgentDoneSound {
   return (
-    value === 'none' || value === 'goal' || value === 'bell' || value === 'train'
+    value === 'none' ||
+    value === 'goal' ||
+    value === 'bell' ||
+    value === 'train' ||
+    value === 'custom'
   );
 }
 
@@ -395,9 +400,15 @@ export interface AdvancedAppSettings {
   /**
    * Sound when an agent turn finishes.
    * Omitted = {@link agentDoneSound} default (`none`).
-   * Prefer `goal` (soccer celebration) when enabling a sound.
+   * Prefer `goal` (soccer celebration) when enabling a built-in sound.
+   * Use `custom` with {@link agentDoneCustomSoundName} after importing a file.
    */
   agentDoneSound?: AgentDoneSound;
+  /**
+   * Display name of the imported custom agent-done sound (original filename).
+   * Audio bytes live under app data `sounds/agent-done.<ext>`.
+   */
+  agentDoneCustomSoundName?: string;
 }
 
 export interface AppSettings {
@@ -961,6 +972,10 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (isAgentDoneSound(source.agentDoneSound)) {
     out.agentDoneSound = source.agentDoneSound;
+  }
+  if (typeof source.agentDoneCustomSoundName === 'string') {
+    const name = source.agentDoneCustomSoundName.trim();
+    if (name) out.agentDoneCustomSoundName = name.slice(0, 200);
   }
   return out;
 }
@@ -2245,6 +2260,13 @@ export function updateAdvancedSettings(
   }
   if (isAgentDoneSound(patch.agentDoneSound)) {
     advanced.agentDoneSound = patch.agentDoneSound;
+  }
+  if (patch.agentDoneCustomSoundName === null || patch.agentDoneCustomSoundName === '') {
+    delete advanced.agentDoneCustomSoundName;
+  } else if (typeof patch.agentDoneCustomSoundName === 'string') {
+    const name = patch.agentDoneCustomSoundName.trim();
+    if (name) advanced.agentDoneCustomSoundName = name.slice(0, 200);
+    else delete advanced.agentDoneCustomSoundName;
   }
   return saveAppSettings({ ...current, advanced });
 }

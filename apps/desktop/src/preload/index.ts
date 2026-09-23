@@ -43,6 +43,9 @@ const api: IpcApi = {
     ipcRenderer.invoke('updateBrightsySettings', patch),
   updateAdvancedSettings: (patch) =>
     ipcRenderer.invoke('updateAdvancedSettings', patch),
+  importAgentDoneSound: () => ipcRenderer.invoke('importAgentDoneSound'),
+  clearAgentDoneCustomSound: () => ipcRenderer.invoke('clearAgentDoneCustomSound'),
+  getAgentDoneCustomSound: () => ipcRenderer.invoke('getAgentDoneCustomSound'),
   updateIntegrationsSettings: (patch) =>
     ipcRenderer.invoke('updateIntegrationsSettings', patch),
   updateDefaultsSettings: (patch) =>

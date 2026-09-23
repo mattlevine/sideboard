@@ -3,7 +3,11 @@ import type { AgentDoneSound } from '@sideboard-ai/core';
 /** Runtime guard — keep out of `@sideboard-ai/core` barrel imports in the renderer. */
 export function isAgentDoneSound(value: unknown): value is AgentDoneSound {
   return (
-    value === 'none' || value === 'goal' || value === 'bell' || value === 'train'
+    value === 'none' ||
+    value === 'goal' ||
+    value === 'bell' ||
+    value === 'train' ||
+    value === 'custom'
   );
 }
 
@@ -16,6 +20,7 @@ export const AGENT_DONE_SOUND_OPTIONS: ReadonlyArray<{
   { value: 'goal', label: 'Soccer goal' },
   { value: 'bell', label: 'Bell' },
   { value: 'train', label: 'Train whistle' },
+  { value: 'custom', label: 'Custom' },
 ];
 
 let sharedCtx: AudioContext | null = null;
@@ -323,6 +328,26 @@ function playTrainWhistle(ctx: AudioContext, master: GainNode, t0: number): void
   }
 }
 
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function playCustomSound(ctx: AudioContext): Promise<void> {
+  const payload = await window.sideboard.getAgentDoneCustomSound();
+  if (!payload?.dataBase64) return;
+  const buffer = await ctx.decodeAudioData(base64ToArrayBuffer(payload.dataBase64).slice(0));
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.9, ctx.currentTime);
+  src.connect(g);
+  g.connect(ctx.destination);
+  src.start();
+}
+
 /**
  * Play the selected agent-done sound via Web Audio.
  * No-ops for `none` or when AudioContext is unavailable.
@@ -333,6 +358,12 @@ export function playAgentDoneSound(sound: AgentDoneSound): void {
   if (!ctx) return;
 
   const start = () => {
+    if (sound === 'custom') {
+      void playCustomSound(ctx).catch(() => {
+        /* decode / missing file — ignore */
+      });
+      return;
+    }
     const t0 = now(ctx);
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.9, t0);
