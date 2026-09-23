@@ -270,6 +270,23 @@ export type FollowUpBehavior = 'queue' | 'steer';
 
 export const FOLLOW_UP_BEHAVIORS = ['steer', 'queue'] as const;
 
+/**
+ * Sound played when an agent turn finishes.
+ * - `none` (default): silent
+ * - `goal`: soccer goal celebration (recommended when enabling sound)
+ * - `bell`: short bell chime
+ * - `train`: train whistle
+ */
+export type AgentDoneSound = 'none' | 'goal' | 'bell' | 'train';
+
+export const AGENT_DONE_SOUNDS = ['none', 'goal', 'bell', 'train'] as const;
+
+export function isAgentDoneSound(value: unknown): value is AgentDoneSound {
+  return (
+    value === 'none' || value === 'goal' || value === 'bell' || value === 'train'
+  );
+}
+
 export interface AdvancedAppSettings {
   /**
    * Ask the agent to rename the temporary `thread/<team>` branch on first send.
@@ -375,6 +392,12 @@ export interface AdvancedAppSettings {
    * Omitted = {@link followUpBehavior} default (`steer`).
    */
   followUpBehavior?: FollowUpBehavior;
+  /**
+   * Sound when an agent turn finishes.
+   * Omitted = {@link agentDoneSound} default (`none`).
+   * Prefer `goal` (soccer celebration) when enabling a sound.
+   */
+  agentDoneSound?: AgentDoneSound;
 }
 
 export interface AppSettings {
@@ -935,6 +958,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (source.followUpBehavior === 'queue' || source.followUpBehavior === 'steer') {
     out.followUpBehavior = source.followUpBehavior;
+  }
+  if (isAgentDoneSound(source.agentDoneSound)) {
+    out.agentDoneSound = source.agentDoneSound;
   }
   return out;
 }
@@ -2217,6 +2243,9 @@ export function updateAdvancedSettings(
   if (patch.followUpBehavior === 'queue' || patch.followUpBehavior === 'steer') {
     advanced.followUpBehavior = patch.followUpBehavior;
   }
+  if (isAgentDoneSound(patch.agentDoneSound)) {
+    advanced.agentDoneSound = patch.agentDoneSound;
+  }
   return saveAppSettings({ ...current, advanced });
 }
 
@@ -2355,6 +2384,15 @@ export function followUpBehavior(
   settings: AppSettings = loadAppSettings(),
 ): FollowUpBehavior {
   return settings.advanced.followUpBehavior === 'queue' ? 'queue' : 'steer';
+}
+
+/** Default: none (silent). Prefer `goal` when the user enables a sound. */
+export function agentDoneSound(
+  settings: AppSettings = loadAppSettings(),
+): AgentDoneSound {
+  return isAgentDoneSound(settings.advanced.agentDoneSound)
+    ? settings.advanced.agentDoneSound
+    : 'none';
 }
 
 export function maxConcurrentAgents(

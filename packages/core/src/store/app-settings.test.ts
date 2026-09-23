@@ -572,6 +572,7 @@ describe('app settings', () => {
     expect(mod.historyMaxDays()).toBe(0);
     expect(mod.maxConcurrentAgents()).toBe(5);
     expect(mod.followUpBehavior()).toBe('steer');
+    expect(mod.agentDoneSound()).toBe('none');
 
     const saved = mod.updateAdvancedSettings({
       autoRenameBranch: false,
@@ -586,6 +587,7 @@ describe('app settings', () => {
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
       followUpBehavior: 'queue',
+      agentDoneSound: 'goal',
     });
     expect(saved.advanced).toEqual({
       autoRenameBranch: false,
@@ -601,12 +603,25 @@ describe('app settings', () => {
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
       followUpBehavior: 'queue',
+      agentDoneSound: 'goal',
     });
     expect(mod.followUpBehavior()).toBe('queue');
+    expect(mod.agentDoneSound()).toBe('goal');
     expect(mod.updateAdvancedSettings({ followUpBehavior: 'steer' }).advanced.followUpBehavior).toBe(
       'steer',
     );
     expect(mod.followUpBehavior()).toBe('steer');
+    expect(mod.updateAdvancedSettings({ agentDoneSound: 'bell' }).advanced.agentDoneSound).toBe(
+      'bell',
+    );
+    expect(mod.agentDoneSound()).toBe('bell');
+    expect(mod.updateAdvancedSettings({ agentDoneSound: 'train' }).advanced.agentDoneSound).toBe(
+      'train',
+    );
+    expect(mod.updateAdvancedSettings({ agentDoneSound: 'none' }).advanced.agentDoneSound).toBe(
+      'none',
+    );
+    expect(mod.agentDoneSound()).toBe('none');
     expect(mod.updateAdvancedSettings({ branchPrefix: 'Matt/extra' }).advanced.branchPrefix).toBe(
       'matt',
     );

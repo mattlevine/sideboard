@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdvancedAppSettings,
+  AgentDoneSound,
   AgentKind,
   AgentSetupActionResult,
   AgentStatus,
@@ -12,6 +13,7 @@ import type {
   Thread,
   Workspace,
 } from '@sideboard-ai/core';
+import { isAgentDoneSound } from '@sideboard-ai/core';
 import { isUsageOnLimit, resolveUsageOnLimit } from '@sideboard/usage-on-limit';
 import {
   HISTORY_MAX_COUNT_DEFAULT,
@@ -22,6 +24,10 @@ import {
 } from '@sideboard/history-retention';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
+import {
+  AGENT_DONE_SOUND_OPTIONS,
+  playAgentDoneSound,
+} from '../lib/agent-done-sound';
 import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ConnectorsSettings } from './ConnectorsSettings';
@@ -1514,6 +1520,56 @@ export function SettingsModal({
                       }
                     >
                       <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Agent done sound</div>
+                  <p className="settings-hint">
+                    Play a short sound when an agent turn finishes. Soccer goal is the
+                    recommended choice when enabling sound.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
+                    <label className="settings-hint" htmlFor="agent-done-sound">
+                      Sound
+                    </label>
+                    <select
+                      id="agent-done-sound"
+                      value={
+                        isAgentDoneSound(advanced.agentDoneSound)
+                          ? advanced.agentDoneSound
+                          : 'none'
+                      }
+                      disabled={busy}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!isAgentDoneSound(v)) return;
+                        void saveAdvancedPatch({ agentDoneSound: v });
+                      }}
+                    >
+                      {AGENT_DONE_SOUND_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="settings-inline-btn"
+                      disabled={
+                        busy ||
+                        !isAgentDoneSound(advanced.agentDoneSound) ||
+                        advanced.agentDoneSound === 'none'
+                      }
+                      onClick={() => {
+                        const sound: AgentDoneSound = isAgentDoneSound(advanced.agentDoneSound)
+                          ? advanced.agentDoneSound
+                          : 'none';
+                        playAgentDoneSound(sound);
+                      }}
+                    >
+                      Preview
                     </button>
                   </div>
                 </div>
