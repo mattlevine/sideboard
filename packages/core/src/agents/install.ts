@@ -254,9 +254,12 @@ export async function installNpmGlobalPackage(opts: {
     exitCode: 0,
     stdout: result.stdout,
     stderr: result.stderr,
-    message: binPath
-      ? `Installed ${opts.npmPackage} → ${binPath}`
-      : `Installed ${opts.npmPackage} (CLI not yet on PATH)`,
+    // Library-only packages (`@cursor/sdk`) have no CLI to look for.
+    message: !opts.cliBin
+      ? `Installed ${opts.npmPackage}`
+      : binPath
+        ? `Installed ${opts.npmPackage} → ${binPath}`
+        : `Installed ${opts.npmPackage} (CLI not yet on PATH)`,
   };
 }
 
