@@ -83,7 +83,61 @@ export function visibleToolRowDetail(
   return base;
 }
 
+export function isSkillToolName(name: string | undefined): boolean {
+  const n = (name ?? '').trim();
+  if (/^(Skill|SlashCommand)$/i.test(n)) return true;
+  return /(?:^|__)Skill$/i.test(n);
+}
+
+export function skillCommandFromInput(input?: Record<string, unknown>): string | undefined {
+  const raw =
+    str(input?.skill) ??
+    str(input?.command) ??
+    str(input?.name) ??
+    str(input?.skill_name) ??
+    str(input?.skillName);
+  if (raw) return raw.replace(/^\//, '').trim() || undefined;
+  const path = str(input?.file_path) ?? str(input?.path);
+  if (path && /SKILL\.md$/i.test(path)) {
+    const parts = path.replace(/\\/g, '/').split('/');
+    const dir = parts[parts.length - 2];
+    if (dir && dir !== 'skills') return dir;
+  }
+  return undefined;
+}
+
+/**
+ * SKILL.md (YAML `name:`) or Sideboard composer expansion (`## Skill: /name`).
+ * Those belong on a Skill tool row, not as the agent's chat bubble.
+ */
+export function looksLikeSkillBody(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (/^## Skill: \//m.test(t) && /Follow this skill for the request above:/i.test(t)) {
+    return true;
+  }
+  return skillNameFromFrontmatter(t) != null;
+}
+
+export function skillNameFromFrontmatter(text: string): string | undefined {
+  const t = text.trim();
+  if (!t.startsWith('---')) return undefined;
+  const close = t.indexOf('\n---', 3);
+  if (close < 0) return undefined;
+  const fm = t.slice(3, close);
+  const m = fm.match(/^\s*name\s*:\s*['"]?([A-Za-z0-9][A-Za-z0-9._-]*)['"]?\s*$/m);
+  return m?.[1];
+}
+
+export function skillCommandFromBody(text: string): string | undefined {
+  return (
+    skillNameFromFrontmatter(text) ??
+    text.match(/^## Skill: \/([A-Za-z0-9][A-Za-z0-9._-]*)/m)?.[1]
+  );
+}
+
 export function toolDetail(name: string, input?: Record<string, unknown>): string | undefined {
+  if (isSkillToolName(name)) return undefined;
   if (!input) return undefined;
   const command = str(input.command) ?? str(input.cmd);
   if (command) return clipChatLine(command);
@@ -137,6 +191,10 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   }
   if (/stop_dev_script$/i.test(name)) {
     return str(input?.name) ? `Stop ${str(input?.name)}` : 'Stop Dev script';
+  }
+  if (isSkillToolName(name)) {
+    const cmd = skillCommandFromInput(input);
+    return cmd ? `Using /${cmd}` : 'Using skill';
   }
   if (isSubagentToolName(name)) {
     const desc = str(input?.description);
@@ -285,6 +343,7 @@ export function toolActivityLine(parts: MessagePart[]): {
   if (tools.length === 0) return null;
 
   const edited: { name: string; running: boolean }[] = [];
+  const skillNames: string[] = [];
   let reads = 0;
   let searches = 0;
   let shells = 0;
@@ -293,7 +352,10 @@ export function toolActivityLine(parts: MessagePart[]): {
   let deletions = 0;
   for (const tool of tools) {
     const kind = classifyTool(tool.name);
-    if (kind === 'edit') {
+    if (isSkillToolName(tool.name)) {
+      const cmd = skillCommandFromInput(tool.input);
+      skillNames.push(cmd ? `/${cmd}` : 'skill');
+    } else if (kind === 'edit') {
       const path = tool.filePath ?? toolFilePath(tool.input);
       edited.push({
         name: path ? fileBasename(path) : tool.name,
@@ -322,6 +384,8 @@ export function toolActivityLine(parts: MessagePart[]): {
   else if (searches > 1) bits.push(`${searches} searches`);
   if (shells === 1) bits.push('ran 1 command');
   else if (shells > 1) bits.push(`ran ${shells} commands`);
+  if (skillNames.length === 1) bits.push(`used ${skillNames[0]}`);
+  else if (skillNames.length > 1) bits.push(`used ${skillNames.length} skills`);
   if (others === 1) bits.push('1 tool');
   else if (others > 1) bits.push(`${others} tools`);
   if (bits.length === 0) return null;
@@ -518,6 +582,26 @@ function withPartTimes<T extends MessagePart>(next: T, prev?: MessagePart | null
   return { ...next, startedAt, updatedAt: now };
 }
 
+function skillToolFromTextPart(
+  part: Extract<MessagePart, { type: 'text' }>,
+  id: string,
+): Extract<MessagePart, { type: 'tool' }> {
+  const command = skillCommandFromBody(part.text);
+  const input = command ? { skill: command } : undefined;
+  return {
+    type: 'tool',
+    id,
+    name: 'Skill',
+    input,
+    description: toolDescription('Skill', input),
+    status: 'done',
+    result: clipToolResultForStore(part.text),
+    ...(part.parentId ? { parentId: part.parentId } : {}),
+    startedAt: part.startedAt,
+    updatedAt: Date.now(),
+  };
+}
+
 export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): MessagePart[] {
   if (event.type === 'stdout') {
     const data = event.data;
@@ -541,6 +625,10 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
           ...(event.parentId ? { parentId: event.parentId } : {}),
         }),
       );
+    }
+    const acc = next[next.length - 1];
+    if (acc?.type === 'text' && looksLikeSkillBody(acc.text)) {
+      next[next.length - 1] = skillToolFromTextPart(acc, `skill-${next.length}`);
     }
     return next;
   }

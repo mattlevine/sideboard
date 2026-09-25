@@ -55,6 +55,28 @@ describe('splitTurnPhases', () => {
     ];
     expect(splitTurnPhases(parts).map((p) => p.kind)).toEqual(['trace', 'text']);
   });
+
+  it('keeps a Skill tool in the work trace instead of the answer body', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 's1',
+        name: 'Skill',
+        status: 'done',
+        description: 'Using /long-running',
+      },
+      { type: 'text', text: 'Detached the pack and waiting on the job.' },
+    ];
+    const phases = splitTurnPhases(parts);
+    expect(phases.map((p) => p.kind)).toEqual(['trace', 'text']);
+    expect(phases[0]?.kind === 'trace' && phases[0].parts[0]).toMatchObject({
+      type: 'tool',
+      name: 'Skill',
+    });
+    expect(phases[1]?.kind === 'text' && phases[1].text).toBe(
+      'Detached the pack and waiting on the job.',
+    );
+  });
 });
 
 describe('phaseDurationMs', () => {

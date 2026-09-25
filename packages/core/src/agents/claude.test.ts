@@ -452,6 +452,66 @@ describe('claudeAdapter.parseEvent', () => {
     expect(event).toEqual({ type: 'stdout', data: 'hello' });
   });
 
+  it('does not paint Claude user skill text as assistant stdout', () => {
+    const skill = `---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+`;
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'user',
+        message: { content: [{ type: 'text', text: skill }] },
+      }),
+    );
+    expect(event).toEqual([
+      {
+        type: 'tool_use',
+        id: 'skill-long-running',
+        name: 'Skill',
+        input: { skill: 'long-running' },
+      },
+      { type: 'tool_result', id: 'skill-long-running', content: skill },
+    ]);
+  });
+
+  it('does not paint non-skill Claude user text as the agent reply', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'user',
+          message: { content: [{ type: 'text', text: 'hook: session started' }] },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('still maps Claude user tool_result blocks onto the matching tool', () => {
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'user',
+          message: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'toolu_skill',
+                content: '---\nname: review\n---\n# Review\n',
+              },
+            ],
+          },
+        }),
+      ),
+    ).toEqual({
+      type: 'tool_result',
+      id: 'toolu_skill',
+      content: '---\nname: review\n---\n# Review\n',
+      isError: false,
+    });
+  });
+
   it('extracts result text', () => {
     const event = claudeAdapter.parseEvent(
       JSON.stringify({
