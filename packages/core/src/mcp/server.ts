@@ -670,7 +670,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_run_scripts',
-    'List .sideboard/.conductor run scripts for this thread (same menu as the desktop Dev button) and which are active. Worktree turns may omit ref (uses cwd).',
+    'List .sideboard/.conductor run scripts for this thread (same menu as the desktop Dev button) and which are active. Each active run includes port, ports, and url (http://localhost:<SIDEBOARD_PORT>). Open that url to use the app — never guess :3000. Worktree turns may omit ref (uses cwd).',
     {
       ref: z
         .string()
@@ -681,7 +681,10 @@ export async function startMcpServer(): Promise<void> {
       try {
         const threadRef = resolveRunScriptThreadRef(ref);
         const scripts = orch.listThreadRunScripts(threadRef);
-        const active = orch.getActiveRuns(threadRef);
+        const active = orch.getActiveRuns(threadRef).map((run) => ({
+          ...run,
+          url: `http://localhost:${run.port}`,
+        }));
         return mcpJson({ scripts, active, ref: threadRef });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -692,7 +695,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'run_dev_script',
-    'Start a .sideboard/.conductor run script (same as the desktop Dev / play button). Logs and Stop appear in the thread UI — do not detached-job or shell-spawn the same command. Returns the allocated port. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
+    'Start a .sideboard/.conductor run script (same as the desktop Dev / play button). Logs and Stop appear in the thread UI — do not detached-job or shell-spawn the same command. Returns {port, ports, url}. Open `url` to use the app (browser, curl, Playwright). The port is allocated SIDEBOARD_PORT, not 3000. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
     {
       ref: z
         .string()

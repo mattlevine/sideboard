@@ -9,7 +9,7 @@ import {
 } from '../git/worktree-labels.js';
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
 import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
-import type { Thread } from '../types/thread.js';
+import type { ActiveRun, Thread } from '../types/thread.js';
 
 function normPath(p: string): string {
   return p.replace(/\/+$/, '');
@@ -53,6 +53,36 @@ export function formatRenameBranchDirective(
   return lines.join('\n');
 }
 
+/** Local URL for a worktree Dev / run-script port (`SIDEBOARD_PORT`). */
+export function localhostPreviewUrl(port: number): string {
+  return `http://localhost:${port}`;
+}
+
+export type DevAccessRun = Pick<ActiveRun, 'scriptName' | 'port'>;
+
+/**
+ * How to open the app this worktree can start. Live URL when a run script is
+ * already up; otherwise point at `run_dev_script`’s returned `url`.
+ */
+export function formatDevAccessHint(
+  runs?: readonly DevAccessRun[] | null,
+): string {
+  const live = (runs ?? []).filter(
+    (r) => Number.isFinite(r.port) && r.port > 0,
+  );
+  if (live.length === 1) {
+    const r = live[0]!;
+    return `This worktree's Dev app is ${localhostPreviewUrl(r.port)} (${r.scriptName}). Open that URL (browser, curl, Playwright) — do not guess :3000.`;
+  }
+  if (live.length > 1) {
+    const bits = live
+      .map((r) => `${r.scriptName} ${localhostPreviewUrl(r.port)}`)
+      .join('; ');
+    return `This worktree's Dev apps: ${bits}. Open those URLs — do not guess :3000.`;
+  }
+  return 'To open the project Dev app: MCP `run_dev_script` (same as the desktop Dev button) returns `{url, port}` — use that URL. The port is allocated `SIDEBOARD_PORT` (also `CONDUCTOR_PORT`), not 3000. If already running, `list_run_scripts` `active[].url`. `stop_dev_script` to stop.';
+}
+
 /**
  * Mandatory Sideboard isolation + landing guidance — agents must edit the thread
  * worktree and open PRs whose titles/bodies describe the *purpose of the changes*.
@@ -60,7 +90,11 @@ export function formatRenameBranchDirective(
 export function formatWorktreeDirective(
   thread: Pick<Thread, 'worktreePath' | 'repoPath' | 'branchName'> &
     Partial<Pick<Thread, 'title' | 'prUrl'>>,
-  opts?: { githubSlug?: string | null; gitAuthMode?: GithubGitAuthMode },
+  opts?: {
+    githubSlug?: string | null;
+    gitAuthMode?: GithubGitAuthMode;
+    activeRuns?: readonly DevAccessRun[] | null;
+  },
 ): string {
   const worktree = normPath(thread.worktreePath);
   const repo = normPath(thread.repoPath);
@@ -110,6 +144,8 @@ export function formatWorktreeDirective(
   lines.push(
     '- Sideboard git buttons send short phrases ("Commit and push.", "Ready for review.", "Merge PR.", …) with their meaning attached — act on them without asking for clarification. If the user gives a goal (Greptile 5/5, CI green, until checks pass), you get the watch-fix-push playbook with that request.',
   );
+  lines.push('');
+  lines.push(formatDevAccessHint(opts?.activeRuns));
   lines.push('');
   lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));
   return lines.join('\n');
@@ -299,7 +335,9 @@ export function formatProcessGuideDirective(opts?: { worktreePath?: string | nul
  * Injected on every fresh worktree session; reminder repeats the helper path
  * because CLI `--resume` drops cachedPrefix.
  */
-export function formatLongRunningDirective(opts?: { scriptPath?: string | null }): string {
+export function formatLongRunningDirective(opts?: {
+  scriptPath?: string | null;
+}): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
   return [
     'Long-running jobs (mandatory when a command may run more than ~30s — pack, test, deploy, `gh pr checks --watch`):',
@@ -309,14 +347,17 @@ export function formatLongRunningDirective(opts?: { scriptPath?: string | null }
     '- Hanging, no useful output, or the wrong thing → `stop_job` (or the helper with `stop <id>`). Do not stop a pack/test/deploy that is clearly making progress.',
     '- Stay in the loop until stillRunning is false (or you stopped it). ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
-    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` — logs and Stop live in the thread UI. Do not detached-job or shell-spawn that same command.',
+    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` — logs and Stop live in the thread UI. Do not detached-job or shell-spawn that same command. `run_dev_script` returns `{url, port}` (`SIDEBOARD_PORT`); open that URL — never guess :3000.',
   ].join('\n');
 }
 
 /** Short long-job line on every worktree turn (survives CLI resume). */
-export function formatLongRunningReminder(opts?: { scriptPath?: string | null }): string {
+export function formatLongRunningReminder(opts?: {
+  scriptPath?: string | null;
+  activeRuns?: readonly DevAccessRun[] | null;
+}): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
-  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn. Project Dev button: list_run_scripts / run_dev_script / stop_dev_script (UI-connected — not detached-job).`;
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn. Project Dev button: list_run_scripts / run_dev_script / stop_dev_script (UI-connected — not detached-job). ${formatDevAccessHint(opts?.activeRuns)}`;
 }
 
 /**
@@ -341,5 +382,5 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button); stop_dev_script to stop.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button) returns url (SIDEBOARD_PORT — never guess :3000); list_run_scripts active[].url if already running; stop_dev_script to stop.';
 }

@@ -94,7 +94,7 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- archive_thread / restore_thread — archive (tears down worktree when last tab) or restore',
   'Setup / run:',
   '- run_setup — re-run worktree setup (already runs automatically on create when a script exists)',
-  '- list_run_scripts / run_dev_script / stop_dev_script — start/stop named run scripts',
+  '- list_run_scripts / run_dev_script / stop_dev_script — start/stop named run scripts. run_dev_script returns {url, port} (SIDEBOARD_PORT). Tell the worktree agent to open that URL; never localhost:3000. list_run_scripts active[].url if already running.',
   'Inspect / review / PRs:',
   '- get_diff — compact diff summary',
   '- get_pr_checks — snapshot of a worktree thread\'s PR checks (null = no PR). Use this to inspect status. If the user gave a goal, the worktree agent watches with `gh pr checks --watch` — do not poll for the human.',

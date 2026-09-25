@@ -1409,12 +1409,19 @@ export class Orchestrator {
           .filter(Boolean)
           .join('\n')
       : null;
+    const worktreeActiveRuns =
+      thread.agent !== 'brightsy' &&
+      !isOrchestratorThread(thread) &&
+      thread.worktreePath
+        ? mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath))
+            .activeRuns
+        : [];
     // Re-assert on every turn (incl. CLI --resume, which drops cachedPrefix).
     const artifactReminder =
       thread.agent !== 'brightsy' ? formatUiReminder() : null;
     const longRunningReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
-        ? formatLongRunningReminder()
+        ? formatLongRunningReminder({ activeRuns: worktreeActiveRuns })
         : null;
     const worktreeReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
@@ -1520,6 +1527,9 @@ export class Orchestrator {
               'resolveGithubRepoSlug',
             ).catch(() => null),
             gitAuthMode,
+            activeRuns: mergeWorktreeActiveRuns(
+              threadsSharingWorktree(fresh.worktreePath),
+            ).activeRuns,
           });
     const artifactDirective = isBrightsy ? null : formatArtifactDirective();
     const longRunningDirective =

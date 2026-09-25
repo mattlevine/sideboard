@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.236] - 2026-09-25
 
+### Added
+
+- Worktree agents are told how to open the Dev app they can start: `run_dev_script` returns `{url, port}` (`SIDEBOARD_PORT`, never `:3000`). If a script is already running, the playbook and `list_run_scripts` include `http://localhost:<port>`.
+
 ### Fixed
 
 - Skill use and conversation compact no longer dump the skill body or compact recap into the agent bubble. They show as **Using /name** and **Summarized conversation** tool rows; the real reply still follows as chat.

@@ -52,6 +52,8 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/type=log appends/);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
+    expect(text).toMatch(/SIDEBOARD_PORT/);
+    expect(text).toMatch(/never guess :3000/);
   });
 });
 
@@ -75,6 +77,8 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
     expect(text).toMatch(/Dev button/);
+    expect(text).toMatch(/url|SIDEBOARD_PORT/);
+    expect(text).toMatch(/:3000/);
   });
 });
 
@@ -90,6 +94,16 @@ describe('formatLongRunningReminder', () => {
     expect(text).toMatch(/let the user know later/);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
+    expect(text).toMatch(/SIDEBOARD_PORT|:3000/);
+  });
+
+  it('names the live Dev URL when a run script is already up', () => {
+    const text = formatLongRunningReminder({
+      scriptPath: '/abs/detached-job.js',
+      activeRuns: [{ scriptName: 'dev', port: 49152 }],
+    });
+    expect(text).toContain('http://localhost:49152');
+    expect(text).toMatch(/do not guess :3000/);
   });
 });
 
@@ -233,6 +247,23 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Worktree folder nickname/i);
     expect(text).toMatch(/never the worktree nickname/i);
     expect(text).toMatch(/gh pr create --draft -R/i);
+    expect(text).toMatch(/run_dev_script/);
+    expect(text).toMatch(/SIDEBOARD_PORT/);
+    expect(text).toMatch(/not 3000/);
+  });
+
+  it('names the live Dev URL when a run script is already up', () => {
+    const text = formatWorktreeDirective(
+      {
+        worktreePath: '/tmp/sideboard/workspaces/app/paris',
+        repoPath: '/Users/me/Projects/app',
+        branchName: 'thread/paris',
+      },
+      { activeRuns: [{ scriptName: 'web', port: 4173 }] },
+    );
+    expect(text).toContain('http://localhost:4173');
+    expect(text).toMatch(/web/);
+    expect(text).not.toMatch(/allocated `SIDEBOARD_PORT`/);
   });
 
   it('pins draft PR create to the origin slug when provided', () => {
