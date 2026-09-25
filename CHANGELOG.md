@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.236] - 2026-09-25
+
+### Fixed
+
+- Skill use and conversation compact no longer dump the skill body or compact recap into the agent bubble. They show as **Using /name** and **Summarized conversation** tool rows; the real reply still follows as chat.
+
 ## [0.1.235] - 2026-09-23
 
 ### Fixed
