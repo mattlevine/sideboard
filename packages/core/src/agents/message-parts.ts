@@ -136,8 +136,50 @@ export function skillCommandFromBody(text: string): string | undefined {
   );
 }
 
+export function isCompactToolName(name: string | undefined): boolean {
+  const short = (name ?? '').replace(/^mcp__[^_]+__/, '').trim();
+  return /^(Compact|ConversationCompact|summarize_context|SummarizeContext|SummarizeConversation)$/i.test(
+    short,
+  );
+}
+
+export function isContextCompactInProgress(text: string): boolean {
+  return /^Compressing context/i.test(text.trim());
+}
+
+export function isContextCompactDone(text: string): boolean {
+  return /^Context compressed\b/i.test(text.trim());
+}
+
+/**
+ * Auto-compact / injected conversation summaries. Those belong on a Compact
+ * tool row, not as the agent's chat bubble.
+ */
+export function looksLikeConversationSummary(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 80) return false;
+  if (/<summarized_conversation\b/i.test(t) || /<conversation_summary\b/i.test(t)) {
+    return true;
+  }
+  if (/this session is being continued from a previous conversation/i.test(t)) {
+    return true;
+  }
+  if (/conversation compacted|replaced with a summary/i.test(t)) return true;
+  if (/^## Prior summary\b/m.test(t)) return true;
+  if (/_Automatic extractive summary/i.test(t)) return true;
+  if (/"context_summary"\s*:/.test(t)) return true;
+  if (
+    /^(?:#+\s*)?(?:conversation summary|summary of (?:the )?conversation|compacted (?:conversation|context))\b/im.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function toolDetail(name: string, input?: Record<string, unknown>): string | undefined {
-  if (isSkillToolName(name)) return undefined;
+  if (isSkillToolName(name) || isCompactToolName(name)) return undefined;
   if (!input) return undefined;
   const command = str(input.command) ?? str(input.cmd);
   if (command) return clipChatLine(command);
@@ -195,6 +237,13 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (isSkillToolName(name)) {
     const cmd = skillCommandFromInput(input);
     return cmd ? `Using /${cmd}` : 'Using skill';
+  }
+  if (isCompactToolName(name)) {
+    const trigger = str(input?.trigger);
+    if (trigger && !/^auto$/i.test(trigger) && trigger !== 'injected') {
+      return `Summarized conversation (${trigger})`;
+    }
+    return 'Summarized conversation';
   }
   if (isSubagentToolName(name)) {
     const desc = str(input?.description);
@@ -344,6 +393,7 @@ export function toolActivityLine(parts: MessagePart[]): {
 
   const edited: { name: string; running: boolean }[] = [];
   const skillNames: string[] = [];
+  let compacts = 0;
   let reads = 0;
   let searches = 0;
   let shells = 0;
@@ -355,6 +405,8 @@ export function toolActivityLine(parts: MessagePart[]): {
     if (isSkillToolName(tool.name)) {
       const cmd = skillCommandFromInput(tool.input);
       skillNames.push(cmd ? `/${cmd}` : 'skill');
+    } else if (isCompactToolName(tool.name)) {
+      compacts += 1;
     } else if (kind === 'edit') {
       const path = tool.filePath ?? toolFilePath(tool.input);
       edited.push({
@@ -386,6 +438,8 @@ export function toolActivityLine(parts: MessagePart[]): {
   else if (shells > 1) bits.push(`ran ${shells} commands`);
   if (skillNames.length === 1) bits.push(`used ${skillNames[0]}`);
   else if (skillNames.length > 1) bits.push(`used ${skillNames.length} skills`);
+  if (compacts === 1) bits.push('summarized conversation');
+  else if (compacts > 1) bits.push(`summarized conversation ×${compacts}`);
   if (others === 1) bits.push('1 tool');
   else if (others > 1) bits.push(`${others} tools`);
   if (bits.length === 0) return null;
@@ -602,10 +656,126 @@ function skillToolFromTextPart(
   };
 }
 
+function compactToolPart(
+  text: string,
+  id: string,
+  opts?: {
+    parentId?: string;
+    status?: 'running' | 'done';
+    prev?: MessagePart | null;
+    trigger?: string;
+  },
+): Extract<MessagePart, { type: 'tool' }> {
+  const input = { trigger: opts?.trigger ?? 'auto' };
+  return withPartTimes(
+    {
+      type: 'tool',
+      id,
+      name: 'Compact',
+      input,
+      description: toolDescription('Compact', input),
+      status: opts?.status ?? 'done',
+      result: clipToolResultForStore(text) ?? '',
+      ...(opts?.parentId ? { parentId: opts.parentId } : {}),
+    },
+    opts?.prev,
+  );
+}
+
+function contextCompactInProgress(parts: MessagePart[], parentId?: string): boolean {
+  let compressing = false;
+  for (const p of parts) {
+    if (!sameParentId(p.parentId, parentId)) continue;
+    if (p.type === 'thinking' && isContextCompactInProgress(p.text)) compressing = true;
+    if (p.type === 'thinking' && isContextCompactDone(p.text)) compressing = false;
+  }
+  return compressing;
+}
+
+function lastRunningCompactIndex(parts: MessagePart[], parentId?: string): number {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (
+      p.type === 'tool' &&
+      isCompactToolName(p.name) &&
+      p.status === 'running' &&
+      sameParentId(p.parentId, parentId)
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function markRunningCompactDone(parts: MessagePart[], parentId?: string): MessagePart[] {
+  return parts.map((p) => {
+    if (
+      p.type === 'tool' &&
+      isCompactToolName(p.name) &&
+      p.status === 'running' &&
+      sameParentId(p.parentId, parentId)
+    ) {
+      return withPartTimes({ ...p, status: 'done' as const }, p);
+    }
+    return p;
+  });
+}
+
+function ensureCompactTool(
+  parts: MessagePart[],
+  parentId?: string,
+): MessagePart[] {
+  const hasCompact = parts.some(
+    (p) =>
+      p.type === 'tool' &&
+      isCompactToolName(p.name) &&
+      sameParentId(p.parentId, parentId),
+  );
+  if (hasCompact) return parts;
+  return [
+    ...parts,
+    compactToolPart('Context compressed', `compact-${parts.length}`, {
+      parentId,
+      status: 'done',
+    }),
+  ];
+}
+
+function withCompactFinish(
+  parts: MessagePart[],
+  thinking: string,
+  parentId?: string,
+): MessagePart[] {
+  if (!isContextCompactDone(thinking)) return parts;
+  return ensureCompactTool(markRunningCompactDone(parts, parentId), parentId);
+}
+
 export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): MessagePart[] {
   if (event.type === 'stdout') {
     const data = event.data;
     if (!data) return parts;
+    const runningIdx = lastRunningCompactIndex(parts, event.parentId);
+    if (runningIdx >= 0) {
+      const prev = parts[runningIdx] as Extract<MessagePart, { type: 'tool' }>;
+      const next = [...parts];
+      next[runningIdx] = withPartTimes(
+        {
+          ...prev,
+          result: clipToolResultForStore(`${prev.result ?? ''}${data}`),
+        },
+        prev,
+      );
+      return next;
+    }
+    if (contextCompactInProgress(parts, event.parentId)) {
+      return [
+        ...parts,
+        compactToolPart(data, `compact-${parts.length}`, {
+          parentId: event.parentId,
+          status: 'running',
+        }),
+      ];
+    }
     const next = [...parts];
     const last = next[next.length - 1];
     if (last?.type === 'text' && sameParentId(last.parentId, event.parentId)) {
@@ -629,6 +799,12 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
     const acc = next[next.length - 1];
     if (acc?.type === 'text' && looksLikeSkillBody(acc.text)) {
       next[next.length - 1] = skillToolFromTextPart(acc, `skill-${next.length}`);
+    } else if (acc?.type === 'text' && looksLikeConversationSummary(acc.text)) {
+      next[next.length - 1] = compactToolPart(acc.text, `compact-${next.length}`, {
+        parentId: acc.parentId,
+        status: 'done',
+        prev: acc,
+      });
     }
     return next;
   }
@@ -649,7 +825,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
             },
             prev,
           );
-          return next;
+          return withCompactFinish(next, data, event.parentId);
         }
       }
       next.push(
@@ -659,7 +835,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
           ...(event.parentId ? { parentId: event.parentId } : {}),
         }),
       );
-      return next;
+      return withCompactFinish(next, data, event.parentId);
     }
     const last = next[next.length - 1];
     if (last?.type === 'thinking' && sameParentId(last.parentId, event.parentId)) {
@@ -680,7 +856,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         }),
       );
     }
-    return next;
+    return withCompactFinish(next, data, event.parentId);
   }
 
   if (event.type === 'tool_use') {

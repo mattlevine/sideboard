@@ -77,6 +77,25 @@ describe('splitTurnPhases', () => {
       'Detached the pack and waiting on the job.',
     );
   });
+
+  it('keeps a Compact tool in the work trace instead of the answer body', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'c1',
+        name: 'Compact',
+        status: 'done',
+        description: 'Summarized conversation',
+      },
+      { type: 'text', text: 'Picking up after compact.' },
+    ];
+    const phases = splitTurnPhases(parts);
+    expect(phases.map((p) => p.kind)).toEqual(['trace', 'text']);
+    expect(phases[0]?.kind === 'trace' && phases[0].parts[0]).toMatchObject({
+      type: 'tool',
+      name: 'Compact',
+    });
+  });
 });
 
 describe('phaseDurationMs', () => {

@@ -11,6 +11,7 @@ import { mcpAllowToolsFromNames } from './claude-mcp.js';
 import { listUserClaudeMcpServerEntries } from './orch-mcp-isolation.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
 import {
+  looksLikeConversationSummary,
   looksLikeSkillBody,
   skillCommandFromBody,
   withEventParentId,
@@ -214,6 +215,23 @@ function skillToolEventsFromBody(text: string, parentId?: string): AgentEvent[] 
   ];
 }
 
+function compactToolEventsFromBody(text: string, parentId?: string): AgentEvent[] {
+  const id = 'compact-summary';
+  return [
+    withEventParentId(
+      { type: 'tool_use', id, name: 'Compact', input: { trigger: 'injected' } },
+      parentId,
+    ),
+    withEventParentId({ type: 'tool_result', id, content: text }, parentId),
+  ];
+}
+
+function eventsFromInjectedUserText(text: string, parentId?: string): AgentEvent[] {
+  if (looksLikeSkillBody(text)) return skillToolEventsFromBody(text, parentId);
+  if (looksLikeConversationSummary(text)) return compactToolEventsFromBody(text, parentId);
+  return [];
+}
+
 /**
  * Claude `user` stream events are tool results and injected context (skills,
  * slash commands, hooks) — never the human's chat (Sideboard already stored
@@ -225,7 +243,7 @@ function eventsFromUserContent(
   parentId?: string,
 ): AgentEvent[] {
   if (typeof content === 'string' && content.trim()) {
-    return looksLikeSkillBody(content) ? skillToolEventsFromBody(content, parentId) : [];
+    return eventsFromInjectedUserText(content, parentId);
   }
   if (!Array.isArray(content) || content.length === 0) return [];
   const out: AgentEvent[] = [];
@@ -264,7 +282,7 @@ function eventsFromUserContent(
   }
   if (out.length > 0) return out;
   for (const text of textBlocks) {
-    if (looksLikeSkillBody(text)) out.push(...skillToolEventsFromBody(text, parentId));
+    out.push(...eventsFromInjectedUserText(text, parentId));
   }
   return out;
 }

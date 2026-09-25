@@ -488,6 +488,28 @@ description: Detach long jobs
     ).toBeNull();
   });
 
+  it('does not paint Claude user compact summaries as the agent reply', () => {
+    const summary = `This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Goal: fix skill chat display.
+`;
+    const event = claudeAdapter.parseEvent(
+      JSON.stringify({
+        type: 'user',
+        message: { content: [{ type: 'text', text: summary }] },
+      }),
+    );
+    expect(event).toEqual([
+      {
+        type: 'tool_use',
+        id: 'compact-summary',
+        name: 'Compact',
+        input: { trigger: 'injected' },
+      },
+      { type: 'tool_result', id: 'compact-summary', content: summary },
+    ]);
+  });
+
   it('still maps Claude user tool_result blocks onto the matching tool', () => {
     expect(
       claudeAdapter.parseEvent(
