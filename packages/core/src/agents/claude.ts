@@ -10,7 +10,12 @@ import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/th
 import { mcpAllowToolsFromNames } from './claude-mcp.js';
 import { listUserClaudeMcpServerEntries } from './orch-mcp-isolation.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
-import { withEventParentId } from './message-parts.js';
+import {
+  looksLikeConversationSummary,
+  looksLikeSkillBody,
+  skillCommandFromBody,
+  withEventParentId,
+} from './message-parts.js';
 import {
   brightsyMcpAllowedTools,
   buildInjectedMcpServers,
@@ -181,6 +186,107 @@ export function claudeResultErrorDetail(obj: Record<string, unknown>): string | 
   return 'Claude turn failed';
 }
 
+function toolResultContent(block: ContentBlock): string | undefined {
+  if (typeof block.content === 'string') return block.content;
+  if (Array.isArray(block.content)) {
+    return block.content
+      .map((c) =>
+        typeof c === 'string'
+          ? c
+          : c && typeof c === 'object' && 'text' in c
+            ? String((c as { text?: string }).text ?? '')
+            : '',
+      )
+      .join('');
+  }
+  if (block.content != null) return JSON.stringify(block.content);
+  return undefined;
+}
+
+function skillToolEventsFromBody(text: string, parentId?: string): AgentEvent[] {
+  const command = skillCommandFromBody(text) ?? 'skill';
+  const id = `skill-${command}`;
+  return [
+    withEventParentId(
+      { type: 'tool_use', id, name: 'Skill', input: { skill: command } },
+      parentId,
+    ),
+    withEventParentId({ type: 'tool_result', id, content: text }, parentId),
+  ];
+}
+
+function compactToolEventsFromBody(text: string, parentId?: string): AgentEvent[] {
+  const id = 'compact-summary';
+  return [
+    withEventParentId(
+      { type: 'tool_use', id, name: 'Compact', input: { trigger: 'injected' } },
+      parentId,
+    ),
+    withEventParentId({ type: 'tool_result', id, content: text }, parentId),
+  ];
+}
+
+function eventsFromInjectedUserText(text: string, parentId?: string): AgentEvent[] {
+  if (looksLikeSkillBody(text)) return skillToolEventsFromBody(text, parentId);
+  if (looksLikeConversationSummary(text)) return compactToolEventsFromBody(text, parentId);
+  return [];
+}
+
+/**
+ * Claude `user` stream events are tool results and injected context (skills,
+ * slash commands, hooks) — never the human's chat (Sideboard already stored
+ * that). Painting their text as stdout makes a skill body look like the agent
+ * wrote it.
+ */
+function eventsFromUserContent(
+  content: ContentBlock[] | string | undefined,
+  parentId?: string,
+): AgentEvent[] {
+  if (typeof content === 'string' && content.trim()) {
+    return eventsFromInjectedUserText(content, parentId);
+  }
+  if (!Array.isArray(content) || content.length === 0) return [];
+  const out: AgentEvent[] = [];
+  const textBlocks: string[] = [];
+  for (const block of content) {
+    if (!block?.type) continue;
+    if (block.type === 'tool_use' && block.id && block.name) {
+      out.push(
+        withEventParentId(
+          {
+            type: 'tool_use',
+            id: block.id,
+            name: block.name,
+            input: block.input,
+          },
+          parentId,
+        ),
+      );
+      continue;
+    }
+    if (block.type === 'tool_result' && block.tool_use_id) {
+      out.push(
+        withEventParentId(
+          {
+            type: 'tool_result',
+            id: block.tool_use_id,
+            content: toolResultContent(block),
+            isError: Boolean(block.is_error),
+          },
+          parentId,
+        ),
+      );
+      continue;
+    }
+    if (block.type === 'text' && block.text) textBlocks.push(block.text);
+  }
+  if (out.length > 0) return out;
+  for (const text of textBlocks) {
+    out.push(...eventsFromInjectedUserText(text, parentId));
+  }
+  return out;
+}
+
 function eventsFromContentBlocks(
   blocks: ContentBlock[] | undefined,
   parentId?: string,
@@ -212,28 +318,12 @@ function eventsFromContentBlocks(
       continue;
     }
     if (block.type === 'tool_result' && block.tool_use_id) {
-      const content =
-        typeof block.content === 'string'
-          ? block.content
-          : Array.isArray(block.content)
-            ? block.content
-                .map((c) =>
-                  typeof c === 'string'
-                    ? c
-                    : c && typeof c === 'object' && 'text' in c
-                      ? String((c as { text?: string }).text ?? '')
-                      : '',
-                )
-                .join('')
-            : block.content != null
-              ? JSON.stringify(block.content)
-              : undefined;
       out.push(
         withEventParentId(
           {
             type: 'tool_result',
             id: block.tool_use_id,
-            content,
+            content: toolResultContent(block),
             isError: Boolean(block.is_error),
           },
           parentId,
@@ -686,9 +776,16 @@ export const claudeAdapter: AgentAdapter = {
 
       if (obj.type === 'assistant' || obj.type === 'user') {
         const parentId = claudeParentToolUseId(obj);
-        const message = (obj as { message?: { content?: ContentBlock[]; usage?: ClaudeUsage } })
-          .message;
-        const events = eventsFromContentBlocks(message?.content, parentId);
+        const message = (
+          obj as { message?: { content?: ContentBlock[] | string; usage?: ClaudeUsage } }
+        ).message;
+        const events =
+          obj.type === 'user'
+            ? eventsFromUserContent(message?.content, parentId)
+            : eventsFromContentBlocks(
+                Array.isArray(message?.content) ? message.content : undefined,
+                parentId,
+              );
         if (obj.type === 'assistant') {
           const usage = usageFromClaude(message?.usage);
           if (usage) events.push({ type: 'usage', data: usage, scope: 'request' });

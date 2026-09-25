@@ -6,8 +6,10 @@ import {
   clipAgentEventForPaint,
   clipThinkingForStore,
   isInternalAgentStatusText,
+  isSkillToolName,
   lastAssistantMessageText,
   liveActivitySummary,
+  looksLikeSkillBody,
   toolActivityLine,
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
@@ -91,6 +93,85 @@ describe('applyAgentEvent', () => {
     });
     expect(parts[2]).toMatchObject({ type: 'text', text: 'Done.' });
     expect(partsToAssistantText(parts)).toBe('Done.');
+  });
+
+  it('promotes a skill-body stdout dump into a Skill tool, not the answer', () => {
+    const body = `---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+
+Detach, then wait.
+`;
+    const parts = applyAgentEvent([], { type: 'stdout', data: body });
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      name: 'Skill',
+      description: 'Using /long-running',
+      status: 'done',
+    });
+    expect(parts[0]?.type === 'tool' && parts[0].result).toContain('Detach, then wait.');
+    expect(partsToAssistantText(parts)).toBe('');
+  });
+
+  it('does not treat a normal reply as a skill', () => {
+    const parts = applyAgentEvent([], {
+      type: 'stdout',
+      data: 'Skill use is a tool row, not this sentence.',
+    });
+    expect(parts).toEqual([expect.objectContaining({ type: 'text' })]);
+    expect(looksLikeSkillBody('Skill use is a tool row, not this sentence.')).toBe(false);
+    expect(isSkillToolName('Skill')).toBe(true);
+    expect(isSkillToolName('Read')).toBe(false);
+  });
+
+  it('promotes a conversation-summary stdout dump into a Compact tool', () => {
+    const body = `This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+- Goal: ship compact display
+- Files: AgentMessage.tsx
+`;
+    const parts = applyAgentEvent([], { type: 'stdout', data: body });
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      name: 'Compact',
+      description: 'Summarized conversation',
+      status: 'done',
+    });
+    expect(partsToAssistantText(parts)).toBe('');
+  });
+
+  it('captures compacting stdout as a Compact tool instead of the answer', () => {
+    let parts = applyAgentEvent([], {
+      type: 'thinking',
+      data: 'Compressing context…',
+      replace: true,
+    });
+    parts = applyAgentEvent(parts, {
+      type: 'stdout',
+      data: 'The user asked to fix auth. Edited auth.ts. Tests still failing.',
+    });
+    parts = applyAgentEvent(parts, { type: 'thinking', data: 'Context compressed (auto)' });
+    expect(parts.map((p) => p.type)).toEqual(['thinking', 'tool', 'thinking']);
+    expect(parts[1]).toMatchObject({
+      type: 'tool',
+      name: 'Compact',
+      status: 'done',
+      description: 'Summarized conversation',
+    });
+    expect(parts[1]?.type === 'tool' && parts[1].result).toContain('fix auth');
+    parts = applyAgentEvent(parts, { type: 'stdout', data: 'Auth redirect is fixed.' });
+    expect(partsToAssistantText(parts)).toBe('Auth redirect is fixed.');
+  });
+
+  it('adds a Compact tool row when compact finishes with no captured summary text', () => {
+    const parts = applyAgentEvent([], { type: 'thinking', data: 'Context compressed (auto)' });
+    expect(parts.some((p) => p.type === 'tool' && p.name === 'Compact')).toBe(true);
+    expect(partsToAssistantText(parts)).toBe('');
   });
 
   it('nests Cursor subagent parts under a parentId and keeps them out of the answer', () => {
@@ -461,6 +542,13 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('run_dev_script', { name: 'dev' })).toBe('Start dev');
     expect(toolDescription('stop_dev_script', {})).toBe('Stop Dev script');
     expect(toolDescription('stop_dev_script', { name: 'dev' })).toBe('Stop dev');
+    expect(toolDescription('Skill', { skill: 'long-running' })).toBe('Using /long-running');
+    expect(toolDescription('SlashCommand', { command: '/commit' })).toBe('Using /commit');
+    expect(toolDescription('Skill')).toBe('Using skill');
+    expect(toolDetail('Skill', { skill: 'long-running' })).toBeUndefined();
+    expect(toolDescription('Compact', { trigger: 'auto' })).toBe('Summarized conversation');
+    expect(toolDescription('summarize_context')).toBe('Summarized conversation');
+    expect(toolDetail('Compact', { trigger: 'auto' })).toBeUndefined();
   });
 });
 
@@ -550,6 +638,44 @@ describe('toolActivityLine', () => {
       ]),
     ).toEqual({
       text: 'Edited CHANGELOG.md, explored 2 files, 1 search, ran 1 command',
+      additions: 0,
+      deletions: 0,
+    });
+  });
+
+  it('labels a Skill tool as used, not as a generic tool', () => {
+    expect(
+      toolActivityLine([
+        {
+          type: 'tool',
+          id: 's1',
+          name: 'Skill',
+          status: 'done',
+          input: { skill: 'long-running' },
+        },
+        { type: 'tool', id: 'r1', name: 'Read', status: 'done' },
+      ]),
+    ).toEqual({
+      text: 'explored 1 file, used /long-running',
+      additions: 0,
+      deletions: 0,
+    });
+  });
+
+  it('labels a Compact tool as summarized conversation', () => {
+    expect(
+      toolActivityLine([
+        {
+          type: 'tool',
+          id: 'c1',
+          name: 'Compact',
+          status: 'done',
+          description: 'Summarized conversation',
+        },
+        { type: 'tool', id: 'r1', name: 'Read', status: 'done' },
+      ]),
+    ).toEqual({
+      text: 'explored 1 file, summarized conversation',
       additions: 0,
       deletions: 0,
     });

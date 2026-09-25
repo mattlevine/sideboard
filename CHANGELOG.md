@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.236] - 2026-09-25
+
+### Added
+
+- Worktree agents are told how to open the Dev app they can start: `run_dev_script` returns `{url, port, preview}` (`SIDEBOARD_PORT`, never `:3000`). If a script is already running, the playbook and `list_run_scripts` include `http://localhost:<port>`.
+
+### Changed
+
+- Worktree Dev access distinguishes web vs Electron: `preview=url` means open that URL (browser, curl, Playwright). `preview=window` means the native Electron window is the app; `url` is the renderer/HMR origin only (not a browser substitute). Set `preview = "window"` on `[scripts.run.*]` or let Sideboard infer it from `electron` / `electron-vite`.
+
+### Fixed
+
+- Skill use and conversation compact no longer dump the skill body or compact recap into the agent bubble. They show as **Using /name** and **Summarized conversation** tool rows; the real reply still follows as chat.
+
 ## [0.1.235] - 2026-09-23
 
 ### Fixed

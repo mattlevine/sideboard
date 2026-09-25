@@ -67,6 +67,17 @@ icon = "test-tube"
     expect(settings?.runScripts[1]?.name).toBe('test');
   });
 
+  it('reads optional scripts.run preview=window', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-preview-toml-'));
+    mkdirSync(join(root, '.sideboard'));
+    writeFileSync(
+      join(root, '.sideboard', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "pnpm --filter desktop dev"\npreview = "window"\n`,
+    );
+    const settings = loadRepoSettings(root);
+    expect(settings?.runScripts[0]?.preview).toBe('window');
+  });
+
   it('reads [prompts] create_pr and resolve_merge_conflicts', () => {
     const root = mkdtempSync(join(tmpdir(), 'sideboard-prompts-'));
     mkdirSync(join(root, '.sideboard'));

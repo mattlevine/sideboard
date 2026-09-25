@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { findConventionSetup } from './convention-setup.js';
 import { hasCursorWorktreeSetup } from './cursor-worktrees.js';
+import { parseDevPreview, type DevPreview } from './dev-preview.js';
 
 export type RunMode = 'concurrent' | 'nonconcurrent';
 
@@ -15,6 +16,11 @@ export interface RunScript {
   icon?: string;
   /** Where the script is available: local, cloud, or both. */
   availableIn?: Array<'local' | 'cloud'>;
+  /**
+   * How agents should use the allocated port. `window` = Electron (native
+   * window is the app). Omit to infer from the command / package.json.
+   */
+  preview?: DevPreview;
 }
 
 export interface RepoSettings {
@@ -122,6 +128,7 @@ function parseSettingsFile(
           default?: boolean;
           icon?: string;
           available_in?: unknown;
+          preview?: unknown;
         }
       >
     | undefined;
@@ -138,6 +145,7 @@ function parseSettingsFile(
           default: Boolean(value.default),
           icon: typeof value.icon === 'string' ? value.icon : undefined,
           availableIn: parseAvailableIn(value.available_in),
+          preview: parseDevPreview(value.preview),
         });
       }
     }
