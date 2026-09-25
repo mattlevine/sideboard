@@ -18,6 +18,12 @@ import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import {
+  activeRunPreview,
+  runScriptPreview,
+  type DevPreview,
+} from '../hook/dev-preview.js';
+import { localhostPreviewUrl } from '../agents/instructions.js';
+import {
   mcpWaitFinishedHint,
   mcpWaitStillRunningHint,
   mcpWaitForTurnTimeoutMs,
@@ -200,6 +206,12 @@ async function createOrchChildThread(
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, text: `create_thread failed: ${message}` };
   }
+}
+
+function previewHint(preview: DevPreview): string {
+  return preview === 'window'
+    ? 'Electron: the native window is the app. url is the renderer/HMR origin only — do not open it in a browser (no preload/IPC).'
+    : 'Open url in a browser, curl, or Playwright to use the app.';
 }
 
 /**
@@ -670,7 +682,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_run_scripts',
-    'List .sideboard/.conductor run scripts for this thread (same menu as the desktop Dev button) and which are active. Each active run includes port, ports, and url (http://localhost:<SIDEBOARD_PORT>). Open that url to use the app — never guess :3000. Worktree turns may omit ref (uses cwd).',
+    'List .sideboard/.conductor run scripts for this thread (same menu as the desktop Dev button) and which are active. Each script and active run includes preview: url (open http://localhost:<SIDEBOARD_PORT>) or window (Electron: native window is the app; url is renderer/HMR only). Never guess :3000. Worktree turns may omit ref (uses cwd).',
     {
       ref: z
         .string()
@@ -680,11 +692,20 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref }) => {
       try {
         const threadRef = resolveRunScriptThreadRef(ref);
-        const scripts = orch.listThreadRunScripts(threadRef);
-        const active = orch.getActiveRuns(threadRef).map((run) => ({
-          ...run,
-          url: `http://localhost:${run.port}`,
+        const worktreePath = orch.getThread(threadRef)?.worktreePath ?? '';
+        const scripts = orch.listThreadRunScripts(threadRef).map((script) => ({
+          ...script,
+          preview: runScriptPreview(script, worktreePath),
         }));
+        const active = orch.getActiveRuns(threadRef).map((run) => {
+          const preview = activeRunPreview(run.scriptName, scripts, worktreePath);
+          return {
+            ...run,
+            url: localhostPreviewUrl(run.port),
+            preview,
+            hint: previewHint(preview),
+          };
+        });
         return mcpJson({ scripts, active, ref: threadRef });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -695,7 +716,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'run_dev_script',
-    'Start a .sideboard/.conductor run script (same as the desktop Dev / play button). Logs and Stop appear in the thread UI — do not detached-job or shell-spawn the same command. Returns {port, ports, url}. Open `url` to use the app (browser, curl, Playwright). The port is allocated SIDEBOARD_PORT, not 3000. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
+    'Start a .sideboard/.conductor run script (same as the desktop Dev / play button). Logs and Stop appear in the thread UI — do not detached-job or shell-spawn the same command. Returns {port, ports, url, preview}. preview=url → open url (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). The port is allocated SIDEBOARD_PORT, not 3000. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
     {
       ref: z
         .string()
@@ -710,11 +731,16 @@ export async function startMcpServer(): Promise<void> {
       try {
         const threadRef = resolveRunScriptThreadRef(ref);
         const result = await orch.startDev(threadRef, name);
+        const worktreePath = orch.getThread(threadRef)?.worktreePath ?? '';
+        const scripts = orch.listThreadRunScripts(threadRef);
+        const preview = activeRunPreview(result.scriptName, scripts, worktreePath);
         return mcpJson({
           port: result.port,
           scriptName: result.scriptName,
           ports: result.ports,
-          url: `http://localhost:${result.port}`,
+          url: localhostPreviewUrl(result.port),
+          preview,
+          hint: previewHint(preview),
           ref: threadRef,
         });
       } catch (err) {

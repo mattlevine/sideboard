@@ -45,6 +45,7 @@ import {
   getRunMode,
   killListenersOnPorts,
 } from '../hook/conductor.js';
+import { annotateDevAccessRuns } from '../hook/dev-preview.js';
 import {
   appendSetupLog,
   beginSetupLog,
@@ -1413,8 +1414,12 @@ export class Orchestrator {
       thread.agent !== 'brightsy' &&
       !isOrchestratorThread(thread) &&
       thread.worktreePath
-        ? mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath))
-            .activeRuns
+        ? annotateDevAccessRuns(
+            mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath))
+              .activeRuns,
+            listRunScripts(thread.worktreePath, thread.repoPath),
+            thread.worktreePath,
+          )
         : [];
     // Re-assert on every turn (incl. CLI --resume, which drops cachedPrefix).
     const artifactReminder =
@@ -1527,9 +1532,13 @@ export class Orchestrator {
               'resolveGithubRepoSlug',
             ).catch(() => null),
             gitAuthMode,
-            activeRuns: mergeWorktreeActiveRuns(
-              threadsSharingWorktree(fresh.worktreePath),
-            ).activeRuns,
+            activeRuns: annotateDevAccessRuns(
+              mergeWorktreeActiveRuns(
+                threadsSharingWorktree(fresh.worktreePath),
+              ).activeRuns,
+              listRunScripts(fresh.worktreePath, fresh.repoPath),
+              fresh.worktreePath,
+            ),
           });
     const artifactDirective = isBrightsy ? null : formatArtifactDirective();
     const longRunningDirective =

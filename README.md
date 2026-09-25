@@ -506,6 +506,8 @@ command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-3000}} pnpm --filter web dev
 default = true
 ```
 
+For Electron / electron-vite apps, add `preview = "window"` on that run script. Sideboard still allocates `SIDEBOARD_PORT` for the Vite renderer, but agents are told the **native window** is the app — `http://localhost:<port>` is HMR only (a browser tab will not have preload/IPC). If `preview` is omitted, Sideboard infers `window` from `electron` / `electron-vite` in the command or the filtered package.
+
 Sideboard prefers `.sideboard/settings.toml` and falls back to `.conductor/settings.toml` when present (so existing Conductor-configured repos keep working). Dev scripts get both `SIDEBOARD_PORT` and `CONDUCTOR_PORT`.
 
 New worktrees run setup automatically (create / fork / stack layer) in the background — it does not block the chat. If `[scripts] setup` is missing, Sideboard uses `.cursor/worktrees.json` `setup-worktree`, then a conventional `script/setup`, `bin/setup`, or `scripts/setup(.sh)` when one of those files exists.

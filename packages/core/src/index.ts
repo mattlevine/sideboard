@@ -75,6 +75,7 @@ export * from './agents/instructions.js';
 export * from './agents/turn-input.js';
 export * from './detect/detect.js';
 export * from './hook/settings.js';
+export * from './hook/dev-preview.js';
 export * from './hook/conductor.js';
 export * from './hook/convention-setup.js';
 export * from './hook/cursor-worktrees.js';

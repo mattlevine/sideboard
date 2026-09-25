@@ -51,9 +51,10 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/not both for the same document/i);
     expect(text).toMatch(/type=log appends/);
     expect(text).toMatch(/run_dev_script/);
-    expect(text).toMatch(/stop_dev_script/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
     expect(text).toMatch(/never guess :3000/);
+    expect(text).toMatch(/preview=window/);
+    expect(text).toMatch(/Electron/);
   });
 });
 
@@ -77,8 +78,9 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
     expect(text).toMatch(/Dev button/);
-    expect(text).toMatch(/url|SIDEBOARD_PORT/);
+    expect(text).toMatch(/preview|SIDEBOARD_PORT/);
     expect(text).toMatch(/:3000/);
+    expect(text).toMatch(/Electron|preview=window/);
   });
 });
 
@@ -104,6 +106,17 @@ describe('formatLongRunningReminder', () => {
     });
     expect(text).toContain('http://localhost:49152');
     expect(text).toMatch(/do not guess :3000/);
+    expect(text).toMatch(/Open that URL/);
+  });
+
+  it('names the Electron window when preview=window', () => {
+    const text = formatLongRunningReminder({
+      scriptPath: '/abs/detached-job.js',
+      activeRuns: [{ scriptName: 'dev', port: 5173, preview: 'window' }],
+    });
+    expect(text).toContain('http://localhost:5173');
+    expect(text).toMatch(/Electron window/);
+    expect(text).not.toMatch(/Open that URL \(browser/);
   });
 });
 
@@ -250,6 +263,8 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
     expect(text).toMatch(/not 3000/);
+    expect(text).toMatch(/preview=window/);
+    expect(text).toMatch(/Electron/);
   });
 
   it('names the live Dev URL when a run script is already up', () => {
@@ -263,7 +278,24 @@ describe('formatWorktreeDirective', () => {
     );
     expect(text).toContain('http://localhost:4173');
     expect(text).toMatch(/web/);
+    expect(text).toMatch(/Open that URL/);
     expect(text).not.toMatch(/allocated `SIDEBOARD_PORT`/);
+    expect(text).not.toMatch(/Electron window/);
+  });
+
+  it('tells agents the Electron window is the app when preview=window', () => {
+    const text = formatWorktreeDirective(
+      {
+        worktreePath: '/tmp/sideboard/workspaces/app/paris',
+        repoPath: '/Users/me/Projects/app',
+        branchName: 'thread/paris',
+      },
+      { activeRuns: [{ scriptName: 'dev', port: 5173, preview: 'window' }] },
+    );
+    expect(text).toContain('http://localhost:5173');
+    expect(text).toMatch(/Electron window/);
+    expect(text).toMatch(/do not open it in a browser/i);
+    expect(text).not.toMatch(/Open that URL \(browser/);
   });
 
   it('pins draft PR create to the origin slug when provided', () => {

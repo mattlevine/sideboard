@@ -9,6 +9,7 @@ import {
 } from '../git/worktree-labels.js';
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
 import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
+import type { DevPreview } from '../hook/dev-preview.js';
 import type { ActiveRun, Thread } from '../types/thread.js';
 
 function normPath(p: string): string {
@@ -58,11 +59,21 @@ export function localhostPreviewUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export type DevAccessRun = Pick<ActiveRun, 'scriptName' | 'port'>;
+export type DevAccessRun = Pick<ActiveRun, 'scriptName' | 'port'> & {
+  preview?: DevPreview;
+};
+
+function describeLiveDevRun(run: DevAccessRun): string {
+  const url = localhostPreviewUrl(run.port);
+  if (run.preview === 'window') {
+    return `${run.scriptName} Electron window (renderer ${url})`;
+  }
+  return `${run.scriptName} ${url}`;
+}
 
 /**
  * How to open the app this worktree can start. Live URL when a run script is
- * already up; otherwise point at `run_dev_script`’s returned `url`.
+ * already up; otherwise point at `run_dev_script`’s returned `url` / `preview`.
  */
 export function formatDevAccessHint(
   runs?: readonly DevAccessRun[] | null,
@@ -72,15 +83,17 @@ export function formatDevAccessHint(
   );
   if (live.length === 1) {
     const r = live[0]!;
-    return `This worktree's Dev app is ${localhostPreviewUrl(r.port)} (${r.scriptName}). Open that URL (browser, curl, Playwright) — do not guess :3000.`;
+    const url = localhostPreviewUrl(r.port);
+    if (r.preview === 'window') {
+      return `This worktree's Dev app is the Electron window (${r.scriptName}). Renderer origin ${url} — curl to confirm Vite; do not open it in a browser (no preload/IPC). Do not guess :3000.`;
+    }
+    return `This worktree's Dev app is ${url} (${r.scriptName}). Open that URL (browser, curl, Playwright) — do not guess :3000.`;
   }
   if (live.length > 1) {
-    const bits = live
-      .map((r) => `${r.scriptName} ${localhostPreviewUrl(r.port)}`)
-      .join('; ');
-    return `This worktree's Dev apps: ${bits}. Open those URLs — do not guess :3000.`;
+    const bits = live.map(describeLiveDevRun).join('; ');
+    return `This worktree's Dev apps: ${bits}. preview=url → open the URL; preview=window → Electron window is the app. Do not guess :3000.`;
   }
-  return 'To open the project Dev app: MCP `run_dev_script` (same as the desktop Dev button) returns `{url, port}` — use that URL. The port is allocated `SIDEBOARD_PORT` (also `CONDUCTOR_PORT`), not 3000. If already running, `list_run_scripts` `active[].url`. `stop_dev_script` to stop.';
+  return 'To open the project Dev app: MCP `run_dev_script` (same as the desktop Dev button) returns `{url, port, preview}` (`SIDEBOARD_PORT`, not 3000). preview=url → open that URL (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). If already running, `list_run_scripts` `active[].url`. `stop_dev_script` to stop.';
 }
 
 /**
@@ -347,7 +360,7 @@ export function formatLongRunningDirective(opts?: {
     '- Hanging, no useful output, or the wrong thing → `stop_job` (or the helper with `stop <id>`). Do not stop a pack/test/deploy that is clearly making progress.',
     '- Stay in the loop until stillRunning is false (or you stopped it). ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
-    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` — logs and Stop live in the thread UI. Do not detached-job or shell-spawn that same command. `run_dev_script` returns `{url, port}` (`SIDEBOARD_PORT`); open that URL — never guess :3000.',
+    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` — logs and Stop live in the thread UI. Do not detached-job or shell-spawn that same command. `run_dev_script` returns `{url, port, preview}` (`SIDEBOARD_PORT`). preview=url → open that URL; preview=window → Electron window is the app (url is renderer/HMR only). Never guess :3000.',
   ].join('\n');
 }
 
@@ -382,5 +395,5 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button) returns url (SIDEBOARD_PORT — never guess :3000); list_run_scripts active[].url if already running; stop_dev_script to stop.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button) returns {url, port, preview} (SIDEBOARD_PORT — never guess :3000). preview=url → open url; preview=window → Electron window is the app, url is renderer/HMR only. list_run_scripts active[].url if already running; stop_dev_script to stop.';
 }
