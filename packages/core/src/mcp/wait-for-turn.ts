@@ -1,3 +1,5 @@
+import type { TaskState } from '../orchestrator/task-state.js';
+
 /**
  * MCP clients (Cursor, Claude Code) often kill a tool call around 60s.
  * wait_for_turn must return before that with a progress snapshot so the
@@ -30,10 +32,37 @@ export const MCP_WAIT_BROKEN_HINT =
 export const MCP_WAIT_ERROR_HINT =
   'Child turn failed. lastError/text is the failure — switch agent, tell the user, or retry. Do not treat empty text as success.';
 
+export const MCP_WAIT_INPUT_REQUIRED_HINT =
+  'Child asked the user a question (ask_user). taskState is input-required. Wait for the user to answer in that chat — do not send_to_thread a check-in.';
+
 /** Hint when wait_for_turn / get_turn_result is no longer stillRunning. */
 export function mcpWaitFinishedHint(status: string): string | undefined {
   if (status === 'stopped') return MCP_WAIT_STOPPED_HINT;
   if (status === 'broken') return MCP_WAIT_BROKEN_HINT;
   if (status === 'error') return MCP_WAIT_ERROR_HINT;
   return undefined;
+}
+
+/**
+ * Coordinator hint from A2A-style taskState (preferred over ThreadStatus).
+ * `status` still distinguishes broken vs other failures.
+ */
+export function mcpWaitTaskHint(
+  taskState: TaskState,
+  status?: string,
+): string | undefined {
+  switch (taskState) {
+    case 'submitted':
+      return MCP_WAIT_QUEUED_HINT;
+    case 'working':
+      return MCP_WAIT_STILL_RUNNING_HINT;
+    case 'input-required':
+      return MCP_WAIT_INPUT_REQUIRED_HINT;
+    case 'canceled':
+      return MCP_WAIT_STOPPED_HINT;
+    case 'failed':
+      return status === 'broken' ? MCP_WAIT_BROKEN_HINT : MCP_WAIT_ERROR_HINT;
+    default:
+      return undefined;
+  }
 }

@@ -1,8 +1,11 @@
 import { EventEmitter } from 'node:events';
 import {
-  formatSlackRepliesForTurn,
-  pendingSlackExternalReplies,
-} from '../slack/outbound-watch.js';
+  formatInjectedNoticesForTurn,
+  lastAgentReply,
+  pendingInjectedNotices,
+} from '../threads/injected-notices.js';
+import { deriveTaskState, type TaskState } from './task-state.js';
+import { notifyRepoSiblingsOfMerge, shouldNotifyRepoSiblingsOfMerge } from './peer-notices.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
@@ -1460,8 +1463,8 @@ export class Orchestrator {
       )
         ? formatReviewWriteGateReminder()
         : null;
-    const slackReplyContext = formatSlackRepliesForTurn(
-      pendingSlackExternalReplies(thread.messages),
+    const injectedNoticeContext = formatInjectedNoticesForTurn(
+      pendingInjectedNotices(thread.messages),
     );
     // Standing reminders restate the fresh-session directives. They travel as
     // `systemPrompt`: Claude appends them to its (cached) system prompt; other
@@ -1489,7 +1492,7 @@ export class Orchestrator {
       thread.planMode ? PLAN_MODE_INSTRUCTION : null,
       orchestrationReminder,
       prGateDirective,
-      slackReplyContext,
+      injectedNoticeContext,
       expandedPrompt,
     ]
       .filter(Boolean)
@@ -2814,7 +2817,7 @@ export class Orchestrator {
     lastTurnUsage: TokenUsage | null;
   } {
     const thread = this.requireThread(threadRef);
-    const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+    const lastAgent = lastAgentReply(thread.messages);
     return {
       usage: sumUsageList(thread.messages.map((m) => m.usage)),
       lastTurnUsage: lastAgent?.usage ?? null,
@@ -2824,6 +2827,7 @@ export class Orchestrator {
   getTurnResult(threadRef: string): {
     text: string;
     status: string;
+    taskState: TaskState;
     sessionId: string | null;
     lastError: string | null;
     stillRunning: boolean;
@@ -2833,7 +2837,7 @@ export class Orchestrator {
     usage: TokenUsage | null;
   } {
     const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
-    const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+    const lastAgent = lastAgentReply(thread.messages);
     const lastError = thread.lastError ?? null;
     const rawText = (lastAgent?.text ?? '').trim();
     const text =
@@ -2849,9 +2853,15 @@ export class Orchestrator {
       stillRunning && thread.status === 'queued' && !liveSummary
         ? 'Queued — waiting for a concurrency slot'
         : null;
+    const taskState = deriveTaskState({
+      status: thread.status,
+      stillRunning,
+      lastAgentParts: lastAgent?.parts,
+    });
     return {
       text,
       status: thread.status,
+      taskState,
       sessionId: thread.sessionId,
       lastError,
       stillRunning,
@@ -3142,6 +3152,21 @@ export class Orchestrator {
     const titled = this.requireThread(thread.id);
     if (!titled.userSetTitle && meta.title && titled.title !== meta.title) {
       updateThread(thread.id, { title: meta.title });
+    }
+
+    const latestForNotice = this.requireThread(thread.id);
+    if (
+      shouldNotifyRepoSiblingsOfMerge({
+        previousPrState: prevState || null,
+        nextPrState: nextState,
+      })
+    ) {
+      await notifyRepoSiblingsOfMerge({
+        merged: latestForNotice,
+        previousPrState: prevState || null,
+        nextPrState: nextState,
+        send: (id, prompt) => this.send(id, prompt, { followUp: 'queue' }),
+      });
     }
 
     const { autoArchiveOnMergeEnabled } = await import('../store/app-settings.js');

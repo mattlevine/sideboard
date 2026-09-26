@@ -159,6 +159,9 @@ describe('coordinator-prompt', () => {
 
   it('fleet playbook tells coordinators how to read child spend', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('costUsd');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('taskState');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('input-required');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('fleet notice');
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_thread.*usage/s);
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_turn_result.*usage/s);
   });
@@ -238,7 +241,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toMatch(/write CLI output to `\.context\/cli\/`/);
       expect(claude).toMatch(/Claude \/ Cursor \/ Codex \/ OpenCode/);
       expect(claude).toContain('ask_user');
-      expect(claude).toMatch(/status stopped or broken/);
+      expect(claude).toContain('taskState');
+      expect(claude).toMatch(/failed = error\/broken/);
       expect(claude).toContain('.claude/skills/');
       expect(claude).toContain('/long-running');
       expect(claude).toContain('graph-engineering');

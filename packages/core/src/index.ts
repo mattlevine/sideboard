@@ -102,7 +102,27 @@ export * from './threads/chat-tabs.js';
 export * from './threads/fork-worktree.js';
 export * from './threads/stack-layers.js';
 export * from './threads/adopt.js';
+export {
+  PEER_NOTICE_PREFIX,
+  formatInjectedNoticesForTurn,
+  isInjectedNoticeText,
+  lastAgentReply,
+  pendingInjectedNotices,
+} from './threads/injected-notices.js';
 export * from './orchestrator/orchestrator.js';
+export {
+  deriveTaskState,
+  endedOnAskUser,
+  isIncompleteTaskState,
+  isTerminalTaskState,
+  needsCoordinatorAction,
+} from './orchestrator/task-state.js';
+export type { TaskState } from './orchestrator/task-state.js';
+export {
+  formatMainMovedNotice,
+  notifyRepoSiblingsOfMerge,
+  shouldNotifyRepoSiblingsOfMerge,
+} from './orchestrator/peer-notices.js';
 export {
   isSetupLastError,
   isStaleLastErrorDuringTurn,

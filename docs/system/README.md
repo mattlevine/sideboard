@@ -5,6 +5,7 @@ Canonical instructions for agents working **on this repository** (not for Sidebo
 | Doc | When |
 |-----|------|
 | [architecture.md](architecture.md) | Layout, packages, how Slack/MCP/desktop fit, process skills |
+| [agent-orchestration.md](agent-orchestration.md) | `taskState`, fleet notices, why not A2A HTTP / Claude Agent Teams |
 | [conventions.md](conventions.md) | Build, test, docs, release |
 | [safety.md](safety.md) | Human-only land/purge, user-gated merge, secrets, remote control |
 | [deploy.md](deploy.md) | Marketing site + Slack relay on Fly |

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import { getOrchestrator, resolveOrchChildFollowUp } from '../orchestrator/orchestrator.js';
+import { needsCoordinatorAction } from '../orchestrator/task-state.js';
 import {
   listBranches,
   listPrs,
@@ -24,8 +25,7 @@ import {
 } from '../hook/dev-preview.js';
 import { localhostPreviewUrl } from '../agents/instructions.js';
 import {
-  mcpWaitFinishedHint,
-  mcpWaitStillRunningHint,
+  mcpWaitTaskHint,
   mcpWaitForTurnTimeoutMs,
 } from './wait-for-turn.js';
 import {
@@ -1005,7 +1005,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'wait_for_turn',
-    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. stillRunning is the source of truth — if false, the child is not working (do not say it is waiting for a gate). If stillRunning is true, progress is tools/thinking (or “queued, waiting for a concurrency slot” if it has not started). Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts), force_stop, or assume a hang. On status error, lastError/text is the failure. On status stopped or broken, the child did not finish — resume with send_to_thread or tell the user; do not treat that as success. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
+    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_thread a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_thread or tell the user. On input-required, wait for the user in that chat. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -1015,34 +1015,33 @@ export async function startMcpServer(): Promise<void> {
         resolveIfStillRunning: true,
       });
       const result = orch.getTurnResult(thread.id);
+      const hint = mcpWaitTaskHint(result.taskState, result.status);
       return mcpJson({
         id: thread.id,
         status: result.status,
+        taskState: result.taskState,
         text: result.text,
         lastError: result.lastError,
         stillRunning: result.stillRunning,
         progress: result.progress,
         lastActivityAt: result.lastActivityAt,
-        hint: result.stillRunning
-          ? mcpWaitStillRunningHint(result.status)
-          : mcpWaitFinishedHint(result.status),
-        incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
+        hint,
+        incomplete: needsCoordinatorAction(result.taskState),
       });
     },
   );
 
   server.tool(
     'get_turn_result',
-    'Assistant message when the turn finished, or live progress while stillRunning. Not the full transcript. Includes usage for the last agent turn (tokens + costUsd when reported).',
+    'Assistant message when the turn finished, or live progress while stillRunning. Not the full transcript. Includes taskState (A2A lifecycle) and usage for the last agent turn (tokens + costUsd when reported).',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);
+      const hint = mcpWaitTaskHint(result.taskState, result.status);
       return mcpJson({
         ...result,
-        hint: result.stillRunning
-          ? mcpWaitStillRunningHint(result.status)
-          : mcpWaitFinishedHint(result.status),
-        incomplete: !result.stillRunning && Boolean(mcpWaitFinishedHint(result.status)),
+        hint,
+        incomplete: needsCoordinatorAction(result.taskState),
       });
     },
   );
