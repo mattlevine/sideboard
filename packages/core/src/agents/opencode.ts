@@ -225,6 +225,7 @@ export const opencodeAdapter: AgentAdapter = {
         orchestrator: isOrchestrator,
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
+      threadId: thread.id,
     });
     const disableNames = isOrchestrator
       ? userMcpNamesToDisable({

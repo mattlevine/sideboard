@@ -5,6 +5,10 @@ import {
   enrichWorkspacesWithGithub,
 } from '../orchestrator/coordinator-prompt.js';
 import {
+  outboundReplyFromTurn,
+  type OutboundTurnSnapshot,
+} from '../orchestrator/outbound-turn-reply.js';
+import {
   ensureSlackDeviceIdentity,
   resolveOrchestratorDefaults,
 } from '../store/app-settings.js';
@@ -41,6 +45,28 @@ export const SLACK_LISTEN_TIMEOUT_REPLY = [
   'Sideboard timed out waiting for the local agent turn to finish.',
   'Send another message to interrupt and retry, or send "stop".',
 ].join(' ');
+
+/**
+ * Coordinator ended on ask_user. The picker is on this Mac — posting that
+ * prompt as the Slack answer looks like the turn finished.
+ */
+export const SLACK_LISTEN_INPUT_REQUIRED_REPLY = [
+  'Sideboard is waiting for an answer on the Mac (the coordinator called ask_user).',
+  'The picker is in the Sideboard app — not in Slack.',
+  'Reply here after you answer it on the Mac, or send "stop".',
+].join(' ');
+
+export function formatSlackTurnReply(result: OutboundTurnSnapshot): string {
+  return outboundReplyFromTurn(result, {
+    inputRequired: SLACK_LISTEN_INPUT_REQUIRED_REPLY,
+    canceled: SLACK_LISTEN_STOPPED_REPLY,
+    completedEmpty: () => '',
+    failed: (detail) =>
+      detail
+        ? `Sideboard coordinator failed: ${detail}`
+        : 'Sideboard coordinator failed before producing a result.',
+  });
+}
 
 /** Serialize send+wait so two replacement turns do not overlap. Interrupt happens before this queue. */
 let handleChain: Promise<void> = Promise.resolve();
@@ -496,7 +522,7 @@ async function relayCoordinatorReplyToSlack(
     : undefined;
   if (lastUser && isSlackInboundUserPrompt(lastUser.text)) return;
   const result = getOrchestrator().getTurnResult(threadId);
-  const text = result.text.trim();
+  const text = formatSlackTurnReply(result);
   if (!text) return;
   if (alreadyRelayed(threadId, text)) return;
   markRelayed(threadId, text);
@@ -629,7 +655,7 @@ export async function handleSlackInbound(
         return;
       }
     }
-    reply = orch.getTurnResult(fresh.id).text.trim();
+    reply = formatSlackTurnReply(orch.getTurnResult(fresh.id));
   } catch (err) {
     if (slackInboundSuperseded(opts)) {
       await dropProgress(`turn error ${msg.ts} (superseded)`);

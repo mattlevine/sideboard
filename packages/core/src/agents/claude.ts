@@ -655,6 +655,7 @@ export const claudeAdapter: AgentAdapter = {
         orchestrator: isOrchestrator,
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
+      threadId: thread.id,
     });
     const injectedBrightsyNames = injectedServers
       .filter((s) => s.name === 'brightsy' || s.name.startsWith('brightsy_'))

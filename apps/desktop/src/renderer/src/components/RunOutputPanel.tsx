@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import type { Thread } from '@sideboard-ai/core';
-import { createKeyedScriptOutputPainter } from '../lib/script-output-paint';
+import { createKeyedScriptOutputPainter, mergeScriptOutput } from '../lib/script-output-paint';
 import { eventOnWorktree } from '../lib/worktree-events';
 import { scriptDisplayName } from '../lib/run-script-icons';
 
@@ -56,6 +56,35 @@ export const RunOutputPanel = memo(function RunOutputPanel({
   useEffect(() => {
     painterRef.current?.clear();
   }, [worktreeKey]);
+
+  const scriptNamesKey = [
+    ...new Set(
+      [primaryScriptName, defaultScriptName, ...activeRuns.map((r) => r.scriptName)].filter(
+        (n): n is string => Boolean(n),
+      ),
+    ),
+  ]
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (typeof window.sideboard.getRunLog !== 'function') return;
+    const names = scriptNamesKey ? scriptNamesKey.split(',') : ['dev'];
+    let cancelled = false;
+    void Promise.all(
+      names.map(async (name) => {
+        const snap = await window.sideboard.getRunLog(threadId, name);
+        if (cancelled || !snap.output) return;
+        setRunLogs((prev) => ({
+          ...prev,
+          [name]: mergeScriptOutput(prev[name] ?? '', snap.output),
+        }));
+      }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [worktreeKey, threadId, scriptNamesKey]);
 
   useEffect(() => {
     if (!clearRequest) return;

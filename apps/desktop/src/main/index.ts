@@ -1728,6 +1728,9 @@ function registerIpc(): void {
       getRepoSetupInfo(worktreePath, repoPath),
   );
   ipcMain.handle('getSetupLog', (_e, ref: string) => orch.getSetupLog(ref));
+  ipcMain.handle('getRunLog', (_e, ref: string, scriptName?: string) =>
+    orch.getRunLog(ref, scriptName),
+  );
   ipcMain.handle('runSetup', (_e, ref: string) => orch.runSetup(ref));
   ipcMain.handle('pickRepoPath', async () => {
     const result = await dialog.showOpenDialog({

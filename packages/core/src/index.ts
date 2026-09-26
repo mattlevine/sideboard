@@ -22,6 +22,13 @@ export * from './store/thread-store.js';
 export { slimThreadForUiList, slimMessagesForUiList } from './store/thread-list.js';
 export type { SetupLogSnapshot } from './store/setup-log.js';
 export { emptySetupLog, mergeSetupOutput, readSetupLog } from './store/setup-log.js';
+export type { RunLogSnapshot } from './store/run-log.js';
+export {
+  DEFAULT_RUN_LOG_TAIL_CHARS,
+  emptyRunLog,
+  readRunLog,
+  sliceRunLogOutput,
+} from './store/run-log.js';
 export * from './store/schedules.js';
 export { armSchedules, fireSchedule, formatScheduledPrompt } from './orchestrator/schedule-runner.js';
 export {
@@ -102,7 +109,36 @@ export * from './threads/chat-tabs.js';
 export * from './threads/fork-worktree.js';
 export * from './threads/stack-layers.js';
 export * from './threads/adopt.js';
+export {
+  formatInjectedNoticesForTurn,
+  isInjectedNoticeText,
+  lastAgentReply,
+  pendingInjectedNotices,
+} from './threads/injected-notices.js';
 export * from './orchestrator/orchestrator.js';
+export {
+  deriveTaskState,
+  endedOnAskUser,
+  isIncompleteTaskState,
+  isTerminalTaskState,
+  needsCoordinatorAction,
+} from './orchestrator/task-state.js';
+export type { TaskState } from './orchestrator/task-state.js';
+export { outboundReplyFromTurn } from './orchestrator/outbound-turn-reply.js';
+export type {
+  OutboundTurnCopy,
+  OutboundTurnSnapshot,
+} from './orchestrator/outbound-turn-reply.js';
+export {
+  formatAskUserNotifyMessage,
+  formatNotifyOrchestratorPrompt,
+  notifyOrchestrator,
+  shouldNotifyOrchestrator,
+} from './orchestrator/notify-orchestrator.js';
+export type {
+  NotifyOrchestratorReason,
+  NotifyOrchestratorResult,
+} from './orchestrator/notify-orchestrator.js';
 export {
   isSetupLastError,
   isStaleLastErrorDuringTurn,
@@ -190,10 +226,13 @@ export {
 export {
   CLOUD_ORCHESTRATOR_GOAL,
   CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_CANCELED_REPLY,
+  CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY,
   CLOUD_COORDINATOR_STOPPED_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
   SIDEBOARD_FORCE_STOP,
   parseForceStopMessage,
+  formatCloudTurnReply,
   runCloudConnect,
 } from './brightsy/cloud-connect.js';
 export type {
@@ -280,6 +319,8 @@ export {
   isInboundForThisDesktop,
   SLACK_LISTEN_STOPPED_REPLY,
   SLACK_LISTEN_TIMEOUT_REPLY,
+  SLACK_LISTEN_INPUT_REQUIRED_REPLY,
+  formatSlackTurnReply,
   SLACK_SEEN_REACTION,
   SLACK_PROGRESS_DELAY_MS,
   SLACK_PROGRESS_EDIT_MS,

@@ -1,7 +1,7 @@
 import { threadsSharingWorktree } from '../threads/chat-tabs.js';
 
 /**
- * Resolve a thread ref for run_dev_script / list_run_scripts / stop_dev_script.
+ * Resolve a thread ref for run_dev_script / list_run_scripts / stop_dev_script / get_run_log.
  * Worktree agents may omit `ref` — cwd is the worktree, so any live chat on that
  * path works (run state is shared across tabs).
  */

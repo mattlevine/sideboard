@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.237] - 2026-09-26
+
+### Added
+
+- `wait_for_turn` / `get_turn_result` return A2A-style `taskState` (`submitted` / `working` / `input-required` / `completed` / `failed` / `canceled`) so coordinators branch on one lifecycle instead of combining `status` and `stillRunning`.
+- Worktree MCP `notify_orchestrator` queues the parent Global chat when a child is blocked; `ask_user` does the same for `input-required` so the coordinator does not have to poll.
+- MCP `get_run_log` tails persisted Dev run-script stdout; the desktop Run pane hydrates from the same store after restart.
+
+### Changed
+
+- Brightsy cloud connect and Slack Listen post replies from `taskState` instead of leftover assistant text (waiting-on-Mac for `input-required`, prefixed failure, canned stop).
+
 ## [0.1.236] - 2026-09-25
 
 ### Added

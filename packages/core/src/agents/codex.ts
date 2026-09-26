@@ -243,6 +243,7 @@ export const codexAdapter: AgentAdapter = {
         orchestrator: isOrchestrator,
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
+      threadId: thread.id,
     });
     const isolatePlugins =
       isOrchestrator ||

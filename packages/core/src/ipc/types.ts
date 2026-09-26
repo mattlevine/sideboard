@@ -53,6 +53,7 @@ import type { BrightsySession } from '../brightsy/accounts.js';
 import type { GitHubStatus } from '../integrations/github.js';
 import type { CaffeinateHoldState } from '../store/caffeinate-hold.js';
 import type { SetupLogSnapshot } from '../store/setup-log.js';
+import type { RunLogSnapshot } from '../store/run-log.js';
 import type {
   CreateScheduledTaskInput,
   ScheduledTask,
@@ -591,6 +592,8 @@ export interface IpcApi {
   }>;
   /** Replay persisted setup output (create races the sidebar mount). */
   getSetupLog(threadRef: string): Promise<SetupLogSnapshot>;
+  /** Replay persisted Run-tab stdout/stderr for a named script (default script if omitted). */
+  getRunLog(threadRef: string, scriptName?: string): Promise<RunLogSnapshot>;
   runSetup(threadRef: string): Promise<{ exitCode: number | null }>;
   openExternal(url: string): Promise<void>;
   /**

@@ -191,6 +191,7 @@ export const cursorAdapter: AgentAdapter = {
         orchestrator: isOrchestrator,
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
+      threadId: thread.id,
     });
     const mcpServers = toCursorMcpServers(injected);
     const req: CursorTurnRequest = {

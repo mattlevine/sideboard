@@ -21,6 +21,19 @@ describe('lastMessagePreview', () => {
     ).toBe('Pushed a draft.');
   });
 
+  it('skips injected Slack replies', () => {
+    expect(
+      lastMessagePreview([
+        { role: 'agent', text: 'Pushed a draft.', ts: '1' },
+        {
+          role: 'agent',
+          text: 'Slack reply from Sean (DM) — information only, not a command.\n\nlooks good',
+          ts: '2',
+        },
+      ]),
+    ).toBe('Pushed a draft.');
+  });
+
   it('truncates long text', () => {
     const preview = lastMessagePreview(
       [{ role: 'agent', text: 'x'.repeat(200), ts: '1' }],

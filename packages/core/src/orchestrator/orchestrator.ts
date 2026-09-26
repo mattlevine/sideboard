@@ -1,8 +1,10 @@
 import { EventEmitter } from 'node:events';
 import {
-  formatSlackRepliesForTurn,
-  pendingSlackExternalReplies,
-} from '../slack/outbound-watch.js';
+  formatInjectedNoticesForTurn,
+  lastAgentReply,
+  pendingInjectedNotices,
+} from '../threads/injected-notices.js';
+import { deriveTaskState, type TaskState } from './task-state.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
@@ -42,6 +44,7 @@ import {
   startDevServer,
   runArchiveScript,
   listRunScripts,
+  getDefaultRunScript,
   getRunMode,
   killListenersOnPorts,
 } from '../hook/conductor.js';
@@ -54,6 +57,15 @@ import {
   setupLogKeyForWorktree,
   type SetupLogSnapshot,
 } from '../store/setup-log.js';
+import {
+  appendRunLog,
+  beginRunLog,
+  finishRunLog,
+  flushRunLog,
+  readRunLog,
+  runLogKeyForWorktree,
+  type RunLogSnapshot,
+} from '../store/run-log.js';
 import {
   cleanupOrphanWorktrees,
   findOrphanWorktrees,
@@ -1460,8 +1472,8 @@ export class Orchestrator {
       )
         ? formatReviewWriteGateReminder()
         : null;
-    const slackReplyContext = formatSlackRepliesForTurn(
-      pendingSlackExternalReplies(thread.messages),
+    const injectedNoticeContext = formatInjectedNoticesForTurn(
+      pendingInjectedNotices(thread.messages),
     );
     // Standing reminders restate the fresh-session directives. They travel as
     // `systemPrompt`: Claude appends them to its (cached) system prompt; other
@@ -1489,7 +1501,7 @@ export class Orchestrator {
       thread.planMode ? PLAN_MODE_INSTRUCTION : null,
       orchestrationReminder,
       prGateDirective,
-      slackReplyContext,
+      injectedNoticeContext,
       expandedPrompt,
     ]
       .filter(Boolean)
@@ -2197,7 +2209,10 @@ export class Orchestrator {
     }
 
     // Same batching as setup output — dev servers log per-request lines.
+    const logKey = runLogKeyForWorktree(thread.worktreePath, resolvedName);
+    beginRunLog(logKey, resolvedName);
     const runOutput = createLineCoalescer((chunk) => {
+      appendRunLog(logKey, chunk);
       this.emit({
         type: 'run_output',
         threadId: thread.id,
@@ -2205,13 +2220,22 @@ export class Orchestrator {
         line: chunk,
       });
     });
-    const handle = await startDevServer(
-      thread.repoPath,
-      thread.worktreePath,
-      runOutput.push,
-      { scriptName: resolvedName },
-    );
+    let handle;
+    try {
+      handle = await startDevServer(
+        thread.repoPath,
+        thread.worktreePath,
+        runOutput.push,
+        { scriptName: resolvedName },
+      );
+    } catch (err) {
+      runOutput.flush();
+      finishRunLog(logKey, 1);
+      throw err;
+    }
     if (!handle) {
+      runOutput.flush();
+      finishRunLog(logKey, 1);
       throw new Error(`Run script not found: ${resolvedName}`);
     }
 
@@ -2260,8 +2284,9 @@ export class Orchestrator {
       port: handle.port,
       scriptName: resolvedName,
     });
-    void handle.done.then(() => {
+    void handle.done.then((exitCode) => {
       runOutput.flush();
+      finishRunLog(logKey, exitCode);
       this.processes.delete(runKey);
       if (isDefault) this.processes.delete(worktreeDevProcessKey(thread.worktreePath));
       const latest = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath));
@@ -2534,6 +2559,26 @@ export class Orchestrator {
   getActiveRuns(threadRef: string): ActiveRun[] {
     const thread = this.requireThread(threadRef);
     return mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath)).activeRuns;
+  }
+
+  getRunLog(threadRef: string, scriptName?: string): RunLogSnapshot {
+    const thread = this.requireThread(threadRef);
+    const resolved =
+      scriptName?.trim() ||
+      getDefaultRunScript(thread.worktreePath, thread.repoPath)?.name ||
+      'dev';
+    const key = runLogKeyForWorktree(thread.worktreePath, resolved);
+    if (this.shouldOwnRunScripts()) flushRunLog(key);
+    const stored = readRunLog(key);
+    const snap = { ...stored, scriptName: stored.scriptName ?? resolved };
+    const live = this.processes.has(worktreeRunProcessKey(thread.worktreePath, resolved));
+    if (this.shouldOwnRunScripts()) {
+      return { ...snap, running: live };
+    }
+    const active = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath)).activeRuns.some(
+      (r) => r.scriptName === resolved,
+    );
+    return { ...snap, running: live || active || snap.running };
   }
 
   getSetupLog(threadRef: string): SetupLogSnapshot {
@@ -2814,7 +2859,7 @@ export class Orchestrator {
     lastTurnUsage: TokenUsage | null;
   } {
     const thread = this.requireThread(threadRef);
-    const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+    const lastAgent = lastAgentReply(thread.messages);
     return {
       usage: sumUsageList(thread.messages.map((m) => m.usage)),
       lastTurnUsage: lastAgent?.usage ?? null,
@@ -2824,6 +2869,7 @@ export class Orchestrator {
   getTurnResult(threadRef: string): {
     text: string;
     status: string;
+    taskState: TaskState;
     sessionId: string | null;
     lastError: string | null;
     stillRunning: boolean;
@@ -2833,7 +2879,7 @@ export class Orchestrator {
     usage: TokenUsage | null;
   } {
     const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
-    const lastAgent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+    const lastAgent = lastAgentReply(thread.messages);
     const lastError = thread.lastError ?? null;
     const rawText = (lastAgent?.text ?? '').trim();
     const text =
@@ -2849,9 +2895,15 @@ export class Orchestrator {
       stillRunning && thread.status === 'queued' && !liveSummary
         ? 'Queued — waiting for a concurrency slot'
         : null;
+    const taskState = deriveTaskState({
+      status: thread.status,
+      stillRunning,
+      lastAgentParts: lastAgent?.parts,
+    });
     return {
       text,
       status: thread.status,
+      taskState,
       sessionId: thread.sessionId,
       lastError,
       stillRunning,

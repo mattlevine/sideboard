@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_CANCELED_REPLY,
+  CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
   CLOUD_ORCHESTRATOR_GOAL,
   SIDEBOARD_FORCE_STOP,
   coordinatorSystemPrompt,
+  formatCloudTurnReply,
   formatWorkspaceInventory,
   parseForceStopMessage,
 } from './cloud-connect.js';
@@ -67,6 +70,51 @@ describe('cloud-connect prompts', () => {
     expect(CLOUD_COORDINATOR_BUSY_REPLY).toContain(SIDEBOARD_FORCE_STOP);
     expect(CLOUD_COORDINATOR_TIMEOUT_REPLY).toContain('timed out');
     expect(CLOUD_COORDINATOR_TIMEOUT_REPLY).toContain(SIDEBOARD_FORCE_STOP);
+  });
+
+  it('maps unfinished taskState to canned cloud replies, not picker/error prose as success', () => {
+    expect(
+      formatCloudTurnReply({
+        text: 'Which workspace?',
+        status: 'idle',
+        taskState: 'input-required',
+      }),
+    ).toBe(CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY);
+    expect(CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY).toContain('input-required');
+    expect(CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY).toContain(SIDEBOARD_FORCE_STOP);
+
+    expect(
+      formatCloudTurnReply({
+        text: 'almost',
+        status: 'stopped',
+        taskState: 'canceled',
+      }),
+    ).toBe(CLOUD_COORDINATOR_CANCELED_REPLY);
+
+    expect(
+      formatCloudTurnReply({
+        text: 'partial',
+        status: 'error',
+        taskState: 'failed',
+        lastError: 'spawn failed',
+      }),
+    ).toContain('spawn failed');
+    expect(
+      formatCloudTurnReply({
+        text: 'partial',
+        status: 'error',
+        taskState: 'failed',
+        lastError: 'spawn failed',
+      }),
+    ).toMatch(/^Sideboard coordinator failed/);
+
+    expect(
+      formatCloudTurnReply({
+        text: 'ship it',
+        status: 'idle',
+        taskState: 'completed',
+      }),
+    ).toBe('ship it');
   });
 });
 

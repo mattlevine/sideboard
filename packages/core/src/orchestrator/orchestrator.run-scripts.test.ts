@@ -616,3 +616,64 @@ describe('Orchestrator desktop run-script adoption', () => {
     expect(Date.now() - began).toBeLessThan(1_000);
   });
 });
+
+describe('Orchestrator run log', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sideboard-run-log-orch-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('captures startDev stdout for getRunLog', async () => {
+    const worktreePath = join(dataDir, 'wt');
+    const repoPath = join(dataDir, 'repo');
+    mkdirSync(join(worktreePath, '.sideboard'), { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
+    writeFileSync(
+      join(worktreePath, '.sideboard', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "sleep 30"\ndefault = true\n`,
+    );
+    const thread = createEmptyThread({
+      title: 'Run log',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/run-log',
+      worktreePath,
+      repoPath,
+      agent: 'claude',
+      status: 'idle',
+    });
+    writeThread(thread);
+
+    const conductor = await import('../hook/conductor.js');
+    vi.spyOn(conductor, 'startDevServer').mockImplementation(async (_repo, _wt, onLine) => {
+      onLine?.('vite ready');
+      onLine?.('error TS2322');
+      return {
+        pid: 9,
+        port: 41950,
+        ports: [41950],
+        scriptName: 'dev',
+        kill: () => undefined,
+        done: new Promise(() => undefined),
+      };
+    });
+
+    const orch = new Orchestrator();
+    await orch.startDev(thread.id, 'dev');
+    await new Promise((r) => setTimeout(r, 80));
+    const log = orch.getRunLog(thread.id, 'dev');
+    expect(log.running).toBe(true);
+    expect(log.scriptName).toBe('dev');
+    expect(log.output).toContain('vite ready');
+    expect(log.output).toContain('error TS2322');
+    await orch.stopDev(thread.id, 'dev');
+  });
+});

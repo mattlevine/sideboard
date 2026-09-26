@@ -23,6 +23,7 @@ import {
   handleSlackInbound,
   interruptSlackCoordinatorForInbound,
   isSlackInboundUserPrompt,
+  SLACK_LISTEN_INPUT_REQUIRED_REPLY,
   SLACK_LISTEN_STOPPED_REPLY,
   SLACK_SEEN_REACTION,
   slackReplyThreadTs,
@@ -290,11 +291,13 @@ describe('handleSlackInbound interrupt', () => {
     const getTurnResult = vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
       text: opts?.reply ?? 'all done',
       status: opts?.waitStatus ?? 'idle',
+      taskState: opts?.waitStatus === 'stopped' ? 'canceled' : 'completed',
       sessionId: null,
       lastError: null,
       stillRunning: false,
       progress: null,
       lastActivityAt: null,
+      usage: null,
     });
     return { send, waitForTurn, getTurnResult };
   }
@@ -348,6 +351,33 @@ describe('handleSlackInbound interrupt', () => {
       addReaction: async () => undefined,
     });
     expect(replies).toEqual([]);
+  });
+
+  it('posts a canned Mac-picker notice instead of ask_user text', async () => {
+    stubTurn({ reply: 'Which workspace?' });
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'Which workspace?',
+      status: 'idle',
+      taskState: 'input-required',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+    const replies: string[] = [];
+    await handleSlackInbound(msg({ text: 'hello', userId: 'Umatt', ts: '3.5' }), {
+      agent: 'claude',
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    expect(replies.some((r) => r.includes(SLACK_LISTEN_INPUT_REQUIRED_REPLY))).toBe(
+      true,
+    );
+    expect(replies.some((r) => r.includes('Which workspace?'))).toBe(false);
   });
 
   it('does not start a turn when a newer inbound superseded it', async () => {
@@ -453,11 +483,13 @@ describe('handleSlackInbound interrupt', () => {
     vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
       text: 'all done',
       status: 'idle',
+      taskState: 'completed',
       sessionId: null,
       lastError: null,
       stillRunning: false,
       progress: null,
       lastActivityAt: null,
+      usage: null,
     });
     const replies: string[] = [];
     await handleSlackInbound(msg({ text: 'hello after close', userId: 'Umatt', ts: '8.0' }), {
@@ -508,11 +540,13 @@ describe('handleSlackInbound interrupt', () => {
     vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
       text: 'all done',
       status: 'idle',
+      taskState: 'completed',
       sessionId: null,
       lastError: null,
       stillRunning: false,
       progress: null,
       lastActivityAt: null,
+      usage: null,
     });
     const posts: string[] = [];
     const updates: string[] = [];
