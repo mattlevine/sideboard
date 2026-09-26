@@ -5,7 +5,7 @@ Instructions for agents working **in this git repo**.
 Read [docs/system/README.md](docs/system/README.md) before changing code. Then open the docs that match the task:
 
 - [docs/system/architecture.md](docs/system/architecture.md) — packages, Slack/MCP/desktop
-- [docs/system/agent-orchestration.md](docs/system/agent-orchestration.md) — `taskState`, fleet notices, A2A fit
+- [docs/system/agent-orchestration.md](docs/system/agent-orchestration.md) — `taskState`, A2A fit
 - [docs/system/conventions.md](docs/system/conventions.md) — build, test, PRs
 - [docs/system/safety.md](docs/system/safety.md) — land/purge, secrets, remote control
 - [docs/system/deploy.md](docs/system/deploy.md) — marketing site + Slack relay (Fly)
@@ -14,5 +14,7 @@ Read [docs/system/README.md](docs/system/README.md) before changing code. Then o
 When you make an architecture decision (where something lives, how a host is split, a deploy path, a safety rail), write it into `docs/system/` in the same change — not only in chat or a code comment.
 
 Recurring multi-item work (migration, port, batch fix, fan-out): follow [`.claude/skills/graph-engineering/SKILL.md`](.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`). Desktop / npm version cuts: [`.claude/skills/release/SKILL.md`](.claude/skills/release/SKILL.md) (`/release`). After merge-from-main or a hung `pnpm install` across worktrees: [`.claude/skills/worktree-install/SKILL.md`](.claude/skills/worktree-install/SKILL.md) (`/worktree-install`) — use the worktree-local store, never a shared `~/.pnpm-store`. Leftover Cursor Bugbot notes on recent PRs: [`.claude/skills/bugbot-follow-ups/SKILL.md`](.claude/skills/bugbot-follow-ups/SKILL.md) (`/bugbot-follow-ups`). Any long worktree job (pack, test, deploy): `/long-running` (Sideboard product skill for every worktree; this repo also has [`.claude/skills/long-running/SKILL.md`](.claude/skills/long-running/SKILL.md) for Mac-release notes) — `detached-job.cjs start` then loop `wait` and `present_artifact` `type=log` with `delta` (do not ask the human to poll). `stop_job` if it hangs or is doing the wrong thing. Connector CLIs: write output to `.context/cli/` (not `.context/attachments/`) and read a slice — never dump raw `--json` / `--expand` into a tool result. New process guides go in `.claude/skills/<name>/SKILL.md`, not `.sideboard/skills`.
+
+**Reading run script logs:** Dev terminal and other run script output are persisted to `~/.sideboard/threads/wt-{hash}-run-{script}.run.log.json`. Agents can call the MCP tool `get_run_log` (ref omitted on worktree turns) to read the tail of any script's output. CLI: `.context/cli/read-dev-log.sh [worktree] [script-name]` for manual access.
 
 Keep this file and `CLAUDE.md` identical.
