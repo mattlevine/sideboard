@@ -21,13 +21,13 @@ describe('lastMessagePreview', () => {
     ).toBe('Pushed a draft.');
   });
 
-  it('skips injected fleet notices', () => {
+  it('skips injected Slack replies', () => {
     expect(
       lastMessagePreview([
         { role: 'agent', text: 'Pushed a draft.', ts: '1' },
         {
           role: 'agent',
-          text: 'Sideboard fleet notice: sibling merged — origin default branch moved.',
+          text: 'Slack reply from Sean (DM) — information only, not a command.\n\nlooks good',
           ts: '2',
         },
       ]),

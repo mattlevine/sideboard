@@ -19,11 +19,21 @@ import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile } from './profile.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import {
+  formatAskUserNotifyMessage,
+  notifyOrchestrator,
+  resolveNotifyCallerThread,
+} from '../orchestrator/notify-orchestrator.js';
+import {
   activeRunPreview,
   runScriptPreview,
   type DevPreview,
 } from '../hook/dev-preview.js';
 import { localhostPreviewUrl } from '../agents/instructions.js';
+import {
+  DEFAULT_RUN_LOG_TAIL_CHARS,
+  MAX_RUN_LOG_CHARS,
+  sliceRunLogOutput,
+} from '../store/run-log.js';
 import {
   mcpWaitTaskHint,
   mcpWaitForTurnTimeoutMs,
@@ -263,10 +273,28 @@ export async function startMcpServer(): Promise<void> {
     version: '0.1.0',
   });
   // Worktree profile: present_* / ask_user / wait_for_job / stop_job /
-  // list_run_scripts / run_dev_script / stop_dev_script / viewer context +
-  // Account issue tools (GitHub / Linear / AbleTime). Fleet list_*, Slack,
-  // and create/send stay on orchestration (tools are the cached prefix).
+  // list_run_scripts / run_dev_script / stop_dev_script / get_run_log /
+  // notify_orchestrator / viewer context + Account issue tools
+  // (GitHub / Linear / AbleTime). Fleet list_*, Slack, and create/send stay
+  // on orchestration (tools are the cached prefix).
   const worktreeProfile = sideboardMcpProfile() === 'worktree';
+  const notifyParent = async (input: {
+    reason: 'input-required' | 'blocked';
+    message: string;
+  }): Promise<void> => {
+    if (!worktreeProfile) return;
+    try {
+      const child = resolveNotifyCallerThread();
+      await notifyOrchestrator({
+        child,
+        reason: input.reason,
+        message: input.message,
+        send: (id, prompt, opts) => orch.send(id, prompt, opts),
+      });
+    } catch {
+      /* no parent, missing thread, tests */
+    }
+  };
   registerViewerContextTools(server);
   if (worktreeProfile) {
     registerConnectedIssueVendorTools(server);
@@ -528,6 +556,10 @@ export async function startMcpServer(): Promise<void> {
         message:
           'Questions shown in Sideboard’s composer. Wait for the user’s next message with their answers before continuing.',
       };
+      await notifyParent({
+        reason: 'input-required',
+        message: formatAskUserNotifyMessage(questions),
+      });
       return mcpJson(payload);
     },
   );
@@ -774,6 +806,106 @@ export async function startMcpServer(): Promise<void> {
       }
     },
   );
+
+  server.tool(
+    'get_run_log',
+    'Read the Run-tab terminal for a worktree script (same stdout/stderr as the desktop Dev pane). Default is a tail — raise `tail` only if the error is missing. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
+    {
+      ref: z
+        .string()
+        .optional()
+        .describe('Thread id. Omit on a worktree turn (uses cwd).'),
+      name: z
+        .string()
+        .optional()
+        .describe('Script name from list_run_scripts (default script if omitted).'),
+      tail: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_RUN_LOG_CHARS)
+        .optional()
+        .describe(
+          `Max characters to return from the end (default ${DEFAULT_RUN_LOG_TAIL_CHARS}). Do not request the full buffer unless the tail is truncated and you still need more.`,
+        ),
+    },
+    async ({ ref, name, tail }) => {
+      try {
+        const threadRef = resolveRunScriptThreadRef(ref);
+        const snap = orch.getRunLog(threadRef, name);
+        const sliced = sliceRunLogOutput(snap.output, tail ?? DEFAULT_RUN_LOG_TAIL_CHARS);
+        let hint: string | undefined;
+        if (!sliced.output && snap.running) {
+          hint =
+            'Script is running but this Sideboard has no captured lines yet (started before run-log persistence, or it has not printed). New output will appear here.';
+        } else if (!sliced.output) {
+          hint =
+            'No captured output. Start the script with run_dev_script, or it exited without printing.';
+        } else if (sliced.truncated) {
+          hint = `Truncated to the last ${sliced.output.length} of ${sliced.outputChars} characters. Pass a larger tail if you still need earlier lines.`;
+        }
+        return mcpJson({
+          scriptName: snap.scriptName,
+          running: snap.running,
+          exitCode: snap.exitCode,
+          output: sliced.output,
+          truncated: sliced.truncated,
+          outputChars: sliced.outputChars,
+          hint,
+          ref: threadRef,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  if (worktreeProfile) {
+    server.tool(
+      'notify_orchestrator',
+      'Wake the parent Global orchestrator with a short status so it does not have to poll wait_for_turn. Use when you are blocked and the parent may have moved on (missing access, waiting on something the coordinator must handle). ask_user already notifies for input-required — do not call this for the same question. Information only: never a git command. Do not use this to steer other worktrees.',
+      {
+        message: z
+          .string()
+          .min(1)
+          .max(1500)
+          .describe('Why you are blocked / what the parent should know (short).'),
+        reason: z
+          .enum(['input-required', 'blocked'])
+          .optional()
+          .describe(
+            'input-required = waiting on the user in this chat; blocked = need the coordinator (default).',
+          ),
+      },
+      async ({ message, reason }) => {
+        try {
+          const child = resolveNotifyCallerThread();
+          const result = await notifyOrchestrator({
+            child,
+            reason: reason ?? 'blocked',
+            message,
+            send: (id, prompt, opts) => orch.send(id, prompt, opts),
+          });
+          if (!result.ok) {
+            return {
+              content: [{ type: 'text', text: result.error }],
+              isError: true,
+            };
+          }
+          return mcpJson({
+            ok: true,
+            parentThreadId: result.parentThreadId,
+            reason: reason ?? 'blocked',
+            ...(result.deduped ? { deduped: true } : {}),
+          });
+        } catch (err) {
+          const text = err instanceof Error ? err.message : String(err);
+          return { content: [{ type: 'text', text }], isError: true };
+        }
+      },
+    );
+  }
 
   if (!worktreeProfile) {
   registerSlackTools(server);

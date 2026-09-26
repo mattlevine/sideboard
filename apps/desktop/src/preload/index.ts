@@ -240,6 +240,8 @@ const api: IpcApi = {
   getRepoSetupInfo: (worktreePath, repoPath) =>
     ipcRenderer.invoke('getRepoSetupInfo', worktreePath, repoPath),
   getSetupLog: (threadRef) => ipcRenderer.invoke('getSetupLog', threadRef),
+  getRunLog: (threadRef, scriptName) =>
+    ipcRenderer.invoke('getRunLog', threadRef, scriptName),
   runSetup: (threadRef) => ipcRenderer.invoke('runSetup', threadRef),
   openExternal: (url) => ipcRenderer.invoke('openExternal', url),
   publishArtifactPreview: (id, html) =>

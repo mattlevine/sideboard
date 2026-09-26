@@ -11,6 +11,8 @@ import {
 } from './api.js';
 import {
   CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_CANCELED_REPLY,
+  CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY,
   CLOUD_COORDINATOR_STOPPED_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
   CLOUD_ORCHESTRATOR_GOAL,
@@ -22,9 +24,15 @@ import {
   enrichWorkspacesWithGithub,
   formatWorkspaceInventory,
 } from '../orchestrator/coordinator-prompt.js';
+import {
+  outboundReplyFromTurn,
+  type OutboundTurnSnapshot,
+} from '../orchestrator/outbound-turn-reply.js';
 
 export {
   CLOUD_COORDINATOR_BUSY_REPLY,
+  CLOUD_COORDINATOR_CANCELED_REPLY,
+  CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY,
   CLOUD_COORDINATOR_STOPPED_REPLY,
   CLOUD_COORDINATOR_TIMEOUT_REPLY,
   CLOUD_ORCHESTRATOR_GOAL,
@@ -39,6 +47,20 @@ export {
 } from '../orchestrator/coordinator-prompt.js';
 
 const POLL_MS = 5_000;
+
+/** Brightsy desktop tasks complete on submitResponse — wrap incomplete taskState. */
+export function formatCloudTurnReply(result: OutboundTurnSnapshot): string {
+  return outboundReplyFromTurn(result, {
+    inputRequired: CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY,
+    canceled: CLOUD_COORDINATOR_CANCELED_REPLY,
+    completedEmpty: (status) =>
+      `(coordinator finished with status ${status}, no text)`,
+    failed: (detail) => {
+      const base = 'Sideboard coordinator failed before producing a result.';
+      return detail ? `${base} ${detail}` : `${base} I did not produce a full orchestration result.`;
+    },
+  });
+}
 
 /** Serialize cloud task handling so busy checks / sends cannot interleave. */
 let handleTaskChain: Promise<void> = Promise.resolve();
@@ -171,11 +193,11 @@ async function handleTask(
     await orch.send(fresh.id, prompt);
     await orch.waitForTurn(fresh.id, 14 * 60 * 1000);
     const result = orch.getTurnResult(fresh.id);
-    const reply =
-      result.text.trim() ||
-      `(coordinator finished with status ${result.status}, no text)`;
+    const reply = formatCloudTurnReply(result);
     await api.submitResponse(task.id, reply);
-    log(`replied ${task.id.slice(0, 8)} (${reply.length} chars)`);
+    log(
+      `replied ${task.id.slice(0, 8)} taskState=${result.taskState} (${reply.length} chars)`,
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const timedOut = /timed out|timeout/i.test(msg);

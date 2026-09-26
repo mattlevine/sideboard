@@ -40,6 +40,8 @@ describe('injected-mcp', () => {
       'mcp__sideboard__list_run_scripts',
       'mcp__sideboard__run_dev_script',
       'mcp__sideboard__stop_dev_script',
+      'mcp__sideboard__get_run_log',
+      'mcp__sideboard__notify_orchestrator',
       'mcp__sideboard__get_viewer_context',
       'mcp__sideboard__update_viewer_context',
     ]);
@@ -231,6 +233,7 @@ describe('injected-mcp', () => {
       orchestratorThreadId: 'orch-thread-123',
     });
     expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBe('orch-thread-123');
+    expect(servers[0]!.env?.SIDEBOARD_THREAD_ID).toBe('orch-thread-123');
     expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('orchestration');
     expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
     const { toCodexMcpConfigArgs } = await import('./injected-mcp.js');
@@ -254,6 +257,18 @@ describe('injected-mcp', () => {
     });
     expect(servers[0]!.env?.SIDEBOARD_APP_DATA).toBeTruthy();
     expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
+    expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBeUndefined();
+    expect(servers[0]!.env?.SIDEBOARD_THREAD_ID).toBeUndefined();
+  });
+
+  it('injects SIDEBOARD_THREAD_ID for worktree turns', async () => {
+    const servers = await buildInjectedMcpServers({
+      includeSideboard: true,
+      includeBrightsy: false,
+      threadId: 'wt-thread-456',
+    });
+    expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
+    expect(servers[0]!.env?.SIDEBOARD_THREAD_ID).toBe('wt-thread-456');
     expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBeUndefined();
   });
 

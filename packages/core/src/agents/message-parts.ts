@@ -234,6 +234,10 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/stop_dev_script$/i.test(name)) {
     return str(input?.name) ? `Stop ${str(input?.name)}` : 'Stop Dev script';
   }
+  if (/get_run_log$/i.test(name)) {
+    return str(input?.name) ? `Read ${str(input?.name)} log` : 'Read Dev log';
+  }
+  if (/notify_orchestrator$/i.test(name)) return 'Notify orchestrator';
   if (isSkillToolName(name)) {
     const cmd = skillCommandFromInput(input);
     return cmd ? `Using /${cmd}` : 'Using skill';

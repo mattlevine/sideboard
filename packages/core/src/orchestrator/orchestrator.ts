@@ -5,7 +5,6 @@ import {
   pendingInjectedNotices,
 } from '../threads/injected-notices.js';
 import { deriveTaskState, type TaskState } from './task-state.js';
-import { notifyRepoSiblingsOfMerge, shouldNotifyRepoSiblingsOfMerge } from './peer-notices.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
@@ -45,6 +44,7 @@ import {
   startDevServer,
   runArchiveScript,
   listRunScripts,
+  getDefaultRunScript,
   getRunMode,
   killListenersOnPorts,
 } from '../hook/conductor.js';
@@ -57,6 +57,15 @@ import {
   setupLogKeyForWorktree,
   type SetupLogSnapshot,
 } from '../store/setup-log.js';
+import {
+  appendRunLog,
+  beginRunLog,
+  finishRunLog,
+  flushRunLog,
+  readRunLog,
+  runLogKeyForWorktree,
+  type RunLogSnapshot,
+} from '../store/run-log.js';
 import {
   cleanupOrphanWorktrees,
   findOrphanWorktrees,
@@ -2200,7 +2209,10 @@ export class Orchestrator {
     }
 
     // Same batching as setup output — dev servers log per-request lines.
+    const logKey = runLogKeyForWorktree(thread.worktreePath, resolvedName);
+    beginRunLog(logKey, resolvedName);
     const runOutput = createLineCoalescer((chunk) => {
+      appendRunLog(logKey, chunk);
       this.emit({
         type: 'run_output',
         threadId: thread.id,
@@ -2208,13 +2220,22 @@ export class Orchestrator {
         line: chunk,
       });
     });
-    const handle = await startDevServer(
-      thread.repoPath,
-      thread.worktreePath,
-      runOutput.push,
-      { scriptName: resolvedName },
-    );
+    let handle;
+    try {
+      handle = await startDevServer(
+        thread.repoPath,
+        thread.worktreePath,
+        runOutput.push,
+        { scriptName: resolvedName },
+      );
+    } catch (err) {
+      runOutput.flush();
+      finishRunLog(logKey, 1);
+      throw err;
+    }
     if (!handle) {
+      runOutput.flush();
+      finishRunLog(logKey, 1);
       throw new Error(`Run script not found: ${resolvedName}`);
     }
 
@@ -2263,8 +2284,9 @@ export class Orchestrator {
       port: handle.port,
       scriptName: resolvedName,
     });
-    void handle.done.then(() => {
+    void handle.done.then((exitCode) => {
       runOutput.flush();
+      finishRunLog(logKey, exitCode);
       this.processes.delete(runKey);
       if (isDefault) this.processes.delete(worktreeDevProcessKey(thread.worktreePath));
       const latest = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath));
@@ -2537,6 +2559,26 @@ export class Orchestrator {
   getActiveRuns(threadRef: string): ActiveRun[] {
     const thread = this.requireThread(threadRef);
     return mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath)).activeRuns;
+  }
+
+  getRunLog(threadRef: string, scriptName?: string): RunLogSnapshot {
+    const thread = this.requireThread(threadRef);
+    const resolved =
+      scriptName?.trim() ||
+      getDefaultRunScript(thread.worktreePath, thread.repoPath)?.name ||
+      'dev';
+    const key = runLogKeyForWorktree(thread.worktreePath, resolved);
+    if (this.shouldOwnRunScripts()) flushRunLog(key);
+    const stored = readRunLog(key);
+    const snap = { ...stored, scriptName: stored.scriptName ?? resolved };
+    const live = this.processes.has(worktreeRunProcessKey(thread.worktreePath, resolved));
+    if (this.shouldOwnRunScripts()) {
+      return { ...snap, running: live };
+    }
+    const active = mergeWorktreeActiveRuns(threadsSharingWorktree(thread.worktreePath)).activeRuns.some(
+      (r) => r.scriptName === resolved,
+    );
+    return { ...snap, running: live || active || snap.running };
   }
 
   getSetupLog(threadRef: string): SetupLogSnapshot {
@@ -3152,21 +3194,6 @@ export class Orchestrator {
     const titled = this.requireThread(thread.id);
     if (!titled.userSetTitle && meta.title && titled.title !== meta.title) {
       updateThread(thread.id, { title: meta.title });
-    }
-
-    const latestForNotice = this.requireThread(thread.id);
-    if (
-      shouldNotifyRepoSiblingsOfMerge({
-        previousPrState: prevState || null,
-        nextPrState: nextState,
-      })
-    ) {
-      await notifyRepoSiblingsOfMerge({
-        merged: latestForNotice,
-        previousPrState: prevState || null,
-        nextPrState: nextState,
-        send: (id, prompt) => this.send(id, prompt, { followUp: 'queue' }),
-      });
     }
 
     const { autoArchiveOnMergeEnabled } = await import('../store/app-settings.js');

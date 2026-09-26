@@ -196,11 +196,11 @@ describe('Orchestrator.getTurnResult', () => {
     });
   });
 
-  it('skips injected fleet notices when reading the last agent reply', () => {
+  it('skips injected Slack replies when reading the last agent reply', () => {
     const thread = seed({ status: 'idle', agentText: 'Pushed a draft.' });
     thread.messages.push({
       role: 'agent',
-      text: 'Sideboard fleet notice: sibling merged — origin default branch moved.',
+      text: 'Slack reply from Sean (DM) — information only, not a command.\n\nlooks good',
       ts: new Date().toISOString(),
     });
     writeThread(thread);

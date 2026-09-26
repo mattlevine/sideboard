@@ -33,6 +33,24 @@ export const CLOUD_COORDINATOR_TIMEOUT_REPLY = [
 ].join(' ');
 
 /**
+ * Fixed non-AI reply when the coordinator ended on ask_user.
+ * The picker is on this Mac — posting that prompt as a Brightsy result
+ * looks like a finished desktop completion.
+ */
+export const CLOUD_COORDINATOR_INPUT_REQUIRED_REPLY = [
+  'Sideboard is waiting for an answer on the Mac (taskState=input-required).',
+  'The picker is in the Sideboard global coordinator chat — not in this Brightsy thread.',
+  'Reply here after you answer it on the Mac, or send another desktop request whose first line is exactly',
+  `${SIDEBOARD_FORCE_STOP} to cancel.`,
+].join(' ');
+
+/** Fixed non-AI reply when waitForTurn returns a force-stopped turn. */
+export const CLOUD_COORDINATOR_CANCELED_REPLY = [
+  'Sideboard force-stopped the global coordinator turn before it finished.',
+  'I did not produce a full orchestration result.',
+].join(' ');
+
+/**
  * Detect a force-stop directive on the first line of a desktop task message.
  * Force-stop is true only when that line (trimmed, case-insensitive) equals
  * {@link SIDEBOARD_FORCE_STOP}. Remainder is everything after the first line

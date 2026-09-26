@@ -229,6 +229,11 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__present_plan');
     expect(allowed).toContain('mcp__sideboard__wait_for_job');
     expect(allowed).toContain('mcp__sideboard__stop_job');
+    expect(allowed).toContain('mcp__sideboard__list_run_scripts');
+    expect(allowed).toContain('mcp__sideboard__run_dev_script');
+    expect(allowed).toContain('mcp__sideboard__stop_dev_script');
+    expect(allowed).toContain('mcp__sideboard__get_run_log');
+    expect(allowed).toContain('mcp__sideboard__notify_orchestrator');
     expect(allowed).toContain('mcp__sideboard__get_viewer_context');
     expect(allowed).toContain('mcp__sideboard__update_viewer_context');
     expect(allowed).toContain('mcp__sideboard__github_*');
@@ -247,6 +252,7 @@ describe('claudeAdapter.buildTurn', () => {
       mcpServers: { sideboard: { env?: Record<string, string> } };
     };
     expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
+    expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_THREAD_ID).toBe('t1');
     const brightsyServers = Object.keys(cfg.mcpServers).filter(
       (n) => n === 'brightsy' || n.startsWith('brightsy_'),
     );

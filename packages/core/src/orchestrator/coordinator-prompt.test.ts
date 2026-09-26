@@ -161,7 +161,6 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('costUsd');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('taskState');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('input-required');
-    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('fleet notice');
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_thread.*usage/s);
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_turn_result.*usage/s);
   });
@@ -191,6 +190,7 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('or after a review');
     expect(COORDINATOR_TOOL_PLAYBOOK).not.toContain('Post this review');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not tell the child to comment');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('notify_orchestrator');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {

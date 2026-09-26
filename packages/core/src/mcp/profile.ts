@@ -3,6 +3,9 @@ export type SideboardMcpProfile = 'worktree' | 'orchestration';
 
 export const SIDEBOARD_MCP_PROFILE_ENV = 'SIDEBOARD_MCP_PROFILE';
 
+/** Calling chat id on injected Sideboard MCP (worktree notify_orchestrator). */
+export const SIDEBOARD_THREAD_ID_ENV = 'SIDEBOARD_THREAD_ID';
+
 /** UI tools always registered when SIDEBOARD_MCP_PROFILE=worktree (coding chats). */
 export const WORKTREE_MCP_TOOLS = [
   'present_artifact',
@@ -15,6 +18,8 @@ export const WORKTREE_MCP_TOOLS = [
   'list_run_scripts',
   'run_dev_script',
   'stop_dev_script',
+  'get_run_log',
+  'notify_orchestrator',
   'get_viewer_context',
   'update_viewer_context',
 ] as const;

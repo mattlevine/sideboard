@@ -25,10 +25,11 @@ describe('formatArtifactDirective', () => {
     expect(text).toMatch(/present_schema/);
     expect(text).toMatch(/present_files/);
     expect(text).toMatch(/ask_user/);
+    expect(text).toMatch(/notify_orchestrator/);
     expect(text).toMatch(/blocked on choosing|concrete options/i);
     expect(text).toMatch(/hello|greetings/i);
     expect(text).toMatch(/tagged `html`/);
-    expect(text.length).toBeLessThan(1_600);
+    expect(text.length).toBeLessThan(1_800);
     expect(text).toMatch(/type=log/);
     expect(text).toMatch(/new lines only|append/i);
     expect(text).toMatch(/never say artifacts, the CMS UI, or the Files column are unavailable/i);
@@ -44,6 +45,7 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/present_schema/);
     expect(text).toMatch(/present_files/);
     expect(text).toMatch(/ask_user/);
+    expect(text).toMatch(/notify_orchestrator/);
     expect(text).toMatch(/hello|check-in|what next/i);
     expect(text).toMatch(/reply in chat/i);
     expect(text).toMatch(/Do not say artifacts\/CMS UI are unavailable/i);
@@ -51,6 +53,7 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/not both for the same document/i);
     expect(text).toMatch(/type=log appends/);
     expect(text).toMatch(/run_dev_script/);
+    expect(text).toMatch(/get_run_log/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
     expect(text).toMatch(/never guess :3000/);
     expect(text).toMatch(/preview=window/);
@@ -77,6 +80,7 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/\.context\/\.sideboard\/detached-jobs/);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
+    expect(text).toMatch(/get_run_log/);
     expect(text).toMatch(/Dev button/);
     expect(text).toMatch(/preview|SIDEBOARD_PORT/);
     expect(text).toMatch(/:3000/);
@@ -96,6 +100,7 @@ describe('formatLongRunningReminder', () => {
     expect(text).toMatch(/let the user know later/);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
+    expect(text).toMatch(/get_run_log/);
     expect(text).toMatch(/SIDEBOARD_PORT|:3000/);
   });
 

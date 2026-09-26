@@ -85,15 +85,15 @@ export function formatDevAccessHint(
     const r = live[0]!;
     const url = localhostPreviewUrl(r.port);
     if (r.preview === 'window') {
-      return `This worktree's Dev app is the Electron window (${r.scriptName}). Renderer origin ${url} — curl to confirm Vite; do not open it in a browser (no preload/IPC). Do not guess :3000.`;
+      return `This worktree's Dev app is the Electron window (${r.scriptName}). Renderer origin ${url} — curl to confirm Vite; do not open it in a browser (no preload/IPC). MCP \`get_run_log\` reads the Run-tab terminal. Do not guess :3000.`;
     }
-    return `This worktree's Dev app is ${url} (${r.scriptName}). Open that URL (browser, curl, Playwright) — do not guess :3000.`;
+    return `This worktree's Dev app is ${url} (${r.scriptName}). Open that URL (browser, curl, Playwright). MCP \`get_run_log\` reads the Run-tab terminal — do not guess :3000.`;
   }
   if (live.length > 1) {
     const bits = live.map(describeLiveDevRun).join('; ');
-    return `This worktree's Dev apps: ${bits}. preview=url → open the URL; preview=window → Electron window is the app. Do not guess :3000.`;
+    return `This worktree's Dev apps: ${bits}. preview=url → open the URL; preview=window → Electron window is the app. MCP \`get_run_log\` reads the Run-tab terminal. Do not guess :3000.`;
   }
-  return 'To open the project Dev app: MCP `run_dev_script` (same as the desktop Dev button) returns `{url, port, preview}` (`SIDEBOARD_PORT`, not 3000). preview=url → open that URL (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). If already running, `list_run_scripts` `active[].url`. `stop_dev_script` to stop.';
+  return 'To open the project Dev app: MCP `run_dev_script` (same as the desktop Dev button) returns `{url, port, preview}` (`SIDEBOARD_PORT`, not 3000). preview=url → open that URL (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). If already running, `list_run_scripts` `active[].url`. `get_run_log` reads the Run-tab terminal (tail). `stop_dev_script` to stop.';
 }
 
 /**
@@ -360,7 +360,7 @@ export function formatLongRunningDirective(opts?: {
     '- Hanging, no useful output, or the wrong thing → `stop_job` (or the helper with `stop <id>`). Do not stop a pack/test/deploy that is clearly making progress.',
     '- Stay in the loop until stillRunning is false (or you stopped it). ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
-    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` — logs and Stop live in the thread UI. Do not detached-job or shell-spawn that same command. `run_dev_script` returns `{url, port, preview}` (`SIDEBOARD_PORT`). preview=url → open that URL; preview=window → Electron window is the app (url is renderer/HMR only). Never guess :3000.',
+    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` / `get_run_log`. `get_run_log` is the Run-tab terminal (tail; raise `tail` only if truncated). Do not detached-job or shell-spawn that same command. `run_dev_script` returns `{url, port, preview}` (`SIDEBOARD_PORT`). preview=url → open that URL; preview=window → Electron window is the app (url is renderer/HMR only). Never guess :3000.',
   ].join('\n');
 }
 
@@ -370,7 +370,7 @@ export function formatLongRunningReminder(opts?: {
   activeRuns?: readonly DevAccessRun[] | null;
 }): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
-  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn. Project Dev button: list_run_scripts / run_dev_script / stop_dev_script (UI-connected — not detached-job). ${formatDevAccessHint(opts?.activeRuns)}`;
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn. Project Dev button: list_run_scripts / run_dev_script / stop_dev_script / get_run_log (UI-connected — not detached-job). ${formatDevAccessHint(opts?.activeRuns)}`;
 }
 
 /**
@@ -386,7 +386,7 @@ export function formatArtifactDirective(): string {
     '- Standalone documents: a fenced block tagged `html` (preferred), `svg`, or `markdown` containing the FULL document opens the side column by itself. Use that or present_artifact — never both for the same body.',
     '- present_artifact type=log appends: same artifact_id, content = new lines only (plus status/phase). Do not resend the full log or wrap it in HTML.',
     '- Data: a markdown table is enough to read. Call present_schema only when the user needs to filter/edit/publish/persist rows — including when they ask for an editable table after you already showed markdown. Never re-present rows you already wrote just to display them.',
-    '- ask_user only when work is blocked on a few concrete options (approach fork, which API, auth vs cookies): first a short chat message explaining the decision and each option, then the call (description on every option), then stop and wait. Not for greetings, check-ins, an invented menu of next tasks, or after a review — reply in chat. If one option is the obvious default, proceed.',
+    '- ask_user only when work is blocked on a few concrete options (approach fork, which API, auth vs cookies): first a short chat message explaining the decision and each option, then the call (description on every option), then stop and wait. Not for greetings, check-ins, an invented menu of next tasks, or after a review — reply in chat. If one option is the obvious default, proceed. ask_user already notifies the parent orchestrator. Call notify_orchestrator only when blocked without a picker.',
   ].join('\n');
 }
 
@@ -395,5 +395,5 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button) returns {url, port, preview} (SIDEBOARD_PORT — never guess :3000). preview=url → open url; preview=window → Electron window is the app, url is renderer/HMR only. list_run_scripts active[].url if already running; stop_dev_script to stop.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. ask_user wakes the parent orchestrator; notify_orchestrator if blocked without a picker. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button) returns {url, port, preview} (SIDEBOARD_PORT — never guess :3000). preview=url → open url; preview=window → Electron window is the app, url is renderer/HMR only. list_run_scripts active[].url if already running; get_run_log for the Run-tab terminal; stop_dev_script to stop.';
 }

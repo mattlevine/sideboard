@@ -542,6 +542,9 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('run_dev_script', { name: 'dev' })).toBe('Start dev');
     expect(toolDescription('stop_dev_script', {})).toBe('Stop Dev script');
     expect(toolDescription('stop_dev_script', { name: 'dev' })).toBe('Stop dev');
+    expect(toolDescription('get_run_log', {})).toBe('Read Dev log');
+    expect(toolDescription('get_run_log', { name: 'dev' })).toBe('Read dev log');
+    expect(toolDescription('notify_orchestrator', {})).toBe('Notify orchestrator');
     expect(toolDescription('Skill', { skill: 'long-running' })).toBe('Using /long-running');
     expect(toolDescription('SlashCommand', { command: '/commit' })).toBe('Using /commit');
     expect(toolDescription('Skill')).toBe('Using skill');
