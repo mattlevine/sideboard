@@ -21,6 +21,19 @@ describe('lastMessagePreview', () => {
     ).toBe('Pushed a draft.');
   });
 
+  it('skips injected fleet notices', () => {
+    expect(
+      lastMessagePreview([
+        { role: 'agent', text: 'Pushed a draft.', ts: '1' },
+        {
+          role: 'agent',
+          text: 'Sideboard fleet notice: sibling merged — origin default branch moved.',
+          ts: '2',
+        },
+      ]),
+    ).toBe('Pushed a draft.');
+  });
+
   it('truncates long text', () => {
     const preview = lastMessagePreview(
       [{ role: 'agent', text: 'x'.repeat(200), ts: '1' }],

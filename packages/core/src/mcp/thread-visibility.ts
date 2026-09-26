@@ -1,4 +1,5 @@
 import { isInternalAgentStatusText } from '../agents/message-parts.js';
+import { isInjectedNoticeText } from '../threads/injected-notices.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
 
 /** Last non-empty message text for coordinators (not the full transcript). */
@@ -9,7 +10,7 @@ export function lastMessagePreview(
   if (!messages?.length) return null;
   for (let i = messages.length - 1; i >= 0; i--) {
     const text = messages[i]?.text?.trim();
-    if (!text || isInternalAgentStatusText(text)) continue;
+    if (!text || isInternalAgentStatusText(text) || isInjectedNoticeText(text)) continue;
     const flat = text.replace(/\s+/g, ' ');
     return flat.length > max ? `${flat.slice(0, max)}…` : flat;
   }

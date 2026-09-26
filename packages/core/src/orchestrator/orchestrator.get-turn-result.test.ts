@@ -69,6 +69,7 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.lastError).toMatch(/shared libuv/);
     expect(result.text).toBe(result.lastError);
     expect(result.stillRunning).toBe(false);
+    expect(result.taskState).toBe('failed');
   });
 
   it('keeps assistant text when present and still returns lastError', () => {
@@ -90,6 +91,7 @@ describe('Orchestrator.getTurnResult', () => {
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.status).toBe('stopped');
     expect(result.stillRunning).toBe(false);
+    expect(result.taskState).toBe('canceled');
     expect(result.text).toBe('Process died (agent exited)');
   });
 
@@ -106,6 +108,7 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.stillRunning).toBe(true);
     expect(result.progress).toBe('Read foo.ts (3 tools)');
     expect(result.lastActivityAt).toBe('2026-08-20T21:00:00.000Z');
+    expect(result.taskState).toBe('working');
   });
 
   it('explains queued threads that have not started yet', () => {
@@ -114,6 +117,7 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.stillRunning).toBe(true);
     expect(result.status).toBe('queued');
     expect(result.progress).toBe('Queued — waiting for a concurrency slot');
+    expect(result.taskState).toBe('submitted');
   });
 
   it('does not treat leftover running status as live after the agent died', () => {
@@ -190,5 +194,34 @@ describe('Orchestrator.getTurnResult', () => {
       outputTokens: 22,
       costUsd: 0.05,
     });
+  });
+
+  it('skips injected fleet notices when reading the last agent reply', () => {
+    const thread = seed({ status: 'idle', agentText: 'Pushed a draft.' });
+    thread.messages.push({
+      role: 'agent',
+      text: 'Sideboard fleet notice: sibling merged — origin default branch moved.',
+      ts: new Date().toISOString(),
+    });
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.text).toBe('Pushed a draft.');
+    expect(result.taskState).toBe('completed');
+  });
+
+  it('marks input-required when the turn ended on ask_user', () => {
+    const thread = seed({ status: 'idle', agentText: 'Need a choice.' });
+    thread.messages[thread.messages.length - 1]!.parts = [
+      {
+        type: 'tool',
+        id: 'q1',
+        name: 'ask_user',
+        status: 'done',
+      },
+    ];
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.taskState).toBe('input-required');
+    expect(result.stillRunning).toBe(false);
   });
 });
