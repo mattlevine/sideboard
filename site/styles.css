@@ -315,6 +315,7 @@ h1 {
   font-size: clamp(2.6rem, 6vw, 4.5rem);
   line-height: 1.05;
   letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 
 h1 em {
@@ -687,16 +688,18 @@ h4 {
   gap: 1rem;
 }
 
+.cards.three {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+
 @media (min-width: 720px) {
-  .cards.three {
-    grid-template-columns: repeat(3, 1fr);
-  }
   .cards.two {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 .card {
+  min-width: 0;
   padding: 1.5rem;
   border-radius: 1.35rem;
 }
@@ -798,6 +801,7 @@ h4 {
   padding: 1.35rem 1.5rem;
   border-radius: 1.25rem;
   overflow-x: auto;
+  max-width: 100%;
   font-size: 0.9rem;
   line-height: 1.85;
   background: #0e0f11;
@@ -872,7 +876,7 @@ h4 {
 
 .page-hero h1 {
   font-size: clamp(2.2rem, 5vw, 3.6rem);
-  max-width: 22ch;
+  max-width: 18em;
 }
 
 .grid-docs {
