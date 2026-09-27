@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.238] - 2026-09-27
+
 ### Fixed
 
 - Nested Cursor Task/Agent stream text no longer paints as the parent answer. Long turns were dropping the parent tool card, so one-word tool-use tokens concatenated into the reply (`thegitdiffforthecommitmessage`).
