@@ -298,14 +298,11 @@ function groupTranscript(parts: MessagePart[]): {
   top: MessagePart[];
   children: Map<string, MessagePart[]>;
 } {
-  const toolIds = new Set(
-    parts.filter((p): p is ToolPart => p.type === 'tool').map((p) => p.id),
-  );
   const children = new Map<string, MessagePart[]>();
   const top: MessagePart[] = [];
   for (const part of parts) {
     const parentId = messagePartParentId(part);
-    if (parentId && toolIds.has(parentId)) {
+    if (parentId) {
       const list = children.get(parentId) ?? [];
       list.push(part);
       children.set(parentId, list);

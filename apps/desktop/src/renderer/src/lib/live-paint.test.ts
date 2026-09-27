@@ -136,4 +136,24 @@ describe('foldLivePaintOps', () => {
     expect(slimLiveParts(many).length).toBeLessThanOrEqual(LIVE_PARTS_MAX);
     expect(slimLiveParts(many).at(-1)?.type).toBe('text');
   });
+
+  it('keeps a Task parent so nested stream text is not promoted to the answer', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'task1',
+        name: 'Task',
+        status: 'running',
+        description: 'Explore loaders',
+      },
+      ...Array.from({ length: LIVE_PARTS_MAX + 10 }, (_, i) => ({
+        type: 'text' as const,
+        text: `w${i}`,
+        parentId: 'task1',
+      })),
+    ];
+    const slim = slimLiveParts(parts);
+    expect(slim.some((p) => p.type === 'tool' && p.id === 'task1')).toBe(true);
+    expect(slim.filter((p) => p.type === 'text').every((p) => p.parentId === 'task1')).toBe(true);
+  });
 });

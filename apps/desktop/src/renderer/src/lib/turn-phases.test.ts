@@ -78,6 +78,22 @@ describe('splitTurnPhases', () => {
     );
   });
 
+  it('does not treat nested tool-use stream text as the parent answer', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'text',
+        text: 'thegitdiffforthecommitmessage',
+        parentId: 'task1',
+      },
+      { type: 'text', text: 'I will replace the spinner with a skeleton.' },
+    ];
+    const phases = splitTurnPhases(parts);
+    expect(phases.map((p) => p.kind)).toEqual(['text']);
+    expect(phases[0]?.kind === 'text' && phases[0].text).toBe(
+      'I will replace the spinner with a skeleton.',
+    );
+  });
+
   it('keeps a Compact tool in the work trace instead of the answer body', () => {
     const parts: MessagePart[] = [
       {

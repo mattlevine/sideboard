@@ -15,8 +15,12 @@ export function isHiddenChatTool(name: string | undefined): boolean {
 }
 
 function classify(part: MessagePart): 'thinking' | 'text' | 'work' | 'skip' {
+  const nested =
+    'parentId' in part && typeof part.parentId === 'string' && Boolean(part.parentId.trim());
   if (part.type === 'thinking') return part.text.trim() ? 'thinking' : 'skip';
-  if (part.type === 'text') return part.text.trim() ? 'text' : 'skip';
+  // Nested tool-use stream text is not the parent answer (even if the parent
+  // Task card was trimmed or has not arrived yet).
+  if (part.type === 'text') return !nested && part.text.trim() ? 'text' : 'skip';
   if (part.type === 'tool') {
     if (isHiddenChatTool(part.name)) return 'skip';
     return 'work';

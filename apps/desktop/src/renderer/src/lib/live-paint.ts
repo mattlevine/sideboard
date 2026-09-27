@@ -1,5 +1,9 @@
 import type { AgentEvent, MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { applyAgentEvent, THINKING_PART_MAX_CHARS } from '@sideboard/message-parts';
+import {
+  applyAgentEvent,
+  messagePartParentId,
+  THINKING_PART_MAX_CHARS,
+} from '@sideboard/message-parts';
 import { applyTurnUsage } from '@sideboard/usage';
 
 /** Live board/chat only — persisted transcripts keep the full turn. */
@@ -12,6 +16,38 @@ function clipLiveTail(text: string, max: number): string {
   return `…${text.slice(text.length - Math.max(1, max - 1))}`;
 }
 
+/**
+ * Keep ancestor tool cards for any trimmed nested part. Dropping a Task parent
+ * promotes its one-word tool-use stream into the top-level answer.
+ */
+function withAncestorTools(all: MessagePart[], kept: MessagePart[]): MessagePart[] {
+  const byId = new Map<string, Extract<MessagePart, { type: 'tool' }>>();
+  for (const part of all) {
+    if (part.type === 'tool') byId.set(part.id, part);
+  }
+  const keptToolIds = new Set(
+    kept.filter((p): p is Extract<MessagePart, { type: 'tool' }> => p.type === 'tool').map((p) => p.id),
+  );
+  const extraIds = new Set<string>();
+  const queue: string[] = [];
+  for (const part of kept) {
+    const parentId = messagePartParentId(part);
+    if (parentId) queue.push(parentId);
+  }
+  while (queue.length) {
+    const id = queue.pop()!;
+    if (keptToolIds.has(id) || extraIds.has(id)) continue;
+    const parent = byId.get(id);
+    if (!parent) continue;
+    extraIds.add(id);
+    const next = messagePartParentId(parent);
+    if (next) queue.push(next);
+  }
+  if (extraIds.size === 0) return kept;
+  const extras = all.filter((p) => p.type === 'tool' && extraIds.has(p.id));
+  return [...extras, ...kept];
+}
+
 export function slimLiveParts(parts: MessagePart[]): MessagePart[] {
   const clipped = parts.map((p) => {
     if (p.type === 'text' && p.text.length > LIVE_TEXT_PART_MAX_CHARS) {
@@ -20,7 +56,7 @@ export function slimLiveParts(parts: MessagePart[]): MessagePart[] {
     return p;
   });
   if (clipped.length <= LIVE_PARTS_MAX) return clipped;
-  return clipped.slice(-Math.floor(LIVE_PARTS_MAX / 2));
+  return withAncestorTools(clipped, clipped.slice(-Math.floor(LIVE_PARTS_MAX / 2)));
 }
 
 export type LivePaintOp =
