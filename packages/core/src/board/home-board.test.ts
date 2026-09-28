@@ -441,7 +441,7 @@ describe('classifyWorktreeListBadges', () => {
     ).toEqual(['review']);
   });
 
-  it('shows pending for your PR once it is in review', () => {
+  it('shows needs approval for your PR once it is in review', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -456,7 +456,7 @@ describe('classifyWorktreeListBadges', () => {
         'matt',
         'eng-review',
       ).map((b) => b.label),
-    ).toEqual(['pending']);
+    ).toEqual(['needs approval']);
     expect(
       classifyWorktreeListBadges(
         [
@@ -469,7 +469,7 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.label),
-    ).toEqual(['pending']);
+    ).toEqual(['needs approval']);
     expect(
       classifyWorktreeListBadges(
         [
@@ -484,7 +484,7 @@ describe('classifyWorktreeListBadges', () => {
         'matt',
         'design-review',
       ).map((b) => b.label),
-    ).toEqual(['pending']);
+    ).toEqual(['needs approval']);
   });
 
   it('does not badge cowboy worktrees', () => {

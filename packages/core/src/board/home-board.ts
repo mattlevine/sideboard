@@ -392,7 +392,7 @@ function groupPrLabels(group: Array<Pick<Thread, 'prLabels'>>): string[] {
 
 /**
  * Sidebar / board badges only while a PR is in review — same as the old
- * "review" pill, plus "pending" for yours. Cowboy worktrees keep the
+ * "review" pill, plus "needs approval" for yours. Cowboy worktrees keep the
  * separate cowboy badge. Drafts of yours, merged, and closed stay unbadged.
  *
  * Yours is in review when the project ready-for-review label (Settings →
@@ -431,8 +431,8 @@ export function classifyWorktreeListBadges(
   return [
     {
       id: 'pending',
-      label: 'pending',
-      title: 'Waiting for review',
+      label: 'needs approval',
+      title: 'Needs approval',
       mod: 'is-pending',
     },
   ];
