@@ -369,7 +369,7 @@ describe('classifyWorktreeListBadges', () => {
     ).toEqual(['draft']);
   });
 
-  it('shows reviewing for someone else\'s draft PR', () => {
+  it('shows reviewing icon plus pending for someone else\'s draft PR', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -384,10 +384,10 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.label),
-    ).toEqual(['reviewing']);
+    ).toEqual(['reviewing', 'pending']);
   });
 
-  it('shows pending plus the ready-for-review label on my PR, reviewing on someone else\'s', () => {
+  it('uses the same pending / ready label for mine and theirs, with a reviewing mark on theirs', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -412,11 +412,13 @@ describe('classifyWorktreeListBadges', () => {
             prUrl: 'https://github.com/acme/app/pull/5',
             prState: 'OPEN',
             prAuthorLogin: 'sam',
+            prLabels: ['eng-review'],
           }),
         ],
         'matt',
+        'eng-review',
       ).map((b) => b.label),
-    ).toEqual(['reviewing']);
+    ).toEqual(['reviewing', 'pending', 'eng-review']);
   });
 
   it('shows pending when my open PR has no matching ready-for-review label', () => {

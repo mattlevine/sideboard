@@ -486,6 +486,7 @@ export function classifyWorktreeListBadges(
     open.some((t) => (t.prReviewDecision ?? '').toUpperCase() === 'CHANGES_REQUESTED') ||
     labelsInclude(labels, ENG_CHANGES_LABEL);
   const ownership = classifyWorktreeOwnership(group, viewerLogin);
+  const theirs = ownership === 'reviewing';
   const badges: WorktreeListBadge[] = [];
 
   if (!hasOpenPr) {
@@ -498,24 +499,18 @@ export function classifyWorktreeListBadges(
     return badges;
   }
 
-  // Not yours → reviewing (including their drafts). Yours: draft, else pending,
-  // plus the project ready-for-review label when that tag is on the PR.
-  if (ownership === 'reviewing') {
+  // Same lifecycle words for yours and theirs. A person icon marks someone
+  // else's PR (including their drafts — those are still in review for you).
+  if (theirs) {
     badges.push({
       id: 'reviewing',
       label: 'reviewing',
       title: "Someone else's PR",
-      mod: 'is-reviewing',
+      mod: 'is-reviewing is-reviewing-icon',
     });
-    if (changesRequested) {
-      badges.push({
-        id: 'changes',
-        label: 'changes',
-        title: 'Changes requested',
-        mod: 'is-changes',
-      });
-    }
-  } else if (draft) {
+  }
+
+  if (draft && !theirs) {
     badges.push({
       id: 'draft',
       label: 'draft',
@@ -533,7 +528,7 @@ export function classifyWorktreeListBadges(
     badges.push({
       id: 'pending',
       label: 'pending',
-      title: 'Waiting for review',
+      title: theirs ? "Someone else's PR — waiting for review" : 'Waiting for review',
       mod: 'is-pending',
     });
     if (hasReadyLabel) {

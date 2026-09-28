@@ -10265,6 +10265,14 @@ body:has(.update-banner) .team-toast-stack {
   color: var(--warn);
 }
 
+.board-badge.is-reviewing-icon {
+  padding: 1px 4px;
+}
+
+.board-badge.is-reviewing-icon svg {
+  display: block;
+}
+
 .board-badge.is-new {
   color: var(--muted);
 }
