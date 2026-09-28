@@ -369,7 +369,7 @@ describe('classifyWorktreeListBadges', () => {
     ).toEqual(['draft']);
   });
 
-  it('shows review for someone else\'s draft PR', () => {
+  it('shows reviewing for someone else\'s draft PR', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -384,10 +384,10 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.label),
-    ).toEqual(['review']);
+    ).toEqual(['reviewing']);
   });
 
-  it('shows eng-review on my ready PR and review on someone else\'s', () => {
+  it('shows pending plus the ready-for-review label on my PR, reviewing on someone else\'s', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -402,7 +402,7 @@ describe('classifyWorktreeListBadges', () => {
         'matt',
         'eng-review',
       ).map((b) => b.label),
-    ).toEqual(['eng-review']);
+    ).toEqual(['pending', 'eng-review']);
     expect(
       classifyWorktreeListBadges(
         [
@@ -416,10 +416,10 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.label),
-    ).toEqual(['review']);
+    ).toEqual(['reviewing']);
   });
 
-  it('shows in review when my open PR has no ready-for-review label', () => {
+  it('shows pending when my open PR has no matching ready-for-review label', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -433,7 +433,7 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.label),
-    ).toEqual(['in review']);
+    ).toEqual(['pending']);
     expect(
       classifyWorktreeListBadges(
         [
@@ -448,7 +448,7 @@ describe('classifyWorktreeListBadges', () => {
         'matt',
         'design-review',
       ).map((b) => b.label),
-    ).toEqual(['design-review']);
+    ).toEqual(['pending', 'design-review']);
   });
 
   it('shows changes, conflicts, checks, merged, and closed', () => {
@@ -480,7 +480,7 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.id),
-    ).toEqual(['in-review', 'conflicts']);
+    ).toEqual(['pending', 'conflicts']);
     expect(
       classifyWorktreeListBadges(
         [
@@ -494,7 +494,7 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.id),
-    ).toEqual(['in-review', 'checks']);
+    ).toEqual(['pending', 'checks']);
     expect(
       classifyWorktreeListBadges(
         [

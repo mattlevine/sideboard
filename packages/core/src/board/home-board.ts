@@ -336,7 +336,8 @@ export const ENG_CHANGES_LABEL = 'eng-requested-changes';
 export type WorktreeListBadgeId =
   | 'new'
   | 'draft'
-  | 'in-review'
+  | 'pending'
+  | 'ready-label'
   | 'reviewing'
   | 'changes'
   | 'merged'
@@ -497,12 +498,12 @@ export function classifyWorktreeListBadges(
     return badges;
   }
 
-  // Not yours → you are reviewing it (including their drafts). Yours: draft,
-  // else in-review, plus the project ready-for-review label when present.
+  // Not yours → reviewing (including their drafts). Yours: draft, else pending,
+  // plus the project ready-for-review label when that tag is on the PR.
   if (ownership === 'reviewing') {
     badges.push({
       id: 'reviewing',
-      label: 'review',
+      label: 'reviewing',
       title: "Someone else's PR",
       mod: 'is-reviewing',
     });
@@ -530,13 +531,19 @@ export function classifyWorktreeListBadges(
     });
   } else {
     badges.push({
-      id: 'in-review',
-      label: hasReadyLabel ? readyLabel : 'in review',
-      title: hasReadyLabel
-        ? `Ready for review (${readyLabel})`
-        : 'Your PR is in review',
-      mod: 'is-in-review',
+      id: 'pending',
+      label: 'pending',
+      title: 'Waiting for review',
+      mod: 'is-pending',
     });
+    if (hasReadyLabel) {
+      badges.push({
+        id: 'ready-label',
+        label: readyLabel,
+        title: `Ready for review (${readyLabel})`,
+        mod: 'is-ready-label',
+      });
+    }
   }
 
   const mergeIssue = classifyPrMergeIssue(groupMergeGate(open.length ? open : group));
