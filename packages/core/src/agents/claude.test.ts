@@ -869,7 +869,7 @@ Goal: fix skill chat display.
         }),
       ),
     ).toEqual([
-      { type: 'thinking', data: 'Context compressed (auto)' },
+      { type: 'thinking', data: 'Context compressed (auto)', replace: true },
       {
         type: 'usage',
         data: { inputTokens: 0, outputTokens: 0, lastRequestTokens: 48_000 },

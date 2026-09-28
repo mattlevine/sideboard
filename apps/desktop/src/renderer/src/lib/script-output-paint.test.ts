@@ -4,6 +4,7 @@ import {
   createKeyedScriptOutputPainter,
   createScriptOutputPainter,
   MAX_SCRIPT_OUTPUT_CHARS,
+  shouldApplyHydratedRunLog,
 } from './script-output-paint';
 
 describe('script-output-paint', () => {
@@ -81,5 +82,12 @@ describe('script-output-paint', () => {
     queued[0]!(0);
     expect(logs).toEqual({ a: 'keep-me', b: '' });
     painter.dispose();
+  });
+
+  it('drops getRunLog hydration after Start clears the pane', () => {
+    expect(shouldApplyHydratedRunLog(1, 1, false, 'old error')).toBe(true);
+    expect(shouldApplyHydratedRunLog(1, 2, false, 'old error')).toBe(false);
+    expect(shouldApplyHydratedRunLog(1, 1, true, 'old error')).toBe(false);
+    expect(shouldApplyHydratedRunLog(1, 1, false, '')).toBe(false);
   });
 });

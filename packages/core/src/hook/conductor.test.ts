@@ -359,6 +359,28 @@ describe('reservePortRange sticky ports', () => {
       child.kill('SIGKILL');
     }
   });
+
+  it('keeps SIDEBOARD_PORT when a sibling holds a later slot in the range', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'sideboard-sib-slot-'));
+    const here = join(parent, 'nycfc');
+    const other = join(parent, 'ajax');
+    mkdirSync(here);
+    mkdirSync(other);
+    const first = await reservePortRange(2);
+    const ports = first.map((h) => h.port);
+    await Promise.all(first.map((h) => h.release()));
+    const child = await occupyPort(ports[1]!, other);
+    try {
+      const held = await reservePortRange(2, { preferred: ports, worktreePath: here });
+      expect(held[0]!.port).toBe(ports[0]);
+      expect(held).toHaveLength(2);
+      await Promise.all(held.map((h) => h.release()));
+      expect(child.exitCode).toBeNull();
+      expect(child.killed).toBe(false);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
 });
 
 describe('startDevServer sticky ports', () => {

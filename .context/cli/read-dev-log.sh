@@ -4,7 +4,7 @@
 
 set -e
 
-SIDEBOARD_DATA="${SIDEBOARD_APP_DATA:-$HOME/Library/Application\ Support/sideboard}"
+SIDEBOARD_DATA="${SIDEBOARD_APP_DATA:-$HOME/Library/Application Support/sideboard}"
 THREADS_DIR="$SIDEBOARD_DATA/threads"
 
 # Function to normalize worktree path and compute hash
