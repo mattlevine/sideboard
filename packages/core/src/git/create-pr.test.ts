@@ -11,6 +11,7 @@ import { gh, git } from './run.js';
 import {
   createOrUpdatePr,
   ghHeadRef,
+  ghPrCreateAssigneeArgs,
   ghRepoSelectArgs,
   parseGithubSlugFromRemoteUrl,
 } from './worktree.js';
@@ -36,6 +37,20 @@ describe('ghHeadRef / ghRepoSelectArgs', () => {
     expect(ghRepoSelectArgs('acme/widgets')).toEqual(['-R', 'acme/widgets']);
     expect(ghHeadRef('acme/widgets', 'thread/paris')).toBe('acme:thread/paris');
     expect(ghHeadRef('acme/widgets', 'acme:already')).toBe('acme:already');
+  });
+});
+
+describe('ghPrCreateAssigneeArgs', () => {
+  it('defaults to the GitHub-connected user', () => {
+    expect(ghPrCreateAssigneeArgs()).toEqual(['--assignee', '@me']);
+    expect(ghPrCreateAssigneeArgs(undefined)).toEqual(['--assignee', '@me']);
+    expect(ghPrCreateAssigneeArgs('  ')).toEqual(['--assignee', '@me']);
+  });
+
+  it('uses an explicit login and skips when opted out', () => {
+    expect(ghPrCreateAssigneeArgs('octocat')).toEqual(['--assignee', 'octocat']);
+    expect(ghPrCreateAssigneeArgs('none')).toEqual([]);
+    expect(ghPrCreateAssigneeArgs('unassigned')).toEqual([]);
   });
 });
 
@@ -100,6 +115,8 @@ describe('createOrUpdatePr', () => {
     expect(createCall?.[0]).toContain('Fix advisories');
     expect(createCall?.[0]).toContain('--head');
     expect(createCall?.[0]).toContain('mattlevine:fix/nextjs-mcp-sdk-advisories');
+    expect(createCall?.[0]).toContain('--assignee');
+    expect(createCall?.[0]).toContain('@me');
   });
 
   it('throws a short GraphQL body-too-long error the agent can act on', async () => {
@@ -138,5 +155,43 @@ describe('createOrUpdatePr', () => {
         head: 'thread/x',
       }),
     ).rejects.toThrow(/GraphQL body is too long/);
+  });
+
+  it('does not reassign when updating an existing PR', async () => {
+    gitMock.mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
+        return {
+          stdout: 'git@github.com:mattlevine/storycycle-ai.git',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+    ghMock.mockImplementation(async (args) => {
+      if (args[0] === 'repo' && args[1] === 'set-default') {
+        return { stdout: 'mattlevine/storycycle-ai', stderr: '', exitCode: 0 };
+      }
+      if (args.includes('pr') && args.includes('view')) {
+        return {
+          stdout: 'https://github.com/mattlevine/storycycle-ai/pull/12\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+
+    const url = await createOrUpdatePr('/tmp/wt', {
+      title: 'Fix advisories',
+      body: 'body',
+      base: 'main',
+      head: 'fix/nextjs-mcp-sdk-advisories',
+    });
+    expect(url).toContain('pull/12');
+    const editCall = ghMock.mock.calls.find((c) => c[0].includes('edit'));
+    expect(editCall?.[0]).toContain('pr');
+    expect(editCall?.[0]).not.toContain('--assignee');
+    expect(ghMock.mock.calls.some((c) => c[0].includes('create'))).toBe(false);
   });
 });

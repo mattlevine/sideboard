@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- New pull requests are assigned to the GitHub-connected account (`gh pr create --assignee @me`) unless the user names someone else.
+
 ## [0.1.243] - 2026-09-28
 
 ### Fixed
