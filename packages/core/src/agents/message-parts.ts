@@ -722,6 +722,20 @@ function lastRunningSkillIndex(parts: MessagePart[], parentId?: string): number 
   return -1;
 }
 
+function markRunningSkillsDone(parts: MessagePart[], parentId?: string): MessagePart[] {
+  return parts.map((p) => {
+    if (
+      p.type === 'tool' &&
+      isSkillToolName(p.name) &&
+      p.status === 'running' &&
+      sameParentId(p.parentId, parentId)
+    ) {
+      return withPartTimes({ ...p, status: 'done' as const }, p);
+    }
+    return p;
+  });
+}
+
 function promoteOrFoldSkillText(
   parts: MessagePart[],
   textIdx: number,
@@ -905,7 +919,10 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         {
           ...prev,
           result: clipToolResultForStore(result),
-          status: looksLikeSkillBody(result) ? ('done' as const) : prev.status,
+          // Stay running after the YAML `name:` fence so later content_block_delta
+          // tokens of SKILL.md stay on this row. thinking / tool_use / finalizeParts
+          // mark the row done so the real reply can be chat.
+          status: 'running',
         },
         prev,
       );
@@ -951,6 +968,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
   if (event.type === 'thinking') {
     const data = event.data;
     if (!data) return parts;
+    parts = markRunningSkillsDone(parts, event.parentId);
     const next = [...parts];
     if (event.replace) {
       for (let i = next.length - 1; i >= 0; i--) {
@@ -999,6 +1017,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
   }
 
   if (event.type === 'tool_use') {
+    parts = markRunningSkillsDone(parts, event.parentId);
     const input = asRecord(event.input);
     const diff = diffFromInput(input);
     const existing = parts.findIndex((p) => p.type === 'tool' && p.id === event.id);

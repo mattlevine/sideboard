@@ -1,3 +1,10 @@
+/** Stable empty compacted archive — `?? []` busts `memo(ChatTranscript)`. */
+export const EMPTY_THREAD_MESSAGES: Array<{
+  text?: string;
+  origin?: string;
+  parts?: Array<{ type: string; text?: string; description?: string; name?: string }>;
+}> = [];
+
 /** Visible chat prose only — skip tool dumps, thinking, and continue notes. */
 export function chatMessageSearchText(message: {
   text?: string;

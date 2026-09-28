@@ -129,6 +129,7 @@ import {
   seedChatSearchQuery,
   shouldDeferChatFind,
   shouldRevealCompactedArchive,
+  EMPTY_THREAD_MESSAGES,
 } from '../lib/chat-search';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
@@ -2549,12 +2550,12 @@ export function ThreadPanel({
             )}
           <ChatTranscript
             messages={thread.messages}
-            compactedMessages={thread.compactedMessages ?? []}
+            compactedMessages={thread.compactedMessages ?? EMPTY_THREAD_MESSAGES}
             forceRevealEarlier={
               chatSearchOpen &&
               shouldRevealCompactedArchive(
                 chatSearchQuery,
-                thread.compactedMessages ?? [],
+                thread.compactedMessages ?? EMPTY_THREAD_MESSAGES,
               )
             }
             fallbackDurations={fallbackDurations}

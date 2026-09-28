@@ -175,9 +175,24 @@ description: Detach long jobs
       type: 'stdout',
       data: 'description: Detach\n---\n\n# Long-running jobs\n',
     });
+    expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'running' });
+    parts = applyAgentEvent(parts, { type: 'thinking', data: 'plan the pack' });
     expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'done' });
     parts = applyAgentEvent(parts, { type: 'stdout', data: 'Detached the pack.' });
     expect(partsToAssistantText(parts)).toBe('Detached the pack.');
+  });
+
+  it('keeps SKILL.md tokens after the YAML fence on the Skill row', () => {
+    let parts = applyAgentEvent([], { type: 'stdout', data: '---\nname: long-running\n' });
+    parts = applyAgentEvent(parts, { type: 'stdout', data: 'description: Detach\n---\n' });
+    expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'running' });
+    parts = applyAgentEvent(parts, {
+      type: 'stdout',
+      data: '# Long-running jobs\n\nYou do not fix the code. You fix the process.\n',
+    });
+    expect(parts).toHaveLength(1);
+    expect(parts[0]?.type === 'tool' && parts[0].result).toContain('You fix the process.');
+    expect(partsToAssistantText(parts)).toBe('');
   });
 
   it('folds a later skill dump into an existing Skill tool instead of duplicating', () => {
