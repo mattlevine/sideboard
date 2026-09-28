@@ -301,10 +301,75 @@ describe('isThisWorktreeListenerCwd', () => {
   });
 });
 
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitUntil(pred: () => boolean, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (pred()) return;
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  throw new Error(`timed out after ${ms}ms`);
+}
+
 describe('killDetachedRunTree', () => {
   it('does not signal pid 1 or this process', () => {
     expect(() => killDetachedRunTree(1, '/tmp/wt')).not.toThrow();
     expect(() => killDetachedRunTree(process.pid, '/tmp/wt')).not.toThrow();
+  });
+
+  it('SIGTERMs leftover process-group children after wrap exits', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-reap-wrap-'));
+    const childPidFile = join(wt, 'child.pid');
+    const childCode =
+      `require('fs').writeFileSync(${JSON.stringify(childPidFile)}, String(process.pid));` +
+      'setInterval(() => {}, 1000);';
+    const wrapCode = `
+      const { spawn } = require('child_process');
+      const child = spawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], {
+        cwd: ${JSON.stringify(wt)},
+        stdio: 'ignore',
+      });
+      child.unref();
+      setInterval(() => {}, 1000);
+    `;
+    const wrap = spawn(process.execPath, ['-e', wrapCode], {
+      cwd: wt,
+      detached: true,
+      stdio: 'ignore',
+    });
+    wrap.unref();
+    const wrapPid = wrap.pid;
+    if (wrapPid == null) throw new Error('wrap pid missing');
+    try {
+      await waitUntil(() => existsSync(childPidFile), 3_000);
+      const childPid = Number.parseInt(readFileSync(childPidFile, 'utf8').trim(), 10);
+      expect(Number.isInteger(childPid) && childPid > 1).toBe(true);
+      process.kill(wrapPid, 'SIGKILL');
+      await waitUntil(() => !pidAlive(wrapPid), 2_000);
+      expect(pidAlive(childPid)).toBe(true);
+      killDetachedRunTree(wrapPid, wt);
+      await waitUntil(() => !pidAlive(childPid), 2_000);
+    } finally {
+      try {
+        process.kill(-wrapPid, 'SIGKILL');
+      } catch {
+        // already dead
+      }
+      try {
+        process.kill(wrapPid, 'SIGKILL');
+      } catch {
+        // already dead
+      }
+    }
   });
 });
 

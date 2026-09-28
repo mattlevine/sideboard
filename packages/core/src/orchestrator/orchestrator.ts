@@ -1369,12 +1369,6 @@ export class Orchestrator {
       thread = this.requireThread(threadId);
     }
 
-    // Compact's Haiku child is not agentPid. Stop during compact must not
-    // spawn Cursor/Claude after the summarizer finally returns.
-    if (this.stoppedTurns.has(threadId)) {
-      return;
-    }
-
     const promptText = typeof prompt === 'string' ? prompt : '';
     const autoContinue =
       isJobContinuePrompt(promptText) ||
@@ -1393,6 +1387,19 @@ export class Orchestrator {
       agent: thread.agent,
       orch: isOrchestratorThread(thread),
     });
+
+    // Compact's Haiku child is not agentPid. Stop during compact must not
+    // spawn Cursor/Claude after the summarizer finally returns — but it must
+    // still append the user prompt and emit turn_finished so the live stream
+    // unpaints (turn_started already fired).
+    if (this.stoppedTurns.has(threadId)) {
+      const stopped = writeLiveStatus(threadId, 'stopped');
+      if (stopped?.status === 'stopped') {
+        this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+      }
+      this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+      return;
+    }
 
     thread = this.requireThread(threadId);
     // Git-button phrases and PR-goal detection must see the raw user text.
