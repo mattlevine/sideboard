@@ -10,7 +10,6 @@ import {
   BOARD_COLUMN_DEFS,
   BOARD_PAGE_SIZE,
   classifyWorktreeColumn,
-  classifyWorktreeOwnership,
   compactPreview,
   markdownPreviewSource,
   DEFAULT_WORKTREE_SORT,
@@ -37,6 +36,7 @@ import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { FleetActivityBar } from './FleetActivityBar';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
+import { WorktreePrBadges } from './WorktreePrBadges';
 
 interface Props {
   threads: Thread[];
@@ -361,7 +361,6 @@ function WorktreeCard({
   );
 
   const dirty = loaded && Boolean(stat?.dirty);
-  const reviewing = classifyWorktreeOwnership(group, githubLogin ?? '') === 'reviewing';
 
   function openWorktree() {
     if (!archiving) onOpenThread(primary.id);
@@ -400,11 +399,7 @@ function WorktreeCard({
         >
           <div className="thread-title">
             <span className="thread-title-text">{label}</span>
-            {reviewing ? (
-              <span className="board-badge is-reviewing" title="Someone else's PR">
-                review
-              </span>
-            ) : null}
+            <WorktreePrBadges group={group} viewerLogin={githubLogin} />
           </div>
           <div className="thread-meta">
             {archiving

@@ -164,6 +164,27 @@ export interface Thread {
    */
   prReviewerLogins?: string[];
   /**
+   * Cached GitHub `reviewDecision` from the last `getPrMeta`
+   * (`APPROVED` | `CHANGES_REQUESTED` | `REVIEW_REQUIRED`).
+   */
+  prReviewDecision?: string | null;
+  /** Cached GitHub `mergeable` (`MERGEABLE` / `CONFLICTING` / `UNKNOWN`). */
+  prMergeable?: string | null;
+  /** Cached GitHub `mergeStateStatus` (`CLEAN` / `DIRTY` / `BLOCKED` / `UNSTABLE` / …). */
+  prMergeStateStatus?: string | null;
+  /** Cached GitHub merge-queue flag from the last `getPrMeta`. */
+  prIsInMergeQueue?: boolean;
+  /**
+   * Cached GitHub label names (workflow tags like `eng-review`).
+   * Used for sidebar / board list badges.
+   */
+  prLabels?: string[];
+  /**
+   * True when `gh pr checks` reported a failing CI run. Undefined until
+   * checks (or a merge-state heuristic) have landed.
+   */
+  prChecksFailed?: boolean;
+  /**
    * When true, skip auto-archive if the PR is already MERGED (set on restore
    * so unarchiving a merged workspace does not immediately re-archive).
    * Cleared when `prState` becomes a non-merged open state again.
@@ -407,6 +428,8 @@ export interface PrMeta {
   authorLogin?: string | null;
   /** Human requested-reviewer logins (bots and team slugs omitted). */
   reviewerLogins?: string[];
+  /** GitHub label names when fetched with `--json labels`. */
+  labels?: string[];
 }
 
 /** One layer in a GitHub PR stack (bottom = position 1). */

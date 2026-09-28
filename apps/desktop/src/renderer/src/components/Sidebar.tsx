@@ -6,7 +6,6 @@ import {
 } from '@sideboard/worktree-labels';
 import {
   DEFAULT_WORKTREE_SORT,
-  classifyWorktreeOwnership,
   groupHomeBoardWorktrees,
   latestVisibleMessageText,
   worktreeBoardStatus,
@@ -42,6 +41,7 @@ import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { SidebarToggle } from './SidebarToggle';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
+import { WorktreePrBadges } from './WorktreePrBadges';
 
 interface Props {
   threads: Thread[];
@@ -430,7 +430,7 @@ function WorktreeSidebarRow({
   selected,
   archiving,
   unread,
-  reviewing,
+  githubLogin,
   onSelect,
   showArchive,
   onRequestArchive,
@@ -442,7 +442,7 @@ function WorktreeSidebarRow({
   selected: boolean;
   archiving: boolean;
   unread: boolean;
-  reviewing: boolean;
+  githubLogin?: string | null;
   onSelect: (id: string, multi: boolean) => void;
   /** When true, show the archive control (parent handles teardown). */
   showArchive?: boolean;
@@ -533,11 +533,7 @@ function WorktreeSidebarRow({
             {primary.sourceType === 'orchestration' ? ' ✦' : ''}
           </span>
           {primary.cowboy ? <span className="board-badge">cowboy</span> : null}
-          {reviewing ? (
-            <span className="board-badge is-reviewing" title="Someone else's PR">
-              review
-            </span>
-          ) : null}
+          <WorktreePrBadges group={group} viewerLogin={githubLogin} />
         </div>
         <div className="thread-meta">
           {archiving
@@ -934,8 +930,6 @@ export function Sidebar({
               const primary =
                 pickWorktreeChat(group, selectedId) ?? group[0]!;
               const worktreeLabel = worktreeDisplayLabelForGroup(group);
-              const reviewing =
-                classifyWorktreeOwnership(group, githubLogin ?? '') === 'reviewing';
               const active =
                 view === 'thread' && group.some((t) => t.id === selectedId);
               const selected =
@@ -952,7 +946,7 @@ export function Sidebar({
                     primary={primary}
                     group={group}
                     worktreeLabel={worktreeLabel}
-                    reviewing={reviewing}
+                    githubLogin={githubLogin}
                     active={active}
                     selected={selected}
                     archiving={archiving}

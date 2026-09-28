@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMergeGateChecks, classifyPrMergeIssue } from './pr-gates.js';
+import { buildMergeGateChecks, classifyPrMergeIssue, ciChecksFailed, mergeStateSuggestsCheckFailure } from './pr-gates.js';
 
 describe('buildMergeGateChecks', () => {
   it('surfaces merge conflicts as a failing row', () => {
@@ -151,5 +151,52 @@ describe('classifyPrMergeIssue', () => {
         url: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe('mergeStateSuggestsCheckFailure', () => {
+  it('treats UNSTABLE and blocked+approved as CI failure', () => {
+    expect(
+      mergeStateSuggestsCheckFailure({
+        mergeStateStatus: 'UNSTABLE',
+        reviewDecision: null,
+      }),
+    ).toBe(true);
+    expect(
+      mergeStateSuggestsCheckFailure({
+        mergeStateStatus: 'BLOCKED',
+        reviewDecision: 'APPROVED',
+      }),
+    ).toBe(true);
+    expect(
+      mergeStateSuggestsCheckFailure({
+        mergeStateStatus: 'BLOCKED',
+        reviewDecision: 'REVIEW_REQUIRED',
+      }),
+    ).toBe(false);
+    expect(
+      mergeStateSuggestsCheckFailure({
+        mergeStateStatus: 'CLEAN',
+        reviewDecision: 'APPROVED',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('ciChecksFailed', () => {
+  it('ignores mergeability / review synthetics', () => {
+    expect(
+      ciChecksFailed([
+        { kind: 'mergeability', bucket: 'fail' },
+        { kind: 'review', bucket: 'fail' },
+        { kind: 'ci', bucket: 'pass' },
+      ]),
+    ).toBe(false);
+    expect(
+      ciChecksFailed([
+        { kind: 'ci', bucket: 'fail' },
+        { kind: 'review', bucket: 'fail' },
+      ]),
+    ).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import {
   shouldAutoArchiveOnPrMerge,
   shouldPersistFetchedPrMeta,
   shouldStopRunOnPrRetarget,
+  threadPrChecksFailedPatch,
   threadPrMetaPatch,
 } from './pr-merge-archive.js';
 
@@ -120,6 +121,40 @@ describe('threadPrMetaPatch', () => {
     ).toMatchObject({
       prState: 'OPEN',
       skipAutoArchiveOnMerge: false,
+    });
+  });
+
+  it('persists review decision, mergeability, labels, and check heuristic', () => {
+    expect(
+      threadPrMetaPatch(base, {
+        url: base.prUrl,
+        title: base.prTitle,
+        state: 'OPEN',
+        isDraft: false,
+        authorLogin: 'sam',
+        reviewerLogins: ['matt'],
+        reviewDecision: 'CHANGES_REQUESTED',
+        mergeable: 'CONFLICTING',
+        mergeStateStatus: 'DIRTY',
+        isInMergeQueue: false,
+        labels: ['eng-review'],
+      }),
+    ).toMatchObject({
+      prIsDraft: false,
+      prReviewDecision: 'CHANGES_REQUESTED',
+      prMergeable: 'CONFLICTING',
+      prMergeStateStatus: 'DIRTY',
+      prLabels: ['eng-review'],
+    });
+  });
+});
+
+describe('threadPrChecksFailedPatch', () => {
+  it('writes only when the flag changes', () => {
+    expect(threadPrChecksFailedPatch({}, true)).toEqual({ prChecksFailed: true });
+    expect(threadPrChecksFailedPatch({ prChecksFailed: true }, true)).toEqual({});
+    expect(threadPrChecksFailedPatch({ prChecksFailed: true }, false)).toEqual({
+      prChecksFailed: false,
     });
   });
 });

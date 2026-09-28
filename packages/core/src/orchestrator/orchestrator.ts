@@ -38,7 +38,9 @@ import {
   shouldPersistFetchedPrMeta,
   shouldStopRunOnPrRetarget,
   threadPrMetaPatch,
+  threadPrChecksFailedPatch,
 } from '../git/pr-merge-archive.js';
+import { ciChecksFailed } from '../git/pr-gates.js';
 import {
   runWorkspaceSetup,
   startDevServer,
@@ -3173,10 +3175,20 @@ export class Orchestrator {
   }
 
   async getPrChecks(threadRef: string): Promise<PrCheckRun[] | null> {
-    const { selectors, cwd } = await this.withPrSelector(threadRef);
+    const { thread, selectors, cwd } = await this.withPrSelector(threadRef);
     for (const selector of selectors) {
       const checks = await getPrChecks(cwd, selector);
-      if (checks) return checks;
+      if (!checks) continue;
+      const live = this.requireThread(thread.id);
+      const failed = ciChecksFailed(checks);
+      const siblings = threadsSharingWorktree(live.worktreePath);
+      const targets = siblings.length > 0 ? siblings : [live];
+      for (const t of targets) {
+        const patch = threadPrChecksFailedPatch(t, failed);
+        if (Object.keys(patch).length === 0) continue;
+        updateThread(t.id, patch);
+      }
+      return checks;
     }
     return null;
   }

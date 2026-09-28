@@ -3,6 +3,10 @@ import {
   lastAssistantMessageText,
 } from '../agents/message-parts.js';
 import {
+  classifyPrMergeIssue,
+  mergeStateSuggestsCheckFailure,
+} from '../git/pr-gates.js';
+import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
@@ -125,6 +129,14 @@ export function isMergedPrState(
 ): boolean {
   if (!prUrl?.trim()) return false;
   return (prState ?? '').trim().toUpperCase() === 'MERGED';
+}
+
+export function isClosedPrState(
+  prUrl: string | null | undefined,
+  prState: string | null | undefined,
+): boolean {
+  if (!prUrl?.trim()) return false;
+  return (prState ?? '').trim().toUpperCase() === 'CLOSED';
 }
 
 /**
@@ -316,6 +328,204 @@ export function classifyWorktreeColumn(
     return 'draft';
   }
   return 'new';
+}
+
+/** Team workflow tags used as ready-for-review / requested-changes signals. */
+export const ENG_REVIEW_LABEL = 'eng-review';
+export const ENG_CHANGES_LABEL = 'eng-requested-changes';
+
+export type WorktreeListBadgeId =
+  | 'new'
+  | 'draft'
+  | 'in-review'
+  | 'reviewing'
+  | 'changes'
+  | 'merged'
+  | 'closed'
+  | 'conflicts'
+  | 'checks';
+
+export type WorktreeListBadge = {
+  id: WorktreeListBadgeId;
+  label: string;
+  title: string;
+  mod: string;
+};
+
+export type WorktreeListBadgeThread = Pick<
+  Thread,
+  | 'prUrl'
+  | 'prState'
+  | 'prIsDraft'
+  | 'prAuthorLogin'
+  | 'prReviewerLogins'
+  | 'sourceType'
+  | 'cowboy'
+  | 'prReviewDecision'
+  | 'prMergeable'
+  | 'prMergeStateStatus'
+  | 'prIsInMergeQueue'
+  | 'prLabels'
+  | 'prChecksFailed'
+>;
+
+function labelsInclude(
+  labels: string[] | null | undefined,
+  name: string,
+): boolean {
+  const want = name.trim().toLowerCase();
+  if (!want) return false;
+  return (labels ?? []).some((label) => label.trim().toLowerCase() === want);
+}
+
+function groupPrLabels(group: Array<Pick<Thread, 'prLabels'>>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const thread of group) {
+    for (const label of thread.prLabels ?? []) {
+      const key = label.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(label.trim());
+    }
+  }
+  return out;
+}
+
+function groupMergeGate(
+  group: Array<
+    Pick<
+      Thread,
+      'prMergeable' | 'prMergeStateStatus' | 'prIsInMergeQueue' | 'prReviewDecision'
+    >
+  >,
+) {
+  return {
+    mergeable: group.find((t) => t.prMergeable)?.prMergeable ?? null,
+    mergeStateStatus: group.find((t) => t.prMergeStateStatus)?.prMergeStateStatus ?? null,
+    reviewDecision: group.find((t) => t.prReviewDecision)?.prReviewDecision ?? null,
+    isInMergeQueue: group.some((t) => t.prIsInMergeQueue),
+    baseRefName: null,
+    url: null,
+  };
+}
+
+function worktreeChecksFailing(group: WorktreeListBadgeThread[]): boolean {
+  if (group.some((t) => t.prChecksFailed === true)) return true;
+  return mergeStateSuggestsCheckFailure(groupMergeGate(group));
+}
+
+/**
+ * Sidebar / board badges so PR lifecycle is visible without hovering the
+ * git card. Cowboy worktrees keep the separate cowboy badge.
+ */
+export function classifyWorktreeListBadges(
+  group: WorktreeListBadgeThread[],
+  viewerLogin = '',
+): WorktreeListBadge[] {
+  if (group.length === 0 || group.some((t) => t.cowboy)) return [];
+
+  if (group.some((t) => isMergedPrState(t.prUrl, t.prState))) {
+    return [
+      {
+        id: 'merged',
+        label: 'merged',
+        title: 'Merged',
+        mod: 'is-merged',
+      },
+    ];
+  }
+
+  if (group.some((t) => isClosedPrState(t.prUrl, t.prState))) {
+    return [
+      {
+        id: 'closed',
+        label: 'closed',
+        title: 'Closed',
+        mod: 'is-closed',
+      },
+    ];
+  }
+
+  const open = group.filter((t) => isOpenPrState(t.prUrl, t.prState));
+  const hasOpenPr = open.length > 0;
+  const draft = open.some((t) => t.prIsDraft);
+  const labels = groupPrLabels(group);
+  const hasEngReview = labelsInclude(labels, ENG_REVIEW_LABEL);
+  const changesRequested =
+    open.some((t) => (t.prReviewDecision ?? '').toUpperCase() === 'CHANGES_REQUESTED') ||
+    labelsInclude(labels, ENG_CHANGES_LABEL);
+  const ownership = classifyWorktreeOwnership(group, viewerLogin);
+  const badges: WorktreeListBadge[] = [];
+
+  if (!hasOpenPr) {
+    badges.push({
+      id: 'new',
+      label: 'new',
+      title: 'No pull request yet',
+      mod: 'is-new',
+    });
+    return badges;
+  }
+
+  if (draft) {
+    badges.push({
+      id: 'draft',
+      label: 'draft',
+      title: 'Draft pull request',
+      mod: 'is-draft',
+    });
+  } else if (ownership === 'reviewing') {
+    badges.push({
+      id: 'reviewing',
+      label: 'review',
+      title: "Someone else's PR",
+      mod: 'is-reviewing',
+    });
+    if (changesRequested) {
+      badges.push({
+        id: 'changes',
+        label: 'changes',
+        title: 'Changes requested',
+        mod: 'is-changes',
+      });
+    }
+  } else if (changesRequested) {
+    badges.push({
+      id: 'changes',
+      label: 'changes',
+      title: 'Changes requested',
+      mod: 'is-changes',
+    });
+  } else {
+    badges.push({
+      id: 'in-review',
+      label: hasEngReview ? 'eng-review' : 'in review',
+      title: hasEngReview
+        ? 'Ready for review (eng-review)'
+        : 'Your PR is in review',
+      mod: 'is-in-review',
+    });
+  }
+
+  const mergeIssue = classifyPrMergeIssue(groupMergeGate(open.length ? open : group));
+  if (mergeIssue === 'conflicts') {
+    badges.push({
+      id: 'conflicts',
+      label: 'conflicts',
+      title: 'Merge conflicts',
+      mod: 'is-conflicts',
+    });
+  }
+  if (worktreeChecksFailing(open.length ? open : group)) {
+    badges.push({
+      id: 'checks',
+      label: 'checks',
+      title: 'Checks failing',
+      mod: 'is-checks',
+    });
+  }
+  return badges;
 }
 
 /** Activity dot for a worktree: running / queued beat idle sibling tabs. */

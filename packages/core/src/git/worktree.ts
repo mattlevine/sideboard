@@ -848,7 +848,7 @@ export async function getPrMeta(
     'view',
     selector,
     '--json',
-    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,isInMergeQueue,mergeStateStatus,mergeable,author,reviewRequests',
+    'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,isInMergeQueue,mergeStateStatus,mergeable,author,reviewRequests,labels',
   ];
   if (slug) viewArgs.push('--repo', slug);
   let { stdout, exitCode, stderr } = await gh(viewArgs, cwd, { reject: false });
@@ -858,7 +858,7 @@ export async function getPrMeta(
       'view',
       selector,
       '--json',
-      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,mergeStateStatus,mergeable,author,reviewRequests',
+      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,mergeStateStatus,mergeable,author,reviewRequests,labels',
     ];
     if (slug) retry.push('--repo', slug);
     ({ stdout, exitCode, stderr } = await gh(retry, cwd, { reject: false }));
@@ -903,6 +903,7 @@ export async function getPrMeta(
       mergeStateStatus: resolved.mergeStateStatus,
       authorLogin: author.login?.trim() || null,
       reviewerLogins: humanReviewerLogins(view.reviewRequests),
+      labels: labelNames(view.labels),
     };
   } catch {
     return null;
