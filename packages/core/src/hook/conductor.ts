@@ -329,6 +329,36 @@ function signalPid(pid: number, signal: NodeJS.Signals): void {
 }
 
 /**
+ * True when `cwd` is this worktree (or a nested package dir). Used to refuse
+ * killing a reused pid that now belongs to some other process.
+ */
+export function isThisWorktreeListenerCwd(
+  cwd: string,
+  worktreePath: string,
+): boolean {
+  const wt = realpathOrResolve(worktreePath);
+  const c = realpathOrResolve(cwd);
+  return c === wt || c.startsWith(wt + sep);
+}
+
+/**
+ * Tear down a detached Dev/setup process group after Electron restart.
+ * `execa(..., { detached: true })` reparents to launchd; port-only reap
+ * misses turbo/`pnpm dev` children that are not listening on SIDEBOARD_PORT.
+ * Never `kill(-1)`. Skip when cwd is missing or not this worktree (pid reuse).
+ */
+export function killDetachedRunTree(pid: number, worktreePath: string): void {
+  if (!Number.isFinite(pid) || pid <= 1 || pid === process.pid) return;
+  const cwd = listenerCwd(pid);
+  if (!cwd || !isThisWorktreeListenerCwd(cwd, worktreePath)) return;
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch {
+    signalPid(pid, 'SIGTERM');
+  }
+}
+
+/**
  * Free TCP listeners on ports we allocated for a run script.
  * Used when the in-memory process handle is gone (app restart) or as a
  * backstop when process-group kill leaves grandchildren bound.

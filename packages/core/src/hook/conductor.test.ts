@@ -8,7 +8,9 @@ import {
   copyConfiguredFiles,
   getRunMode,
   isOtherWorktreeListenerCwd,
+  isThisWorktreeListenerCwd,
   killableListenerPids,
+  killDetachedRunTree,
   killListenersOnPorts,
   listRunScripts,
   reservePort,
@@ -281,6 +283,28 @@ describe('isOtherWorktreeListenerCwd', () => {
     expect(isOtherWorktreeListenerCwd(here, here)).toBe(false);
     expect(isOtherWorktreeListenerCwd(join(here, 'apps'), here)).toBe(false);
     expect(isOtherWorktreeListenerCwd(join(tmpdir(), 'unrelated'), here)).toBe(false);
+  });
+});
+
+describe('isThisWorktreeListenerCwd', () => {
+  it('accepts this worktree and nested dirs, not siblings or unrelated', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'sideboard-this-cwd-'));
+    const here = join(parent, 'godoy-cruz');
+    const other = join(parent, 'detroit-city');
+    mkdirSync(here);
+    mkdirSync(other);
+    mkdirSync(join(here, 'apps'));
+    expect(isThisWorktreeListenerCwd(here, here)).toBe(true);
+    expect(isThisWorktreeListenerCwd(join(here, 'apps'), here)).toBe(true);
+    expect(isThisWorktreeListenerCwd(other, here)).toBe(false);
+    expect(isThisWorktreeListenerCwd(join(tmpdir(), 'unrelated'), here)).toBe(false);
+  });
+});
+
+describe('killDetachedRunTree', () => {
+  it('does not signal pid 1 or this process', () => {
+    expect(() => killDetachedRunTree(1, '/tmp/wt')).not.toThrow();
+    expect(() => killDetachedRunTree(process.pid, '/tmp/wt')).not.toThrow();
   });
 });
 
