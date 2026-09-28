@@ -5096,6 +5096,36 @@ button.worktree-hover-card-title:hover {
   text-align: center;
 }
 
+.chat-earlier {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(100%, 820px);
+  align-self: stretch;
+}
+
+.chat-earlier-toggle {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  font-family: inherit;
+}
+
+button.chat-earlier-toggle {
+  cursor: pointer;
+}
+
+button.chat-earlier-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.msg.earlier {
+  opacity: 0.92;
+}
+
 .msg-user-body {
   display: flex;
   flex-direction: column;

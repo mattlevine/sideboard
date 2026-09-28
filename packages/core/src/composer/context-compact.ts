@@ -1,3 +1,8 @@
+import {
+  compactSummaryPart,
+  isInternalAgentStatusText,
+  lastAssistantMessageText,
+} from '../agents/message-parts.js';
 import { clipToolResultForStore } from '../agents/error-detail.js';
 import { contextTokens } from '../agents/usage.js';
 import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
@@ -374,6 +379,42 @@ export function buildBrightsySessionSeed(
   return blocks.join('\n');
 }
 
+/**
+ * User / agent prose from a turn that is about to leave {@link Thread.messages}.
+ * Drops tools, thinking, continue notes, prior summaries, and empty bodies so
+ * the archive stays searchable without re-inflating occupancy.
+ */
+export function compactArchiveProse(message: ThreadMessage): ThreadMessage | null {
+  if (message.origin === 'continue') return null;
+  if (message.role === 'summary') return null;
+  let text = (message.text ?? '').trim();
+  if (!text && message.role === 'agent') {
+    text = lastAssistantMessageText(message.parts).trim();
+  }
+  if (!text || isInternalAgentStatusText(text)) return null;
+  return { role: message.role, text, ts: message.ts };
+}
+
+/** Prose rows to append when `older` is replaced by a summary. */
+export function messagesForCompactArchive(older: ThreadMessage[]): ThreadMessage[] {
+  const out: ThreadMessage[] = [];
+  for (const message of older) {
+    const prose = compactArchiveProse(message);
+    if (prose) out.push(prose);
+  }
+  return out;
+}
+
+export function appendCompactedMessages(
+  existing: ThreadMessage[] | undefined,
+  older: ThreadMessage[],
+): ThreadMessage[] {
+  const next = messagesForCompactArchive(older);
+  if (!existing?.length) return next;
+  if (!next.length) return existing;
+  return [...existing, ...next];
+}
+
 export function applyCompaction(
   messages: ThreadMessage[],
   summaryText: string,
@@ -382,9 +423,11 @@ export function applyCompaction(
   const { older, recent } = splitForCompaction(messages, thresholds);
   if (older.length === 0) return messages;
 
+  const text = summaryText.trim();
   const summary: ThreadMessage = {
     role: 'summary',
-    text: summaryText.trim(),
+    text,
+    parts: [compactSummaryPart(text)],
     ts: new Date().toISOString(),
   };
   return [summary, ...recent];
@@ -445,6 +488,7 @@ export async function maybeCompactContext(
   });
 
   let messages = applyCompaction(thread.messages, summary, thresholds);
+  const compactedMessages = appendCompactedMessages(thread.compactedMessages, older);
   const resetSession = shouldResetSessionForOccupancy({ messages: thread.messages });
   // Session reset reseeds from this transcript — persist going-forward occupancy
   // so the meter and lastRequestOccupancy match the compressed context.
@@ -455,6 +499,7 @@ export async function maybeCompactContext(
   const next: Thread = {
     ...thread,
     messages,
+    ...(compactedMessages.length ? { compactedMessages } : { compactedMessages: undefined }),
     sessionId: resetSession ? null : thread.sessionId,
     updatedAt: new Date().toISOString(),
   };

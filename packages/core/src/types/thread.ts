@@ -189,6 +189,12 @@ export interface Thread {
   /** When this chat was archived. History age uses this, not later row updates. */
   archivedAt?: string;
   messages: ThreadMessage[];
+  /**
+   * Prose-only turns dropped by auto-compact (user text + agent answers).
+   * Chat search / “show earlier” read this. Seed, occupancy, and session
+   * resume must keep using {@link messages} only.
+   */
+  compactedMessages?: ThreadMessage[];
   /** Pending composer attachments (forked transcripts, etc.). */
   attachments: ThreadAttachment[];
   /**

@@ -3,8 +3,10 @@ import type { Thread, ThreadMessage } from '../types/thread.js';
 import {
   applyCompaction,
   applyForwardOccupancy,
+  appendCompactedMessages,
   buildBrightsySessionSeed,
   buildSessionSeed,
+  compactArchiveProse,
   estimateOccupancyTokens,
   estimateThreadChars,
   extractBrightsyContextSummary,
@@ -13,6 +15,7 @@ import {
   forwardOccupancyTokens,
   lastRequestOccupancy,
   maybeCompactContext,
+  messagesForCompactArchive,
   messagesSinceLastBrightsyContextSummary,
   shouldCompactContext,
   shouldResetSessionForOccupancy,
@@ -62,6 +65,15 @@ describe('context compact', () => {
     });
     expect(next[0]?.role).toBe('summary');
     expect(next[0]?.text).toContain('ship compact');
+    expect(next[0]?.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool',
+        name: 'Compact',
+        description: 'Summarized conversation',
+        status: 'done',
+        result: expect.stringContaining('ship compact'),
+      }),
+    ]);
     expect(next.length).toBeLessThan(messages.length);
     expect(estimateThreadChars(next)).toBeLessThan(estimateThreadChars(messages));
   });
@@ -387,6 +399,11 @@ describe('context compact', () => {
     expect(result.thread.sessionId).toBe('sess-123');
     expect(result.thread.messages[0]?.role).toBe('summary');
     expect(result.thread.messages[0]?.text).toContain('Compacted goals');
+    expect(result.thread.messages[0]?.parts?.[0]).toMatchObject({
+      type: 'tool',
+      name: 'Compact',
+      result: expect.stringContaining('Compacted goals'),
+    });
     expect(result.method).toBe('extractive');
   });
 
@@ -442,6 +459,115 @@ describe('context compact', () => {
       estimateOccupancyTokens(result.thread.messages),
     );
     expect(lastAgent?.usage?.lastRequestTokens).toBeLessThan(800_000);
+  });
+
+  it('archives user and agent prose without tool dumps or prior summaries', () => {
+    const ts = '2026-04-01T00:00:00.000Z';
+    const older = [
+      msg('summary', 'already compacted', { ts }),
+      msg('user', 'fix the login bug', { ts }),
+      msg('user', 'keep-alive', { ts, origin: 'continue' }),
+      msg('agent', '', {
+        ts,
+        parts: [
+          {
+            type: 'tool',
+            id: 't1',
+            name: 'Read',
+            status: 'done',
+            result: 'SECRET-TOOL-BODY',
+          },
+          { type: 'text', text: 'Patched auth.ts' },
+        ],
+      }),
+    ];
+    const archived = messagesForCompactArchive(older);
+    expect(archived.map((m) => m.text)).toEqual(['fix the login bug', 'Patched auth.ts']);
+    expect(JSON.stringify(archived)).not.toContain('SECRET-TOOL-BODY');
+    expect(compactArchiveProse(older[0]!)).toBeNull();
+    expect(appendCompactedMessages([{ role: 'user', text: 'first', ts }], older).map((m) => m.text)).toEqual([
+      'first',
+      'fix the login bug',
+      'Patched auth.ts',
+    ]);
+  });
+
+  it('maybeCompactContext keeps compacted turns for search, not the session seed', async () => {
+    const messages = fatThread(20, 6_000);
+    const marker = 'UNIQUE-SEARCH-PHRASE';
+    messages[0] = msg('user', marker);
+    const thread = {
+      id: 't1',
+      title: 'test',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'feat',
+      worktreePath: '/tmp',
+      repoPath: '/tmp',
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      fast: false,
+      planMode: false,
+      sessionId: 'sess-123',
+      autonomy: 'default',
+      sourceIsFork: false,
+      status: 'idle',
+      queue: [],
+      parentThreadId: null,
+      devPort: null,
+      prUrl: null,
+      prTitle: null,
+      prState: null,
+      stackId: null,
+      stackLayer: null,
+      userSetTitle: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages,
+      attachments: [],
+    } satisfies Thread;
+
+    const thresholds = {
+      maxChars: 50_000,
+      minMessages: 10,
+      keepRecentMessages: 6,
+      keepRecentChars: 12_000,
+    };
+    const { older } = splitForCompaction(messages, thresholds);
+    const result = await maybeCompactContext(
+      thread,
+      thresholds,
+      async () => ({ summary: '- Compacted goals', method: 'extractive' }),
+    );
+
+    expect(result.didCompact).toBe(true);
+    expect(result.thread.compactedMessages?.some((m) => m.text === marker)).toBe(true);
+    expect(result.thread.compactedMessages?.some((m) => m.parts)).toBe(false);
+    expect(result.thread.messages.some((m) => m.text === marker)).toBe(false);
+    expect(result.thread.compactedMessages?.length).toBe(older.length);
+    const seed = buildSessionSeed(result.thread.messages)!;
+    expect(seed).not.toContain(marker);
+    expect(estimateThreadChars(result.thread.messages)).toBeLessThan(estimateThreadChars(messages));
+
+    const grown = {
+      ...result.thread,
+      messages: [
+        ...result.thread.messages,
+        ...fatThread(16, 6_000),
+      ],
+    };
+    const second = await maybeCompactContext(
+      grown,
+      thresholds,
+      async () => ({ summary: '- Compacted again', method: 'extractive' }),
+    );
+    expect(second.didCompact).toBe(true);
+    expect(second.thread.compactedMessages?.some((m) => m.text === marker)).toBe(true);
+    expect(second.thread.compactedMessages!.length).toBeGreaterThan(
+      result.thread.compactedMessages!.length,
+    );
+    expect(second.thread.compactedMessages?.some((m) => m.role === 'summary')).toBe(false);
   });
 
   it('occupancy helpers read lastRequestTokens from the latest usage', () => {

@@ -91,6 +91,9 @@ export function normalizeThread(raw: Thread): Thread {
       typeof raw.archivedAt === 'string' && raw.archivedAt.trim()
         ? raw.archivedAt.trim()
         : undefined,
+    compactedMessages: Array.isArray(raw.compactedMessages)
+      ? raw.compactedMessages
+      : undefined,
   };
 }
 

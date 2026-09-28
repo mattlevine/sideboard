@@ -72,6 +72,16 @@ describe('slimThreadForUiList', () => {
     expect(slim.messages.reduce((n, m) => n + (m.usage?.inputTokens ?? 0), 0)).toBe(10);
   });
 
+  it('drops compacted archive so board/sidebar IPC stays slim', () => {
+    const full = threadWithMessages([{ role: 'user', text: 'follow up please' }]);
+    full.compactedMessages = [
+      { role: 'user', text: 'HUGE-ARCHIVE-TURN', ts: '2026-01-01T00:00:00.000Z' },
+    ];
+    const slim = slimThreadForUiList(full);
+    expect(slim.compactedMessages).toBeUndefined();
+    expect(JSON.stringify(slim)).not.toContain('HUGE-ARCHIVE-TURN');
+  });
+
   it('keeps an empty list empty', () => {
     const empty = threadWithMessages([]);
     expect(slimThreadForUiList(empty).messages).toEqual([]);

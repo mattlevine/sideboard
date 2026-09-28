@@ -685,6 +685,7 @@ export const claudeAdapter: AgentAdapter = {
           github: true,
           linear: isLinearConnected(),
           abletime: isAbleTimeConnected(),
+          planMode: thread.planMode,
         }),
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
       ];

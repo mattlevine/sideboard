@@ -7,6 +7,7 @@ import {
   nextChatSearchIndex,
   seedChatSearchQuery,
   shouldDeferChatFind,
+  shouldRevealCompactedArchive,
 } from './chat-search';
 
 describe('chatMessageSearchText', () => {
@@ -80,6 +81,16 @@ describe('findChatSearchHits', () => {
 
   it('counts every occurrence in a message', () => {
     expect(findChatSearchHits('foo', [{ text: 'foo then foo again' }])).toEqual(['msg-0', 'msg-0']);
+  });
+});
+
+describe('shouldRevealCompactedArchive', () => {
+  it('is true when the query matches a compacted turn', () => {
+    expect(
+      shouldRevealCompactedArchive('login bug', [{ text: 'fix the login bug' }]),
+    ).toBe(true);
+    expect(shouldRevealCompactedArchive('login bug', [{ text: 'unrelated' }])).toBe(false);
+    expect(shouldRevealCompactedArchive('', [{ text: 'login bug' }])).toBe(false);
   });
 });
 

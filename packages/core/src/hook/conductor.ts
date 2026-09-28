@@ -34,6 +34,7 @@ import {
   loadWorktreeRunPorts,
   saveWorktreeRunPorts,
 } from './worktree-run-ports.js';
+import { processGroupAlive } from '../mcp/wait-for-job.js';
 
 export {
   loadWorktreeRunPorts,
@@ -345,12 +346,18 @@ export function isThisWorktreeListenerCwd(
  * Tear down a detached Dev/setup process group after Electron restart.
  * `execa(..., { detached: true })` reparents to launchd; port-only reap
  * misses turbo/`pnpm dev` children that are not listening on SIDEBOARD_PORT.
- * Never `kill(-1)`. Skip when cwd is missing or not this worktree (pid reuse).
+ * Never `kill(-1)`. Skip when wrap cwd is another worktree (pid reuse).
+ * If wrap cwd is missing (zsh already exited), still `kill(-pid)` when
+ * `processGroupAlive` — leftover turbo/pnpm children keep that group.
  */
 export function killDetachedRunTree(pid: number, worktreePath: string): void {
   if (!Number.isFinite(pid) || pid <= 1 || pid === process.pid) return;
   const cwd = listenerCwd(pid);
-  if (!cwd || !isThisWorktreeListenerCwd(cwd, worktreePath)) return;
+  if (cwd) {
+    if (!isThisWorktreeListenerCwd(cwd, worktreePath)) return;
+  } else if (!processGroupAlive(pid)) {
+    return;
+  }
   try {
     process.kill(-pid, 'SIGTERM');
   } catch {

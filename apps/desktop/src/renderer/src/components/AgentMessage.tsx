@@ -63,6 +63,8 @@ interface Props {
   onForkWorkspace?: () => void;
   /** Hide the answer body when the plan card already shows the same markdown. */
   hideAnswer?: boolean;
+  /** Show tool rows without the Worked/Thought accordion (auto-compact). */
+  toolsOnly?: boolean;
 }
 
 function basename(path: string): string {
@@ -348,6 +350,7 @@ export function AgentMessage({
   onFork,
   onForkWorkspace,
   hideAnswer = false,
+  toolsOnly = false,
 }: Props) {
   const showCost = useShowCost();
   const [openPhases, setOpenPhases] = useState<Set<number>>(
@@ -532,7 +535,7 @@ export function AgentMessage({
     <div className={`agent-msg${streaming ? ' streaming' : ''}`}>
       {phases.map((phase, i) => {
         if (phase.kind === 'text') {
-          if (hideAnswer) return null;
+          if (hideAnswer || toolsOnly) return null;
           return (
             <div key={`text-${i}`} className="msg-body" data-chat-text="">
               <MarkdownMessage
@@ -543,6 +546,13 @@ export function AgentMessage({
                 onThreadLinkClick={onOpenThread}
                 isStreaming={Boolean(streaming && i === phases.length - 1)}
               />
+            </div>
+          );
+        }
+        if (toolsOnly) {
+          return (
+            <div key={`${phase.kind}-${i}`} className="turn-details tools-only">
+              {renderParts(phase.parts, `trace-${i}`)}
             </div>
           );
         }
@@ -584,7 +594,7 @@ export function AgentMessage({
         );
       })}
 
-      {!hasTextPhase && answer && !hideAnswer && (
+      {!hasTextPhase && answer && !hideAnswer && !toolsOnly && (
         <div className="msg-body" data-chat-text="">
           <MarkdownMessage
             text={answer}
@@ -597,7 +607,7 @@ export function AgentMessage({
         </div>
       )}
 
-      {activityLine && (
+      {!toolsOnly && activityLine && (
         <div className="msg-activity-line">
           <span>{activityLine.text}</span>
           {activityLine.additions > 0 && (
@@ -617,7 +627,8 @@ export function AgentMessage({
         </div>
       )}
 
-      {(durationLabel ||
+      {!toolsOnly &&
+        (durationLabel ||
         usage ||
         occupancyTokens != null ||
         chips.length > 0 ||

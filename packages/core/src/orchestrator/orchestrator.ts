@@ -240,7 +240,7 @@ import {
   resolveViewerProfileForRepo,
   type FollowUpBehavior,
 } from '../store/app-settings.js';
-import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
+import { planModeTurnInstruction } from '../agents/types.js';
 import {
   extractPresentedPlan,
   readPlanFile,
@@ -1354,6 +1354,7 @@ export class Orchestrator {
         thread = updateThread(threadId, {
           messages: compact.thread.messages,
           sessionId: compact.thread.sessionId,
+          compactedMessages: compact.thread.compactedMessages,
         });
         this.emit({
           type: 'context_compacted',
@@ -1367,12 +1368,6 @@ export class Orchestrator {
       const message = err instanceof Error ? err.message : String(err);
       this.emit({ type: 'error', threadId, message: `context compact failed: ${message}` });
       thread = this.requireThread(threadId);
-    }
-
-    // Compact's Haiku child is not agentPid. Stop during compact must not
-    // spawn Cursor/Claude after the summarizer finally returns.
-    if (this.stoppedTurns.has(threadId)) {
-      return;
     }
 
     const promptText = typeof prompt === 'string' ? prompt : '';
@@ -1393,6 +1388,19 @@ export class Orchestrator {
       agent: thread.agent,
       orch: isOrchestratorThread(thread),
     });
+
+    // Compact's Haiku child is not agentPid. Stop during compact must not
+    // spawn Cursor/Claude after the summarizer finally returns — but it must
+    // still append the user prompt and emit turn_finished so the live stream
+    // unpaints (turn_started already fired).
+    if (this.stoppedTurns.has(threadId)) {
+      const stopped = writeLiveStatus(threadId, 'stopped');
+      if (stopped?.status === 'stopped') {
+        this.emit({ type: 'status_changed', threadId, status: 'stopped' });
+      }
+      this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+      return;
+    }
 
     thread = this.requireThread(threadId);
     // Git-button phrases and PR-goal detection must see the raw user text.
@@ -1505,7 +1513,7 @@ export class Orchestrator {
         ? formatPrGateDirective()
         : null;
     const agentPrompt = [
-      thread.planMode ? PLAN_MODE_INSTRUCTION : null,
+      planModeTurnInstruction(thread.planMode),
       orchestrationReminder,
       prGateDirective,
       injectedNoticeContext,
