@@ -1,6 +1,10 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import type { Thread } from '@sideboard-ai/core';
-import { createKeyedScriptOutputPainter, mergeScriptOutput } from '../lib/script-output-paint';
+import {
+  createKeyedScriptOutputPainter,
+  mergeScriptOutput,
+  shouldApplyHydratedRunLog,
+} from '../lib/script-output-paint';
 import { eventOnWorktree } from '../lib/worktree-events';
 import { scriptDisplayName } from '../lib/run-script-icons';
 
@@ -42,6 +46,7 @@ export const RunOutputPanel = memo(function RunOutputPanel({
   const [runLogs, setRunLogs] = useState<Record<string, string>>({});
   const painterRef = useRef<ReturnType<typeof createKeyedScriptOutputPainter> | null>(null);
   const logPreRef = useRef<HTMLPreElement>(null);
+  const hydrateEpochRef = useRef(0);
 
   useEffect(() => {
     const painter = createKeyedScriptOutputPainter(setRunLogs);
@@ -70,11 +75,16 @@ export const RunOutputPanel = memo(function RunOutputPanel({
   useEffect(() => {
     if (typeof window.sideboard.getRunLog !== 'function') return;
     const names = scriptNamesKey ? scriptNamesKey.split(',') : ['dev'];
+    const epoch = hydrateEpochRef.current;
     let cancelled = false;
     void Promise.all(
       names.map(async (name) => {
         const snap = await window.sideboard.getRunLog(threadId, name);
-        if (cancelled || !snap.output) return;
+        if (
+          !shouldApplyHydratedRunLog(epoch, hydrateEpochRef.current, cancelled, snap.output)
+        ) {
+          return;
+        }
         setRunLogs((prev) => ({
           ...prev,
           [name]: mergeScriptOutput(prev[name] ?? '', snap.output),
@@ -88,6 +98,10 @@ export const RunOutputPanel = memo(function RunOutputPanel({
 
   useEffect(() => {
     if (!clearRequest) return;
+    // Invalidate in-flight getRunLog so a pre-clear snapshot cannot restore
+    // the previous run after Start empties the pane. Do not re-hydrate here —
+    // beginRunLog has not run yet, so a refetch would be the stale file.
+    hydrateEpochRef.current += 1;
     painterRef.current?.clear(clearRequest.scriptName);
   }, [clearRequest?.token, clearRequest?.scriptName]);
 

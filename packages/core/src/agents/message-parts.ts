@@ -106,16 +106,23 @@ export function skillCommandFromInput(input?: Record<string, unknown>): string |
   return undefined;
 }
 
+/** Composer `/skill` expansion — injected user text, not an authored SKILL.md. */
+export function looksLikeComposerSkillExpansion(text: string): boolean {
+  const t = text.trim();
+  return (
+    /^## Skill: \//m.test(t) && /Follow this skill for the request above:/i.test(t)
+  );
+}
+
 /**
- * SKILL.md (YAML `name:`) or Sideboard composer expansion (`## Skill: /name`).
- * Those belong on a Skill tool row, not as the agent's chat bubble.
+ * Injected skill dumps (YAML `name:`) or composer expansion (`## Skill: /name`).
+ * Use for Claude user-role content. Assistant stdout that merely authors a
+ * SKILL.md must stay as chat — see looksLikeComposerSkillExpansion.
  */
 export function looksLikeSkillBody(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
-  if (/^## Skill: \//m.test(t) && /Follow this skill for the request above:/i.test(t)) {
-    return true;
-  }
+  if (looksLikeComposerSkillExpansion(t)) return true;
   return skillNameFromFrontmatter(t) != null;
 }
 
@@ -143,12 +150,16 @@ export function isCompactToolName(name: string | undefined): boolean {
   );
 }
 
-export function isContextCompactInProgress(text: string): boolean {
-  return /^Compressing context/i.test(text.trim());
+export function isContextCompactDone(text: string): boolean {
+  return /\bContext compressed\b/i.test(text.trim());
 }
 
-export function isContextCompactDone(text: string): boolean {
-  return /^Context compressed\b/i.test(text.trim());
+export function isContextCompactInProgress(text: string): boolean {
+  const t = text.trim();
+  // Compact-boundary thinking is not replace, so it appends onto
+  // "Compressing context…". That merged part must count as finished.
+  if (isContextCompactDone(t)) return false;
+  return /^Compressing context/i.test(t);
 }
 
 /**
@@ -801,7 +812,7 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       );
     }
     const acc = next[next.length - 1];
-    if (acc?.type === 'text' && looksLikeSkillBody(acc.text)) {
+    if (acc?.type === 'text' && looksLikeComposerSkillExpansion(acc.text)) {
       next[next.length - 1] = skillToolFromTextPart(acc, `skill-${next.length}`);
     } else if (acc?.type === 'text' && looksLikeConversationSummary(acc.text)) {
       next[next.length - 1] = compactToolPart(acc.text, `compact-${next.length}`, {

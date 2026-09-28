@@ -535,6 +535,7 @@ function eventsFromClaudeSystem(obj: Record<string, unknown>): AgentEvent | Agen
     const thinking: AgentEvent = {
       type: 'thinking',
       data: `Context compressed${trigger}`,
+      replace: true,
     };
     if (meta.postTokens != null && meta.postTokens > 0) {
       return [

@@ -10,6 +10,8 @@ import {
   lastAssistantMessageText,
   liveActivitySummary,
   looksLikeSkillBody,
+  isContextCompactDone,
+  isContextCompactInProgress,
   toolActivityLine,
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
@@ -95,13 +97,10 @@ describe('applyAgentEvent', () => {
     expect(partsToAssistantText(parts)).toBe('Done.');
   });
 
-  it('promotes a skill-body stdout dump into a Skill tool, not the answer', () => {
-    const body = `---
-name: long-running
-description: Detach long jobs
----
-
-# Long-running jobs
+  it('promotes a composer skill expansion into a Skill tool, not the answer', () => {
+    const body = `## Skill: /long-running (Long-running jobs)
+Source: project · .claude/skills/long-running/SKILL.md
+Follow this skill for the request above:
 
 Detach, then wait.
 `;
@@ -115,6 +114,22 @@ Detach, then wait.
     });
     expect(parts[0]?.type === 'tool' && parts[0].result).toContain('Detach, then wait.');
     expect(partsToAssistantText(parts)).toBe('');
+  });
+
+  it('keeps an authored SKILL.md reply as chat, not a Skill row', () => {
+    const body = `---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+
+Detach, then wait.
+`;
+    const parts = applyAgentEvent([], { type: 'stdout', data: body });
+    expect(parts).toEqual([expect.objectContaining({ type: 'text', text: body })]);
+    expect(looksLikeSkillBody(body)).toBe(true);
+    expect(partsToAssistantText(parts)).toContain('Detach, then wait.');
   });
 
   it('does not treat a normal reply as a skill', () => {
@@ -164,6 +179,17 @@ Detach, then wait.
       description: 'Summarized conversation',
     });
     expect(parts[1]?.type === 'tool' && parts[1].result).toContain('fix auth');
+    parts = applyAgentEvent(parts, { type: 'stdout', data: 'Auth redirect is fixed.' });
+    expect(partsToAssistantText(parts)).toBe('Auth redirect is fixed.');
+  });
+
+  it('does not swallow the reply when compact-boundary thinking appends onto compressing', () => {
+    expect(
+      isContextCompactInProgress('Compressing context…Context compressed (auto)'),
+    ).toBe(false);
+    expect(isContextCompactDone('Compressing context…Context compressed (auto)')).toBe(true);
+    let parts = applyAgentEvent([], { type: 'thinking', data: 'Compressing context…' });
+    parts = applyAgentEvent(parts, { type: 'thinking', data: 'Context compressed (auto)' });
     parts = applyAgentEvent(parts, { type: 'stdout', data: 'Auth redirect is fixed.' });
     expect(partsToAssistantText(parts)).toBe('Auth redirect is fixed.');
   });

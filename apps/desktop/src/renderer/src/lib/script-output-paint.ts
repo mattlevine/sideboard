@@ -15,6 +15,19 @@ export function appendScriptOutput(
   return nl >= 0 && nl < cut.length - 1 ? cut.slice(nl + 1) : cut;
 }
 
+/**
+ * Persist a getRunLog snapshot only if Start has not cleared the pane since
+ * this fetch began. In-flight hydration otherwise restores the previous run.
+ */
+export function shouldApplyHydratedRunLog(
+  epochAtFetch: number,
+  currentEpoch: number,
+  cancelled: boolean,
+  output: string,
+): boolean {
+  return !cancelled && epochAtFetch === currentEpoch && Boolean(output);
+}
+
 /** Combine a persisted setup snapshot with lines that arrived while it loaded. */
 export function mergeScriptOutput(prev: string, incoming: string): string {
   if (!prev) return incoming;

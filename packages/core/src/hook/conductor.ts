@@ -747,13 +747,23 @@ async function fillPortRange(
 ): Promise<PortReservation[]> {
   if (held.length >= size) return held;
   const base = held[0]?.port;
+  const taken = new Set(held.map((h) => h.port));
   try {
-    for (let i = held.length; i < size; i++) {
-      const candidate = base != null ? base + i : null;
+    let offset = 0;
+    while (held.length < size) {
+      const candidate = base != null ? base + offset : null;
+      offset += 1;
+      if (candidate != null && taken.has(candidate)) continue;
       const next =
         candidate != null ? await tryReservePort(candidate) : null;
-      if (next) held.push(next);
-      else held.push(await reservePort());
+      if (next) {
+        held.push(next);
+        taken.add(next.port);
+      } else {
+        const ephemeral = await reservePort();
+        held.push(ephemeral);
+        taken.add(ephemeral.port);
+      }
     }
     return held;
   } catch (err) {
@@ -762,11 +772,37 @@ async function fillPortRange(
   }
 }
 
+/** Reserve whatever is free. Unlike tryReservePorts, do not release on the first miss. */
+async function tryReserveAvailablePorts(
+  ports: number[],
+): Promise<PortReservation[]> {
+  const held: PortReservation[] = [];
+  for (const port of ports) {
+    const next = await tryReservePort(port);
+    if (next) held.push(next);
+  }
+  return held;
+}
+
+/**
+ * Reuse this worktree's last range. SIDEBOARD_PORT is preferred[0] — succeed
+ * with a partial hold when a sibling already bound a later slot.
+ */
 async function reclaimPreferredPorts(
   ports: number[],
   worktreePath: string | undefined,
 ): Promise<PortReservation[] | null> {
-  let held = await tryReservePorts(ports);
+  const primary = ports[0];
+  if (primary == null) return null;
+
+  const takePrimary = async (): Promise<PortReservation[] | null> => {
+    const held = await tryReserveAvailablePorts(ports);
+    if (held.some((h) => h.port === primary)) return held;
+    await Promise.all(held.map((h) => h.release()));
+    return null;
+  };
+
+  let held = await takePrimary();
   if (held) return held;
   if (worktreePath) {
     killStaleWorktreeListeners(ports, worktreePath, 'SIGTERM');
@@ -775,7 +811,7 @@ async function reclaimPreferredPorts(
   }
   for (let i = 0; i < RECLAIM_TRIES; i++) {
     await delay(RECLAIM_RETRY_DELAY_MS);
-    held = await tryReservePorts(ports);
+    held = await takePrimary();
     if (held) return held;
     if (i === 2 && worktreePath) {
       killStaleWorktreeListeners(ports, worktreePath, 'SIGKILL');
@@ -795,7 +831,8 @@ export type ReservePortRangeOpts = {
  * Hold a block of ports (Conductor: CONDUCTOR_PORT … +9) until release.
  * Callers must `release()` immediately before spawning the child that binds them.
  * When `preferred` is set, reuse those ports — reclaim a leftover Dev instance
- * on them instead of allocating a new range.
+ * on them instead of allocating a new range. SIDEBOARD_PORT is preferred[0];
+ * a sibling holding a later slot must not force a new block.
  */
 export async function reservePortRange(
   size = PORT_RANGE_SIZE,
