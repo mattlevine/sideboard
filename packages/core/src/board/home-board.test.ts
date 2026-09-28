@@ -352,7 +352,7 @@ describe('classifyWorktreeListBadges', () => {
     ).toEqual(['new']);
   });
 
-  it('shows draft for an open draft PR', () => {
+  it('shows draft only for your open draft PR', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -367,6 +367,24 @@ describe('classifyWorktreeListBadges', () => {
         'matt',
       ).map((b) => b.label),
     ).toEqual(['draft']);
+  });
+
+  it('shows review for someone else\'s draft PR', () => {
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'theirs-draft',
+            sourceType: 'pr',
+            prUrl: 'https://github.com/acme/app/pull/9',
+            prState: 'OPEN',
+            prIsDraft: true,
+            prAuthorLogin: 'sam',
+          }),
+        ],
+        'matt',
+      ).map((b) => b.label),
+    ).toEqual(['review']);
   });
 
   it('shows eng-review on my ready PR and review on someone else\'s', () => {

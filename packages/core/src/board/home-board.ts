@@ -497,14 +497,9 @@ export function classifyWorktreeListBadges(
     return badges;
   }
 
-  if (draft) {
-    badges.push({
-      id: 'draft',
-      label: 'draft',
-      title: 'Draft pull request',
-      mod: 'is-draft',
-    });
-  } else if (ownership === 'reviewing') {
+  // Not yours → you are reviewing it (including their drafts). Yours: draft,
+  // else in-review, plus the project ready-for-review label when present.
+  if (ownership === 'reviewing') {
     badges.push({
       id: 'reviewing',
       label: 'review',
@@ -519,6 +514,13 @@ export function classifyWorktreeListBadges(
         mod: 'is-changes',
       });
     }
+  } else if (draft) {
+    badges.push({
+      id: 'draft',
+      label: 'draft',
+      title: 'Draft pull request',
+      mod: 'is-draft',
+    });
   } else if (changesRequested) {
     badges.push({
       id: 'changes',
