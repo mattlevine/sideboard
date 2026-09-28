@@ -151,7 +151,7 @@ export function formatWorktreeDirective(
       ? ''
       : ' Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree.';
     lines.push(
-      `- Prefer a draft PR first: \`gh pr create --draft -R ${slug}\` (update via \`gh pr edit -R ${slug}\`). Always pass \`-R\` — bare \`gh pr create\` may target upstream on dual-remote checkouts.${resolve} Mark ready for review only when asked. If GitHub rejects the body as too long, retry with a short \`--body-file\` — do not paste a changelog or diff into \`--body\`.`,
+      `- Prefer a draft PR first: \`gh pr create --draft --assignee @me -R ${slug}\` (update via \`gh pr edit -R ${slug}\`). Always pass \`-R\` — bare \`gh pr create\` may target upstream on dual-remote checkouts.${resolve} Assign to the GitHub-connected user (\`--assignee @me\`) unless the user named someone else. Mark ready for review only when asked. If GitHub rejects the body as too long, retry with a short \`--body-file\` — do not paste a changelog or diff into \`--body\`.`,
     );
   }
   lines.push(

@@ -1822,6 +1822,16 @@ export async function mergePr(
   return { url, state: 'MERGED' };
 }
 
+/**
+ * Assign a newly created PR to the GitHub-connected account (`@me`) unless
+ * the caller named a different login or opted out with none/unassigned.
+ */
+export function ghPrCreateAssigneeArgs(assignee?: string | null): string[] {
+  const raw = assignee?.trim();
+  if (raw && /^(none|unassigned)$/i.test(raw)) return [];
+  return ['--assignee', raw || '@me'];
+}
+
 export async function createOrUpdatePr(
   worktreePath: string,
   opts: {
@@ -1832,6 +1842,8 @@ export async function createOrUpdatePr(
     draft?: boolean;
     /** Open the GitHub PR form in the browser instead of creating via API. */
     web?: boolean;
+    /** Login to assign, `@me` (default), or none/unassigned to skip. */
+    assignee?: string | null;
   },
 ): Promise<string> {
   // Prefer origin over `gh`'s inferred repo — Makerkit-style checkouts with
@@ -1881,6 +1893,7 @@ async function createOrUpdatePrWithBodyFile(
     head: string;
     draft?: boolean;
     web?: boolean;
+    assignee?: string | null;
     slug: string;
     repoArgs: string[];
     headRef: string;
@@ -1929,6 +1942,7 @@ async function createOrUpdatePrWithBodyFile(
       headRef,
     ];
     if (opts.draft) args.push('--draft');
+    args.push(...ghPrCreateAssigneeArgs(opts.assignee));
     await gh(args, worktreePath, { reject: false });
     // URL may open in browser; return existing view if available
     const again = await gh(
@@ -1952,6 +1966,7 @@ async function createOrUpdatePrWithBodyFile(
     headRef,
   ];
   if (opts.draft) args.push('--draft');
+  args.push(...ghPrCreateAssigneeArgs(opts.assignee));
   const created = await gh(args, worktreePath, { reject: false });
   if (created.exitCode !== 0) {
     const raw =

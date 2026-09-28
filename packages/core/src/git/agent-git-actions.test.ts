@@ -39,10 +39,13 @@ describe('expandCanonicalGitRequest', () => {
     expect(out).toMatch(/git push -u origin HEAD/);
     expect(expandCanonicalGitRequest('Merge PR.')).toMatch(/gh stack merge/);
     expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.')).toMatch(
-      /gh pr create --draft -R/,
+      /gh pr create --draft --assignee @me -R/,
+    );
+    expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.')).toMatch(
+      /if the user named someone else/,
     );
     expect(expandCanonicalGitRequest('Commit, push, and open a PR in the browser.')).toMatch(
-      /--web/,
+      /--web --assignee @me/,
     );
     expect(expandCanonicalGitRequest('Ready for review.')).toMatch(/gh pr ready/);
   });

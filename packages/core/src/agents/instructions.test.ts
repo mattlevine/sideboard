@@ -264,7 +264,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Stay inside the worktree/i);
     expect(text).toMatch(/Worktree folder nickname/i);
     expect(text).toMatch(/never the worktree nickname/i);
-    expect(text).toMatch(/gh pr create --draft -R/i);
+    expect(text).toMatch(/gh pr create --draft --assignee @me -R/i);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
     expect(text).toMatch(/not 3000/);
@@ -312,7 +312,8 @@ describe('formatWorktreeDirective', () => {
       },
       { githubSlug: 'mattlevine/storycycle-ai' },
     );
-    expect(text).toContain('gh pr create --draft -R mattlevine/storycycle-ai');
+    expect(text).toContain('gh pr create --draft --assignee @me -R mattlevine/storycycle-ai');
+    expect(text).toMatch(/unless the user named someone else/i);
     expect(text).toMatch(/body-file/);
     expect(text).toMatch(/may target upstream/i);
     expect(text).toMatch(/git push -u origin HEAD/i);

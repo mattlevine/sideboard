@@ -79,9 +79,9 @@ function gitActionExpansion(action: AgentGitAction, base: string | null): string
     case 'commit-push':
       return 'Commit any uncommitted work with a purpose-stating message, then push to origin (`git push -u origin HEAD`; this updates an existing PR when one is linked). Do not start a checks loop unless a goal was given.';
     case 'create-draft':
-      return 'Commit, push, then create a draft PR with `gh pr create --draft -R <origin-owner/name>` (title/body from the change purpose). Update the existing PR instead if one is linked.';
+      return 'Commit, push, then create a draft PR with `gh pr create --draft --assignee @me -R <origin-owner/name>` (title/body from the change purpose). Update the existing PR instead if one is linked. Use a different `--assignee` only if the user named someone else.';
     case 'create-web':
-      return 'Commit, push, then `gh pr create --web -R <origin-owner/name>`.';
+      return 'Commit, push, then `gh pr create --web --assignee @me -R <origin-owner/name>`. Use a different `--assignee` only if the user named someone else.';
     case 'resolve-conflicts':
       return `Fetch the PR base${base ? ` (\`${base}\`)` : ''}, merge it into this branch, resolve conflicts carefully, then commit and push until the PR is mergeable.`;
     case 'ready-for-review':

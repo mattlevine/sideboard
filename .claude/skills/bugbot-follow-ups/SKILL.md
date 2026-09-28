@@ -38,7 +38,7 @@ Skip nits that do not match a real caller or test.
 - Match existing helpers and tests; add a regression test per accepted note.
 - Prefer the function Bugbot named (empty allowlist, pagination, unknown
   viewer) over drive-by refactors.
-- Stay on the thread worktree. Draft PR: `gh pr create --draft -R mattlevine/sideboard`.
+- Stay on the thread worktree. Draft PR: `gh pr create --draft --assignee @me -R mattlevine/sideboard`.
 
 ## Do not
 

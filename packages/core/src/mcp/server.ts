@@ -1348,7 +1348,7 @@ export async function startMcpServer(): Promise<void> {
             action,
             lastError: message,
             hint: /body is too long/i.test(message)
-              ? 'Branch is already pushed. send_to_thread so the worktree agent runs gh pr create --draft -R <origin> --body-file <short.md>. Keep the description short.'
+              ? 'Branch is already pushed. send_to_thread so the worktree agent runs gh pr create --draft --assignee @me -R <origin> --body-file <short.md>. Keep the description short.'
               : undefined,
           },
           true,
