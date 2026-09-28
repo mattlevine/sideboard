@@ -12,10 +12,12 @@ import {
   lastAssistantMessageText,
   liveActivitySummary,
   looksLikeSkillBody,
+  looksLikeIncompleteSkillDump,
   isContextCompactDone,
   isContextCompactInProgress,
   toolActivityLine,
   partsToAssistantText,
+  visibleAssistantText,
   stripBrightsyNdjsonNoise,
   toolDescription,
   toolDetail,
@@ -118,7 +120,7 @@ Detach, then wait.
     expect(partsToAssistantText(parts)).toBe('');
   });
 
-  it('keeps an authored SKILL.md reply as chat, not a Skill row', () => {
+  it('promotes a YAML skill dump into a Skill tool, not the answer', () => {
     const body = `---
 name: long-running
 description: Detach long jobs
@@ -129,9 +131,90 @@ description: Detach long jobs
 Detach, then wait.
 `;
     const parts = applyAgentEvent([], { type: 'stdout', data: body });
-    expect(parts).toEqual([expect.objectContaining({ type: 'text', text: body })]);
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      name: 'Skill',
+      description: 'Using /long-running',
+      status: 'done',
+    });
+    expect(partsToAssistantText(parts)).toBe('');
+    expect(
+      visibleAssistantText(body, parts),
+    ).toBe('');
+  });
+
+  it('promotes a Claude Launching-skill prefix into a Skill tool', () => {
+    const body = `Launching skill: long-running
+
+Base directory for this skill: /tmp/wt/.claude/skills/long-running
+
+---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+`;
     expect(looksLikeSkillBody(body)).toBe(true);
-    expect(partsToAssistantText(parts)).toContain('Detach, then wait.');
+    const parts = applyAgentEvent([], { type: 'stdout', data: body });
+    expect(parts[0]).toMatchObject({
+      type: 'tool',
+      name: 'Skill',
+      description: 'Using /long-running',
+    });
+    expect(partsToAssistantText(parts)).toBe('');
+  });
+
+  it('keeps a streaming skill prefix off the answer bubble', () => {
+    let parts = applyAgentEvent([], { type: 'stdout', data: '---\nname: long-running\n' });
+    expect(looksLikeIncompleteSkillDump('---\nname: long-running\n')).toBe(true);
+    expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'running' });
+    expect(partsToAssistantText(parts)).toBe('');
+    parts = applyAgentEvent(parts, {
+      type: 'stdout',
+      data: 'description: Detach\n---\n\n# Long-running jobs\n',
+    });
+    expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'done' });
+    parts = applyAgentEvent(parts, { type: 'stdout', data: 'Detached the pack.' });
+    expect(partsToAssistantText(parts)).toBe('Detached the pack.');
+  });
+
+  it('folds a later skill dump into an existing Skill tool instead of duplicating', () => {
+    let parts = applyAgentEvent([], {
+      type: 'tool_use',
+      id: 'toolu_skill',
+      name: 'Skill',
+      input: { skill: 'long-running' },
+    });
+    const body = `---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+`;
+    parts = applyAgentEvent(parts, { type: 'stdout', data: body });
+    expect(parts.filter((p) => p.type === 'tool')).toHaveLength(1);
+    expect(partsToAssistantText(parts)).toBe('');
+    expect(parts[0]?.type === 'tool' && parts[0].result).toContain('# Long-running jobs');
+  });
+
+  it('does not fall back to stored text when parts are only a Skill tool', () => {
+    expect(
+      visibleAssistantText('---\nname: long-running\n---\n# Guide\n', [
+        {
+          type: 'tool',
+          id: 'skill-long-running',
+          name: 'Skill',
+          status: 'done',
+          description: 'Using /long-running',
+        },
+      ]),
+    ).toBe('');
+    expect(visibleAssistantText('Hello from an old transcript.')).toBe(
+      'Hello from an old transcript.',
+    );
   });
 
   it('does not treat a normal reply as a skill', () => {

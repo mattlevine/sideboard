@@ -114,33 +114,54 @@ export function looksLikeComposerSkillExpansion(text: string): boolean {
   );
 }
 
-/**
- * Injected skill dumps (YAML `name:`) or composer expansion (`## Skill: /name`).
- * Use for Claude user-role content. Assistant stdout that merely authors a
- * SKILL.md must stay as chat — see looksLikeComposerSkillExpansion.
- */
-export function looksLikeSkillBody(text: string): boolean {
-  const t = text.trim();
-  if (!t) return false;
-  if (looksLikeComposerSkillExpansion(t)) return true;
-  return skillNameFromFrontmatter(t) != null;
-}
+const SKILL_FRONTMATTER_NAME =
+  /^\s*name\s*:\s*['"]?([A-Za-z0-9][A-Za-z0-9._-]*)['"]?\s*$/m;
 
+/** YAML `name:` block, including a short Claude launcher prefix. */
 export function skillNameFromFrontmatter(text: string): string | undefined {
   const t = text.trim();
-  if (!t.startsWith('---')) return undefined;
-  const close = t.indexOf('\n---', 3);
+  if (!t) return undefined;
+  let yaml = t;
+  if (!yaml.startsWith('---')) {
+    const at = t.search(/(?:^|\n)---(?:\r?\n)/);
+    if (at < 0 || at > 800) return undefined;
+    yaml = t.slice(at).replace(/^\n/, '');
+  }
+  if (!yaml.startsWith('---')) return undefined;
+  const close = yaml.indexOf('\n---', 3);
   if (close < 0) return undefined;
-  const fm = t.slice(3, close);
-  const m = fm.match(/^\s*name\s*:\s*['"]?([A-Za-z0-9][A-Za-z0-9._-]*)['"]?\s*$/m);
-  return m?.[1];
+  return yaml.slice(3, close).match(SKILL_FRONTMATTER_NAME)?.[1];
 }
 
 export function skillCommandFromBody(text: string): string | undefined {
   return (
     skillNameFromFrontmatter(text) ??
-    text.match(/^## Skill: \/([A-Za-z0-9][A-Za-z0-9._-]*)/m)?.[1]
+    text.match(/^## Skill: \/([A-Za-z0-9][A-Za-z0-9._-]*)/m)?.[1] ??
+    text.match(/^Launching skill:\s*\/?([A-Za-z0-9][A-Za-z0-9._-]*)/im)?.[1]
   );
+}
+
+/**
+ * Injected skill dump (YAML `name:`, Claude "Launching skill:", or composer
+ * `## Skill: /name`). Claude user-role and assistant stdout both use this —
+ * dumping SKILL.md as the chat bubble looks like the agent wrote the guide.
+ */
+export function looksLikeSkillBody(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (looksLikeComposerSkillExpansion(t)) return true;
+  if (skillNameFromFrontmatter(t) != null) return true;
+  return /^Launching skill:/im.test(t) && /Base directory for this skill:/i.test(t);
+}
+
+/** Streaming prefix of a skill dump — keep it off the answer bubble. */
+export function looksLikeIncompleteSkillDump(text: string): boolean {
+  const t = text.trim();
+  if (!t || looksLikeSkillBody(t)) return false;
+  if (/^## Skill: \//m.test(t)) return true;
+  if (/^Launching skill:/im.test(t)) return true;
+  if (/Base directory for this skill:/i.test(t)) return true;
+  return t.startsWith('---') && SKILL_FRONTMATTER_NAME.test(t);
 }
 
 export function isCompactToolName(name: string | undefined): boolean {
@@ -654,21 +675,85 @@ function withPartTimes<T extends MessagePart>(next: T, prev?: MessagePart | null
 function skillToolFromTextPart(
   part: Extract<MessagePart, { type: 'text' }>,
   id: string,
+  status: 'running' | 'done' = 'done',
 ): Extract<MessagePart, { type: 'tool' }> {
   const command = skillCommandFromBody(part.text);
   const input = command ? { skill: command } : undefined;
   return {
     type: 'tool',
-    id,
+    id: command ? `skill-${command}` : id,
     name: 'Skill',
     input,
     description: toolDescription('Skill', input),
-    status: 'done',
+    status,
     result: clipToolResultForStore(part.text),
     ...(part.parentId ? { parentId: part.parentId } : {}),
     startedAt: part.startedAt,
     updatedAt: Date.now(),
   };
+}
+
+function lastSkillToolIndex(parts: MessagePart[], parentId?: string): number {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (
+      p.type === 'tool' &&
+      isSkillToolName(p.name) &&
+      sameParentId(p.parentId, parentId)
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function lastRunningSkillIndex(parts: MessagePart[], parentId?: string): number {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (
+      p.type === 'tool' &&
+      isSkillToolName(p.name) &&
+      p.status === 'running' &&
+      sameParentId(p.parentId, parentId)
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function promoteOrFoldSkillText(
+  parts: MessagePart[],
+  textIdx: number,
+): MessagePart[] {
+  const acc = parts[textIdx];
+  if (acc?.type !== 'text') return parts;
+  const complete = looksLikeSkillBody(acc.text);
+  const incomplete = looksLikeIncompleteSkillDump(acc.text);
+  if (!complete && !incomplete) return parts;
+  const existing = lastSkillToolIndex(parts, acc.parentId);
+  if (existing >= 0 && existing !== textIdx) {
+    const prev = parts[existing] as Extract<MessagePart, { type: 'tool' }>;
+    const next = parts.filter((_, i) => i !== textIdx);
+    const existingIdx = lastSkillToolIndex(next, acc.parentId);
+    if (existingIdx < 0) return parts;
+    next[existingIdx] = withPartTimes(
+      {
+        ...prev,
+        status: complete ? ('done' as const) : prev.status,
+        result: clipToolResultForStore(acc.text) ?? prev.result,
+      },
+      prev,
+    );
+    return next;
+  }
+  const next = [...parts];
+  next[textIdx] = skillToolFromTextPart(
+    acc,
+    `skill-${next.length}`,
+    complete ? 'done' : 'running',
+  );
+  return next;
 }
 
 /** Persisted / backfilled Compact tool for Sideboard auto-compact (`role: 'summary'`). */
@@ -811,6 +896,21 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         }),
       ];
     }
+    const runningSkillIdx = lastRunningSkillIndex(parts, event.parentId);
+    if (runningSkillIdx >= 0) {
+      const prev = parts[runningSkillIdx] as Extract<MessagePart, { type: 'tool' }>;
+      const result = `${prev.result ?? ''}${data}`;
+      const next = [...parts];
+      next[runningSkillIdx] = withPartTimes(
+        {
+          ...prev,
+          result: clipToolResultForStore(result),
+          status: looksLikeSkillBody(result) ? ('done' as const) : prev.status,
+        },
+        prev,
+      );
+      return next;
+    }
     const next = [...parts];
     const last = next[next.length - 1];
     if (last?.type === 'text' && sameParentId(last.parentId, event.parentId)) {
@@ -832,9 +932,13 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       );
     }
     const acc = next[next.length - 1];
-    if (acc?.type === 'text' && looksLikeComposerSkillExpansion(acc.text)) {
-      next[next.length - 1] = skillToolFromTextPart(acc, `skill-${next.length}`);
-    } else if (acc?.type === 'text' && looksLikeConversationSummary(acc.text)) {
+    if (
+      acc?.type === 'text' &&
+      (looksLikeSkillBody(acc.text) || looksLikeIncompleteSkillDump(acc.text))
+    ) {
+      return promoteOrFoldSkillText(next, next.length - 1);
+    }
+    if (acc?.type === 'text' && looksLikeConversationSummary(acc.text)) {
       next[next.length - 1] = compactToolPart(acc.text, `compact-${next.length}`, {
         parentId: acc.parentId,
         status: 'done',
@@ -1013,6 +1117,21 @@ export function partsToAssistantText(parts: MessagePart[]): string {
     .map((p) => p.text)
     .join('')
     .trim();
+}
+
+/**
+ * Chat bubble text. Prefer text parts. If the turn only has tools/thinking
+ * (Skill / Compact dumps promoted off stdout), do not fall back to `text` —
+ * that string is often the skill body spawn still concatenated.
+ */
+export function visibleAssistantText(
+  text: string | undefined,
+  parts?: MessagePart[],
+): string {
+  const fromParts = partsToAssistantText(parts ?? []);
+  if (fromParts) return fromParts;
+  if (parts?.some((p) => p.type === 'tool' || p.type === 'thinking')) return '';
+  return (text ?? '').trim();
 }
 
 /**

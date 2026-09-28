@@ -487,6 +487,88 @@ description: Detach long jobs
     ]);
   });
 
+  it('does not paint Claude assistant skill text as stdout', () => {
+    const skill = `---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+`;
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: skill }] },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'skill-long-running',
+        name: 'Skill',
+        input: { skill: 'long-running' },
+      },
+      { type: 'tool_result', id: 'skill-long-running', content: skill },
+    ]);
+  });
+
+  it('does not paint a Claude Launching-skill user dump as stdout', () => {
+    const skill = `Launching skill: long-running
+
+Base directory for this skill: /tmp/.claude/skills/long-running
+
+---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+`;
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'user',
+          message: { content: [{ type: 'text', text: skill }] },
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'skill-long-running',
+        name: 'Skill',
+        input: { skill: 'long-running' },
+      },
+      { type: 'tool_result', id: 'skill-long-running', content: skill },
+    ]);
+  });
+
+  it('does not paint a Claude result skill dump as stdout', () => {
+    const skill = `---
+name: review
+description: Merge-readiness review
+---
+
+# Review guidelines
+`;
+    expect(
+      claudeAdapter.parseEvent(
+        JSON.stringify({
+          type: 'result',
+          result: skill,
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_use',
+        id: 'skill-review',
+        name: 'Skill',
+        input: { skill: 'review' },
+      },
+      { type: 'tool_result', id: 'skill-review', content: skill },
+    ]);
+  });
+
   it('does not paint non-skill Claude user text as the agent reply', () => {
     expect(
       claudeAdapter.parseEvent(
