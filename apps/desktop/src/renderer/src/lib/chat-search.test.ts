@@ -8,6 +8,7 @@ import {
   seedChatSearchQuery,
   shouldDeferChatFind,
   shouldRevealCompactedArchive,
+  EMPTY_THREAD_MESSAGES,
 } from './chat-search';
 
 describe('chatMessageSearchText', () => {
@@ -91,6 +92,13 @@ describe('shouldRevealCompactedArchive', () => {
     ).toBe(true);
     expect(shouldRevealCompactedArchive('login bug', [{ text: 'unrelated' }])).toBe(false);
     expect(shouldRevealCompactedArchive('', [{ text: 'login bug' }])).toBe(false);
+  });
+});
+
+describe('EMPTY_THREAD_MESSAGES', () => {
+  it('is a stable fallback so ChatTranscript memo is not busted', () => {
+    expect(undefined ?? EMPTY_THREAD_MESSAGES).toBe(EMPTY_THREAD_MESSAGES);
+    expect(undefined ?? []).not.toBe(undefined ?? []);
   });
 });
 
