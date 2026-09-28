@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.242] - 2026-09-27
+
 ### Fixed
 
 - After a Sideboard restart, reap the detached Dev process group (persisted `ActiveRun.pid`), not only listeners on `SIDEBOARD_PORT`. Leftover `turbo`/`pnpm dev` trees were surviving as PID 1 children and blocking Start.
