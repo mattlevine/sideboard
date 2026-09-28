@@ -62,6 +62,15 @@ describe('context compact', () => {
     });
     expect(next[0]?.role).toBe('summary');
     expect(next[0]?.text).toContain('ship compact');
+    expect(next[0]?.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool',
+        name: 'Compact',
+        description: 'Summarized conversation',
+        status: 'done',
+        result: expect.stringContaining('ship compact'),
+      }),
+    ]);
     expect(next.length).toBeLessThan(messages.length);
     expect(estimateThreadChars(next)).toBeLessThan(estimateThreadChars(messages));
   });
@@ -387,6 +396,11 @@ describe('context compact', () => {
     expect(result.thread.sessionId).toBe('sess-123');
     expect(result.thread.messages[0]?.role).toBe('summary');
     expect(result.thread.messages[0]?.text).toContain('Compacted goals');
+    expect(result.thread.messages[0]?.parts?.[0]).toMatchObject({
+      type: 'tool',
+      name: 'Compact',
+      result: expect.stringContaining('Compacted goals'),
+    });
     expect(result.method).toBe('extractive');
   });
 

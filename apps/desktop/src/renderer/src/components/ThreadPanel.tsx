@@ -52,6 +52,7 @@ import {
   setRightPaneSuppressed,
 } from '../lib/right-pane-memory';
 import { forwardOccupancyTokens, threadHasCompactedContext } from '@sideboard/context-estimate';
+import { compactPartsForSummaryMessage } from '@sideboard/message-parts';
 import {
   contextMeterTooltip,
   occupancyFillRatio,
@@ -415,7 +416,7 @@ const ChatTranscript = memo(function ChatTranscript({
         return (
           <div
             key={`${m.ts}-${i}`}
-            className={`msg ${m.origin === 'continue' ? 'continue' : m.role}`}
+            className={`msg ${m.origin === 'continue' ? 'continue' : m.role === 'summary' ? 'agent' : m.role}`}
             data-chat-search-key={`msg-${i}`}
           >
             {m.role === 'agent' ? (
@@ -466,13 +467,24 @@ const ChatTranscript = memo(function ChatTranscript({
                   )}
               </>
             ) : m.role === 'summary' ? (
-              <div className="msg-summary" data-chat-text="">
-                <div className="msg-summary-label">Context summarized</div>
-                <MarkdownMessage
-                  text={m.text}
-                  onThreadLinkClick={h.onOpenThreadLink}
-                />
-              </div>
+              <AgentMessage
+                text=""
+                parts={compactPartsForSummaryMessage(m)}
+                ts={m.ts}
+                agent={agent}
+                model={model}
+                threadId={threadId}
+                worktreePath={worktreePath}
+                knownFilePaths={filePaths}
+                onOpenFile={h.onSelectFile}
+                onRevealDirectory={h.onRevealDirectory}
+                onOpenThread={h.onOpenThreadLink}
+                onOpenArtifact={h.openRightPane}
+                activeArtifactId={activeArtifactId}
+                artifactIdPrefix={`msg-${i}`}
+                hideAnswer
+                toolsOnly
+              />
             ) : m.origin === 'continue' ? (
               <div className="msg-continue" title={m.text}>
                 Sideboard continued the turn

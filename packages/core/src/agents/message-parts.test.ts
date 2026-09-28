@@ -3,6 +3,8 @@ import {
   THINKING_PART_MAX_CHARS,
   STDOUT_EVENT_MAX_CHARS,
   applyAgentEvent,
+  compactPartsForSummaryMessage,
+  compactSummaryPart,
   clipAgentEventForPaint,
   clipThinkingForStore,
   isInternalAgentStatusText,
@@ -158,6 +160,22 @@ Detach, then wait.
       status: 'done',
     });
     expect(partsToAssistantText(parts)).toBe('');
+  });
+
+  it('compactPartsForSummaryMessage uses stored Compact parts or synthesizes from text', () => {
+    const stored = compactSummaryPart('- Goal: auth');
+    expect(compactPartsForSummaryMessage({ text: '- Goal: auth', parts: [stored] })).toEqual([
+      stored,
+    ]);
+    const backfill = compactPartsForSummaryMessage({ text: '- Goal: ports' });
+    expect(backfill).toHaveLength(1);
+    expect(backfill[0]).toMatchObject({
+      type: 'tool',
+      name: 'Compact',
+      description: 'Summarized conversation',
+      result: '- Goal: ports',
+    });
+    expect(partsToAssistantText(backfill)).toBe('');
   });
 
   it('captures compacting stdout as a Compact tool instead of the answer', () => {

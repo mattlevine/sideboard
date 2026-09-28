@@ -1,3 +1,4 @@
+import { compactSummaryPart } from '../agents/message-parts.js';
 import { clipToolResultForStore } from '../agents/error-detail.js';
 import { contextTokens } from '../agents/usage.js';
 import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
@@ -382,9 +383,11 @@ export function applyCompaction(
   const { older, recent } = splitForCompaction(messages, thresholds);
   if (older.length === 0) return messages;
 
+  const text = summaryText.trim();
   const summary: ThreadMessage = {
     role: 'summary',
-    text: summaryText.trim(),
+    text,
+    parts: [compactSummaryPart(text)],
     ts: new Date().toISOString(),
   };
   return [summary, ...recent];

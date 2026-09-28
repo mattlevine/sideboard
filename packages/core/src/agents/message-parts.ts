@@ -1,4 +1,4 @@
-import type { AgentEvent, MessagePart } from '../types/thread.js';
+import type { AgentEvent, MessagePart, ThreadMessage } from '../types/thread.js';
 import { clipToolResultForStore } from './error-detail.js';
 
 function asRecord(input: unknown): Record<string, unknown> | undefined {
@@ -669,6 +669,26 @@ function skillToolFromTextPart(
     startedAt: part.startedAt,
     updatedAt: Date.now(),
   };
+}
+
+/** Persisted / backfilled Compact tool for Sideboard auto-compact (`role: 'summary'`). */
+export function compactSummaryPart(
+  text: string,
+  id = 'compact-summary',
+): Extract<MessagePart, { type: 'tool' }> {
+  return compactToolPart(text, id, { status: 'done' });
+}
+
+/** Compact tool parts on a summary message, or synthesize one from `text`. */
+export function compactPartsForSummaryMessage(
+  message: Pick<ThreadMessage, 'text' | 'parts'>,
+): MessagePart[] {
+  const existing = (message.parts ?? []).filter(
+    (p): p is Extract<MessagePart, { type: 'tool' }> =>
+      p.type === 'tool' && isCompactToolName(p.name),
+  );
+  if (existing.length) return existing;
+  return [compactSummaryPart(message.text ?? '')];
 }
 
 function compactToolPart(
