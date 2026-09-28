@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Auto-compact no longer blocks Cursor (or any non-Claude) turns on an unbounded `claude -p` Haiku one-shot. The summarizer times out in 20s and falls back to extractive bullets; Stop during compact does not spawn the chat agent afterwards.
+
 ## [0.1.240] - 2026-09-27
 
 ### Fixed

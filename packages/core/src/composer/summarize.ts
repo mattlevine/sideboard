@@ -3,6 +3,8 @@ import { ensureAgentPath } from '../agents/path.js';
 
 const MAX_TRANSCRIPT_CHARS = 120_000;
 const MAX_SUMMARY_CHARS = 6_000;
+/** Haiku one-shot used by auto-compact — independent of the chat agent. */
+export const CLAUDE_SUMMARY_TIMEOUT_MS = 20_000;
 
 export interface SummarizeResult {
   summary: string;
@@ -11,7 +13,10 @@ export interface SummarizeResult {
 
 /**
  * Summarize a conversation transcript for agent continuity.
- * Prefers a fast Claude one-shot; falls back to extractive bullets.
+ * Prefers a fast Claude Haiku one-shot (even on Cursor/Codex/OpenCode
+ * threads); falls back to extractive bullets when that CLI is missing,
+ * fails, or exceeds {@link CLAUDE_SUMMARY_TIMEOUT_MS}. Compact runs
+ * before the chat agent spawns — an unbounded `claude -p` wedges Cursor.
  */
 export async function summarizeConversation(
   transcript: string,
@@ -61,7 +66,11 @@ async function tryClaudeSummary(
         '--model',
         'haiku',
       ],
-      { cwd: opts?.cwd, reject: false },
+      {
+        cwd: opts?.cwd,
+        reject: false,
+        timeoutMs: opts?.timeoutMs ?? CLAUDE_SUMMARY_TIMEOUT_MS,
+      },
     );
     if (exitCode !== 0) return null;
     const text = stdout.trim();
