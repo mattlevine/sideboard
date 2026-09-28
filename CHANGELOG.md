@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.240] - 2026-09-27
+
+### Fixed
+
+- Worktree Dev Stop/Start keeps `SIDEBOARD_PORT` even when a sibling already bound a later slot in the saved port range.
+- Auto-compact no longer paints the next assistant reply as a Compact row; authored SKILL.md stays as chat.
+- The Run tab no longer restores the previous run's log after Start; the helper run-log script finds `Application Support`.
+
 ## [0.1.239] - 2026-09-27
 
 ### Fixed
