@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.246] - 2026-09-28
+
+### Added
+
+- `/bugbot-follow-ups` skill: collect unresolved Cursor Bugbot review threads on recently merged PRs, triage against `origin/main`, and land leftover fixes in one follow-up PR.
+
+### Fixed
+
+- Streaming Claude skill dumps stay on the Skill row after the YAML `name:` fence; later `content_block_delta` tokens of SKILL.md no longer paint as the assistant reply.
+- Memoized chat transcript no longer rebuilds on every composer keystroke when the thread has no compacted archive (`?? []`).
+
 ## [0.1.245] - 2026-09-28
 
 ### Fixed
