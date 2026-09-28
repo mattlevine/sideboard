@@ -47,6 +47,7 @@ import {
   getDefaultRunScript,
   getRunMode,
   killListenersOnPorts,
+  killDetachedRunTree,
 } from '../hook/conductor.js';
 import { annotateDevAccessRuns } from '../hook/dev-preview.js';
 import {
@@ -2194,6 +2195,9 @@ export class Orchestrator {
     const preferredPorts =
       active?.ports?.length ? active.ports : active?.port != null ? [active.port] : undefined;
     if (active && !existing) {
+      if (typeof active.pid === 'number') {
+        killDetachedRunTree(active.pid, thread.worktreePath);
+      }
       killListenersOnPorts(collectActiveRunPorts([active]));
       this.syncWorktreeRuns(
         thread.worktreePath,
@@ -2276,6 +2280,7 @@ export class Orchestrator {
       port: handle.port,
       ports: handle.ports,
       startedAt,
+      ...(typeof handle.pid === 'number' && handle.pid > 1 ? { pid: handle.pid } : {}),
     };
     const nextRuns = [
       ...latestShared.activeRuns.filter((r) => r.scriptName !== resolvedName),
@@ -2463,6 +2468,9 @@ export class Orchestrator {
       const run = shared.activeRuns.find((r) => r.scriptName === scriptName);
       // After app restart, handles are gone — free ports from persisted metadata.
       if (!hadHandle && run) {
+        if (typeof run.pid === 'number') {
+          killDetachedRunTree(run.pid, thread.worktreePath);
+        }
         killListenersOnPorts(collectActiveRunPorts([run]));
       }
       const remaining = shared.activeRuns.filter((r) => r.scriptName !== scriptName);
@@ -2489,6 +2497,11 @@ export class Orchestrator {
       }
     }
     if (!hadHandle && shared.activeRuns.length > 0) {
+      for (const run of shared.activeRuns) {
+        if (typeof run.pid === 'number') {
+          killDetachedRunTree(run.pid, thread.worktreePath);
+        }
+      }
       killListenersOnPorts(collectActiveRunPorts(shared.activeRuns));
     }
     this.syncWorktreeRuns(thread.worktreePath, [], null);
@@ -2538,6 +2551,11 @@ export class Orchestrator {
       );
       if (!force && hasLiveHandle) continue;
 
+      for (const run of shared.activeRuns) {
+        if (typeof run.pid === 'number') {
+          killDetachedRunTree(run.pid, thread.worktreePath);
+        }
+      }
       killListenersOnPorts(collectActiveRunPorts(shared.activeRuns));
       if (shared.devPort != null) {
         killListenersOnPorts([shared.devPort]);

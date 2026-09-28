@@ -638,6 +638,8 @@ export interface ActiveRun {
   port: number;
   ports: number[];
   startedAt: string;
+  /** Detached shell pid. Survives Electron restart so reap can kill the tree. */
+  pid?: number;
 }
 
 /**
