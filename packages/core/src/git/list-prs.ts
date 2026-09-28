@@ -41,6 +41,11 @@ export interface ListPrsOptions {
   reviewer?: PrReviewerFilter;
   /** Extra GitHub search tokens (title, `draft:true`, …). */
   query?: string;
+  /**
+   * Override the ready-for-review GitHub label used by queue=review|mine
+   * (Settings → Projects). Empty / omitted uses `eng-review`.
+   */
+  reviewLabel?: string;
   /** When set, keep only drafts (`true`) or ready-for-review PRs (`false`). */
   draft?: boolean;
   /**
@@ -125,6 +130,11 @@ const QUEUE_DEFAULTS: Record<
   changes: { state: 'open', labels: ['eng-requested-changes'] },
 };
 
+function reviewQueueLabel(reviewLabel?: string | null): string {
+  const label = (reviewLabel ?? '').trim();
+  return label || QUEUE_DEFAULTS.review.labels[0]!;
+}
+
 /** Linear-style `ENG-12` or GitHub `#44` in a PR title. */
 const TICKET_IN_TITLE_RE = /\b[A-Z]{2,8}-\d{1,6}\b|(?:^|[^\w/])#(\d+)\b/g;
 
@@ -146,10 +156,13 @@ export function resolveListPrsOptions(opts?: ListPrsOptions): ResolvedListPrsOpt
   const defaults = queue ? QUEUE_DEFAULTS[queue] : undefined;
   const stateIsQueueAlias = Boolean(normalizePrListQueue(undefined, opts?.state));
   const labels = normalizePrLabels(opts?.labels);
+  const readyLabel = reviewQueueLabel(opts?.reviewLabel);
+  const queueLabels =
+    queue === 'review' || queue === 'mine' ? [readyLabel] : (defaults?.labels ?? []);
   return {
     ...(queue ? { queue } : {}),
     state: normalizePrListState(stateIsQueueAlias ? defaults?.state : (opts?.state ?? defaults?.state)),
-    labels: labels.length ? labels : (defaults?.labels ?? []),
+    labels: labels.length ? labels : queueLabels,
     ...(opts?.reviewer?.trim()
       ? { reviewer: opts.reviewer.trim() }
       : defaults?.reviewer

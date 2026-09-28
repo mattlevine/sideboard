@@ -208,6 +208,7 @@ export {
   groupHomeBoardWorktrees,
   classifyWorktreeColumn,
   classifyWorktreeListBadges,
+  reviewLabelForRepo,
   worktreeBoardStatus,
   DEFAULT_WORKTREE_SORT,
 } from './board/home-board.js';

@@ -177,6 +177,9 @@ describe('list-prs helpers', () => {
     });
     expect(resolveListPrsOptions({ state: 'view' }).queue).toBe('review');
     expect(resolveListPrsOptions({ state: 'review' }).labels).toEqual(['eng-review']);
+    expect(
+      resolveListPrsOptions({ queue: 'review', reviewLabel: 'design-review' }).labels,
+    ).toEqual(['design-review']);
     const args = buildGhPrListArgs({
       ...resolveListPrsOptions({ queue: 'review' }),
       limit: 12,

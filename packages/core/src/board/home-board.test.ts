@@ -11,6 +11,7 @@ import {
   classifyWorktreeColumn,
   classifyWorktreeListBadges,
   classifyWorktreeOwnership,
+  reviewLabelForRepo,
   worktreeMatchesOwnership,
   groupHomeBoardWorktrees,
   DEFAULT_WORKTREE_SORT,
@@ -381,6 +382,7 @@ describe('classifyWorktreeListBadges', () => {
           }),
         ],
         'matt',
+        'eng-review',
       ).map((b) => b.label),
     ).toEqual(['eng-review']);
     expect(
@@ -399,7 +401,7 @@ describe('classifyWorktreeListBadges', () => {
     ).toEqual(['review']);
   });
 
-  it('shows in review when my open PR has no eng-review label', () => {
+  it('shows in review when my open PR has no ready-for-review label', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -408,11 +410,27 @@ describe('classifyWorktreeListBadges', () => {
             prUrl: 'https://github.com/acme/app/pull/6',
             prState: 'OPEN',
             prAuthorLogin: 'matt',
+            prLabels: ['eng-review'],
           }),
         ],
         'matt',
       ).map((b) => b.label),
     ).toEqual(['in review']);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'design',
+            prUrl: 'https://github.com/acme/app/pull/12',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prLabels: ['design-review'],
+          }),
+        ],
+        'matt',
+        'design-review',
+      ).map((b) => b.label),
+    ).toEqual(['design-review']);
   });
 
   it('shows changes, conflicts, checks, merged, and closed', () => {
@@ -491,6 +509,18 @@ describe('classifyWorktreeListBadges', () => {
     expect(
       classifyWorktreeListBadges([thread({ id: 'cow', cowboy: true })], 'matt'),
     ).toEqual([]);
+  });
+
+  it('resolves the project ready-for-review label for a worktree path', () => {
+    expect(
+      reviewLabelForRepo(
+        { '/Users/me/app': 'eng-review' },
+        '/Users/me/app/worktrees/ajax',
+      ),
+    ).toBe('eng-review');
+    expect(reviewLabelForRepo({ '/Users/me/app': 'eng-review' }, '/Users/me/other')).toBe(
+      '',
+    );
   });
 });
 

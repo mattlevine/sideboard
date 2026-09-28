@@ -19,6 +19,7 @@ import {
   visiblePage,
   worktreeBoardStatus,
   worktreeMatchesOwnership,
+  reviewLabelForRepo,
   type BoardColumnId,
   type BoardOwnershipFilter,
   type WorktreeSortMode,
@@ -58,6 +59,7 @@ interface Props {
   ownership?: BoardOwnershipFilter;
   onOwnershipChange?: (filter: BoardOwnershipFilter) => void;
   githubLogin?: string | null;
+  projectReviewLabels?: Record<string, string>;
   /** Left-edge open control when the left sidebar is closed. */
   leftSidebarToggle?: ReactNode;
 }
@@ -114,6 +116,7 @@ export function GlobalBoard({
   ownership = 'all',
   onOwnershipChange,
   githubLogin = null,
+  projectReviewLabels = {},
   leftSidebarToggle,
 }: Props) {
   const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
@@ -260,6 +263,10 @@ export function GlobalBoard({
                             key={normalizeWorktreePath(primary.worktreePath)}
                             group={group}
                             githubLogin={githubLogin}
+                            reviewLabel={reviewLabelForRepo(
+                              projectReviewLabels,
+                              primary.repoPath,
+                            )}
                             workspaces={workspaces}
                             selectedId={selectedId}
                             archiving={group.some((t) => archivingIds.has(t.id))}
@@ -328,6 +335,7 @@ function WorktreeCard({
   archiving,
   canArchive,
   githubLogin,
+  reviewLabel,
   onOpenThread,
   onRefresh,
   onArchive,
@@ -338,6 +346,7 @@ function WorktreeCard({
   archiving: boolean;
   canArchive: boolean;
   githubLogin: string | null;
+  reviewLabel?: string | null;
   onOpenThread: (id: string) => void;
   onRefresh: () => void;
   onArchive: () => void;
@@ -399,7 +408,11 @@ function WorktreeCard({
         >
           <div className="thread-title">
             <span className="thread-title-text">{label}</span>
-            <WorktreePrBadges group={group} viewerLogin={githubLogin} />
+            <WorktreePrBadges
+              group={group}
+              viewerLogin={githubLogin}
+              reviewLabel={reviewLabel}
+            />
           </div>
           <div className="thread-meta">
             {archiving

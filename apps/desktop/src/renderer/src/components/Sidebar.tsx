@@ -8,6 +8,7 @@ import {
   DEFAULT_WORKTREE_SORT,
   groupHomeBoardWorktrees,
   latestVisibleMessageText,
+  reviewLabelForRepo,
   worktreeBoardStatus,
   worktreeMatchesOwnership,
   type BoardOwnershipFilter,
@@ -70,6 +71,8 @@ interface Props {
   ownership?: BoardOwnershipFilter;
   onOwnershipChange?: (filter: BoardOwnershipFilter) => void;
   githubLogin?: string | null;
+  /** Settings → Projects ready-for-review GitHub labels, keyed by repo path. */
+  projectReviewLabels?: Record<string, string>;
 }
 
 function repoName(repoPath: string): string {
@@ -431,6 +434,7 @@ function WorktreeSidebarRow({
   archiving,
   unread,
   githubLogin,
+  reviewLabel,
   onSelect,
   showArchive,
   onRequestArchive,
@@ -443,6 +447,7 @@ function WorktreeSidebarRow({
   archiving: boolean;
   unread: boolean;
   githubLogin?: string | null;
+  reviewLabel?: string | null;
   onSelect: (id: string, multi: boolean) => void;
   /** When true, show the archive control (parent handles teardown). */
   showArchive?: boolean;
@@ -533,7 +538,11 @@ function WorktreeSidebarRow({
             {primary.sourceType === 'orchestration' ? ' ✦' : ''}
           </span>
           {primary.cowboy ? <span className="board-badge">cowboy</span> : null}
-          <WorktreePrBadges group={group} viewerLogin={githubLogin} />
+          <WorktreePrBadges
+            group={group}
+            viewerLogin={githubLogin}
+            reviewLabel={reviewLabel}
+          />
         </div>
         <div className="thread-meta">
           {archiving
@@ -606,6 +615,7 @@ export function Sidebar({
   ownership = 'all',
   onOwnershipChange,
   githubLogin = null,
+  projectReviewLabels = {},
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -947,6 +957,7 @@ export function Sidebar({
                     group={group}
                     worktreeLabel={worktreeLabel}
                     githubLogin={githubLogin}
+                    reviewLabel={reviewLabelForRepo(projectReviewLabels, path)}
                     active={active}
                     selected={selected}
                     archiving={archiving}

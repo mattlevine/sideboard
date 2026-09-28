@@ -66,6 +66,8 @@ import { formatMcpPrList } from './pr-list.js';
 import { resolveListPrsOptions } from '../git/list-prs.js';
 import {
   formatWorkspaceProfileSuffix,
+  loadAppSettings,
+  resolveProjectReviewLabel,
   resolveViewerProfile,
   resolveViewerProfileForRepo,
 } from '../store/app-settings.js';
@@ -1552,7 +1554,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_prs',
-    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_workspaces. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled eng-review with no individual user reviewer. Prefer teams that match Settings → Agents / Projects roles for this repo. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_thread with sourceType=pr.',
+    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_workspaces. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled with this project\'s ready-for-review GitHub label (Settings → Projects; default eng-review) with no individual user reviewer. Prefer teams that match Settings → Agents / Projects roles for this repo. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_thread with sourceType=pr.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('GitHub search tokens (title, draft:true, …)'),
@@ -1560,7 +1562,7 @@ export async function startMcpServer(): Promise<void> {
         .enum(['review', 'mine', 'approved', 'changes'])
         .optional()
         .describe(
-          'review = unclaimed eng-review inbox (use for "get me N tickets to review"). mine = review-requested:@me. approved / changes = eng-approved / eng-requested-changes.',
+          'review = unclaimed ready-for-review inbox (Settings → Projects label, default eng-review). mine = review-requested:@me. approved / changes = eng-approved / eng-requested-changes.',
         ),
       state: z
         .enum(['open', 'closed', 'merged', 'all', 'review'])
@@ -1596,6 +1598,7 @@ export async function startMcpServer(): Promise<void> {
         labels: label,
         reviewer,
         limit: page + 1,
+        reviewLabel: resolveProjectReviewLabel(loadAppSettings(), root),
       });
       const prs = await listPrs(root, resolved);
       const windowed = applyIssueListWindow(prs, page);

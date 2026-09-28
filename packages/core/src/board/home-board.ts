@@ -331,7 +331,6 @@ export function classifyWorktreeColumn(
 }
 
 /** Team workflow tags used as ready-for-review / requested-changes signals. */
-export const ENG_REVIEW_LABEL = 'eng-review';
 export const ENG_CHANGES_LABEL = 'eng-requested-changes';
 
 export type WorktreeListBadgeId =
@@ -378,6 +377,34 @@ function labelsInclude(
   return (labels ?? []).some((label) => label.trim().toLowerCase() === want);
 }
 
+/**
+ * Ready-for-review GitHub label for a repo from Settings → Projects
+ * (`reviewLabel`), matching exact or descendant worktree paths.
+ */
+export function reviewLabelForRepo(
+  labelsByRepo: Record<string, string> | null | undefined,
+  repoPath: string,
+): string {
+  const want = repoPath.trim().replace(/\/+$/, '');
+  if (!want || !labelsByRepo) return '';
+  const direct = labelsByRepo[want]?.trim();
+  if (direct) return direct;
+  let best = '';
+  let bestLen = 0;
+  for (const [key, label] of Object.entries(labelsByRepo)) {
+    const stored = key.trim().replace(/\/+$/, '');
+    const value = label.trim();
+    if (!stored || !value) continue;
+    if (stored === want || want.startsWith(`${stored}/`)) {
+      if (stored.length > bestLen) {
+        best = value;
+        bestLen = stored.length;
+      }
+    }
+  }
+  return best;
+}
+
 function groupPrLabels(group: Array<Pick<Thread, 'prLabels'>>): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -422,6 +449,7 @@ function worktreeChecksFailing(group: WorktreeListBadgeThread[]): boolean {
 export function classifyWorktreeListBadges(
   group: WorktreeListBadgeThread[],
   viewerLogin = '',
+  reviewLabel = '',
 ): WorktreeListBadge[] {
   if (group.length === 0 || group.some((t) => t.cowboy)) return [];
 
@@ -451,7 +479,8 @@ export function classifyWorktreeListBadges(
   const hasOpenPr = open.length > 0;
   const draft = open.some((t) => t.prIsDraft);
   const labels = groupPrLabels(group);
-  const hasEngReview = labelsInclude(labels, ENG_REVIEW_LABEL);
+  const readyLabel = reviewLabel.trim();
+  const hasReadyLabel = Boolean(readyLabel) && labelsInclude(labels, readyLabel);
   const changesRequested =
     open.some((t) => (t.prReviewDecision ?? '').toUpperCase() === 'CHANGES_REQUESTED') ||
     labelsInclude(labels, ENG_CHANGES_LABEL);
@@ -500,9 +529,9 @@ export function classifyWorktreeListBadges(
   } else {
     badges.push({
       id: 'in-review',
-      label: hasEngReview ? 'eng-review' : 'in review',
-      title: hasEngReview
-        ? 'Ready for review (eng-review)'
+      label: hasReadyLabel ? readyLabel : 'in review',
+      title: hasReadyLabel
+        ? `Ready for review (${readyLabel})`
         : 'Your PR is in review',
       mod: 'is-in-review',
     });

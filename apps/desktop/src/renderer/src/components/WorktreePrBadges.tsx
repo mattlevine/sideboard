@@ -7,11 +7,17 @@ import {
 export function WorktreePrBadges({
   group,
   viewerLogin,
+  reviewLabel,
 }: {
   group: WorktreeListBadgeThread[];
   viewerLogin?: string | null;
+  reviewLabel?: string | null;
 }) {
-  const badges = classifyWorktreeListBadges(group, viewerLogin ?? '');
+  const badges = classifyWorktreeListBadges(
+    group,
+    viewerLogin ?? '',
+    reviewLabel ?? '',
+  );
   if (badges.length === 0) return null;
   return (
     <>

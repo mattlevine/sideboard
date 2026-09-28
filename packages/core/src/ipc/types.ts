@@ -211,7 +211,7 @@ export interface IpcApi {
   }): Promise<PublicAppSettings>;
   updateProjectProfileSettings(
     repoPath: string,
-    patch: { notes?: string | null },
+    patch: { notes?: string | null; reviewLabel?: string | null },
   ): Promise<PublicAppSettings>;
   /** Machine-global GitHub status via `gh`. */
   getGitHubStatus(): Promise<GitHubStatus>;
