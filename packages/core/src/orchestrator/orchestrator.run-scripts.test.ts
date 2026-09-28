@@ -337,10 +337,10 @@ describe('Orchestrator startDev coalescing', () => {
 
     const conductor = await import('../hook/conductor.js');
     const killSpy = vi.spyOn(conductor, 'killListenersOnPorts').mockImplementation(() => undefined);
-    vi.spyOn(conductor, 'startDevServer').mockResolvedValue({
+    const spawn = vi.spyOn(conductor, 'startDevServer').mockResolvedValue({
       pid: 2,
-      port: 41889,
-      ports: [41889],
+      port: 41888,
+      ports: [41888],
       scriptName: 'dev',
       kill: () => undefined,
       done: new Promise(() => undefined),
@@ -349,8 +349,14 @@ describe('Orchestrator startDev coalescing', () => {
     const orch = new Orchestrator();
     const result = await orch.startDev(thread.id, 'dev');
     expect(killSpy).toHaveBeenCalledWith([41888]);
-    expect(result.port).toBe(41889);
-    expect(readThread(thread.id)?.devPort).toBe(41889);
+    expect(spawn).toHaveBeenCalledWith(
+      repoPath,
+      worktreePath,
+      expect.any(Function),
+      expect.objectContaining({ scriptName: 'dev', preferredPorts: [41888] }),
+    );
+    expect(result.port).toBe(41888);
+    expect(readThread(thread.id)?.devPort).toBe(41888);
     orch.stopDev(thread.id, 'dev');
   });
 });

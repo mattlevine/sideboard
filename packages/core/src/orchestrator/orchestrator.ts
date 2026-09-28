@@ -2184,7 +2184,9 @@ export class Orchestrator {
     }
 
     // Persisted activeRuns without a live handle (crash / race) — free those
-    // ports before allocating again so Start does not EADDRINUSE against ghosts.
+    // listeners so Start can reclaim the same SIDEBOARD_PORT range.
+    const preferredPorts =
+      active?.ports?.length ? active.ports : active?.port != null ? [active.port] : undefined;
     if (active && !existing) {
       killListenersOnPorts(collectActiveRunPorts([active]));
       this.syncWorktreeRuns(
@@ -2226,7 +2228,7 @@ export class Orchestrator {
         thread.repoPath,
         thread.worktreePath,
         runOutput.push,
-        { scriptName: resolvedName },
+        { scriptName: resolvedName, preferredPorts },
       );
     } catch (err) {
       runOutput.flush();

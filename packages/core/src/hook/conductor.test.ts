@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -6,15 +7,19 @@ import {
   buildWorkspaceScriptEnv,
   copyConfiguredFiles,
   getRunMode,
+  isOtherWorktreeListenerCwd,
   killableListenerPids,
   killListenersOnPorts,
   listRunScripts,
   reservePort,
+  reservePortRange,
   resolveFilesToCopy,
   runConventionSetup,
   runWorkspaceSetup,
+  startDevServer,
   stripNestedElectronEnv,
 } from './conductor.js';
+import { loadWorktreeRunPorts } from './worktree-run-ports.js';
 import { CONTEXT_REVIEW_PATH, REPO_REVIEW_PATH, REVIEW_SKILL_PATH } from '../review/request-review.js';
 
 describe('resolveFilesToCopy', () => {
@@ -261,5 +266,119 @@ describe('reservePort', () => {
       });
     });
     expect(free).toBe(true);
+  });
+});
+
+describe('isOtherWorktreeListenerCwd', () => {
+  it('treats sibling worktree dirs as foreign and this tree as ours', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'sideboard-cwd-'));
+    const here = join(parent, 'nycfc');
+    const other = join(parent, 'ajax');
+    mkdirSync(here);
+    mkdirSync(other);
+    mkdirSync(join(here, 'apps'));
+    expect(isOtherWorktreeListenerCwd(other, here)).toBe(true);
+    expect(isOtherWorktreeListenerCwd(here, here)).toBe(false);
+    expect(isOtherWorktreeListenerCwd(join(here, 'apps'), here)).toBe(false);
+    expect(isOtherWorktreeListenerCwd(join(tmpdir(), 'unrelated'), here)).toBe(false);
+  });
+});
+
+async function occupyPort(port: number, cwd: string) {
+  const child = spawn(
+    process.execPath,
+    [
+      '-e',
+      `require('net').createServer().listen(${port}, '127.0.0.1', () => process.stdout.write('ready'));`,
+    ],
+    { cwd, stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  let ready = false;
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('child did not listen')), 4000);
+    child.stdout?.once('data', () => {
+      ready = true;
+      clearTimeout(timer);
+      resolve();
+    });
+    child.once('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.once('exit', (code) => {
+      if (ready) return;
+      clearTimeout(timer);
+      reject(new Error(`child exited ${code}`));
+    });
+  });
+  return child;
+}
+
+describe('reservePortRange sticky ports', () => {
+  it('reuses preferred ports when they are free', async () => {
+    const first = await reservePortRange(2);
+    const ports = first.map((h) => h.port);
+    await Promise.all(first.map((h) => h.release()));
+    const again = await reservePortRange(2, { preferred: ports });
+    expect(again.map((h) => h.port)).toEqual(ports);
+    await Promise.all(again.map((h) => h.release()));
+  });
+
+  it('kills a leftover listener in this worktree and reuses the port', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-reclaim-'));
+    const probe = await reservePort();
+    const port = probe.port;
+    await probe.release();
+    const child = await occupyPort(port, wt);
+    try {
+      const held = await reservePortRange(1, { preferred: [port], worktreePath: wt });
+      expect(held[0]!.port).toBe(port);
+      await held[0]!.release();
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  it('does not steal a sibling worktree listener', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'sideboard-sib-'));
+    const here = join(parent, 'nycfc');
+    const other = join(parent, 'ajax');
+    mkdirSync(here);
+    mkdirSync(other);
+    const probe = await reservePort();
+    const port = probe.port;
+    await probe.release();
+    const child = await occupyPort(port, other);
+    try {
+      const held = await reservePortRange(1, { preferred: [port], worktreePath: here });
+      expect(held[0]!.port).not.toBe(port);
+      await held[0]!.release();
+      expect(child.exitCode).toBeNull();
+      expect(child.killed).toBe(false);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+});
+
+describe('startDevServer sticky ports', () => {
+  it('persists ports and reuses them on the next start', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-sticky-dev-'));
+    mkdirSync(join(wt, '.sideboard'));
+    writeFileSync(
+      join(wt, '.sideboard', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "echo ok"\n`,
+    );
+    const first = await startDevServer(wt, wt);
+    expect(first).not.toBeNull();
+    const ports = first!.ports;
+    expect(ports.length).toBeGreaterThan(0);
+    expect(loadWorktreeRunPorts(wt, 'dev')).toEqual(ports);
+    first!.kill();
+    await first!.done;
+    const second = await startDevServer(wt, wt);
+    expect(second!.ports).toEqual(ports);
+    second!.kill();
+    await second!.done;
   });
 });

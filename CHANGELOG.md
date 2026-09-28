@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Worktree Dev ports stay assigned across Stop / Start. A leftover process still bound to that worktree's `SIDEBOARD_PORT` range is killed so the same ports are reused instead of allocating a new ephemeral block.
+
 ## [0.1.238] - 2026-09-27
 
 ### Fixed
