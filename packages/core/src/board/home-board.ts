@@ -3,10 +3,6 @@ import {
   lastAssistantMessageText,
 } from '../agents/message-parts.js';
 import {
-  classifyPrMergeIssue,
-  mergeStateSuggestsCheckFailure,
-} from '../git/pr-gates.js';
-import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
@@ -129,14 +125,6 @@ export function isMergedPrState(
 ): boolean {
   if (!prUrl?.trim()) return false;
   return (prState ?? '').trim().toUpperCase() === 'MERGED';
-}
-
-export function isClosedPrState(
-  prUrl: string | null | undefined,
-  prState: string | null | undefined,
-): boolean {
-  if (!prUrl?.trim()) return false;
-  return (prState ?? '').trim().toUpperCase() === 'CLOSED';
 }
 
 /**
@@ -330,20 +318,7 @@ export function classifyWorktreeColumn(
   return 'new';
 }
 
-/** Team workflow tags used as ready-for-review / requested-changes signals. */
-export const ENG_CHANGES_LABEL = 'eng-requested-changes';
-
-export type WorktreeListBadgeId =
-  | 'new'
-  | 'draft'
-  | 'pending'
-  | 'ready-label'
-  | 'reviewing'
-  | 'changes'
-  | 'merged'
-  | 'closed'
-  | 'conflicts'
-  | 'checks';
+export type WorktreeListBadgeId = 'review' | 'pending';
 
 export type WorktreeListBadge = {
   id: WorktreeListBadgeId;
@@ -361,12 +336,7 @@ export type WorktreeListBadgeThread = Pick<
   | 'prReviewerLogins'
   | 'sourceType'
   | 'cowboy'
-  | 'prReviewDecision'
-  | 'prMergeable'
-  | 'prMergeStateStatus'
-  | 'prIsInMergeQueue'
   | 'prLabels'
-  | 'prChecksFailed'
 >;
 
 function labelsInclude(
@@ -420,32 +390,14 @@ function groupPrLabels(group: Array<Pick<Thread, 'prLabels'>>): string[] {
   return out;
 }
 
-function groupMergeGate(
-  group: Array<
-    Pick<
-      Thread,
-      'prMergeable' | 'prMergeStateStatus' | 'prIsInMergeQueue' | 'prReviewDecision'
-    >
-  >,
-) {
-  return {
-    mergeable: group.find((t) => t.prMergeable)?.prMergeable ?? null,
-    mergeStateStatus: group.find((t) => t.prMergeStateStatus)?.prMergeStateStatus ?? null,
-    reviewDecision: group.find((t) => t.prReviewDecision)?.prReviewDecision ?? null,
-    isInMergeQueue: group.some((t) => t.prIsInMergeQueue),
-    baseRefName: null,
-    url: null,
-  };
-}
-
-function worktreeChecksFailing(group: WorktreeListBadgeThread[]): boolean {
-  if (group.some((t) => t.prChecksFailed === true)) return true;
-  return mergeStateSuggestsCheckFailure(groupMergeGate(group));
-}
-
 /**
- * Sidebar / board badges so PR lifecycle is visible without hovering the
- * git card. Cowboy worktrees keep the separate cowboy badge.
+ * Sidebar / board badges only while a PR is in review — same as the old
+ * "review" pill, plus "pending" for yours. Cowboy worktrees keep the
+ * separate cowboy badge. Drafts of yours, merged, and closed stay unbadged.
+ *
+ * Yours is in review when the project ready-for-review label (Settings →
+ * Projects) is on the PR; if that label is unset, a published (non-draft)
+ * PR counts. Someone else's open PR is always "review", including drafts.
  */
 export function classifyWorktreeListBadges(
   group: WorktreeListBadgeThread[],
@@ -454,111 +406,36 @@ export function classifyWorktreeListBadges(
 ): WorktreeListBadge[] {
   if (group.length === 0 || group.some((t) => t.cowboy)) return [];
 
-  if (group.some((t) => isMergedPrState(t.prUrl, t.prState))) {
-    return [
-      {
-        id: 'merged',
-        label: 'merged',
-        title: 'Merged',
-        mod: 'is-merged',
-      },
-    ];
-  }
-
-  if (group.some((t) => isClosedPrState(t.prUrl, t.prState))) {
-    return [
-      {
-        id: 'closed',
-        label: 'closed',
-        title: 'Closed',
-        mod: 'is-closed',
-      },
-    ];
-  }
-
   const open = group.filter((t) => isOpenPrState(t.prUrl, t.prState));
-  const hasOpenPr = open.length > 0;
-  const draft = open.some((t) => t.prIsDraft);
-  const labels = groupPrLabels(group);
-  const readyLabel = reviewLabel.trim();
-  const hasReadyLabel = Boolean(readyLabel) && labelsInclude(labels, readyLabel);
-  const changesRequested =
-    open.some((t) => (t.prReviewDecision ?? '').toUpperCase() === 'CHANGES_REQUESTED') ||
-    labelsInclude(labels, ENG_CHANGES_LABEL);
+  if (open.length === 0) return [];
+
   const ownership = classifyWorktreeOwnership(group, viewerLogin);
-  const theirs = ownership === 'reviewing';
-  const badges: WorktreeListBadge[] = [];
-
-  if (!hasOpenPr) {
-    badges.push({
-      id: 'new',
-      label: 'new',
-      title: 'No pull request yet',
-      mod: 'is-new',
-    });
-    return badges;
+  if (ownership === 'reviewing') {
+    return [
+      {
+        id: 'review',
+        label: 'review',
+        title: "Someone else's PR",
+        mod: 'is-review',
+      },
+    ];
   }
 
-  // Same lifecycle words for yours and theirs. A person icon marks someone
-  // else's PR (including their drafts — those are still in review for you).
-  if (theirs) {
-    badges.push({
-      id: 'reviewing',
-      label: 'reviewing',
-      title: "Someone else's PR",
-      mod: 'is-reviewing is-reviewing-icon',
-    });
-  }
+  const draft = open.some((t) => t.prIsDraft);
+  const readyLabel = reviewLabel.trim();
+  const inReview = readyLabel
+    ? labelsInclude(groupPrLabels(group), readyLabel)
+    : !draft;
+  if (!inReview) return [];
 
-  if (draft && !theirs) {
-    badges.push({
-      id: 'draft',
-      label: 'draft',
-      title: 'Draft pull request',
-      mod: 'is-draft',
-    });
-  } else if (changesRequested) {
-    badges.push({
-      id: 'changes',
-      label: 'changes',
-      title: 'Changes requested',
-      mod: 'is-changes',
-    });
-  } else {
-    badges.push({
+  return [
+    {
       id: 'pending',
       label: 'pending',
-      title: theirs ? "Someone else's PR — waiting for review" : 'Waiting for review',
+      title: 'Waiting for review',
       mod: 'is-pending',
-    });
-    if (hasReadyLabel) {
-      badges.push({
-        id: 'ready-label',
-        label: readyLabel,
-        title: `Ready for review (${readyLabel})`,
-        mod: 'is-ready-label',
-      });
-    }
-  }
-
-  const mergeIssue = classifyPrMergeIssue(groupMergeGate(open.length ? open : group));
-  if (mergeIssue === 'conflicts') {
-    badges.push({
-      id: 'conflicts',
-      label: 'conflicts',
-      title: 'Merge conflicts',
-      mod: 'is-conflicts',
-    });
-  }
-  if (worktreeChecksFailing(open.length ? open : group)) {
-    badges.push({
-      id: 'checks',
-      label: 'checks',
-      title: 'Checks failing',
-      mod: 'is-checks',
-    });
-  }
-  return badges;
+    },
+  ];
 }
 
 /** Activity dot for a worktree: running / queued beat idle sibling tabs. */

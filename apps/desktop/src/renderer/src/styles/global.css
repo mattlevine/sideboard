@@ -10259,61 +10259,16 @@ body:has(.update-banner) .team-toast-stack {
   white-space: nowrap;
 }
 
-.board-badge.is-reviewing {
+.board-badge.is-review {
   border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
   background: color-mix(in srgb, var(--warn) 16%, var(--bg));
   color: var(--warn);
-}
-
-.board-badge.is-reviewing-icon {
-  padding: 1px 4px;
-}
-
-.board-badge.is-reviewing-icon svg {
-  display: block;
-}
-
-.board-badge.is-new {
-  color: var(--muted);
-}
-
-.board-badge.is-draft {
-  border-style: dashed;
-  border-color: color-mix(in srgb, #75beff 45%, var(--border));
-  background: color-mix(in srgb, #75beff 12%, var(--bg));
-  color: #9cdcfe;
 }
 
 .board-badge.is-pending {
   border-color: rgba(210, 153, 34, 0.5);
   background: rgba(210, 153, 34, 0.12);
   color: #e2b340;
-}
-
-.board-badge.is-ready-label {
-  border-color: color-mix(in srgb, var(--muted) 40%, var(--border));
-  background: var(--bg);
-  color: var(--muted);
-}
-
-.board-badge.is-changes,
-.board-badge.is-conflicts,
-.board-badge.is-checks {
-  border-color: rgba(248, 81, 73, 0.5);
-  background: rgba(248, 81, 73, 0.12);
-  color: #ff7b72;
-}
-
-.board-badge.is-merged {
-  border-color: rgba(163, 113, 247, 0.45);
-  background: rgba(163, 113, 247, 0.14);
-  color: #d2a8ff;
-}
-
-.board-badge.is-closed {
-  border-color: rgba(139, 148, 158, 0.4);
-  background: rgba(139, 148, 158, 0.12);
-  color: #9aa0a6;
 }
 
 .board-row .thread-title {

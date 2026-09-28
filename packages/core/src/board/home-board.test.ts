@@ -344,15 +344,39 @@ describe('classifyWorktreeOwnership', () => {
 });
 
 describe('classifyWorktreeListBadges', () => {
-  it('shows new when there is no PR', () => {
+  it('does not badge worktrees with no open PR', () => {
     expect(
-      classifyWorktreeListBadges([thread({ id: 'wip', sourceType: 'ticket' })], 'matt').map(
-        (b) => b.id,
+      classifyWorktreeListBadges([thread({ id: 'wip', sourceType: 'ticket' })], 'matt'),
+    ).toEqual([]);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'done',
+            prUrl: 'https://github.com/acme/app/pull/10',
+            prState: 'MERGED',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
       ),
-    ).toEqual(['new']);
+    ).toEqual([]);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'shut',
+            prUrl: 'https://github.com/acme/app/pull/11',
+            prState: 'CLOSED',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+      ),
+    ).toEqual([]);
   });
 
-  it('shows draft only for your open draft PR', () => {
+  it('does not badge your draft, or your open PR until it is in review', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -365,11 +389,25 @@ describe('classifyWorktreeListBadges', () => {
           }),
         ],
         'matt',
-      ).map((b) => b.label),
-    ).toEqual(['draft']);
+      ),
+    ).toEqual([]);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'mine',
+            prUrl: 'https://github.com/acme/app/pull/6',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+        'eng-review',
+      ),
+    ).toEqual([]);
   });
 
-  it('shows reviewing icon plus pending for someone else\'s draft PR', () => {
+  it('shows review for someone else\'s open PR, including their drafts', () => {
     expect(
       classifyWorktreeListBadges(
         [
@@ -384,25 +422,7 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       ).map((b) => b.label),
-    ).toEqual(['reviewing', 'pending']);
-  });
-
-  it('uses the same pending / ready label for mine and theirs, with a reviewing mark on theirs', () => {
-    expect(
-      classifyWorktreeListBadges(
-        [
-          thread({
-            id: 'mine',
-            prUrl: 'https://github.com/acme/app/pull/4',
-            prState: 'OPEN',
-            prAuthorLogin: 'matt',
-            prLabels: ['eng-review'],
-          }),
-        ],
-        'matt',
-        'eng-review',
-      ).map((b) => b.label),
-    ).toEqual(['pending', 'eng-review']);
+    ).toEqual(['review']);
     expect(
       classifyWorktreeListBadges(
         [
@@ -418,19 +438,33 @@ describe('classifyWorktreeListBadges', () => {
         'matt',
         'eng-review',
       ).map((b) => b.label),
-    ).toEqual(['reviewing', 'pending', 'eng-review']);
+    ).toEqual(['review']);
   });
 
-  it('shows pending when my open PR has no matching ready-for-review label', () => {
+  it('shows pending for your PR once it is in review', () => {
     expect(
       classifyWorktreeListBadges(
         [
           thread({
             id: 'mine',
-            prUrl: 'https://github.com/acme/app/pull/6',
+            prUrl: 'https://github.com/acme/app/pull/4',
             prState: 'OPEN',
             prAuthorLogin: 'matt',
             prLabels: ['eng-review'],
+          }),
+        ],
+        'matt',
+        'eng-review',
+      ).map((b) => b.label),
+    ).toEqual(['pending']);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'published',
+            prUrl: 'https://github.com/acme/app/pull/6',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
           }),
         ],
         'matt',
@@ -450,79 +484,7 @@ describe('classifyWorktreeListBadges', () => {
         'matt',
         'design-review',
       ).map((b) => b.label),
-    ).toEqual(['pending', 'design-review']);
-  });
-
-  it('shows changes, conflicts, checks, merged, and closed', () => {
-    expect(
-      classifyWorktreeListBadges(
-        [
-          thread({
-            id: 'ch',
-            prUrl: 'https://github.com/acme/app/pull/7',
-            prState: 'OPEN',
-            prAuthorLogin: 'matt',
-            prReviewDecision: 'CHANGES_REQUESTED',
-          }),
-        ],
-        'matt',
-      ).map((b) => b.id),
-    ).toEqual(['changes']);
-    expect(
-      classifyWorktreeListBadges(
-        [
-          thread({
-            id: 'cf',
-            prUrl: 'https://github.com/acme/app/pull/8',
-            prState: 'OPEN',
-            prAuthorLogin: 'matt',
-            prMergeable: 'CONFLICTING',
-            prMergeStateStatus: 'DIRTY',
-          }),
-        ],
-        'matt',
-      ).map((b) => b.id),
-    ).toEqual(['pending', 'conflicts']);
-    expect(
-      classifyWorktreeListBadges(
-        [
-          thread({
-            id: 'ci',
-            prUrl: 'https://github.com/acme/app/pull/9',
-            prState: 'OPEN',
-            prAuthorLogin: 'matt',
-            prChecksFailed: true,
-          }),
-        ],
-        'matt',
-      ).map((b) => b.id),
-    ).toEqual(['pending', 'checks']);
-    expect(
-      classifyWorktreeListBadges(
-        [
-          thread({
-            id: 'done',
-            prUrl: 'https://github.com/acme/app/pull/10',
-            prState: 'MERGED',
-            prAuthorLogin: 'matt',
-          }),
-        ],
-        'matt',
-      ).map((b) => b.id),
-    ).toEqual(['merged']);
-    expect(
-      classifyWorktreeListBadges(
-        [
-          thread({
-            id: 'shut',
-            prUrl: 'https://github.com/acme/app/pull/11',
-            prState: 'CLOSED',
-            prAuthorLogin: 'matt',
-          }),
-        ],
-        'matt',
-      ).map((b) => b.id),
-    ).toEqual(['closed']);
+    ).toEqual(['pending']);
   });
 
   it('does not badge cowboy worktrees', () => {
