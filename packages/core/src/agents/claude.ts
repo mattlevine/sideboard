@@ -232,6 +232,11 @@ function eventsFromInjectedUserText(text: string, parentId?: string): AgentEvent
   return [];
 }
 
+function eventsFromAssistantText(text: string, parentId?: string): AgentEvent[] {
+  if (looksLikeSkillBody(text)) return skillToolEventsFromBody(text, parentId);
+  return [withEventParentId({ type: 'stdout', data: text }, parentId)];
+}
+
 /**
  * Claude `user` stream events are tool results and injected context (skills,
  * slash commands, hooks) — never the human's chat (Sideboard already stored
@@ -247,7 +252,7 @@ function eventsFromUserContent(
   }
   if (!Array.isArray(content) || content.length === 0) return [];
   const out: AgentEvent[] = [];
-  const textBlocks: string[] = [];
+  const injected: AgentEvent[] = [];
   for (const block of content) {
     if (!block?.type) continue;
     if (block.type === 'tool_use' && block.id && block.name) {
@@ -278,13 +283,12 @@ function eventsFromUserContent(
       );
       continue;
     }
-    if (block.type === 'text' && block.text) textBlocks.push(block.text);
+    if (block.type === 'text' && block.text) {
+      injected.push(...eventsFromInjectedUserText(block.text, parentId));
+    }
   }
-  if (out.length > 0) return out;
-  for (const text of textBlocks) {
-    out.push(...eventsFromInjectedUserText(text, parentId));
-  }
-  return out;
+  if (out.length === 0 && injected.length === 0) return [];
+  return [...out, ...injected];
 }
 
 function eventsFromContentBlocks(
@@ -296,7 +300,7 @@ function eventsFromContentBlocks(
   for (const block of blocks) {
     if (!block?.type) continue;
     if (block.type === 'text' && block.text) {
-      out.push(withEventParentId({ type: 'stdout', data: block.text }, parentId));
+      out.push(...eventsFromAssistantText(block.text, parentId));
       continue;
     }
     if ((block.type === 'thinking' || block.type === 'redacted_thinking') && block.thinking) {
@@ -868,7 +872,9 @@ export const claudeAdapter: AgentAdapter = {
           events.push({ type: 'stderr', data: errorDetail });
         } else {
           const text = (obj as { result?: unknown }).result;
-          if (typeof text === 'string' && text) events.push({ type: 'stdout', data: text });
+          if (typeof text === 'string' && text) {
+            events.push(...eventsFromAssistantText(text));
+          }
         }
         const usage = usageFromClaude((obj as { usage?: ClaudeUsage }).usage);
         if (usage) {

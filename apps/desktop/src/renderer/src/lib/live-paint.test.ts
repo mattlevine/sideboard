@@ -26,6 +26,12 @@ describe('stdoutCountsAsLivePreview', () => {
         data: '{"type":"tool_use","id":"1"}',
       }),
     ).toBe(false);
+    expect(
+      stdoutCountsAsLivePreview({
+        type: 'stdout',
+        data: '---\nname: long-running\ndescription: Detach\n---\n# Guide\n',
+      }),
+    ).toBe(false);
   });
 });
 
@@ -57,6 +63,30 @@ describe('foldLivePaintOps', () => {
     expect(next.output.a).toBe('Done.');
     expect(next.parts.a?.map((p) => p.type)).toEqual(['thinking', 'text']);
     expect(next.usage.a).toBeNull();
+  });
+
+  it('does not keep a skill dump in live output after promoting it to a Skill tool', () => {
+    const body = `---
+name: long-running
+description: Detach long jobs
+---
+
+# Long-running jobs
+`;
+    const next = foldLivePaintOps(
+      { output: {}, parts: {}, startedAt: {}, usage: {} },
+      [
+        { kind: 'started', threadId: 'a' },
+        { kind: 'output', threadId: 'a', event: { type: 'stdout', data: body } },
+      ],
+      1,
+    );
+    expect(next.output.a).toBe('');
+    expect(next.parts.a?.[0]).toMatchObject({
+      type: 'tool',
+      name: 'Skill',
+      description: 'Using /long-running',
+    });
   });
 
   it('folds usage and costUsd from stream events', () => {

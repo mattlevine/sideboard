@@ -1,7 +1,10 @@
 import type { AgentEvent, MessagePart, TokenUsage } from '@sideboard-ai/core';
 import {
   applyAgentEvent,
+  looksLikeIncompleteSkillDump,
+  looksLikeSkillBody,
   messagePartParentId,
+  partsToAssistantText,
   THINKING_PART_MAX_CHARS,
 } from '@sideboard/message-parts';
 import { applyTurnUsage } from '@sideboard/usage';
@@ -76,6 +79,8 @@ export function stdoutCountsAsLivePreview(event: AgentEvent): boolean {
   return (
     event.type === 'stdout' &&
     !event.parentId &&
+    !looksLikeSkillBody(event.data) &&
+    !looksLikeIncompleteSkillDump(event.data) &&
     !(
       /^\s*\{/.test(event.data) &&
       /"type"\s*:\s*"(tool_use|tool_result|tool|thinking|usage|done|error)"/.test(
@@ -111,22 +116,20 @@ export function foldLivePaintOps(
       continue;
     }
     const ev = op.event;
-    if (stdoutCountsAsLivePreview(ev)) {
-      const next = `${output[op.threadId] ?? ''}${ev.data}`;
-      output = {
-        ...output,
-        [op.threadId]: clipLiveTail(next, LIVE_OUTPUT_MAX_CHARS),
-      };
-    }
     if (
       ev.type === 'stdout' ||
       ev.type === 'thinking' ||
       ev.type === 'tool_use' ||
       ev.type === 'tool_result'
     ) {
+      const nextParts = slimLiveParts(applyAgentEvent(parts[op.threadId] ?? [], ev));
       parts = {
         ...parts,
-        [op.threadId]: slimLiveParts(applyAgentEvent(parts[op.threadId] ?? [], ev)),
+        [op.threadId]: nextParts,
+      };
+      output = {
+        ...output,
+        [op.threadId]: clipLiveTail(partsToAssistantText(nextParts), LIVE_OUTPUT_MAX_CHARS),
       };
     }
     if (ev.type === 'usage') {

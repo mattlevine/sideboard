@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentKind, MessagePart, TokenUsage } from '@sideboard-ai/core';
-import { isShellToolName, isSubagentToolName, messagePartParentId, toolActivityLine, visibleToolRowDetail } from '@sideboard/message-parts';
+import { isShellToolName, isSubagentToolName, messagePartParentId, toolActivityLine, visibleAssistantText, visibleToolRowDetail } from '@sideboard/message-parts';
 import {
   extractRightPaneContents,
   isFilesPane,
@@ -121,12 +121,7 @@ function stripBrightsyNdjsonNoise(text: string): string {
 }
 
 function finalText(text: string, parts: MessagePart[] | undefined): string {
-  if (!parts?.length) return stripBrightsyNdjsonNoise(text);
-  const texts = parts.filter(
-    (p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text' && !p.parentId,
-  );
-  if (texts.length === 0) return stripBrightsyNdjsonNoise(text);
-  return stripBrightsyNdjsonNoise(texts.map((p) => p.text).join('\n\n').trim() || text);
+  return stripBrightsyNdjsonNoise(visibleAssistantText(text, parts));
 }
 
 function thoughtLabel(durationMs: number | null): string {

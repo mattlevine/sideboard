@@ -224,9 +224,11 @@ export async function spawnAgentTurn(
           ) {
             continue;
           }
-          assistantText += parsed.data;
         }
         parts = applyAgentEvent(parts, parsed);
+        if (parsed.type === 'stdout') {
+          assistantText = partsToAssistantText(parts);
+        }
         outbound.push(parsed);
       }
     });
