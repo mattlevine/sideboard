@@ -1368,6 +1368,12 @@ export class Orchestrator {
       thread = this.requireThread(threadId);
     }
 
+    // Compact's Haiku child is not agentPid. Stop during compact must not
+    // spawn Cursor/Claude after the summarizer finally returns.
+    if (this.stoppedTurns.has(threadId)) {
+      return;
+    }
+
     const promptText = typeof prompt === 'string' ? prompt : '';
     const autoContinue =
       isJobContinuePrompt(promptText) ||
