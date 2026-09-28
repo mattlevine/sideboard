@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.245] - 2026-09-28
+
+### Fixed
+
+- Claude skill instruction dumps (assistant stdout and `result`, not only user-role injections) show as a Using /name tool row instead of the assistant reply.
+
 ## [0.1.244] - 2026-09-28
 
 ### Changed
