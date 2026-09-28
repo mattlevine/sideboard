@@ -4,10 +4,11 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { execa, type ResultPromise } from 'execa';
 import { createInterface } from 'node:readline';
 import {
@@ -29,6 +30,17 @@ import { runCursorWorktreeSetup } from './cursor-worktrees.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
 import { ensureReviewGuidelinesFile } from '../review/request-review.js';
 import { ensureWorktreeSideboardIgnored } from '../git/worktree-exclude.js';
+import {
+  loadWorktreeRunPorts,
+  saveWorktreeRunPorts,
+} from './worktree-run-ports.js';
+
+export {
+  loadWorktreeRunPorts,
+  saveWorktreeRunPorts,
+  worktreeRunPortsPath,
+  RUN_PORTS_REL,
+} from './worktree-run-ports.js';
 
 export type SetupRunResult = {
   ran: boolean;
@@ -51,7 +63,9 @@ export {
   workspaceSettingsSourceLabel,
 };
 
-const PORT_RANGE_SIZE = 10;
+export const PORT_RANGE_SIZE = 10;
+const RECLAIM_RETRY_DELAY_MS = 40;
+const RECLAIM_TRIES = 8;
 
 /** Match a simple glob (`*` and `?`) against a basename or relative path. */
 function matchSimpleGlob(pattern: string, name: string): boolean {
@@ -248,6 +262,72 @@ export function killableListenerPids(raw: string, selfPid = process.pid): number
   return pids;
 }
 
+function listUnixListenerPids(port: number, selfPid: number): number[] {
+  try {
+    const raw = execFileSync('lsof', [`-tiTCP:${port}`, '-sTCP:LISTEN'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2_000,
+    });
+    return killableListenerPids(raw, selfPid);
+  } catch {
+    return [];
+  }
+}
+
+/** Cwd of a pid via lsof (`-d cwd`). Null when unknown / unavailable. */
+export function listenerCwd(pid: number): string | null {
+  if (!Number.isFinite(pid) || pid <= 0) return null;
+  try {
+    const raw = execFileSync('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2_000,
+    });
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('n') && line.length > 1) return line.slice(1);
+    }
+  } catch {
+    // lsof missing, pid exited, or cwd not readable
+  }
+  return null;
+}
+
+function realpathOrResolve(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+/**
+ * True when `cwd` is a sibling Sideboard worktree (same parent dir, other
+ * nickname) — do not steal that worktree's live Dev server.
+ */
+export function isOtherWorktreeListenerCwd(
+  cwd: string,
+  worktreePath: string,
+): boolean {
+  const wt = realpathOrResolve(worktreePath);
+  const c = realpathOrResolve(cwd);
+  if (c === wt || c.startsWith(wt + sep)) return false;
+  const parent = dirname(wt);
+  const thisName = basename(wt);
+  if (!thisName || c === parent) return false;
+  if (!c.startsWith(parent + sep)) return false;
+  const first = c.slice(parent.length + 1).split(sep)[0];
+  return Boolean(first) && first !== thisName;
+}
+
+function signalPid(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(pid, signal);
+  } catch {
+    // already exited
+  }
+}
+
 /**
  * Free TCP listeners on ports we allocated for a run script.
  * Used when the in-memory process handle is gone (app restart) or as a
@@ -274,26 +354,39 @@ export function killListenersOnPorts(ports: number[]): void {
         );
         continue;
       }
-      let raw = '';
-      try {
-        raw = execFileSync('lsof', [`-tiTCP:${port}`, '-sTCP:LISTEN'], {
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: 2_000,
-        });
-      } catch {
-        // No LISTEN on this port (lsof exits 1) — nothing to kill.
-        continue;
-      }
-      for (const pid of killableListenerPids(raw, selfPid)) {
-        try {
-          process.kill(pid, 'SIGTERM');
-        } catch {
-          // already exited
-        }
+      for (const pid of listUnixListenerPids(port, selfPid)) {
+        signalPid(pid, 'SIGTERM');
       }
     } catch {
       // Port already free or tooling unavailable — ignore.
+    }
+  }
+}
+
+/**
+ * Reclaim this worktree's assigned ports: kill leftovers from a previous Dev
+ * instance, but never another worktree's live server (cwd under a sibling).
+ */
+export function killStaleWorktreeListeners(
+  ports: number[],
+  worktreePath: string,
+  signal: NodeJS.Signals = 'SIGTERM',
+): void {
+  if (!worktreePath.trim()) {
+    killListenersOnPorts(ports);
+    return;
+  }
+  if (process.platform === 'win32') {
+    killListenersOnPorts(ports);
+    return;
+  }
+  const selfPid = process.pid;
+  for (const port of ports) {
+    if (!Number.isFinite(port) || port <= 0) continue;
+    for (const pid of listUnixListenerPids(port, selfPid)) {
+      const cwd = listenerCwd(pid);
+      if (cwd && isOtherWorktreeListenerCwd(cwd, worktreePath)) continue;
+      signalPid(pid, signal);
     }
   }
 }
@@ -587,7 +680,8 @@ export async function allocatePort(): Promise<number> {
   return held.port;
 }
 
-async function tryReservePort(port: number): Promise<PortReservation | null> {
+export async function tryReservePort(port: number): Promise<PortReservation | null> {
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return null;
   return new Promise((resolve) => {
     const server = createServer();
     let released = false;
@@ -600,37 +694,121 @@ async function tryReservePort(port: number): Promise<PortReservation | null> {
         released = true;
         server.close(() => res());
       });
-    server.once('error', () => resolve(null));
+    server.once('error', () => {
+      try {
+        server.close();
+      } catch {
+        // never listened
+      }
+      resolve(null);
+    });
     server.listen(port, '127.0.0.1', () => {
       resolve({ port, release });
     });
   });
 }
 
-/**
- * Hold a block of ports (Conductor: CONDUCTOR_PORT … +9) until release.
- * Callers must `release()` immediately before spawning the child that binds them.
- */
-export async function reservePortRange(
-  size = PORT_RANGE_SIZE,
+/** Reserve every port or none. */
+export async function tryReservePorts(
+  ports: number[],
+): Promise<PortReservation[] | null> {
+  const held: PortReservation[] = [];
+  for (const port of ports) {
+    const next = await tryReservePort(port);
+    if (!next) {
+      await Promise.all(held.map((h) => h.release()));
+      return null;
+    }
+    held.push(next);
+  }
+  return held;
+}
+
+function normalizePreferredPorts(ports: number[] | undefined, size: number): number[] {
+  if (!ports?.length) return [];
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const p of ports) {
+    if (!Number.isInteger(p) || p <= 0 || p > 65535 || seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+    if (out.length >= size) break;
+  }
+  return out;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fillPortRange(
+  held: PortReservation[],
+  size: number,
 ): Promise<PortReservation[]> {
-  const held: PortReservation[] = [await reservePort()];
-  const base = held[0]!.port;
+  if (held.length >= size) return held;
+  const base = held[0]?.port;
   try {
-    for (let i = 1; i < size; i++) {
-      const candidate = base + i;
-      const next = await tryReservePort(candidate);
-      if (next) {
-        held.push(next);
-      } else {
-        held.push(await reservePort());
-      }
+    for (let i = held.length; i < size; i++) {
+      const candidate = base != null ? base + i : null;
+      const next =
+        candidate != null ? await tryReservePort(candidate) : null;
+      if (next) held.push(next);
+      else held.push(await reservePort());
     }
     return held;
   } catch (err) {
     await Promise.all(held.map((h) => h.release()));
     throw err;
   }
+}
+
+async function reclaimPreferredPorts(
+  ports: number[],
+  worktreePath: string | undefined,
+): Promise<PortReservation[] | null> {
+  let held = await tryReservePorts(ports);
+  if (held) return held;
+  if (worktreePath) {
+    killStaleWorktreeListeners(ports, worktreePath, 'SIGTERM');
+  } else {
+    killListenersOnPorts(ports);
+  }
+  for (let i = 0; i < RECLAIM_TRIES; i++) {
+    await delay(RECLAIM_RETRY_DELAY_MS);
+    held = await tryReservePorts(ports);
+    if (held) return held;
+    if (i === 2 && worktreePath) {
+      killStaleWorktreeListeners(ports, worktreePath, 'SIGKILL');
+    }
+  }
+  return null;
+}
+
+export type ReservePortRangeOpts = {
+  /** Reuse this worktree's last assignment when still free (or reclaimable). */
+  preferred?: number[];
+  /** When preferred ports are busy, kill leftovers whose cwd is this worktree. */
+  worktreePath?: string;
+};
+
+/**
+ * Hold a block of ports (Conductor: CONDUCTOR_PORT … +9) until release.
+ * Callers must `release()` immediately before spawning the child that binds them.
+ * When `preferred` is set, reuse those ports — reclaim a leftover Dev instance
+ * on them instead of allocating a new range.
+ */
+export async function reservePortRange(
+  size = PORT_RANGE_SIZE,
+  opts?: ReservePortRangeOpts,
+): Promise<PortReservation[]> {
+  const preferred = normalizePreferredPorts(opts?.preferred, size);
+  if (preferred.length) {
+    const reused = await reclaimPreferredPorts(preferred, opts?.worktreePath);
+    if (reused) return fillPortRange(reused, size);
+  }
+
+  const held: PortReservation[] = [await reservePort()];
+  return fillPortRange(held, size);
 }
 
 /** Allocate a contiguous block, releasing holds immediately (legacy / tests). */
@@ -656,15 +834,21 @@ export async function startDevServer(
   repoPath: string,
   worktreePath: string,
   onLine?: (line: string) => void,
-  opts?: { scriptName?: string; defaultBranch?: string },
+  opts?: { scriptName?: string; defaultBranch?: string; preferredPorts?: number[] },
 ): Promise<DevServerHandle | null> {
   const script = getRunScript(worktreePath, repoPath, opts?.scriptName);
   if (!script) return null;
 
-  // Hold ports until the moment of spawn so another Start / worktree cannot
-  // steal SIDEBOARD_PORT (Vite strictPort then fails the Run console Start).
-  const held = await reservePortRange(PORT_RANGE_SIZE);
+  // Reuse this worktree's last SIDEBOARD_PORT range so Stop / Start stays put.
+  // Hold until spawn so another Start cannot steal the ports (Vite strictPort).
+  const preferred =
+    loadWorktreeRunPorts(worktreePath, script.name) ?? opts?.preferredPorts;
+  const held = await reservePortRange(PORT_RANGE_SIZE, {
+    preferred: preferred ?? undefined,
+    worktreePath,
+  });
   const ports = held.map((h) => h.port);
+  saveWorktreeRunPorts(worktreePath, script.name, ports);
   try {
     const handle = await spawnWorkspaceScript(script.command, {
       worktreePath,
