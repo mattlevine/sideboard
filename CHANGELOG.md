@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.243] - 2026-09-28
+
 ### Fixed
 
 - After a Sideboard restart, reap leftover Dev process-group children even when the wrap shell (`zsh`) has already exited — `killDetachedRunTree` no longer returns just because wrap cwd is unreadable.
