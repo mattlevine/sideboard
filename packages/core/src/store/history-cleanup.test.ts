@@ -51,6 +51,11 @@ describe('cleanupArchivedHistory', () => {
           },
         ]
       : [{ role: 'summary', text: HISTORY_DISCARDED_TEXT, ts: updatedAt }];
+    if (fat) {
+      thread.compactedMessages = [
+        { role: 'user', text: 'archived-prose', ts: updatedAt },
+      ];
+    }
     writeThread(thread, { touch: false });
     return thread;
   }
@@ -80,6 +85,7 @@ describe('cleanupArchivedHistory', () => {
     expect(result.stripped).toEqual(['old-fat']);
     expect(result.purged).toEqual(['old-stub']);
     expect(readThread('old-fat')?.messages[0]?.text).toBe(HISTORY_DISCARDED_TEXT);
+    expect(readThread('old-fat')?.compactedMessages).toBeUndefined();
     expect(readThread('old-fat')?.updatedAt).toBe('2026-01-01T00:00:00.000Z');
     expect(readThread('old-stub')).toBeNull();
     expect(readThread(live.id)?.status).toBe('idle');

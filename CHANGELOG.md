@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After a Sideboard restart, reap leftover Dev process-group children even when the wrap shell (`zsh`) has already exited — `killDetachedRunTree` no longer returns just because wrap cwd is unreadable.
 - Stop during auto-compact records the user prompt and emits `turn_finished`, so the live stream does not stay painted and the cancelled send remains in the thread.
 - Auto-compact stores the summary as a Compact tool (same as in-turn compact); chat shows a tool row instead of dumping the full markdown.
+- Auto-compact keeps dropped user/agent prose in `compactedMessages` for Find and “show earlier”; seed, occupancy, and the slim thread list still read the compressed transcript only.
+- When Plan mode is off, the per-turn prompt says so, worktree Claude omits `present_plan` from `--allowedTools`, and Sideboard MCP does not register the tool for that thread.
 
 ## [0.1.242] - 2026-09-27
 

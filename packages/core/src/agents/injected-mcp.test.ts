@@ -48,6 +48,12 @@ describe('injected-mcp', () => {
     expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.join(' ')).not.toMatch(/slack|list_teams/i);
     expect(sideboardWorktreeAllowedTools()).toContain('mcp__sideboard__github_*');
     expect(sideboardWorktreeAllowedTools()).not.toContain('mcp__sideboard__linear_*');
+    expect(sideboardWorktreeAllowedTools()).not.toContain(
+      'mcp__sideboard__present_plan',
+    );
+    expect(
+      sideboardWorktreeAllowedTools({ planMode: true }),
+    ).toContain('mcp__sideboard__present_plan');
     expect(sideboardWorktreeAllowedTools({ linear: true, abletime: true })).toEqual(
       expect.arrayContaining([
         'mcp__sideboard__github_*',

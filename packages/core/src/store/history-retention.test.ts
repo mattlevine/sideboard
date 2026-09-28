@@ -165,5 +165,12 @@ describe('history retention stub', () => {
     expect(stub.usage).toMatchObject({ inputTokens: 10, outputTokens: 4, costUsd: 0.02 });
     expect(isHistoryRetentionStub({ messages: [stub], attachments: [] })).toBe(true);
     expect(isHistoryRetentionStub(thread)).toBe(false);
+    expect(
+      isHistoryRetentionStub({
+        messages: [stub],
+        attachments: [],
+        compactedMessages: [{ role: 'user', text: 'old turn', ts: '2026-01-01T00:00:00.000Z' }],
+      }),
+    ).toBe(false);
   });
 });

@@ -37,6 +37,7 @@ function stripArchivedTranscript(thread: Thread): void {
       attachments: [],
       pendingTurnAttachments: [],
       queueAttachments: [],
+      compactedMessages: undefined,
       messages: [historyRetentionStubMessage(thread)],
     },
     { touch: false },

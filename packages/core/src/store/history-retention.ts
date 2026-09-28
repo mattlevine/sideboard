@@ -48,8 +48,11 @@ export function archivedUpdatedMs(
   return Number.isFinite(created) ? created : 0;
 }
 
-export function isHistoryRetentionStub(thread: Pick<Thread, 'messages' | 'attachments'>): boolean {
+export function isHistoryRetentionStub(
+  thread: Pick<Thread, 'messages' | 'attachments' | 'compactedMessages'>,
+): boolean {
   if ((thread.attachments?.length ?? 0) > 0) return false;
+  if ((thread.compactedMessages?.length ?? 0) > 0) return false;
   const messages = thread.messages ?? [];
   if (messages.length === 0) return true;
   if (messages.length > 1) return false;

@@ -19,9 +19,13 @@ export {
   LEGACY_PLAN_FILE_REL,
   PLAN_FILE_NAME,
   PLAN_FILE_REL,
+  PRESENT_PLAN_REQUIRES_PLAN_MODE,
+  PRESENT_PLAN_TOOL_DESCRIPTION,
   extractPresentedPlan,
   isPresentPlanToolName,
   resolvePlanMarkdown,
+  shouldRegisterPresentPlan,
+  threadMayPresentPlan,
   type PlanToolPartLike,
   type PresentedPlan,
 } from './plan-present.js';

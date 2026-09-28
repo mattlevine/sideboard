@@ -128,6 +128,7 @@ import {
   scrollChatToElement,
   seedChatSearchQuery,
   shouldDeferChatFind,
+  shouldRevealCompactedArchive,
 } from '../lib/chat-search';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
@@ -349,6 +350,8 @@ type ChatTranscriptHandlers = {
 /** Isolated from composer `prompt` so keystrokes do not rebuild markdown/tool cards. */
 const ChatTranscript = memo(function ChatTranscript({
   messages,
+  compactedMessages,
+  forceRevealEarlier,
   fallbackDurations,
   showPlanCard,
   showStreaming,
@@ -375,6 +378,8 @@ const ChatTranscript = memo(function ChatTranscript({
   handlersRef,
 }: {
   messages: Thread['messages'];
+  compactedMessages: Thread['messages'];
+  forceRevealEarlier: boolean;
   fallbackDurations: Array<number | undefined>;
   showPlanCard: boolean;
   showStreaming: boolean;
@@ -401,8 +406,65 @@ const ChatTranscript = memo(function ChatTranscript({
   handlersRef: { current: ChatTranscriptHandlers };
 }) {
   const h = handlersRef.current;
+  const [earlierPinned, setEarlierPinned] = useState(false);
+  useEffect(() => {
+    setEarlierPinned(false);
+  }, [threadId]);
+  const earlier = compactedMessages ?? [];
+  const revealEarlier = earlierPinned || forceRevealEarlier;
   return (
     <>
+      {earlier.length > 0 && (
+        <div className="chat-earlier">
+          {forceRevealEarlier && !earlierPinned ? (
+            <div className="chat-earlier-toggle" role="status">
+              {earlier.length} earlier message{earlier.length === 1 ? '' : 's'}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="chat-earlier-toggle"
+              onClick={() => setEarlierPinned((open) => !open)}
+            >
+              {revealEarlier
+                ? 'Hide earlier messages'
+                : `Show ${earlier.length} earlier message${earlier.length === 1 ? '' : 's'}`}
+            </button>
+          )}
+          {revealEarlier &&
+            earlier.map((m, i) => (
+              <div
+                key={`earlier-${m.ts}-${i}`}
+                className={`msg ${m.role === 'user' ? 'user' : 'agent'} earlier`}
+                data-chat-search-key={`earlier-${i}`}
+              >
+                {m.role === 'user' ? (
+                  <div className="msg-user-body">
+                    {m.text ? (
+                      <UserMessageText
+                        text={m.text}
+                        threadId={threadId}
+                        worktreePath={worktreePath}
+                        knownFilePaths={filePaths}
+                        onOpenFile={h.onSelectFile}
+                        onRevealDirectory={h.onRevealDirectory}
+                        onThreadLinkClick={h.onOpenThreadLink}
+                      />
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="msg-body msg-body-md" data-chat-text="">
+                    <MarkdownMessage
+                      text={m.text}
+                      knownFilePaths={filePaths}
+                      worktreePath={worktreePath}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+        </div>
+      )}
       {messages.map((m, i) => {
         const fallbackDuration = fallbackDurations[i];
         const hidePlanProse =
@@ -1877,6 +1939,7 @@ export function ThreadPanel({
     pendingTranscript,
     showStreaming,
     thread.messages,
+    thread.compactedMessages,
   ]);
 
   useEffect(() => {
@@ -2486,6 +2549,14 @@ export function ThreadPanel({
             )}
           <ChatTranscript
             messages={thread.messages}
+            compactedMessages={thread.compactedMessages ?? []}
+            forceRevealEarlier={
+              chatSearchOpen &&
+              shouldRevealCompactedArchive(
+                chatSearchQuery,
+                thread.compactedMessages ?? [],
+              )
+            }
             fallbackDurations={fallbackDurations}
             showPlanCard={showPlanCard}
             showStreaming={showStreaming}

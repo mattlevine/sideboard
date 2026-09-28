@@ -240,7 +240,7 @@ import {
   resolveViewerProfileForRepo,
   type FollowUpBehavior,
 } from '../store/app-settings.js';
-import { PLAN_MODE_INSTRUCTION } from '../agents/types.js';
+import { planModeTurnInstruction } from '../agents/types.js';
 import {
   extractPresentedPlan,
   readPlanFile,
@@ -1354,6 +1354,7 @@ export class Orchestrator {
         thread = updateThread(threadId, {
           messages: compact.thread.messages,
           sessionId: compact.thread.sessionId,
+          compactedMessages: compact.thread.compactedMessages,
         });
         this.emit({
           type: 'context_compacted',
@@ -1512,7 +1513,7 @@ export class Orchestrator {
         ? formatPrGateDirective()
         : null;
     const agentPrompt = [
-      thread.planMode ? PLAN_MODE_INSTRUCTION : null,
+      planModeTurnInstruction(thread.planMode),
       orchestrationReminder,
       prGateDirective,
       injectedNoticeContext,

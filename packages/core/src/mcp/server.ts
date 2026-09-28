@@ -16,7 +16,13 @@ import { listIssues } from '../integrations/issues.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
-import { sideboardMcpProfile } from './profile.js';
+import { sideboardMcpProfile, SIDEBOARD_THREAD_ID_ENV } from './profile.js';
+import {
+  PRESENT_PLAN_REQUIRES_PLAN_MODE,
+  PRESENT_PLAN_TOOL_DESCRIPTION,
+  shouldRegisterPresentPlan,
+  threadMayPresentPlan,
+} from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import {
   formatAskUserNotifyMessage,
@@ -564,41 +570,50 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
-  server.tool(
-    'present_plan',
-    'Save the implementation plan as markdown to .context/attachments/plan.md and show it in Sideboard chat for user approval (Copy / Hand off / Approve). Call this when the plan is ready — required in plan mode. Pass the full plan body in content. Then Claude should call ExitPlanMode.',
-    {
-      title: z
-        .string()
-        .optional()
-        .describe('Short plan title (defaults to Plan)'),
-      content: z
-        .string()
-        .min(1)
-        .describe('Full plan markdown (headings, steps, risks, open questions)'),
-      thread_id: z
-        .string()
-        .optional()
-        .describe('Sideboard thread id when cwd is not the worktree'),
-    },
-    async ({ title, content, thread_id }) => {
-      const { writePlanFile } = await import('../plan/plan-file.js');
-      let root = process.cwd();
-      if (thread_id?.trim()) {
-        const t = orch.getThread(thread_id.trim());
+  const callingThreadId = process.env[SIDEBOARD_THREAD_ID_ENV]?.trim() || '';
+  const callingThread = callingThreadId ? orch.getThread(callingThreadId) : null;
+  if (shouldRegisterPresentPlan(callingThread)) {
+    server.tool(
+      'present_plan',
+      PRESENT_PLAN_TOOL_DESCRIPTION,
+      {
+        title: z
+          .string()
+          .optional()
+          .describe('Short plan title (defaults to Plan)'),
+        content: z
+          .string()
+          .min(1)
+          .describe('Full plan markdown (headings, steps, risks, open questions)'),
+        thread_id: z
+          .string()
+          .optional()
+          .describe('Sideboard thread id when cwd is not the worktree'),
+      },
+      async ({ title, content, thread_id }) => {
+        const { writePlanFile } = await import('../plan/plan-file.js');
+        const ref = thread_id?.trim() || callingThreadId;
+        const t = ref ? orch.getThread(ref) : null;
+        if (t && !threadMayPresentPlan(t)) {
+          return mcpJson(
+            { ok: false, error: PRESENT_PLAN_REQUIRES_PLAN_MODE },
+            true,
+          );
+        }
+        let root = process.cwd();
         if (t?.worktreePath?.trim()) root = t.worktreePath;
-      }
-      const path = writePlanFile(root, content);
-      const payload = {
-        ok: true,
-        path,
-        title: title?.trim() || 'Plan',
-        message:
-          'Plan saved to .context/attachments/plan.md and shown in Sideboard chat for approval.',
-      };
-      return mcpJson(payload);
-    },
-  );
+        const path = writePlanFile(root, content);
+        const payload = {
+          ok: true,
+          path,
+          title: title?.trim() || 'Plan',
+          message:
+            'Plan saved to .context/attachments/plan.md and shown in Sideboard chat for approval.',
+        };
+        return mcpJson(payload);
+      },
+    );
+  }
 
   server.tool(
     'present_schema',

@@ -4,9 +4,13 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   PLAN_FILE_REL,
+  PRESENT_PLAN_REQUIRES_PLAN_MODE,
+  PRESENT_PLAN_TOOL_DESCRIPTION,
   extractPresentedPlan,
   isPresentPlanToolName,
   resolvePlanMarkdown,
+  shouldRegisterPresentPlan,
+  threadMayPresentPlan,
   writePlanFile,
   readPlanFile,
 } from './plan-file.js';
@@ -16,6 +20,27 @@ describe('isPresentPlanToolName', () => {
     expect(isPresentPlanToolName('present_plan')).toBe(true);
     expect(isPresentPlanToolName('mcp__sideboard__present_plan')).toBe(true);
     expect(isPresentPlanToolName('ask_user')).toBe(false);
+  });
+});
+
+describe('threadMayPresentPlan', () => {
+  it('is true only when Plan mode is on', () => {
+    expect(threadMayPresentPlan(null)).toBe(false);
+    expect(threadMayPresentPlan({ planMode: false })).toBe(false);
+    expect(threadMayPresentPlan({ planMode: true })).toBe(true);
+  });
+
+  it('keeps present_plan registered for unknown callers, hides it when Plan is off', () => {
+    expect(shouldRegisterPresentPlan(null)).toBe(true);
+    expect(shouldRegisterPresentPlan(undefined)).toBe(true);
+    expect(shouldRegisterPresentPlan({ planMode: false })).toBe(false);
+    expect(shouldRegisterPresentPlan({ planMode: true })).toBe(true);
+  });
+
+  it('describes present_plan as Plan-mode-only', () => {
+    expect(PRESENT_PLAN_TOOL_DESCRIPTION).toMatch(/Only when Sideboard Plan mode is on/i);
+    expect(PRESENT_PLAN_TOOL_DESCRIPTION).toMatch(/If Plan mode is off/i);
+    expect(PRESENT_PLAN_REQUIRES_PLAN_MODE).toMatch(/Plan mode is off/i);
   });
 });
 

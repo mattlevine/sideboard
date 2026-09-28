@@ -75,6 +75,18 @@ export function findChatSearchHits(
   return hits;
 }
 
+/** Expand the compacted archive when Find would match a dropped turn. */
+export function shouldRevealCompactedArchive(
+  query: string,
+  compacted: Array<{
+    text?: string;
+    origin?: string;
+    parts?: Array<{ type: string; text?: string; description?: string; name?: string }>;
+  }>,
+): boolean {
+  return findChatSearchHits(query, compacted).length > 0;
+}
+
 const SEARCH_TEXT_SCOPE = '[data-chat-text], .turn-summary-text';
 const SEARCH_TEXT_SKIP = '.chat-search-bar, .msg-continue, script, style, svg';
 

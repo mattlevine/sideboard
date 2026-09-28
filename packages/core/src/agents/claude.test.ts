@@ -89,6 +89,10 @@ describe('claudeAdapter.buildTurn', () => {
     );
     expect(cmd.args).toContain('--permission-mode');
     expect(cmd.args[cmd.args.indexOf('--permission-mode') + 1]).toBe('plan');
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__sideboard__present_plan');
   });
 
   it('passes prompt as plain -p arg without stream-json input format', async () => {
@@ -226,7 +230,7 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__present_schema');
     expect(allowed).toContain('mcp__sideboard__present_files');
     expect(allowed).toContain('mcp__sideboard__ask_user');
-    expect(allowed).toContain('mcp__sideboard__present_plan');
+    expect(allowed).not.toContain('mcp__sideboard__present_plan');
     expect(allowed).toContain('mcp__sideboard__wait_for_job');
     expect(allowed).toContain('mcp__sideboard__stop_job');
     expect(allowed).toContain('mcp__sideboard__list_run_scripts');

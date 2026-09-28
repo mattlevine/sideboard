@@ -24,6 +24,30 @@ export function isPresentPlanToolName(name: string | undefined | null): boolean 
   return /present_plan$/i.test(name) || /^mcp__sideboard__present_plan$/i.test(name);
 }
 
+/** present_plan / ExitPlanMode only work when the composer Plan chip is on. */
+export function threadMayPresentPlan(
+  thread: { planMode?: boolean } | null | undefined,
+): boolean {
+  return Boolean(thread?.planMode);
+}
+
+/**
+ * Register present_plan on Sideboard MCP. Unknown caller (CLI, thread not
+ * loaded yet) keeps the tool; a known thread with Plan mode off hides it.
+ */
+export function shouldRegisterPresentPlan(
+  thread: { planMode?: boolean } | null | undefined,
+): boolean {
+  if (thread == null) return true;
+  return threadMayPresentPlan(thread);
+}
+
+export const PRESENT_PLAN_TOOL_DESCRIPTION =
+  'Only when Sideboard Plan mode is on (composer Plan chip). Saves the implementation plan to .context/attachments/plan.md and shows Approve / Hand off / Copy in chat. Pass the full plan body in content. Then Claude should call ExitPlanMode. If Plan mode is off, do not call this — write the plan in chat.';
+
+export const PRESENT_PLAN_REQUIRES_PLAN_MODE =
+  'Plan mode is off. Do not call present_plan or ExitPlanMode. Write the plan in chat. The user can turn Plan on in the composer.';
+
 export type PresentedPlan = {
   title: string;
   content: string;
