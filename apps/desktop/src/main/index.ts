@@ -1070,7 +1070,7 @@ function registerIpc(): void {
     (
       _e,
       repoPath: string,
-      patch: { notes?: string | null },
+      patch: { notes?: string | null; reviewLabel?: string | null },
     ) => toPublicAppSettings(updateProjectProfileSettings(repoPath, patch)),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());

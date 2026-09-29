@@ -13,6 +13,7 @@ import type {
   FollowUpBehavior,
   OrchestratorEvent,
   OrchestratorRuntime,
+  PublicAppSettings,
   Thread,
   ThreadAttachment,
   Workspace,
@@ -84,6 +85,17 @@ function sameWorktreePath(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
+function projectReviewLabelsFromSettings(
+  projects: PublicAppSettings['projects'] | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [path, profile] of Object.entries(projects ?? {})) {
+    const label = profile.reviewLabel?.trim();
+    if (label) out[path] = label;
+  }
+  return out;
+}
+
 function readSidebarPref(key: string, fallback: boolean): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -145,6 +157,9 @@ export function App() {
   const [worktreeOwnership, setWorktreeOwnership] =
     useState<BoardOwnershipFilter>(readWorktreeOwnership);
   const [githubLogin, setGithubLogin] = useState<string | null>(null);
+  const [projectReviewLabels, setProjectReviewLabels] = useState<Record<string, string>>(
+    {},
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
@@ -515,6 +530,7 @@ export function App() {
       setAgentDoneSound(
         isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
       );
+      setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
     });
   }, []);
 
@@ -1210,6 +1226,7 @@ export function App() {
             ownership={worktreeOwnership}
             onOwnershipChange={onWorktreeOwnershipChange}
             githubLogin={githubLogin}
+            projectReviewLabels={projectReviewLabels}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -1241,6 +1258,7 @@ export function App() {
           ownership={worktreeOwnership}
           onOwnershipChange={onWorktreeOwnershipChange}
           githubLogin={githubLogin}
+          projectReviewLabels={projectReviewLabels}
           onRefresh={() => void refresh()}
           onAddToBoard={() =>
             openCreate(repoPath || undefined, 'quick', { stayOnBoard: true })
@@ -1598,6 +1616,7 @@ export function App() {
             setAgentDoneSound(
               isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
             );
+            setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
           }}
           onClose={() => {
             setSettingsOpen(false);

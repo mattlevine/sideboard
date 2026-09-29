@@ -318,6 +318,126 @@ export function classifyWorktreeColumn(
   return 'new';
 }
 
+export type WorktreeListBadgeId = 'review' | 'pending';
+
+export type WorktreeListBadge = {
+  id: WorktreeListBadgeId;
+  label: string;
+  title: string;
+  mod: string;
+};
+
+export type WorktreeListBadgeThread = Pick<
+  Thread,
+  | 'prUrl'
+  | 'prState'
+  | 'prIsDraft'
+  | 'prAuthorLogin'
+  | 'prReviewerLogins'
+  | 'sourceType'
+  | 'cowboy'
+  | 'prLabels'
+>;
+
+function labelsInclude(
+  labels: string[] | null | undefined,
+  name: string,
+): boolean {
+  const want = name.trim().toLowerCase();
+  if (!want) return false;
+  return (labels ?? []).some((label) => label.trim().toLowerCase() === want);
+}
+
+/**
+ * Ready-for-review GitHub label for a repo from Settings → Projects
+ * (`reviewLabel`), matching exact or descendant worktree paths.
+ */
+export function reviewLabelForRepo(
+  labelsByRepo: Record<string, string> | null | undefined,
+  repoPath: string,
+): string {
+  const want = repoPath.trim().replace(/\/+$/, '');
+  if (!want || !labelsByRepo) return '';
+  const direct = labelsByRepo[want]?.trim();
+  if (direct) return direct;
+  let best = '';
+  let bestLen = 0;
+  for (const [key, label] of Object.entries(labelsByRepo)) {
+    const stored = key.trim().replace(/\/+$/, '');
+    const value = label.trim();
+    if (!stored || !value) continue;
+    if (stored === want || want.startsWith(`${stored}/`)) {
+      if (stored.length > bestLen) {
+        best = value;
+        bestLen = stored.length;
+      }
+    }
+  }
+  return best;
+}
+
+function groupPrLabels(group: Array<Pick<Thread, 'prLabels'>>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const thread of group) {
+    for (const label of thread.prLabels ?? []) {
+      const key = label.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(label.trim());
+    }
+  }
+  return out;
+}
+
+/**
+ * Sidebar / board badges only while a PR is in review — same as the old
+ * "review" pill, plus "pending" for yours. Cowboy worktrees keep the
+ * separate cowboy badge. Drafts of yours, merged, and closed stay unbadged.
+ *
+ * Yours is in review when the project ready-for-review label (Settings →
+ * Projects) is on the PR; if that label is unset, a published (non-draft)
+ * PR counts. Someone else's open PR is always "review", including drafts.
+ */
+export function classifyWorktreeListBadges(
+  group: WorktreeListBadgeThread[],
+  viewerLogin = '',
+  reviewLabel = '',
+): WorktreeListBadge[] {
+  if (group.length === 0 || group.some((t) => t.cowboy)) return [];
+
+  const open = group.filter((t) => isOpenPrState(t.prUrl, t.prState));
+  if (open.length === 0) return [];
+
+  const ownership = classifyWorktreeOwnership(group, viewerLogin);
+  if (ownership === 'reviewing') {
+    return [
+      {
+        id: 'review',
+        label: 'review',
+        title: "Someone else's PR",
+        mod: 'is-review',
+      },
+    ];
+  }
+
+  const draft = open.some((t) => t.prIsDraft);
+  const readyLabel = reviewLabel.trim();
+  const inReview = readyLabel
+    ? labelsInclude(groupPrLabels(group), readyLabel)
+    : !draft;
+  if (!inReview) return [];
+
+  return [
+    {
+      id: 'pending',
+      label: 'pending',
+      title: 'Waiting for review',
+      mod: 'is-pending',
+    },
+  ];
+}
+
 /** Activity dot for a worktree: running / queued beat idle sibling tabs. */
 export function worktreeBoardStatus(group: Array<Pick<Thread, 'status'>>): Thread['status'] {
   const order: Thread['status'][] = ['running', 'queued', 'error', 'broken'];

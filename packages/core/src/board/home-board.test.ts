@@ -9,7 +9,9 @@ import {
   boardPrKey,
   classifyThreadColumn,
   classifyWorktreeColumn,
+  classifyWorktreeListBadges,
   classifyWorktreeOwnership,
+  reviewLabelForRepo,
   worktreeMatchesOwnership,
   groupHomeBoardWorktrees,
   DEFAULT_WORKTREE_SORT,
@@ -338,6 +340,169 @@ describe('classifyWorktreeOwnership', () => {
     expect(worktreeMatchesOwnership(reviewing, 'mine', 'matt')).toBe(false);
     expect(worktreeMatchesOwnership(mine, 'reviewing', 'matt')).toBe(false);
     expect(worktreeMatchesOwnership(reviewing, 'reviewing', 'matt')).toBe(true);
+  });
+});
+
+describe('classifyWorktreeListBadges', () => {
+  it('does not badge worktrees with no open PR', () => {
+    expect(
+      classifyWorktreeListBadges([thread({ id: 'wip', sourceType: 'ticket' })], 'matt'),
+    ).toEqual([]);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'done',
+            prUrl: 'https://github.com/acme/app/pull/10',
+            prState: 'MERGED',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+      ),
+    ).toEqual([]);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'shut',
+            prUrl: 'https://github.com/acme/app/pull/11',
+            prState: 'CLOSED',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not badge your draft, or your open PR until it is in review', () => {
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'd',
+            prUrl: 'https://github.com/acme/app/pull/1',
+            prState: 'OPEN',
+            prIsDraft: true,
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+      ),
+    ).toEqual([]);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'mine',
+            prUrl: 'https://github.com/acme/app/pull/6',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+        'eng-review',
+      ),
+    ).toEqual([]);
+  });
+
+  it('shows review for someone else\'s open PR, including their drafts', () => {
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'theirs-draft',
+            sourceType: 'pr',
+            prUrl: 'https://github.com/acme/app/pull/9',
+            prState: 'OPEN',
+            prIsDraft: true,
+            prAuthorLogin: 'sam',
+          }),
+        ],
+        'matt',
+      ).map((b) => b.label),
+    ).toEqual(['review']);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'theirs',
+            sourceType: 'pr',
+            prUrl: 'https://github.com/acme/app/pull/5',
+            prState: 'OPEN',
+            prAuthorLogin: 'sam',
+            prLabels: ['eng-review'],
+          }),
+        ],
+        'matt',
+        'eng-review',
+      ).map((b) => b.label),
+    ).toEqual(['review']);
+  });
+
+  it('shows pending for your PR once it is in review', () => {
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'mine',
+            prUrl: 'https://github.com/acme/app/pull/4',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prLabels: ['eng-review'],
+          }),
+        ],
+        'matt',
+        'eng-review',
+      ).map((b) => b.label),
+    ).toEqual(['pending']);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'published',
+            prUrl: 'https://github.com/acme/app/pull/6',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        'matt',
+      ).map((b) => b.label),
+    ).toEqual(['pending']);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'design',
+            prUrl: 'https://github.com/acme/app/pull/12',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prLabels: ['design-review'],
+          }),
+        ],
+        'matt',
+        'design-review',
+      ).map((b) => b.label),
+    ).toEqual(['pending']);
+  });
+
+  it('does not badge cowboy worktrees', () => {
+    expect(
+      classifyWorktreeListBadges([thread({ id: 'cow', cowboy: true })], 'matt'),
+    ).toEqual([]);
+  });
+
+  it('resolves the project ready-for-review label for a worktree path', () => {
+    expect(
+      reviewLabelForRepo(
+        { '/Users/me/app': 'eng-review' },
+        '/Users/me/app/worktrees/ajax',
+      ),
+    ).toBe('eng-review');
+    expect(reviewLabelForRepo({ '/Users/me/app': 'eng-review' }, '/Users/me/other')).toBe(
+      '',
+    );
   });
 });
 

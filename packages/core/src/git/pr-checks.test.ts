@@ -245,6 +245,7 @@ describe('getPrMeta', () => {
         mergeable: 'MERGEABLE',
         author: { login: 'sam' },
         reviewRequests: [{ login: 'matt' }],
+        labels: [{ name: 'eng-review' }],
       }),
       stderr: '',
       exitCode: 0,
@@ -257,6 +258,7 @@ describe('getPrMeta', () => {
       mergeStateStatus: 'CLEAN',
       authorLogin: 'sam',
       reviewerLogins: ['matt'],
+      labels: ['eng-review'],
     });
   });
 

@@ -134,22 +134,49 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
 function ProjectProfileCard({
   workspace,
   notesDraft,
+  reviewLabelDraft,
   busy,
   onNotesChange,
   onNotesFocus,
   onNotesBlur,
+  onReviewLabelChange,
+  onReviewLabelFocus,
+  onReviewLabelBlur,
 }: {
   workspace: Workspace;
   notesDraft: string;
+  reviewLabelDraft: string;
   busy?: boolean;
   onNotesChange: (notes: string) => void;
   onNotesFocus: () => void;
   onNotesBlur: () => void;
+  onReviewLabelChange: (label: string) => void;
+  onReviewLabelFocus: () => void;
+  onReviewLabelBlur: () => void;
 }) {
   return (
     <div className="settings-section settings-section-card">
       <div className="settings-section-title">{workspace.name}</div>
       <p className="settings-hint">{workspace.path}</p>
+      <label className="settings-field" style={{ marginTop: '0.85rem' }}>
+        Ready-for-review label
+        <input
+          type="text"
+          className="settings-history-search"
+          maxLength={50}
+          placeholder="eng-review"
+          spellCheck={false}
+          value={reviewLabelDraft}
+          disabled={busy}
+          onFocus={onReviewLabelFocus}
+          onChange={(e) => onReviewLabelChange(e.target.value)}
+          onBlur={onReviewLabelBlur}
+        />
+      </label>
+      <p className="settings-hint">
+        GitHub label that marks a PR ready for coworkers (sidebar shows this tag). Leave
+        empty if this repo does not use a ready-for-review label.
+      </p>
       <label className="settings-field" style={{ marginTop: '0.85rem' }}>
         Project context
         <textarea
@@ -317,8 +344,12 @@ export function SettingsModal({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [accountNotesDraft, setAccountNotesDraft] = useState('');
   const [projectNotesDrafts, setProjectNotesDrafts] = useState<Record<string, string>>({});
+  const [projectReviewLabelDrafts, setProjectReviewLabelDrafts] = useState<
+    Record<string, string>
+  >({});
   const accountNotesFocused = useRef(false);
   const projectNotesFocused = useRef<string | null>(null);
+  const projectReviewLabelFocused = useRef<string | null>(null);
   const [setupBusy, setSetupBusy] = useState<'install' | 'login' | null>(null);
   const [setupLog, setSetupLog] = useState<string | null>(null);
   const loginAbortRef = useRef<AbortController | null>(null);
@@ -346,6 +377,16 @@ export function SettingsModal({
           projectNotesFocused.current === ws.path
             ? (prev[ws.path] ?? next.projects?.[ws.path]?.notes ?? '')
             : (next.projects?.[ws.path]?.notes ?? '');
+      }
+      return drafts;
+    });
+    setProjectReviewLabelDrafts((prev) => {
+      const drafts: Record<string, string> = {};
+      for (const ws of listed) {
+        drafts[ws.path] =
+          projectReviewLabelFocused.current === ws.path
+            ? (prev[ws.path] ?? next.projects?.[ws.path]?.reviewLabel ?? '')
+            : (next.projects?.[ws.path]?.reviewLabel ?? '');
       }
       return drafts;
     });
@@ -582,7 +623,7 @@ export function SettingsModal({
 
   async function saveProjectPatch(
     repoPath: string,
-    patch: { notes?: string | null },
+    patch: { notes?: string | null; reviewLabel?: string | null },
   ) {
     setBusy(true);
     setError(null);
@@ -593,6 +634,12 @@ export function SettingsModal({
         setProjectNotesDrafts((prev) => ({
           ...prev,
           [repoPath]: next.projects?.[repoPath]?.notes ?? '',
+        }));
+      }
+      if (projectReviewLabelFocused.current !== repoPath) {
+        setProjectReviewLabelDrafts((prev) => ({
+          ...prev,
+          [repoPath]: next.projects?.[repoPath]?.reviewLabel ?? '',
         }));
       }
     } catch (err) {
@@ -861,7 +908,9 @@ export function SettingsModal({
               <div className="settings-body">
                 <p className="settings-lead">
                   Per-project context for finding tickets and review PRs. Adds to Settings →
-                  Agents. Agents may propose updates; they ask you to confirm first.
+                  Agents. Set the GitHub label your team uses when a PR is ready for review
+                  (for example eng-review). Agents may propose context updates; they ask you
+                  to confirm first.
                 </p>
                 {workspaces.length === 0 ? (
                   <p className="settings-hint">
@@ -873,6 +922,7 @@ export function SettingsModal({
                       key={ws.path}
                       workspace={ws}
                       notesDraft={projectNotesDrafts[ws.path] ?? ''}
+                      reviewLabelDraft={projectReviewLabelDrafts[ws.path] ?? ''}
                       busy={busy}
                       onNotesChange={(notes) =>
                         setProjectNotesDrafts((prev) => ({ ...prev, [ws.path]: notes }))
@@ -885,6 +935,20 @@ export function SettingsModal({
                         const next = (projectNotesDrafts[ws.path] ?? '').trim();
                         if (next === (settings.projects?.[ws.path]?.notes ?? '')) return;
                         void saveProjectPatch(ws.path, { notes: next || null });
+                      }}
+                      onReviewLabelChange={(label) =>
+                        setProjectReviewLabelDrafts((prev) => ({ ...prev, [ws.path]: label }))
+                      }
+                      onReviewLabelFocus={() => {
+                        projectReviewLabelFocused.current = ws.path;
+                      }}
+                      onReviewLabelBlur={() => {
+                        projectReviewLabelFocused.current = null;
+                        const next = (projectReviewLabelDrafts[ws.path] ?? '').trim();
+                        if (next === (settings.projects?.[ws.path]?.reviewLabel ?? '')) {
+                          return;
+                        }
+                        void saveProjectPatch(ws.path, { reviewLabel: next || null });
                       }}
                     />
                   ))

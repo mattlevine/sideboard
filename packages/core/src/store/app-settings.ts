@@ -103,6 +103,11 @@ export interface DefaultsAppSettings {
 /** Per-repo context (Settings → Projects). Adds to account context. */
 export interface ProjectProfileSettings {
   notes?: string;
+  /**
+   * GitHub label that means this PR is ready for coworkers to review
+   * (e.g. `eng-review`). Empty = no special ready-for-review tag.
+   */
+  reviewLabel?: string;
   /** @deprecated Folded into {@link ProjectProfileSettings.notes} on read. */
   roles?: string[];
   /** @deprecated Folded into {@link ProjectProfileSettings.notes} on read. */
@@ -836,13 +841,31 @@ function profileRepoKey(path: string): string {
   return path.trim().replace(/\/+$/, '');
 }
 
+/** GitHub label max length. */
+export const REVIEW_LABEL_MAX = 50;
+
+/** Trim a GitHub workflow label used as ready-for-review (e.g. `eng-review`). */
+export function normalizeReviewLabel(value?: string | null): string {
+  const label = (value ?? '').trim().replace(/^:+/, '').slice(0, REVIEW_LABEL_MAX);
+  if (!label || /[,|]/.test(label)) return '';
+  return label;
+}
+
+function projectProfileHasFields(profile: ProjectProfileSettings): boolean {
+  return Boolean(profile.notes || profile.reviewLabel);
+}
+
 function normalizeProjectProfile(raw: unknown): ProjectProfileSettings | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const source = raw as Record<string, unknown>;
   const out: ProjectProfileSettings = {};
   const notes = foldLegacyRolesIntoNotes(source.roles, source.role, source.notes);
   if (notes) out.notes = notes;
-  return out.notes ? out : undefined;
+  const reviewLabel = normalizeReviewLabel(
+    typeof source.reviewLabel === 'string' ? source.reviewLabel : null,
+  );
+  if (reviewLabel) out.reviewLabel = reviewLabel;
+  return projectProfileHasFields(out) ? out : undefined;
 }
 
 function normalizeProjects(raw: unknown): Record<string, ProjectProfileSettings> {
@@ -1637,7 +1660,7 @@ export function updateDefaultsSettings(patch: DefaultsSettingsPatch): AppSetting
 
 export function updateProjectProfileSettings(
   repoPath: string,
-  patch: { notes?: string | null },
+  patch: { notes?: string | null; reviewLabel?: string | null },
 ): AppSettings {
   const current = loadAppSettings();
   const key = profileRepoKey(repoPath);
@@ -1650,11 +1673,26 @@ export function updateProjectProfileSettings(
     if (!notes) delete next.notes;
     else next.notes = notes;
   }
+  if ('reviewLabel' in patch) {
+    const reviewLabel = normalizeReviewLabel(patch.reviewLabel);
+    if (!reviewLabel) delete next.reviewLabel;
+    else next.reviewLabel = reviewLabel;
+  }
   delete next.roles;
   delete next.role;
-  if (!next.notes) delete projects[key];
+  if (!projectProfileHasFields(next)) delete projects[key];
   else projects[key] = next;
   return saveAppSettings({ ...current, projects });
+}
+
+/** Ready-for-review GitHub label from Settings → Projects (empty if unset). */
+export function resolveProjectReviewLabel(
+  settings: Pick<AppSettings, 'projects'>,
+  repoPath?: string | null,
+): string {
+  const key = findProjectProfileKey(settings.projects, repoPath);
+  if (!key) return '';
+  return settings.projects[key]?.reviewLabel?.trim() || '';
 }
 
 /** Default agent for Create / new chats (claude when unset). */

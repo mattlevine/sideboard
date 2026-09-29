@@ -207,6 +207,8 @@ export {
   findLiveThreadForCreateSource,
   groupHomeBoardWorktrees,
   classifyWorktreeColumn,
+  classifyWorktreeListBadges,
+  reviewLabelForRepo,
   worktreeBoardStatus,
   DEFAULT_WORKTREE_SORT,
 } from './board/home-board.js';
@@ -215,6 +217,7 @@ export type {
   BoardPin,
   HomeBoardLoaded,
   HomeBoardRemoteData,
+  WorktreeListBadge,
   WorktreeSortMode,
 } from './board/home-board.js';
 export { loadBrightsyConfig, brightsyConfigPath } from './brightsy/config.js';

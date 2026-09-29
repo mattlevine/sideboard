@@ -78,6 +78,13 @@ export function normalizeThread(raw: Thread): Thread {
     prTitle: raw.prTitle ?? null,
     prState: raw.prState ?? null,
     prIsDraft: Boolean(raw.prIsDraft),
+    prReviewDecision: raw.prReviewDecision ?? null,
+    prMergeable: raw.prMergeable ?? null,
+    prMergeStateStatus: raw.prMergeStateStatus ?? null,
+    prIsInMergeQueue: Boolean(raw.prIsInMergeQueue),
+    prLabels: Array.isArray(raw.prLabels) ? raw.prLabels : [],
+    prChecksFailed:
+      typeof raw.prChecksFailed === 'boolean' ? raw.prChecksFailed : undefined,
     skipAutoArchiveOnMerge: Boolean(raw.skipAutoArchiveOnMerge),
     cowboy: Boolean(raw.cowboy),
     stackId: raw.stackId ?? null,
@@ -114,6 +121,12 @@ export function createEmptyThread(
     | 'prIsDraft'
     | 'prAuthorLogin'
     | 'prReviewerLogins'
+    | 'prReviewDecision'
+    | 'prMergeable'
+    | 'prMergeStateStatus'
+    | 'prIsInMergeQueue'
+    | 'prLabels'
+    | 'prChecksFailed'
     | 'skipAutoArchiveOnMerge'
     | 'stackId'
     | 'stackLayer'
@@ -150,6 +163,12 @@ export function createEmptyThread(
         | 'prIsDraft'
         | 'prAuthorLogin'
         | 'prReviewerLogins'
+        | 'prReviewDecision'
+        | 'prMergeable'
+        | 'prMergeStateStatus'
+        | 'prIsInMergeQueue'
+        | 'prLabels'
+        | 'prChecksFailed'
         | 'skipAutoArchiveOnMerge'
         | 'cowboy'
         | 'stackId'
@@ -183,6 +202,12 @@ export function createEmptyThread(
     prIsDraft: Boolean(partial.prIsDraft),
     prAuthorLogin: partial.prAuthorLogin?.trim() || null,
     prReviewerLogins: partial.prReviewerLogins ?? [],
+    prReviewDecision: partial.prReviewDecision ?? null,
+    prMergeable: partial.prMergeable ?? null,
+    prMergeStateStatus: partial.prMergeStateStatus ?? null,
+    prIsInMergeQueue: Boolean(partial.prIsInMergeQueue),
+    prLabels: partial.prLabels ?? [],
+    prChecksFailed: partial.prChecksFailed,
     skipAutoArchiveOnMerge: partial.skipAutoArchiveOnMerge ?? false,
     cowboy: Boolean(partial.cowboy),
     stackId: partial.stackId ?? null,

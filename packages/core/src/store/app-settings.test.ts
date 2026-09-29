@@ -525,6 +525,34 @@ describe('app settings', () => {
     expect(clearedProject.projects['/Users/me/design-app']).toBeUndefined();
   });
 
+  it('round-trips a per-project ready-for-review GitHub label', async () => {
+    const mod = await load();
+    const withLabel = mod.updateProjectProfileSettings('/Users/me/design-app', {
+      reviewLabel: '  eng-review  ',
+    });
+    expect(withLabel.projects['/Users/me/design-app']).toEqual({
+      reviewLabel: 'eng-review',
+    });
+    expect(mod.resolveProjectReviewLabel(withLabel, '/Users/me/design-app/wt/foo')).toBe(
+      'eng-review',
+    );
+
+    const withNotes = mod.updateProjectProfileSettings('/Users/me/design-app', {
+      notes: 'design board',
+    });
+    expect(withNotes.projects['/Users/me/design-app']).toEqual({
+      reviewLabel: 'eng-review',
+      notes: 'design board',
+    });
+
+    const clearedLabel = mod.updateProjectProfileSettings('/Users/me/design-app', {
+      reviewLabel: '',
+    });
+    expect(clearedLabel.projects['/Users/me/design-app']).toEqual({
+      notes: 'design board',
+    });
+  });
+
   it('does not resolve a parent path to another project profile', async () => {
     const mod = await load();
     mod.updateProjectProfileSettings('/Users/me/alpha-app', {

@@ -70,11 +70,27 @@ export function threadPrMetaPatch(
     | 'prIsDraft'
     | 'prAuthorLogin'
     | 'prReviewerLogins'
+    | 'prReviewDecision'
+    | 'prMergeable'
+    | 'prMergeStateStatus'
+    | 'prIsInMergeQueue'
+    | 'prLabels'
+    | 'prChecksFailed'
     | 'skipAutoArchiveOnMerge'
   >,
   meta: Pick<
     PrMeta,
-    'url' | 'title' | 'state' | 'isDraft' | 'authorLogin' | 'reviewerLogins'
+    | 'url'
+    | 'title'
+    | 'state'
+    | 'isDraft'
+    | 'authorLogin'
+    | 'reviewerLogins'
+    | 'reviewDecision'
+    | 'mergeable'
+    | 'mergeStateStatus'
+    | 'isInMergeQueue'
+    | 'labels'
   >,
 ): Partial<Thread> {
   const prevState = normalizePrState(thread.prState);
@@ -94,6 +110,37 @@ export function threadPrMetaPatch(
   if (!sameLoginList(nextReviewers, thread.prReviewerLogins)) {
     patch.prReviewerLogins = nextReviewers;
   }
+  const nextDecision = meta.reviewDecision ?? null;
+  if ((thread.prReviewDecision ?? null) !== nextDecision) {
+    patch.prReviewDecision = nextDecision;
+  }
+  const nextMergeable = meta.mergeable ?? null;
+  if ((thread.prMergeable ?? null) !== nextMergeable) {
+    patch.prMergeable = nextMergeable;
+  }
+  const nextMergeState = meta.mergeStateStatus ?? null;
+  if ((thread.prMergeStateStatus ?? null) !== nextMergeState) {
+    patch.prMergeStateStatus = nextMergeState;
+  }
+  const nextQueued = Boolean(meta.isInMergeQueue);
+  if (Boolean(thread.prIsInMergeQueue) !== nextQueued) {
+    patch.prIsInMergeQueue = nextQueued;
+  }
+  const nextLabels = meta.labels ?? [];
+  if (!sameLoginList(nextLabels, thread.prLabels)) {
+    patch.prLabels = nextLabels;
+  }
+  const mergeState = (nextMergeState ?? '').toUpperCase();
+  if (mergeState === 'CLEAN' && thread.prChecksFailed) {
+    patch.prChecksFailed = false;
+  } else if (
+    (mergeState === 'UNSTABLE' ||
+      (mergeState === 'BLOCKED' &&
+        (nextDecision ?? '').toUpperCase() === 'APPROVED')) &&
+    !thread.prChecksFailed
+  ) {
+    patch.prChecksFailed = true;
+  }
   if (
     thread.skipAutoArchiveOnMerge &&
     nextState &&
@@ -103,6 +150,15 @@ export function threadPrMetaPatch(
     patch.skipAutoArchiveOnMerge = false;
   }
   return patch;
+}
+
+/** Persist CI failure for sidebar list badges (CI only — not review/conflicts). */
+export function threadPrChecksFailedPatch(
+  thread: Pick<Thread, 'prChecksFailed'>,
+  failed: boolean,
+): Partial<Thread> {
+  if (thread.prChecksFailed === failed) return {};
+  return { prChecksFailed: failed };
 }
 
 /**

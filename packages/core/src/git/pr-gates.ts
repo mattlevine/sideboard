@@ -34,6 +34,33 @@ export function classifyPrMergeIssue(
   return null;
 }
 
+/**
+ * True when GitHub merge state implies failing CI without a `gh pr checks` list.
+ * `UNSTABLE` is failed non-required checks. `BLOCKED` + `APPROVED` is usually
+ * required status checks (review is already satisfied).
+ */
+export function mergeStateSuggestsCheckFailure(
+  gate: Pick<PrMergeGate, 'mergeStateStatus' | 'reviewDecision'> | null | undefined,
+): boolean {
+  if (!gate) return false;
+  const mergeState = (gate.mergeStateStatus ?? '').toUpperCase();
+  if (mergeState === 'UNSTABLE') return true;
+  if (mergeState === 'BLOCKED') {
+    return (gate.reviewDecision ?? '').toUpperCase() === 'APPROVED';
+  }
+  return false;
+}
+
+/** CI rows only — merge-conflict / review synthetics have their own badges. */
+export function ciChecksFailed(
+  checks: Array<Pick<PrCheckRun, 'kind' | 'bucket'>> | null | undefined,
+): boolean {
+  if (!checks?.length) return false;
+  return checks.some(
+    (check) => (!check.kind || check.kind === 'ci') && check.bucket === 'fail',
+  );
+}
+
 export interface BuildMergeGateOptions {
   /**
    * When true (default), skip a generic "Merge blocked" row — that status usually
