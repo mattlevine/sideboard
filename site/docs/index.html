@@ -12,59 +12,54 @@
 <meta property="og:image" content="https://sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css">
+<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code,pre{font-family:ui-monospace,"SF Mono",Menlo,monospace}</style>
+<style>.nav-link:hover,.foot-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}.btn-outline:hover{background:#202226}.card-link:hover{border-color:#0f7ed4}</style>
 </head>
 <body>
-<div class="canvas">
-<header class="site-header">
-<div class="container header-grid">
-<a class="brand" href="/" aria-label="Sideboard home">
-<span class="brand-mark" aria-hidden="true"><span class="back"></span><span class="front"></span></span>
-<span class="brand-name">Sideboard</span>
+<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
+<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
+<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
+<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
+<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
 </a>
-<nav class="nav-pills" aria-label="Primary">
-<a href="/">Home</a>
-<a href="#install">Install</a>
-<a href="#settings">Settings</a>
-<a href="#find-work">Find work</a>
-<a href="#schedules">Schedules</a>
-<a href="#guides">Guides</a>
-</nav>
-<div class="header-actions">
-<a class="btn btn-ghost" href="https://github.com/mattlevine/sideboard">GitHub</a>
-<a class="btn btn-primary" href="https://github.com/mattlevine/sideboard/releases/latest">Download</a>
-</div>
+<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
+<a href="#install" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Install</a>
+<a href="#settings" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Settings</a>
+<a href="#find-work" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Find work</a>
+<a href="#schedules" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Schedules</a>
+<a href="#guides" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Guides</a>
+<a href="https://github.com/mattlevine/sideboard" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">GitHub</a>
 </div>
 </header>
+<div style="background:#17181a">
 
-<main class="main">
-<section class="container section page-hero">
-<p class="eyebrow">Docs</p>
-<h1>Everything you need to run the fleet</h1>
-<p class="lede" style="margin-top:1.1rem">Start with the CLI — it's the fastest way to see whether Sideboard fits how you already work. The desktop, MCP and Slack layer on top of the same local orchestrator.</p>
+<section style="max-width:1180px;margin:0 auto;padding:56px 40px 0">
+<span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Docs</span>
+<h1 style="font-weight:700;font-size:60px;line-height:1.06;letter-spacing:-.02em;margin:20px 0 0;max-width:800px">Everything you need to run the fleet</h1>
+<p style="font-size:20px;line-height:1.55;max-width:620px;margin:20px 0 0;color:#b3bcc4">Start with the CLI — it's the fastest way to see whether Sideboard fits how you already work. The desktop, MCP and Slack layer on top of the same local orchestrator.</p>
 </section>
 
-<section id="install" class="container section">
-<h2>Install</h2>
-<div class="cards three" style="margin-top:1.5rem">
-<div class="card frame">
-<h3>CLI</h3>
-<p style="margin-bottom:1rem">Ships the stdio MCP server too. Aliases: <code>side</code> → <code>sideboard</code>.</p>
-<pre class="pre">npm i -g @sideboard-ai/cli
+<section id="install" style="max-width:1180px;margin:0 auto;padding:72px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 24px">Install</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
+<div style="padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">CLI</h3>
+<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Ships the stdio MCP server too. Aliases: <code style="font-size:14px;color:#8cc8f5">side</code> → <code style="font-size:14px;color:#8cc8f5">sideboard</code>.</p>
+<pre style="margin:0;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto">npm i -g @sideboard-ai/cli
 sideboard detect</pre>
 </div>
-<div class="card frame">
-<h3>Desktop</h3>
-<p style="margin-bottom:1rem">Apple Silicon Mac builds from GitHub Releases. Auto-updates on launch and every four hours — never mid-session. Token counts always show; turn on <strong>Settings → Advanced → Show cost (when available)</strong> for provider-reported USD (off by default; Codex has no USD). Claude and Global / orchestration chats also show remaining Claude Code plan usage (5-hour, weekly, per-model) next to the context ring.</p>
-<a class="btn btn-primary" href="https://github.com/mattlevine/sideboard/releases/latest">Latest release</a>
+<div style="padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">Desktop</h3>
+<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Apple Silicon Mac builds from GitHub Releases. Auto-updates on launch and every four hours — never mid-session. Token counts always show; turn on <strong>Settings → Advanced → Show cost (when available)</strong> for provider-reported USD (off by default; Codex has no USD). Claude and Global / orchestration chats also show remaining Claude Code plan usage (5-hour, weekly, per-model) next to the context ring.</p>
+<a href="https://github.com/mattlevine/sideboard/releases/latest" style="display:inline-flex;align-items:center;padding:11px 22px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:15px" class="btn-blue">Latest release</a>
 </div>
-<div class="card frame">
-<h3>Agent CLIs</h3>
-<p style="margin-bottom:1rem">Sideboard shells out to each agent's own CLI. Install the ones you want on your PATH and authenticate; Cursor uses a user-installed <code>@cursor/sdk</code> plus a <code>CURSOR_API_KEY</code> (Settings → Agents → Cursor → Install).</p>
-<pre class="pre">npm i -g @anthropic-ai/claude-code
+<div style="padding:30px;border-radius:26px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:22px;margin:0 0 10px">Agent CLIs</h3>
+<p style="margin:0 0 16px;font-size:15.5px;line-height:1.6;color:#b3bcc4">Sideboard shells out to each agent's own CLI. Install the ones you want on your PATH and authenticate; Cursor uses a user-installed <code style="font-size:14px;color:#8cc8f5">@cursor/sdk</code> plus a <code style="font-size:14px;color:#8cc8f5">CURSOR_API_KEY</code> (Settings → Agents → Cursor → Install).</p>
+<pre style="margin:0;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto">npm i -g @anthropic-ai/claude-code
 npm i -g @openai/codex
 npm i -g opencode-ai@latest
 npm i -g @cursor/sdk
@@ -73,169 +68,205 @@ export CURSOR_API_KEY="cursor_..."</pre>
 </div>
 </section>
 
-<section class="container section">
-<h2>Quick start</h2>
-<p class="lede" style="margin:0.6rem 0 1.25rem">Board, send, inspect, attach when you want the native CLI, land when it's ready.</p>
-<pre class="pre frame">sideboard new --from branch:main --agent claude
-sideboard new --from branch:main --cowboy   <span class="cmt"># project folder on default branch; Settings → Advanced first</span>
+<section style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Quick start</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:620px;margin:0 0 24px">Board, send, inspect, attach when you want the native CLI, land when it's ready.</p>
+<pre style="margin:0;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">sideboard new --from branch:main --agent claude
+sideboard new --from branch:main --cowboy   <span style="color:#6f777e"># project folder on default branch; Settings → Advanced first</span>
 sideboard ls
 sideboard send &lt;thread&gt; "add a README note"
 sideboard diff &lt;thread&gt;
-sideboard attach &lt;thread&gt;        <span class="cmt"># native CLI, same session</span>
-sideboard land &lt;thread&gt;          <span class="cmt"># interactive y/N; no --yes in v1</span>
+sideboard attach &lt;thread&gt;        <span style="color:#6f777e"># native CLI, same session</span>
+sideboard land &lt;thread&gt;          <span style="color:#6f777e"># interactive y/N; no --yes in v1</span>
 sideboard schedule ls
-sideboard adopt --from-conductor <span class="cmt"># import Conductor workspaces + history</span></pre>
+sideboard adopt --from-conductor <span style="color:#6f777e"># import Conductor workspaces + history</span></pre>
 </section>
 
-<section class="container section">
-<h2>Connect the MCP</h2>
-<p class="lede" style="margin:0.6rem 0 1.25rem">The desktop auto-injects the MCP into its own turns. Register it yourself when you want fleet tools from an agent running <em>outside</em> Sideboard.</p>
-<div class="cards two">
-<div class="card frame">
-<h4>Claude Code</h4>
-<pre class="pre" style="margin-top:0.75rem">claude mcp add --scope user \
+<section style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Connect the MCP</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:660px;margin:0 0 24px">The desktop auto-injects the MCP into its own turns. Register it yourself when you want fleet tools from an agent running <em>outside</em> Sideboard.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px">
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">Claude Code</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">claude mcp add --scope user \
   sideboard -- sideboard mcp</pre>
 </div>
-<div class="card frame">
-<h4>Cursor</h4>
-<pre class="pre" style="margin-top:0.75rem">{ "mcpServers": { "sideboard": {
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">Cursor</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">{ "mcpServers": { "sideboard": {
   "command": "sideboard",
   "args": ["mcp"] } } }</pre>
 </div>
-<div class="card frame">
-<h4>Codex</h4>
-<pre class="pre" style="margin-top:0.75rem">[mcp_servers.sideboard]
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">Codex</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">[mcp_servers.sideboard]
 command = "sideboard"
 args = ["mcp"]</pre>
 </div>
-<div class="card frame">
-<h4>OpenCode</h4>
-<pre class="pre" style="margin-top:0.75rem">{ "mcp": { "sideboard": {
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 12px">OpenCode</h4>
+<pre style="margin:0;padding:18px;border-radius:16px;background:#0e0f11;color:#dfe5ea;font-size:13.5px;line-height:1.75;overflow-x:auto">{ "mcp": { "sideboard": {
   "type": "local",
   "command": ["sideboard","mcp"] } } }</pre>
 </div>
 </div>
-<p class="muted" style="margin-top:1.25rem;max-width:48rem;line-height:1.65">Agents then get discovery (<code>list_workspaces</code>, <code>list_threads</code>), worktree chats (<code>create_thread</code>, <code>send_to_thread</code>, <code>wait_for_turn</code>, <code>fork_worktree</code>), schedules (<code>create_schedule</code>), structure panes, setup/run scripts, diffs, review and <code>ask_git</code>. <code>create_thread cowboy=true</code> (and CLI <code>--cowboy</code>) needs Settings → Advanced → Cowboy mode first — then the child works in the project folder on the default branch. <code>send_to_thread</code> steers (Settings → Follow-up, default interrupt now). <code>wait_for_turn</code> returns within ~45s with <code>stillRunning</code> and <code>taskState</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code>ask_git</code>) only when the user explicitly asked.</p>
+<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_workspaces</code>, <code style="color:#8cc8f5">list_threads</code>), worktree chats (<code style="color:#8cc8f5">create_thread</code>, <code style="color:#8cc8f5">send_to_thread</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_worktree</code>), schedules (<code style="color:#8cc8f5">create_schedule</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. <code style="color:#8cc8f5">create_thread cowboy=true</code> (and CLI <code style="color:#8cc8f5">--cowboy</code>) needs Settings → Advanced → Cowboy mode first — then the child works in the project folder on the default branch. <code style="color:#8cc8f5">send_to_thread</code> steers (Settings → Follow-up, default interrupt now). <code style="color:#8cc8f5">wait_for_turn</code> returns within ~45s with <code style="color:#8cc8f5">stillRunning</code> and <code style="color:#8cc8f5">taskState</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code style="color:#8cc8f5">ask_git</code>) only when the user explicitly asked.</p>
 </section>
 
-<section id="settings" class="container section">
-<h2>Settings</h2>
-<p class="lede" style="margin:0.6rem 0 1.25rem">Desktop Settings opens on <strong>Agents</strong>. Connections are owned by Sideboard, not per-agent MCP.</p>
-<div class="grid-docs">
-<div class="card frame"><h4>Agents</h4><p>Default agent, model, and effort for new chats; <strong>Account context</strong> (roles, tickets, and review queues as freeform text); then harness setup for Claude, Codex, OpenCode, Cursor, and Brightsy.</p></div>
-<div class="card frame"><h4>Projects</h4><p>Per-repo context that adds to Settings → Agents. Agents can update account or project context after you confirm.</p></div>
-<div class="card frame"><h4>Git</h4><p>How this Mac and worktree agents authenticate GitHub — Auto, <code>gh</code>, SSH, or a personal access token.</p></div>
-<div class="card frame"><h4>Issues</h4><p>Preferred tracker for Create-from and Home. Connect Linear (browser) or AbleTime (personal access token).</p></div>
-<div class="card frame"><h4>Remote</h4><p>Slack remote-controls this Mac. Add a workspace, name this destination, wait for Relay connected.</p></div>
-<div class="card frame"><h4>Connectors</h4><p>Optional Vercel, Supabase, PostHog, and Sentry tokens. Agents use official CLIs or the PostHog HTTP API — not vendor MCPs. Install a missing CLI from the same row.</p></div>
-<div class="card frame"><h4>The rest</h4><p>Environment injects extra env. Schedules are local jobs. Advanced covers cowboy, caffeinate, show cost, and one usage/session-limit policy (keep going, confirm, switch agent, or wait for reset). History is archived chats.</p></div>
+<section id="settings" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Settings</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:680px;margin:0 0 24px">Desktop Settings opens on <strong>Agents</strong>. Connections are owned by Sideboard, not per-agent MCP.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Agents</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Default agent, model, and effort for new chats; <strong>Account context</strong> (roles, tickets, and review queues as freeform text); then harness setup for Claude, Codex, OpenCode, Cursor, and Brightsy.</p>
+</div>
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Projects</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Per-repo context that adds to Settings → Agents. Agents can update account or project context after you confirm.</p>
+</div>
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Git</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">How this Mac and worktree agents authenticate GitHub — Auto, <code style="font-size:13px;color:#8cc8f5">gh</code>, SSH, or a personal access token.</p>
+</div>
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Issues</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Preferred tracker for Create-from and Home. Connect Linear (browser) or AbleTime (personal access token).</p>
+</div>
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Remote</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Slack remote-controls this Mac. Add a workspace, name this destination, wait for Relay connected.</p>
+</div>
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Connectors</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Optional Vercel, Supabase, PostHog, and Sentry tokens. Agents use official CLIs or the PostHog HTTP API — not vendor MCPs. Install a missing CLI from the same row.</p>
+</div>
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">The rest</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Environment injects extra env. Schedules are local jobs. Advanced covers cowboy, caffeinate, show cost, and one usage/session-limit policy (keep going, confirm, switch agent, or wait for reset). History is archived chats.</p>
+</div>
 </div>
 </section>
 
-<section id="find-work" class="container section">
-<h2>Contextually aware</h2>
-<p class="lede" style="margin:0.6rem 0 1.25rem">The orchestrator reads Settings → Agents (account) plus Settings → Projects (per-repo) so it can pick tickets and review PRs the way you would.</p>
-<div class="cards two">
-<div class="card frame">
-<h4>“Find me some work”</h4>
-<p>Lists options only. Tickets via <code>list_issues</code> (query + assignee from your context). Reviews via <code>list_prs queue=review</code> — open non-draft PRs labeled <code>eng-review</code> with no individual reviewer, preferring teams that match that context. Does not create worktrees.</p>
+<section id="find-work" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Contextually aware</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:720px;margin:0 0 24px">The orchestrator reads Settings → Agents (account) plus Settings → Projects (per-repo) so it can pick tickets and review PRs the way you would.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:24px">
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">“Find me some work”</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Lists options only. Tickets via <code style="color:#8cc8f5">list_issues</code> (query + assignee from your context). Reviews via <code style="color:#8cc8f5">list_prs queue=review</code> — open non-draft PRs labeled <code style="color:#8cc8f5">eng-review</code> with no individual reviewer, preferring teams that match that context. Does not create worktrees.</p>
 </div>
-<div class="card frame">
-<h4>“Find me work and start it”</h4>
-<p>Same list, then <code>create_thread</code> + <code>send_to_thread</code> for the ones you want started. Same split for reviews.</p>
+<div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h4 style="font-weight:700;font-size:18px;margin:0 0 8px">“Find me work and start it”</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Same list, then <code style="color:#8cc8f5">create_thread</code> + <code style="color:#8cc8f5">send_to_thread</code> for the ones you want started. Same split for reviews.</p>
 </div>
 </div>
-<p class="muted" style="margin-top:1.25rem;max-width:45rem;line-height:1.65">A team request such as <code>engineering-team</code> is a queue, not a claim — you are on that team. Set this once; every orchestration chat already has that context.</p>
+<p style="font-size:15.5px;line-height:1.65;color:#b3bcc4;max-width:720px;margin:0">A team request such as <code style="color:#8cc8f5">engineering-team</code> is a queue, not a claim — you are on that team. Set this once; every orchestration chat already has that context.</p>
 </section>
 
-<section id="schedules" class="container section">
-<h2>Scheduled orchestration</h2>
-<p class="lede" style="margin:0.6rem 0 1.25rem">Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app must be running. A sleeping Mac skips until wake.</p>
-<pre class="pre frame">sideboard schedule ls
+<section id="schedules" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Scheduled orchestration</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:680px;margin:0 0 24px">Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app must be running. A sleeping Mac skips until wake.</p>
+<pre style="margin:0 0 20px;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">sideboard schedule ls
 sideboard schedule add --prompt "Triage open PRs" --every 1h --thread &lt;id&gt;
 sideboard schedule add --prompt "Morning standup" --cron "0 9 * * *" --tz America/Los_Angeles
 sideboard schedule run &lt;id&gt;</pre>
-<p class="muted" style="margin-top:1.15rem;max-width:45rem;line-height:1.65">Same jobs from <strong>Settings → Schedules</strong> or orchestration MCP (<code>create_schedule</code>, <code>threadId=self</code> to continue this coordinator). Overnight: <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong> (off by default so a 9am cron does not pin the Mac awake), or <code>set_caffeinate</code> from a chat. Recurring jobs with no target chat open a new Global chat each run.</p>
+<p style="font-size:15.5px;line-height:1.65;color:#b3bcc4;max-width:720px;margin:0">Same jobs from <strong>Settings → Schedules</strong> or orchestration MCP (<code style="color:#8cc8f5">create_schedule</code>, <code style="color:#8cc8f5">threadId=self</code> to continue this coordinator). Overnight: <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong> (off by default so a 9am cron does not pin the Mac awake), or <code style="color:#8cc8f5">set_caffeinate</code> from a chat. Recurring jobs with no target chat open a new Global chat each run.</p>
 </section>
 
-<section id="guides" class="container section">
-<h2>Guides</h2>
-<div class="grid-docs" style="margin-top:1.5rem">
-<a class="card frame card-link" href="#settings"><h4>Settings</h4><p>Agents (account context), Projects, Git, Issues, Remote, and Connectors — connections live here, not in per-agent MCP.</p></a>
-<a class="card frame card-link" href="#find-work"><h4>Find work</h4><p>Account and project context so the orchestrator is aware when listing tickets and review PRs — or starting them. Agents can update that text after you confirm.</p></a>
-<a class="card frame card-link" href="#schedules"><h4>Schedules</h4><p>Local jobs that wake an orchestration chat. Opt-in caffeinate so overnight runs can fire.</p></a>
-<a class="card frame card-link" href="/slack/"><h4>Slack</h4><p>Settings → Remote. Connect a workspace, name this Mac, and address it by prefix from a DM or channel.</p></a>
-<a class="card frame card-link" href="https://github.com/mattlevine/sideboard/blob/main/docs/agent-adapters.md"><h4>Agent adapters</h4><p>How each agent is spawned, what it supports, and how to add another one.</p></a>
-<a class="card frame card-link" href="https://github.com/mattlevine/sideboard/blob/main/docs/remote-integrations.md"><h4>Remote integrations</h4><p>Settings map, Slack relay, Linear, optional connectors, and what does and doesn't leave the machine.</p></a>
-<a class="card frame card-link" href="https://github.com/mattlevine/sideboard#process-skills"><h4>Process skills</h4><p>Recurring guides live in <code>.claude/skills</code> so Claude Code and attach see them without Sideboard. Sideboard also ships <code>/long-running</code> to every worktree agent.</p></a>
-<a class="card frame card-link" id="compare" href="https://github.com/mattlevine/sideboard/blob/main/docs/COMPARE.md"><h4>Compare</h4><p>Peer-by-peer notes against Conductor, Cursor, Emdash and Superset.</p></a>
-<a class="card frame card-link" href="https://github.com/mattlevine/sideboard/blob/main/SECURITY.md"><h4>Security</h4><p>Where credentials live, what the relay sees, and the v1 safety rails on landing.</p></a>
-<a class="card frame card-link" href="https://github.com/mattlevine/sideboard/blob/main/CONTRIBUTING.md"><h4>Contributing</h4><p>Monorepo layout, local dev commands, and how releases are cut.</p></a>
+<section id="guides" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 24px">Guides</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px">
+<a href="#settings" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Settings</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Agents (account context), Projects, Git, Issues, Remote, and Connectors — connections live here, not in per-agent MCP.</p>
+</a>
+<a href="#find-work" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Find work</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Account and project context so the orchestrator is aware when listing tickets and review PRs — or starting them. Agents can update that text after you confirm.</p>
+</a>
+<a href="#schedules" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Schedules</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Local jobs that wake an orchestration chat. Opt-in caffeinate so overnight runs can fire.</p>
+</a>
+<a href="/slack/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Slack</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings → Remote. Connect a workspace, name this Mac, and address it by prefix from a DM or channel.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/docs/agent-adapters.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Agent adapters</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">How each agent is spawned, what it supports, and how to add another one.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/docs/remote-integrations.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Remote integrations</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings map, Slack relay, Linear, optional connectors, and what does and doesn't leave the machine.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard#process-skills" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Process skills</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Recurring guides live in <code style="font-size:13px;color:#8cc8f5">.claude/skills</code> so Claude Code and attach see them without Sideboard. Sideboard also ships <code style="font-size:13px;color:#8cc8f5">/long-running</code> to every worktree agent.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/docs/COMPARE.md" id="compare" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Compare</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Peer-by-peer notes against Conductor, Cursor, Emdash and Superset.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/SECURITY.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Security</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Where credentials live, what the relay sees, and the v1 safety rails on landing.</p>
+</a>
+<a href="https://github.com/mattlevine/sideboard/blob/main/CONTRIBUTING.md" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Contributing</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Monorepo layout, local dev commands, and how releases are cut.</p>
+</a>
 </div>
 </section>
 
-<section class="container section">
-<h2>Repo config</h2>
-<p class="lede" style="margin:0.6rem 0 1.5rem">Commit these next to the code. Sideboard prefers <code>.sideboard/settings.toml</code>; an existing <code>.conductor/settings.toml</code> still works.</p>
-<div class="cards two">
-<div class="card frame">
-<h3>Worktrees</h3>
-<p>Checkouts live outside the repo at <code>~/sideboard/workspaces/&lt;repo-slug&gt;/&lt;team&gt;/</code>. Override the root in settings. Opt-in cowboy (Settings → Advanced, then New chat → ⋯) works in the project folder on the default branch instead.</p>
+<section style="max-width:1180px;margin:0 auto;padding:80px 40px 110px">
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Repo config</h2>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:620px;margin:0 0 28px">Commit these next to the code. Sideboard prefers <code style="font-size:15px;color:#8cc8f5">.sideboard/settings.toml</code>; an existing <code style="font-size:15px;color:#8cc8f5">.conductor/settings.toml</code> still works.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:24px">
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Worktrees</h3>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Checkouts live outside the repo at <code style="font-size:13.5px;color:#8cc8f5">~/sideboard/workspaces/&lt;repo-slug&gt;/&lt;team&gt;/</code>. Override the root in settings. Opt-in cowboy (Settings → Advanced, then New chat → ⋯) works in the project folder on the default branch instead.</p>
 </div>
-<div class="card frame">
-<h3>Setup</h3>
-<p>New worktrees run <code>[scripts] setup</code> when present, then Cursor <code>.cursor/worktrees.json</code>, then <code>script/setup</code> or <code>bin/setup</code>.</p>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Setup</h3>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">New worktrees run <code style="font-size:13.5px;color:#8cc8f5">[scripts] setup</code> when present, then Cursor <code style="font-size:13.5px;color:#8cc8f5">.cursor/worktrees.json</code>, then <code style="font-size:13.5px;color:#8cc8f5">script/setup</code> or <code style="font-size:13.5px;color:#8cc8f5">bin/setup</code>.</p>
 </div>
-<div class="card frame">
-<h3>Review</h3>
-<p>Review attaches <code>.claude/skills/review/SKILL.md</code> when that skill already exists; otherwise it copies <code>.sideboard/review.md</code> into the worktree <code>.context/review.md</code>. Sideboard does not create a review skill.</p>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Review</h3>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Review attaches <code style="font-size:13.5px;color:#8cc8f5">.claude/skills/review/SKILL.md</code> when that skill already exists; otherwise it copies <code style="font-size:13.5px;color:#8cc8f5">.sideboard/review.md</code> into the worktree <code style="font-size:13.5px;color:#8cc8f5">.context/review.md</code>. Sideboard does not create a review skill.</p>
 </div>
-<div class="card frame">
-<h3>Process skills</h3>
-<p>Put recurring guides in <code>.claude/skills/&lt;name&gt;/SKILL.md</code>, not <code>.sideboard/skills</code>, so Claude Code and <code>attach</code> load them without Sideboard. <code>/long-running</code> is a Sideboard product skill — every worktree agent gets detach-and-wait without copying that file.</p>
+<div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
+<h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Process skills</h3>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Put recurring guides in <code style="font-size:13.5px;color:#8cc8f5">.claude/skills/&lt;name&gt;/SKILL.md</code>, not <code style="font-size:13.5px;color:#8cc8f5">.sideboard/skills</code>, so Claude Code and <code style="font-size:13.5px;color:#8cc8f5">attach</code> load them without Sideboard. <code style="font-size:13.5px;color:#8cc8f5">/long-running</code> is a Sideboard product skill — every worktree agent gets detach-and-wait without copying that file.</p>
 </div>
 </div>
-<pre class="pre frame" style="margin-top:1.25rem">[scripts]
+<pre style="margin:0;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">[scripts]
 setup = "pnpm install"
 
 [scripts.run.dev]
 command = "PORT=${SIDEBOARD_PORT:-3000} pnpm --filter web dev"
 default = true</pre>
 </section>
-</main>
 
-<footer class="site-footer">
-<div class="container">
-<div class="footer-grid">
-<div class="footer-brand">
-<a class="brand" href="/">
-<span class="brand-mark" aria-hidden="true"><span class="back"></span><span class="front"></span></span>
-<span class="brand-name">Sideboard</span>
-</a>
-<p>Local orchestration for a fleet of coding agents.</p>
-</div>
-<div class="footer-cols">
-<div class="footer-col">
-<span>Product</span>
-<a href="/">Home</a>
-<a href="/docs/">Docs</a>
-<a href="/slack/">Slack</a>
-</div>
-<div class="footer-col">
-<span>Legal</span>
-<a href="/privacy/">Privacy</a>
-<a href="/support/">Support</a>
-</div>
-<div class="footer-col">
-<span>Open source</span>
-<a href="https://github.com/mattlevine/sideboard">GitHub</a>
-<a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>
-</div>
-</div>
-</div>
-<p class="legal">Apache-2.0</p>
+<footer style="border-top:1px solid #26292d">
+<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
+<span style="display:flex;align-items:center;gap:10px;margin-right:auto">
+<span style="position:relative;display:inline-block;width:24px;height:24px;flex:none">
+<span style="position:absolute;left:6px;top:6px;width:16px;height:16px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:16px">sideboard.cloud</span>
+</span>
+<a href="/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Home</a>
+<a href="/slack/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Slack</a>
+<a href="/privacy/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Privacy</a>
+<a href="/support/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Support</a>
+<a href="https://github.com/mattlevine/sideboard" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">GitHub</a>
+<span style="color:#6f777e;font-size:14px">Apache-2.0</span>
 </div>
 </footer>
+
 </div>
 </body>
 </html>
