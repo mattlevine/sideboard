@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.248] - 2026-09-28
+
+### Changed
+
+- Tab bar usage is one context ring. Hover shows this chat's occupancy and, on Claude chats, the Code plan windows so extra tabs stay reachable.
+
 ## [0.1.247] - 2026-09-28
 
 ### Added
