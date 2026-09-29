@@ -121,6 +121,7 @@ describe('getRepoSetupInfo', () => {
     expect(getRepoSetupInfo(root)).toEqual({
       hasConfig: false,
       hasSetupScript: false,
+      hasSettingsToml: false,
       configLabel: null,
     });
   });
@@ -132,6 +133,7 @@ describe('getRepoSetupInfo', () => {
     expect(getRepoSetupInfo(root)).toEqual({
       hasConfig: true,
       hasSetupScript: false,
+      hasSettingsToml: true,
       configLabel: '.sideboard/settings.toml (worktree)',
     });
   });
@@ -146,6 +148,7 @@ describe('getRepoSetupInfo', () => {
     expect(getRepoSetupInfo(root)).toEqual({
       hasConfig: true,
       hasSetupScript: true,
+      hasSettingsToml: true,
       configLabel: '.conductor/settings.toml (worktree)',
     });
   });
@@ -195,6 +198,7 @@ describe('getRepoSetupInfo', () => {
     expect(getRepoSetupInfo(wt, repo)).toEqual({
       hasConfig: true,
       hasSetupScript: true,
+      hasSettingsToml: true,
       configLabel: '.sideboard/settings.toml (main repo)',
     });
   });
@@ -209,6 +213,7 @@ describe('getRepoSetupInfo', () => {
     expect(getRepoSetupInfo(root)).toEqual({
       hasConfig: true,
       hasSetupScript: true,
+      hasSettingsToml: false,
       configLabel: '.cursor/worktrees.json (worktree)',
     });
   });
@@ -220,8 +225,20 @@ describe('getRepoSetupInfo', () => {
     expect(getRepoSetupInfo(root)).toEqual({
       hasConfig: true,
       hasSetupScript: true,
+      hasSettingsToml: false,
       configLabel: 'script/setup (worktree)',
     });
+  });
+
+  it('does not treat settings.local.toml as committed settings.toml', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-setup-local-only-'));
+    mkdirSync(join(root, '.sideboard'));
+    writeFileSync(
+      join(root, '.sideboard', 'settings.local.toml'),
+      `[scripts.run.dev]\ncommand = "pnpm dev"\n`,
+    );
+    expect(getRepoSetupInfo(root).hasSettingsToml).toBe(false);
+    expect(getRepoSetupInfo(root).hasConfig).toBe(true);
   });
 });
 

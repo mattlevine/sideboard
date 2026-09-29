@@ -582,6 +582,7 @@ export interface IpcApi {
   ): Promise<{
     hasConfig: boolean;
     hasSetupScript: boolean;
+    hasSettingsToml: boolean;
     configLabel: string | null;
     prompts?: {
       renameBranch?: string;
