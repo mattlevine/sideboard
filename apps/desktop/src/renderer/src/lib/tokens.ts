@@ -155,6 +155,20 @@ export function contextMeterTone(ratio: number): '' | 'warn' | 'hot' {
   return '';
 }
 
+/** Tab-bar ring fill: thread context when known, otherwise hottest Claude plan window. */
+export function tabUsageRingRatio(
+  contextRatio: number | null | undefined,
+  claudeUsedPercent: number | null | undefined,
+): number | null {
+  if (contextRatio != null && Number.isFinite(contextRatio)) {
+    return Math.max(0, Math.min(1, contextRatio));
+  }
+  if (claudeUsedPercent != null && Number.isFinite(claudeUsedPercent)) {
+    return Math.max(0, Math.min(1, claudeUsedPercent / 100));
+  }
+  return null;
+}
+
 export function contextMeterTooltip(
   usage: TokenUsage | null,
   windowTokens: number,

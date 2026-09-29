@@ -8,9 +8,7 @@ import { previewUrlTabLabel } from '../lib/preview-url';
 import { reorderChatIds } from '../lib/worktree-tabs';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { CaffeinateBadge } from './CaffeinateBadge';
-import { ContextMeter } from './ContextMeter';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
-import { contextMeterTone } from '../lib/tokens';
 import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defaults';
 
 const CHAT_TAB_DRAG = 'application/x-sideboard-chat-tab';
@@ -46,13 +44,7 @@ interface Props {
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
   statusBadge?: string | null;
-  /** Going-forward occupancy / 1M. Warn/hot from that fill, not billed Σ. */
-  usageTotalLabel?: string | null;
-  usageTotalTooltip?: string;
-  /** 0–1 fill of the fixed 1M window; omit to hide the ring. */
-  contextRatio?: number | null;
-  contextTooltip?: string;
-  /** Claude Code plan remaining (5h / weekly / model) — shown only for Claude chats. */
+  /** Combined context + plan meter (one ring). */
   planUsage?: ReactNode;
   onSelectChat: (id: string) => void;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
@@ -95,10 +87,6 @@ export function ChatTabs({
   leftSidebarToggle,
   rightSidebarToggle,
   statusBadge = null,
-  usageTotalLabel = null,
-  usageTotalTooltip,
-  contextRatio = null,
-  contextTooltip,
   planUsage = null,
   onSelectChat,
   onSelectFile,
@@ -190,7 +178,6 @@ export function ChatTabs({
 
   const urlActive = Boolean(activeUrl) && !changesActive && !prPageActive;
   const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive && !prPageActive;
-  const meterTone = contextRatio != null ? contextMeterTone(contextRatio) : '';
   const canReorder = Boolean(onReorderChats) && chats.length > 1;
 
   function dropPlaceForTab(el: HTMLElement, clientX: number): 'before' | 'after' {
@@ -487,19 +474,6 @@ export function ChatTabs({
         />
       </div>
       <div className="chat-tabs-actions">
-        {(usageTotalLabel || contextRatio != null) && (
-          <span
-            className={`thread-meta usage-cluster${meterTone ? ` ${meterTone}` : ''}`}
-            title={contextTooltip ?? usageTotalTooltip}
-          >
-            {contextRatio != null && (
-              <ContextMeter ratio={contextRatio} title={contextTooltip} />
-            )}
-            {usageTotalLabel && (
-              <span className="usage-total">{usageTotalLabel}</span>
-            )}
-          </span>
-        )}
         {planUsage}
         {onFindChat && (
           <button

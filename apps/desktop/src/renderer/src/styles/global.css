@@ -2720,6 +2720,7 @@ mark.chat-search-hit.chat-search-current {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
   max-width: 200px;
   padding: 8px 10px 7px;
   border-bottom: 2px solid transparent;
@@ -2866,43 +2867,19 @@ mark.chat-search-hit.chat-search-current {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .thread-meta.usage-cluster {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   cursor: default;
   color: var(--muted);
 }
 
-.thread-meta.usage-cluster .usage-total {
-  font-variant-numeric: tabular-nums;
-}
-
-.thread-meta.usage-cluster.warn .usage-total {
-  color: #e6b84d;
-}
-
-.thread-meta.usage-cluster.hot .usage-total {
-  color: var(--err, #e85d5d);
-}
-
 .claude-plan-usage {
-  margin-left: 2px;
-  gap: 8px;
   white-space: nowrap;
-}
-
-.claude-plan-window {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.claude-plan-usage .usage-total {
-  font-size: 11px;
 }
 
 .claude-usage-card {
@@ -2917,6 +2894,12 @@ mark.chat-search-hit.chat-search-current {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   color: var(--text);
   -webkit-app-region: no-drag;
+}
+
+.claude-usage-card-section + .claude-usage-card-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 .claude-usage-card-head {
@@ -3020,11 +3003,6 @@ mark.chat-search-hit.chat-search-current {
 
 .claude-usage-card-foot {
   margin-top: 8px;
-}
-
-.thread-meta.usage-total {
-  font-variant-numeric: tabular-nums;
-  cursor: default;
 }
 
 .context-meter {
