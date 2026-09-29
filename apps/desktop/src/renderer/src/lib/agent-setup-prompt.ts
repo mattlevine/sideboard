@@ -1,4 +1,4 @@
-/** Prompt sent when the user chooses "Create settings.toml" in the Setup pane. */
+/** Prompt sent when the user chooses "Setup with agent" and settings.toml is missing. */
 export const AGENT_SETUP_PROMPT = `This worktree has no \`.sideboard/settings.toml\` or \`.conductor/settings.toml\`.
 
 Stay in this thread's worktree (your cwd) — do not edit the main repo checkout. Explore the worktree (package manager, monorepo layout, how to install deps, how to run the dev server). Then create \`.sideboard/settings.toml\` in the worktree (preferred; use \`.conductor/settings.toml\` only if the repo already standardizes on Conductor) with:

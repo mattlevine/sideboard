@@ -132,24 +132,14 @@ function SetupPanelActions({
           {setupRunning ? 'Running…' : rerun ? '▶ Run setup again' : '▶ Run setup'}
         </button>
       ) : null}
-      {showCreateToml ? (
+      {(showCreateToml || showAgentForMissingSetup) ? (
         <button
           type="button"
           className="ghost-action"
           disabled={agentSetupBusy}
           onClick={onCreateSettings}
         >
-          {agentSetupBusy ? 'Starting agent…' : '▶ Create settings.toml'}
-        </button>
-      ) : null}
-      {showAgentForMissingSetup ? (
-        <button
-          type="button"
-          className="ghost-action"
-          disabled={agentSetupBusy}
-          onClick={onCreateSettings}
-        >
-          {agentSetupBusy ? 'Starting agent…' : '▶ Use agent to set up'}
+          {agentSetupBusy ? 'Starting agent…' : '▶ Setup with agent'}
         </button>
       ) : null}
     </>
