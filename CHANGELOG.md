@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.247] - 2026-09-28
+
+### Added
+
+- Sidebar and Home worktree rows show **review** (someone else's PR, including their drafts) vs **pending** (yours, once it is in review) without hovering the git card.
+- Settings → Projects ready-for-review GitHub label per repo. Yours is pending when that label is on the PR; if unset, a published (non-draft) PR counts.
+
 ## [0.1.246] - 2026-09-28
 
 ### Added
