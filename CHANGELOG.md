@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.250] - 2026-09-29
+
+### Added
+
+- Setup pane **Setup with agent** when a worktree has no `.sideboard/settings.toml` or `.conductor/settings.toml`. Sends a chat prompt to create the file, including after auto-setup logs “No setup script.”
+
 ## [0.1.249] - 2026-09-29
 
 ### Added
