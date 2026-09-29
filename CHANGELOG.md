@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.249] - 2026-09-29
+
+### Added
+
+- Settings → Advanced → **Chat text size**: chat messages and the composer at 1.2× (default) or 1.4× the left nav size.
+
+### Changed
+
+- Chat text defaults to 1.2× the left nav (15.6px, was 18px). Pick 1.4× in Settings → Advanced for the previous larger size.
+
 ## [0.1.248] - 2026-09-28
 
 ### Changed

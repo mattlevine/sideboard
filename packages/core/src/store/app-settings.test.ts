@@ -608,6 +608,7 @@ describe('app settings', () => {
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.cowboyModeEnabled()).toBe(false);
     expect(mod.showCostEnabled()).toBe(false);
+    expect(mod.chatTextScale()).toBe(1.2);
     expect(mod.usageOnLimit()).toBe('keep_going');
     expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(false);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(false);
@@ -627,6 +628,7 @@ describe('app settings', () => {
       deleteBranchOnPurge: true,
       cowboyMode: true,
       showCost: true,
+      chatTextScale: 1.4,
       usageOnLimit: 'confirm',
       autoArchiveOnMerge: true,
       maxConcurrent: 8,
@@ -642,6 +644,7 @@ describe('app settings', () => {
       deleteBranchOnPurge: true,
       cowboyMode: true,
       showCost: true,
+      chatTextScale: 1.4,
       usageOnLimit: 'confirm',
       confirmClaudeUsageOverLimit: true,
       autoArchiveOnMerge: true,
@@ -649,6 +652,11 @@ describe('app settings', () => {
       followUpBehavior: 'queue',
       agentDoneSound: 'goal',
     });
+    expect(mod.chatTextScale()).toBe(1.4);
+    expect(
+      mod.updateAdvancedSettings({ chatTextScale: 2 as never }).advanced.chatTextScale,
+    ).toBe(1.4);
+    expect(mod.updateAdvancedSettings({ chatTextScale: 1.2 }).advanced.chatTextScale).toBe(1.2);
     expect(mod.followUpBehavior()).toBe('queue');
     expect(mod.agentDoneSound()).toBe('goal');
     expect(mod.updateAdvancedSettings({ followUpBehavior: 'steer' }).advanced.followUpBehavior).toBe(
