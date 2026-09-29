@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billedUsageLabel, contextFillRatio, contextMeterTone, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, occupancyFillRatio, resolveContextWindow, sumUsage, tabsContextLabel, totalTokens, usageTooltip } from './tokens';
+import { billedUsageLabel, contextFillRatio, contextMeterTone, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, occupancyFillRatio, resolveContextWindow, sumUsage, tabsContextLabel, tabUsageRingRatio, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -105,6 +105,19 @@ describe('tabsContextLabel', () => {
     expect(tabsContextLabel(4_200, 1_000_000)).toBe('4.2k / 1M');
     expect(tabsContextLabel(4_200, 1_000_000)).not.toContain('2.5');
     expect(tabsContextLabel(4_200, 1_000_000)).not.toContain('4.6');
+  });
+});
+
+describe('tabUsageRingRatio', () => {
+  it('prefers thread context over Claude plan fill', () => {
+    expect(tabUsageRingRatio(0.12, 97)).toBe(0.12);
+    expect(tabUsageRingRatio(0, 40)).toBe(0);
+  });
+
+  it('falls back to hottest Claude window when context is unknown', () => {
+    expect(tabUsageRingRatio(null, 40)).toBe(0.4);
+    expect(tabUsageRingRatio(undefined, 0)).toBe(0);
+    expect(tabUsageRingRatio(null, null)).toBeNull();
   });
 });
 

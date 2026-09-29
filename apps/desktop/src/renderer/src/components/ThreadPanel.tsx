@@ -60,7 +60,6 @@ import {
   sumUsage,
   tabsContextLabel,
   totalTokens,
-  usageTooltip,
 } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { useFollowUpBehavior } from '../lib/follow-up-behavior';
@@ -1873,10 +1872,7 @@ export function ThreadPanel({
     () => forwardOccupancyTokens(forwardMessages, latestContextUsage, contextWindow),
     [forwardMessages, latestContextUsage, contextWindow],
   );
-  const contextRatio =
-    forwardOccupancy > 0 || latestContextUsage || threadUsage
-      ? occupancyFillRatio(forwardOccupancy, contextWindow)
-      : null;
+  const contextRatio = occupancyFillRatio(forwardOccupancy, contextWindow);
   const contextCompacted = threadHasCompactedContext(forwardMessages);
   const showClaudePlan = shouldShowClaudePlanUsage(thread);
   const claudePlanUsage = useClaudePlanUsage(
@@ -2232,41 +2228,22 @@ export function ThreadPanel({
         statusBadge={
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
-        usageTotalLabel={
-          contextRatio != null
-            ? tabsContextLabel(
-                forwardOccupancy,
-                contextWindow,
-                threadUsage?.costUsd,
-                showCost,
-              )
-            : null
-        }
-        usageTotalTooltip={
-          latestContextUsage
-            ? contextMeterTooltip(latestContextUsage, contextWindow, {
-                occupancy: forwardOccupancy,
-                compacted: contextCompacted,
-                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
-              })
-            : threadUsage
-              ? `Open chat — ${usageTooltip(threadUsage, { showCost })}`
-              : undefined
-        }
-        contextRatio={contextRatio}
-        contextTooltip={
-          latestContextUsage || forwardOccupancy > 0
-            ? contextMeterTooltip(latestContextUsage, contextWindow, {
-                occupancy: forwardOccupancy,
-                compacted: contextCompacted,
-                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
-              })
-            : undefined
-        }
         planUsage={
-          showClaudePlan && claudePlanUsage ? (
-            <ClaudeUsageMeter usage={claudePlanUsage} />
-          ) : null
+          <ClaudeUsageMeter
+            usage={showClaudePlan ? claudePlanUsage : null}
+            contextRatio={contextRatio}
+            contextLabel={tabsContextLabel(
+              forwardOccupancy,
+              contextWindow,
+              threadUsage?.costUsd,
+              showCost,
+            )}
+            contextTooltip={contextMeterTooltip(latestContextUsage, contextWindow, {
+              occupancy: forwardOccupancy,
+              compacted: contextCompacted,
+              billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+            })}
+          />
         }
         openMenu={
           isGlobalThread(thread) ? undefined : (
