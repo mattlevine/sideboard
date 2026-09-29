@@ -4,6 +4,7 @@ import type {
   DiffResult,
   DiffScope,
   PrCheckRun,
+  RepoSetupInfo,
   Thread,
   ThreadAttachment,
 } from '@sideboard-ai/core';
@@ -19,7 +20,8 @@ import { FileTree } from './FileTree';
 import { PrChecksPanel } from './PrChecksPanel';
 import { StackMap } from './StackMap';
 import { ChangesScopeMenu } from './ChangesScopeMenu';
-import { AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
+import { AGENT_ADD_SETUP_PROMPT, AGENT_SETUP_PROMPT } from '../lib/agent-setup-prompt';
+import { setupPanelActions } from '../lib/setup-panel-actions';
 import { followThreadPrMeta } from '../lib/follow-thread-pr';
 import { prPillModifier, prPillStatusLabel, summarizeChecks, hasMergeConflictChecks, hasBranchBehindChecks, classifyMergeIssue, checksFromRuns, checksTabShortLabel } from '../lib/pr-format';
 import {
@@ -83,23 +85,75 @@ interface Props {
 type UpperTab = 'changes' | 'files' | 'checks';
 type LowerTab = 'setup' | 'run' | 'terminal';
 
-interface RepoSetupInfo {
-  hasConfig: boolean;
-  hasSetupScript: boolean;
-  configLabel: string | null;
-  prompts?: {
-    renameBranch?: string;
-    createPr?: string;
-    general?: string;
-    resolveMergeConflicts?: string;
-  };
-}
-
 interface RunScriptInfo {
   name: string;
   command: string;
   default?: boolean;
   icon?: string;
+}
+
+function setupEmptyCopy(info: RepoSetupInfo): string {
+  if (info.hasSetupScript) {
+    return 'Setup script output will appear here after running setup.';
+  }
+  if (!info.hasSettingsToml) {
+    return 'No .sideboard/settings.toml or .conductor/settings.toml in this worktree.';
+  }
+  return 'No setup script defined in settings.toml.';
+}
+
+function SetupPanelActions({
+  info,
+  setupRunning,
+  agentSetupBusy,
+  rerun,
+  onRun,
+  onCreateSettings,
+}: {
+  info: RepoSetupInfo;
+  setupRunning: boolean;
+  agentSetupBusy: boolean;
+  rerun: boolean;
+  onRun: () => void;
+  onCreateSettings: () => void;
+}) {
+  const { run: showRun, createToml: showCreateToml, addSetup: showAgentForMissingSetup } =
+    setupPanelActions(info);
+  if (!showRun && !showCreateToml && !showAgentForMissingSetup) return null;
+  return (
+    <>
+      {showRun ? (
+        <button
+          type="button"
+          className="ghost-action"
+          disabled={setupRunning}
+          onClick={onRun}
+        >
+          {setupRunning ? 'Running…' : rerun ? '▶ Run setup again' : '▶ Run setup'}
+        </button>
+      ) : null}
+      {showCreateToml ? (
+        <button
+          type="button"
+          className="ghost-action"
+          disabled={agentSetupBusy}
+          onClick={onCreateSettings}
+        >
+          {agentSetupBusy ? 'Starting agent…' : '▶ Create settings.toml'}
+        </button>
+      ) : null}
+      {showAgentForMissingSetup ? (
+        <button
+          type="button"
+          className="ghost-action"
+          disabled={agentSetupBusy}
+          onClick={onCreateSettings}
+        >
+          {agentSetupBusy ? 'Starting agent…' : '▶ Use agent to set up'}
+        </button>
+      ) : null}
+    </>
+  );
 }
 
 /** Prefer explicit default, then `dev`, and never fall back to `all`. */
@@ -1006,7 +1060,10 @@ export function RightSidebar({
         targetId = tab.id;
         onSelectChat?.(tab.id, tab);
       }
-      await window.sideboard.sendToThread(targetId, AGENT_SETUP_PROMPT);
+      await window.sideboard.sendToThread(
+        targetId,
+        setupInfo?.hasSettingsToml ? AGENT_ADD_SETUP_PROMPT : AGENT_SETUP_PROMPT,
+      );
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
@@ -1831,47 +1888,28 @@ export function RightSidebar({
                     />
                     {lower === 'setup' &&
                       (setupHasOutput || setupRunning ? (
-                        setupInfo.hasSetupScript ? (
-                          <div className="panel-footer-actions">
-                            <button
-                              type="button"
-                              className="ghost-action"
-                              disabled={setupRunning}
-                              onClick={() => void runSetupScript()}
-                            >
-                              {setupRunning ? 'Running…' : '▶ Run setup again'}
-                            </button>
-                          </div>
-                        ) : null
+                        <div className="panel-footer-actions">
+                          <SetupPanelActions
+                            info={setupInfo}
+                            setupRunning={setupRunning}
+                            agentSetupBusy={agentSetupBusy}
+                            rerun
+                            onRun={() => void runSetupScript()}
+                            onCreateSettings={() => void useAgentSetup()}
+                          />
+                        </div>
                       ) : (
                         <div className="panel-empty">
                           <div className="panel-empty-title">No setup script output</div>
-                          <p className="panel-empty-copy">
-                            {setupInfo.hasSetupScript
-                              ? 'Setup script output will appear here after running setup.'
-                              : setupInfo.hasConfig
-                                ? 'No setup script defined in settings.toml.'
-                                : 'No setup script in this worktree (.sideboard/settings.toml, .cursor/worktrees.json, or script/setup).'}
-                          </p>
-                          {setupInfo.hasSetupScript ? (
-                            <button
-                              type="button"
-                              className="ghost-action"
-                              disabled={setupRunning}
-                              onClick={() => void runSetupScript()}
-                            >
-                              ▶ Run setup
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="ghost-action"
-                              disabled={agentSetupBusy}
-                              onClick={() => void useAgentSetup()}
-                            >
-                              {agentSetupBusy ? 'Starting agent…' : '▶ Use agent to set up'}
-                            </button>
-                          )}
+                          <p className="panel-empty-copy">{setupEmptyCopy(setupInfo)}</p>
+                          <SetupPanelActions
+                            info={setupInfo}
+                            setupRunning={setupRunning}
+                            agentSetupBusy={agentSetupBusy}
+                            rerun={false}
+                            onRun={() => void runSetupScript()}
+                            onCreateSettings={() => void useAgentSetup()}
+                          />
                         </div>
                       ))}
                   </>

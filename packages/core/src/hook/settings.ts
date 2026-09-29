@@ -266,6 +266,29 @@ function familyExists(rootPath: string, source: 'sideboard' | 'conductor'): bool
   return existsSync(files.toml) || existsSync(files.local);
 }
 
+function hasCommittedSettingsToml(rootPath: string): boolean {
+  return (
+    existsSync(familyFiles(rootPath, 'sideboard').toml) ||
+    existsSync(familyFiles(rootPath, 'conductor').toml)
+  );
+}
+
+/** True if worktree or main repo has `.sideboard/settings.toml` or `.conductor/settings.toml`. */
+export function hasWorkspaceSettingsToml(
+  worktreePath: string,
+  repoPath?: string | null,
+): boolean {
+  if (hasCommittedSettingsToml(worktreePath)) return true;
+  if (
+    repoPath &&
+    normPath(repoPath) !== normPath(worktreePath) &&
+    hasCommittedSettingsToml(repoPath)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** Prefer `.sideboard`, then `.conductor`. */
 function detectFamily(rootPath: string): 'sideboard' | 'conductor' | null {
   if (familyExists(rootPath, 'sideboard')) return 'sideboard';
@@ -415,6 +438,8 @@ export interface RepoSetupInfo {
   hasConfig: boolean;
   /** A setup command will run on new worktrees (settings, Cursor json, or script/setup). */
   hasSetupScript: boolean;
+  /** Committed `.sideboard/settings.toml` or `.conductor/settings.toml` in worktree or main repo. */
+  hasSettingsToml: boolean;
   configLabel: string | null;
   /** `[prompts]` from workspace settings (Create PR / Resolve, etc.). */
   prompts?: RepoSettings['prompts'];
@@ -441,6 +466,7 @@ export function getRepoSetupInfo(
   return {
     hasConfig: hasWorkspaceHook(worktreePath, repoPath) || cursor || Boolean(convention),
     hasSetupScript,
+    hasSettingsToml: hasWorkspaceSettingsToml(worktreePath, repoPath),
     configLabel,
     ...(settings?.prompts ? { prompts: settings.prompts } : {}),
   };

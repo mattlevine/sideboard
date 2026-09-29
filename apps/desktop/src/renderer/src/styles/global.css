@@ -8772,6 +8772,8 @@ button.linkish:hover {
 .panel-footer-actions {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 8px;
   border-top: 1px solid #2a2622;
 }
