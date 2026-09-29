@@ -312,6 +312,17 @@ export function isAgentDoneSound(value: unknown): value is AgentDoneSound {
   return (AGENT_DONE_SOUNDS as readonly string[]).includes(value as string);
 }
 
+/** Chat text size as a multiple of the 13px UI (left nav) size. Default 1.2. */
+export type ChatTextScale = 1.2 | 1.4;
+
+export const CHAT_TEXT_SCALES = [1.2, 1.4] as const;
+
+export const CHAT_TEXT_SCALE_DEFAULT: ChatTextScale = 1.2;
+
+export function isChatTextScale(value: unknown): value is ChatTextScale {
+  return (CHAT_TEXT_SCALES as readonly unknown[]).includes(value);
+}
+
 export interface AdvancedAppSettings {
   /**
    * Ask the agent to rename the temporary `thread/<team>` branch on first send.
@@ -364,6 +375,11 @@ export interface AdvancedAppSettings {
    * hover spend. Default off — turn on in Settings → Advanced.
    */
   showCost?: boolean;
+  /**
+   * Chat text size relative to the left nav.
+   * Omitted = {@link CHAT_TEXT_SCALE_DEFAULT} (1.2).
+   */
+  chatTextScale?: ChatTextScale;
   /**
    * Unified over-limit policy. Default `keep_going`.
    * @see UsageOnLimit
@@ -939,6 +955,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.showCost === 'boolean') {
     out.showCost = source.showCost;
+  }
+  if (isChatTextScale(source.chatTextScale)) {
+    out.chatTextScale = source.chatTextScale;
   }
   if (isUsageOnLimit(source.usageOnLimit)) {
     out.usageOnLimit = source.usageOnLimit;
@@ -2239,6 +2258,9 @@ export function updateAdvancedSettings(
   if (typeof patch.showCost === 'boolean') {
     advanced.showCost = patch.showCost;
   }
+  if (isChatTextScale(patch.chatTextScale)) {
+    advanced.chatTextScale = patch.chatTextScale;
+  }
   if (isUsageOnLimit(patch.usageOnLimit)) {
     advanced.usageOnLimit = patch.usageOnLimit;
     advanced.confirmClaudeUsageOverLimit = patch.usageOnLimit === 'confirm';
@@ -2387,6 +2409,15 @@ export function showCostEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.showCost);
+}
+
+/** Settings → Advanced → Chat text size (default 1.2× the left nav). */
+export function chatTextScale(
+  settings: AppSettings = loadAppSettings(),
+): ChatTextScale {
+  return isChatTextScale(settings.advanced.chatTextScale)
+    ? settings.advanced.chatTextScale
+    : CHAT_TEXT_SCALE_DEFAULT;
 }
 
 /** Settings → Advanced → Confirm with user when usage is over the limit. */

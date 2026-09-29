@@ -34,6 +34,7 @@ import {
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
 import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
+import { applyChatTextScale, resolveChatTextScale } from './lib/chat-text-scale';
 import { ShowCostProvider } from './lib/show-cost';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
@@ -526,6 +527,7 @@ export function App() {
   useEffect(() => {
     void window.sideboard.getAppSettings().then((s) => {
       setShowCost(Boolean(s.advanced?.showCost));
+      applyChatTextScale(resolveChatTextScale(s.advanced?.chatTextScale));
       setFollowUpBehavior(s.advanced?.followUpBehavior === 'queue' ? 'queue' : 'steer');
       setAgentDoneSound(
         isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
@@ -1612,6 +1614,7 @@ export function App() {
           }}
           onSettingsChange={(s) => {
             setShowCost(Boolean(s.advanced?.showCost));
+            applyChatTextScale(resolveChatTextScale(s.advanced?.chatTextScale));
             setFollowUpBehavior(s.advanced?.followUpBehavior === 'queue' ? 'queue' : 'steer');
             setAgentDoneSound(
               isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',

@@ -28,6 +28,11 @@ import {
   isAgentDoneSound,
   playAgentDoneSound,
 } from '../lib/agent-done-sound';
+import {
+  CHAT_TEXT_SCALE_OPTIONS,
+  isChatTextScale,
+  resolveChatTextScale,
+} from '../lib/chat-text-scale';
 import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ConnectorsSettings } from './ConnectorsSettings';
@@ -1855,6 +1860,35 @@ export function SettingsModal({
                     >
                       <span className="settings-switch-knob" />
                     </button>
+                  </div>
+                </div>
+
+                <div className="settings-section settings-section-card">
+                  <div className="settings-section-title">Chat text size</div>
+                  <p className="settings-hint">
+                    Size of chat messages and the composer relative to the left nav. 1.2× is the
+                    default; 1.4× is closer to the previous larger chat text.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem', gap: '0.75rem' }}>
+                    <label className="settings-hint" htmlFor="chat-text-scale">
+                      Size
+                    </label>
+                    <select
+                      id="chat-text-scale"
+                      value={String(resolveChatTextScale(advanced.chatTextScale))}
+                      disabled={busy}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (!isChatTextScale(v)) return;
+                        void saveAdvancedPatch({ chatTextScale: v });
+                      }}
+                    >
+                      {CHAT_TEXT_SCALE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={String(opt.value)}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

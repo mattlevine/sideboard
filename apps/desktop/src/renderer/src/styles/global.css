@@ -25,8 +25,9 @@
   --mono:
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --font-size: 13px;
-  --font-size-chat: 18px;
   --font-size-ui: 13px;
+  --chat-text-scale: 1.2;
+  --font-size-chat: calc(var(--font-size-ui) * var(--chat-text-scale));
   --font-size-meta: 14px;
   --font-size-tiny: 12px;
   --line-height: 1.45;
