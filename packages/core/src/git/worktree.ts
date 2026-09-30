@@ -50,6 +50,7 @@ import {
   type GithubGitAuthMode,
 } from '../store/app-settings.js';
 import {
+  applyCleanLocalMergeTree,
   buildMergeGateChecks,
   prIsInMergeQueue,
   type PrMergeGate,
@@ -437,6 +438,26 @@ export async function listPrs(
   return applyPrListResponse(stdout, { ...resolved, limit, viewerTeams });
 }
 
+/** `gh pr view` / `pr list` fields needed at create time (badges + draft). */
+const PR_INFO_JSON_FIELDS =
+  'number,title,headRefName,url,isCrossRepository,author,isDraft,labels';
+
+function prInfoFromGhView(view: Record<string, unknown>): PrInfo {
+  const author = view.author as { login?: string } | null | undefined;
+  const login = author?.login?.trim();
+  return {
+    number: Number(view.number),
+    title: String(view.title ?? ''),
+    headRefName: String(view.headRefName ?? ''),
+    url: String(view.url ?? ''),
+    isCrossRepository: Boolean(view.isCrossRepository),
+    author: login ? { login } : null,
+    isDraft: Boolean(view.isDraft),
+    state: typeof view.state === 'string' ? view.state : undefined,
+    labels: labelNames(view.labels),
+  };
+}
+
 export async function getPr(
   repoPath: string,
   number: number,
@@ -447,12 +468,16 @@ export async function getPr(
     'view',
     String(number),
     '--json',
-    'number,title,headRefName,url,isCrossRepository,author',
+    PR_INFO_JSON_FIELDS,
   ];
   if (slug) args.push('--repo', slug);
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) return null;
-  return JSON.parse(stdout) as PrInfo;
+  try {
+    return prInfoFromGhView(JSON.parse(stdout) as Record<string, unknown>);
+  } catch {
+    return null;
+  }
 }
 
 function normalizeGitBranchName(ref: string): string {
@@ -546,7 +571,7 @@ export async function getPrForHeadBranch(
     '--head',
     listHead,
     '--json',
-    'number,title,headRefName,url,isCrossRepository,author',
+    PR_INFO_JSON_FIELDS,
     '--limit',
     '1',
     '--state',
@@ -556,8 +581,8 @@ export async function getPrForHeadBranch(
   const listed = await gh(listArgs, repoPath, { reject: false });
   if (listed.exitCode === 0 && listed.stdout.trim()) {
     try {
-      const rows = JSON.parse(listed.stdout) as PrInfo[];
-      if (rows[0]) return rows[0];
+      const rows = JSON.parse(listed.stdout) as Record<string, unknown>[];
+      if (rows[0]) return prInfoFromGhView(rows[0]);
     } catch {
       // fall through to `pr view`
     }
@@ -568,13 +593,13 @@ export async function getPrForHeadBranch(
     'view',
     head,
     '--json',
-    'number,title,headRefName,url,isCrossRepository,author,state',
+    `${PR_INFO_JSON_FIELDS},state`,
   ];
   if (slug) viewArgs.push('--repo', slug);
   const viewed = await gh(viewArgs, repoPath, { reject: false });
   if (viewed.exitCode !== 0 || !viewed.stdout.trim()) return null;
   try {
-    const info = JSON.parse(viewed.stdout) as PrInfo & { state?: string };
+    const info = prInfoFromGhView(JSON.parse(viewed.stdout) as Record<string, unknown>);
     const state = (info.state ?? 'OPEN').trim().toUpperCase();
     if (state !== 'OPEN') return null;
     return info;
@@ -748,11 +773,7 @@ async function probeLocalMergeGate(
     }
     if (gate && (githubConflicting || githubUnknown)) {
       return {
-        gate: {
-          ...gate,
-          mergeable: 'MERGEABLE',
-          mergeStateStatus: mergeState === 'BEHIND' ? 'BEHIND' : 'CLEAN',
-        },
+        gate: applyCleanLocalMergeTree(gate),
         files: [],
       };
     }

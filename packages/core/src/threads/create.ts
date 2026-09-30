@@ -202,6 +202,7 @@ export async function createThread(
   let prTitle: string | null = null;
   let prAuthorLogin: string | null = null;
   let prLabels: string[] = [];
+  let prIsDraft = false;
   if (sourceType === 'pr') {
     const num = Number(input.sourceRef.replace(/^#/, ''));
     if (!Number.isFinite(num)) throw new Error(`Invalid PR number: ${input.sourceRef}`);
@@ -219,6 +220,7 @@ export async function createThread(
     prUrl = pr.url;
     prAuthorLogin = pr.author?.login?.trim() || null;
     prLabels = pr.labels ?? [];
+    prIsDraft = Boolean(pr.isDraft);
     const localFetchBranch = `sideboard-pr-${pr.number}`;
     await fetchPrHead(repoPath, pr.number, localFetchBranch);
     sourceRef = localFetchBranch;
@@ -249,6 +251,7 @@ export async function createThread(
           prTitle = existing.title;
           prAuthorLogin = existing.author?.login?.trim() || null;
           prLabels = existing.labels ?? [];
+          prIsDraft = Boolean(existing.isDraft);
         }
       }
     }
@@ -297,6 +300,7 @@ export async function createThread(
     prTitle,
     prAuthorLogin,
     prLabels,
+    prIsDraft,
   });
   writeThread(thread);
   await ensureWorkspace(repoPath);

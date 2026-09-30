@@ -182,6 +182,25 @@ description: Detach long jobs
     expect(partsToAssistantText(parts)).toBe('Detached the pack.');
   });
 
+  it('does not close a streaming Skill row on API retry or compact thinking', () => {
+    let parts = applyAgentEvent([], { type: 'stdout', data: '---\nname: long-running\n' });
+    expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'running' });
+    parts = applyAgentEvent(parts, { type: 'thinking', data: 'API retry 2/5 (wait 800ms)' });
+    expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'running' });
+    parts = applyAgentEvent(parts, {
+      type: 'thinking',
+      data: 'Compressing context…',
+      replace: true,
+    });
+    expect(parts[0]).toMatchObject({ type: 'tool', name: 'Skill', status: 'running' });
+    parts = applyAgentEvent(parts, {
+      type: 'stdout',
+      data: 'description: Detach\n---\n\n# Long-running jobs\nYou fix the process.\n',
+    });
+    expect(parts[0]?.type === 'tool' && parts[0].result).toContain('You fix the process.');
+    expect(partsToAssistantText(parts)).toBe('');
+  });
+
   it('keeps SKILL.md tokens after the YAML fence on the Skill row', () => {
     let parts = applyAgentEvent([], { type: 'stdout', data: '---\nname: long-running\n' });
     parts = applyAgentEvent(parts, { type: 'stdout', data: 'description: Detach\n---\n' });

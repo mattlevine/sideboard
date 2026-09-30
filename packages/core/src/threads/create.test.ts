@@ -33,10 +33,11 @@ vi.mock('../store/app-settings.js', async (importOriginal) => {
   };
 });
 
-const { createThreadWorktree, getPr, getPrForHeadBranch } = vi.hoisted(() => ({
+const { createThreadWorktree, getPr, getPrForHeadBranch, fetchPrHead } = vi.hoisted(() => ({
   createThreadWorktree: vi.fn(),
   getPr: vi.fn(),
   getPrForHeadBranch: vi.fn(),
+  fetchPrHead: vi.fn(),
 }));
 
 vi.mock('../git/worktree.js', async (importOriginal) => {
@@ -46,6 +47,7 @@ vi.mock('../git/worktree.js', async (importOriginal) => {
     createThreadWorktree,
     getPr,
     getPrForHeadBranch,
+    fetchPrHead,
   };
 });
 
@@ -62,8 +64,10 @@ describe('createThread cowboy', () => {
     createThreadWorktree.mockReset();
     getPr.mockReset();
     getPrForHeadBranch.mockReset();
+    fetchPrHead.mockReset();
     getPr.mockResolvedValue(null);
     getPrForHeadBranch.mockResolvedValue(null);
+    fetchPrHead.mockResolvedValue(undefined);
     repo = mkdtempSync(join(tmpdir(), 'sideboard-cowboy-repo-'));
     await execa('git', ['init', '-b', 'main'], { cwd: repo });
     await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: repo });
@@ -144,8 +148,10 @@ describe('createThread reuses a live named branch', () => {
     createThreadWorktree.mockReset();
     getPr.mockReset();
     getPrForHeadBranch.mockReset();
+    fetchPrHead.mockReset();
     getPr.mockResolvedValue(null);
     getPrForHeadBranch.mockResolvedValue(null);
+    fetchPrHead.mockResolvedValue(undefined);
     createThreadWorktree.mockResolvedValue({
       branchName: 'thread/new',
       worktreePath: join(tmpdir(), 'sideboard-reuse-wt'),
@@ -295,5 +301,61 @@ describe('createThread reuses a live named branch', () => {
     expect(createThreadWorktree).toHaveBeenCalled();
     const slug = (createThreadWorktree.mock.calls[0]?.[0] as { slug?: string })?.slug;
     expect(slug).toMatch(/^eng-12-/);
+  });
+});
+
+describe('createThread from PR stores draft and labels', () => {
+  let dataDir: string;
+  let repo: string;
+
+  beforeEach(async () => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sideboard-pr-create-data-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+    createThreadWorktree.mockReset();
+    getPr.mockReset();
+    getPrForHeadBranch.mockReset();
+    fetchPrHead.mockReset();
+    getPrForHeadBranch.mockResolvedValue(null);
+    fetchPrHead.mockResolvedValue(undefined);
+    createThreadWorktree.mockResolvedValue({
+      branchName: 'thread/ajax',
+      worktreePath: join(tmpdir(), 'sideboard-pr-create-wt'),
+    });
+    repo = mkdtempSync(join(tmpdir(), 'sideboard-pr-create-repo-'));
+    await execa('git', ['init', '-b', 'main'], { cwd: repo });
+    await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: repo });
+    await execa('git', ['config', 'user.name', 'Test'], { cwd: repo });
+    writeFileSync(join(repo, 'README.md'), 'hi\n');
+    await execa('git', ['add', 'README.md'], { cwd: repo });
+    await execa('git', ['commit', '-m', 'init'], { cwd: repo });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('persists isDraft and labels from getPr', async () => {
+    getPr.mockResolvedValue({
+      number: 12,
+      title: 'WIP login',
+      headRefName: 'feat/login',
+      url: 'https://github.com/acme/app/pull/12',
+      isCrossRepository: false,
+      isDraft: true,
+      labels: ['eng-review'],
+      author: { login: 'sam' },
+    });
+    const thread = await createThread({
+      sourceType: 'pr',
+      sourceRef: '12',
+      agent: 'claude',
+      repoPath: repo,
+    });
+    expect(thread.prIsDraft).toBe(true);
+    expect(thread.prLabels).toEqual(['eng-review']);
+    expect(thread.prAuthorLogin).toBe('sam');
+    expect(fetchPrHead).toHaveBeenCalled();
   });
 });

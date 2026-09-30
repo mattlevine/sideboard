@@ -19,6 +19,33 @@ export function prIsInMergeQueue(
   return (gate.mergeStateStatus ?? '').toUpperCase() === 'QUEUED';
 }
 
+/**
+ * After a clean local `merge-tree`, treat GitHub CONFLICTING as stale and fill
+ * UNKNOWN mergeable — but keep known statuses (UNSTABLE, BLOCKED, DRAFT, …).
+ */
+export function applyCleanLocalMergeTree(gate: PrMergeGate): PrMergeGate {
+  const mergeable = (gate.mergeable ?? '').toUpperCase();
+  const mergeState = (gate.mergeStateStatus ?? '').toUpperCase();
+  const githubConflicting = mergeable === 'CONFLICTING' || mergeState === 'DIRTY';
+  if (githubConflicting) {
+    return {
+      ...gate,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: mergeState === 'BEHIND' ? 'BEHIND' : 'CLEAN',
+    };
+  }
+  return {
+    ...gate,
+    mergeable: mergeable === 'UNKNOWN' || !mergeable ? 'MERGEABLE' : gate.mergeable,
+    mergeStateStatus:
+      mergeState === 'BEHIND'
+        ? 'BEHIND'
+        : mergeState === 'UNKNOWN' || !mergeState
+          ? 'CLEAN'
+          : gate.mergeStateStatus,
+  };
+}
+
 /** Conflicts block merge. Behind-base is informational (update recommended, not a failure). */
 export type PrMergeIssue = 'conflicts' | 'behind';
 
