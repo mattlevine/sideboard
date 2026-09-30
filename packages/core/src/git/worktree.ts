@@ -921,6 +921,7 @@ export const PR_DETAILS_JSON_FIELDS = [
   'isDraft',
   'reviewDecision',
   'author',
+  'createdAt',
   'baseRefName',
   'headRefName',
   'additions',
@@ -956,6 +957,7 @@ export function parsePrDetailsView(view: Record<string, unknown>): PrDetails {
         ? view.reviewDecision
         : null,
     author: { login: author.login ?? 'unknown', name: author.name ?? null },
+    createdAt: typeof view.createdAt === 'string' && view.createdAt ? view.createdAt : null,
     baseRefName: String(view.baseRefName ?? ''),
     headRefName: String(view.headRefName ?? ''),
     additions: Number(view.additions ?? 0),

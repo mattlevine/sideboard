@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - After Resolve finishes, the left-nav worktree hover follows persisted mergeability instead of keeping **Merge conflicts** while the git button already says Commit & push. A local clean merge-tree also clears a stale GitHub CONFLICTING status.
-- The PR page Activity view shows the pull request description as the opening post, not only behind the Description tab.
+- The PR page is one GitHub-style conversation: description first, then comments and reviews (no Description tab).
 
 ## [0.1.250] - 2026-09-29
 

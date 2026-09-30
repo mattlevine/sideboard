@@ -13,7 +13,7 @@ export interface PrActivityItem {
 
 /** Opening post for the PR conversation (GitHub-style description). */
 export function prDescriptionItem(
-  details: Pick<PrDetails, 'body' | 'author'>,
+  details: Pick<PrDetails, 'body' | 'author'> & { createdAt?: string | null },
 ): PrActivityItem | null {
   const body = details.body?.trim() ?? '';
   if (!body) return null;
@@ -22,7 +22,7 @@ export function prDescriptionItem(
     kind: 'description',
     author: details.author?.login?.trim() || 'unknown',
     body: details.body,
-    at: '',
+    at: details.createdAt?.trim() || '',
   };
 }
 
@@ -132,6 +132,17 @@ export function prActivityItems(details: Pick<PrDetails, 'comments' | 'reviews'>
     const tb = Date.parse(b.at) || 0;
     return ta - tb;
   });
+}
+
+/** GitHub conversation: PR body first, then comments and reviews. */
+export function prConversationItems(
+  details: Pick<PrDetails, 'body' | 'author' | 'comments' | 'reviews'> & {
+    createdAt?: string | null;
+  },
+): PrActivityItem[] {
+  const lead = prDescriptionItem(details);
+  const rest = prActivityItems(details);
+  return lead ? [lead, ...rest] : rest;
 }
 
 const HTML_TAG = /<\/?[a-zA-Z][^>]*>/;
