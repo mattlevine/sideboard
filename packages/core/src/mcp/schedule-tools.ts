@@ -6,6 +6,7 @@ import {
   getSchedule,
   listSchedules,
   resolveScheduleThreadId,
+  scheduleNeedsCaffeinate,
   updateSchedule,
   type ScheduleWhen,
 } from '../store/schedules.js';
@@ -62,7 +63,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'create_schedule',
-    'Create a local schedule that, when due, sends a prompt to an existing chat (threadId) or starts a new Global orchestration chat (omit threadId). Pass threadId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without threadId open a new Global chat each run. Overnight/unattended runs need Settings → Advanced → Caffeinate while schedules are enabled (orchestration chats can also call set_caffeinate). Sideboard.app must be running for the job to fire.',
+    'Create a local schedule that, when due, sends a prompt to an existing chat (threadId) or starts a new Global orchestration chat (omit threadId). Pass threadId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without threadId open a new Global chat each run. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
     {
       prompt: z.string().describe('User message / goal queued when the schedule fires'),
       name: z.string().optional(),
@@ -104,8 +105,9 @@ export function registerScheduleTools(server: McpServer): void {
         });
         return text({
           schedule,
-          hint:
-            'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run. Overnight runs need Settings → Advanced → Caffeinate while schedules are enabled.',
+          hint: scheduleNeedsCaffeinate(schedule)
+            ? 'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run. Caffeinate while schedules are enabled is now on so the Mac can stay awake until this job is due.'
+            : 'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run.',
         });
       } catch (err) {
         return fail(err);

@@ -10,6 +10,10 @@ import {
 import type { AgentKind } from '../types/thread.js';
 import { appDataDir } from './paths.js';
 import { writePrivateFile } from './private-file.js';
+import {
+  caffeinateWhileSchedulesEnabled,
+  updateAdvancedSettings,
+} from './app-settings.js';
 
 export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
 
@@ -25,7 +29,6 @@ export interface ScheduledTask {
   enabled: boolean;
   when: ScheduleWhen;
   /** Existing chat (orchestration or worktree). Null = create a new Global chat on fire. */
-  threadId: string | null;
   threadId: string | null;
   agent: OrchestratorAgentKind | null;
   model: string | null;
@@ -262,6 +265,24 @@ export function hasEnabledSchedules(): boolean {
   return listSchedules().some((row) => row.enabled);
 }
 
+/** Enabled job whose next tick is still in the future. */
+export function scheduleNeedsCaffeinate(
+  task: Pick<ScheduledTask, 'enabled' | 'nextRunAt'>,
+  now: Date = new Date(),
+): boolean {
+  if (!task.enabled) return false;
+  const at = new Date(task.nextRunAt);
+  if (Number.isNaN(at.getTime())) return false;
+  return at.getTime() > now.getTime();
+}
+
+/** Creating/enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled. */
+function ensureCaffeinateForFutureSchedule(task: ScheduledTask): void {
+  if (!scheduleNeedsCaffeinate(task)) return;
+  if (caffeinateWhileSchedulesEnabled()) return;
+  updateAdvancedSettings({ caffeinateWhileSchedules: true });
+}
+
 export function getSchedule(id: string): ScheduledTask | null {
   const key = id.trim();
   if (!key) return null;
@@ -277,6 +298,7 @@ export function createSchedule(input: CreateScheduledTaskInput): ScheduledTask {
   const rows = readAll();
   rows.push(task);
   writeAll(rows);
+  ensureCaffeinateForFutureSchedule(task);
   return task;
 }
 
@@ -317,6 +339,7 @@ export function updateSchedule(
   };
   rows[idx] = next;
   writeAll(rows);
+  ensureCaffeinateForFutureSchedule(next);
   return next;
 }
 

@@ -136,4 +136,31 @@ describe('schedules store', () => {
     updateSchedule(row.id, { enabled: false });
     expect(hasEnabledSchedules()).toBe(false);
   });
+
+  it('turns on caffeinate-while-schedules for an enabled future job', async () => {
+    const { createSchedule, updateSchedule, scheduleNeedsCaffeinate } = await load();
+    const settings = await import('./app-settings.js');
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(false);
+    const row = createSchedule({
+      prompt: 'Later',
+      when: { kind: 'once', at: '2099-01-01T00:00:00.000Z' },
+      createdBy: 'mcp',
+    });
+    expect(scheduleNeedsCaffeinate(row)).toBe(true);
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(true);
+
+    settings.updateAdvancedSettings({ caffeinateWhileSchedules: false });
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(false);
+    const disabled = createSchedule({
+      prompt: 'Off',
+      when: { kind: 'every', every: '1h' },
+      enabled: false,
+      createdBy: 'ui',
+    });
+    expect(scheduleNeedsCaffeinate(disabled)).toBe(false);
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(false);
+
+    updateSchedule(disabled.id, { enabled: true });
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(true);
+  });
 });

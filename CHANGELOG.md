@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Worktree agents can create and manage local Sideboard schedules (`list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule`). `threadId=self` continues that coding chat; omit `threadId` to start a new Global orchestration chat when due. Settings → Schedules can target worktree chats too. If the named chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat).
+- Worktree agents can create and manage local Sideboard schedules (`list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule`). `threadId=self` continues that coding chat; omit `threadId` to start a new Global orchestration chat when due. Settings → Schedules can target worktree chats too. If the named chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled**.
 
 ### Changed
 

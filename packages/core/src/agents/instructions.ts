@@ -161,7 +161,7 @@ export function formatWorktreeDirective(
   lines.push(formatDevAccessHint(opts?.activeRuns));
   lines.push('');
   lines.push(
-    'Schedules: `create_schedule` / `list_schedules` (`at` / `every` / `cron`). `threadId=self` continues this chat; omit threadId for a new Global chat. Fires only while Sideboard.app is running. Overnight: Settings → Advanced → Caffeinate while schedules are enabled.',
+    'Schedules: `create_schedule` / `list_schedules` (`at` / `every` / `cron`). `threadId=self` continues this chat; omit threadId for a new Global chat. Fires only while Sideboard.app is running. A future job turns on Settings → Advanced → Caffeinate while schedules are enabled.',
   );
   lines.push('');
   lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));

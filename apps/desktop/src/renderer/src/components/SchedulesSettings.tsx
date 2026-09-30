@@ -236,10 +236,10 @@ export function SchedulesSettings() {
     <div className="settings-body">
       <p className="settings-lead">
         Jobs that send a prompt to a chat (Global orchestration or a worktree),
-        or start a new Global chat. Sideboard must be running. A sleeping Mac
-        skips until wake — turn on{' '}
+        or start a new Global chat. Sideboard must be running. Creating or
+        enabling a future job turns on{' '}
         <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong>{' '}
-        (or <code>set_caffeinate</code> from a Global chat) for overnight runs.
+        so the Mac can stay awake until due. A sleeping Mac skips until wake.
       </p>
       {error && <div className="settings-error" style={{ margin: '0 0 12px' }}>{error}</div>}
 
