@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README and marketing-site screenshots refreshed (`sideboard-desktop-review-v6.png`, `site/desktop.png`, `site/board.png`) at native 2764×1680 PNG (144 dpi) so they stay sharp on retina.
+
 ## [0.1.252] - 2026-09-29
 
 ### Added
