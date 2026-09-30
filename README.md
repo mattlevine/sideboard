@@ -450,7 +450,7 @@ sideboard schedule add --prompt "One-shot reminder" --at 2026-08-21T18:00:00-07:
 sideboard schedule run <id>
 ```
 
-Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs will open a new chat each run). Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat.
+Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs will open a new chat each run). Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat. If the target chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat).
 
 ## Also: Brightsy
 
