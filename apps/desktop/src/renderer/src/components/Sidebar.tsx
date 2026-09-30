@@ -264,7 +264,16 @@ function WorktreeEditCard({
 
   useEffect(() => {
     setPrMeta((prev) => followThreadPrMeta(prev, thread));
-  }, [thread.prUrl, thread.prState, thread.prIsDraft]);
+  }, [
+    thread.prUrl,
+    thread.prState,
+    thread.prIsDraft,
+    thread.prTitle,
+    thread.prReviewDecision,
+    thread.prMergeable,
+    thread.prMergeStateStatus,
+    thread.prIsInMergeQueue,
+  ]);
 
   // Fetch live PR lifecycle (draft / open / merged / review) when the card opens.
   useEffect(() => {

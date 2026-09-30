@@ -21,18 +21,34 @@ function samePrUrl(a: string, b: string): boolean {
   return Boolean(na && nb && na === nb);
 }
 
+/** Thread fields the sidebar PR pill / left-nav hover follow without a refetch. */
+export type ThreadPrFollow = {
+  prUrl?: string | null;
+  prState?: string | null;
+  prIsDraft?: boolean;
+  prTitle?: string | null;
+  prReviewDecision?: string | null;
+  prMergeable?: string | null;
+  prMergeStateStatus?: string | null;
+  prIsInMergeQueue?: boolean;
+};
+
+function nonEmpty(value: string | null | undefined): string | null {
+  const text = value?.trim() || '';
+  return text || null;
+}
+
 /**
  * When the PR connected to a worktree changes (new URL or lifecycle), drop or
  * patch cached GraphQL meta so the right-sidebar pill and left-sidebar hover
  * card cannot keep showing the previous PR's number / draft / merged status.
+ * Persisted mergeability / review fields overlay the live cache so Resolve
+ * completing (and `getPrMeta` writing the thread) clears "Merge conflicts"
+ * on the left nav without waiting for another hover fetch.
  */
 export function followThreadPrMeta(
   prev: SidebarPrMeta | null,
-  thread: {
-    prUrl?: string | null;
-    prState?: string | null;
-    prIsDraft?: boolean;
-  },
+  thread: ThreadPrFollow,
 ): SidebarPrMeta | null {
   const url = thread.prUrl?.trim() || '';
   if (!url) return null;
@@ -40,13 +56,40 @@ export function followThreadPrMeta(
   const state = thread.prState?.trim() || '';
   const isDraft = Boolean(thread.prIsDraft);
   const samePr = Boolean(prev && samePrUrl(prev.url, url));
+  const persistedTitle = nonEmpty(thread.prTitle);
+  const persistedDecision = nonEmpty(thread.prReviewDecision);
+  const persistedMergeable = nonEmpty(thread.prMergeable);
+  const persistedMergeState = nonEmpty(thread.prMergeStateStatus);
 
   if (samePr && prev) {
     const nextState = state || prev.state;
-    if (prev.url === url && prev.state === nextState && prev.isDraft === isDraft) {
+    const next: SidebarPrMeta = {
+      ...prev,
+      url,
+      state: nextState,
+      isDraft,
+      title: persistedTitle || prev.title,
+      reviewDecision: persistedDecision ?? prev.reviewDecision,
+      mergeable: persistedMergeable ?? prev.mergeable,
+      mergeStateStatus: persistedMergeState ?? prev.mergeStateStatus,
+      isInMergeQueue:
+        thread.prIsInMergeQueue !== undefined
+          ? Boolean(thread.prIsInMergeQueue)
+          : prev.isInMergeQueue,
+    };
+    if (
+      prev.url === next.url &&
+      prev.state === next.state &&
+      prev.isDraft === next.isDraft &&
+      prev.title === next.title &&
+      prev.reviewDecision === next.reviewDecision &&
+      prev.mergeable === next.mergeable &&
+      prev.mergeStateStatus === next.mergeStateStatus &&
+      prev.isInMergeQueue === next.isInMergeQueue
+    ) {
       return prev;
     }
-    return { ...prev, url, state: nextState, isDraft };
+    return next;
   }
 
   const num = Number(githubPullNumber(url) ?? 0);
@@ -55,12 +98,12 @@ export function followThreadPrMeta(
     url,
     state,
     isDraft,
-    title: '',
+    title: persistedTitle ?? '',
     baseRefName: '',
-    reviewDecision: null,
-    isInMergeQueue: false,
-    mergeable: null,
-    mergeStateStatus: null,
+    reviewDecision: persistedDecision,
+    isInMergeQueue: Boolean(thread.prIsInMergeQueue),
+    mergeable: persistedMergeable,
+    mergeStateStatus: persistedMergeState,
   };
 }
 

@@ -26,6 +26,35 @@ function mockCleanGate() {
   };
 }
 
+function mockGitWithMergeTree(opts: { conflicting: boolean }) {
+  gitMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote') {
+      return {
+        stdout: 'git@github.com:acme/widgets.git',
+        stderr: '',
+        exitCode: 0,
+      };
+    }
+    if (args[0] === 'rev-parse') {
+      return { stdout: 'abc', stderr: '', exitCode: 0 };
+    }
+    if (args[0] === 'fetch') {
+      return { stdout: '', stderr: '', exitCode: 0 };
+    }
+    if (args[0] === 'merge-tree') {
+      if (opts.conflicting) {
+        return {
+          stdout: 'README.md\npackages/core/src/index.ts',
+          stderr: 'CONFLICT (content)',
+          exitCode: 1,
+        };
+      }
+      return { stdout: 'tree-oid\n', stderr: '', exitCode: 0 };
+    }
+    return { stdout: '', stderr: '', exitCode: 0 };
+  });
+}
+
 describe('getPrChecks', () => {
   beforeEach(() => {
     ghMock.mockReset();
@@ -89,6 +118,7 @@ describe('getPrChecks', () => {
   });
 
   it('prepends merge conflicts from pr view', async () => {
+    mockGitWithMergeTree({ conflicting: true });
     ghMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify([
@@ -127,29 +157,7 @@ describe('getPrChecks', () => {
   });
 
   it('detects conflicts locally when GitHub mergeable is UNKNOWN', async () => {
-    gitMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote') {
-        return {
-          stdout: 'git@github.com:acme/widgets.git',
-          stderr: '',
-          exitCode: 0,
-        };
-      }
-      if (args[0] === 'rev-parse') {
-        return { stdout: 'abc', stderr: '', exitCode: 0 };
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '', exitCode: 0 };
-      }
-      if (args[0] === 'merge-tree') {
-        return {
-          stdout: 'README.md\npackages/core/src/index.ts',
-          stderr: 'CONFLICT (content)',
-          exitCode: 1,
-        };
-      }
-      return { stdout: '', stderr: '', exitCode: 0 };
-    });
+    mockGitWithMergeTree({ conflicting: true });
     ghMock
       .mockResolvedValueOnce({
         stdout: '[]',
@@ -174,6 +182,30 @@ describe('getPrChecks', () => {
       kind: 'mergeability',
     });
     expect(checks?.[0]?.description).toMatch(/README\.md/);
+  });
+
+  it('clears GitHub CONFLICTING when local merge-tree is clean', async () => {
+    mockGitWithMergeTree({ conflicting: false });
+    ghMock
+      .mockResolvedValueOnce({
+        stdout: '[]',
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          mergeable: 'CONFLICTING',
+          mergeStateStatus: 'DIRTY',
+          reviewDecision: null,
+          baseRefName: 'main',
+          url: 'https://github.com/acme/widgets/pull/42',
+        }),
+        stderr: '',
+        exitCode: 0,
+      });
+    const checks = await getPrChecks('/tmp/wt', '42');
+    expect(checks?.some((c) => /merge conflicts/i.test(c.name))).toBe(false);
+    expect(gitMock.mock.calls.some((c) => c[0]?.[0] === 'merge-tree')).toBe(true);
   });
 
   it('throws on auth failures instead of pretending checks are empty', async () => {
@@ -262,7 +294,8 @@ describe('getPrMeta', () => {
     });
   });
 
-  it('maps CONFLICTING onto PrMeta without a local probe', async () => {
+  it('maps CONFLICTING onto PrMeta when local merge-tree still conflicts', async () => {
+    mockGitWithMergeTree({ conflicting: true });
     ghMock.mockResolvedValue({
       stdout: JSON.stringify({
         number: 17,
@@ -286,7 +319,33 @@ describe('getPrMeta', () => {
       mergeStateStatus: 'DIRTY',
       isInMergeQueue: false,
     });
-    expect(gitMock.mock.calls.some((c) => c[0]?.[0] === 'merge-tree')).toBe(false);
+    expect(gitMock.mock.calls.some((c) => c[0]?.[0] === 'merge-tree')).toBe(true);
+  });
+
+  it('treats GitHub CONFLICTING as mergeable when local HEAD is clean', async () => {
+    mockGitWithMergeTree({ conflicting: false });
+    ghMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        number: 17,
+        title: 'Conflicts',
+        url: 'https://github.com/acme/widgets/pull/17',
+        state: 'OPEN',
+        isDraft: true,
+        reviewDecision: null,
+        baseRefName: 'main',
+        headRefName: 'feat/x',
+        isInMergeQueue: false,
+        mergeStateStatus: 'DIRTY',
+        mergeable: 'CONFLICTING',
+      }),
+      stderr: '',
+      exitCode: 0,
+    });
+    await expect(getPrMeta('/tmp/wt', '17')).resolves.toMatchObject({
+      number: 17,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+    });
   });
 });
 

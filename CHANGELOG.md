@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- After Resolve finishes, the left-nav worktree hover follows persisted mergeability instead of keeping **Merge conflicts** while the git button already says Commit & push. A local clean merge-tree also clears a stale GitHub CONFLICTING status.
+
 ## [0.1.250] - 2026-09-29
 
 ### Added
