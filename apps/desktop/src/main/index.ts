@@ -1551,6 +1551,9 @@ function registerIpc(): void {
   );
   ipcMain.handle('unwatchOpenFile', () => stopOpenFileWatcher());
   ipcMain.handle('listSkills', (_e, ref: string) => orch.listSkills(ref));
+  ipcMain.handle('listSkillsForRepo', (_e, repoPath: string) =>
+    orch.listSkillsForRepo(typeof repoPath === 'string' ? repoPath : ''),
+  );
   ipcMain.handle(
     'openInEditor',
     async (_e, ref: string, editor?: string, relativePath?: string) => {

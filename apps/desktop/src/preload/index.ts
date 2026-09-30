@@ -177,6 +177,7 @@ const api: IpcApi = {
     };
   },
   listSkills: (threadRef) => ipcRenderer.invoke('listSkills', threadRef),
+  listSkillsForRepo: (repoPath) => ipcRenderer.invoke('listSkillsForRepo', repoPath),
   openInEditor: (threadRef, editor, relativePath) =>
     ipcRenderer.invoke('openInEditor', threadRef, editor, relativePath),
   openWorktree: (threadRef, target) => ipcRenderer.invoke('openWorktree', threadRef, target),

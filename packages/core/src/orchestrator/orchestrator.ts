@@ -3072,6 +3072,15 @@ export class Orchestrator {
     return discoverSkills(thread.worktreePath);
   }
 
+  /** Skills for a project folder before a worktree exists (create modal). */
+  listSkillsForRepo(repoPath: string): SkillInfo[] {
+    const root = repoPath.trim();
+    if (!root || root === '/' || root === '.') {
+      return discoverSkills('/__sideboard_no_workspace__');
+    }
+    return discoverSkills(root);
+  }
+
   async previewLand(threadRef: string) {
     const thread = this.requireThread(threadRef);
     this.assertNotGlobal(thread, 'Land');
