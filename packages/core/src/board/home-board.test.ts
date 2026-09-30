@@ -407,6 +407,36 @@ describe('classifyWorktreeListBadges', () => {
     ).toEqual([]);
   });
 
+  it('does not badge as pending before the viewer login loads', () => {
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'theirs',
+            sourceType: 'pr',
+            prUrl: 'https://github.com/acme/app/pull/5',
+            prState: 'OPEN',
+            prAuthorLogin: 'sam',
+          }),
+        ],
+        '',
+      ),
+    ).toEqual([]);
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'mine',
+            prUrl: 'https://github.com/acme/app/pull/6',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+          }),
+        ],
+        '',
+      ),
+    ).toEqual([]);
+  });
+
   it('shows review for someone else\'s open PR, including their drafts', () => {
     expect(
       classifyWorktreeListBadges(

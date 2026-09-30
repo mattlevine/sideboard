@@ -421,6 +421,10 @@ export function classifyWorktreeListBadges(
     ];
   }
 
+  // Without a viewer login we cannot tell mine vs reviewing, so skip
+  // pending — an empty login would badge someone else's published PR as yours.
+  if (!normalizeViewerLogin(viewerLogin)) return [];
+
   const draft = open.some((t) => t.prIsDraft);
   const readyLabel = reviewLabel.trim();
   const inReview = readyLabel

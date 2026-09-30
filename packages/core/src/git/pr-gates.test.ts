@@ -1,5 +1,70 @@
 import { describe, expect, it } from 'vitest';
-import { buildMergeGateChecks, classifyPrMergeIssue, ciChecksFailed, mergeStateSuggestsCheckFailure } from './pr-gates.js';
+import {
+  applyCleanLocalMergeTree,
+  buildMergeGateChecks,
+  classifyPrMergeIssue,
+  ciChecksFailed,
+  mergeStateSuggestsCheckFailure,
+} from './pr-gates.js';
+
+describe('applyCleanLocalMergeTree', () => {
+  it('fills UNKNOWN mergeable without wiping UNSTABLE or BLOCKED', () => {
+    expect(
+      applyCleanLocalMergeTree({
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: 'UNSTABLE',
+        reviewDecision: null,
+        baseRefName: 'main',
+        url: null,
+      }),
+    ).toMatchObject({
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'UNSTABLE',
+    });
+    expect(
+      applyCleanLocalMergeTree({
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: 'BLOCKED',
+        reviewDecision: 'APPROVED',
+        baseRefName: 'main',
+        url: null,
+      }),
+    ).toMatchObject({
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BLOCKED',
+    });
+  });
+
+  it('sets CLEAN only when GitHub merge state is also unknown', () => {
+    expect(
+      applyCleanLocalMergeTree({
+        mergeable: 'UNKNOWN',
+        mergeStateStatus: 'UNKNOWN',
+        reviewDecision: null,
+        baseRefName: 'main',
+        url: null,
+      }),
+    ).toMatchObject({
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+    });
+  });
+
+  it('treats stale GitHub CONFLICTING as MERGEABLE/CLEAN', () => {
+    expect(
+      applyCleanLocalMergeTree({
+        mergeable: 'CONFLICTING',
+        mergeStateStatus: 'DIRTY',
+        reviewDecision: null,
+        baseRefName: 'main',
+        url: null,
+      }),
+    ).toMatchObject({
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+    });
+  });
+});
 
 describe('buildMergeGateChecks', () => {
   it('surfaces merge conflicts as a failing row', () => {

@@ -184,6 +184,23 @@ export function isContextCompactInProgress(text: string): boolean {
 }
 
 /**
+ * Claude paints API retries, compact, MCP init, and agent-task pulses as
+ * `thinking`. Those must not close a streaming Skill dump.
+ */
+export function isSystemStatusThinking(event: {
+  data?: string;
+  replace?: boolean;
+}): boolean {
+  if (event.replace) return true;
+  const t = (event.data ?? '').trim();
+  if (!t) return true;
+  if (/^API retry\b/i.test(t)) return true;
+  if (/^MCP:/i.test(t)) return true;
+  if (isContextCompactInProgress(t) || isContextCompactDone(t)) return true;
+  return false;
+}
+
+/**
  * Auto-compact / injected conversation summaries. Those belong on a Compact
  * tool row, not as the agent's chat bubble.
  */
@@ -901,15 +918,6 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
       );
       return next;
     }
-    if (contextCompactInProgress(parts, event.parentId)) {
-      return [
-        ...parts,
-        compactToolPart(data, `compact-${parts.length}`, {
-          parentId: event.parentId,
-          status: 'running',
-        }),
-      ];
-    }
     const runningSkillIdx = lastRunningSkillIndex(parts, event.parentId);
     if (runningSkillIdx >= 0) {
       const prev = parts[runningSkillIdx] as Extract<MessagePart, { type: 'tool' }>;
@@ -927,6 +935,15 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
         prev,
       );
       return next;
+    }
+    if (contextCompactInProgress(parts, event.parentId)) {
+      return [
+        ...parts,
+        compactToolPart(data, `compact-${parts.length}`, {
+          parentId: event.parentId,
+          status: 'running',
+        }),
+      ];
     }
     const next = [...parts];
     const last = next[next.length - 1];
@@ -968,7 +985,9 @@ export function applyAgentEvent(parts: MessagePart[], event: AgentEvent): Messag
   if (event.type === 'thinking') {
     const data = event.data;
     if (!data) return parts;
-    parts = markRunningSkillsDone(parts, event.parentId);
+    if (!isSystemStatusThinking(event)) {
+      parts = markRunningSkillsDone(parts, event.parentId);
+    }
     const next = [...parts];
     if (event.replace) {
       for (let i = next.length - 1; i >= 0; i--) {

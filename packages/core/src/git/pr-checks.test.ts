@@ -347,6 +347,32 @@ describe('getPrMeta', () => {
       mergeStateStatus: 'CLEAN',
     });
   });
+
+  it('keeps UNSTABLE when GitHub mergeable is UNKNOWN and local tree is clean', async () => {
+    mockGitWithMergeTree({ conflicting: false });
+    ghMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        number: 17,
+        title: 'CI failing',
+        url: 'https://github.com/acme/widgets/pull/17',
+        state: 'OPEN',
+        isDraft: false,
+        reviewDecision: null,
+        baseRefName: 'main',
+        headRefName: 'feat/x',
+        isInMergeQueue: false,
+        mergeStateStatus: 'UNSTABLE',
+        mergeable: 'UNKNOWN',
+      }),
+      stderr: '',
+      exitCode: 0,
+    });
+    await expect(getPrMeta('/tmp/wt', '17')).resolves.toMatchObject({
+      number: 17,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'UNSTABLE',
+    });
+  });
 });
 
 describe('getPrForHeadBranch', () => {
@@ -369,6 +395,8 @@ describe('getPrForHeadBranch', () => {
           headRefName: 'feat/existing',
           url: 'https://github.com/acme/widgets/pull/111',
           isCrossRepository: false,
+          isDraft: true,
+          labels: [{ name: 'eng-review' }],
         },
       ]),
       stderr: '',
@@ -377,12 +405,16 @@ describe('getPrForHeadBranch', () => {
     await expect(getPrForHeadBranch('/repo', 'feat/existing')).resolves.toMatchObject({
       number: 111,
       url: 'https://github.com/acme/widgets/pull/111',
+      isDraft: true,
+      labels: ['eng-review'],
     });
     const listArgs = ghMock.mock.calls[0]?.[0] as string[];
     expect(listArgs).toContain('--head');
     expect(listArgs).toContain('acme:feat/existing');
     expect(listArgs).toContain('--state');
     expect(listArgs).toContain('open');
+    expect(listArgs.join(' ')).toMatch(/isDraft/);
+    expect(listArgs.join(' ')).toMatch(/labels/);
   });
 
   it('falls back to gh pr view when list is empty and that PR is open', async () => {
