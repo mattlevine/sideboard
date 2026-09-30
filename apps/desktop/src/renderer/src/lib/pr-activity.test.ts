@@ -4,6 +4,7 @@ import {
   githubPullNumber,
   htmlFragmentsToMarkdown,
   prActivityItems,
+  prDescriptionItem,
   prDetailsAttachment,
   prDetailsReviewerList,
   prTabTitle,
@@ -86,6 +87,21 @@ describe('prActivityItems', () => {
     expect(items.map((i) => i.author)).toEqual(['reviewer', 'github-actions']);
     expect(items[0]?.kind).toBe('review');
     expect(items[1]?.kind).toBe('comment');
+  });
+});
+
+describe('prDescriptionItem', () => {
+  it('returns the opening post when the PR has a body', () => {
+    expect(prDescriptionItem(details())).toMatchObject({
+      id: 'description',
+      kind: 'description',
+      author: 'matt',
+      body: 'Harden the resume path.',
+    });
+  });
+
+  it('skips blank bodies', () => {
+    expect(prDescriptionItem(details({ body: '  \n  ' }))).toBeNull();
   });
 });
 

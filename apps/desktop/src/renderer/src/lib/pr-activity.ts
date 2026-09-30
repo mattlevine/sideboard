@@ -1,6 +1,6 @@
 import type { PrDetails, ThreadAttachment } from '@sideboard-ai/core';
 
-export type PrActivityKind = 'comment' | 'review';
+export type PrActivityKind = 'comment' | 'review' | 'description';
 
 export interface PrActivityItem {
   id: string;
@@ -9,6 +9,21 @@ export interface PrActivityItem {
   body: string;
   at: string;
   reviewState?: string;
+}
+
+/** Opening post for the PR conversation (GitHub-style description). */
+export function prDescriptionItem(
+  details: Pick<PrDetails, 'body' | 'author'>,
+): PrActivityItem | null {
+  const body = details.body?.trim() ?? '';
+  if (!body) return null;
+  return {
+    id: 'description',
+    kind: 'description',
+    author: details.author?.login?.trim() || 'unknown',
+    body: details.body,
+    at: '',
+  };
 }
 
 export function prTabTitle(input: {
@@ -361,7 +376,9 @@ export function prDetailsAttachment(details: PrDetails): ThreadAttachment {
       const label =
         item.kind === 'review'
           ? reviewStateLabel(item.reviewState)
-          : 'Comment';
+          : item.kind === 'description'
+            ? 'Description'
+            : 'Comment';
       const when = item.at ? ` · ${item.at}` : '';
       const body = item.body.trim() ? `\n\n${item.body.trim()}` : '';
       return `### @${item.author} — ${label}${when}${body}`;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import type { PrDetails, ThreadAttachment } from '@sideboard-ai/core';
 import {
   prActivityItems,
+  prDescriptionItem,
   prDetailsAttachment,
   prDetailsReviewerList,
   preparePrCommentBody,
@@ -82,6 +83,10 @@ export function PrPage({ threadId, onAddToChat }: Props) {
 
   const activity = useMemo(
     () => (details ? prActivityItems(details) : []),
+    [details],
+  );
+  const description = useMemo(
+    () => (details ? prDescriptionItem(details) : null),
     [details],
   );
   const assignees = useMemo(
@@ -202,16 +207,27 @@ export function PrPage({ threadId, onAddToChat }: Props) {
         <div className="pr-page-empty">{error}</div>
       ) : section === 'description' ? (
         <div className="pr-page-body">
-          {details?.body.trim() ? (
-            <PrCommentBody text={details.body} />
+          {description ? (
+            <PrCommentBody text={description.body} />
           ) : (
             <div className="pr-page-empty">No description.</div>
           )}
         </div>
-      ) : activity.length === 0 ? (
+      ) : !description && activity.length === 0 ? (
         <div className="pr-page-empty">No comments or reviews yet.</div>
       ) : (
         <div className="pr-page-activity">
+          {description ? (
+            <article className="pr-page-item is-description">
+              <header className="pr-page-item-meta">
+                <span className="pr-page-author">{description.author}</span>
+                <span className="pr-page-kind">Description</span>
+              </header>
+              <div className="pr-page-item-body">
+                <PrCommentBody text={description.body} />
+              </div>
+            </article>
+          ) : null}
           {activity.map((item) => (
             <article key={item.id} className="pr-page-item">
               <header className="pr-page-item-meta">
