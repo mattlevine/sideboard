@@ -41,11 +41,11 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
 ] as const;
 
 /**
- * Worktree Claude turns: auto-approve the UI tools that the worktree MCP
- * profile always registers (present_* / ask_user / wait_for_job / stop_job /
- * run_dev_script / stop_dev_script / get_run_log / notify_orchestrator / viewer
- * context). Slack / list_* stay orchestration-only so they stay out of the cached
- * tools prefix.
+ * Worktree Claude turns: auto-approve the UI + schedule tools that the
+ * worktree MCP profile always registers (present_* / ask_user / wait_for_job /
+ * stop_job / run_dev_script / stop_dev_script / get_run_log /
+ * notify_orchestrator / viewer context / schedules). Slack / list_* stay
+ * orchestration-only so they stay out of the cached tools prefix.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__present_artifact',
@@ -62,6 +62,11 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__notify_orchestrator',
   'mcp__sideboard__get_viewer_context',
   'mcp__sideboard__update_viewer_context',
+  'mcp__sideboard__list_schedules',
+  'mcp__sideboard__create_schedule',
+  'mcp__sideboard__update_schedule',
+  'mcp__sideboard__delete_schedule',
+  'mcp__sideboard__run_schedule',
 ] as const;
 
 /** Account issue tools on the worktree MCP profile. */
@@ -69,7 +74,7 @@ export const SIDEBOARD_GITHUB_MCP_ALLOWED_TOOLS = ['mcp__sideboard__github_*'] a
 export const SIDEBOARD_LINEAR_MCP_ALLOWED_TOOLS = ['mcp__sideboard__linear_*'] as const;
 export const SIDEBOARD_ABLETIME_MCP_ALLOWED_TOOLS = ['mcp__sideboard__abletime_*'] as const;
 
-/** Worktree Claude --allowedTools: UI tools + connected Account issue trackers. */
+/** Worktree Claude --allowedTools: UI + schedules + connected Account issue trackers. */
 export function sideboardWorktreeAllowedTools(opts?: {
   github?: boolean;
   linear?: boolean;

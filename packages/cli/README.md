@@ -8,7 +8,7 @@ npm i -g @sideboard-ai/cli
 sideboard ls
 sideboard send <thread> "…"
 sideboard mcp          # MCP stdio server
-sideboard schedule ls  # local jobs that trigger orchestration chats
+sideboard schedule ls  # local jobs that trigger a chat
 ```
 
 Also installs `side` as a short alias. The MCP server is available as `sideboard mcp`, or via `@sideboard-ai/core`'s `sideboard-mcp` bin.

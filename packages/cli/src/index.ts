@@ -694,7 +694,7 @@ async function main(): Promise<void> {
   const scheduleCmd = program
     .command('schedule')
     .description(
-      'Local jobs that trigger orchestration chats (Sideboard.app must be running to fire)',
+      'Local jobs that trigger a chat (Sideboard.app must be running to fire)',
     );
 
   scheduleCmd
@@ -726,7 +726,7 @@ async function main(): Promise<void> {
     .option('--tz <iana>', 'timezone for cron')
     .option(
       '--thread <id>',
-      'existing orchestration chat (or self). Omit to create a new Global chat each run',
+      'existing chat (orchestration or worktree, or self). Omit to create a new Global chat each run',
     )
     .option('--agent <agent>', 'claude|cursor|codex|opencode (new chats only)')
     .action((opts) => {
@@ -747,7 +747,9 @@ async function main(): Promise<void> {
         opts.thread ? String(opts.thread) : undefined,
       );
       if (String(opts.thread ?? '').trim().toLowerCase() === 'self' && !threadId) {
-        throw new Error('--thread self needs SIDEBOARD_ORCHESTRATOR_THREAD_ID');
+        throw new Error(
+          '--thread self needs SIDEBOARD_THREAD_ID or SIDEBOARD_ORCHESTRATOR_THREAD_ID',
+        );
       }
       const agent = opts.agent ? parseAgent(String(opts.agent)) : undefined;
       if (agent === 'brightsy') {

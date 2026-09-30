@@ -49,13 +49,22 @@ describe('schedules store', () => {
     expect(cronNext.toISOString()).toBe('2026-08-22T09:00:00.000Z');
   });
 
-  it('resolves self thread ids from the orchestrator env', async () => {
+  it('resolves self thread ids from orchestration or worktree env', async () => {
     const { resolveScheduleThreadId } = await load();
     expect(resolveScheduleThreadId(undefined)).toBeNull();
     expect(resolveScheduleThreadId('')).toBeNull();
     expect(resolveScheduleThreadId('abc-123')).toBe('abc-123');
     expect(
       resolveScheduleThreadId('self', { SIDEBOARD_ORCHESTRATOR_THREAD_ID: ' orch-1 ' }),
+    ).toBe('orch-1');
+    expect(
+      resolveScheduleThreadId('self', { SIDEBOARD_THREAD_ID: ' wt-1 ' }),
+    ).toBe('wt-1');
+    expect(
+      resolveScheduleThreadId('self', {
+        SIDEBOARD_ORCHESTRATOR_THREAD_ID: 'orch-1',
+        SIDEBOARD_THREAD_ID: 'wt-1',
+      }),
     ).toBe('orch-1');
     expect(resolveScheduleThreadId('self', {})).toBeNull();
   });
@@ -126,5 +135,32 @@ describe('schedules store', () => {
     expect(hasEnabledSchedules()).toBe(true);
     updateSchedule(row.id, { enabled: false });
     expect(hasEnabledSchedules()).toBe(false);
+  });
+
+  it('turns on caffeinate-while-schedules for an enabled future job', async () => {
+    const { createSchedule, updateSchedule, scheduleNeedsCaffeinate } = await load();
+    const settings = await import('./app-settings.js');
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(false);
+    const row = createSchedule({
+      prompt: 'Later',
+      when: { kind: 'once', at: '2099-01-01T00:00:00.000Z' },
+      createdBy: 'mcp',
+    });
+    expect(scheduleNeedsCaffeinate(row)).toBe(true);
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(true);
+
+    settings.updateAdvancedSettings({ caffeinateWhileSchedules: false });
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(false);
+    const disabled = createSchedule({
+      prompt: 'Off',
+      when: { kind: 'every', every: '1h' },
+      enabled: false,
+      createdBy: 'ui',
+    });
+    expect(scheduleNeedsCaffeinate(disabled)).toBe(false);
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(false);
+
+    updateSchedule(disabled.id, { enabled: true });
+    expect(settings.caffeinateWhileSchedulesEnabled()).toBe(true);
   });
 });

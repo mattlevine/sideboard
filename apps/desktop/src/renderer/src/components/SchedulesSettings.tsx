@@ -99,7 +99,7 @@ function whenFromForm(form: FormState): ScheduleWhen {
 
 export function SchedulesSettings() {
   const [rows, setRows] = useState<ScheduledTask[]>([]);
-  const [orchThreads, setOrchThreads] = useState<Thread[]>([]);
+  const [targetThreads, setTargetThreads] = useState<Thread[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [busy, setBusy] = useState(false);
@@ -112,10 +112,15 @@ export function SchedulesSettings() {
       window.sideboard.getThreads(false),
     ]);
     setRows(schedules);
-    setOrchThreads(
-      threads.filter(
-        (t) => t.sourceType === 'orchestration' && t.status !== 'archived',
-      ),
+    setTargetThreads(
+      threads
+        .filter((t) => t.status !== 'archived')
+        .sort((a, b) => {
+          const ao = a.sourceType === 'orchestration' ? 0 : 1;
+          const bo = b.sourceType === 'orchestration' ? 0 : 1;
+          if (ao !== bo) return ao - bo;
+          return threadDisplayLabel(a).localeCompare(threadDisplayLabel(b));
+        }),
     );
   }, []);
 
@@ -130,12 +135,12 @@ export function SchedulesSettings() {
   }, [reload]);
 
   const threadLabel = useMemo(() => {
-    const map = new Map(orchThreads.map((t) => [t.id, threadDisplayLabel(t)]));
+    const map = new Map(targetThreads.map((t) => [t.id, threadDisplayLabel(t)]));
     return (id: string | null) => {
       if (!id) return 'New orchestration chat';
       return map.get(id) ?? `${id.slice(0, 8)}…`;
     };
-  }, [orchThreads]);
+  }, [targetThreads]);
 
   function openCreate() {
     setEditingId(null);
@@ -230,10 +235,11 @@ export function SchedulesSettings() {
   return (
     <div className="settings-body">
       <p className="settings-lead">
-        Jobs that send a prompt to an orchestration chat, or start a new Global
-        chat. Sideboard must be running. A sleeping Mac skips until wake — turn
-        on <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong>{' '}
-        (or <code>set_caffeinate</code> from a chat) for overnight runs.
+        Jobs that send a prompt to a chat (Global orchestration or a worktree),
+        or start a new Global chat. Sideboard must be running. Creating or
+        enabling a future job turns on{' '}
+        <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong>{' '}
+        so the Mac can stay awake until due. A sleeping Mac skips until wake.
       </p>
       {error && <div className="settings-error" style={{ margin: '0 0 12px' }}>{error}</div>}
 
@@ -316,7 +322,7 @@ export function SchedulesSettings() {
               rows={4}
               value={form.prompt}
               onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
-              placeholder="What the orchestration agent should do"
+              placeholder="What the agent should do when this fires"
             />
           </label>
           <label className="settings-field">
@@ -392,9 +398,11 @@ export function SchedulesSettings() {
               onChange={(e) => setForm((f) => ({ ...f, threadId: e.target.value }))}
             >
               <option value="">New orchestration chat each run</option>
-              {orchThreads.map((t) => (
+              {targetThreads.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {threadDisplayLabel(t)}
+                  {t.sourceType === 'orchestration'
+                    ? `${threadDisplayLabel(t)} (orchestration)`
+                    : threadDisplayLabel(t)}
                 </option>
               ))}
             </select>

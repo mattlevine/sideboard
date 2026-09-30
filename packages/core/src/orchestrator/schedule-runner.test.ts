@@ -123,16 +123,17 @@ describe('schedule runner', () => {
     expect(after.enabled).toBe(true);
   });
 
-  it('skips a missing target thread and records lastError', async () => {
+  it('opens a new Global chat when the target is missing', async () => {
     const { store, runner } = await load();
-    let started = 0;
+    const sent: string[] = [];
+    const created = orchThread({ id: 'fallback-orch' });
     runner.setScheduleFireHooks({
       findThread: () => null,
-      send: async () => orchThread(),
-      startOrchestration: async () => {
-        started += 1;
-        return orchThread();
+      send: async (id, prompt) => {
+        sent.push(`${id}:${prompt}`);
+        return created;
       },
+      startOrchestration: async () => created,
     });
     const schedule = store.createSchedule({
       prompt: 'Ping',
@@ -141,8 +142,69 @@ describe('schedule runner', () => {
       createdBy: 'cli',
     });
     const after = await runner.fireSchedule(schedule.id);
-    expect(started).toBe(0);
-    expect(after.lastError).toMatch(/not found/);
+    expect(sent).toHaveLength(0);
+    expect(after.lastThreadId).toBe('fallback-orch');
+    expect(after.lastError).toBeNull();
     expect(after.enabled).toBe(true);
+    expect(store.getSchedule(schedule.id)?.threadId).toBe('fallback-orch');
+  });
+
+  it('opens a new Global chat when the target is archived', async () => {
+    const { store, runner } = await load();
+    const archived = orchThread({ id: 'old-orch', status: 'archived' });
+    const created = orchThread({ id: 'new-orch' });
+    let sent = 0;
+    runner.setScheduleFireHooks({
+      findThread: () => archived,
+      send: async () => {
+        sent += 1;
+        return archived;
+      },
+      startOrchestration: async () => created,
+    });
+    const schedule = store.createSchedule({
+      prompt: 'Retry',
+      when: { kind: 'once', at: '2099-01-01T00:00:00.000Z' },
+      threadId: archived.id,
+      createdBy: 'ui',
+    });
+    const after = await runner.fireSchedule(schedule.id);
+    expect(sent).toBe(0);
+    expect(after.lastThreadId).toBe('new-orch');
+    expect(after.lastError).toBeNull();
+    expect(after.enabled).toBe(false);
+  });
+
+  it('sends to an existing worktree chat', async () => {
+    const { store, runner } = await load();
+    const sent: string[] = [];
+    const worktree = orchThread({
+      id: 'wt-1',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      repoPath: '/tmp/repo',
+      worktreePath: '/tmp/repo/lens',
+    });
+    runner.setScheduleFireHooks({
+      findThread: () => worktree,
+      send: async (id, prompt) => {
+        sent.push(`${id}:${prompt}`);
+        return worktree;
+      },
+      startOrchestration: async () => orchThread(),
+    });
+    const schedule = store.createSchedule({
+      name: 'Follow-up',
+      prompt: 'Retry the flaky test',
+      when: { kind: 'once', at: '2099-01-01T00:00:00.000Z' },
+      threadId: worktree.id,
+      createdBy: 'mcp',
+    });
+    const after = await runner.fireSchedule(schedule.id);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain('wt-1:');
+    expect(sent[0]).toContain('Retry the flaky test');
+    expect(after.lastThreadId).toBe('wt-1');
+    expect(after.lastError).toBeNull();
   });
 });

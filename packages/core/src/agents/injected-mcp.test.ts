@@ -44,6 +44,11 @@ describe('injected-mcp', () => {
       'mcp__sideboard__notify_orchestrator',
       'mcp__sideboard__get_viewer_context',
       'mcp__sideboard__update_viewer_context',
+      'mcp__sideboard__list_schedules',
+      'mcp__sideboard__create_schedule',
+      'mcp__sideboard__update_schedule',
+      'mcp__sideboard__delete_schedule',
+      'mcp__sideboard__run_schedule',
     ]);
     expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.join(' ')).not.toMatch(/slack|list_teams/i);
     expect(sideboardWorktreeAllowedTools()).toContain('mcp__sideboard__github_*');

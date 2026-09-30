@@ -240,6 +240,11 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__notify_orchestrator');
     expect(allowed).toContain('mcp__sideboard__get_viewer_context');
     expect(allowed).toContain('mcp__sideboard__update_viewer_context');
+    expect(allowed).toContain('mcp__sideboard__list_schedules');
+    expect(allowed).toContain('mcp__sideboard__create_schedule');
+    expect(allowed).toContain('mcp__sideboard__update_schedule');
+    expect(allowed).toContain('mcp__sideboard__delete_schedule');
+    expect(allowed).toContain('mcp__sideboard__run_schedule');
     expect(allowed).toContain('mcp__sideboard__github_*');
     expect(allowed).not.toContain('mcp__sideboard__linear_*');
     expect(allowed).not.toContain('mcp__sideboard__abletime_*');

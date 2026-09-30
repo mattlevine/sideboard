@@ -287,6 +287,13 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
     return str(input?.name) ? `Read ${str(input?.name)} log` : 'Read Dev log';
   }
   if (/notify_orchestrator$/i.test(name)) return 'Notify orchestrator';
+  if (/list_schedules$/i.test(name)) return 'List schedules';
+  if (/create_schedule$/i.test(name)) {
+    return str(input?.name) ? `Schedule ${str(input?.name)}` : 'Create schedule';
+  }
+  if (/update_schedule$/i.test(name)) return 'Update schedule';
+  if (/delete_schedule$/i.test(name)) return 'Delete schedule';
+  if (/run_schedule$/i.test(name)) return 'Run schedule';
   if (isSkillToolName(name)) {
     const cmd = skillCommandFromInput(input);
     return cmd ? `Using /${cmd}` : 'Using skill';

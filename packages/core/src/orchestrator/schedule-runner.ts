@@ -8,10 +8,10 @@ import {
   getSchedule,
   listSchedules,
   recordScheduleRun,
+  updateSchedule,
   type ScheduledTask,
 } from '../store/schedules.js';
 import { findThreadByRef } from '../store/thread-store.js';
-import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentKind, Thread } from '../types/thread.js';
 
 const SET_TIMEOUT_MAX = 2_147_483_647;
@@ -72,21 +72,9 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
   try {
     const deps = fireHooks ?? (await defaultDeps());
     const prompt = formatScheduledPrompt(schedule.name, schedule.prompt);
-    if (schedule.threadId) {
-      const thread = deps.findThread(schedule.threadId);
-      if (!thread || thread.status === 'archived') {
-        return recordScheduleRun(schedule.id, {
-          lastError: thread
-            ? `Orchestration chat ${schedule.threadId} is archived`
-            : `Orchestration chat not found: ${schedule.threadId}`,
-        });
-      }
-      if (!isOrchestratorThread(thread)) {
-        return recordScheduleRun(schedule.id, {
-          lastError: `Thread ${schedule.threadId} is not an orchestration chat`,
-        });
-      }
-      const sent = await deps.send(thread.id, prompt);
+    const target = schedule.threadId ? deps.findThread(schedule.threadId) : null;
+    if (target && target.status !== 'archived') {
+      const sent = await deps.send(target.id, prompt);
       return recordScheduleRun(schedule.id, {
         lastThreadId: sent.id,
         lastError: null,
@@ -97,6 +85,11 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
       agent: pickAgent(schedule),
       model: schedule.model,
     });
+    // Recurring jobs that lost their chat should keep using the replacement,
+    // not open a new Global chat on every later tick.
+    if (schedule.threadId && schedule.when.kind !== 'once') {
+      updateSchedule(schedule.id, { threadId: created.id });
+    }
     return recordScheduleRun(schedule.id, {
       lastThreadId: created.id,
       lastError: null,

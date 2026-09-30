@@ -706,6 +706,10 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('get_run_log', {})).toBe('Read Dev log');
     expect(toolDescription('get_run_log', { name: 'dev' })).toBe('Read dev log');
     expect(toolDescription('notify_orchestrator', {})).toBe('Notify orchestrator');
+    expect(toolDescription('create_schedule', { name: 'Standup' })).toBe(
+      'Schedule Standup',
+    );
+    expect(toolDescription('list_schedules', {})).toBe('List schedules');
     expect(toolDescription('Skill', { skill: 'long-running' })).toBe('Using /long-running');
     expect(toolDescription('SlashCommand', { command: '/commit' })).toBe('Using /commit');
     expect(toolDescription('Skill')).toBe('Using skill');

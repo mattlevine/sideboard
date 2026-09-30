@@ -1788,9 +1788,9 @@ export function SettingsModal({
                         Caffeinate while schedules are enabled
                       </div>
                       <p className="settings-hint">
-                        Keep the Mac awake so due jobs can fire (macOS only). Off by default so
-                        a daily 9am cron does not pin the machine awake. Lid-close may still
-                        sleep on battery.
+                        Keep the Mac awake so due jobs can fire (macOS only). Creating
+                        or enabling a future schedule turns this on. You can turn it
+                        off anytime. Lid-close may still sleep on battery.
                       </p>
                     </div>
                     <button

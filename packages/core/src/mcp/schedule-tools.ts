@@ -6,6 +6,7 @@ import {
   getSchedule,
   listSchedules,
   resolveScheduleThreadId,
+  scheduleNeedsCaffeinate,
   updateSchedule,
   type ScheduleWhen,
 } from '../store/schedules.js';
@@ -43,13 +44,13 @@ function parseWhen(args: {
 }
 
 /**
- * Local schedule tools (orchestration profile). Jobs persist in schedules.json
- * and fire from the desktop host via send / startOrchestration.
+ * Local schedule tools (worktree + orchestration). Jobs persist in
+ * schedules.json and fire from the desktop host via send / startOrchestration.
  */
 export function registerScheduleTools(server: McpServer): void {
   server.tool(
     'list_schedules',
-    'List local Sideboard schedules that trigger orchestration agents. Jobs fire only while Sideboard.app is running on this Mac (sleep skips until wake).',
+    'List local Sideboard schedules that trigger a chat when due. Jobs fire only while Sideboard.app is running on this Mac (sleep skips until wake).',
     {},
     async () => {
       try {
@@ -62,7 +63,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'create_schedule',
-    'Create a local schedule that, when due, sends a prompt to an orchestration chat (threadId) or starts a new Global orchestration chat (omit threadId). Pass threadId=self to continue this coordinator. Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without threadId open a new chat each run. Overnight/unattended runs need Settings → Advanced → Caffeinate while schedules are enabled, or set_caffeinate. Sideboard.app must be running for the job to fire.',
+    'Create a local schedule that, when due, sends a prompt to an existing chat (threadId) or starts a new Global orchestration chat (omit threadId). Pass threadId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without threadId open a new Global chat each run. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
     {
       prompt: z.string().describe('User message / goal queued when the schedule fires'),
       name: z.string().optional(),
@@ -74,7 +75,7 @@ export function registerScheduleTools(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          'Existing orchestration chat id, or "self" for this coordinator. Omit to create a new Global chat on fire.',
+          'Existing chat id (orchestration or worktree), or "self" for this chat. Omit to create a new Global chat on fire.',
         ),
       agent: z
         .enum(['claude', 'cursor', 'codex', 'opencode'])
@@ -88,7 +89,9 @@ export function registerScheduleTools(server: McpServer): void {
         const threadId = resolveScheduleThreadId(args.threadId);
         if (args.threadId?.trim().toLowerCase() === 'self' && !threadId) {
           return fail(
-            new Error('threadId=self requires this turn to be an orchestration chat'),
+            new Error(
+              'threadId=self needs this chat id (SIDEBOARD_THREAD_ID or SIDEBOARD_ORCHESTRATOR_THREAD_ID)',
+            ),
           );
         }
         const schedule = createSchedule({
@@ -102,8 +105,9 @@ export function registerScheduleTools(server: McpServer): void {
         });
         return text({
           schedule,
-          hint:
-            'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run. Overnight runs need Settings → Advanced → Caffeinate while schedules are enabled, or set_caffeinate.',
+          hint: scheduleNeedsCaffeinate(schedule)
+            ? 'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run. Caffeinate while schedules are enabled is now on so the Mac can stay awake until this job is due.'
+            : 'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run.',
         });
       } catch (err) {
         return fail(err);
@@ -125,7 +129,9 @@ export function registerScheduleTools(server: McpServer): void {
       threadId: z
         .string()
         .optional()
-        .describe('Existing orchestration chat, "self", or empty string to create a new chat each run'),
+        .describe(
+          'Existing chat (orchestration or worktree), "self", or empty string to create a new Global chat each run',
+        ),
       agent: z.enum(['claude', 'cursor', 'codex', 'opencode']).optional(),
       model: z.string().optional(),
       enabled: z.boolean().optional(),
@@ -146,7 +152,9 @@ export function registerScheduleTools(server: McpServer): void {
           threadId = resolveScheduleThreadId(args.threadId);
           if (args.threadId.trim().toLowerCase() === 'self' && !threadId) {
             return fail(
-              new Error('threadId=self requires this turn to be an orchestration chat'),
+              new Error(
+                'threadId=self needs this chat id (SIDEBOARD_THREAD_ID or SIDEBOARD_ORCHESTRATOR_THREAD_ID)',
+              ),
             );
           }
         }
@@ -182,7 +190,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'run_schedule',
-    'Fire a schedule now (does not wait for nextRunAt). Queues the prompt or starts a new Global chat. If Sideboard.app is running, the desktop drains the turn.',
+    'Fire a schedule now (does not wait for nextRunAt). Queues the prompt on the target chat or starts a new Global chat. If Sideboard.app is running, the desktop drains the turn.',
     { id: z.string() },
     async ({ id }) => {
       try {

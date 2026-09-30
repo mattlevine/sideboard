@@ -10,6 +10,10 @@ import {
 import type { AgentKind } from '../types/thread.js';
 import { appDataDir } from './paths.js';
 import { writePrivateFile } from './private-file.js';
+import {
+  caffeinateWhileSchedulesEnabled,
+  updateAdvancedSettings,
+} from './app-settings.js';
 
 export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
 
@@ -24,7 +28,7 @@ export interface ScheduledTask {
   prompt: string;
   enabled: boolean;
   when: ScheduleWhen;
-  /** Existing orchestration chat. Null = create a new Global chat on fire. */
+  /** Existing chat (orchestration or worktree). Null = create a new Global chat on fire. */
   threadId: string | null;
   agent: OrchestratorAgentKind | null;
   model: string | null;
@@ -88,7 +92,10 @@ export function defaultScheduleName(prompt: string): string {
   return line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line;
 }
 
-/** `self` → SIDEBOARD_ORCHESTRATOR_THREAD_ID. Empty / missing → null (new chat). */
+/**
+ * `self` → this chat: orchestration env first, then SIDEBOARD_THREAD_ID
+ * (worktree). Empty / missing → null (new Global chat).
+ */
 export function resolveScheduleThreadId(
   raw: string | null | undefined,
   env: NodeJS.ProcessEnv = process.env,
@@ -96,7 +103,11 @@ export function resolveScheduleThreadId(
   const value = raw?.trim() || '';
   if (!value) return null;
   if (value.toLowerCase() === 'self') {
-    return env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || null;
+    return (
+      env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() ||
+      env.SIDEBOARD_THREAD_ID?.trim() ||
+      null
+    );
   }
   return value;
 }
@@ -254,6 +265,24 @@ export function hasEnabledSchedules(): boolean {
   return listSchedules().some((row) => row.enabled);
 }
 
+/** Enabled job whose next tick is still in the future. */
+export function scheduleNeedsCaffeinate(
+  task: Pick<ScheduledTask, 'enabled' | 'nextRunAt'>,
+  now: Date = new Date(),
+): boolean {
+  if (!task.enabled) return false;
+  const at = new Date(task.nextRunAt);
+  if (Number.isNaN(at.getTime())) return false;
+  return at.getTime() > now.getTime();
+}
+
+/** Creating/enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled. */
+function ensureCaffeinateForFutureSchedule(task: ScheduledTask): void {
+  if (!scheduleNeedsCaffeinate(task)) return;
+  if (caffeinateWhileSchedulesEnabled()) return;
+  updateAdvancedSettings({ caffeinateWhileSchedules: true });
+}
+
 export function getSchedule(id: string): ScheduledTask | null {
   const key = id.trim();
   if (!key) return null;
@@ -269,6 +298,7 @@ export function createSchedule(input: CreateScheduledTaskInput): ScheduledTask {
   const rows = readAll();
   rows.push(task);
   writeAll(rows);
+  ensureCaffeinateForFutureSchedule(task);
   return task;
 }
 
@@ -309,6 +339,7 @@ export function updateSchedule(
   };
   rows[idx] = next;
   writeAll(rows);
+  ensureCaffeinateForFutureSchedule(next);
   return next;
 }
 
