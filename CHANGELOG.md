@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.252] - 2026-09-29
+
+### Added
+
+- New-worktree composer: type `/` to open the same skills picker as the thread composer.
+
+### Fixed
+
+- A clean local merge-tree no longer overwrites GitHub `UNSTABLE` or `BLOCKED` with `CLEAN` when mergeable is `UNKNOWN`.
+- Sidebar review/pending badges wait for the GitHub login so someone else's PR is not flashed as **pending**. Create-from-PR stores `isDraft` and labels.
+- API retry / compact / MCP thinking no longer closes a streaming Skill dump; later `SKILL.md` tokens stay on the Skill row.
+
+### Changed
+
+- Marketing site restored to the pre-Brightsy sans-serif layout.
+
 ## [0.1.251] - 2026-09-29
 
 ### Fixed
