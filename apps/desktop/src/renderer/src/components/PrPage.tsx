@@ -7,6 +7,7 @@ import {
   preparePrCommentBody,
   relativePrTime,
   reviewStateLabel,
+  shortPrOid,
   uniquePrLogins,
 } from '../lib/pr-activity';
 import { MarkdownMessage } from './MarkdownMessage';
@@ -156,7 +157,7 @@ export function PrPage({ threadId, onAddToChat }: Props) {
               type="button"
               className="pr-page-add"
               disabled={loading}
-              title="Reload pull request comments and reviews"
+              title="Reload pull request description, comments, and commits"
               onClick={() => loadDetails()}
             >
               {loading && details ? 'Refreshing…' : 'Refresh'}
@@ -175,32 +176,44 @@ export function PrPage({ threadId, onAddToChat }: Props) {
       ) : error && !details ? (
         <div className="pr-page-empty">{error}</div>
       ) : conversation.length === 0 ? (
-        <div className="pr-page-empty">No description or comments yet.</div>
+        <div className="pr-page-empty">No description, comments, or commits yet.</div>
       ) : (
         <div className="pr-page-activity">
-          {conversation.map((item) => (
-            <article
-              key={item.id}
-              className={`pr-page-item${item.kind === 'description' ? ' is-description' : ''}`}
-            >
-              <header className="pr-page-item-meta">
-                <span className="pr-page-author">{item.author}</span>
-                {item.kind === 'review' ? (
-                  <span className="pr-page-kind">{reviewStateLabel(item.reviewState)}</span>
-                ) : item.kind === 'description' ? (
-                  <span className="pr-page-kind">commented</span>
+          {conversation.map((item) => {
+            const sha = item.kind === 'commit' ? shortPrOid(item.oid) : '';
+            return (
+              <article
+                key={item.id}
+                className={`pr-page-item${item.kind === 'description' ? ' is-description' : ''}${item.kind === 'commit' ? ' is-commit' : ''}`}
+              >
+                <header className="pr-page-item-meta">
+                  <span className="pr-page-author">{item.author}</span>
+                  {item.kind === 'review' ? (
+                    <span className="pr-page-kind">{reviewStateLabel(item.reviewState)}</span>
+                  ) : item.kind === 'description' ? (
+                    <span className="pr-page-kind">commented</span>
+                  ) : item.kind === 'commit' ? (
+                    <>
+                      <span className="pr-page-kind">committed</span>
+                      {sha ? <code className="pr-commit-sha">{sha}</code> : null}
+                    </>
+                  ) : null}
+                  {item.at ? (
+                    <time dateTime={item.at}>{relativePrTime(item.at)}</time>
+                  ) : null}
+                </header>
+                {item.body.trim() ? (
+                  <div className="pr-page-item-body">
+                    {item.kind === 'commit' ? (
+                      <div className="pr-commit-msg">{item.body.trim()}</div>
+                    ) : (
+                      <PrCommentBody text={item.body} />
+                    )}
+                  </div>
                 ) : null}
-                {item.at ? (
-                  <time dateTime={item.at}>{relativePrTime(item.at)}</time>
-                ) : null}
-              </header>
-              {item.body.trim() ? (
-                <div className="pr-page-item-body">
-                  <PrCommentBody text={item.body} />
-                </div>
-              ) : null}
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </div>

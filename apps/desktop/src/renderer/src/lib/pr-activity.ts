@@ -1,6 +1,6 @@
 import type { PrDetails, ThreadAttachment } from '@sideboard-ai/core';
 
-export type PrActivityKind = 'comment' | 'review' | 'description';
+export type PrActivityKind = 'comment' | 'review' | 'description' | 'commit';
 
 export interface PrActivityItem {
   id: string;
@@ -9,6 +9,12 @@ export interface PrActivityItem {
   body: string;
   at: string;
   reviewState?: string;
+  oid?: string;
+}
+
+export function shortPrOid(oid: string | null | undefined): string {
+  const sha = oid?.trim() ?? '';
+  return sha ? sha.slice(0, 7) : '';
 }
 
 /** Opening post for the PR conversation (GitHub-style description). */
@@ -111,7 +117,9 @@ export function prDetailsReviewerList(
   ]);
 }
 
-export function prActivityItems(details: Pick<PrDetails, 'comments' | 'reviews'>): PrActivityItem[] {
+export function prActivityItems(
+  details: Pick<PrDetails, 'comments' | 'reviews' | 'commits'>,
+): PrActivityItem[] {
   const comments = (details.comments ?? []).map((c, i) => ({
     id: `comment:${c.createdAt}:${c.author.login}:${i}`,
     kind: 'comment' as const,
@@ -127,16 +135,27 @@ export function prActivityItems(details: Pick<PrDetails, 'comments' | 'reviews'>
     at: r.submittedAt ?? '',
     reviewState: r.state,
   }));
-  return [...comments, ...reviews].sort((a, b) => {
+  const commits = (details.commits ?? []).map((c, i) => {
+    const actor = c.authors[0];
+    return {
+      id: `commit:${c.oid || c.committedDate}:${i}`,
+      kind: 'commit' as const,
+      author: actor?.login?.trim() || actor?.name?.trim() || 'unknown',
+      body: c.messageHeadline ?? '',
+      at: c.committedDate ?? '',
+      oid: c.oid,
+    };
+  });
+  return [...comments, ...reviews, ...commits].sort((a, b) => {
     const ta = Date.parse(a.at) || 0;
     const tb = Date.parse(b.at) || 0;
     return ta - tb;
   });
 }
 
-/** GitHub conversation: PR body first, then comments and reviews. */
+/** GitHub conversation: PR body first, then commits, comments, and reviews. */
 export function prConversationItems(
-  details: Pick<PrDetails, 'body' | 'author' | 'comments' | 'reviews'> & {
+  details: Pick<PrDetails, 'body' | 'author' | 'comments' | 'reviews' | 'commits'> & {
     createdAt?: string | null;
   },
 ): PrActivityItem[] {
@@ -384,12 +403,15 @@ export function prDetailsAttachment(details: PrDetails): ThreadAttachment {
   const items = prActivityItems(details);
   const activity = items
     .map((item) => {
+      const sha = shortPrOid(item.oid);
       const label =
         item.kind === 'review'
           ? reviewStateLabel(item.reviewState)
           : item.kind === 'description'
             ? 'Description'
-            : 'Comment';
+            : item.kind === 'commit'
+              ? `Commit${sha ? ` ${sha}` : ''}`
+              : 'Comment';
       const when = item.at ? ` · ${item.at}` : '';
       const body = item.body.trim() ? `\n\n${item.body.trim()}` : '';
       return `### @${item.author} — ${label}${when}${body}`;
