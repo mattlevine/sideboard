@@ -9778,6 +9778,15 @@ button.linkish:hover {
   font-weight: 600;
 }
 
+.pr-page-kind {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.pr-page-item.is-description {
+  padding-top: 4px;
+}
+
 .pr-page-item-body {
   margin-top: 8px;
   min-width: 0;

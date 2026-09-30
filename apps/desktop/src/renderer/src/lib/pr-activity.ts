@@ -1,6 +1,6 @@
 import type { PrDetails, ThreadAttachment } from '@sideboard-ai/core';
 
-export type PrActivityKind = 'comment' | 'review';
+export type PrActivityKind = 'comment' | 'review' | 'description';
 
 export interface PrActivityItem {
   id: string;
@@ -9,6 +9,21 @@ export interface PrActivityItem {
   body: string;
   at: string;
   reviewState?: string;
+}
+
+/** Opening post for the PR conversation (GitHub-style description). */
+export function prDescriptionItem(
+  details: Pick<PrDetails, 'body' | 'author'> & { createdAt?: string | null },
+): PrActivityItem | null {
+  const body = details.body?.trim() ?? '';
+  if (!body) return null;
+  return {
+    id: 'description',
+    kind: 'description',
+    author: details.author?.login?.trim() || 'unknown',
+    body: details.body,
+    at: details.createdAt?.trim() || '',
+  };
 }
 
 export function prTabTitle(input: {
@@ -117,6 +132,17 @@ export function prActivityItems(details: Pick<PrDetails, 'comments' | 'reviews'>
     const tb = Date.parse(b.at) || 0;
     return ta - tb;
   });
+}
+
+/** GitHub conversation: PR body first, then comments and reviews. */
+export function prConversationItems(
+  details: Pick<PrDetails, 'body' | 'author' | 'comments' | 'reviews'> & {
+    createdAt?: string | null;
+  },
+): PrActivityItem[] {
+  const lead = prDescriptionItem(details);
+  const rest = prActivityItems(details);
+  return lead ? [lead, ...rest] : rest;
 }
 
 const HTML_TAG = /<\/?[a-zA-Z][^>]*>/;
@@ -361,7 +387,9 @@ export function prDetailsAttachment(details: PrDetails): ThreadAttachment {
       const label =
         item.kind === 'review'
           ? reviewStateLabel(item.reviewState)
-          : 'Comment';
+          : item.kind === 'description'
+            ? 'Description'
+            : 'Comment';
       const when = item.at ? ` · ${item.at}` : '';
       const body = item.body.trim() ? `\n\n${item.body.trim()}` : '';
       return `### @${item.author} — ${label}${when}${body}`;

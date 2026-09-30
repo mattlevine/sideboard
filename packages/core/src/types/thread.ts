@@ -386,6 +386,8 @@ export interface PrDetails {
   isDraft: boolean;
   reviewDecision: string | null;
   author: PrActor;
+  /** When the PR was opened (`gh pr view --json createdAt`). */
+  createdAt?: string | null;
   baseRefName: string;
   headRefName: string;
   additions: number;

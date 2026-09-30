@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { PrDetails, ThreadAttachment } from '@sideboard-ai/core';
 import {
-  prActivityItems,
+  prConversationItems,
   prDetailsAttachment,
   prDetailsReviewerList,
   preparePrCommentBody,
@@ -10,8 +10,6 @@ import {
   uniquePrLogins,
 } from '../lib/pr-activity';
 import { MarkdownMessage } from './MarkdownMessage';
-
-type Section = 'activity' | 'description';
 
 interface Props {
   threadId: string;
@@ -46,7 +44,6 @@ export function PrPage({ threadId, onAddToChat }: Props) {
   const [details, setDetails] = useState<PrDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [section, setSection] = useState<Section>('activity');
   const loadGen = useRef(0);
   const detailsRef = useRef<PrDetails | null>(null);
   detailsRef.current = details;
@@ -80,8 +77,8 @@ export function PrPage({ threadId, onAddToChat }: Props) {
     };
   }, [loadDetails]);
 
-  const activity = useMemo(
-    () => (details ? prActivityItems(details) : []),
+  const conversation = useMemo(
+    () => (details ? prConversationItems(details) : []),
     [details],
   );
   const assignees = useMemo(
@@ -154,29 +151,6 @@ export function PrPage({ threadId, onAddToChat }: Props) {
           </dl>
         ) : null}
         <div className="pr-page-toolbar">
-          <div className="pr-page-sections" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={section === 'activity'}
-              className={section === 'activity' ? 'active' : undefined}
-              onClick={() => setSection('activity')}
-            >
-              Activity
-              {activity.length > 0 ? (
-                <span className="pr-page-count">{activity.length}</span>
-              ) : null}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={section === 'description'}
-              className={section === 'description' ? 'active' : undefined}
-              onClick={() => setSection('description')}
-            >
-              Description
-            </button>
-          </div>
           <div className="pr-page-actions">
             <button
               type="button"
@@ -200,24 +174,21 @@ export function PrPage({ threadId, onAddToChat }: Props) {
         <div className="pr-page-empty">Loading pull request…</div>
       ) : error && !details ? (
         <div className="pr-page-empty">{error}</div>
-      ) : section === 'description' ? (
-        <div className="pr-page-body">
-          {details?.body.trim() ? (
-            <PrCommentBody text={details.body} />
-          ) : (
-            <div className="pr-page-empty">No description.</div>
-          )}
-        </div>
-      ) : activity.length === 0 ? (
-        <div className="pr-page-empty">No comments or reviews yet.</div>
+      ) : conversation.length === 0 ? (
+        <div className="pr-page-empty">No description or comments yet.</div>
       ) : (
         <div className="pr-page-activity">
-          {activity.map((item) => (
-            <article key={item.id} className="pr-page-item">
+          {conversation.map((item) => (
+            <article
+              key={item.id}
+              className={`pr-page-item${item.kind === 'description' ? ' is-description' : ''}`}
+            >
               <header className="pr-page-item-meta">
                 <span className="pr-page-author">{item.author}</span>
                 {item.kind === 'review' ? (
                   <span className="pr-page-kind">{reviewStateLabel(item.reviewState)}</span>
+                ) : item.kind === 'description' ? (
+                  <span className="pr-page-kind">commented</span>
                 ) : null}
                 {item.at ? (
                   <time dateTime={item.at}>{relativePrTime(item.at)}</time>

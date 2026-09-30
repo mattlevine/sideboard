@@ -199,6 +199,8 @@ export function App() {
   const [changesOpen, setChangesOpen] = useState(false);
   /** Native PR page (GitHub API), not an embedded github.com tab. */
   const [prPageOpen, setPrPageOpen] = useState(false);
+  /** When set, switching `selectedId` should open the PR page instead of closing it. */
+  const openPrAfterSelect = useRef<string | null>(null);
   const [changesPath, setChangesPath] = useState<string | null>(null);
   const [changesDiffScope, setChangesDiffScope] = useState<DiffScope>('uncommitted');
   const [changesCommitSha, setChangesCommitSha] = useState<string | null>(null);
@@ -217,8 +219,14 @@ export function App() {
     setFileChanges({});
     setChangesOpen(false);
     setChangesPath(null);
-    setPrPageOpen(false);
     setOpenFileReveal(null);
+    if (openPrAfterSelect.current && openPrAfterSelect.current === selectedId) {
+      openPrAfterSelect.current = null;
+      setPrPageOpen(true);
+      return;
+    }
+    openPrAfterSelect.current = null;
+    setPrPageOpen(false);
   }, [selectedId]);
 
   function openFile(
@@ -332,6 +340,17 @@ export function App() {
   }
 
   function openPrPage() {
+    setChangesOpen(false);
+    setOpenFilePath(null);
+    setOpenUrl(null);
+    setPrPageOpen(true);
+  }
+
+  function openPrForThread(id: string) {
+    if (id !== selectedId) {
+      openPrAfterSelect.current = id;
+    }
+    onSelect(id, false);
     setChangesOpen(false);
     setOpenFilePath(null);
     setOpenUrl(null);
@@ -1229,6 +1248,7 @@ export function App() {
             onOwnershipChange={onWorktreeOwnershipChange}
             githubLogin={githubLogin}
             projectReviewLabels={projectReviewLabels}
+            onOpenPr={openPrForThread}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />

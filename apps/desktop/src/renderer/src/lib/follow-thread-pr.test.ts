@@ -68,6 +68,24 @@ describe('followThreadPrMeta', () => {
     expect(next?.url).toBe('https://github.com/acme/app/pull/10/');
   });
 
+  it('follows persisted mergeability on the same PR so the left nav can drop conflicts', () => {
+    const next = followThreadPrMeta(
+      meta({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }),
+      {
+        prUrl: 'https://github.com/acme/app/pull/10',
+        prState: 'OPEN',
+        prIsDraft: false,
+        prMergeable: 'MERGEABLE',
+        prMergeStateStatus: 'CLEAN',
+      },
+    );
+    expect(next).toMatchObject({
+      number: 10,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+    });
+  });
+
   it('does not treat a URL-only stub as a known hover status', () => {
     const stub = followThreadPrMeta(null, {
       prUrl: 'https://github.com/acme/app/pull/22',
@@ -75,6 +93,16 @@ describe('followThreadPrMeta', () => {
       prIsDraft: false,
     });
     expect(sidebarPrHasKnownStatus(stub)).toBe(false);
+    expect(
+      sidebarPrHasKnownStatus(
+        followThreadPrMeta(null, {
+          prUrl: 'https://github.com/acme/app/pull/22',
+          prState: 'OPEN',
+          prMergeable: 'CONFLICTING',
+          prMergeStateStatus: 'DIRTY',
+        }),
+      ),
+    ).toBe(true);
     expect(sidebarPrHasKnownStatus(meta({ state: 'MERGED' }))).toBe(true);
     expect(sidebarPrHasKnownStatus(meta({ isDraft: true }))).toBe(true);
   });

@@ -73,6 +73,8 @@ interface Props {
   githubLogin?: string | null;
   /** Settings → Projects ready-for-review GitHub labels, keyed by repo path. */
   projectReviewLabels?: Record<string, string>;
+  /** Open the in-app PR page for this worktree (not GitHub). */
+  onOpenPr?: (threadId: string) => void;
 }
 
 function repoName(repoPath: string): string {
@@ -203,6 +205,7 @@ function WorktreeEditCard({
   deletions,
   onOpen,
   onKeepOpen,
+  onOpenPr,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
@@ -215,6 +218,7 @@ function WorktreeEditCard({
   deletions: number;
   onOpen: () => void;
   onKeepOpen: (v: boolean) => void;
+  onOpenPr?: () => void;
 }) {
   const showCost = useShowCost();
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -264,7 +268,16 @@ function WorktreeEditCard({
 
   useEffect(() => {
     setPrMeta((prev) => followThreadPrMeta(prev, thread));
-  }, [thread.prUrl, thread.prState, thread.prIsDraft]);
+  }, [
+    thread.prUrl,
+    thread.prState,
+    thread.prIsDraft,
+    thread.prTitle,
+    thread.prReviewDecision,
+    thread.prMergeable,
+    thread.prMergeStateStatus,
+    thread.prIsInMergeQueue,
+  ]);
 
   // Fetch live PR lifecycle (draft / open / merged / review) when the card opens.
   useEffect(() => {
@@ -385,15 +398,17 @@ function WorktreeEditCard({
             className={`worktree-hover-card-btn${prStatusMod ? ` ${prStatusMod}` : ''}`}
             title={
               prStatusLabel
-                ? `${prNum ? `#${prNum}` : 'PR'} · ${prStatusLabel}`
-                : (prUrl ?? undefined)
+                ? `Open #${prNum} · ${prStatusLabel}`
+                : `Open #${prNum}`
             }
             onClick={() => {
-              if (prUrl) void window.sideboard.openExternal(prUrl);
+              onKeepOpen(false);
+              if (onOpenPr) onOpenPr();
+              else onOpen();
             }}
           >
             <span aria-hidden>⎇</span>
-            #{prNum} ↗
+            #{prNum}
             {prStatusLabel ? (
               <span className="worktree-hover-card-btn-status">{prStatusLabel}</span>
             ) : null}
@@ -438,6 +453,7 @@ function WorktreeSidebarRow({
   onSelect,
   showArchive,
   onRequestArchive,
+  onOpenPr,
 }: {
   primary: Thread;
   group: Thread[];
@@ -452,6 +468,7 @@ function WorktreeSidebarRow({
   /** When true, show the archive control (parent handles teardown). */
   showArchive?: boolean;
   onRequestArchive: (chats: Thread[]) => void;
+  onOpenPr?: (threadId: string) => void;
 }) {
   const [gitCardOpen, setGitCardOpenState] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -587,6 +604,10 @@ function WorktreeSidebarRow({
             setGitCardOpen(false);
             onSelect(primary.id, false);
           }}
+          onOpenPr={() => {
+            setGitCardOpen(false);
+            onOpenPr?.(primary.id);
+          }}
           onKeepOpen={setGitCardOpen}
         />
       ) : null}
@@ -616,6 +637,7 @@ export function Sidebar({
   onOwnershipChange,
   githubLogin = null,
   projectReviewLabels = {},
+  onOpenPr,
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -963,6 +985,7 @@ export function Sidebar({
                     archiving={archiving}
                     unread={unread}
                     onSelect={onSelect}
+                    onOpenPr={onOpenPr}
                     showArchive={Boolean(onArchive)}
                     onRequestArchive={(chats) =>
                       runArchive(

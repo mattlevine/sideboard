@@ -4,6 +4,8 @@ import {
   githubPullNumber,
   htmlFragmentsToMarkdown,
   prActivityItems,
+  prConversationItems,
+  prDescriptionItem,
   prDetailsAttachment,
   prDetailsReviewerList,
   prTabTitle,
@@ -86,6 +88,49 @@ describe('prActivityItems', () => {
     expect(items.map((i) => i.author)).toEqual(['reviewer', 'github-actions']);
     expect(items[0]?.kind).toBe('review');
     expect(items[1]?.kind).toBe('comment');
+  });
+});
+
+describe('prDescriptionItem', () => {
+  it('returns the opening post when the PR has a body', () => {
+    expect(prDescriptionItem(details())).toMatchObject({
+      id: 'description',
+      kind: 'description',
+      author: 'matt',
+      body: 'Harden the resume path.',
+    });
+  });
+
+  it('skips blank bodies', () => {
+    expect(prDescriptionItem(details({ body: '  \n  ' }))).toBeNull();
+  });
+});
+
+describe('prConversationItems', () => {
+  it('puts the description first, then comments and reviews', () => {
+    const items = prConversationItems(
+      details({
+        createdAt: '2026-08-10T09:00:00Z',
+        comments: [
+          {
+            author: { login: 'github-actions' },
+            body: 'Checks passed',
+            createdAt: '2026-08-12T10:00:00Z',
+          },
+        ],
+        reviews: [
+          {
+            author: { login: 'reviewer' },
+            state: 'APPROVED',
+            body: 'LGTM',
+            submittedAt: '2026-08-11T10:00:00Z',
+          },
+        ],
+      }),
+    );
+    expect(items.map((i) => i.kind)).toEqual(['description', 'review', 'comment']);
+    expect(items[0]?.body).toBe('Harden the resume path.');
+    expect(items[0]?.at).toBe('2026-08-10T09:00:00Z');
   });
 });
 

@@ -127,5 +127,18 @@ describe('parsePrDetailsView', () => {
     expect(details.reviewers).toEqual(['alice']);
     expect(details.teams).toEqual(['engineering-team']);
     expect(details.reviewRequests).toEqual(['alice', 'engineering-team']);
+    expect(details.createdAt).toBeNull();
+  });
+
+  it('maps createdAt for the conversation opening post', () => {
+    const details = parsePrDetailsView({
+      number: 84,
+      title: 'feat: defaults',
+      body: 'Ship it.',
+      author: { login: 'matt' },
+      createdAt: '2026-09-29T12:00:00Z',
+    });
+    expect(details.body).toBe('Ship it.');
+    expect(details.createdAt).toBe('2026-09-29T12:00:00Z');
   });
 });

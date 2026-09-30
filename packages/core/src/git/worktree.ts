@@ -715,8 +715,9 @@ export async function detectLocalMergeConflicts(
 }
 
 /**
- * When GitHub leaves mergeable UNKNOWN (or is silent), verify with merge-tree.
- * Skip if GitHub already reports a conflict or the PR is in a merge queue.
+ * Verify mergeability with merge-tree. GitHub CONFLICTING is often stale after
+ * a local resolve (commit not pushed yet, or GitHub still recalculating). Skip
+ * only when the PR is already in a merge queue.
  */
 async function probeLocalMergeGate(
   cwd: string,
@@ -724,10 +725,11 @@ async function probeLocalMergeGate(
 ): Promise<{ gate: PrMergeGate | null; files: string[] }> {
   const mergeable = (gate?.mergeable ?? '').toUpperCase();
   const mergeState = (gate?.mergeStateStatus ?? '').toUpperCase();
-  const alreadyConflicting =
+  const githubConflicting =
     mergeable === 'CONFLICTING' || mergeState === 'DIRTY';
+  const githubUnknown = mergeable === 'UNKNOWN' || mergeState === 'UNKNOWN';
   const inQueue = gate ? prIsInMergeQueue(gate) : false;
-  if (alreadyConflicting || inQueue) return { gate, files: [] };
+  if (inQueue) return { gate, files: [] };
 
   try {
     const local = await detectLocalMergeConflicts(cwd, gate?.baseRefName ?? null);
@@ -744,13 +746,12 @@ async function probeLocalMergeGate(
         files: local.files,
       };
     }
-    if (gate && (mergeable === 'UNKNOWN' || mergeState === 'UNKNOWN')) {
+    if (gate && (githubConflicting || githubUnknown)) {
       return {
         gate: {
           ...gate,
-          mergeable: gate.mergeable === 'UNKNOWN' ? 'MERGEABLE' : gate.mergeable,
-          mergeStateStatus:
-            gate.mergeStateStatus === 'UNKNOWN' ? 'CLEAN' : gate.mergeStateStatus,
+          mergeable: 'MERGEABLE',
+          mergeStateStatus: mergeState === 'BEHIND' ? 'BEHIND' : 'CLEAN',
         },
         files: [],
       };
@@ -920,6 +921,7 @@ export const PR_DETAILS_JSON_FIELDS = [
   'isDraft',
   'reviewDecision',
   'author',
+  'createdAt',
   'baseRefName',
   'headRefName',
   'additions',
@@ -955,6 +957,7 @@ export function parsePrDetailsView(view: Record<string, unknown>): PrDetails {
         ? view.reviewDecision
         : null,
     author: { login: author.login ?? 'unknown', name: author.name ?? null },
+    createdAt: typeof view.createdAt === 'string' && view.createdAt ? view.createdAt : null,
     baseRefName: String(view.baseRefName ?? ''),
     headRefName: String(view.headRefName ?? ''),
     additions: Number(view.additions ?? 0),
