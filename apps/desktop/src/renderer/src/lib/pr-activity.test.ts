@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrDetails } from '@sideboard-ai/core';
 import {
+  githubPrCommitUrl,
   githubPullNumber,
   htmlFragmentsToMarkdown,
   prActivityItems,
@@ -13,6 +14,7 @@ import {
   relativePrTime,
   reviewStateLabel,
   rewriteDeadBadgeUrl,
+  shortPrOid,
   stripHtmlComments,
   unwrapIndentedHtml,
 } from './pr-activity';
@@ -64,8 +66,33 @@ describe('githubPullNumber', () => {
   });
 });
 
+describe('githubPrCommitUrl', () => {
+  it('builds a PR commit URL', () => {
+    expect(githubPrCommitUrl('https://github.com/acme/app/pull/99', 'abcdef123')).toBe(
+      'https://github.com/acme/app/pull/99/commits/abcdef123',
+    );
+  });
+
+  it('strips /files and query from the PR URL', () => {
+    expect(
+      githubPrCommitUrl('https://github.com/acme/app/pull/99/files?w=1', 'abcdef123'),
+    ).toBe('https://github.com/acme/app/pull/99/commits/abcdef123');
+  });
+
+  it('falls back to the repo commit page', () => {
+    expect(githubPrCommitUrl('https://github.com/acme/app', 'abcdef123')).toBe(
+      'https://github.com/acme/app/commit/abcdef123',
+    );
+  });
+
+  it('returns null without a sha or url', () => {
+    expect(githubPrCommitUrl('https://github.com/acme/app/pull/99', '')).toBeNull();
+    expect(githubPrCommitUrl('', 'abcdef123')).toBeNull();
+  });
+});
+
 describe('prActivityItems', () => {
-  it('merges comments and reviews in chronological order', () => {
+  it('merges comments, reviews, and commits in chronological order', () => {
     const items = prActivityItems(
       details({
         comments: [
@@ -83,11 +110,23 @@ describe('prActivityItems', () => {
             submittedAt: '2026-08-11T10:00:00Z',
           },
         ],
+        commits: [
+          {
+            oid: 'abc1234def',
+            messageHeadline: 'fix: resume auth',
+            committedDate: '2026-08-10T18:00:00Z',
+            authors: [{ login: 'matt' }],
+          },
+        ],
       }),
     );
-    expect(items.map((i) => i.author)).toEqual(['reviewer', 'github-actions']);
-    expect(items[0]?.kind).toBe('review');
-    expect(items[1]?.kind).toBe('comment');
+    expect(items.map((i) => i.kind)).toEqual(['commit', 'review', 'comment']);
+    expect(items[0]).toMatchObject({
+      author: 'matt',
+      body: 'fix: resume auth',
+      oid: 'abc1234def',
+      url: 'https://github.com/acme/app/pull/99/commits/abc1234def',
+    });
   });
 });
 
@@ -107,7 +146,7 @@ describe('prDescriptionItem', () => {
 });
 
 describe('prConversationItems', () => {
-  it('puts the description first, then comments and reviews', () => {
+  it('puts the description first, then commits, comments and reviews', () => {
     const items = prConversationItems(
       details({
         createdAt: '2026-08-10T09:00:00Z',
@@ -126,11 +165,27 @@ describe('prConversationItems', () => {
             submittedAt: '2026-08-11T10:00:00Z',
           },
         ],
+        commits: [
+          {
+            oid: 'abc1234def',
+            messageHeadline: 'fix: resume auth',
+            committedDate: '2026-08-10T18:00:00Z',
+            authors: [{ login: 'matt' }],
+          },
+        ],
       }),
     );
-    expect(items.map((i) => i.kind)).toEqual(['description', 'review', 'comment']);
+    expect(items.map((i) => i.kind)).toEqual(['description', 'commit', 'review', 'comment']);
     expect(items[0]?.body).toBe('Harden the resume path.');
     expect(items[0]?.at).toBe('2026-08-10T09:00:00Z');
+    expect(items[1]?.body).toBe('fix: resume auth');
+  });
+});
+
+describe('shortPrOid', () => {
+  it('returns the first 7 characters', () => {
+    expect(shortPrOid('abcdef1234567890')).toBe('abcdef1');
+    expect(shortPrOid('')).toBe('');
   });
 });
 
@@ -322,6 +377,24 @@ describe('prDetailsAttachment', () => {
     expect(att.content).toContain('Harden the resume path.');
     expect(att.content).toContain('@supabase');
     expect(att.content).toContain('Preview ready');
+  });
+
+  it('includes commits in activity', () => {
+    const att = prDetailsAttachment(
+      details({
+        commits: [
+          {
+            oid: 'abc1234def',
+            messageHeadline: 'fix: resume auth',
+            committedDate: '2026-08-10T18:00:00Z',
+            authors: [{ login: 'matt' }],
+          },
+        ],
+      }),
+    );
+    expect(att.content).toContain('Commit abc1234');
+    expect(att.content).toContain('https://github.com/acme/app/pull/99/commits/abc1234def');
+    expect(att.content).toContain('fix: resume auth');
   });
 
   it('includes assignees, reviewers, and labels', () => {

@@ -9787,6 +9787,34 @@ button.linkish:hover {
   padding-top: 4px;
 }
 
+.pr-page-item.is-commit {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.pr-page-item.is-commit .pr-page-item-body {
+  margin-top: 4px;
+}
+
+.pr-page-item .pr-commit-sha {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+a.pr-commit-link {
+  color: #75beff;
+  text-decoration: none;
+}
+
+a.pr-commit-link:hover {
+  text-decoration: underline;
+}
+
+a.pr-commit-sha.pr-commit-link {
+  color: #75beff;
+}
+
 .pr-page-item-body {
   margin-top: 8px;
   min-width: 0;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   connectedPrSelectors,
   parsePrDetailsView,
+  PR_DETAILS_JSON_FIELDS,
   resolvePrSelector,
   resolvePrSelectors,
 } from './worktree.js';
@@ -101,6 +102,10 @@ describe('connectedPrSelectors', () => {
 });
 
 describe('parsePrDetailsView', () => {
+  it('requests commits for the PR conversation', () => {
+    expect(PR_DETAILS_JSON_FIELDS.split(',')).toContain('commits');
+  });
+
   it('maps assignees, labels, and requested reviewers', () => {
     const details = parsePrDetailsView({
       number: 84,
@@ -140,5 +145,39 @@ describe('parsePrDetailsView', () => {
     });
     expect(details.body).toBe('Ship it.');
     expect(details.createdAt).toBe('2026-09-29T12:00:00Z');
+  });
+
+  it('maps commits from gh pr view', () => {
+    const details = parsePrDetailsView({
+      number: 84,
+      commits: [
+        {
+          oid: 'abcdef1234567890',
+          messageHeadline: 'fix: show conversation commits',
+          committedDate: '2026-09-29T11:00:00Z',
+          authors: [{ login: 'matt', name: 'Matt' }],
+        },
+        {
+          oid: 'fedcba0987654321',
+          messageHeadline: 'chore: follow-up',
+          committedDate: '2026-09-29T11:30:00Z',
+          authors: [{ name: 'Local Dev' }],
+        },
+      ],
+    });
+    expect(details.commits).toEqual([
+      {
+        oid: 'abcdef1234567890',
+        messageHeadline: 'fix: show conversation commits',
+        committedDate: '2026-09-29T11:00:00Z',
+        authors: [{ login: 'matt', name: 'Matt' }],
+      },
+      {
+        oid: 'fedcba0987654321',
+        messageHeadline: 'chore: follow-up',
+        committedDate: '2026-09-29T11:30:00Z',
+        authors: [{ login: 'Local Dev', name: 'Local Dev' }],
+      },
+    ]);
   });
 });

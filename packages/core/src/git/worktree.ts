@@ -948,6 +948,7 @@ export const PR_DETAILS_JSON_FIELDS = [
   'additions',
   'deletions',
   'changedFiles',
+  'commits',
   'comments',
   'reviews',
   'assignees',
@@ -960,6 +961,7 @@ export function parsePrDetailsView(view: Record<string, unknown>): PrDetails {
   const author = (view.author ?? {}) as { login?: string; name?: string | null };
   const comments = Array.isArray(view.comments) ? view.comments : [];
   const reviews = Array.isArray(view.reviews) ? view.reviews : [];
+  const commits = Array.isArray(view.commits) ? view.commits : [];
   const requested = {
     ids: reviewerIdentities(view.reviewRequests),
     users: humanReviewerLogins(view.reviewRequests),
@@ -984,8 +986,24 @@ export function parsePrDetailsView(view: Record<string, unknown>): PrDetails {
     additions: Number(view.additions ?? 0),
     deletions: Number(view.deletions ?? 0),
     changedFiles: Number(view.changedFiles ?? 0),
-    // Commits live in Changes; omit from GraphQL to save rate-limit points.
-    commits: [],
+    commits: commits.map((c) => {
+      const row = c as Record<string, unknown>;
+      const authors = Array.isArray(row.authors)
+        ? row.authors.map((a) => {
+            const actor = a as { login?: string; name?: string | null };
+            return {
+              login: actor.login?.trim() || actor.name?.trim() || 'unknown',
+              name: actor.name ?? null,
+            };
+          })
+        : [];
+      return {
+        oid: String(row.oid ?? ''),
+        messageHeadline: String(row.messageHeadline ?? ''),
+        committedDate: String(row.committedDate ?? ''),
+        authors,
+      };
+    }),
     comments: comments.map((c) => {
       const row = c as Record<string, unknown>;
       const a = (row.author ?? {}) as { login?: string };
@@ -1015,7 +1033,7 @@ export function parsePrDetailsView(view: Record<string, unknown>): PrDetails {
   };
 }
 
-/** PR description / reviews for the Review tab (no nested CI — use getPrChecks). */
+/** PR description / commits / reviews for the PR page (no nested CI — use getPrChecks). */
 export async function getPrDetails(
   cwd: string,
   selector: string,
