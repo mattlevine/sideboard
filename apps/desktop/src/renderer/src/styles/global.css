@@ -9802,6 +9802,19 @@ button.linkish:hover {
   color: var(--muted);
 }
 
+a.pr-commit-link {
+  color: #75beff;
+  text-decoration: none;
+}
+
+a.pr-commit-link:hover {
+  text-decoration: underline;
+}
+
+a.pr-commit-sha.pr-commit-link {
+  color: #75beff;
+}
+
 .pr-page-item-body {
   margin-top: 8px;
   min-width: 0;

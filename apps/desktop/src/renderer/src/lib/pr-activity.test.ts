@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrDetails } from '@sideboard-ai/core';
 import {
+  githubPrCommitUrl,
   githubPullNumber,
   htmlFragmentsToMarkdown,
   prActivityItems,
@@ -65,6 +66,31 @@ describe('githubPullNumber', () => {
   });
 });
 
+describe('githubPrCommitUrl', () => {
+  it('builds a PR commit URL', () => {
+    expect(githubPrCommitUrl('https://github.com/acme/app/pull/99', 'abcdef123')).toBe(
+      'https://github.com/acme/app/pull/99/commits/abcdef123',
+    );
+  });
+
+  it('strips /files and query from the PR URL', () => {
+    expect(
+      githubPrCommitUrl('https://github.com/acme/app/pull/99/files?w=1', 'abcdef123'),
+    ).toBe('https://github.com/acme/app/pull/99/commits/abcdef123');
+  });
+
+  it('falls back to the repo commit page', () => {
+    expect(githubPrCommitUrl('https://github.com/acme/app', 'abcdef123')).toBe(
+      'https://github.com/acme/app/commit/abcdef123',
+    );
+  });
+
+  it('returns null without a sha or url', () => {
+    expect(githubPrCommitUrl('https://github.com/acme/app/pull/99', '')).toBeNull();
+    expect(githubPrCommitUrl('', 'abcdef123')).toBeNull();
+  });
+});
+
 describe('prActivityItems', () => {
   it('merges comments, reviews, and commits in chronological order', () => {
     const items = prActivityItems(
@@ -99,6 +125,7 @@ describe('prActivityItems', () => {
       author: 'matt',
       body: 'fix: resume auth',
       oid: 'abc1234def',
+      url: 'https://github.com/acme/app/pull/99/commits/abc1234def',
     });
   });
 });
@@ -366,6 +393,7 @@ describe('prDetailsAttachment', () => {
       }),
     );
     expect(att.content).toContain('Commit abc1234');
+    expect(att.content).toContain('https://github.com/acme/app/pull/99/commits/abc1234def');
     expect(att.content).toContain('fix: resume auth');
   });
 

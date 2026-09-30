@@ -10,11 +10,37 @@ export interface PrActivityItem {
   at: string;
   reviewState?: string;
   oid?: string;
+  url?: string;
 }
 
 export function shortPrOid(oid: string | null | undefined): string {
   const sha = oid?.trim() ?? '';
   return sha ? sha.slice(0, 7) : '';
+}
+
+/** GitHub commit page for a PR conversation row (`/pull/N/commits/sha`). */
+export function githubPrCommitUrl(
+  prUrl: string | null | undefined,
+  oid: string | null | undefined,
+): string | null {
+  const sha = oid?.trim();
+  if (!sha || !prUrl) return null;
+  try {
+    const u = new URL(prUrl);
+    const pull = u.pathname.match(/^(\/[^/]+\/[^/]+\/pull\/\d+)/);
+    if (pull) {
+      u.pathname = `${pull[1]}/commits/${sha}`;
+    } else {
+      const repo = u.pathname.match(/^(\/[^/]+\/[^/]+)/);
+      if (!repo) return null;
+      u.pathname = `${repo[1]}/commit/${sha}`;
+    }
+    u.search = '';
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return null;
+  }
 }
 
 /** Opening post for the PR conversation (GitHub-style description). */
@@ -118,7 +144,7 @@ export function prDetailsReviewerList(
 }
 
 export function prActivityItems(
-  details: Pick<PrDetails, 'comments' | 'reviews' | 'commits'>,
+  details: Pick<PrDetails, 'comments' | 'reviews' | 'commits' | 'url'>,
 ): PrActivityItem[] {
   const comments = (details.comments ?? []).map((c, i) => ({
     id: `comment:${c.createdAt}:${c.author.login}:${i}`,
@@ -137,6 +163,7 @@ export function prActivityItems(
   }));
   const commits = (details.commits ?? []).map((c, i) => {
     const actor = c.authors[0];
+    const url = githubPrCommitUrl(details.url, c.oid) ?? undefined;
     return {
       id: `commit:${c.oid || c.committedDate}:${i}`,
       kind: 'commit' as const,
@@ -144,6 +171,7 @@ export function prActivityItems(
       body: c.messageHeadline ?? '',
       at: c.committedDate ?? '',
       oid: c.oid,
+      url,
     };
   });
   return [...comments, ...reviews, ...commits].sort((a, b) => {
@@ -155,7 +183,7 @@ export function prActivityItems(
 
 /** GitHub conversation: PR body first, then commits, comments, and reviews. */
 export function prConversationItems(
-  details: Pick<PrDetails, 'body' | 'author' | 'comments' | 'reviews' | 'commits'> & {
+  details: Pick<PrDetails, 'body' | 'author' | 'comments' | 'reviews' | 'commits' | 'url'> & {
     createdAt?: string | null;
   },
 ): PrActivityItem[] {
@@ -413,8 +441,9 @@ export function prDetailsAttachment(details: PrDetails): ThreadAttachment {
               ? `Commit${sha ? ` ${sha}` : ''}`
               : 'Comment';
       const when = item.at ? ` · ${item.at}` : '';
+      const link = item.url ? `\n${item.url}` : '';
       const body = item.body.trim() ? `\n\n${item.body.trim()}` : '';
-      return `### @${item.author} — ${label}${when}${body}`;
+      return `### @${item.author} — ${label}${when}${link}${body}`;
     })
     .join('\n\n');
   const assignees = (details.assignees ?? []).filter(Boolean);

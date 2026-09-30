@@ -195,7 +195,20 @@ export function PrPage({ threadId, onAddToChat }: Props) {
                   ) : item.kind === 'commit' ? (
                     <>
                       <span className="pr-page-kind">committed</span>
-                      {sha ? <code className="pr-commit-sha">{sha}</code> : null}
+                      {sha ? (
+                        item.url ? (
+                          <a
+                            className="pr-commit-sha pr-commit-link"
+                            href={item.url}
+                            title="Open commit on GitHub"
+                            onClick={openHtmlLink}
+                          >
+                            {sha}
+                          </a>
+                        ) : (
+                          <code className="pr-commit-sha">{sha}</code>
+                        )
+                      ) : null}
                     </>
                   ) : null}
                   {item.at ? (
@@ -205,7 +218,18 @@ export function PrPage({ threadId, onAddToChat }: Props) {
                 {item.body.trim() ? (
                   <div className="pr-page-item-body">
                     {item.kind === 'commit' ? (
-                      <div className="pr-commit-msg">{item.body.trim()}</div>
+                      item.url ? (
+                        <a
+                          className="pr-commit-msg pr-commit-link"
+                          href={item.url}
+                          title="Open commit on GitHub"
+                          onClick={openHtmlLink}
+                        >
+                          {item.body.trim()}
+                        </a>
+                      ) : (
+                        <div className="pr-commit-msg">{item.body.trim()}</div>
+                      )
                     ) : (
                       <PrCommentBody text={item.body} />
                     )}
