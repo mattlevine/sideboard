@@ -247,6 +247,7 @@ describe('formatWorktreeReminder', () => {
     expect(text).toMatch(/upstream/i);
     expect(text).toMatch(/If a goal is given/);
     expect(text).toMatch(/do not watch after every push/i);
+    expect(text).toMatch(/create_schedule/);
   });
 });
 
@@ -266,6 +267,8 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/never the worktree nickname/i);
     expect(text).toMatch(/gh pr create --draft --assignee @me -R/i);
     expect(text).toMatch(/run_dev_script/);
+    expect(text).toMatch(/create_schedule/);
+    expect(text).toMatch(/threadId=self/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
     expect(text).toMatch(/not 3000/);
     expect(text).toMatch(/preview=window/);

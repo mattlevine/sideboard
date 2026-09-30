@@ -11,7 +11,6 @@ import {
   type ScheduledTask,
 } from '../store/schedules.js';
 import { findThreadByRef } from '../store/thread-store.js';
-import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentKind, Thread } from '../types/thread.js';
 
 const SET_TIMEOUT_MAX = 2_147_483_647;
@@ -77,13 +76,8 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
       if (!thread || thread.status === 'archived') {
         return recordScheduleRun(schedule.id, {
           lastError: thread
-            ? `Orchestration chat ${schedule.threadId} is archived`
-            : `Orchestration chat not found: ${schedule.threadId}`,
-        });
-      }
-      if (!isOrchestratorThread(thread)) {
-        return recordScheduleRun(schedule.id, {
-          lastError: `Thread ${schedule.threadId} is not an orchestration chat`,
+            ? `Chat ${schedule.threadId} is archived`
+            : `Chat not found: ${schedule.threadId}`,
         });
       }
       const sent = await deps.send(thread.id, prompt);

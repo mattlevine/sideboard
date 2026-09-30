@@ -145,4 +145,37 @@ describe('schedule runner', () => {
     expect(after.lastError).toMatch(/not found/);
     expect(after.enabled).toBe(true);
   });
+
+  it('sends to an existing worktree chat', async () => {
+    const { store, runner } = await load();
+    const sent: string[] = [];
+    const worktree = orchThread({
+      id: 'wt-1',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      repoPath: '/tmp/repo',
+      worktreePath: '/tmp/repo/lens',
+    });
+    runner.setScheduleFireHooks({
+      findThread: () => worktree,
+      send: async (id, prompt) => {
+        sent.push(`${id}:${prompt}`);
+        return worktree;
+      },
+      startOrchestration: async () => orchThread(),
+    });
+    const schedule = store.createSchedule({
+      name: 'Follow-up',
+      prompt: 'Retry the flaky test',
+      when: { kind: 'once', at: '2099-01-01T00:00:00.000Z' },
+      threadId: worktree.id,
+      createdBy: 'mcp',
+    });
+    const after = await runner.fireSchedule(schedule.id);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain('wt-1:');
+    expect(sent[0]).toContain('Retry the flaky test');
+    expect(after.lastThreadId).toBe('wt-1');
+    expect(after.lastError).toBeNull();
+  });
 });

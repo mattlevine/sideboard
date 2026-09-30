@@ -299,7 +299,7 @@ Once connected, agents get tools to:
 - **Worktree chats** — `create_thread` → `send_to_thread` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentThreadId` — MCP binds the child to that chat; do not invent uuids). A ticket, PR, or named branch may have only one live worktree — `create_thread` returns that thread (`alreadyStarted`) instead of a second checkout; default-branch create still opens a new isolated worktree. `wait_for_turn` returns within ~45s with `stillRunning`, `taskState` (submitted / working / input-required / completed / failed / canceled), and live `progress` while the child is still working — call it again; do not assume a hang. `fork_worktree` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_thread` force-stops (kills in-flight turn and clears the prompt queue); `send_to_thread` steers (Settings → Follow-up, default interrupt now) and accepts optional `force_stop` to clear the inbox first; `archive_thread`, `restore_thread`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
 - **Ask the user** — `ask_user` (composer multiple-choice when work is blocked on a concrete choice — not greetings or “what next?” menus). Agents explain options in chat first; Sideboard shows the picker and mirrors questions in the transcript. On a worktree child, `ask_user` also wakes the parent Global chat (`notify_orchestrator`, `input-required`) so the coordinator does not have to poll. Worktree agents can call `notify_orchestrator` themselves when blocked without a picker.
-- **Schedules** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration profile). Jobs fire only while Sideboard.app is running. Overnight: **Settings → Advanced → Caffeinate while schedules are enabled**, or `set_caffeinate`.
+- **Schedules** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration and worktree). `threadId=self` continues this chat; omit `threadId` to start a new Global chat when due. Jobs fire only while Sideboard.app is running. Overnight: **Settings → Advanced → Caffeinate while schedules are enabled**, or `set_caffeinate` from a Global chat.
 - **Setup / run** — `run_setup` (also runs automatically on new worktrees), `list_run_scripts`, `run_dev_script`, `stop_dev_script`, `get_run_log`
 - **Inspect / review / PRs** — `get_diff`; `get_pr_checks` (snapshot); `request_review` (opens a Review chat tab on a worktree thread). The review stays in chat so you can read it and type next steps before the PR or ticket author is notified — no immediate Post/Keep picker. `ask_git` (commit & push, draft PR, ready for review, resolve conflicts, merge — same prompts as the desktop git buttons). If a goal is given (Greptile 5/5, CI green), the worktree agent watch-fix-pushes until it lands. Merge only when the user explicitly asked.
 - **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while Slack Listen is on, and while schedules are enabled.
@@ -438,9 +438,9 @@ Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supa
 
 ## Scheduled orchestration
 
-Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app must be running on this Mac; a sleeping machine skips until wake. For overnight runs, enable **Settings → Advanced → Caffeinate while schedules are enabled** (or `set_caffeinate` from a chat).
+Local jobs that send a prompt to an existing chat (Global or worktree), or start a new Global chat. Sideboard.app must be running on this Mac; a sleeping machine skips until wake. For overnight runs, enable **Settings → Advanced → Caffeinate while schedules are enabled** (or `set_caffeinate` from a Global chat).
 
-**Settings → Schedules**, orchestration MCP (`list_schedules` / `create_schedule` / `run_schedule`), or:
+**Settings → Schedules**, MCP (`list_schedules` / `create_schedule` / `run_schedule` — orchestration and worktree agents), or:
 
 ```bash
 sideboard schedule ls
@@ -450,7 +450,7 @@ sideboard schedule add --prompt "One-shot reminder" --at 2026-08-21T18:00:00-07:
 sideboard schedule run <id>
 ```
 
-Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs will open a new chat each run). Pass `--thread self` from an orchestration turn (or `threadId=self` in MCP) to continue that coordinator.
+Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs will open a new chat each run). Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat.
 
 ## Also: Brightsy
 

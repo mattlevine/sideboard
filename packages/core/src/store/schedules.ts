@@ -24,7 +24,8 @@ export interface ScheduledTask {
   prompt: string;
   enabled: boolean;
   when: ScheduleWhen;
-  /** Existing orchestration chat. Null = create a new Global chat on fire. */
+  /** Existing chat (orchestration or worktree). Null = create a new Global chat on fire. */
+  threadId: string | null;
   threadId: string | null;
   agent: OrchestratorAgentKind | null;
   model: string | null;
@@ -88,7 +89,10 @@ export function defaultScheduleName(prompt: string): string {
   return line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line;
 }
 
-/** `self` → SIDEBOARD_ORCHESTRATOR_THREAD_ID. Empty / missing → null (new chat). */
+/**
+ * `self` → this chat: orchestration env first, then SIDEBOARD_THREAD_ID
+ * (worktree). Empty / missing → null (new Global chat).
+ */
 export function resolveScheduleThreadId(
   raw: string | null | undefined,
   env: NodeJS.ProcessEnv = process.env,
@@ -96,7 +100,11 @@ export function resolveScheduleThreadId(
   const value = raw?.trim() || '';
   if (!value) return null;
   if (value.toLowerCase() === 'self') {
-    return env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || null;
+    return (
+      env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() ||
+      env.SIDEBOARD_THREAD_ID?.trim() ||
+      null
+    );
   }
   return value;
 }

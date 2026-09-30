@@ -28,7 +28,7 @@ describe('sideboardMcpProfile', () => {
     );
   });
 
-  it('worktree MCP catalog is the UI tools plus wait_for_job, stop_job, run scripts, and notify_orchestrator', () => {
+  it('worktree MCP catalog is the UI tools plus wait_for_job, stop_job, run scripts, notify_orchestrator, and schedules', () => {
     expect([...WORKTREE_MCP_TOOLS]).toEqual([
       'present_artifact',
       'ask_user',
@@ -44,6 +44,11 @@ describe('sideboardMcpProfile', () => {
       'notify_orchestrator',
       'get_viewer_context',
       'update_viewer_context',
+      'list_schedules',
+      'create_schedule',
+      'update_schedule',
+      'delete_schedule',
+      'run_schedule',
     ]);
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_threads');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_board');

@@ -283,8 +283,8 @@ export async function startMcpServer(): Promise<void> {
   // Worktree profile: present_* / ask_user / wait_for_job / stop_job /
   // list_run_scripts / run_dev_script / stop_dev_script / get_run_log /
   // notify_orchestrator / viewer context + Account issue tools
-  // (GitHub / Linear / AbleTime). Fleet list_*, Slack, and create/send stay
-  // on orchestration (tools are the cached prefix).
+  // (GitHub / Linear / AbleTime) + local schedules. Fleet list_*, Slack,
+  // and create/send stay on orchestration (tools are the cached prefix).
   const worktreeProfile = sideboardMcpProfile() === 'worktree';
   const notifyParent = async (input: {
     reason: 'input-required' | 'blocked';
@@ -924,10 +924,11 @@ export async function startMcpServer(): Promise<void> {
     );
   }
 
+  registerScheduleTools(server);
+
   if (!worktreeProfile) {
   registerSlackTools(server);
   registerConnectedIssueVendorTools(server);
-  registerScheduleTools(server);
   const { getCaffeinateHold, setCaffeinateHold } = await import(
     '../store/caffeinate-hold.js'
   );

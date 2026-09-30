@@ -49,13 +49,22 @@ describe('schedules store', () => {
     expect(cronNext.toISOString()).toBe('2026-08-22T09:00:00.000Z');
   });
 
-  it('resolves self thread ids from the orchestrator env', async () => {
+  it('resolves self thread ids from orchestration or worktree env', async () => {
     const { resolveScheduleThreadId } = await load();
     expect(resolveScheduleThreadId(undefined)).toBeNull();
     expect(resolveScheduleThreadId('')).toBeNull();
     expect(resolveScheduleThreadId('abc-123')).toBe('abc-123');
     expect(
       resolveScheduleThreadId('self', { SIDEBOARD_ORCHESTRATOR_THREAD_ID: ' orch-1 ' }),
+    ).toBe('orch-1');
+    expect(
+      resolveScheduleThreadId('self', { SIDEBOARD_THREAD_ID: ' wt-1 ' }),
+    ).toBe('wt-1');
+    expect(
+      resolveScheduleThreadId('self', {
+        SIDEBOARD_ORCHESTRATOR_THREAD_ID: 'orch-1',
+        SIDEBOARD_THREAD_ID: 'wt-1',
+      }),
     ).toBe('orch-1');
     expect(resolveScheduleThreadId('self', {})).toBeNull();
   });
