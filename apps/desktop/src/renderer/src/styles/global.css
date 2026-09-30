@@ -11107,6 +11107,7 @@ body:has(.update-banner) .team-toast-stack {
   min-height: 160px;
   flex: 1;
   border-radius: 10px;
+  overflow: visible;
 }
 
 .create-modal.drag-over .create-body,
@@ -11114,6 +11115,15 @@ body:has(.update-banner) .team-toast-stack {
   outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
   outline-offset: -3px;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.create-composer-wrap {
+  position: relative;
+}
+
+.create-composer-wrap .composer-ac {
+  left: 0;
+  right: 0;
 }
 
 .create-composer-input {

@@ -8,6 +8,15 @@ import type {
 import { resolveCreateFirstPrompt } from '@sideboard/implied-first-prompt';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import {
+  applyAutocomplete,
+  autocompleteItemsFromQuery,
+  ComposerAutocomplete,
+  consumeAutocompleteKeyDown,
+  getAutocompleteQuery,
+  type AutocompleteItem,
+  type AutocompleteSkill,
+} from './ComposerAutocomplete';
+import {
   ComposerAttachmentChips,
   ComposerOptionsToolbar,
   type ComposerDraftOptions,
@@ -184,6 +193,11 @@ export function CreateModal({
   const repoBtnRef = useRef<HTMLButtonElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const acOpenRef = useRef(false);
+  const [skills, setSkills] = useState<AutocompleteSkill[]>([]);
+  const [cursor, setCursor] = useState(0);
+  const [acIndex, setAcIndex] = useState(0);
+  const [acSuppressed, setAcSuppressed] = useState(false);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((w) => w.path === repoPath) ?? null,
@@ -308,6 +322,21 @@ export function CreateModal({
     setPickerOpen(false);
   }, [repoPath]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void window.sideboard
+      .listSkillsForRepo(repoPath)
+      .then((list) => {
+        if (!cancelled) setSkills(list);
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repoPath]);
+
   const hasDraft = createModalHasDraft({
     mode,
     prompt,
@@ -341,6 +370,7 @@ export function CreateModal({
         return;
       }
       if (e.key === 'Escape') {
+        if (acOpenRef.current) return;
         if (pickerOpen || repoMenuOpen || moreMenuOpen || discardOpen) return;
         e.preventDefault();
         requestClose();
@@ -396,6 +426,7 @@ export function CreateModal({
   function resetDraft() {
     setPrompt('');
     setGoal('');
+    setCursor(0);
     setSelection(null);
     setAttachments([]);
     setError(null);
@@ -541,6 +572,38 @@ export function CreateModal({
 
   const promptValue = mode === 'orchestration' ? goal : prompt;
   const setPromptValue = mode === 'orchestration' ? setGoal : setPrompt;
+  const acQuery = useMemo(
+    () => getAutocompleteQuery(promptValue, cursor),
+    [promptValue, cursor],
+  );
+  const acItems: AutocompleteItem[] = useMemo(
+    () =>
+      autocompleteItemsFromQuery(acQuery, {
+        suppressed: acSuppressed,
+        skills,
+      }),
+    [acQuery, acSuppressed, skills],
+  );
+  acOpenRef.current = acItems.length > 0;
+
+  useEffect(() => {
+    setAcIndex(0);
+    setAcSuppressed(false);
+  }, [acQuery?.kind, acQuery?.query]);
+
+  function pickAutocomplete(item: AutocompleteItem) {
+    if (!acQuery) return;
+    const next = applyAutocomplete(promptValue, acQuery.start, acQuery.end, item.insert);
+    setPromptValue(next.value);
+    setCursor(next.cursor);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
+
   const canSubmit =
     !busy &&
     agentsLoaded &&
@@ -793,50 +856,78 @@ export function CreateModal({
               setAttachments((prev) => prev.filter((a) => a.id !== id))
             }
           />
-          <textarea
-            ref={textareaRef}
-            className="create-composer-input"
-            value={promptValue}
-            onChange={(e) => setPromptValue(e.target.value)}
-            rows={5}
-            autoFocus
-            disabled={busy}
-            readOnly={busy}
-            placeholder={
-              mode === 'orchestration'
-                ? 'Coordination goal across threads…'
-                : cowboy
-                  ? 'What are you changing on main?'
-                  : selection?.kind === 'ticket'
-                    ? 'Optional — leave blank to resolve the issue'
-                    : 'What do you want to work on?'
-            }
-            onPaste={(e) => {
-              if (busy) return;
-              const pasted = e.clipboardData?.files;
-              if (pasted && pasted.length > 0) {
-                e.preventDefault();
-                void attachDroppedFiles(Array.from(pasted)).catch((err) => {
-                  setError(err instanceof Error ? err.message : String(err));
-                });
-                return;
+          <div className="create-composer-wrap">
+            {acItems.length > 0 && (
+              <ComposerAutocomplete
+                items={acItems}
+                activeIndex={Math.min(acIndex, acItems.length - 1)}
+                onHover={setAcIndex}
+                onPick={pickAutocomplete}
+              />
+            )}
+            <textarea
+              ref={textareaRef}
+              className="create-composer-input"
+              value={promptValue}
+              onChange={(e) => {
+                setPromptValue(e.target.value);
+                setCursor(e.target.selectionStart);
+              }}
+              onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
+              onClick={(e) => setCursor(e.currentTarget.selectionStart)}
+              onKeyUp={(e) => setCursor(e.currentTarget.selectionStart)}
+              rows={5}
+              autoFocus
+              disabled={busy}
+              readOnly={busy}
+              placeholder={
+                mode === 'orchestration'
+                  ? 'Coordination goal across threads…'
+                  : cowboy
+                    ? 'What are you changing on main?'
+                    : selection?.kind === 'ticket'
+                      ? 'Optional — leave blank to resolve the issue'
+                      : 'What do you want to work on? Type / for skills'
               }
-              void attachmentsFromLargePaste(e, attachments)
-                .then((files) => {
-                  if (files?.length) setAttachments((prev) => [...prev, ...files]);
-                })
-                .catch((err) => {
-                  setError(err instanceof Error ? err.message : String(err));
-                });
-            }}
-            onKeyDown={(e) => {
-              if (busy) return;
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (canSubmit) void submit();
-              }
-            }}
-          />
+              onPaste={(e) => {
+                if (busy) return;
+                const pasted = e.clipboardData?.files;
+                if (pasted && pasted.length > 0) {
+                  e.preventDefault();
+                  void attachDroppedFiles(Array.from(pasted)).catch((err) => {
+                    setError(err instanceof Error ? err.message : String(err));
+                  });
+                  return;
+                }
+                void attachmentsFromLargePaste(e, attachments)
+                  .then((files) => {
+                    if (files?.length) setAttachments((prev) => [...prev, ...files]);
+                  })
+                  .catch((err) => {
+                    setError(err instanceof Error ? err.message : String(err));
+                  });
+              }}
+              onKeyDown={(e) => {
+                if (busy) return;
+                if (
+                  consumeAutocompleteKeyDown(e, {
+                    items: acItems,
+                    activeIndex: acIndex,
+                    onIndex: setAcIndex,
+                    onPick: pickAutocomplete,
+                    onSuppress: () => setAcSuppressed(true),
+                  })
+                ) {
+                  e.stopPropagation();
+                  return;
+                }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (canSubmit) void submit();
+                }
+              }}
+            />
+          </div>
         </div>
 
         {(agentsLoaded && !agentOk) || error ? (

@@ -463,6 +463,20 @@ export interface IpcApi {
       source: 'workspace' | 'user' | 'cli' | 'bundled';
     }>
   >;
+  /**
+   * Skills for the new-worktree composer (no thread yet).
+   * Empty / invalid `repoPath` still returns user, CLI, and bundled skills.
+   */
+  listSkillsForRepo(repoPath: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      command: string;
+      description: string;
+      path: string;
+      source: 'workspace' | 'user' | 'cli' | 'bundled';
+    }>
+  >;
   openInEditor(threadRef: string, editor?: string, relativePath?: string): Promise<void>;
   openWorktree(
     threadRef: string,

@@ -98,7 +98,9 @@ import { ActivityMark } from './ActivityMark';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import {
   applyAutocomplete,
+  autocompleteItemsFromQuery,
   ComposerAutocomplete,
+  consumeAutocompleteKeyDown,
   getAutocompleteQuery,
   type AutocompleteItem,
 } from './ComposerAutocomplete';
@@ -912,34 +914,15 @@ export function ThreadPanel({
     (thread.attachments?.length ?? 0) > 0;
 
   const acQuery = useMemo(() => getAutocompleteQuery(prompt, cursor), [prompt, cursor]);
-  const acItems: AutocompleteItem[] = useMemo(() => {
-    if (!acQuery || acSuppressed) return [];
-    if (acQuery.kind === 'file') {
-      return filePaths
-        .filter((p) => p.toLowerCase().includes(acQuery.query))
-        .slice(0, 10)
-        .map((p) => ({
-          id: `file:${p}`,
-          label: p,
-          insert: `@${p} `,
-          kind: 'file' as const,
-        }));
-    }
-    return skills
-      .filter(
-        (s) =>
-          s.command.includes(acQuery.query) ||
-          s.name.toLowerCase().includes(acQuery.query),
-      )
-      .slice(0, 10)
-      .map((s) => ({
-        id: s.id,
-        label: `/${s.command}`,
-        detail: `${s.description || s.name} · ${s.source}`,
-        insert: `/${s.command} `,
-        kind: 'skill' as const,
-      }));
-  }, [acQuery, acSuppressed, filePaths, skills]);
+  const acItems: AutocompleteItem[] = useMemo(
+    () =>
+      autocompleteItemsFromQuery(acQuery, {
+        suppressed: acSuppressed,
+        filePaths,
+        skills,
+      }),
+    [acQuery, acSuppressed, filePaths, skills],
+  );
 
   useEffect(() => {
     setAcIndex(0);
@@ -2868,28 +2851,16 @@ export function ThreadPanel({
                 })();
               }}
               onKeyDown={(e) => {
-                if (acItems.length > 0) {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setAcIndex((i) => (i + 1) % acItems.length);
-                    return;
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setAcIndex((i) => (i - 1 + acItems.length) % acItems.length);
-                    return;
-                  }
-                  if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-                    e.preventDefault();
-                    const item = acItems[Math.min(acIndex, acItems.length - 1)];
-                    if (item) pickAutocomplete(item);
-                    return;
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setAcSuppressed(true);
-                    return;
-                  }
+                if (
+                  consumeAutocompleteKeyDown(e, {
+                    items: acItems,
+                    activeIndex: acIndex,
+                    onIndex: setAcIndex,
+                    onPick: pickAutocomplete,
+                    onSuppress: () => setAcSuppressed(true),
+                  })
+                ) {
+                  return;
                 }
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
