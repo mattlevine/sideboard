@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.254] - 2026-09-30
+
+### Added
+
+- Thread chrome: project and PR title (or branch if there is no PR) on a draggable titlebar row, with chat tabs one level below.
+
+### Fixed
+
+- Desktop download links use the working Tigris public URL (`sideboard-downloads.t3.tigrisfiles.io`) until custom-domain TLS on `download.sideboard.cloud` is issued.
+
 ## [0.1.253] - 2026-09-30
 
 ### Added
