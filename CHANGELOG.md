@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Artifact / CMS / Files document tabs sit on the same row as chat tabs and the right-sidebar Files tabs.
+- Artifact / CMS / Files document tabs sit under the chat tab row (not beside it). Chat tabs still span the center column so they line up with All files / Changes / Checks.
 
 ## [0.1.255] - 2026-09-30
 

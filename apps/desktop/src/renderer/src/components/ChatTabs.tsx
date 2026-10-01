@@ -21,101 +21,6 @@ export type NewChatTabOptions = {
   fast?: boolean;
 };
 
-/** Titlebar row (`project > worktree`) that lines up with the right-sidebar PR bar. */
-export interface ThreadWorkspaceChromeProps {
-  /** Project folder shown in the titlebar crumb (`brightsy-ai`). */
-  projectName?: string | null;
-  /** PR title, or branch name when there is no PR. */
-  taskName?: string | null;
-  /** Branch selector (`…`) next to the crumb. */
-  branchMenu?: ReactNode;
-  /** Open-worktree cube (Finder / Cursor / …) on the right. */
-  openMenu?: ReactNode;
-  /** Leave the thread (back to the board). */
-  onBack?: () => void;
-  /** Left/right edge toggles for the center column. */
-  leftSidebarToggle?: ReactNode;
-  rightSidebarToggle?: ReactNode;
-  statusBadge?: string | null;
-  /** Combined context + plan meter (one ring). */
-  planUsage?: ReactNode;
-  onFindChat?: () => void;
-}
-
-export function ThreadWorkspaceChrome({
-  projectName = null,
-  taskName = null,
-  branchMenu,
-  openMenu,
-  onBack,
-  leftSidebarToggle,
-  rightSidebarToggle,
-  statusBadge = null,
-  planUsage = null,
-  onFindChat,
-}: ThreadWorkspaceChromeProps) {
-  const crumb = [projectName, taskName].filter(Boolean).join(' > ');
-
-  return (
-    <div className="thread-chrome">
-      <div className="workspace-chrome">
-        {leftSidebarToggle}
-        {onBack && (
-          <button
-            type="button"
-            className="workspace-back"
-            title="Back to board"
-            aria-label="Back to board"
-            onClick={onBack}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden>
-              <path
-                d="M10 3 L5 8 L10 13"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-        <div className="workspace-chrome-crumb" title={crumb || undefined}>
-          <span className="workspace-glyph" aria-hidden />
-          {projectName ? <span className="open-crumb">{projectName}</span> : null}
-          {projectName && taskName ? <span className="open-sep">{'>'}</span> : null}
-          {taskName ? (
-            <span className="open-crumb open-crumb-task">{taskName}</span>
-          ) : null}
-          {branchMenu}
-        </div>
-        <div className="workspace-chrome-actions">
-          {planUsage}
-          {onFindChat && (
-            <button
-              type="button"
-              className="chat-tab-open chat-tab-find"
-              title="Find in chat"
-              aria-label="Find in chat"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onFindChat();
-              }}
-            >
-              <span className="nav-glyph search" aria-hidden />
-            </button>
-          )}
-          {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}
-          {openMenu}
-          {rightSidebarToggle}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 interface Props {
   chats: Thread[];
   activeChatId: string;
@@ -133,6 +38,22 @@ interface Props {
   changesCount?: number;
   /** Git change markers keyed by relative path (status letter on dirty file tabs). */
   fileChanges?: Record<string, GitFileChange>;
+  /** Project folder shown in the titlebar crumb (`brightsy-ai`). */
+  projectName?: string | null;
+  /** PR title, or branch name when there is no PR. */
+  taskName?: string | null;
+  /** Branch selector (`…`) next to the crumb. */
+  branchMenu?: ReactNode;
+  /** Open-worktree cube (Finder / Cursor / …) on the right. */
+  openMenu?: ReactNode;
+  /** Leave the thread (back to the board). */
+  onBack?: () => void;
+  /** Left/right edge toggles for the center column. */
+  leftSidebarToggle?: ReactNode;
+  rightSidebarToggle?: ReactNode;
+  statusBadge?: string | null;
+  /** Combined context + plan meter (one ring). */
+  planUsage?: ReactNode;
   onSelectChat: (id: string) => void;
   onSelectFile?: (path: string, opts?: { view?: 'edit' | 'diff' }) => void;
   onCloseFile?: (path: string) => void;
@@ -151,6 +72,7 @@ interface Props {
   onCloseTab?: (id: string) => void;
   /** Persist a new agent/orchestration tab order (leave/return uses the same list). */
   onReorderChats?: (ids: string[]) => void;
+  onFindChat?: () => void;
 }
 
 function basename(path: string): string {
@@ -169,6 +91,15 @@ export function ChatTabs({
   changesActive = false,
   changesCount = 0,
   fileChanges = {},
+  projectName = null,
+  taskName = null,
+  branchMenu,
+  openMenu,
+  onBack,
+  leftSidebarToggle,
+  rightSidebarToggle,
+  statusBadge = null,
+  planUsage = null,
   onSelectChat,
   onSelectFile,
   onCloseFile,
@@ -185,6 +116,7 @@ export function ChatTabs({
   onRename,
   onCloseTab,
   onReorderChats,
+  onFindChat,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -315,8 +247,65 @@ export function ChatTabs({
     setDropHint(null);
   }
 
+  const crumb = [projectName, taskName].filter(Boolean).join(' > ');
+
   return (
-    <div className="chat-tabs">
+    <div className="thread-chrome">
+      <div className="workspace-chrome">
+        {leftSidebarToggle}
+        {onBack && (
+          <button
+            type="button"
+            className="workspace-back"
+            title="Back to board"
+            aria-label="Back to board"
+            onClick={onBack}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M10 3 L5 8 L10 13"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+        <div className="workspace-chrome-crumb" title={crumb || undefined}>
+          <span className="workspace-glyph" aria-hidden />
+          {projectName ? <span className="open-crumb">{projectName}</span> : null}
+          {projectName && taskName ? <span className="open-sep">{'>'}</span> : null}
+          {taskName ? (
+            <span className="open-crumb open-crumb-task">{taskName}</span>
+          ) : null}
+          {branchMenu}
+        </div>
+        <div className="workspace-chrome-actions">
+          {planUsage}
+          {onFindChat && (
+            <button
+              type="button"
+              className="chat-tab-open chat-tab-find"
+              title="Find in chat"
+              aria-label="Find in chat"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onFindChat();
+              }}
+            >
+              <span className="nav-glyph search" aria-hidden />
+            </button>
+          )}
+          {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}
+          {openMenu}
+          {rightSidebarToggle}
+        </div>
+      </div>
+      <div className="chat-tabs">
       <div className="chat-tabs-scroll">
         {prPageOpen && (
           <div
@@ -551,6 +540,7 @@ export function ChatTabs({
             });
           }}
         />
+      </div>
       </div>
     </div>
   );

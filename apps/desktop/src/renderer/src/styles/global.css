@@ -33,8 +33,8 @@
   --line-height: 1.45;
   --line-height-chat: 1.6;
   --letter-tight: -0.011em;
-  /* Thread titlebar + tab rows share these heights so `project > worktree`
-     lines up with the PR bar, and chat / artifact tabs with Files. */
+  /* Thread titlebar + right-sidebar GitHub/Files rows share these heights
+     so `project > worktree` lines up with the PR bar and chat tabs with Files. */
   --thread-chrome-row: 44px;
   --thread-tabs-row: 42px;
 }
