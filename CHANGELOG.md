@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.257] - 2026-10-01
+
+### Fixed
+
+- Cube menu worktree openers show real app icons, Finder actually comes forward (the first row sat on the titlebar drag strip), and VS Code launches via `/usr/bin/open`. Number keys 1–N match list order while the menu is open.
+- Artifact / CMS / Files tabs stay under the chat tab row after a follow-up alignment fix.
+
 ## [0.1.256] - 2026-09-30
 
 ### Added
