@@ -51,7 +51,7 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
    Signing env (`apps/desktop/.env`) is not required for this path.
 4. Point README Desktop download at:
 
-   `https://download.sideboard.cloud/Sideboard-latest-arm64.dmg`
+   `https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg`
 
 5. Update `site/` if the public story changed. Move `[Unreleased]` notes into `## [X.Y.Z] - YYYY-MM-DD`.
 6. Commit (`Release vX.Y.Z`).

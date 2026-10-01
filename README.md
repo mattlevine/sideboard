@@ -63,7 +63,7 @@ Also true, and useful on the way:
 
 Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration)
 
-Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only). Desktop downloads: [download.sideboard.cloud](https://download.sideboard.cloud/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
+Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
 ## Install
 
@@ -78,7 +78,7 @@ sideboard detect
 
 Download the latest **Apple Silicon** Mac build:
 
-https://download.sideboard.cloud/Sideboard-latest-arm64.dmg
+https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg
 
 The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently). New builds also land on that host as `latest-mac.yml` (existing installs still check GitHub until a later updater cutover).
 
