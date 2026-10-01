@@ -61,9 +61,9 @@ Also true, and useful on the way:
 - **Local-first / Slack-remote** — agents stay on this Mac (VPN, private git, internal APIs); Slack is how you and a coworker reach them ([setup](#slack))
 - **Portable process skills** — recurring guides are Claude Code project skills (`.claude/skills/<name>/SKILL.md`). Sideboard `/name`, Claude Code, and `attach` all load that path ([Process skills](#process-skills))
 
-Docs: [Contributing](CONTRIBUTING.md) · [Agent adapters](docs/agent-adapters.md) · [Settings](#settings) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration) · [Remote integrations](docs/remote-integrations.md) · [Compare](docs/COMPARE.md) · [Process skills](#process-skills) · [Security](SECURITY.md)
+Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration)
 
-Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only)
+Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only). Desktop downloads: [download.sideboard.cloud](https://download.sideboard.cloud/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
 ## Install
 
@@ -76,13 +76,11 @@ sideboard detect
 
 ### Desktop
 
-Download the latest **Apple Silicon** Mac build from [GitHub Releases](https://github.com/mattlevine/sideboard/releases/latest):
+Download the latest **Apple Silicon** Mac build:
 
-https://github.com/mattlevine/sideboard/releases/download/v0.1.252/Sideboard-0.1.252-arm64.dmg
+https://download.sideboard.cloud/Sideboard-latest-arm64.dmg
 
-> Direct download links only work while the GitHub repo (or its releases) are **public**.
-
-The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently).
+The app auto-updates via `electron-updater` (checks on launch and every 4 hours; shows an in-app + OS notification when a new version is available, then **Restart to update** when the download finishes — never restarts mid-session silently). New builds also land on that host as `latest-mac.yml` (existing installs still check GitHub until a later updater cutover).
 
 #### Releasing
 

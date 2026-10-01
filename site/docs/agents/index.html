@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agents — Sideboard</title>
+<meta name="description" content="Install Claude Code, Codex, OpenCode, and Cursor for Sideboard.">
+<meta property="og:title" content="Agents — Sideboard">
+<meta property="og:description" content="Install Claude Code, Codex, OpenCode, and Cursor for Sideboard.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.sideboard.cloud/docs/">
+<meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.png">
+<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code,pre{font-family:ui-monospace,"SF Mono",Menlo,monospace}article h2{font-weight:700;font-size:28px;letter-spacing:-.02em;margin:40px 0 12px}article h3{font-weight:700;font-size:20px;margin:28px 0 10px}article p{font-size:16.5px;line-height:1.65;color:#b3bcc4;margin:0 0 14px}article li{font-size:16.5px;line-height:1.6;color:#b3bcc4;margin:0 0 8px}article ul,article ol{margin:0 0 18px;padding-left:22px}article pre{margin:0 0 18px;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto}article code{font-size:13.5px;color:#8cc8f5}article pre code{color:#dfe5ea}article table{width:100%;border-collapse:collapse;margin:0 0 22px;font-size:14.5px}article th,article td{text-align:left;padding:10px 12px;border:1px solid #2c3036;vertical-align:top;color:#b3bcc4}article th{color:#edf0f3;background:#202226}</style>
+<style>.nav-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}</style>
+</head>
+<body>
+<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
+<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
+<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
+<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
+<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
+</a>
+<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
+<a href="/docs/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Docs</a>
+<a href="/slack/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Slack</a>
+<a href="https://download.sideboard.cloud/Sideboard-latest-arm64.dmg" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">Download for Mac</a>
+</div>
+</header>
+<div style="max-width:800px;margin:0 auto;padding:56px 40px 110px">
+<p style="margin:0 0 8px"><a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px">← Docs</a></p>
+<h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:0 0 24px">Agents</h1>
+<article>
+<p>Sideboard shells out to each agent’s own CLI. Install the ones you want on your PATH and authenticate. Cursor uses a user-installed <code>@cursor/sdk</code> plus a <code>CURSOR_API_KEY</code> (Settings → Agents → Cursor → Install). Sideboard does not pack the Cursor SDK — so agents can update it without a new Sideboard build.</p>
+<pre><code>npm i -g @anthropic-ai/claude-code
+npm i -g @openai/codex
+npm i -g opencode-ai@latest
+npm i -g @cursor/sdk
+export CURSOR_API_KEY=&quot;cursor_...&quot;</code></pre>
+<p>Then <code>sideboard detect</code> (or Settings → Agents) shows which harnesses are installed and signed in.</p>
+<table><thead><tr>
+<th>Agent</th>
+<th>How it runs</th>
+</tr></thead><tbody>
+<tr>
+<td>Claude Code</td>
+<td>Official CLI on PATH</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td>Official CLI on PATH</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>Official CLI on PATH</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>User-installed <code>@cursor/sdk</code> + API key</td>
+</tr>
+<tr>
+<td>Brightsy</td>
+<td>Optional chat-only adapter</td>
+</tr>
+</tbody></table>
+<p>Mechanical control (list, send, diff, land) stays on the Sideboard CLI — zero tokens. Use MCP when an agent needs judgment across threads or needs to open a pane in the desktop.</p>
+<p>Connect the Sideboard MCP from each harness so an agent can drive the board. Typical stdio command: <code>sideboard mcp</code> (or <code>npx -y sideboard-mcp</code>). Packaged Sideboard.app writes the absolute Node + bundled MCP path on launch.</p>
+<p>See <a href="/docs/remote/">Remote integrations</a> for Settings → Agents vs Git / Issues / Slack / Connectors.</p>
+</article>
+</div>
+<footer style="border-top:1px solid #26292d">
+<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
+<span style="font-weight:700;font-size:16px;margin-right:auto">sideboard.cloud</span>
+<a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Docs</a>
+<a href="/slack/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Slack</a>
+<a href="/privacy/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Privacy</a>
+<a href="/support/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Support</a>
+<a href="https://www.npmjs.com/package/@sideboard-ai/cli" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">npm</a>
+</div>
+</footer>
+</body>
+</html>

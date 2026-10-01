@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare — Sideboard</title>
+<meta name="description" content="Sideboard vs Conductor, Cursor, and other local boards.">
+<meta property="og:title" content="Compare — Sideboard">
+<meta property="og:description" content="Sideboard vs Conductor, Cursor, and other local boards.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.sideboard.cloud/docs/">
+<meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.png">
+<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code,pre{font-family:ui-monospace,"SF Mono",Menlo,monospace}article h2{font-weight:700;font-size:28px;letter-spacing:-.02em;margin:40px 0 12px}article h3{font-weight:700;font-size:20px;margin:28px 0 10px}article p{font-size:16.5px;line-height:1.65;color:#b3bcc4;margin:0 0 14px}article li{font-size:16.5px;line-height:1.6;color:#b3bcc4;margin:0 0 8px}article ul,article ol{margin:0 0 18px;padding-left:22px}article pre{margin:0 0 18px;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto}article code{font-size:13.5px;color:#8cc8f5}article pre code{color:#dfe5ea}article table{width:100%;border-collapse:collapse;margin:0 0 22px;font-size:14.5px}article th,article td{text-align:left;padding:10px 12px;border:1px solid #2c3036;vertical-align:top;color:#b3bcc4}article th{color:#edf0f3;background:#202226}</style>
+<style>.nav-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}</style>
+</head>
+<body>
+<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
+<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
+<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
+<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
+<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
+<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
+</span>
+<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
+</a>
+<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
+<a href="/docs/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Docs</a>
+<a href="/slack/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Slack</a>
+<a href="https://download.sideboard.cloud/Sideboard-latest-arm64.dmg" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">Download for Mac</a>
+</div>
+</header>
+<div style="max-width:800px;margin:0 auto;padding:56px 40px 110px">
+<p style="margin:0 0 8px"><a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px">← Docs</a></p>
+<h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:0 0 24px">Compare</h1>
+<article>
+<p>Short positioning. Not a feature-complete matrix.</p>
+<p>Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard does that too. The comparison that matters is the <strong>orchestration tier</strong>: an agent that can reason about other threads, a board where you can see that, and Slack so a coworker can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs).</p>
+<h2>vs Conductor (Melty)</h2>
+<p>Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is <a href="https://www.conductor.build/pricing">Conductor Cloud</a> (Pro / Teams): Vercel sandboxes in us-east-1, agents that keep running after you close the laptop, multiplayer, and an API against <strong>cloud</strong> workspaces. Cloud session data is stored on Conductor’s servers; local sessions stay on disk.</p>
+<p>A serious local orchestration tier would compete with that upsell. Sideboard is the option that keeps the fleet on this machine.</p>
+<table><thead><tr>
+<th>Where agents run</th>
+<th>Free: your Mac. Paid: cloud sandbox, off-VPN</th>
+<th>Always this Mac — inside the corporate VPN</th>
+</tr></thead><tbody>
+<tr>
+<td>Orchestration</td>
+<td>Human-oriented local board; programmatic control is the Cloud API</td>
+<td>MCP + Global board, on this Mac</td>
+</tr>
+<tr>
+<td>Team / remote</td>
+<td>Cloud multiplayer and shared workspaces</td>
+<td>Slack to this Mac; <code>slack_post</code> a review ping; replies come back as info</td>
+</tr>
+<tr>
+<td>Away from the laptop</td>
+<td>Cloud sandbox keeps running</td>
+<td>Slack reaches this Mac only while it is awake (opt-in caffeinate). Local schedules fire the same way.</td>
+</tr>
+<tr>
+<td>Session data</td>
+<td>Cloud: Conductor’s servers. Local: your disk</td>
+<td>Your Mac. Relay routes Slack chat only</td>
+</tr>
+<tr>
+<td>Work on <code>main</code> in the project folder</td>
+<td>Always a sidecar worktree</td>
+<td>Opt-in cowboy (Settings → Advanced; off by default)</td>
+</tr>
+<tr>
+<td>Lock-in</td>
+<td>Sessions live in the app</td>
+<td><code>attach</code> / <code>adopt</code> — move in and out of native CLIs</td>
+</tr>
+</tbody></table>
+<p>Use Conductor when you want their finished Mac workspace UI, or their cloud sandboxes (always-on, off-VPN, paid). Use Sideboard when the fleet should stay on this machine and Slack is how you and a coworker enter the loop.</p>
+<h2>vs “open Conductor” clones</h2>
+<p>Several projects aim to recreate Conductor’s local board (worktrees + terminals + diffs). Sideboard’s wedge is different:</p>
+<ol>
+<li><strong>Local orchestration</strong> — MCP so an agent can drive the fleet, and a board so you can see it, without a cloud workspace</li>
+<li><strong>Slack to this Mac</strong> — inbound to the orchestrator, outbound review pings, replies as information — not a rented sandbox</li>
+<li><strong>Handoff</strong> — attach/adopt/Conductor import, not a closed session cage</li>
+<li><strong>Surface split</strong> — CLI (zero tokens) vs MCP (judgment) vs desktop (board)</li>
+</ol>
+<p>If you only need a TUI/dashboard over <code>claude</code>/<code>codex</code> worktrees, a thinner clone may be enough. If you need orchestration that other agents can drive, on the VPN you already use, start here.</p>
+<h2>vs YAML workflow runners (e.g. Microsoft Conductor)</h2>
+<p>Those tools version <strong>deterministic multi-agent pipelines</strong> in YAML. Sideboard orchestrates <strong>live coding sessions</strong> in git worktrees. Related category name; different job.</p>
+<p>Recurring <em>method</em> still belongs on disk — as a committed Claude Code skill (<code>.claude/skills/&lt;name&gt;/SKILL.md</code>), not a locked DAG. Sideboard <code>/name</code>, Claude Code, and <code>attach</code> load the same file. See <a href="/docs/skills/">Process skills</a>.</p>
+</article>
+</div>
+<footer style="border-top:1px solid #26292d">
+<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
+<span style="font-weight:700;font-size:16px;margin-right:auto">sideboard.cloud</span>
+<a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Docs</a>
+<a href="/slack/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Slack</a>
+<a href="/privacy/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Privacy</a>
+<a href="/support/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Support</a>
+<a href="https://www.npmjs.com/package/@sideboard-ai/cli" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">npm</a>
+</div>
+</footer>
+</body>
+</html>
