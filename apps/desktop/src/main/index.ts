@@ -34,11 +34,24 @@ import {
   caffeinateTrayPng,
   paintCaffeinateDockBadge,
 } from './caffeinate-indicator';
+import {
+  MAC_OPEN,
+  execMacOpen,
+  finderLaunchCommands,
+  finderRevealTarget,
+  isWorktreeOpenerId,
+  listWorktreeOpenerBundles,
+  openerIdForEditor,
+  openWorktreeFolder,
+  pngDataUrlFromIcnsFile,
+  spawnDetached,
+  toWorktreeOpener,
+} from './open-worktree';
 
 // Must run before app.ready so artifact iframes can load outside renderer CSP.
 registerArtifactPreviewScheme();
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { watch, type FSWatcher } from 'chokidar';
@@ -538,6 +551,44 @@ function resolveAppIcon(): string | null {
     if (existsSync(path)) return path;
   }
   return null;
+}
+
+const openerIconCache = new Map<string, string | null>();
+
+function iconDataUrlForApp(iconPath: string | null): string | null {
+  if (!iconPath) return null;
+  if (openerIconCache.has(iconPath)) return openerIconCache.get(iconPath) ?? null;
+  const url = pngDataUrlFromIcnsFile(iconPath);
+  openerIconCache.set(iconPath, url);
+  return url;
+}
+
+/**
+ * Reveal in Finder via Launch Services with Electron env stripped.
+ * `open -a Finder <dir>` is a no-op; `showItemInFolder` often stays behind this window.
+ */
+async function revealWorktreeInFinder(folder: string): Promise<void> {
+  if (!folder || !existsSync(folder)) {
+    throw new Error(`Worktree folder is missing:\n${folder}`);
+  }
+  let resolved = folder;
+  try {
+    resolved = realpathSync(folder);
+  } catch {
+    resolved = folder;
+  }
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(resolved);
+  } catch {
+    entries = [];
+  }
+  const reveal = finderRevealTarget(resolved, entries);
+  shell.showItemInFolder(reveal);
+  for (const { file, args } of finderLaunchCommands(reveal)) {
+    await execMacOpen(file, args);
+  }
+  mainWindow?.blur();
 }
 
 function applyDockIcon(): void {
@@ -1566,36 +1617,33 @@ function registerIpc(): void {
         throw new Error('Invalid path');
       }
       const target = relativePath ? join(t.worktreePath, relativePath) : t.worktreePath;
-      const cmd = editor ?? process.env.SIDEBOARD_EDITOR ?? 'cursor';
-      spawn(cmd, [target], { detached: true, stdio: 'ignore' }).unref();
+      const cmd = (editor ?? process.env.SIDEBOARD_EDITOR ?? 'cursor').trim();
+      const openerId = openerIdForEditor(cmd);
+      if (openerId) {
+        await openWorktreeFolder(openerId, target);
+        return;
+      }
+      if (cmd.startsWith('/')) {
+        await spawnDetached(cmd, [target]);
+        return;
+      }
+      await execMacOpen(MAC_OPEN, ['-a', cmd, target]);
     },
   );
-  ipcMain.handle(
-    'openWorktree',
-    async (_e, ref: string, target: 'finder' | 'cursor' | 'code' | 'xcode' | 'terminal' | 'datagrip') => {
-      const t = orch.getThread(ref);
-      if (!t) throw new Error(`Thread not found: ${ref}`);
-      const p = t.worktreePath;
-      if (target === 'finder') {
-        spawn('open', [p], { detached: true, stdio: 'ignore' }).unref();
-        return;
-      }
-      if (target === 'terminal') {
-        spawn('open', ['-a', 'Terminal', p], { detached: true, stdio: 'ignore' }).unref();
-        return;
-      }
-      if (target === 'xcode') {
-        spawn('open', ['-a', 'Xcode', p], { detached: true, stdio: 'ignore' }).unref();
-        return;
-      }
-      if (target === 'datagrip') {
-        spawn('open', ['-a', 'DataGrip', p], { detached: true, stdio: 'ignore' }).unref();
-        return;
-      }
-      const cmd = target === 'code' ? 'code' : 'cursor';
-      spawn(cmd, [p], { detached: true, stdio: 'ignore' }).unref();
-    },
-  );
+  ipcMain.handle('openWorktree', async (_e, ref: string, target: string) => {
+    const t = orch.getThread(ref);
+    if (!t) throw new Error(`Thread not found: ${ref}`);
+    if (!isWorktreeOpenerId(target)) throw new Error(`Unknown opener: ${target}`);
+    if (target === 'finder') {
+      await revealWorktreeInFinder(t.worktreePath);
+      return;
+    }
+    await openWorktreeFolder(target, t.worktreePath);
+  });
+  ipcMain.handle('listWorktreeOpeners', () => {
+    const listed = listWorktreeOpenerBundles();
+    return listed.map((bundle) => toWorktreeOpener(bundle, iconDataUrlForApp(bundle.iconPath)));
+  });
   ipcMain.handle('runDevScript', (_e, ref: string, scriptName?: string) =>
     orch.startDev(ref, scriptName),
   );

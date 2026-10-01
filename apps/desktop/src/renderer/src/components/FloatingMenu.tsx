@@ -153,7 +153,8 @@ export function FloatingMenu({
     <div
       ref={menuRef}
       className={`tool-menu floating-menu ${className}`.trim()}
-      style={style}
+      style={{ ...style, WebkitAppRegion: 'no-drag' }}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       {hasFooter ? <div className="floating-menu-scroll">{children}</div> : children}
       {hasFooter ? <div className="floating-menu-footer">{footer}</div> : null}

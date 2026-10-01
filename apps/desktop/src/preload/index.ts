@@ -183,6 +183,7 @@ const api: IpcApi = {
   openInEditor: (threadRef, editor, relativePath) =>
     ipcRenderer.invoke('openInEditor', threadRef, editor, relativePath),
   openWorktree: (threadRef, target) => ipcRenderer.invoke('openWorktree', threadRef, target),
+  listWorktreeOpeners: () => ipcRenderer.invoke('listWorktreeOpeners'),
   runDevScript: (threadRef, scriptName) =>
     ipcRenderer.invoke('runDevScript', threadRef, scriptName),
   stopDevScript: (threadRef, scriptName) =>

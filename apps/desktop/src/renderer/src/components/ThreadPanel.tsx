@@ -15,6 +15,8 @@ import type {
   Thread,
   ThreadAttachment,
   TokenUsage,
+  WorktreeOpener,
+  WorktreeOpenerId,
 } from '@sideboard-ai/core';
 import { resolveUsageOnLimit } from '@sideboard/usage-on-limit';
 import {
@@ -112,6 +114,14 @@ import { ChatSearchBar } from './ChatSearchBar';
 import { MarkdownMessage } from './MarkdownMessage';
 import { type FilePathLink } from '../lib/file-path-link';
 import { openWorktreePathLink } from '../lib/reveal-worktree-path';
+import {
+  COPY_WORKTREE_PATH_KBD,
+  FALLBACK_WORKTREE_OPENERS,
+  matchWorktreeOpenShortcut,
+  pickTriggerOpener,
+  readLastWorktreeOpener,
+  writeLastWorktreeOpener,
+} from '../lib/worktree-opener';
 import { PrPage } from './PrPage';
 import { UrlPreview } from './UrlPreview';
 import { prTabTitle } from '../lib/pr-activity';
@@ -775,6 +785,12 @@ export function ThreadPanel({
   const opencodeModelsEnabled = thread.agent === 'opencode';
   const { models: opencodeModels } = useAgentModels('opencode', opencodeModelsEnabled);
   const [openMenu, setOpenMenu] = useState(false);
+  const [worktreeOpeners, setWorktreeOpeners] = useState<WorktreeOpener[]>(
+    FALLBACK_WORKTREE_OPENERS,
+  );
+  const [lastWorktreeOpener, setLastWorktreeOpener] = useState<WorktreeOpenerId>(() =>
+    readLastWorktreeOpener(),
+  );
   const [issuePickerOpen, setIssuePickerOpen] = useState(false);
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
@@ -1203,10 +1219,39 @@ export function ThreadPanel({
   }, [thread.queue]);
 
   useEffect(() => {
+    void window.sideboard
+      .listWorktreeOpeners()
+      .then(setWorktreeOpeners)
+      .catch(() => {
+        /* keep FALLBACK_WORKTREE_OPENERS */
+      });
+  }, []);
+
+  function openWorktreeApp(id: WorktreeOpenerId) {
+    writeLastWorktreeOpener(id);
+    setLastWorktreeOpener(id);
+    void window.sideboard.openWorktree(thread.id, id).catch((err: unknown) => {
+      window.alert(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') {
+      if (e.repeat) return;
+      const shortcut = matchWorktreeOpenShortcut(
+        e,
+        worktreeOpeners,
+        openMenu && !isGlobalThread(thread),
+      );
+      if (shortcut) {
         e.preventDefault();
-        void window.sideboard.openWorktree(thread.id, 'cursor');
+        setOpenMenu(false);
+        if (shortcut.type === 'copy') {
+          void navigator.clipboard?.writeText(thread.worktreePath);
+        } else {
+          openWorktreeApp(shortcut.id);
+        }
+        return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
         e.preventDefault();
@@ -1235,7 +1280,7 @@ export function ThreadPanel({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [thread.id, planAwaitingApproval]);
+  }, [thread.id, thread.worktreePath, planAwaitingApproval, openMenu, worktreeOpeners]);
 
   function patchOptions(patch: Parameters<typeof window.sideboard.setThreadOptions>[1]) {
     void window.sideboard
@@ -2201,6 +2246,7 @@ export function ThreadPanel({
   };
 
   const chrome = workspaceChromeLabels(thread);
+  const triggerOpener = pickTriggerOpener(worktreeOpeners, lastWorktreeOpener);
 
   return (
     <section className="panel thread-main">
@@ -2275,10 +2321,24 @@ export function ThreadPanel({
                 ref={openBtnRef}
                 type="button"
                 className="chat-tab-open"
-                title="Open worktree"
+                title={
+                  triggerOpener
+                    ? `Open worktree in ${triggerOpener.label}`
+                    : 'Open worktree'
+                }
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setOpenMenu((v) => !v)}
               >
-                <span className="open-cube" aria-hidden />
+                {triggerOpener?.iconDataUrl ? (
+                  <img
+                    className="open-app-icon"
+                    src={triggerOpener.iconDataUrl}
+                    alt=""
+                    draggable={false}
+                  />
+                ) : (
+                  <span className="open-cube" aria-hidden />
+                )}
                 <span className="open-caret">▾</span>
               </button>
               <FloatingMenu
@@ -2288,37 +2348,41 @@ export function ThreadPanel({
                 align="right"
                 minWidth={220}
               >
-                {(
-                  [
-                    { id: 'finder' as const, label: 'Finder', kbd: '1' },
-                    { id: 'cursor' as const, label: 'Cursor', kbd: '⌘O' },
-                    { id: 'code' as const, label: 'VS Code', kbd: '3' },
-                    { id: 'xcode' as const, label: 'Xcode', kbd: '4' },
-                    { id: 'terminal' as const, label: 'Terminal', kbd: '5' },
-                    { id: 'datagrip' as const, label: 'DataGrip', kbd: '6' },
-                  ] as const
-                ).map((item) => (
+                {worktreeOpeners.map((item, i) => (
                   <button
                     key={item.id}
                     type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setOpenMenu(false);
-                      void window.sideboard.openWorktree(thread.id, item.id).catch(alert);
+                      openWorktreeApp(item.id);
                     }}
                   >
+                    {item.iconDataUrl ? (
+                      <img
+                        className="open-app-icon"
+                        src={item.iconDataUrl}
+                        alt=""
+                        draggable={false}
+                      />
+                    ) : (
+                      <span className="open-app-icon open-app-icon-fallback" aria-hidden />
+                    )}
                     <span>{item.label}</span>
-                    <kbd>{item.kbd}</kbd>
+                    <kbd>{String(i + 1)}</kbd>
                   </button>
                 ))}
                 <button
                   type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => {
                     setOpenMenu(false);
                     void navigator.clipboard?.writeText(thread.worktreePath);
                   }}
                 >
+                  <span className="open-app-icon" aria-hidden />
                   <span>Copy path</span>
-                  <kbd>7</kbd>
+                  <kbd>{COPY_WORKTREE_PATH_KBD}</kbd>
                 </button>
               </FloatingMenu>
             </>

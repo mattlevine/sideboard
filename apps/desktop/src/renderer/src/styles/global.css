@@ -2822,6 +2822,11 @@ mark.chat-search-hit.chat-search-current {
   height: 12px;
 }
 
+.chat-tab-open .open-app-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .chat-tab-open .open-caret {
   font-size: 10px;
 }
@@ -4218,6 +4223,16 @@ mark.chat-search-hit.chat-search-current {
   right: auto !important;
   bottom: auto !important;
   overflow: auto;
+}
+
+/* Portaled menus paint over `.chat-tabs` / `.workspace-chrome` drag strips.
+   Without an explicit no-drag hole, Electron still treats that overlap as
+   window-drag — so the first row (Finder) never receives the click. */
+.tool-menu,
+.floating-menu,
+.tool-menu *,
+.floating-menu * {
+  -webkit-app-region: no-drag;
 }
 
 .floating-menu-scroll {
@@ -7991,6 +8006,29 @@ button.chat-earlier-toggle:hover {
   transform: rotate(12deg);
   flex-shrink: 0;
   opacity: 0.8;
+}
+
+.open-app-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.open-app-icon-fallback {
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  opacity: 0.35;
+}
+
+.tool-menu .open-app-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.tool-menu button kbd {
+  margin-left: auto;
 }
 
 .open-caret {

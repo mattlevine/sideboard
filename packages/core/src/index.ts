@@ -188,7 +188,13 @@ export {
   WORKTREE_ABLETIME_MCP_TOOLS,
 } from './mcp/profile.js';
 export type { SideboardMcpProfile } from './mcp/profile.js';
-export type { IpcApi, CloudConnectStatus, SlackListenStatus } from './ipc/types.js';
+export type {
+  IpcApi,
+  CloudConnectStatus,
+  SlackListenStatus,
+  WorktreeOpener,
+  WorktreeOpenerId,
+} from './ipc/types.js';
 export {
   loadHomeBoardInputs,
   getHomeBoardInputs,
