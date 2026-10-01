@@ -5,6 +5,10 @@ import {
   type RightPaneContent,
   type SchemaPaneContent,
 } from '../../lib/right-pane';
+import {
+  RIGHT_COLUMN_MAX,
+  RIGHT_COLUMN_MIN,
+} from '../../lib/panel-widths';
 import { ArtifactPane, ARTIFACT_WIDTH_DEFAULT } from '../ArtifactPane';
 import { PanelResizeHandle } from '../PanelResizeHandle';
 import { FilesPane, FILES_WIDTH_DEFAULT } from './FilesPane';
@@ -53,8 +57,6 @@ function MinimizeIcon() {
 
 export { ARTIFACT_WIDTH_DEFAULT, SCHEMA_WIDTH_DEFAULT, FILES_WIDTH_DEFAULT };
 
-const COLUMN_WIDTH_MIN = 320;
-const COLUMN_WIDTH_MAX = 900;
 export const RIGHT_COLUMN_WIDTH_DEFAULT = SCHEMA_WIDTH_DEFAULT;
 
 export interface RightColumnFilePicker {
@@ -107,7 +109,7 @@ export function RightColumnPane({
 }: Props) {
   const [maximized, setMaximized] = useState(false);
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0] ?? null;
-  const clamped = Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, width));
+  const clamped = Math.min(RIGHT_COLUMN_MAX, Math.max(RIGHT_COLUMN_MIN, width));
 
   useEffect(() => {
     if (tabs.length === 0) setMaximized(false);
@@ -226,8 +228,8 @@ export function RightColumnPane({
           <PanelResizeHandle
             edge="left"
             value={clamped}
-            min={COLUMN_WIDTH_MIN}
-            max={COLUMN_WIDTH_MAX}
+            min={RIGHT_COLUMN_MIN}
+            max={RIGHT_COLUMN_MAX}
             onChange={onWidthChange}
             onChangeEnd={onWidthChangeEnd ?? onWidthChange}
           />

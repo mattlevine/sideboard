@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  firstOpenRightColumnWidth,
+  hasStoredRightColumnWidth,
   readRightColumnWidth,
+  RIGHT_COLUMN_MIN,
   RIGHT_COLUMN_WIDTH_FALLBACK,
   writeRightColumnWidth,
 } from './panel-widths';
@@ -51,8 +54,16 @@ describe('panel-widths', () => {
 
   it('clamps out-of-range widths', () => {
     writeRightColumnWidth('/wt/monaco', 50);
-    expect(readRightColumnWidth('/wt/monaco')).toBe(320);
+    expect(readRightColumnWidth('/wt/monaco')).toBe(RIGHT_COLUMN_MIN);
     writeRightColumnWidth('/wt/monaco', 5000);
-    expect(readRightColumnWidth('/wt/monaco')).toBe(900);
+    expect(readRightColumnWidth('/wt/monaco')).toBe(1400);
+  });
+
+  it('detects an unset worktree and splits the first open 50/50', () => {
+    expect(hasStoredRightColumnWidth('/wt/monaco')).toBe(false);
+    expect(firstOpenRightColumnWidth(1200)).toBe(600);
+    expect(firstOpenRightColumnWidth(400)).toBe(RIGHT_COLUMN_MIN);
+    writeRightColumnWidth('/wt/monaco', 560);
+    expect(hasStoredRightColumnWidth('/wt/monaco')).toBe(true);
   });
 });

@@ -1,12 +1,12 @@
 :root {
-  /* Cursor-adjacent dark UI: brighter prose, softer chrome labels */
+  /* Near-black chrome: chat, titlebar, and sidebars share one deep surface */
   color-scheme: dark;
-  --bg: #1e1e1e;
-  --bg-elevated: #252526;
-  --bg-hover: #2a2d2e;
-  --bg-input: #3c3c3c;
-  --border: #3e3e42;
-  --border-subtle: #2b2b2b;
+  --bg: #121212;
+  --bg-elevated: #18191a;
+  --bg-hover: #242424;
+  --bg-input: #2a2a2a;
+  --border: #2e2e32;
+  --border-subtle: #262626;
   --text: #ededed;
   --text-secondary: #c6c6c6;
   --muted: #9b9b9b;
@@ -33,6 +33,10 @@
   --line-height: 1.45;
   --line-height-chat: 1.6;
   --letter-tight: -0.011em;
+  /* Thread titlebar + right-sidebar GitHub/Files rows share these heights
+     so `project > worktree` lines up with the PR bar and chat tabs with Files. */
+  --thread-chrome-row: 44px;
+  --thread-tabs-row: 42px;
 }
 
 * {
@@ -239,34 +243,6 @@ body.resizing-panels webview {
 
 .sidebar-toggle.active {
   color: var(--text);
-}
-
-.sidebar-toggle-icon {
-  position: relative;
-  display: block;
-  width: 16px;
-  height: 12px;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
-  box-sizing: border-box;
-}
-
-.sidebar-toggle-icon.left::after,
-.sidebar-toggle-icon.right::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: currentColor;
-}
-
-.sidebar-toggle-icon.left::after {
-  left: 0;
-}
-
-.sidebar-toggle-icon.right::after {
-  right: 0;
 }
 
 .sidebar-chrome {
@@ -2667,6 +2643,7 @@ mark.chat-search-hit.chat-search-current {
   flex-direction: column;
   flex-shrink: 0;
   min-width: 0;
+  background: var(--bg);
   -webkit-app-region: drag;
 }
 
@@ -2674,7 +2651,9 @@ mark.chat-search-hit.chat-search-current {
   display: flex;
   align-items: center;
   gap: 4px;
-  min-height: 38px;
+  box-sizing: border-box;
+  height: var(--thread-chrome-row);
+  min-height: var(--thread-chrome-row);
   padding: 0 10px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg);
@@ -2765,12 +2744,14 @@ mark.chat-search-hit.chat-search-current {
 
 .chat-tabs {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 4px;
+  box-sizing: border-box;
+  height: var(--thread-tabs-row);
+  min-height: var(--thread-tabs-row);
   padding: 0 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--bg);
-  min-height: 36px;
   padding-top: 0;
   -webkit-app-region: drag;
 }
@@ -2832,7 +2813,7 @@ mark.chat-search-hit.chat-search-current {
 
 .chat-tab.active {
   color: var(--text);
-  border-bottom-color: #c4a574;
+  border-bottom-color: var(--text);
 }
 
 .chat-tab.file-tab-item,
@@ -2849,11 +2830,11 @@ mark.chat-search-hit.chat-search-current {
 }
 
 .chat-tab.chat-tab-agent.drop-before {
-  box-shadow: inset 2px 0 0 #c4a574;
+  box-shadow: inset 2px 0 0 var(--text);
 }
 
 .chat-tab.chat-tab-agent.drop-after {
-  box-shadow: inset -2px 0 0 #c4a574;
+  box-shadow: inset -2px 0 0 var(--text);
 }
 
 .chat-tab.file-tab-item.active,
@@ -3347,7 +3328,7 @@ mark.chat-search-hit.chat-search-current {
   max-width: min(100%, 280px);
   padding: 6px 10px;
   border-radius: 6px;
-  background: #1e1e1e;
+  background: var(--bg);
   border: 1px solid var(--border);
   color: #d4d4d4;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -3833,7 +3814,7 @@ mark.chat-search-hit.chat-search-current {
   flex-direction: column;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: #252526;
+  background: var(--bg-elevated);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   overflow: auto;
 }
@@ -3922,11 +3903,11 @@ mark.chat-search-hit.chat-search-current {
   line-height: 1.45;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #1e1e1e;
+  background: var(--bg);
 }
 
 .tool-diff-result.hljs {
-  background: #1e1e1e;
+  background: var(--bg);
 }
 
 .tool-diff-codeblock {
@@ -5433,6 +5414,14 @@ button.chat-earlier-toggle:hover {
   overflow-wrap: normal;
 }
 
+/* vs2015 ships #1E1E1E — keep tokens on the new near-black surfaces. */
+.md .hljs,
+.md pre code.hljs,
+.tool-diff-result.hljs {
+  background: var(--bg);
+  color: var(--text);
+}
+
 .md-mermaid {
   position: relative;
   margin: 0 0 0.75em;
@@ -6740,57 +6729,27 @@ button.chat-earlier-toggle:hover {
 .right-top {
   position: relative;
   z-index: 30;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--thread-chrome-row);
+  height: var(--thread-chrome-row);
+  padding: 0 10px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
   -webkit-app-region: drag;
   /* Keep visible so the PR split-menu can overlay the files panel below. */
   overflow: visible;
 }
 
-/* Conductor-style: tint the whole right header by PR lifecycle state. */
-.right-top.open,
-.right-top.behind {
-  background: #16324a;
-  border-bottom-color: rgba(0, 127, 212, 0.35);
+.right-top:has(.stack-map) {
+  height: auto;
 }
 
-.right-top.draft {
-  background: #1a2f42;
-  border-bottom-color: rgba(0, 127, 212, 0.28);
-}
+/* Status color stays on the PR pill — the bar matches the center chrome. */
 
-.right-top.needs-approval {
-  background: #3a2e14;
-  border-bottom-color: rgba(210, 153, 34, 0.4);
-}
-
-.right-top.approved {
-  background: #16341f;
-  border-bottom-color: rgba(63, 185, 80, 0.35);
-}
-
-.right-top.rejected,
-.right-top.conflicts {
-  background: #3a1a1a;
-  border-bottom-color: rgba(248, 81, 73, 0.4);
-}
-
-.right-top.closed {
-  background: #2a2d2e;
-  border-bottom-color: rgba(139, 148, 158, 0.35);
-}
-
-.right-top.merged {
-  background: #2b1f3d;
-  border-bottom-color: rgba(163, 113, 247, 0.35);
-}
-
-.right-top.queued {
-  background: #16363a;
-  border-bottom-color: rgba(57, 192, 201, 0.4);
-}
-
-/* PR pill sits on the tinted bar — outlined, status color matches state. */
+/* PR pill stays outlined; status color matches lifecycle state. */
 .right-top.open .pr-pill,
 .right-top.behind .pr-pill,
 .right-top.draft .pr-pill {
@@ -6871,114 +6830,25 @@ button.chat-earlier-toggle:hover {
   color: #6fdbd4;
 }
 
-/* Primary + caret follow the state color; Archive stays solid accent for that state. */
-.right-top.open .btn-continue,
-.right-top.open .split-caret,
-.right-top.behind .btn-continue,
-.right-top.behind .split-caret,
-.right-top.draft .btn-continue,
-.right-top.draft .split-caret {
-  border: 1px dashed rgba(117, 190, 255, 0.55) !important;
+/* Conductor-style: outlined actions on the chrome, not a tinted toolbar. */
+.right-top .split-main,
+.right-top .split-caret,
+.right-top .btn-live,
+.right-top .btn-continue,
+.right-top .btn-closed,
+.right-top .btn-archive {
+  border: 1px solid var(--border) !important;
   background: transparent !important;
-  color: #9cdcfe !important;
+  color: var(--text) !important;
 }
 
-.right-top.open .btn-archive,
-.right-top.behind .btn-archive,
-.right-top.draft .btn-archive {
-  background: #0e639c !important;
-  border-color: #007fd4 !important;
-  color: #fff !important;
-}
-
-.right-top.needs-approval .btn-continue,
-.right-top.needs-approval .split-caret {
-  border: 1px dashed rgba(226, 179, 64, 0.55) !important;
-  background: transparent !important;
-  color: #f0c14d !important;
-}
-
-.right-top.needs-approval .btn-archive {
-  background: #a67c16 !important;
-  border-color: #cca700 !important;
-  color: #fff !important;
-}
-
-.right-top.approved .btn-continue,
-.right-top.approved .btn-live,
-.right-top.approved .split-caret {
-  border: 1px dashed rgba(111, 207, 151, 0.55) !important;
-  background: transparent !important;
-  color: #8fd9a8 !important;
-}
-
-.right-top.approved .btn-archive {
-  background: #2ea043 !important;
-  border-color: #3fb950 !important;
-  color: #fff !important;
-}
-
-.right-top.rejected .btn-continue,
-.right-top.rejected .split-caret,
-.right-top.conflicts .btn-continue,
-.right-top.conflicts .split-caret {
-  border: 1px dashed rgba(255, 123, 114, 0.55) !important;
-  background: transparent !important;
-  color: #ffa198 !important;
-}
-
-.right-top.rejected .btn-archive,
-.right-top.conflicts .btn-archive {
-  background: #da3633 !important;
-  border-color: #f85149 !important;
-  color: #fff !important;
-}
-
-.right-top.closed .btn-closed,
-.right-top.closed .btn-continue,
-.right-top.closed .split-caret {
-  border: 1px dashed rgba(154, 160, 166, 0.5) !important;
-  background: transparent !important;
-  color: #b0b5ba !important;
-}
-
-.right-top.closed .btn-archive {
-  background: #6e7681 !important;
-  border-color: #8b949e !important;
-  color: #fff !important;
-}
-
-.right-top.merged .btn-live,
-.right-top.merged .btn-continue,
-.right-top.merged .btn-closed,
-.right-top.merged .split-caret {
-  border: 1px dashed rgba(210, 168, 255, 0.55) !important;
-  background: transparent !important;
-  color: #d2a8ff !important;
-}
-
-.right-top.merged .btn-archive {
-  background: #a371f7 !important;
-  border-color: #9466e8 !important;
-  color: #fff !important;
-}
-
-.right-top.merged .btn-archive:hover:not(:disabled) {
-  background: #b084f9 !important;
-  border-color: #b084f9 !important;
-}
-
-.right-top.queued .btn-continue,
-.right-top.queued .split-caret {
-  border: 1px dashed rgba(111, 219, 212, 0.55) !important;
-  background: transparent !important;
-  color: #9ee8e2 !important;
-}
-
-.right-top.queued .btn-archive {
-  background: #1a7f88 !important;
-  border-color: #39c0c9 !important;
-  color: #fff !important;
+.right-top .split-main:hover:not(:disabled),
+.right-top .split-caret:hover:not(:disabled),
+.right-top .btn-live:hover:not(:disabled),
+.right-top .btn-continue:hover:not(:disabled),
+.right-top .btn-closed:hover:not(:disabled),
+.right-top .btn-archive:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
 }
 
 .right-top .split-btn {
@@ -7053,7 +6923,7 @@ button.chat-earlier-toggle:hover {
 }
 
 .stack-map {
-  margin: 8px 10px 0;
+  margin: 8px 0 0;
   padding: 8px 10px;
   border: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.25));
   border-radius: 8px;
@@ -7229,20 +7099,8 @@ button.chat-earlier-toggle:hover {
   display: inline;
 }
 
-/* Files/Changes/Checks labels overflow before chrome icons do. Collapse those
-   first so Review stays pinned at the default 340px width. */
-@container right-sidebar (max-width: 420px) {
-  .right-tabs-scroll .tab-full {
-    display: none;
-  }
-
-  .right-tabs-scroll .tab-short {
-    display: inline;
-  }
-
-  .right-tabs-scroll > button {
-    padding: 7px 8px;
-  }
+.right-tabs-review-btn svg {
+  display: none;
 }
 
 /* Drop long Draft/Open/review labels before #93 + Ready for review wrap.
@@ -7259,7 +7117,7 @@ button.chat-earlier-toggle:hover {
    keep "Commit & push" / "Changes" / "Archive" text, not icons. */
 @container right-sidebar (max-width: 280px) {
   .right-top {
-    padding: 8px 8px;
+    padding: 0 8px;
   }
 
   .right-top-row {
@@ -7401,7 +7259,7 @@ button.chat-earlier-toggle:hover {
   bottom: 0;
   height: 2px;
   border-radius: 1px;
-  background: #c4a484;
+  background: var(--text);
 }
 
 .lower-tabs.right-tabs .lower-tabs-scroll > button.is-live::before {
@@ -8358,16 +8216,28 @@ button.linkish:hover {
 
 .right-tabs {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 2px;
-  padding: 8px 8px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
   min-width: 0;
+}
+
+.right-upper > .right-tabs {
+  box-sizing: border-box;
+  height: var(--thread-tabs-row);
+  min-height: var(--thread-tabs-row);
+}
+
+.lower-tabs.right-tabs {
+  align-items: flex-end;
+  padding: 8px 8px 0;
 }
 
 .right-tabs-scroll {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 2px;
   flex: 1;
   min-width: 0;
@@ -8382,27 +8252,29 @@ button.linkish:hover {
 .right-tabs-scroll > button {
   border: none;
   background: transparent;
-  border-radius: 6px 6px 0 0;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
   color: var(--muted);
-  padding: 7px 10px;
+  padding: 8px 10px 7px;
+  font-size: 12px;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .right-tabs-scroll > button.active {
   color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-bottom-color: var(--bg);
-  margin-bottom: -1px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--text);
+  margin-bottom: 0;
 }
 
 /* Conductor-style action pinned on the right of the Files/Changes/Checks row */
 .right-tabs-review {
   margin-left: 0;
-  margin-bottom: 4px;
+  margin-bottom: 0;
   display: inline-flex;
-  align-items: stretch;
+  align-items: center;
   position: relative;
   flex-shrink: 0;
 }
@@ -8448,12 +8320,6 @@ button.linkish:hover {
   cursor: default;
 }
 
-@container right-sidebar (max-width: 280px) {
-  /* Eye icon is enough at the minimum pane width; keep the control itself. */
-  .right-tabs-review-btn .tab-full {
-    display: none;
-  }
-}
 
 .right-upper-body {
   position: relative;
@@ -8472,7 +8338,7 @@ button.linkish:hover {
   flex-direction: column;
   overflow: hidden;
   /* Same surface as Setup / Run / Terminal — hosts can leave gaps while
-     siblings park absolute; never show the shell --bg (#1e1e1e) strip. */
+     siblings park absolute; never show the shell --bg strip. */
   background: #141210;
 }
 
@@ -8678,6 +8544,12 @@ button.linkish:hover {
   border-radius: 0;
 }
 
+.code-view .monaco-editor,
+.code-view .monaco-editor-background,
+.code-view .monaco-editor .margin {
+  background-color: var(--bg);
+}
+
 .file-editor {
   flex: 1;
   min-height: 0;
@@ -8721,8 +8593,8 @@ button.linkish:hover {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
 }
 
 .file-path-pill {
@@ -10829,8 +10701,8 @@ body:has(.update-banner) .team-toast-stack {
   overflow: visible;
   padding: 0;
   border-radius: 12px;
-  background: #1c1c1e;
-  border-color: #2c2c2e;
+  background: var(--bg-elevated);
+  border-color: var(--border);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -10891,7 +10763,7 @@ body:has(.update-banner) .team-toast-stack {
   gap: 18px;
   padding: 28px 24px;
   border-radius: inherit;
-  background: rgba(28, 28, 30, 0.82);
+  background: color-mix(in srgb, var(--bg-elevated) 82%, transparent);
   backdrop-filter: blur(2px);
   /* hiddenInset window: this overlay covers sidebar/board chrome drag regions. */
   -webkit-app-region: drag;
@@ -11542,7 +11414,7 @@ body:has(.update-banner) .team-toast-stack {
 .settings-nav {
   border-right: 1px solid var(--border);
   padding: 14px 10px;
-  background: var(--bg);
+  background: var(--bg-elevated);
   min-height: 0;
   overflow-y: auto;
 }

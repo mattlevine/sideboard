@@ -1203,10 +1203,11 @@ export function RightSidebar({
             </div>
           ) : null}
           <div className="right-actions">
+            {gitAction !== 'live' ? (
             <div className="split-btn" ref={prMenuRef}>
               <button
                 type="button"
-                className={`${prMerged ? 'btn-live' : prClosed ? 'btn-closed' : 'btn-continue'} split-main`}
+                className={`${prClosed ? 'btn-closed' : 'btn-continue'} split-main`}
                 disabled={busy}
                 onClick={onPrimaryGitClick}
                 title={
@@ -1377,6 +1378,7 @@ export function RightSidebar({
                 </>
               )}
             </div>
+            ) : null}
             <button
               type="button"
               className="primary btn-archive"
@@ -1416,7 +1418,7 @@ export function RightSidebar({
               title={changeCount ? `Changes (${changeCount})` : 'Changes'}
             >
               <span className="tab-full">Changes{changeCount ? ` ${changeCount}` : ''}</span>
-              <span className="tab-short">Δ{changeCount ? ` ${changeCount}` : ''}</span>
+              <span className="tab-short">Changes{changeCount ? ` ${changeCount}` : ''}</span>
             </button>
             <button
               type="button"

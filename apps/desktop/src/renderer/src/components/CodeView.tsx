@@ -18,6 +18,21 @@ disableMonacoTsDiagnostics(monaco);
 // Drop any leftover tsserver session from a previous HMR / session.
 void shutdownTsDiagnostics();
 
+const SIDEBOARD_DARK = 'sideboard-dark';
+
+function defineSideboardTheme(monacoApi: typeof monaco) {
+  monacoApi.editor.defineTheme(SIDEBOARD_DARK, {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#121212',
+      'editorGutter.background': '#121212',
+      'minimap.background': '#121212',
+    },
+  });
+}
+
 interface Props {
   path: string;
   value: string;
@@ -117,6 +132,7 @@ export function CodeView({
   }, [refAction]);
 
   const handleBeforeMount: BeforeMount = (monacoApi) => {
+    defineSideboardTheme(monacoApi);
     disableMonacoTsDiagnostics(monacoApi);
   };
 
@@ -269,7 +285,7 @@ export function CodeView({
         language={language}
         value={value}
         height={height}
-        theme="vs-dark"
+        theme={SIDEBOARD_DARK}
         beforeMount={handleBeforeMount}
         onMount={handleMount}
         onChange={(next) => {

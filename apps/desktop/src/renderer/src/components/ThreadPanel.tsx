@@ -136,6 +136,8 @@ import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
 import { workspaceChromeLabels } from '../lib/workspace-chrome';
 import {
+  firstOpenRightColumnWidth,
+  hasStoredRightColumnWidth,
   readRightColumnWidth,
   writeRightColumnWidth,
 } from '../lib/panel-widths';
@@ -807,6 +809,8 @@ export function ThreadPanel({
   const [artifactWidth, setArtifactWidth] = useState(() =>
     readRightColumnWidth(thread.worktreePath, RIGHT_COLUMN_WIDTH_DEFAULT),
   );
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const prevRightTabCount = useRef(0);
   const [filePicker, setFilePicker] = useState<RightColumnFilePicker | null>(null);
   /** After the user closes the pane, skip auto-open until a different artifact. */
   const suppressArtifactAutoOpen = useRef(isRightPaneSuppressed(thread.id));
@@ -2060,18 +2064,33 @@ export function ThreadPanel({
     onShowChat?.();
   }
 
+  function applyFirstOpenSplit() {
+    if (hasStoredRightColumnWidth(thread.worktreePath)) {
+      setArtifactWidth(
+        readRightColumnWidth(thread.worktreePath, RIGHT_COLUMN_WIDTH_DEFAULT),
+      );
+      return;
+    }
+    setArtifactWidth(
+      firstOpenRightColumnWidth(workspaceRef.current?.clientWidth ?? 0),
+    );
+  }
+
   // Restore per-chat pane before paint so sidebar-collapse sees the new chat's
   // pane (not the previous chat's) when switching threads.
   useLayoutEffect(() => {
     suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
     setFilePicker(null);
-    setArtifactWidth(readRightColumnWidth(thread.worktreePath, RIGHT_COLUMN_WIDTH_DEFAULT));
     const remembered = getRememberedRightPaneSession(thread.id);
     if (remembered !== undefined) {
+      const nextCount = remembered?.tabs.length ?? 0;
+      prevRightTabCount.current = nextCount;
+      if (nextCount > 0) applyFirstOpenSplit();
       setRightSession(remembered);
       return;
     }
     if (suppressArtifactAutoOpen.current) {
+      prevRightTabCount.current = 0;
       setRightSession(null);
       return;
     }
@@ -2087,12 +2106,24 @@ export function ThreadPanel({
     }
     if (fromHistory) {
       const session = { tabs: [fromHistory], activeId: fromHistory.id };
+      prevRightTabCount.current = 1;
+      applyFirstOpenSplit();
       setRightSession(session);
       rememberRightPaneSession(thread.id, session);
     } else {
+      prevRightTabCount.current = 0;
       setRightSession(null);
     }
   }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
+
+  // First artifact/schema/files tab: split chat | pane 50/50 unless this
+  // worktree already has a dragged width.
+  useLayoutEffect(() => {
+    const n = rightSession?.tabs.length ?? 0;
+    const openedFirst = prevRightTabCount.current === 0 && n > 0;
+    prevRightTabCount.current = n;
+    if (openedFirst) applyFirstOpenSplit();
+  }, [rightSession?.tabs.length, thread.worktreePath, thread.id]);
 
   function setPersistedArtifactWidth(width: number) {
     writeRightColumnWidth(thread.worktreePath, width);
@@ -2379,6 +2410,7 @@ export function ThreadPanel({
       )}
 
       <div
+        ref={workspaceRef}
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
         <div className="thread-chat-column">
