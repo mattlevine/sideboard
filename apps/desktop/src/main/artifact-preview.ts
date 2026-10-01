@@ -1,13 +1,22 @@
 import { ipcMain, protocol } from 'electron';
-import { injectArtifactNavigationGuard } from './artifact-nav-guard';
+import {
+  ARTIFACT_PREVIEW_SCHEME,
+  artifactPreviewUrl,
+  missingArtifactPreviewHtml,
+  parseArtifactPreviewId,
+  prepareArtifactPreviewHtml,
+} from './artifact-preview-page';
 
-export const ARTIFACT_PREVIEW_SCHEME = 'sideboard-artifact';
+export { ARTIFACT_PREVIEW_SCHEME, artifactPreviewUrl };
 export {
+  ARTIFACT_MISSING_MSG,
   ARTIFACT_OPEN_EXTERNAL_MSG,
+  ARTIFACT_READY_MSG,
   injectArtifactNavigationGuard,
 } from './artifact-nav-guard';
 
 const htmlById = new Map<string, string>();
+const revById = new Map<string, number>();
 const MAX_HTML_CHARS = 5_000_000;
 
 /**
@@ -29,35 +38,18 @@ export function registerArtifactPreviewScheme(): void {
   ]);
 }
 
-export function artifactPreviewUrl(id: string, rev = 0): string {
-  return `${ARTIFACT_PREVIEW_SCHEME}://preview/${encodeURIComponent(id)}?v=${rev}`;
-}
-
 /** Register protocol handler + IPC after app is ready. */
 export function bindArtifactPreviewProtocol(): void {
   protocol.handle(ARTIFACT_PREVIEW_SCHEME, (request) => {
-    let id = '';
-    try {
-      const url = new URL(request.url);
-      // sideboard-artifact://preview/<id> → host=preview, pathname=/<id>
-      id = decodeURIComponent((url.pathname || '').replace(/^\//, ''));
-      if (!id && url.hostname && url.hostname !== 'preview') {
-        id = decodeURIComponent(url.hostname);
-      }
-    } catch {
-      id = '';
-    }
+    const id = parseArtifactPreviewId(request.url);
     const html = id ? htmlById.get(id) : undefined;
     if (!html) {
-      return new Response(
-        '<!DOCTYPE html><html><body style="font:14px system-ui;padding:16px;color:#444">Artifact preview missing — reload the pane.</body></html>',
-        {
-          status: 404,
-          headers: { 'content-type': 'text/html; charset=utf-8' },
-        },
-      );
+      return new Response(missingArtifactPreviewHtml(), {
+        status: 404,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
     }
-    return new Response(injectArtifactNavigationGuard(html), {
+    return new Response(prepareArtifactPreviewHtml(html), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         // Artifacts are agent-authored demos; allow typical inline JS/CSS + CDNs.
@@ -79,10 +71,16 @@ export function bindArtifactPreviewProtocol(): void {
     }
     const key = id.trim();
     htmlById.set(key, html);
-    return { url: artifactPreviewUrl(key) };
+    const rev = (revById.get(key) ?? 0) + 1;
+    revById.set(key, rev);
+    return { url: artifactPreviewUrl(key, rev) };
   });
 
   ipcMain.handle('artifactPreview:clear', (_e, id: unknown) => {
-    if (typeof id === 'string' && id.trim()) htmlById.delete(id.trim());
+    if (typeof id === 'string' && id.trim()) {
+      const key = id.trim();
+      htmlById.delete(key);
+      revById.delete(key);
+    }
   });
 }

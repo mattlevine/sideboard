@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { wrapReactArtifactHtml, type ChatArtifact } from '../lib/artifacts';
+import {
+  artifactPreviewUrlsMatch,
+  cancelArtifactPreviewClear,
+  scheduleArtifactPreviewClear,
+} from '../lib/artifact-preview-clear';
 import { artifactSourcePath, resolveCodeLanguage } from '../lib/language';
 import { CodeView } from './CodeView';
 import { DocumentPreviewModeToggle } from './DocumentPreview';
@@ -10,6 +15,12 @@ import { PanelResizeHandle } from './PanelResizeHandle';
 const ARTIFACT_WIDTH_MIN = 320;
 const ARTIFACT_WIDTH_MAX = 900;
 const ARTIFACT_WIDTH_DEFAULT = 420;
+
+/** Keep in sync with `artifact-nav-guard.ts` (renderer cannot import main). */
+const ARTIFACT_OPEN_EXTERNAL_MSG = 'sideboard-artifact-open-external';
+const ARTIFACT_READY_MSG = 'sideboard-artifact-ready';
+const ARTIFACT_MISSING_MSG = 'sideboard-artifact-missing';
+const ARTIFACT_MISSING_RETRIES = 3;
 
 interface Props {
   artifact: ChatArtifact;
@@ -67,17 +78,27 @@ export function ArtifactPane({
     artifact.kind === 'log';
   const [mode, setMode] = useState<'code' | 'preview'>(canPreview ? 'preview' : 'code');
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
+  /** Last iframe URL that posted `ready` — keep showing it while the next rev loads. */
+  const [shownFrameUrl, setShownFrameUrl] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   /** Defer Monaco / markdown mount so the preloader can paint first. */
   const [bodyReady, setBodyReady] = useState(false);
-  const clearTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
+  const missingRetriesRef = useRef(0);
+  const frameUrlRef = useRef<string | null>(null);
+  const shownFrameUrlRef = useRef<string | null>(null);
+  const artifactIdRef = useRef(artifact.id);
+  const debouncedHtmlRef = useRef('');
 
   useEffect(() => {
     setMode(canPreview ? 'preview' : 'code');
     setCopied(false);
     setBodyReady(false);
+    setShownFrameUrl(null);
+    setFrameUrl(null);
+    setFrameError(null);
+    missingRetriesRef.current = 0;
     if (copiedTimerRef.current != null) {
       window.clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = null;
@@ -92,14 +113,46 @@ export function ArtifactPane({
     };
   }, []);
 
-  // Links inside the sandboxed iframe would navigate it away (relative → white 404).
+  // Links inside the sandboxed iframe would navigate it away (relative → 404).
   // Main injects a guard that postMessages http(s)/mailto here for openExternal.
+  // Ready/missing pings keep the pane on a loader until a real document paints.
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       const data = event.data as { type?: unknown; url?: unknown } | null;
-      if (!data || data.type !== 'sideboard-artifact-open-external') return;
-      if (typeof data.url !== 'string' || !data.url.trim()) return;
-      void window.sideboard.openExternal(data.url.trim());
+      if (!data || typeof data.type !== 'string') return;
+      if (data.type === ARTIFACT_OPEN_EXTERNAL_MSG) {
+        if (typeof data.url !== 'string' || !data.url.trim()) return;
+        void window.sideboard.openExternal(data.url.trim());
+        return;
+      }
+      if (data.type === ARTIFACT_READY_MSG) {
+        if (typeof data.url !== 'string') return;
+        const published = frameUrlRef.current;
+        if (published && artifactPreviewUrlsMatch(published, data.url)) {
+          missingRetriesRef.current = 0;
+          setFrameError(null);
+          setShownFrameUrl(published);
+        }
+        return;
+      }
+      if (data.type !== ARTIFACT_MISSING_MSG) return;
+      if (missingRetriesRef.current >= ARTIFACT_MISSING_RETRIES) {
+        if (!shownFrameUrlRef.current) setFrameError('Preview failed to load');
+        return;
+      }
+      missingRetriesRef.current += 1;
+      const id = artifactIdRef.current;
+      void window.sideboard
+        .publishArtifactPreview(id, debouncedHtmlRef.current)
+        .then((res: { url: string }) => {
+          if (artifactIdRef.current !== id) return;
+          setFrameUrl(res.url);
+        })
+        .catch((err: unknown) => {
+          if (artifactIdRef.current !== id) return;
+          setFrameUrl(null);
+          setFrameError(err instanceof Error ? err.message : String(err));
+        });
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -133,10 +186,15 @@ export function ArtifactPane({
 
   // Debounce so streaming HTML doesn't constantly remount JS.
   const debouncedHtml = useDebounced(previewSrcDoc, 280);
+  debouncedHtmlRef.current = debouncedHtml;
+  frameUrlRef.current = frameUrl;
+  shownFrameUrlRef.current = shownFrameUrl;
+  artifactIdRef.current = artifact.id;
 
   useEffect(() => {
     if (artifact.kind !== 'html' && artifact.kind !== 'svg' && artifact.kind !== 'react') {
       setFrameUrl(null);
+      setShownFrameUrl(null);
       setFrameError(null);
       return;
     }
@@ -145,10 +203,9 @@ export function ArtifactPane({
     setFrameError(null);
     void window.sideboard
       .publishArtifactPreview(id, debouncedHtml)
-      .then((res) => {
+      .then((res: { url: string }) => {
         if (cancelled) return;
-        // Bust cache when content changes so the iframe reloads scripts.
-        setFrameUrl(`${res.url}${res.url.includes('?') ? '&' : '?'}t=${Date.now()}`);
+        setFrameUrl(res.url);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -160,23 +217,16 @@ export function ArtifactPane({
     };
   }, [artifact.id, artifact.kind, debouncedHtml]);
 
-  // Clear preview HTML only after a real unmount. Cancel on remount so React
-  // Strict Mode (and brief remounts) don't wipe the map while the pane is open —
-  // otherwise Code→Preview remounts the iframe and hits "preview missing".
+  // Clear preview HTML only after a real unmount. Timer is keyed by artifact id
+  // so React Strict Mode remounts cancel the previous instance's delete —
+  // a per-component ref left the map empty and the iframe on "preview missing".
   useEffect(() => {
-    if (clearTimerRef.current != null) {
-      window.clearTimeout(clearTimerRef.current);
-      clearTimerRef.current = null;
-    }
+    cancelArtifactPreviewClear(artifact.id);
     const id = artifact.id;
     return () => {
-      if (clearTimerRef.current != null) {
-        window.clearTimeout(clearTimerRef.current);
-      }
-      clearTimerRef.current = window.setTimeout(() => {
-        clearTimerRef.current = null;
-        void window.sideboard.clearArtifactPreview(id).catch(() => {});
-      }, 2_000);
+      scheduleArtifactPreviewClear(id, (clearId) => {
+        void window.sideboard.clearArtifactPreview(clearId).catch(() => {});
+      });
     };
   }, [artifact.id]);
 
@@ -304,28 +354,42 @@ export function ArtifactPane({
             <PanePreloader label="Loading preview" />
           )
         ) : isHtmlPreview ? (
-          <>
-            {/* Keep the iframe mounted across Code/Preview toggles so we don't
-                re-fetch (and don't depend on preview HTML still being in main). */}
-            {frameUrl ? (
-              <iframe
-                className="artifact-pane-frame"
-                title={artifact.title}
-                hidden={effectiveMode !== 'preview'}
-                // Custom protocol is isolated from the app origin; same-origin here
-                // only means the artifact can use its own localStorage / etc.
-                sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
-                src={frameUrl}
-              />
-            ) : effectiveMode === 'preview' ? (
+          <div className="artifact-pane-preview-stack">
+            {/* Keep iframes mounted across Code/Preview so we don't re-fetch.
+                Hide until `ready`; keep the last ready frame while the next rev loads. */}
+            {effectiveMode === 'preview' && !shownFrameUrl ? (
               frameError ? (
                 <div className="artifact-pane-loading">Preview failed: {frameError}</div>
               ) : (
                 <PanePreloader label="Loading preview" />
               )
             ) : null}
+            {shownFrameUrl && shownFrameUrl !== frameUrl ? (
+              <iframe
+                key={shownFrameUrl}
+                className="artifact-pane-frame"
+                title={artifact.title}
+                hidden={effectiveMode !== 'preview'}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                src={shownFrameUrl}
+              />
+            ) : null}
+            {frameUrl ? (
+              <iframe
+                key={frameUrl}
+                className={
+                  shownFrameUrl === frameUrl
+                    ? 'artifact-pane-frame'
+                    : 'artifact-pane-frame artifact-pane-frame-pending'
+                }
+                title={artifact.title}
+                hidden={shownFrameUrl === frameUrl && effectiveMode !== 'preview'}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                src={frameUrl}
+              />
+            ) : null}
             {effectiveMode === 'code' ? codeView : null}
-          </>
+          </div>
         ) : (
           codeView
         )}

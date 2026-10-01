@@ -1,5 +1,7 @@
-/** postMessage type from injected preview guard → renderer. */
+/** postMessage types from injected preview guard → renderer. */
 export const ARTIFACT_OPEN_EXTERNAL_MSG = 'sideboard-artifact-open-external';
+export const ARTIFACT_READY_MSG = 'sideboard-artifact-ready';
+export const ARTIFACT_MISSING_MSG = 'sideboard-artifact-missing';
 
 /**
  * Keep iframe from navigating away on link clicks (relative → 404 white page;
@@ -11,6 +13,7 @@ export function injectArtifactNavigationGuard(html: string): string {
   const script = `<script data-sideboard-artifact-nav>
 (function () {
   var MSG = ${JSON.stringify(ARTIFACT_OPEN_EXTERNAL_MSG)};
+  var READY = ${JSON.stringify(ARTIFACT_READY_MSG)};
   function abs(href) {
     try { return new URL(href, location.href); } catch (e) { return null; }
   }
@@ -66,6 +69,13 @@ export function injectArtifactNavigationGuard(html: string): string {
     }
     return null;
   };
+  function pingReady() {
+    var boot = document.getElementById('sideboard-artifact-boot');
+    if (boot) boot.remove();
+    try { parent.postMessage({ type: READY, url: String(location.href) }, '*'); } catch (e) {}
+  }
+  if (document.readyState === 'complete') pingReady();
+  else window.addEventListener('load', pingReady);
 })();
 </script>`;
   if (/<\/body>/i.test(html)) {
