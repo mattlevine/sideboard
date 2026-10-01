@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.253] - 2026-09-30
+
 ### Added
 
 - Worktree agents can create and manage local Sideboard schedules (`list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule`). `threadId=self` continues that coding chat; omit `threadId` to start a new Global orchestration chat when due. Settings → Schedules can target worktree chats too. If the named chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled**.
+- Public desktop downloads on `https://download.sideboard.cloud` (Tigris). The `v*` Release workflow still publishes `@sideboard-ai/cli` and `@sideboard-ai/core` to npm, then mirrors the Mac dmg/zip/`latest-mac.yml` to that host.
 
 ### Changed
 
 - README and marketing-site screenshots refreshed (`sideboard-desktop-review-v6.png`, `site/desktop.png`, `site/board.png`) at native 2764×1680 PNG (144 dpi) so they stay sharp on retina.
+- Marketing Download buttons and user-facing docs (agents, remote, skills, compare, security) live on `www.sideboard.cloud` and no longer link to GitHub. CLI install remains `npm i -g @sideboard-ai/cli`.
 
 ## [0.1.252] - 2026-09-29
 
