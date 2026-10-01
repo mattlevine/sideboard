@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.255] - 2026-09-30
+
+### Changed
+
+- Desktop chrome uses a near-black surface (`#121212`) with elevated panels at `#18191a`. The chat titlebar, tabs, file path bar, and editor canvas share that fill; modals use the elevated token.
+- Thread title and tab rows share heights with the right sidebar GitHub and Files rows. Files / Changes / Checks / Review stay as words; sidebar toggles are chevrons.
+- The first artifact or files pane opens at 50/50 unless that worktree already has a dragged width.
+- Hide the merged-PR Live button.
+
 ## [0.1.254] - 2026-09-30
 
 ### Added

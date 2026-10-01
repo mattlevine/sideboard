@@ -301,8 +301,8 @@ export function ChatTabs({
             </button>
           )}
           {statusBadge && <span className="thread-meta status-live">{statusBadge}</span>}
-          {rightSidebarToggle}
           {openMenu}
+          {rightSidebarToggle}
         </div>
       </div>
       <div className="chat-tabs">

@@ -7,8 +7,8 @@ const RIGHT_COLUMN_BY_WORKTREE_KEY = 'sideboard.rightColumnWidthByWorktree';
 /** Legacy fallback when no worktree key is available. */
 const RIGHT_COLUMN_GLOBAL_KEY = 'sideboard.rightColumnWidth';
 
-const RIGHT_COLUMN_MIN = 320;
-const RIGHT_COLUMN_MAX = 900;
+export const RIGHT_COLUMN_MIN = 320;
+export const RIGHT_COLUMN_MAX = 1400;
 export const RIGHT_COLUMN_WIDTH_FALLBACK = 420;
 
 function normalizeWorktreeKey(key: string): string {
@@ -55,6 +55,24 @@ function readGlobalRightColumnWidth(): number | null {
   } catch {
     return null;
   }
+}
+
+export function hasStoredRightColumnWidth(
+  worktreeKey: string | null | undefined,
+): boolean {
+  if (worktreeKey) {
+    const map = readMap();
+    return typeof map[normalizeWorktreeKey(worktreeKey)] === 'number';
+  }
+  return readGlobalRightColumnWidth() != null;
+}
+
+/** Half the chat workspace — used the first time an artifact column opens. */
+export function firstOpenRightColumnWidth(containerWidth: number): number {
+  if (!Number.isFinite(containerWidth) || containerWidth <= 0) {
+    return RIGHT_COLUMN_WIDTH_FALLBACK;
+  }
+  return clampRightColumnWidth(containerWidth / 2);
 }
 
 /** Per-worktree right column width; missing keys use fallback (then legacy global). */
