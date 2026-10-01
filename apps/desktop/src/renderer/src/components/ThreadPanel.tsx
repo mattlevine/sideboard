@@ -134,6 +134,7 @@ import {
 } from '../lib/chat-search';
 import { largePasteBufferFromEvent } from '../lib/paste-attachment';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
+import { workspaceChromeLabels } from '../lib/workspace-chrome';
 import {
   readRightColumnWidth,
   writeRightColumnWidth,
@@ -235,6 +236,8 @@ interface Props {
   fileChanges?: Record<string, { status: string; additions?: number; deletions?: number }>;
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
+  /** Rendered under the tab strip (orchestrator child-thread chips). */
+  belowTabs?: ReactNode;
 }
 
 const queuedIconStroke = {
@@ -732,6 +735,7 @@ export function ThreadPanel({
   fileChanges = {},
   leftSidebarToggle,
   rightSidebarToggle,
+  belowTabs,
 }: Props) {
   const live = useLiveThread(thread.id);
   const liveOutput = live.output;
@@ -2165,6 +2169,8 @@ export function ThreadPanel({
     requestForkWorkspace,
   };
 
+  const chrome = workspaceChromeLabels(thread);
+
   return (
     <section className="panel thread-main">
       {usageLimitConfirm ? (
@@ -2206,6 +2212,9 @@ export function ThreadPanel({
         onClosePrPage={onClosePrPage}
         changesCount={Object.keys(fileChanges).length}
         fileChanges={fileChanges}
+        projectName={chrome.project}
+        taskName={chrome.task}
+        onBack={onLeaveThread}
         leftSidebarToggle={leftSidebarToggle}
         rightSidebarToggle={rightSidebarToggle}
         statusBadge={
@@ -2308,6 +2317,7 @@ export function ThreadPanel({
         onReorderChats={onReorderChats}
         onFindChat={() => openChatSearch()}
       />
+      {belowTabs}
 
       {forkWorkspaceConfirm && (
         <div

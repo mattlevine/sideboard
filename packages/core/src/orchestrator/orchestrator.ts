@@ -24,6 +24,7 @@ import {
   removeWorktree,
   resolveGithubRepoSlug,
   resolvePrSelector,
+  switchWorktreeBranch,
 } from '../git/worktree.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
@@ -3528,6 +3529,21 @@ export class Orchestrator {
     const next = title.trim();
     if (!next) throw new Error('Title cannot be empty');
     return updateThread(thread.id, { title: next, userSetTitle: true });
+  }
+
+  async switchThreadBranch(threadRef: string, branchName: string): Promise<Thread> {
+    const thread = this.requireThread(threadRef);
+    this.assertNotGlobal(thread, 'Switch branch');
+    if (thread.status === 'running') {
+      throw new Error('Stop the agent before switching branches');
+    }
+    await switchWorktreeBranch({
+      repoPath: thread.repoPath,
+      worktreePath: thread.worktreePath,
+      branchName,
+    });
+    await syncThreadBranchFromGit(thread.id);
+    return this.requireThread(thread.id);
   }
 
   setAttachments(

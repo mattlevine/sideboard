@@ -111,9 +111,8 @@ textarea {
 }
 
 /* Traffic lights sit over the center column when the left sidebar is closed */
-.app.left-collapsed .chat-tabs,
-.app.left-collapsed .board-chrome,
-.app.left-collapsed .child-list {
+.app.left-collapsed .workspace-chrome,
+.app.left-collapsed .board-chrome {
   padding-left: 78px;
 }
 
@@ -2663,6 +2662,107 @@ mark.chat-search-hit.chat-search-current {
   color: var(--text);
 }
 
+.thread-chrome {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
+  -webkit-app-region: drag;
+}
+
+.workspace-chrome {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
+  -webkit-app-region: drag;
+}
+
+.workspace-back,
+.workspace-more,
+.workspace-chrome .sidebar-toggle,
+.workspace-chrome-actions {
+  -webkit-app-region: no-drag;
+}
+
+.workspace-back,
+.workspace-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.workspace-back:hover,
+.workspace-more:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.workspace-more {
+  width: auto;
+  min-width: 22px;
+  padding: 0 4px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.workspace-chrome-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  -webkit-app-region: drag;
+}
+
+.workspace-chrome-crumb .workspace-more {
+  -webkit-app-region: no-drag;
+}
+
+.workspace-chrome-crumb .workspace-glyph {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.workspace-chrome-crumb .open-crumb {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.workspace-chrome-crumb .open-crumb-task {
+  flex: 0 1 auto;
+  max-width: 420px;
+}
+
+.workspace-chrome-crumb .open-sep {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace-chrome-actions {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
 .chat-tabs {
   display: flex;
   align-items: center;
@@ -2670,8 +2770,7 @@ mark.chat-search-hit.chat-search-current {
   padding: 0 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
-  min-height: 38px;
-  /* Align with sidebar traffic-light inset */
+  min-height: 36px;
   padding-top: 0;
   -webkit-app-region: drag;
 }
@@ -4158,6 +4257,37 @@ mark.chat-search-hit.chat-search-current {
   color: var(--muted);
   font-size: 11px;
   font-family: var(--mono);
+}
+
+.branch-picker-menu {
+  padding: 6px;
+}
+
+.branch-picker-search {
+  display: block;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.branch-picker-empty {
+  padding: 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.branch-picker-remote {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .floating-menu .tool-menu-icon {
@@ -10070,20 +10200,9 @@ body:has(.update-banner) .team-toast-stack {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
-  padding: 8px 16px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
   flex-shrink: 0;
-}
-
-.child-list .thread-meta {
-  -webkit-app-region: drag;
-}
-
-.child-list button,
-.child-list .child-chip {
-  -webkit-app-region: no-drag;
 }
 
 .child-chip {

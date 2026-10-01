@@ -86,6 +86,8 @@ const api: IpcApi = {
   addBoardItem: (input) => ipcRenderer.invoke('addBoardItem', input),
   removeBoardItem: (id) => ipcRenderer.invoke('removeBoardItem', id),
   listBranches: (repoPath, opts) => ipcRenderer.invoke('listBranches', repoPath, opts),
+  switchThreadBranch: (threadRef, branchName) =>
+    ipcRenderer.invoke('switchThreadBranch', threadRef, branchName),
   listPrs: (repoPath) => ipcRenderer.invoke('listPrs', repoPath),
   listLinearIssues: (agent, repoPath) => ipcRenderer.invoke('listLinearIssues', agent, repoPath),
   resolveRepoRoot: (cwd) => ipcRenderer.invoke('resolveRepoRoot', cwd),
