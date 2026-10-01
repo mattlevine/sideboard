@@ -67,7 +67,7 @@ import { createUsageSendGate } from '../lib/usage-send-gate';
 import { useLiveThread } from '../lib/live-paint-context';
 import { shouldShowClaudePlanUsage, useClaudePlanUsage } from '../lib/use-claude-usage';
 import { AgentMessage } from './AgentMessage';
-import { ChatTabs } from './ChatTabs';
+import { ChatTabs, ThreadWorkspaceChrome } from './ChatTabs';
 import { ClaudeUsageMeter } from './ClaudeUsageMeter';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
@@ -2227,22 +2227,7 @@ export function ThreadPanel({
           }}
         />
       ) : null}
-      <ChatTabs
-        chats={chats}
-        activeChatId={thread.id}
-        openFiles={openFiles}
-        activeFilePath={openFilePath}
-        openUrls={openUrls}
-        activeUrl={openUrl}
-        changesOpen={changesOpen}
-        changesActive={changesOpen && !openFilePath && !openUrl && !prPageOpen}
-        prPageOpen={prPageOpen}
-        prPageActive={prPageOpen && !openFilePath && !openUrl && !changesOpen}
-        prPageTitle={prTabTitle(thread)}
-        onSelectPrPage={onSelectPrPage}
-        onClosePrPage={onClosePrPage}
-        changesCount={Object.keys(fileChanges).length}
-        fileChanges={fileChanges}
+      <ThreadWorkspaceChrome
         projectName={chrome.project}
         taskName={chrome.task}
         onBack={onLeaveThread}
@@ -2324,31 +2309,8 @@ export function ThreadPanel({
             </>
           )
         }
-        onSelectChat={(id) => {
-          onShowChat?.();
-          onSelectChat(id);
-        }}
-        onSelectFile={(path) => onSelectFile?.(path)}
-        onCloseFile={(path) => onCloseFile?.(path)}
-        onSelectUrl={(url) => onSelectUrl?.(url)}
-        onCloseUrl={(url) => onCloseUrl?.(url)}
-        onSelectChanges={() => onSelectChanges?.()}
-        onCloseChanges={() => onCloseChanges?.()}
-        onNewTab={(opts) => void newTab(opts)}
-        onRename={(id, title) =>
-          void window.sideboard.renameThread(id, title).then(onRefresh)
-        }
-        onCloseTab={(id) => {
-          const tab = chats.find((c) => c.id === id);
-          if (!tab) return;
-          void archiveChatTab(id).catch((err: unknown) => {
-            window.alert(err instanceof Error ? err.message : String(err));
-          });
-        }}
-        onReorderChats={onReorderChats}
         onFindChat={() => openChatSearch()}
       />
-      {belowTabs}
 
       {forkWorkspaceConfirm && (
         <div
@@ -2414,6 +2376,46 @@ export function ThreadPanel({
         className={`thread-workspace${rightPane && chatViewOpen ? ' with-artifact' : ''}`}
       >
         <div className="thread-chat-column">
+      <ChatTabs
+        chats={chats}
+        activeChatId={thread.id}
+        openFiles={openFiles}
+        activeFilePath={openFilePath}
+        openUrls={openUrls}
+        activeUrl={openUrl}
+        changesOpen={changesOpen}
+        changesActive={changesOpen && !openFilePath && !openUrl && !prPageOpen}
+        prPageOpen={prPageOpen}
+        prPageActive={prPageOpen && !openFilePath && !openUrl && !changesOpen}
+        prPageTitle={prTabTitle(thread)}
+        onSelectPrPage={onSelectPrPage}
+        onClosePrPage={onClosePrPage}
+        changesCount={Object.keys(fileChanges).length}
+        fileChanges={fileChanges}
+        onSelectChat={(id) => {
+          onShowChat?.();
+          onSelectChat(id);
+        }}
+        onSelectFile={(path) => onSelectFile?.(path)}
+        onCloseFile={(path) => onCloseFile?.(path)}
+        onSelectUrl={(url) => onSelectUrl?.(url)}
+        onCloseUrl={(url) => onCloseUrl?.(url)}
+        onSelectChanges={() => onSelectChanges?.()}
+        onCloseChanges={() => onCloseChanges?.()}
+        onNewTab={(opts) => void newTab(opts)}
+        onRename={(id, title) =>
+          void window.sideboard.renameThread(id, title).then(onRefresh)
+        }
+        onCloseTab={(id) => {
+          const tab = chats.find((c) => c.id === id);
+          if (!tab) return;
+          void archiveChatTab(id).catch((err: unknown) => {
+            window.alert(err instanceof Error ? err.message : String(err));
+          });
+        }}
+        onReorderChats={onReorderChats}
+      />
+      {belowTabs}
       {chatSearchOpen ? (
         <ChatSearchBar
           query={chatSearchQuery}

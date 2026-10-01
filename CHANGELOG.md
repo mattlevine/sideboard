@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Artifact / CMS / Files document tabs sit on the same row as chat tabs and the right-sidebar Files tabs.
+
 ## [0.1.255] - 2026-09-30
 
 ### Changed
