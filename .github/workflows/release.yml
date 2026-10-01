@@ -183,3 +183,30 @@ jobs:
           if [ -n "$DMG" ]; then
             gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$(basename "$DMG")"
           fi
+
+  # Public downloads + future generic auto-update feed.
+  # CNAME: download.sideboard.cloud → sideboard-downloads.t3.tigrisbucket.io
+  # Secrets: TIGRIS_ACCESS_KEY_ID, TIGRIS_SECRET_ACCESS_KEY (Fly `fly storage create`).
+  # Do not `if: secrets.*` — GitHub rejects the secrets context in `if`.
+  publish-downloads:
+    needs: release-desktop-mac
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download GitHub Release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/sideboard-release"
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --dir "$RUNNER_TEMP/sideboard-release" \
+            --pattern 'latest-mac.yml' \
+            --pattern 'Sideboard-*'
+      - name: Publish to Tigris (download.sideboard.cloud)
+        env:
+          TIGRIS_ACCESS_KEY_ID: ${{ secrets.TIGRIS_ACCESS_KEY_ID }}
+          TIGRIS_SECRET_ACCESS_KEY: ${{ secrets.TIGRIS_SECRET_ACCESS_KEY }}
+        run: bash scripts/publish-tigris.sh "$RUNNER_TEMP/sideboard-release"

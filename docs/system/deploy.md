@@ -7,8 +7,9 @@ The static site in `site/` is not a separate host. It ships inside Fly app `side
 | https://www.sideboard.cloud | `site/` (`index.html`, `docs/`) |
 | https://sideboard.cloud | 301 → www |
 | https://relay.sideboard.cloud | Slack + `/health` only |
+| https://download.sideboard.cloud | Public desktop artifacts (Tigris). Not this Fly app. |
 
-Desktop and npm are a different path (`pnpm release` in the README).
+Desktop and npm are a different path (`pnpm release` in the README). The `v*` Release workflow uploads the Mac dmg/zip/`latest-mac.yml` to GitHub Releases, then `publish-downloads` copies them to the Tigris bucket `sideboard-downloads` (`scripts/publish-tigris.sh`). Stable alias: `https://download.sideboard.cloud/Sideboard-latest-arm64.dmg`. GoDaddy CNAME `download` → `sideboard-downloads.t3.tigrisbucket.io`. Repo secrets: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`.
 
 ## When
 
