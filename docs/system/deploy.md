@@ -7,9 +7,10 @@ The static site in `site/` is not a separate host. It ships inside Fly app `side
 | https://www.sideboard.cloud | `site/` (`index.html`, `docs/`) |
 | https://sideboard.cloud | 301 → www |
 | https://relay.sideboard.cloud | Slack + `/health` only |
-| https://download.sideboard.cloud | Public desktop artifacts (Tigris). Not this Fly app. |
+| https://download.sideboard.cloud | Intended custom domain for desktop artifacts. CNAME is set; TLS is not issued yet. |
+| https://sideboard-downloads.t3.tigrisfiles.io | Working public Tigris host (use this until custom-domain HTTPS works). |
 
-Desktop and npm are a different path (`pnpm release` in the README). The `v*` Release workflow uploads the Mac dmg/zip/`latest-mac.yml` to GitHub Releases, then `publish-downloads` copies them to the Tigris bucket `sideboard-downloads` (`scripts/publish-tigris.sh`). Stable alias: `https://download.sideboard.cloud/Sideboard-latest-arm64.dmg`. GoDaddy CNAME `download` → `sideboard-downloads.t3.tigrisbucket.io`. Repo secrets: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`.
+Desktop and npm are a different path (`pnpm release` in the README). The `v*` Release workflow uploads the Mac dmg/zip/`latest-mac.yml` to GitHub Releases, then `publish-downloads` copies them to the Tigris bucket `sideboard-downloads` (`scripts/publish-tigris.sh`). Stable alias: `https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg`. GoDaddy CNAME `download` → `sideboard-downloads.t3.tigrisbucket.io`. Repo secrets: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`.
 
 ## When
 
