@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.256] - 2026-09-30
+
+### Added
+
+- Settings → Remote and support docs point at the Sideboard community Slack (`sideboard-ai.slack.com`), separate from installing the Slack app into a workspace.
+
 ### Changed
 
 - Artifact / CMS / Files document tabs sit under the chat tab row (not beside it). Chat tabs still span the center column so they line up with All files / Changes / Checks.
+
+### Fixed
+
+- HTML artifact previews keep a themed loader (and the last good document) instead of flashing an unstyled white page.
 
 ## [0.1.255] - 2026-09-30
 
