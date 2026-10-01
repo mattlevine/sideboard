@@ -264,6 +264,34 @@ export function RemoteSettings({
           Connect a workspace with Add via browser. Listening only receives your Slack user&apos;s
           messages on this Mac.
         </p>
+        <div style={{ marginTop: 16 }}>
+          <div className="settings-section-title">Community</div>
+          <p className="settings-hint">
+            Product questions go to the Sideboard community Slack (
+            <code>sideboard-ai.slack.com</code>
+            ). Open that URL, enter your email, then the confirmation code Slack sends. That
+            workspace is not the same as installing the Sideboard app into your own team with Add
+            via browser.
+          </p>
+          <div className="row" style={{ marginTop: 8, gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => {
+                void window.sideboard.openExternal('https://sideboard-ai.slack.com');
+              }}
+            >
+              Join community Slack
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void window.sideboard.openExternal('https://www.sideboard.cloud/support/');
+              }}
+            >
+              How to join
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
