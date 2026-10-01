@@ -89,6 +89,26 @@ export interface SlackListenStatus {
   lastLog: string | null;
 }
 
+/** Open-worktree cube targets (Finder, Cursor, VS Code, …). */
+export type WorktreeOpenerId =
+  | 'finder'
+  | 'cursor'
+  | 'code'
+  | 'xcode'
+  | 'terminal'
+  | 'datagrip';
+
+/** Installed third-party (and Finder) apps the worktree cube can open. */
+export interface WorktreeOpener {
+  id: WorktreeOpenerId;
+  label: string;
+  kbd: string;
+  /** True when the `.app` bundle was found on disk (icon is then available). */
+  installed: boolean;
+  /** PNG data URL of the macOS app icon when the bundle was found. */
+  iconDataUrl?: string | null;
+}
+
 /** Shared typed surface for Electron preload ↔ renderer (and docs). */
 export interface IpcApi {
   detectAgents(): Promise<AgentStatus[]>;
@@ -480,10 +500,9 @@ export interface IpcApi {
     }>
   >;
   openInEditor(threadRef: string, editor?: string, relativePath?: string): Promise<void>;
-  openWorktree(
-    threadRef: string,
-    target: 'finder' | 'cursor' | 'code' | 'xcode' | 'terminal' | 'datagrip',
-  ): Promise<void>;
+  openWorktree(threadRef: string, target: WorktreeOpenerId): Promise<void>;
+  /** Finder / editor apps on this Mac, with native icons when the bundle exists. */
+  listWorktreeOpeners(): Promise<WorktreeOpener[]>;
   runDevScript(
     threadRef: string,
     scriptName?: string,
