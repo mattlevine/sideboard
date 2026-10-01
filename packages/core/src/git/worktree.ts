@@ -1550,6 +1550,72 @@ export async function createExistingBranchWorktree(opts: {
   return { branchName, worktreePath };
 }
 
+/**
+ * Check out an existing local (or origin-tracking) branch in this worktree.
+ * Does not create a new worktree. Fails if another worktree already has it.
+ */
+export async function switchWorktreeBranch(opts: {
+  repoPath: string;
+  worktreePath: string;
+  branchName: string;
+}): Promise<string> {
+  const branch = opts.branchName.trim().replace(/^origin\//, '');
+  if (!branch) throw new Error('branch name required');
+
+  const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], opts.worktreePath, {
+    reject: false,
+  });
+  if (head.stdout.trim() === branch) return branch;
+
+  const here = normalizeWorktreePath(opts.worktreePath);
+  const trees = await listWorktrees(opts.repoPath);
+  const taken = trees.find(
+    (w) => w.branch === branch && normalizeWorktreePath(w.path) !== here,
+  );
+  if (taken?.path) {
+    throw new Error(`Branch ${branch} is already checked out at ${taken.path}`);
+  }
+
+  await withRepoGitLock(opts.repoPath, async () => {
+    const local = await git(
+      ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`],
+      opts.worktreePath,
+      { reject: false },
+    );
+    if (local.exitCode === 0) {
+      const sw = await git(['switch', branch], opts.worktreePath, {
+        reject: false,
+      });
+      if (sw.exitCode !== 0) {
+        throw new Error(
+          sw.stderr.trim() || sw.stdout.trim() || `Failed to switch to ${branch}`,
+        );
+      }
+      return;
+    }
+    const remote = `origin/${branch}`;
+    const remoteOk = await git(['rev-parse', '--verify', '--quiet', remote], opts.repoPath, {
+      reject: false,
+    });
+    if (remoteOk.exitCode === 0) {
+      const sw = await git(
+        ['switch', '-c', branch, '--track', remote],
+        opts.worktreePath,
+        { reject: false },
+      );
+      if (sw.exitCode !== 0) {
+        throw new Error(
+          sw.stderr.trim() || sw.stdout.trim() || `Failed to switch to ${branch}`,
+        );
+      }
+      return;
+    }
+    throw new Error(`Unknown branch ${branch}`);
+  });
+
+  return branch;
+}
+
 export async function removeWorktree(
   repoPath: string,
   worktreePath: string,

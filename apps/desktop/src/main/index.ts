@@ -1345,6 +1345,9 @@ function registerIpc(): void {
     async (_e, path: string, opts?: { unmergedOnly?: boolean }) =>
       listBranches(await resolveRepoRoot(path), opts),
   );
+  ipcMain.handle('switchThreadBranch', (_e, ref: string, branch: string) =>
+    orch.switchThreadBranch(ref, branch),
+  );
   ipcMain.handle('listPrs', async (_e, path: string) => listPrs(await resolveRepoRoot(path)));
   ipcMain.handle('listLinearIssues', (_e, agent: AgentKind, path: string) =>
     listLinearIssues(agent, path),

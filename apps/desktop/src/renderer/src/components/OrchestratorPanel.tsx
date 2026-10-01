@@ -81,40 +81,42 @@ export function OrchestratorPanel({
   }, [childThreads]);
 
   const parentQueueCount = thread.queue.length;
+  const childList = (
+    <div className="child-list">
+      <span className="thread-meta">
+        {global ? 'Worktree agents' : 'Child threads'}
+      </span>
+      {childThreads.length === 0 ? (
+        <span className="thread-meta">
+          {global ? '(spawn via Sideboard MCP)' : '(none yet)'}
+        </span>
+      ) : (
+        childSummary && <span className="thread-meta">{childSummary}</span>
+      )}
+      {parentQueueCount > 0 ? (
+        <span
+          className="thread-meta"
+          title="Follow-ups waiting above the composer — edit, send now, or remove"
+        >
+          {parentQueueCount} queued
+        </span>
+      ) : null}
+      {childThreads.map((c) => (
+        <button key={c.id} className="child-chip" onClick={() => onSelectChild(c.id)}>
+          <span className={`dot ${c.status}`} />
+          {c.title}
+          {c.queue.length > 0 ? (
+            <span className="thread-meta" title={`${c.queue.length} queued`}>
+              · q{c.queue.length}
+            </span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="panel orchestrator-panel">
-      <div className="child-list">
-        <span className="thread-meta">
-          {global ? 'Worktree agents' : 'Child threads'}
-        </span>
-        {childThreads.length === 0 ? (
-          <span className="thread-meta">
-            {global ? '(spawn via Sideboard MCP)' : '(none yet)'}
-          </span>
-        ) : (
-          childSummary && <span className="thread-meta">{childSummary}</span>
-        )}
-        {parentQueueCount > 0 ? (
-          <span
-            className="thread-meta"
-            title="Follow-ups waiting above the composer — edit, send now, or remove"
-          >
-            {parentQueueCount} queued
-          </span>
-        ) : null}
-        {childThreads.map((c) => (
-          <button key={c.id} className="child-chip" onClick={() => onSelectChild(c.id)}>
-            <span className={`dot ${c.status}`} />
-            {c.title}
-            {c.queue.length > 0 ? (
-              <span className="thread-meta" title={`${c.queue.length} queued`}>
-                · q{c.queue.length}
-              </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
       <div className="orchestrator-panel-main">
         {/* Same ThreadPanel as worktree chats — includes the Queued dock (edit / send now / remove). */}
         <ThreadPanel
@@ -142,6 +144,7 @@ export function OrchestratorPanel({
           prPageOpen={prPageOpen}
           onSelectPrPage={onSelectPrPage}
           onClosePrPage={onClosePrPage}
+          belowTabs={childList}
         />
       </div>
     </div>

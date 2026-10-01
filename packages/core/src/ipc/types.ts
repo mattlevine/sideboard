@@ -284,6 +284,8 @@ export interface IpcApi {
   addBoardItem(input: AddBoardPinInput): Promise<BoardPin>;
   removeBoardItem(id: string): Promise<boolean>;
   listBranches(repoPath: string, opts?: { unmergedOnly?: boolean }): Promise<BranchInfo[]>;
+  /** Check out `branchName` in this thread's worktree. */
+  switchThreadBranch(threadRef: string, branchName: string): Promise<Thread>;
   listPrs(repoPath: string): Promise<PrInfo[]>;
   /** @deprecated Prefer listIssues — agent Linear MCP. */
   listLinearIssues(agent: AgentKind, repoPath: string): Promise<IssueInfo[]>;
