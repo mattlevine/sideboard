@@ -9,7 +9,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "site" / "docs" / "_src"
-DL = "https://download.sideboard.cloud/Sideboard-latest-arm64.dmg"
+# Public Tigris host (custom domain download.sideboard.cloud CNAME is live;
+# TLS on that hostname is not issued yet).
+DL = "https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg"
 
 PAGES = {
     "agents.md": {
