@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.255] - 2026-09-30
+
 ### Changed
 
 - Desktop chrome uses a near-black surface (`#121212`) with elevated panels at `#18191a`. The chat titlebar, tabs, file path bar, and editor canvas share that fill; modals use the elevated token.
