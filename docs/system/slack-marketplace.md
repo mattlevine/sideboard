@@ -211,7 +211,7 @@ Resolve people while acting as the installer (`slack_list_users` / destination l
 ### Contacts
 
 - Developer:
-- Support (same as `/support/`): support@sideboard.cloud
+- Support (same as `/support/`): support@sideboard.cloud; community Slack: https://sideboard-ai.slack.com
 
 ## Don’t
 

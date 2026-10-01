@@ -16,7 +16,7 @@ Connections are owned by Sideboard, not per-agent MCP. Optional connector tokens
 
 Slack is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac (corporate VPN, private git, internal APIs). Message text goes through `relay.sideboard.cloud`; the relay does not host worktrees. The Mac must stay awake — Slack cannot reach a sleeping machine. For unattended Listen, enable **Settings → Advanced → Caffeinate while Slack Listen is on**, or `set_caffeinate` from the orchestration chat.
 
-Full Slack landing and Add to Slack: [sideboard.cloud/slack](/slack/).
+Full Slack landing and Add to Slack: [sideboard.cloud/slack](/slack/). Product questions: join the Sideboard community at [sideboard-ai.slack.com](https://sideboard-ai.slack.com) — that is a public workspace, not a substitute for **Add via browser** on your own team. Join steps: [Support](/support/).
 
 ### Connect
 
