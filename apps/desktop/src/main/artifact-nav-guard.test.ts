@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ARTIFACT_OPEN_EXTERNAL_MSG,
+  ARTIFACT_READY_MSG,
   injectArtifactNavigationGuard,
 } from './artifact-nav-guard';
 
@@ -10,6 +11,7 @@ describe('injectArtifactNavigationGuard', () => {
     const once = injectArtifactNavigationGuard(html);
     expect(once).toContain('data-sideboard-artifact-nav');
     expect(once).toContain(ARTIFACT_OPEN_EXTERNAL_MSG);
+    expect(once).toContain(ARTIFACT_READY_MSG);
     expect(once.indexOf('</body>')).toBeGreaterThan(once.indexOf('data-sideboard-artifact-nav'));
     expect(injectArtifactNavigationGuard(once)).toBe(once);
   });
