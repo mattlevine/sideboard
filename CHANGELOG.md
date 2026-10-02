@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.258] - 2026-10-02
+
+### Fixed
+
+- Cube menu worktree openers omit apps that are not installed and renumber 1–N (and Copy path) to match the remaining rows.
+
 ## [0.1.257] - 2026-10-01
 
 ### Fixed
