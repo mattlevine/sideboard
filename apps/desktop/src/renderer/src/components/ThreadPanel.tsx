@@ -115,8 +115,9 @@ import { MarkdownMessage } from './MarkdownMessage';
 import { type FilePathLink } from '../lib/file-path-link';
 import { openWorktreePathLink } from '../lib/reveal-worktree-path';
 import {
-  COPY_WORKTREE_PATH_KBD,
+  copyWorktreePathKbd,
   FALLBACK_WORKTREE_OPENERS,
+  installedWorktreeOpeners,
   matchWorktreeOpenShortcut,
   pickTriggerOpener,
   readLastWorktreeOpener,
@@ -785,8 +786,8 @@ export function ThreadPanel({
   const opencodeModelsEnabled = thread.agent === 'opencode';
   const { models: opencodeModels } = useAgentModels('opencode', opencodeModelsEnabled);
   const [openMenu, setOpenMenu] = useState(false);
-  const [worktreeOpeners, setWorktreeOpeners] = useState<WorktreeOpener[]>(
-    FALLBACK_WORKTREE_OPENERS,
+  const [worktreeOpeners, setWorktreeOpeners] = useState<WorktreeOpener[]>(() =>
+    installedWorktreeOpeners(FALLBACK_WORKTREE_OPENERS),
   );
   const [lastWorktreeOpener, setLastWorktreeOpener] = useState<WorktreeOpenerId>(() =>
     readLastWorktreeOpener(),
@@ -1221,7 +1222,7 @@ export function ThreadPanel({
   useEffect(() => {
     void window.sideboard
       .listWorktreeOpeners()
-      .then(setWorktreeOpeners)
+      .then((list) => setWorktreeOpeners(installedWorktreeOpeners(list)))
       .catch(() => {
         /* keep FALLBACK_WORKTREE_OPENERS */
       });
@@ -2382,7 +2383,7 @@ export function ThreadPanel({
                 >
                   <span className="open-app-icon" aria-hidden />
                   <span>Copy path</span>
-                  <kbd>{COPY_WORKTREE_PATH_KBD}</kbd>
+                  <kbd>{copyWorktreePathKbd(worktreeOpeners)}</kbd>
                 </button>
               </FloatingMenu>
             </>

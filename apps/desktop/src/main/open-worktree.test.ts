@@ -9,6 +9,7 @@ import {
   finderRevealTarget,
   formatOpenWorktreeError,
   isMissingAppError,
+  installedOpenerBundles,
   listOpenerBundles,
   openFolderWithApp,
   openWorktreeArgs,
@@ -78,6 +79,19 @@ describe('resolveBundlePath', () => {
     const listed = listOpenerBundles({ home: '/Users/ada', exists: () => false });
     expect(listed.find((o) => o.id === 'finder')?.installed).toBe(true);
     expect(listed.find((o) => o.id === 'code')?.installed).toBe(false);
+  });
+
+  it('omits missing apps from the cube list and renumbers 1–N', () => {
+    const listed = installedOpenerBundles(
+      listOpenerBundles({
+        home: '/Users/ada',
+        exists: (p) =>
+          p === '/Applications/Cursor.app' || p === '/System/Applications/Utilities/Terminal.app',
+      }),
+    );
+    expect(listed.map((o) => o.id)).toEqual(['finder', 'cursor', 'terminal']);
+    expect(listed.map((o) => o.kbd)).toEqual(['1', '2', '3']);
+    expect(listed.every((o) => o.installed)).toBe(true);
   });
 });
 
