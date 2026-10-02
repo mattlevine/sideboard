@@ -5,13 +5,20 @@ const STORAGE_KEY = 'sideboard.worktreeOpener';
 export const FALLBACK_WORKTREE_OPENERS: WorktreeOpener[] = [
   { id: 'finder', label: 'Finder', kbd: '1', installed: true },
   { id: 'cursor', label: 'Cursor', kbd: '2', installed: true },
-  { id: 'code', label: 'VS Code', kbd: '3', installed: true },
-  { id: 'xcode', label: 'Xcode', kbd: '4', installed: true },
+  { id: 'code', label: 'VS Code', kbd: '3', installed: false },
+  { id: 'xcode', label: 'Xcode', kbd: '4', installed: false },
   { id: 'terminal', label: 'Terminal', kbd: '5', installed: true },
-  { id: 'datagrip', label: 'DataGrip', kbd: '6', installed: true },
+  { id: 'datagrip', label: 'DataGrip', kbd: '6', installed: false },
 ];
 
-export const COPY_WORKTREE_PATH_KBD = String(FALLBACK_WORKTREE_OPENERS.length + 1);
+/** Drop missing apps and number 1–N in remaining order. */
+export function installedWorktreeOpeners(openers: WorktreeOpener[]): WorktreeOpener[] {
+  return openers.filter((o) => o.installed).map((o, i) => ({ ...o, kbd: String(i + 1) }));
+}
+
+export function copyWorktreePathKbd(openers: Array<{ id: string }>): string {
+  return String(openers.length + 1);
+}
 
 export type WorktreeOpenShortcut =
   | { type: 'open'; id: WorktreeOpenerId }
@@ -64,7 +71,8 @@ export function pickTriggerOpener(
   openers: WorktreeOpener[],
   lastId: WorktreeOpenerId,
 ): WorktreeOpener | undefined {
-  const last = openers.find((o) => o.id === lastId);
+  const visible = installedWorktreeOpeners(openers);
+  const last = visible.find((o) => o.id === lastId);
   if (last?.iconDataUrl) return last;
-  return openers.find((o) => o.iconDataUrl) ?? last ?? openers[0];
+  return visible.find((o) => o.iconDataUrl) ?? last ?? visible[0];
 }

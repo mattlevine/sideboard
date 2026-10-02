@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WorktreeOpener } from '@sideboard-ai/core';
 import {
-  COPY_WORKTREE_PATH_KBD,
+  copyWorktreePathKbd,
   FALLBACK_WORKTREE_OPENERS,
+  installedWorktreeOpeners,
   matchWorktreeOpenShortcut,
   pickTriggerOpener,
   readLastWorktreeOpener,
@@ -64,6 +65,15 @@ describe('pickTriggerOpener', () => {
   });
 });
 
+describe('installedWorktreeOpeners', () => {
+  it('drops missing apps and renumbers 1–N', () => {
+    const visible = installedWorktreeOpeners(FALLBACK_WORKTREE_OPENERS);
+    expect(visible.map((o) => o.id)).toEqual(['finder', 'cursor', 'terminal']);
+    expect(visible.map((o) => o.kbd)).toEqual(['1', '2', '3']);
+    expect(copyWorktreePathKbd(visible)).toBe('4');
+  });
+});
+
 describe('matchWorktreeOpenShortcut', () => {
   const key = (
     k: string,
@@ -75,22 +85,24 @@ describe('matchWorktreeOpenShortcut', () => {
     altKey: Boolean(mods.alt),
   });
 
-  it('maps 1–7 in list order while the menu is open', () => {
-    expect(matchWorktreeOpenShortcut(key('1'), FALLBACK_WORKTREE_OPENERS, true)).toEqual({
+  it('maps 1–N in list order while the menu is open', () => {
+    const visible = installedWorktreeOpeners(FALLBACK_WORKTREE_OPENERS);
+    expect(matchWorktreeOpenShortcut(key('1'), visible, true)).toEqual({
       type: 'open',
       id: 'finder',
     });
-    expect(matchWorktreeOpenShortcut(key('2'), FALLBACK_WORKTREE_OPENERS, true)).toEqual({
+    expect(matchWorktreeOpenShortcut(key('2'), visible, true)).toEqual({
       type: 'open',
       id: 'cursor',
     });
-    expect(matchWorktreeOpenShortcut(key('3'), FALLBACK_WORKTREE_OPENERS, true)).toEqual({
+    expect(matchWorktreeOpenShortcut(key('3'), visible, true)).toEqual({
       type: 'open',
-      id: 'code',
+      id: 'terminal',
     });
-    expect(matchWorktreeOpenShortcut(key(COPY_WORKTREE_PATH_KBD), FALLBACK_WORKTREE_OPENERS, true)).toEqual({
+    expect(matchWorktreeOpenShortcut(key(copyWorktreePathKbd(visible)), visible, true)).toEqual({
       type: 'copy',
     });
+    expect(matchWorktreeOpenShortcut(key('7'), visible, true)).toBeNull();
   });
 
   it('does not steal digits when the menu is closed', () => {

@@ -276,6 +276,11 @@ export function listOpenerBundles(opts: {
   });
 }
 
+/** Cube menu: only apps whose bundle exists, numbered 1–N in remaining order. */
+export function installedOpenerBundles(bundles: OpenerBundle[]): OpenerBundle[] {
+  return bundles.filter((b) => b.installed).map((b, i) => ({ ...b, kbd: String(i + 1) }));
+}
+
 export type IcnsToPngDeps = {
   execFileSync: (file: string, args: string[]) => void;
   readFileSync: (path: string) => Buffer;
@@ -341,7 +346,7 @@ export async function openWorktreeFolder(id: WorktreeOpenerId, folder: string): 
 }
 
 export function listWorktreeOpenerBundles(): OpenerBundle[] {
-  return listOpenerBundles({ home: homedir(), exists: existsSync });
+  return installedOpenerBundles(listOpenerBundles({ home: homedir(), exists: existsSync }));
 }
 
 export function formatSpawnError(err: unknown, file: string): string {
