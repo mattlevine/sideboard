@@ -58,8 +58,9 @@ import {
 } from './lib/right-sidebar-prefs';
 import {
   baselineUnreadWorktrees,
-  latestAgentResponseAt,
-  markWorktreeSeen,
+  countUnreadChats,
+  markChatSeen,
+  markChatUnread,
   unreadWorktreeKey,
 } from './lib/unread-worktrees';
 import { readWorktreeSort, writeWorktreeSort } from './lib/worktree-sort';
@@ -67,7 +68,6 @@ import { readWorktreeOwnership, writeWorktreeOwnership } from './lib/worktree-ow
 import {
   orderWorktreeChatsForKey,
   writeLastWorktreeChatId,
-  writeWorktreeChatOrder,
 } from './lib/worktree-tabs';
 import {
   shouldHoldCreateOverlay,
@@ -164,8 +164,7 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
-  /** Bump when the user drag-reorders tabs so worktreeChats re-reads localStorage. */
-  const [tabOrderEpoch, setTabOrderEpoch] = useState(0);
+  const [unreadEpoch, setUnreadEpoch] = useState(0);
   const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set());
   /** Threads currently tearing down via archive (sidebar shows progress on each). */
   const [archivingIds, setArchivingIds] = useState<Set<string>>(() => new Set());
@@ -895,7 +894,7 @@ export function App() {
       sameWorktreePath(t.worktreePath, selected.worktreePath),
     );
     return orderWorktreeChatsForKey(siblings, unreadWorktreeKey(selected));
-  }, [threads, selected, tabOrderEpoch]);
+  }, [threads, selected]);
 
   useEffect(() => {
     if (!selected) return;
@@ -938,28 +937,24 @@ export function App() {
     baselineUnreadWorktrees(threads);
   }, [threads]);
 
-  // While a worktree/orchestration is open, keep it marked seen so finishes
-  // while watching don't light up the sidebar when you navigate away.
+  // While a chat is open, keep it marked seen so finishes while watching
+  // don't light up the nested row when you navigate away.
   useEffect(() => {
     if (view !== 'thread' || !selectedId) return;
     const selectedThread =
       threads.find((t) => t.id === selectedId) ??
       archived.find((t) => t.id === selectedId);
     if (!selectedThread) return;
-    const key = unreadWorktreeKey(selectedThread);
-    if (!key) return;
-    const group = threads.filter((t) => unreadWorktreeKey(t) === key);
-    const activity = latestAgentResponseAt(group) ?? new Date().toISOString();
-    markWorktreeSeen(key, activity);
+    if (markChatSeen(selectedThread)) setUnreadEpoch((n) => n + 1);
   }, [view, selectedId, threads, archived]);
 
-  function reorderSelectedChats(ids: string[]) {
-    if (!selected) return;
-    const key = unreadWorktreeKey(selected);
-    if (!key) return;
-    writeWorktreeChatOrder(key, ids);
-    setTabOrderEpoch((n) => n + 1);
-  }
+  useEffect(() => {
+    const n = countUnreadChats(threads, {
+      activeChatId: selectedId,
+      viewIsThread: view === 'thread',
+    });
+    void window.sideboard.setDockBadge?.(n);
+  }, [threads, selectedId, view, unreadEpoch]);
 
   function onSelect(id: string, multi: boolean) {
     setView('thread');
@@ -967,9 +962,7 @@ export function App() {
     void refreshThread(id);
     const selectedThread = threads.find((t) => t.id === id);
     if (selectedThread && !multi) {
-      const key = unreadWorktreeKey(selectedThread);
-      const group = threads.filter((t) => unreadWorktreeKey(t) === key);
-      markWorktreeSeen(key, latestAgentResponseAt(group) ?? new Date().toISOString());
+      if (markChatSeen(selectedThread)) setUnreadEpoch((n) => n + 1);
     }
     if (!multi) {
       setMultiSelected(new Set([id]));
@@ -1249,6 +1242,11 @@ export function App() {
             githubLogin={githubLogin}
             projectReviewLabels={projectReviewLabels}
             onOpenPr={openPrForThread}
+            onMarkUnread={(thread) => {
+              if (markChatUnread(thread)) setUnreadEpoch((n) => n + 1);
+            }}
+            onRenameChat={(id, title) => void window.sideboard.renameThread(id, title).then(() => refresh())}
+            onCloseChat={(chat) => void archiveThreadsAndRefresh([chat.id], { title: chat.title?.trim() || 'Untitled', removesWorktree: false })}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -1335,7 +1333,6 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
-              onReorderChats: reorderSelectedChats,
             };
             const urlPreviewProps = {
               openUrls,
@@ -1376,7 +1373,6 @@ export function App() {
                 setMultiSelected(new Set([id]));
                 void refreshThread(id);
               }}
-              onReorderChats={reorderSelectedChats}
               onLeaveThread={showBoard}
               composerPrefill={prefill}
               onComposerPrefillConsumed={() => setPrefill(undefined)}

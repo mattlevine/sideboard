@@ -7,7 +7,13 @@ import {
   teamNameFromSlug,
   teamSlugFromName,
 } from './teams.js';
-import { ticketSlugForBranch, worktreeSlugForTicket } from './worktree-labels.js';
+import {
+  agentNicknameFromWorktreePath,
+  isWorktreeIdentityTitle,
+  ticketSlugForBranch,
+  worktreeAnchorLabel,
+  worktreeSlugForTicket,
+} from './worktree-labels.js';
 import { worktreeDisplayLabel, worktreeDisplayLabelForGroup } from './worktree.js';
 
 describe('teamNameFromSlug', () => {
@@ -68,6 +74,12 @@ describe('worktreeDisplayLabel', () => {
   it('shows soccer-team nickname while branch is still a placeholder', () => {
     expect(
       worktreeDisplayLabel({
+        branchName: 'west-ham',
+        worktreePath: '/Users/me/sideboard/workspaces/sideboard/west-ham',
+      }),
+    ).toBe('West Ham');
+    expect(
+      worktreeDisplayLabel({
         branchName: 'thread/west-ham',
         worktreePath: '/Users/me/sideboard/workspaces/sideboard/west-ham',
       }),
@@ -119,6 +131,95 @@ describe('worktreeDisplayLabelForGroup', () => {
         },
       ]),
     ).toBe('West Ham');
+  });
+});
+
+describe('worktreeAnchorLabel', () => {
+  it('prefers a PR title and keeps the branch as subtitle', () => {
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'fix/eu-promo-checkout',
+          worktreePath: '/wt/eu-promo',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          prTitle: 'eu-promo-checkout',
+        },
+        {
+          branchName: 'fix/eu-promo-checkout',
+          worktreePath: '/wt/eu-promo',
+          createdAt: '2026-01-02T00:00:00.000Z',
+        },
+      ]),
+    ).toEqual({
+      title: 'eu-promo-checkout',
+      subtitle: 'fix/eu-promo-checkout',
+    });
+  });
+
+  it('uses the soccer nickname for placeholder branches, not the raw ref', () => {
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'lens',
+          worktreePath: '/wt/lens',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          branchName: 'lens',
+          worktreePath: '/wt/lens',
+          createdAt: '2026-01-02T00:00:00.000Z',
+        },
+      ]),
+    ).toEqual({ title: 'Lens', subtitle: null });
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'thread/lens',
+          worktreePath: '/wt/lens',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]),
+    ).toEqual({ title: 'Lens', subtitle: null });
+  });
+
+  it('uses a real git branch as the title when there is no PR', () => {
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'feature/checkout-flow-v2',
+          worktreePath: '/wt/checkout-flow-v2',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]),
+    ).toEqual({ title: 'feature/checkout-flow-v2', subtitle: null });
+  });
+});
+
+describe('isWorktreeIdentityTitle', () => {
+  it('treats a truncated PR copy as the worktree', () => {
+    expect(
+      isWorktreeIdentityTitle('feat: replace full-page spinn', [
+        'feat: replace full-page spinner',
+      ]),
+    ).toBe(true);
+  });
+
+  it('does not treat a distinct purpose name as the worktree', () => {
+    expect(
+      isWorktreeIdentityTitle('Add dark mode to settings', [
+        'feat: replace full-page spinner',
+      ]),
+    ).toBe(false);
+  });
+});
+
+describe('agentNicknameFromWorktreePath', () => {
+  it('returns the soccer nickname for a club folder', () => {
+    expect(agentNicknameFromWorktreePath('/wt/lens')).toBe('Lens');
+  });
+
+  it('returns null when the folder is not a club', () => {
+    expect(agentNicknameFromWorktreePath('/wt/feat-replace-spinner')).toBeNull();
   });
 });
 

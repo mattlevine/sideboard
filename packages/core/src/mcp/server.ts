@@ -1,5 +1,5 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createClippedMcpServer } from './wrap-mcp-tools.js';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
@@ -276,10 +276,7 @@ export async function startMcpServer(): Promise<void> {
     );
   }
 
-  const server = new McpServer({
-    name: 'sideboard',
-    version: '0.1.0',
-  });
+  const server = createClippedMcpServer();
   // Worktree profile: present_* / ask_user / wait_for_job / stop_job /
   // list_run_scripts / run_dev_script / stop_dev_script / get_run_log /
   // notify_orchestrator / viewer context + Account issue tools
@@ -1301,7 +1298,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'request_review',
-    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). Opens a new Review chat tab, attaches .claude/skills/review/SKILL.md when present (else copies .sideboard/review.md into .context/review.md, or seeds that file from the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information in that chat. The review stays there so the user can read it and type next steps — do not comment on or update the PR or ticket, and do not ask_user after the review, until they ask. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review tab id.',
+    'Start a merge-readiness Review on a worktree agent thread (same as the desktop Review button). If that worktree has a single unused idle agent (no messages), runs the review there; otherwise opens a new Review chat tab. Attaches .claude/skills/review/SKILL.md when present (else copies .sideboard/review.md into .context/review.md, or seeds that file from the stock template), and sends "Review changes in this workspace." Expect Approve / Approve with nits / Request changes / Needs more information in that chat. The review stays there so the user can read it and type next steps — do not comment on or update the PR or ticket, and do not ask_user after the review, until they ask. Pass a worktree thread ref — not the orchestrator. Then wait_for_turn (loop while stillRunning) / get_turn_result on the returned review thread id.',
     { ref: z.string().describe('Worktree thread id/ref to review') },
     async ({ ref }) => {
       try {

@@ -34,7 +34,7 @@
   --line-height-chat: 1.6;
   --letter-tight: -0.011em;
   /* Thread titlebar + right-sidebar GitHub/Files rows share these heights
-     so `project > worktree` lines up with the PR bar and chat tabs with Files. */
+     so `project > worktree > agent` lines up with the PR bar and file tabs with Files. */
   --thread-chrome-row: 44px;
   --thread-tabs-row: 42px;
 }
@@ -2753,21 +2753,55 @@ mark.chat-search-hit.chat-search-current {
   border-radius: 4px;
 }
 
+.workspace-chrome-crumb .workspace-chrome-crumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .workspace-chrome-crumb .open-crumb {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text);
+  color: var(--muted);
 }
 
 .workspace-chrome-crumb .open-crumb-task {
   flex: 0 1 auto;
-  max-width: 420px;
+  max-width: 280px;
+}
+
+.workspace-chrome-crumb .open-crumb-agent {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 280px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
 }
 
 .workspace-chrome-crumb .open-sep {
   flex-shrink: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.workspace-chrome-crumb .chat-tab-add {
+  -webkit-app-region: no-drag;
+  margin-left: 2px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .workspace-chrome-actions {
@@ -4412,11 +4446,167 @@ mark.chat-search-hit.chat-search-current {
 }
 
 .worktree-block {
+  display: flex;
+  flex-direction: column;
   position: relative;
   min-width: 0;
   max-width: 100%;
   padding: 0 6px;
   box-sizing: border-box;
+}
+
+.worktree-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.worktree-card.is-expanded {
+  background: color-mix(in srgb, var(--text) 5%, var(--bg-hover));
+  border-radius: 8px;
+  padding: 4px 2px 6px;
+}
+
+.worktree-card.is-expanded .thread-item.worktree-parent,
+.worktree-card.is-expanded .thread-item.worktree-parent:hover,
+.worktree-card.is-expanded .thread-item.worktree-parent.active {
+  background: transparent;
+  border-color: transparent;
+}
+
+.worktree-card.is-expanded .thread-item.worktree-parent .thread-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.thread-item.worktree-parent .thread-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.worktree-agents-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.worktree-agents-row .thread-meta {
+  flex: 1 1 0;
+}
+
+.worktree-expand {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.worktree-expand:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.thread-item.worktree-parent.is-open {
+  background: transparent;
+}
+
+.thread-item.worktree-parent.is-open:hover {
+  background: transparent;
+}
+
+.worktree-chats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Indent so nested status lines up under the parent title. */
+  margin: 2px 2px 6px 22px;
+  padding: 0;
+}
+
+.thread-item.nested {
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-color: transparent;
+}
+
+.thread-item.nested.active {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.thread-item.nested .thread-status-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.thread-item.nested .thread-status-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.thread-item.nested .thread-title-text {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+
+.thread-item.nested.active .thread-title-text {
+  color: var(--text);
+}
+
+.nested-chat-agent {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--font-size-tiny);
+  letter-spacing: 0.02em;
+}
+
+.nested-chat-close {
+  flex: 0 0 auto;
+  opacity: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.thread-item.nested:hover .nested-chat-close,
+.thread-item.nested.active .nested-chat-close,
+.worktree-row-actions .nested-chat-close {
+  opacity: 1;
+}
+
+.nested-chat-close:hover {
+  color: var(--text);
+}
+
+.nested-chat-input {
+  flex: 1 1 0;
+  min-width: 0;
+  border: none;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
 }
 
 .sidebar-tool-menu {
@@ -8940,6 +9130,55 @@ button.linkish:hover {
 .terminal-panel.is-parked,
 .terminal-panel.is-parked * {
   visibility: hidden !important;
+}
+
+.terminal-panel.split {
+  flex-direction: column;
+}
+
+.terminal-split-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-split-pane + .terminal-split-pane {
+  border-top: 1px solid var(--border);
+}
+
+.account-switcher {
+  max-width: 7.5rem;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  -webkit-app-region: no-drag;
+}
+
+.managed-account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 0.5rem;
+}
+
+.managed-account-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.managed-account-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .embedded-terminal {

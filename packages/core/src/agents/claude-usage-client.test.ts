@@ -219,4 +219,35 @@ describe('getClaudePlanUsage', () => {
     expect(second?.windows[0]?.usedPercent).toBe(100);
     expect(called).toBe(2);
   });
+
+  it('does not reuse a cache entry from a different config dir', async () => {
+    let called = 0;
+    const fetch = async () => {
+      called += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          five_hour: { utilization: called === 1 ? 10 : 90 },
+        }),
+      };
+    };
+    const first = await getClaudePlanUsage({
+      now: 1_000,
+      configDir: '/tmp/acct-a',
+      readAccessToken: async () => 'sk-ant-oat01-a',
+      userAgent: 'claude-code/2.1.80',
+      fetch,
+    });
+    const second = await getClaudePlanUsage({
+      now: 1_000,
+      configDir: '/tmp/acct-b',
+      readAccessToken: async () => 'sk-ant-oat01-b',
+      userAgent: 'claude-code/2.1.80',
+      fetch,
+    });
+    expect(first?.windows[0]?.usedPercent).toBe(10);
+    expect(second?.windows[0]?.usedPercent).toBe(90);
+    expect(called).toBe(2);
+  });
 });

@@ -5,14 +5,21 @@
  *
  * - `keep_going` (default): do not interrupt
  * - `confirm`: ask before composer send
+ * - `switch_account`: continue on the next Claude/Codex managed account
  * - `switch_agent`: continue on the configured fallback agent
  * - `wait_reset`: stop sending until the window resets, then retry
  */
-export type UsageOnLimit = 'keep_going' | 'confirm' | 'switch_agent' | 'wait_reset';
+export type UsageOnLimit =
+  | 'keep_going'
+  | 'confirm'
+  | 'switch_account'
+  | 'switch_agent'
+  | 'wait_reset';
 
 export const USAGE_ON_LIMIT_VALUES = [
   'keep_going',
   'confirm',
+  'switch_account',
   'switch_agent',
   'wait_reset',
 ] as const;
@@ -21,6 +28,7 @@ export function isUsageOnLimit(value: unknown): value is UsageOnLimit {
   return (
     value === 'keep_going' ||
     value === 'confirm' ||
+    value === 'switch_account' ||
     value === 'switch_agent' ||
     value === 'wait_reset'
   );

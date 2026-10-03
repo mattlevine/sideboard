@@ -94,6 +94,12 @@ export function normalizeThread(raw: Thread): Thread {
     runScriptRequest: normalizeRunScriptRequest(raw.runScriptRequest),
     quotaResumeAt: raw.quotaResumeAt ?? null,
     quotaContinuedFromId: raw.quotaContinuedFromId ?? null,
+    accountId:
+      raw.accountId === null
+        ? null
+        : typeof raw.accountId === 'string' && raw.accountId.trim()
+          ? raw.accountId.trim()
+          : undefined,
     archivedAt:
       typeof raw.archivedAt === 'string' && raw.archivedAt.trim()
         ? raw.archivedAt.trim()
@@ -178,6 +184,7 @@ export function createEmptyThread(
         | 'pendingTurnAttachments'
         | 'queueAttachments'
         | 'archivedAt'
+        | 'accountId'
       >
     >,
 ): Thread {
@@ -232,6 +239,7 @@ export function createEmptyThread(
     agent: partial.agent,
     lastError: null,
     agentPid: null,
+    ...(partial.accountId !== undefined ? { accountId: partial.accountId } : {}),
   };
 }
 

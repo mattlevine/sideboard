@@ -123,6 +123,11 @@ export interface Thread {
    */
   isolateCodexPlugins?: boolean;
   sessionId: string | null;
+  /**
+   * Pinned Claude/Codex managed account for this chat. `null` = system
+   * default (`~/.claude` / `~/.codex`). Omitted until the first spawn pins it.
+   */
+  accountId?: string | null;
   autonomy: Autonomy;
   sourceIsFork: boolean;
   status: ThreadStatus;
@@ -259,6 +264,8 @@ export interface CreateChatTabInput {
   fast?: boolean;
   title?: string;
   attachments?: ThreadAttachment[];
+  /** Pin a managed Claude/Codex account (`null` = system default). */
+  accountId?: string | null;
 }
 
 export interface ForkChatTabInput {
@@ -637,7 +644,7 @@ export type OrchestratorEvent =
   | {
       type: 'quota_failover';
       threadId: string;
-      action: 'switch_agent' | 'wait_reset';
+      action: 'switch_account' | 'switch_agent' | 'wait_reset';
       message: string;
       /** New orchestration chat when action is switch_agent. */
       toThreadId?: string;

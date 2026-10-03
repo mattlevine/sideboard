@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { isUsageOnLimit, resolveUsageOnLimit } from './usage-on-limit.js';
 
 describe('isUsageOnLimit', () => {
-  it('accepts the four policy values', () => {
+  it('accepts the policy values', () => {
     expect(isUsageOnLimit('keep_going')).toBe(true);
     expect(isUsageOnLimit('confirm')).toBe(true);
+    expect(isUsageOnLimit('switch_account')).toBe(true);
     expect(isUsageOnLimit('switch_agent')).toBe(true);
     expect(isUsageOnLimit('wait_reset')).toBe(true);
     expect(isUsageOnLimit('switch')).toBe(false);

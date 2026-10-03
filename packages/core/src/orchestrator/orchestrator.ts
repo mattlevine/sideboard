@@ -126,6 +126,7 @@ import {
   planJobContinue,
   turnWatchedDetachedJob,
 } from '../mcp/wait-for-job.js';
+import { agentPurposeStamp } from '../threads/agent-purpose-title.js';
 import { createThread } from '../threads/create.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
@@ -160,6 +161,7 @@ import {
   createQuotaFailoverChat,
   isolateQuotaFailover,
   planOrchestrationQuotaFailover,
+  QUOTA_CONTINUE_ACCOUNT_PROMPT,
   QUOTA_CONTINUE_PROMPT,
   QUOTA_RESUME_PROMPT,
 } from './quota-failover.js';
@@ -851,6 +853,51 @@ export class Orchestrator {
       return true;
     }
 
+    if (plan.action === 'switch_account' && plan.fallbackAccountLabel) {
+      this.haltDrain.add(threadId);
+      let next: Thread;
+      try {
+        next = createQuotaFailoverChat(thread, thread.agent, plan.limitText, {
+          accountId: plan.fallbackAccountId ?? null,
+          accountLabel: plan.fallbackAccountLabel,
+        });
+      } catch {
+        return false;
+      }
+      this.clearQuotaResumeTimer(threadId);
+      try {
+        updateThread(threadId, { quotaResumeAt: null });
+      } catch {
+        // ignore
+      }
+      try {
+        appendMessage(threadId, {
+          role: 'agent',
+          text: `Session limit on ${thread.agent}. Sideboard continued on account “${plan.fallbackAccountLabel}” in [${next.title}](sideboard://thread/${next.id}).`,
+          ts: new Date().toISOString(),
+        });
+        this.emit({
+          type: 'quota_failover',
+          threadId,
+          action: 'switch_account',
+          toThreadId: next.id,
+          message: plan.reason,
+        });
+        this.emit({
+          type: 'status_changed',
+          threadId: next.id,
+          status: next.status,
+        });
+      } catch {
+        // Sibling already exists — do not rethrow into runTurn.
+      }
+      void this.send(
+        next.id,
+        QUOTA_CONTINUE_ACCOUNT_PROMPT(thread.agent, plan.fallbackAccountLabel),
+      );
+      return true;
+    }
+
     if (plan.action === 'switch_agent' && plan.fallbackAgent) {
       this.haltDrain.add(threadId);
       let next: Thread;
@@ -1386,6 +1433,15 @@ export class Orchestrator {
       ...(autoContinue ? { origin: 'continue' as const } : {}),
       ts: new Date().toISOString(),
     });
+    if (!autoContinue) {
+      const live = this.requireThread(threadId);
+      const stamp = agentPurposeStamp({
+        thread: live,
+        prompt: promptText,
+        autoContinue: false,
+      });
+      if (stamp) updateThread(threadId, stamp);
+    }
     traceTurn('runTurn.afterUserMessage', {
       threadId,
       agent: thread.agent,
@@ -3247,11 +3303,6 @@ export class Orchestrator {
       if (Object.keys(patch).length === 0) continue;
       updateThread(t.id, patch);
     }
-    const titled = this.requireThread(thread.id);
-    if (!titled.userSetTitle && meta.title && titled.title !== meta.title) {
-      updateThread(thread.id, { title: meta.title });
-    }
-
     const { autoArchiveOnMergeEnabled } = await import('../store/app-settings.js');
     const latest = this.requireThread(thread.id);
     if (
@@ -3389,14 +3440,7 @@ export class Orchestrator {
       const patch: Partial<Thread> = {};
       if (details.url && details.url !== thread.prUrl) patch.prUrl = details.url;
       if (details.title && details.title !== thread.prTitle) patch.prTitle = details.title;
-      if (Object.keys(patch).length > 0) {
-        updateThread(thread.id, patch);
-        // Refresh cached sidebar title from PR when not user-overridden.
-        const latest = this.requireThread(thread.id);
-        if (!latest.userSetTitle && details.title && latest.title !== details.title) {
-          updateThread(thread.id, { title: details.title });
-        }
-      }
+      if (Object.keys(patch).length > 0) updateThread(thread.id, patch);
     }
     return details;
   }
@@ -3406,8 +3450,9 @@ export class Orchestrator {
   }
 
   /**
-   * Open a Review chat tab on a worktree thread (same as the desktop Review button)
-   * and send the merge-readiness prefill.
+   * Run a merge-readiness review on a worktree thread (same as the desktop
+   * Review button). Reuses a single unused idle agent when that is the only
+   * chat; otherwise opens a Review tab so existing work is not interrupted.
    */
   async requestReview(threadRef: string): Promise<Thread> {
     const { tab } = await requestReview(threadRef, (ref, prompt) => this.send(ref, prompt));

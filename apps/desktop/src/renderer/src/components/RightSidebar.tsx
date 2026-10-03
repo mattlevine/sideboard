@@ -42,7 +42,9 @@ import { FloatingMenu } from './FloatingMenu';
 import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
 import {
   readRightSidebarLower,
+  readTerminalSplit,
   writeRightSidebarLower,
+  writeTerminalSplit,
 } from '../lib/right-sidebar-prefs';
 import { eventOnWorktree, sameWorktreePath } from '../lib/worktree-events';
 import { RunOutputPanel, type RunClearRequest } from './RunOutputPanel';
@@ -246,6 +248,9 @@ export function RightSidebar({
       (!thread.cowboy && thread.messages.length === 0 ? 'setup' : 'run'),
   );
   const [terminalOpened, setTerminalOpened] = useState(() => lower === 'terminal');
+  const [terminalSplit, setTerminalSplit] = useState(() =>
+    readTerminalSplit(thread.worktreePath),
+  );
   const [runOpened, setRunOpened] = useState(
     () =>
       lower === 'run' ||
@@ -323,6 +328,14 @@ export function RightSidebar({
     // worktreeKey only: chat tabs share parked Setup / Run / shell. Resetting
     // on thread.id unmounts those panes and drops in-memory Run logs.
   }, [worktreeKey]);
+
+  useEffect(() => {
+    setTerminalSplit(readTerminalSplit(worktreeKey));
+  }, [worktreeKey]);
+
+  useEffect(() => {
+    writeTerminalSplit(worktreeKey, terminalSplit);
+  }, [worktreeKey, terminalSplit]);
 
   useEffect(() => {
     if (!revealDirectory) return;
@@ -1015,7 +1028,7 @@ export function RightSidebar({
   }
 
   /**
-   * Open a fresh Review chat, attach resolved guidelines, send the review prefill.
+   * Run a merge-readiness review (reuse the unused singleton agent, else a new tab).
    * Same path as MCP `request_review`.
    */
   async function startAgentReview() {
@@ -1706,6 +1719,17 @@ export function RightSidebar({
             </button>
           </div>
           <div className="lower-tab-actions" ref={runMenuRef}>
+            {lower === 'terminal' ? (
+              <button
+                type="button"
+                className={`dev-open-port${terminalSplit ? ' is-live' : ''}`}
+                title={terminalSplit ? 'Merge terminal panes' : 'Split terminal'}
+                aria-pressed={terminalSplit}
+                onClick={() => setTerminalSplit((v) => !v)}
+              >
+                Split
+              </button>
+            ) : null}
             {/* Conductor: Open is pinned with Stop/Dev, not in the scrolling tabs. */}
             {lower === 'run' && primaryPort != null ? (
               <button
@@ -1941,16 +1965,31 @@ export function RightSidebar({
 
           {terminalOpened && (
             <div
-              className={`terminal-panel${lower === 'terminal' ? '' : ' is-parked'}`}
+              className={`terminal-panel${lower === 'terminal' ? '' : ' is-parked'}${terminalSplit ? ' split' : ''}`}
               aria-hidden={lower !== 'terminal'}
             >
-              <EmbeddedTerminal
-                key={worktreeKey}
-                threadId={thread.id}
-                worktreePath={thread.worktreePath}
-                mode="shell"
-                active={lower === 'terminal'}
-              />
+              <div className="terminal-split-pane">
+                <EmbeddedTerminal
+                  key={`${worktreeKey}:0`}
+                  threadId={thread.id}
+                  worktreePath={thread.worktreePath}
+                  mode="shell"
+                  pane={0}
+                  active={lower === 'terminal'}
+                />
+              </div>
+              {terminalSplit ? (
+                <div className="terminal-split-pane">
+                  <EmbeddedTerminal
+                    key={`${worktreeKey}:1`}
+                    threadId={thread.id}
+                    worktreePath={thread.worktreePath}
+                    mode="shell"
+                    pane={1}
+                    active={lower === 'terminal'}
+                  />
+                </div>
+              ) : null}
             </div>
           )}
         </div>

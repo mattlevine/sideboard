@@ -8,7 +8,7 @@
  * Uses {@link JsonlLocalAgentStore} instead of the SDK's default SQLite store:
  * Electron's embedded Node (used via ELECTRON_RUN_AS_NODE) lacks `node:sqlite`.
  */
-import type { LocalAgentOptions } from '@cursor/sdk';
+import type { LocalAgentOptions, SDKCustomTool } from '@cursor/sdk';
 import { mkdirSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
@@ -33,6 +33,8 @@ import {
   withCursorLocalHangGuards,
 } from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
+import { slicedReadCustomToolConfig } from './sliced-file-read.js';
+import { clipAgentEventForEmit } from './tool-result-clip.js';
 import {
   cursorCostOnlyUsageEvent,
   cursorDeltaToEvents,
@@ -54,7 +56,7 @@ type AgentApi = CursorSdk['Agent'];
 type StoreCtor = CursorSdk['JsonlLocalAgentStore'];
 
 function emit(event: unknown): void {
-  process.stdout.write(`${JSON.stringify(event)}\n`);
+  process.stdout.write(`${JSON.stringify(clipAgentEventForEmit(event, process.cwd()))}\n`);
 }
 
 /** Durable local agent metadata (Conductor-style JSONL, not SQLite). */
@@ -151,9 +153,15 @@ async function main(): Promise<number> {
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
   const store = localAgentStore(JsonlLocalAgentStore, req.threadId);
   const isolateSources: NonNullable<LocalAgentOptions['settingSources']> = [];
+  // Built-in Read has no offset/limit in the SDK schema — whole files crash
+  // the protobuf turn. Custom `read` slices; deny-wins does not apply to MCP.
+  const customTools = {
+    read: slicedReadCustomToolConfig(req.cwd) as SDKCustomTool,
+  };
   const local = withCursorLocalHangGuards({
     cwd: req.cwd,
     store,
+    customTools,
     ...(req.isolateAmbientMcp ? { settingSources: isolateSources } : {}),
   });
   // Inline MCP is not persisted on resume — pass every turn (create + resume + send).
@@ -167,6 +175,7 @@ async function main(): Promise<number> {
     mode,
     local,
     name: 'Sideboard' as const,
+    disallowedTools: ['read'] as const,
     ...(mcpServers ? { mcpServers } : {}),
   };
 
@@ -188,6 +197,7 @@ async function main(): Promise<number> {
               model,
               mode,
               local,
+              disallowedTools: ['read'],
               ...(mcpServers ? { mcpServers } : {}),
             }),
           )

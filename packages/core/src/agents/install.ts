@@ -363,3 +363,26 @@ export async function loginAgent(agent: AgentKind): Promise<AgentSetupActionResu
     message: `Opened Terminal to run: ${prepared}`,
   };
 }
+
+/** Open login for a managed Claude/Codex account with an isolated config dir. */
+export async function loginManagedAccount(accountId: string): Promise<AgentSetupActionResult> {
+  const { loadAppSettings } = await import('../store/app-settings.js');
+  const { loginEnvPrefix } = await import('../store/managed-accounts.js');
+  const account = loadAppSettings().accounts.accounts.find((a) => a.id === accountId);
+  if (!account) {
+    return { ok: false, message: `Account not found: ${accountId}` };
+  }
+  const loginCommand = resolveLoginCommand(account.kind);
+  if (!loginCommand) {
+    return { ok: false, message: `No login command for ${account.kind}` };
+  }
+  const prepared = await prepareTerminalCommand(loginCommand);
+  const prefixed = `${loginEnvPrefix(account)} && ${prepared}`;
+  await openInSystemTerminal(prefixed);
+  return {
+    ok: true,
+    openedTerminal: true,
+    command: prefixed,
+    message: `Opened Terminal to run: ${prefixed}`,
+  };
+}

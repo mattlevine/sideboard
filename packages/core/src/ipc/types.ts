@@ -151,6 +151,13 @@ export interface IpcApi {
    * Null when the account is API-key-only, logged out, or the usage API fails.
    */
   getClaudeUsage(refresh?: boolean): Promise<ClaudePlanUsage | null>;
+  addManagedAccount(kind: 'claude' | 'codex', label: string): Promise<PublicAppSettings>;
+  selectManagedAccount(kind: 'claude' | 'codex', accountId: string | null): Promise<PublicAppSettings>;
+  removeManagedAccount(id: string): Promise<PublicAppSettings>;
+  renameManagedAccount(id: string, label: string): Promise<PublicAppSettings>;
+  loginManagedAccount(id: string): Promise<AgentSetupActionResult>;
+  /** macOS Dock unread count (empty string when 0). */
+  setDockBadge(count: number): Promise<void>;
   /** Brightsy login + connected teams (shared by CLI, Brightsy agent, and Claude MCP). */
   getBrightsySession(): Promise<BrightsySession>;
   /**
@@ -576,6 +583,7 @@ export interface IpcApi {
       threadRef: string,
       cols?: number,
       rows?: number,
+      pane?: number,
     ): Promise<{ id: string; scrollback?: string }>;
     /** Start a PTY running the native agent attach command. */
     attach(

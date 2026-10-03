@@ -390,7 +390,7 @@ describe('createThreadWorktree', () => {
       slug: 'ajax',
     });
 
-    expect(created.branchName).toBe('thread/ajax');
+    expect(created.branchName).toBe('ajax');
     expect(created.worktreePath).toBe(join(wtRoot.current, 'ajax'));
 
     const verbs = gitMock.mock.calls.map((c) => c[0]?.[0]);
@@ -409,7 +409,7 @@ describe('createThreadWorktree', () => {
       'worktree',
       'add',
       '-b',
-      'thread/ajax',
+      'ajax',
       join(wtRoot.current, 'ajax'),
       'origin/main',
     ]);

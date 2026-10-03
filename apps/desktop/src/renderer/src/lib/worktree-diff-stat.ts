@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { WorktreeDirtyStat } from '@sideboard-ai/core';
+import { GLOBAL_WORKSPACE_ID } from './global-workspace';
 
 export type { WorktreeDirtyStat };
 
@@ -11,6 +12,10 @@ const BUSY_STATUS = new Set(['queued', 'running']);
 const CREATE_DEFER_MS = 1_500;
 
 const CLEAN: WorktreeDirtyStat = { additions: 0, deletions: 0, dirty: false };
+
+function skipDirtyStat(worktreePath: string): boolean {
+  return !worktreePath || worktreePath === GLOBAL_WORKSPACE_ID;
+}
 
 /**
  * Uncommitted dirty stat for a sidebar/board worktree row.
@@ -25,8 +30,9 @@ export function useWorktreeDirtyStat(
   worktreePath: string,
   status: string,
 ): { stat: WorktreeDirtyStat | null; loaded: boolean } {
-  const [stat, setStat] = useState<WorktreeDirtyStat | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const skip = skipDirtyStat(worktreePath);
+  const [stat, setStat] = useState<WorktreeDirtyStat | null>(skip ? CLEAN : null);
+  const [loaded, setLoaded] = useState(skip);
   const fetchGen = useRef(0);
   const prevStatus = useRef<string | null>(null);
   const statusRef = useRef(status);
@@ -34,6 +40,11 @@ export function useWorktreeDirtyStat(
 
   useEffect(() => {
     prevStatus.current = null;
+    if (skipDirtyStat(worktreePath)) {
+      setStat(CLEAN);
+      setLoaded(true);
+      return;
+    }
     let cancelled = false;
     const load = async (opts?: { skipWhenBusy?: boolean }) => {
       if (opts?.skipWhenBusy && BUSY_STATUS.has(statusRef.current)) return;
@@ -66,6 +77,7 @@ export function useWorktreeDirtyStat(
   }, [threadId, worktreePath]);
 
   useEffect(() => {
+    if (skipDirtyStat(worktreePath)) return;
     const prev = prevStatus.current;
     prevStatus.current = status;
     // First paint already loaded via the id/path effect — only refetch after

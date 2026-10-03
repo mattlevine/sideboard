@@ -13,6 +13,13 @@ const api: IpcApi = {
   getAgentSetupInfo: (agent) => ipcRenderer.invoke('getAgentSetupInfo', agent),
   installAgent: (agent) => ipcRenderer.invoke('installAgent', agent),
   loginAgent: (agent) => ipcRenderer.invoke('loginAgent', agent),
+  addManagedAccount: (kind, label) => ipcRenderer.invoke('addManagedAccount', kind, label),
+  selectManagedAccount: (kind, accountId) =>
+    ipcRenderer.invoke('selectManagedAccount', kind, accountId),
+  removeManagedAccount: (id) => ipcRenderer.invoke('removeManagedAccount', id),
+  renameManagedAccount: (id, label) => ipcRenderer.invoke('renameManagedAccount', id, label),
+  loginManagedAccount: (id) => ipcRenderer.invoke('loginManagedAccount', id),
+  setDockBadge: (count) => ipcRenderer.invoke('setDockBadge', count),
   getAppSettings: () => ipcRenderer.invoke('getAppSettings'),
   saveAppSettings: (settings) => ipcRenderer.invoke('saveAppSettings', settings),
   updateAppEnvironment: (patch) => ipcRenderer.invoke('updateAppEnvironment', patch),
@@ -206,8 +213,8 @@ const api: IpcApi = {
   bestOfN: (opts) => ipcRenderer.invoke('bestOfN', opts),
   attachThread: (threadRef) => ipcRenderer.invoke('attachThread', threadRef),
   terminal: {
-    start: (threadRef, cols, rows) =>
-      ipcRenderer.invoke('terminal:start', threadRef, cols, rows),
+    start: (threadRef, cols, rows, pane) =>
+      ipcRenderer.invoke('terminal:start', threadRef, cols, rows, pane),
     attach: (threadRef, cols, rows) =>
       ipcRenderer.invoke('terminal:attach', threadRef, cols, rows),
     snapshot: (id) => ipcRenderer.invoke('terminal:snapshot', id),

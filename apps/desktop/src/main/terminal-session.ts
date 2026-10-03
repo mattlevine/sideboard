@@ -60,13 +60,16 @@ export function terminalSessionKind(opts?: {
   return opts?.command ? 'attach' : 'shell';
 }
 
-/** Shell is one PTY per worktree; attach stays per chat (agent session). */
+/** Shell is one PTY per worktree pane; attach stays per chat (agent session). */
 export function terminalReuseKey(
   kind: TerminalSessionKind,
   worktreeKey: string,
   threadRef: string,
+  pane = 0,
 ): string {
-  return kind === 'shell' ? `shell:${worktreeKey}` : `attach:${threadRef}`;
+  if (kind === 'attach') return `attach:${threadRef}`;
+  const n = Number.isFinite(pane) && pane > 0 ? Math.floor(pane) : 0;
+  return n > 0 ? `shell:${worktreeKey}:${n}` : `shell:${worktreeKey}`;
 }
 
 export function findReusableTerminalSession<

@@ -2,10 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Thread } from '@sideboard-ai/core';
 import {
   baselineUnreadWorktrees,
+  countUnreadChats,
   getWorktreeLastSeen,
+  isChatUnread,
   isWorktreeUnread,
   latestAgentResponseAt,
+  markChatSeen,
+  markChatUnread,
   markWorktreeSeen,
+  unreadChatKey,
   unreadWorktreeKey,
 } from './unread-worktrees';
 
@@ -124,5 +129,39 @@ describe('unread-worktrees', () => {
     expect(
       isWorktreeUnread('/wt', '2026-08-01T10:05:00.000Z', { active: false }),
     ).toBe(false);
+  });
+
+  it('tracks unread per chat and can mark unread again', () => {
+    const t = thread({
+      id: 'a',
+      worktreePath: '/wt',
+      messages: [{ role: 'agent', text: 'yo', ts: '2026-08-01T10:05:00.000Z' }],
+    });
+    expect(baselineUnreadWorktrees([t])).toBe(true);
+    expect(isChatUnread(t, { active: false })).toBe(false);
+    expect(markChatUnread(t)).toBe(true);
+    expect(isChatUnread(t, { active: false })).toBe(true);
+    expect(isChatUnread(t, { active: true })).toBe(false);
+    expect(markChatSeen(t)).toBe(true);
+    expect(isChatUnread(t, { active: false })).toBe(false);
+    expect(getWorktreeLastSeen(unreadChatKey('a'))).toBe('2026-08-01T10:05:00.000Z');
+  });
+
+  it('counts unread chats excluding the open one', () => {
+    const a = thread({
+      id: 'a',
+      worktreePath: '/wt',
+      messages: [{ role: 'agent', text: 'yo', ts: '2026-08-01T10:05:00.000Z' }],
+    });
+    const b = thread({
+      id: 'b',
+      worktreePath: '/wt',
+      messages: [{ role: 'agent', text: 'hi', ts: '2026-08-01T10:06:00.000Z' }],
+    });
+    baselineUnreadWorktrees([a, b]);
+    markChatUnread(a);
+    markChatUnread(b);
+    expect(countUnreadChats([a, b], { activeChatId: 'a', viewIsThread: true })).toBe(1);
+    expect(countUnreadChats([a, b], { activeChatId: 'a', viewIsThread: false })).toBe(2);
   });
 });

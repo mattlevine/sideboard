@@ -1,17 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
-import { isOrchestratorThread, threadDisplayTitle } from '../lib/global-workspace';
-import { chatTabIsCaffeinated, useCaffeinateHold } from '../lib/caffeinate-tab';
+import { isOrchestratorThread } from '../lib/global-workspace';
 import { isImagePath } from '../lib/language';
 import { previewUrlTabLabel } from '../lib/preview-url';
-import { reorderChatIds } from '../lib/worktree-tabs';
+import {
+  workspaceChromeCrumbs,
+  type WorkspaceChromeCrumb,
+} from '../lib/workspace-chrome';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
-import { CaffeinateBadge } from './CaffeinateBadge';
 import { GitChangeBadge, type GitFileChange } from './GitChangeBadge';
 import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defaults';
-
-const CHAT_TAB_DRAG = 'application/x-sideboard-chat-tab';
 
 export type NewChatTabOptions = {
   agent?: AgentKind;
@@ -24,7 +23,7 @@ export type NewChatTabOptions = {
 interface Props {
   chats: Thread[];
   activeChatId: string;
-  /** Open file paths shown as tabs beside chats. */
+  /** Open file paths shown as tabs beside the breadcrumb. */
   openFiles?: string[];
   /** When set, a file tab is active (chat content hidden). */
   activeFilePath?: string | null;
@@ -42,6 +41,8 @@ interface Props {
   projectName?: string | null;
   /** PR title, or branch name when there is no PR. */
   taskName?: string | null;
+  /** Current agent purpose name (`New agent` until the first prompt names it). */
+  agentName?: string | null;
   /** Branch selector (`…`) next to the crumb. */
   branchMenu?: ReactNode;
   /** Open-worktree cube (Finder / Cursor / …) on the right. */
@@ -68,16 +69,18 @@ interface Props {
   onSelectPrPage?: () => void;
   onClosePrPage?: () => void;
   onNewTab: (opts?: NewChatTabOptions) => void;
-  onRename: (id: string, title: string) => void;
-  onCloseTab?: (id: string) => void;
-  /** Persist a new agent/orchestration tab order (leave/return uses the same list). */
-  onReorderChats?: (ids: string[]) => void;
   onFindChat?: () => void;
 }
 
 function basename(path: string): string {
   const parts = path.replace(/\/$/, '').split('/');
   return parts[parts.length - 1] || path;
+}
+
+function crumbClass(kind: WorkspaceChromeCrumb['kind']): string {
+  if (kind === 'task') return 'open-crumb open-crumb-task';
+  if (kind === 'agent') return 'open-crumb open-crumb-agent';
+  return 'open-crumb';
 }
 
 export function ChatTabs({
@@ -93,6 +96,7 @@ export function ChatTabs({
   fileChanges = {},
   projectName = null,
   taskName = null,
+  agentName = null,
   branchMenu,
   openMenu,
   onBack,
@@ -113,13 +117,8 @@ export function ChatTabs({
   onSelectPrPage,
   onClosePrPage,
   onNewTab,
-  onRename,
-  onCloseTab,
-  onReorderChats,
   onFindChat,
 }: Props) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
   const [newOpen, setNewOpen] = useState(false);
   const [newTabDefaults, setNewTabDefaults] = useState<{
     agent: AgentKind;
@@ -134,25 +133,23 @@ export function ChatTabs({
     effort: 'high',
     fast: false,
   });
-  const caffeinateHold = useCaffeinateHold();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const draggedChatId = useRef<string | null>(null);
-  const suppressClickAfterDrag = useRef(false);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dropHint, setDropHint] = useState<{
-    id: string;
-    place: 'before' | 'after';
-  } | null>(null);
 
   const activeChat = useMemo(
     () => chats.find((c) => c.id === activeChatId) ?? chats[0],
     [chats, activeChatId],
   );
   const orchAgentsOnly = isOrchestratorThread(activeChat);
+  const crumbs = workspaceChromeCrumbs({
+    project: projectName ?? '',
+    task: taskName,
+    agent: agentName,
+  });
+  const crumbTitle = crumbs.map((c) => c.label).join(' > ');
+  const showAuxTabs =
+    prPageOpen || changesOpen || openFiles.length > 0 || openUrls.length > 0;
 
-  useEffect(() => {
-    if (editingId) inputRef.current?.focus();
-  }, [editingId]);
+  const urlActive = Boolean(activeUrl) && !changesActive && !prPageActive;
+  const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive && !prPageActive;
 
   async function openNewTabPicker() {
     const defaults = orchAgentsOnly
@@ -173,81 +170,6 @@ export function ChatTabs({
     });
     setNewOpen(true);
   }
-
-  function startEdit(t: Thread) {
-    setEditingId(t.id);
-    setDraft(threadDisplayTitle(t));
-  }
-
-  function commitEdit() {
-    if (!editingId) return;
-    const title = draft.trim();
-    if (title && title !== chats.find((c) => c.id === editingId)?.title) {
-      onRename(editingId, title);
-    }
-    setEditingId(null);
-  }
-
-  const urlActive = Boolean(activeUrl) && !changesActive && !prPageActive;
-  const fileActive = Boolean(activeFilePath) && !changesActive && !urlActive && !prPageActive;
-  const canReorder = Boolean(onReorderChats) && chats.length > 1;
-
-  function dropPlaceForTab(el: HTMLElement, clientX: number): 'before' | 'after' {
-    const rect = el.getBoundingClientRect();
-    return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
-  }
-
-  function onChatDragStart(e: DragEvent<HTMLDivElement>, id: string) {
-    if (!canReorder || editingId === id) {
-      e.preventDefault();
-      return;
-    }
-    draggedChatId.current = id;
-    suppressClickAfterDrag.current = false;
-    setDraggingId(id);
-    e.dataTransfer.setData(CHAT_TAB_DRAG, id);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setDragImage(e.currentTarget, 16, 12);
-  }
-
-  function onChatDragOver(e: DragEvent<HTMLDivElement>, id: string) {
-    if (!canReorder) return;
-    const from = draggedChatId.current || e.dataTransfer.getData(CHAT_TAB_DRAG);
-    if (!from || from === id) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const place = dropPlaceForTab(e.currentTarget, e.clientX);
-    setDropHint((prev) => (prev?.id === id && prev.place === place ? prev : { id, place }));
-  }
-
-  function onChatDrop(e: DragEvent<HTMLDivElement>, targetId: string) {
-    if (!canReorder || !onReorderChats) return;
-    e.preventDefault();
-    const fromId = e.dataTransfer.getData(CHAT_TAB_DRAG) || draggedChatId.current;
-    const place = dropPlaceForTab(e.currentTarget, e.clientX);
-    setDropHint(null);
-    if (!fromId) return;
-    // HTML5 drag-and-drop fires a click on the drop target; suppress it even
-    // when the drop is a no-op so we do not change the active chat.
-    suppressClickAfterDrag.current = true;
-    if (fromId === targetId) return;
-    const next = reorderChatIds(
-      chats.map((c) => c.id),
-      fromId,
-      targetId,
-      place,
-    );
-    if (next.join('\0') === chats.map((c) => c.id).join('\0')) return;
-    onReorderChats(next);
-  }
-
-  function onChatDragEnd() {
-    draggedChatId.current = null;
-    setDraggingId(null);
-    setDropHint(null);
-  }
-
-  const crumb = [projectName, taskName].filter(Boolean).join(' > ');
 
   return (
     <div className="thread-chrome">
@@ -273,14 +195,52 @@ export function ChatTabs({
             </svg>
           </button>
         )}
-        <div className="workspace-chrome-crumb" title={crumb || undefined}>
+        <div className="workspace-chrome-crumb" title={crumbTitle || undefined}>
           <span className="workspace-glyph" aria-hidden />
-          {projectName ? <span className="open-crumb">{projectName}</span> : null}
-          {projectName && taskName ? <span className="open-sep">{'>'}</span> : null}
-          {taskName ? (
-            <span className="open-crumb open-crumb-task">{taskName}</span>
-          ) : null}
+          {crumbs.map((crumb, i) => (
+            <span key={`${crumb.kind}:${crumb.label}`} className="workspace-chrome-crumb-item">
+              {i > 0 ? <span className="open-sep">{'>'}</span> : null}
+              {crumb.kind === 'agent' ? (
+                <button
+                  type="button"
+                  className={crumbClass(crumb.kind)}
+                  title={crumb.label}
+                  onClick={() => onSelectChat(activeChatId)}
+                >
+                  {crumb.label}
+                </button>
+              ) : (
+                <span className={crumbClass(crumb.kind)}>{crumb.label}</span>
+              )}
+            </span>
+          ))}
           {branchMenu}
+          <button
+            type="button"
+            className="chat-tab-add"
+            title="Add agent"
+            aria-label="Add agent"
+            onClick={() => void openNewTabPicker()}
+          >
+            +
+          </button>
+          <AgentOptionsPicker
+            open={newOpen}
+            value={newTabDefaults}
+            title="Add agent"
+            confirmLabel="Add agent"
+            allowedAgents={orchAgentsOnly ? ORCHESTRATOR_AGENT_KINDS : undefined}
+            onClose={() => setNewOpen(false)}
+            onApply={(next) => {
+              onNewTab({
+                agent: next.agent,
+                model: next.model,
+                autonomy: next.autonomy,
+                effort: next.effort,
+                fast: next.fast,
+              });
+            }}
+          />
         </div>
         <div className="workspace-chrome-actions">
           {planUsage}
@@ -305,243 +265,128 @@ export function ChatTabs({
           {rightSidebarToggle}
         </div>
       </div>
-      <div className="chat-tabs">
-      <div className="chat-tabs-scroll">
-        {prPageOpen && (
-          <div
-            className={`chat-tab file-tab-item pr-tab${prPageActive ? ' active' : ''}`}
-            onClick={() => onSelectPrPage?.()}
-            title={prPageTitle}
-          >
-            <span className="chat-tab-file-icon" aria-hidden>
-              ⎇
-            </span>
-            <span className="chat-tab-title">{prPageTitle}</span>
-            {onClosePrPage && (
-              <button
-                type="button"
-                className="chat-tab-close"
-                title="Close PR"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClosePrPage();
-                }}
+      {showAuxTabs ? (
+        <div className="chat-tabs">
+          <div className="chat-tabs-scroll">
+            {prPageOpen && (
+              <div
+                className={`chat-tab file-tab-item pr-tab${prPageActive ? ' active' : ''}`}
+                onClick={() => onSelectPrPage?.()}
+                title={prPageTitle}
               >
-                ×
-              </button>
+                <span className="chat-tab-file-icon" aria-hidden>
+                  ⎇
+                </span>
+                <span className="chat-tab-title">{prPageTitle}</span>
+                {onClosePrPage && (
+                  <button
+                    type="button"
+                    className="chat-tab-close"
+                    title="Close PR"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClosePrPage();
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             )}
-          </div>
-        )}
 
-        {changesOpen && (
-          <div
-            className={`chat-tab file-tab-item changes-tab${changesActive ? ' active' : ''}`}
-            onClick={() => onSelectChanges?.()}
-            title="Changes"
-          >
-            <span className="chat-tab-file-icon" aria-hidden>
-              ±
-            </span>
-            <span className="chat-tab-title">Changes</span>
-            {changesCount > 0 && (
-              <span className="chat-tab-changes-count">{changesCount}</span>
-            )}
-            {onCloseChanges && (
-              <button
-                type="button"
-                className="chat-tab-close"
-                title="Close Changes"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCloseChanges();
-                }}
+            {changesOpen && (
+              <div
+                className={`chat-tab file-tab-item changes-tab${changesActive ? ' active' : ''}`}
+                onClick={() => onSelectChanges?.()}
+                title="Changes"
               >
-                ×
-              </button>
+                <span className="chat-tab-file-icon" aria-hidden>
+                  ±
+                </span>
+                <span className="chat-tab-title">Changes</span>
+                {changesCount > 0 && (
+                  <span className="chat-tab-changes-count">{changesCount}</span>
+                )}
+                {onCloseChanges && (
+                  <button
+                    type="button"
+                    className="chat-tab-close"
+                    title="Close Changes"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCloseChanges();
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             )}
-          </div>
-        )}
 
-        {/* Conductor order: file tabs, URL tabs, then chat/agent tabs */}
-        {openFiles.map((path) => {
-          const active = fileActive && activeFilePath === path;
-          const change = fileChanges[path];
-          return (
-            <div
-              key={`file:${path}`}
-              className={`chat-tab file-tab-item${active ? ' active' : ''}${change ? ' changed' : ''}`}
-              onClick={() => onSelectFile?.(path)}
-              title={path}
-            >
-              <span className="chat-tab-file-icon" aria-hidden>
-                {isImagePath(path) ? '▣' : '{}'}
-              </span>
-              <span className="chat-tab-title">{basename(path)}</span>
-              {change && <GitChangeBadge change={change} compact />}
-              {onCloseFile && (
-                <button
-                  type="button"
-                  className="chat-tab-close"
-                  title="Close file"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseFile(path);
-                  }}
+            {openFiles.map((path) => {
+              const active = fileActive && activeFilePath === path;
+              const change = fileChanges[path];
+              return (
+                <div
+                  key={`file:${path}`}
+                  className={`chat-tab file-tab-item${active ? ' active' : ''}${change ? ' changed' : ''}`}
+                  onClick={() => onSelectFile?.(path)}
+                  title={path}
                 >
-                  ×
-                </button>
-              )}
-            </div>
-          );
-        })}
-
-        {openUrls.map((url) => {
-          const active = urlActive && activeUrl === url;
-          return (
-            <div
-              key={`url:${url}`}
-              className={`chat-tab file-tab-item url-tab-item${active ? ' active' : ''}`}
-              onClick={() => onSelectUrl?.(url)}
-              title={url}
-            >
-              <span className="chat-tab-file-icon" aria-hidden>
-                ◎
-              </span>
-              <span className="chat-tab-title">{previewUrlTabLabel(url)}</span>
-              {onCloseUrl && (
-                <button
-                  type="button"
-                  className="chat-tab-close"
-                  title="Close URL"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseUrl(url);
-                  }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          );
-        })}
-
-        {chats.map((t) => {
-          const active = !fileActive && !urlActive && !changesActive && !prPageActive && t.id === activeChatId;
-          const caffeinated = chatTabIsCaffeinated(
-            t,
-            caffeinateHold,
-            Boolean(caffeinateHold?.appCaffeinated),
-          );
-          const dragging = draggingId === t.id;
-          const dropClass =
-            dropHint?.id === t.id
-              ? dropHint.place === 'before'
-                ? ' drop-before'
-                : ' drop-after'
-              : '';
-          return (
-            <div
-              key={t.id}
-              className={`chat-tab chat-tab-agent${active ? ' active' : ''}${caffeinated ? ' caffeinated' : ''}${canReorder ? ' is-reorderable' : ''}${dragging ? ' is-dragging' : ''}${dropClass}`}
-              draggable={canReorder && editingId !== t.id}
-              onDragStart={(e) => onChatDragStart(e, t.id)}
-              onDragOver={(e) => onChatDragOver(e, t.id)}
-              onDrop={(e) => onChatDrop(e, t.id)}
-              onDragEnd={onChatDragEnd}
-              onClick={() => {
-                if (suppressClickAfterDrag.current) {
-                  suppressClickAfterDrag.current = false;
-                  return;
-                }
-                onSelectChat(t.id);
-              }}
-              onDoubleClick={() => startEdit(t)}
-            >
-              {editingId === t.id ? (
-                <input
-                  ref={inputRef}
-                  className="chat-tab-input"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onBlur={commitEdit}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      commitEdit();
-                    }
-                    if (e.key === 'Escape') {
-                      setEditingId(null);
-                    }
-                  }}
-                />
-              ) : (
-                <>
-                  <span className="chat-tab-agent-icon" aria-hidden>
-                    ›_
+                  <span className="chat-tab-file-icon" aria-hidden>
+                    {isImagePath(path) ? '▣' : '{}'}
                   </span>
-                  <span className="chat-tab-title" title={t.title}>
-                    {threadDisplayTitle(t)}
-                  </span>
-                  {caffeinated ? <CaffeinateBadge /> : null}
-                  {active && (
+                  <span className="chat-tab-title">{basename(path)}</span>
+                  {change && <GitChangeBadge change={change} compact />}
+                  {onCloseFile && (
                     <button
                       type="button"
-                      className="chat-tab-edit"
-                      title="Rename"
+                      className="chat-tab-close"
+                      title="Close file"
                       onClick={(e) => {
                         e.stopPropagation();
-                        startEdit(t);
+                        onCloseFile(path);
                       }}
                     >
-                      ✎
+                      ×
                     </button>
                   )}
-                </>
-              )}
-              {onCloseTab && (
-                <button
-                  type="button"
-                  className="chat-tab-close"
-                  title="Close tab"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseTab(t.id);
-                  }}
+                </div>
+              );
+            })}
+
+            {openUrls.map((url) => {
+              const active = urlActive && activeUrl === url;
+              return (
+                <div
+                  key={`url:${url}`}
+                  className={`chat-tab file-tab-item url-tab-item${active ? ' active' : ''}`}
+                  onClick={() => onSelectUrl?.(url)}
+                  title={url}
                 >
-                  ×
-                </button>
-              )}
-            </div>
-          );
-        })}
-        <button
-          type="button"
-          className="chat-tab-add"
-          title="New chat tab"
-          onClick={() => void openNewTabPicker()}
-        >
-          +
-        </button>
-        <AgentOptionsPicker
-          open={newOpen}
-          value={newTabDefaults}
-          title="New chat tab"
-          confirmLabel="Create tab"
-          allowedAgents={orchAgentsOnly ? ORCHESTRATOR_AGENT_KINDS : undefined}
-          onClose={() => setNewOpen(false)}
-          onApply={(next) => {
-            onNewTab({
-              agent: next.agent,
-              model: next.model,
-              autonomy: next.autonomy,
-              effort: next.effort,
-              fast: next.fast,
-            });
-          }}
-        />
-      </div>
-      </div>
+                  <span className="chat-tab-file-icon" aria-hidden>
+                    ◎
+                  </span>
+                  <span className="chat-tab-title">{previewUrlTabLabel(url)}</span>
+                  {onCloseUrl && (
+                    <button
+                      type="button"
+                      className="chat-tab-close"
+                      title="Close URL"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCloseUrl(url);
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 /**
  * Memorable worktree / thread labels (Conductor-style nicknames).
- * Slug is the directory + `thread/<slug>` branch; `name` is the UI title.
+ * Slug is the directory + placeholder branch; `name` is the UI title.
  */
 import { SOCCER_TEAM_META } from './team-meta.js';
 
@@ -386,7 +386,7 @@ export function lookupSoccerTeam(titleOrSlug: string): TeamName | null {
   });
 }
 
-/** Human-readable label for a worktree dir / `thread/<slug>` branch. */
+/** Human-readable label for a worktree dir / placeholder branch slug. */
 export function teamNameFromSlug(slug: string): string {
   const normalized = slug.toLowerCase().replace(/^thread\//, '');
   const withoutTicket = normalized

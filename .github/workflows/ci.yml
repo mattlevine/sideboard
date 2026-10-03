@@ -22,6 +22,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Ratchets
+        run: |
+          node scripts/check-max-lines.mjs
+          node scripts/check-renderer-core-barrel.mjs
       - name: Build core + CLI
         run: |
           pnpm --filter @sideboard-ai/core build

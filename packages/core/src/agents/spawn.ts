@@ -2,7 +2,13 @@ import { createInterface } from 'node:readline';
 import { execa } from 'execa';
 import { resolveGithubRepoSlug } from '../git/worktree.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
-import { childEnvWithAppSettings } from '../store/app-settings.js';
+import { childEnvWithAppSettings, loadAppSettings } from '../store/app-settings.js';
+import {
+  accountIdToPin,
+  applyManagedAccountEnv,
+  resolveAccountForThread,
+} from '../store/managed-accounts.js';
+import { updateThread } from '../store/thread-store.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import { traceTurn, withTimeout } from './turn-trace.js';
 import type { AgentEvent, AgentKind, MessagePart, Thread, TokenUsage } from '../types/thread.js';
@@ -121,6 +127,17 @@ export async function spawnAgentTurn(
   // Pin bare `gh` to this worktree's origin (not upstream) for dual-remote repos.
   // GitHub auth is a warmed credential store + GH_CONFIG_DIR — not GH_TOKEN in env.
   const env = childEnvWithAppSettings(cmd.env);
+  const accounts = loadAppSettings().accounts;
+  const pin = accountIdToPin(thread, accounts);
+  if (pin !== undefined && thread.accountId !== pin) {
+    try {
+      updateThread(thread.id, { accountId: pin });
+      thread = { ...thread, accountId: pin };
+    } catch {
+      thread = { ...thread, accountId: pin };
+    }
+  }
+  applyManagedAccountEnv(env, thread.agent, resolveAccountForThread(thread, accounts));
   // `pnpm --filter desktop dev` from a Sideboard worktree leaks NODE_PATH,
   // INIT_CWD, host node_modules/.bin, and SIDEBOARD_WORKSPACE_* into Claude.
   // Packaged builds do not set those — worktree agents only hang in local Electron.

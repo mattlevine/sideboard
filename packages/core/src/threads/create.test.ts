@@ -289,7 +289,7 @@ describe('createThread reuses a live named branch', () => {
 
   it('puts the ticket id in the worktree slug and branch', async () => {
     createThreadWorktree.mockResolvedValue({
-      branchName: 'thread/eng-12-ajax',
+      branchName: 'eng-12-ajax',
       worktreePath: join(tmpdir(), 'sideboard-ticket-wt'),
     });
     await createThread({

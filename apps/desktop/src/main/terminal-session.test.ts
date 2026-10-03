@@ -57,8 +57,10 @@ describe('terminal session reuse', () => {
   it('keys shell by worktree and attach by chat', () => {
     expect(terminalReuseKey('shell', '/wt/paris', 'chat-a')).toBe('shell:/wt/paris');
     expect(terminalReuseKey('shell', '/wt/paris', 'chat-b')).toBe('shell:/wt/paris');
+    expect(terminalReuseKey('shell', '/wt/paris', 'chat-a', 0)).toBe('shell:/wt/paris');
+    expect(terminalReuseKey('shell', '/wt/paris', 'chat-a', 1)).toBe('shell:/wt/paris:1');
     expect(terminalReuseKey('attach', '/wt/paris', 'chat-a')).toBe('attach:chat-a');
-    expect(terminalReuseKey('attach', '/wt/paris', 'chat-b')).toBe('attach:chat-b');
+    expect(terminalReuseKey('attach', '/wt/paris', 'chat-b', 1)).toBe('attach:chat-b');
   });
 
   it('finds the matching live session for a reuse key + kind', () => {

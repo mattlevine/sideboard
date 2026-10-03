@@ -227,3 +227,23 @@ export function writeRightSidebarLower(
     // ignore
   }
 }
+
+const SPLIT_BY_WORKTREE_KEY = 'sideboard.terminalSplitByWorktree';
+
+export function readTerminalSplit(worktreeKey: string | null | undefined): boolean {
+  if (!worktreeKey) return false;
+  const map = readBoolMap(SPLIT_BY_WORKTREE_KEY);
+  return map[normalizeWorktreeKey(worktreeKey)] === true;
+}
+
+export function writeTerminalSplit(
+  worktreeKey: string | null | undefined,
+  split: boolean,
+): void {
+  if (!worktreeKey) return;
+  const map = readBoolMap(SPLIT_BY_WORKTREE_KEY);
+  const key = normalizeWorktreeKey(worktreeKey);
+  if (split) map[key] = true;
+  else delete map[key];
+  writeBoolMap(SPLIT_BY_WORKTREE_KEY, map);
+}

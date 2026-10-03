@@ -500,9 +500,10 @@ export function isDefaultishSourceRef(ref: string | null | undefined): boolean {
 
 /**
  * Fallback `gh pr view` / checks selectors when the current branch has no open
- * PR. Create-from-branch still forks `thread/<team>`, so that name is not the
- * GitHub head. Prefer persisted URL, then the worktree branch, then the source
- * branch. {@link connectedPrSelectors} prepends the current-branch open PR.
+ * PR. Create-from-branch still forks a soccer-team placeholder branch, so that
+ * name is not the GitHub head. Prefer persisted URL, then the worktree branch,
+ * then the source branch. {@link connectedPrSelectors} prepends the current-branch
+ * open PR.
  */
 export function resolvePrSelectors(
   thread: Pick<Thread, 'prUrl' | 'sourceType' | 'sourceRef' | 'branchName'>,
@@ -1432,7 +1433,7 @@ export async function createThreadWorktree(opts: {
   sourceRef: string;
   slug: string;
 }): Promise<CreateWorktreeResult> {
-  let branchName = `thread/${opts.slug}`;
+  let branchName = opts.slug;
   const worktreePath = join(worktreesRoot(opts.repoPath), opts.slug);
 
   if (existsSync(worktreePath)) {
@@ -1484,7 +1485,7 @@ export async function createThreadWorktree(opts: {
 
 /**
  * Attach a worktree to an **existing** branch (stack layers).
- * Unlike {@link createThreadWorktree}, does not create `thread/<slug>`.
+ * Unlike {@link createThreadWorktree}, does not create a new placeholder branch.
  */
 export async function createExistingBranchWorktree(opts: {
   repoPath: string;
@@ -2111,20 +2112,34 @@ function sameRepoPath(a: string, b: string): boolean {
   return normalizeWorktreePath(a) === normalizeWorktreePath(b);
 }
 
-/** Local `thread/*` branch tips under `.git/refs/heads/thread` (best-effort). */
-function listLocalThreadBranchSlugs(repoPath: string): string[] {
-  const refsDir = join(repoPath, '.git', 'refs', 'heads', 'thread');
-  if (!existsSync(refsDir)) return [];
+/**
+ * Local placeholder branch tips (best-effort): unprefixed soccer-team heads and
+ * leftover `thread/*` refs under `.git/refs/heads`.
+ */
+function listLocalPlaceholderBranchSlugs(repoPath: string): string[] {
+  const slugs: string[] = [];
+  const headsDir = join(repoPath, '.git', 'refs', 'heads');
+  const threadDir = join(headsDir, 'thread');
   try {
-    return readdirSync(refsDir)
-      .filter((name) => !name.startsWith('.'))
-      .map((name) => normalizeTakenSlug(name));
+    if (existsSync(threadDir)) {
+      for (const name of readdirSync(threadDir)) {
+        if (!name.startsWith('.')) slugs.push(normalizeTakenSlug(name));
+      }
+    }
+    if (existsSync(headsDir)) {
+      for (const entry of readdirSync(headsDir, { withFileTypes: true })) {
+        if (entry.isFile() && !entry.name.startsWith('.')) {
+          slugs.push(normalizeTakenSlug(entry.name));
+        }
+      }
+    }
   } catch {
-    return [];
+    return slugs;
   }
+  return slugs;
 }
 
-/** Slugs already used by worktree dirs, thread records, or `thread/<slug>` branches. */
+/** Slugs already used by worktree dirs, thread records, or leftover placeholder branches. */
 export function collectTakenTeamSlugs(repoPath: string): Set<string> {
   const taken = new Set<string>();
 
@@ -2139,7 +2154,7 @@ export function collectTakenTeamSlugs(repoPath: string): Set<string> {
     }
   }
 
-  for (const slug of listLocalThreadBranchSlugs(repoPath)) {
+  for (const slug of listLocalPlaceholderBranchSlugs(repoPath)) {
     for (const token of takenSlugsFromThread({ branchName: slug })) {
       taken.add(token);
     }

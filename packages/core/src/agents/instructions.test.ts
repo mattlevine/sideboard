@@ -364,11 +364,18 @@ describe('formatRenameBranchDirective', () => {
   it('asks the agent to rename placeholder branches', () => {
     const text = formatRenameBranchDirective({
       worktreePath: '/tmp/sideboard/workspaces/app/paris',
-      branchName: 'thread/paris',
+      branchName: 'paris',
     });
     expect(text).toMatch(/git branch -m/i);
-    expect(text).toContain('thread/paris');
     expect(text).toContain('paris');
+  });
+
+  it('still treats leftover thread/ branches as placeholders', () => {
+    const text = formatRenameBranchDirective({
+      worktreePath: '/tmp/sideboard/workspaces/app/paris',
+      branchName: 'thread/paris',
+    });
+    expect(text).toContain('thread/paris');
   });
 
   it('skips renamed task branches', () => {
@@ -383,7 +390,7 @@ describe('formatRenameBranchDirective', () => {
   it('keeps the ticket id in the suggested rename for issue worktrees', () => {
     const text = formatRenameBranchDirective({
       worktreePath: '/tmp/sideboard/workspaces/app/eng-12-paris',
-      branchName: 'thread/eng-12-paris',
+      branchName: 'eng-12-paris',
       sourceType: 'ticket',
       sourceRef: 'ENG-12',
     });

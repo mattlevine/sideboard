@@ -11,6 +11,7 @@ import {
   REVIEW_SKILL_NAME,
   REVIEW_SKILL_PATH,
   buildReviewRequestAttachment,
+  canReuseIdleWorktreeAgentForReview,
   ensureReviewGuidelinesFile,
   ensureReviewRequestFile,
   readExistingReviewRequestFile,
@@ -21,17 +22,22 @@ import {
 
 vi.mock('../store/thread-store.js', () => ({
   findThreadByRef: vi.fn(),
+  updateThread: vi.fn(),
 }));
 
 vi.mock('../threads/chat-tabs.js', () => ({
   createChatTab: vi.fn(),
+  threadsSharingWorktree: vi.fn(),
 }));
 
-import { findThreadByRef } from '../store/thread-store.js';
-import { createChatTab } from '../threads/chat-tabs.js';
+import { findThreadByRef, updateThread } from '../store/thread-store.js';
+import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
+import { REVIEW_TAB_TITLE } from './review-write-gate.js';
 
 const findMock = vi.mocked(findThreadByRef);
+const updateMock = vi.mocked(updateThread);
 const createTabMock = vi.mocked(createChatTab);
+const sharingMock = vi.mocked(threadsSharingWorktree);
 
 describe('requestReview', () => {
   let worktree: string;
@@ -40,7 +46,13 @@ describe('requestReview', () => {
     worktree = join(tmpdir(), `sideboard-review-${Date.now()}`);
     mkdirSync(join(worktree, '.sideboard', 'attachments'), { recursive: true });
     findMock.mockReset();
+    updateMock.mockReset();
+    updateMock.mockImplementation(((id: string, patch: object) => ({
+      id,
+      ...patch,
+    })) as typeof updateThread);
     createTabMock.mockReset();
+    sharingMock.mockReset();
   });
 
   afterEach(() => {
@@ -135,6 +147,50 @@ describe('requestReview', () => {
     expect(readExistingReviewRequestFile(worktree)).toContain('## Required outcome');
   });
 
+  it('reuses a single idle unused agent instead of opening a second tab', () => {
+    const idle = {
+      id: 'solo',
+      status: 'idle' as const,
+      messages: [],
+      queue: [],
+    };
+    expect(canReuseIdleWorktreeAgentForReview(idle, [idle])).toBe(true);
+    expect(
+      canReuseIdleWorktreeAgentForReview(idle, [
+        idle,
+        { id: 'other', status: 'idle', messages: [], queue: [] },
+      ]),
+    ).toBe(false);
+    expect(
+      canReuseIdleWorktreeAgentForReview(
+        { ...idle, messages: [{ role: 'user', text: 'hi' }] as never },
+        [{ ...idle, messages: [{ role: 'user', text: 'hi' }] as never }],
+      ),
+    ).toBe(false);
+    expect(
+      canReuseIdleWorktreeAgentForReview(
+        { ...idle, messages: [{ role: 'assistant', text: 'ok' }] as never },
+        [{ ...idle, messages: [{ role: 'assistant', text: 'ok' }] as never }],
+      ),
+    ).toBe(false);
+    expect(
+      canReuseIdleWorktreeAgentForReview({ ...idle, status: 'queued' }, [
+        { ...idle, status: 'queued' },
+      ]),
+    ).toBe(false);
+    expect(
+      canReuseIdleWorktreeAgentForReview({ ...idle, queue: ['later'] }, [
+        { ...idle, queue: ['later'] },
+      ]),
+    ).toBe(false);
+    expect(
+      canReuseIdleWorktreeAgentForReview(idle, [
+        idle,
+        { id: 'old', status: 'archived', messages: [], queue: [] },
+      ]),
+    ).toBe(true);
+  });
+
   it('rejects orchestrator threads', async () => {
     findMock.mockReturnValue({
       id: 'orch',
@@ -158,18 +214,23 @@ describe('requestReview', () => {
       worktreePath: worktree,
       status: 'idle',
       title: 'Feature',
+      messages: [{ role: 'user', text: 'implement it' }],
+      attachments: [],
+      queue: [],
     };
-    const tab = { id: 'review-tab', title: 'Review', status: 'queued' };
+    const tab = { id: 'review-tab', title: REVIEW_TAB_TITLE, status: 'queued' };
     findMock.mockReturnValue(from as never);
+    sharingMock.mockReturnValue([from] as never);
     createTabMock.mockReturnValue(tab as never);
     const send = vi.fn(async () => tab as never);
 
     const result = await requestReview('from-id', send);
 
+    expect(updateMock).not.toHaveBeenCalled();
     expect(createTabMock).toHaveBeenCalledWith(
       expect.objectContaining({
         fromThreadId: 'from-id',
-        title: 'Review',
+        title: REVIEW_TAB_TITLE,
         attachments: [
           expect.objectContaining({
             name: REVIEW_SKILL_NAME,
@@ -183,6 +244,79 @@ describe('requestReview', () => {
     expect(REVIEW_REQUEST_PREFILL).toBe('Review changes in this workspace.');
     expect(result.tab.id).toBe('review-tab');
     expect(result.from.id).toBe('from-id');
+  });
+
+  it('runs the review in the only unused agent instead of creating a second tab', async () => {
+    mkdirSync(join(worktree, '.claude', 'skills', 'review'), { recursive: true });
+    writeFileSync(join(worktree, REVIEW_SKILL_PATH), wrapReviewSkillMarkdown('## Recommendation required\n'));
+    const from = {
+      id: 'solo-id',
+      sourceType: 'pr',
+      repoPath: '/repo',
+      worktreePath: worktree,
+      status: 'idle',
+      title: 'Ajax',
+      messages: [],
+      attachments: [],
+      queue: [],
+    };
+    const reused = {
+      ...from,
+      title: REVIEW_TAB_TITLE,
+      userSetTitle: true,
+      attachments: [{ name: REVIEW_SKILL_NAME }],
+    };
+    findMock.mockReturnValue(from as never);
+    sharingMock.mockReturnValue([from] as never);
+    updateMock.mockReturnValue(reused as never);
+    const send = vi.fn(async () => ({ ...reused, status: 'queued' }) as never);
+
+    const result = await requestReview('solo-id', send);
+
+    expect(createTabMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(
+      'solo-id',
+      expect.objectContaining({
+        title: REVIEW_TAB_TITLE,
+        userSetTitle: true,
+        attachments: [
+          expect.objectContaining({
+            name: REVIEW_SKILL_NAME,
+            path: REVIEW_SKILL_PATH,
+          }),
+        ],
+      }),
+    );
+    expect(send).toHaveBeenCalledWith('solo-id', REVIEW_REQUEST_PREFILL);
+    expect(result.tab.id).toBe('solo-id');
+    expect(result.from.id).toBe('solo-id');
+  });
+
+  it('still opens a Review tab when the worktree already has two agents', async () => {
+    mkdirSync(join(worktree, '.claude', 'skills', 'review'), { recursive: true });
+    writeFileSync(join(worktree, REVIEW_SKILL_PATH), wrapReviewSkillMarkdown('## Recommendation required\n'));
+    const from = {
+      id: 'first',
+      sourceType: 'pr',
+      repoPath: '/repo',
+      worktreePath: worktree,
+      status: 'idle',
+      title: 'Ajax',
+      messages: [],
+      attachments: [],
+      queue: [],
+    };
+    const sibling = { ...from, id: 'second', title: 'Arsenal' };
+    const tab = { id: 'review-tab', title: REVIEW_TAB_TITLE, status: 'queued' };
+    findMock.mockReturnValue(from as never);
+    sharingMock.mockReturnValue([from, sibling] as never);
+    createTabMock.mockReturnValue(tab as never);
+    const send = vi.fn(async () => tab as never);
+
+    await requestReview('first', send);
+
+    expect(createTabMock).toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith('review-tab', REVIEW_REQUEST_PREFILL);
   });
 
   it('builds a file attachment with optional path', () => {

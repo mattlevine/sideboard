@@ -132,6 +132,7 @@ import {
   ensureBrightsyLocalConfigFresh,
   ensureConnectedBrightsyTeamTokens,
   loginAgent,
+  loginManagedAccount,
   maxConcurrentAgents,
   resolveRepoRoot,
   run,
@@ -169,6 +170,10 @@ import {
   updateDefaultsSettings,
   updateProjectProfileSettings,
   updateIntegrationsSettings,
+  addManagedAccount,
+  selectManagedAccount,
+  removeManagedAccount,
+  renameManagedAccount,
   importAgentDoneCustomSound,
   clearAgentDoneCustomSoundFile,
   readAgentDoneCustomSound,
@@ -666,6 +671,17 @@ function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
   return { ...hold, appCaffeinated: reasons.length > 0 };
 }
 
+let dockUnreadCount = 0;
+
+function applyDockUnreadBadge(): void {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  try {
+    app.dock.setBadge(dockUnreadCount > 0 ? String(dockUnreadCount) : '');
+  } catch {
+    // ignore
+  }
+}
+
 function syncCaffeinateIndicator(): void {
   const state = caffeinateUiState();
   const reasons = caffeinateIndicatorReasons({
@@ -688,7 +704,7 @@ function syncCaffeinateIndicator(): void {
         app.dock.setIcon(active ? overlayCaffeinateOnIcon(base) : base);
       }
     }
-    app.dock.setBadge('');
+    applyDockUnreadBadge();
   }
 
   syncCaffeinateTray(active, tooltip);
@@ -982,12 +998,38 @@ function registerIpc(): void {
     applyAppEnvironment(process.env);
     return loginAgent(agent);
   });
+  ipcMain.handle(
+    'addManagedAccount',
+    (_e, kind: 'claude' | 'codex', label: string) =>
+      toPublicAppSettings(addManagedAccount(kind, label)),
+  );
+  ipcMain.handle(
+    'selectManagedAccount',
+    (_e, kind: 'claude' | 'codex', accountId: string | null) =>
+      toPublicAppSettings(selectManagedAccount(kind, accountId)),
+  );
+  ipcMain.handle('removeManagedAccount', (_e, id: string) =>
+    toPublicAppSettings(removeManagedAccount(id)),
+  );
+  ipcMain.handle('renameManagedAccount', (_e, id: string, label: string) =>
+    toPublicAppSettings(renameManagedAccount(id, label)),
+  );
+  ipcMain.handle('loginManagedAccount', async (_e, id: string) => {
+    ensureAgentPath();
+    applyAppEnvironment(process.env);
+    return loginManagedAccount(id);
+  });
+  ipcMain.handle('setDockBadge', (_e, count: number) => {
+    dockUnreadCount = Math.max(0, Math.floor(Number(count) || 0));
+    applyDockUnreadBadge();
+  });
   ipcMain.handle('getAppSettings', () => toPublicAppSettings(loadAppSettings()));
   ipcMain.handle('saveAppSettings', (_e, settings: AppSettings) => {
     const current = loadAppSettings();
     const saved = saveAppSettings({
       ...settings,
       environment: current.environment,
+      accounts: settings.accounts ?? current.accounts,
       integrations: {
         ...current.integrations,
         issueSource: settings.integrations?.issueSource ?? current.integrations.issueSource,
@@ -1346,7 +1388,14 @@ function registerIpc(): void {
   });
   ipcMain.handle('getClaudeUsage', (_e, refresh?: boolean) => {
     applyAppEnvironment(process.env);
-    return getClaudePlanUsage({ force: Boolean(refresh) });
+    const settings = loadAppSettings();
+    const active = settings.accounts.accounts.find(
+      (a) => a.id === settings.accounts.activeClaudeAccountId && a.kind === 'claude',
+    );
+    return getClaudePlanUsage({
+      force: Boolean(refresh),
+      configDir: active?.configDir,
+    });
   });
   ipcMain.handle('getBrightsySession', () => getBrightsySession());
   ipcMain.handle('getBrightsyCmsAuth', async () => {
@@ -1702,9 +1751,9 @@ function registerIpc(): void {
   });
   ipcMain.handle(
     'terminal:start',
-    async (_e, ref: string, cols?: number, rows?: number) => {
+    async (_e, ref: string, cols?: number, rows?: number, pane?: number) => {
       const { startTerminalSession } = await import('./terminal.js');
-      return startTerminalSession(orch, ref, cols, rows);
+      return startTerminalSession(orch, ref, cols, rows, { pane });
     },
   );
   ipcMain.handle(
@@ -1985,7 +2034,8 @@ app.on('will-quit', () => {
   stopSlackListenDaemon();
   stopCaffeinate();
   destroyCaffeinateTray();
-  try {
+    try {
+    dockUnreadCount = 0;
     if (process.platform === 'darwin') app.dock?.setBadge('');
   } catch {
     // ignore

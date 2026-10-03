@@ -102,6 +102,7 @@ export {
   installAgent,
   installNpmGlobalPackage,
   loginAgent,
+  loginManagedAccount,
   openInSystemTerminal,
   prepareTerminalCommand,
   resolveLoginCommand,

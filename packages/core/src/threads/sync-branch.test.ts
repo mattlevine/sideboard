@@ -77,16 +77,17 @@ describe('syncThreadBranchFromGit', () => {
     expect(listed.find((t) => t.id === 'forked')?.title).toBe('Arsenal');
   });
 
-  it('still refreshes the canonical tab title when not user-set', async () => {
+  it('does not copy the worktree label onto the canonical chat title', async () => {
     listed = [
-      { ...primary, title: 'Stale', userSetTitle: false },
-      { ...forked, title: 'Arsenal', userSetTitle: true },
+      { ...primary, title: 'Stale', userSetTitle: false, branchName: 'old' },
+      { ...forked, title: 'Arsenal', userSetTitle: true, branchName: 'old' },
     ];
     const { syncThreadBranchFromGit } = await import('./sync-branch.js');
     await syncThreadBranchFromGit('primary');
 
-    const primaryUpdate = updates.find((u) => u.id === 'primary' && u.patch.title);
-    expect(primaryUpdate?.patch.title).toBe('Monaco');
+    expect(updates.some((u) => u.patch.title)).toBe(false);
+    expect(listed.find((t) => t.id === 'primary')?.title).toBe('Stale');
     expect(listed.find((t) => t.id === 'forked')?.title).toBe('Arsenal');
+    expect(listed.find((t) => t.id === 'primary')?.branchName).toBe('thread/monaco');
   });
 });
