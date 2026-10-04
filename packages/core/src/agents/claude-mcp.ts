@@ -73,3 +73,47 @@ export function mcpAuthWarnings(servers: McpServerStatus[]): string[] {
     `MCP needs login: ${needing.join(', ')}. Run: claude mcp login "<name>"`,
   ];
 }
+
+/**
+ * Tools Sideboard auto-approves on every Claude turn.
+ * `--allowedTools` does not restrict availability — it skips permission prompts.
+ * Non-interactive `-p` turns have no TTY dialog, so anything not listed here
+ * (with default `acceptEdits` autonomy) is denied.
+ *
+ * Background Agent/Task polls need TaskOutput / TaskStop. EnterWorktree is how
+ * `isolation: "worktree"` agents start. Skill is process guides.
+ */
+export const BASE_ALLOWED_TOOLS = [
+  'Edit',
+  'Write',
+  'Bash',
+  'Read',
+  'Glob',
+  'Grep',
+  'WebFetch',
+  'WebSearch',
+  'Task',
+  'Agent',
+  'TaskOutput',
+  'TaskStop',
+  'EnterWorktree',
+  'ExitWorktree',
+  'Skill',
+];
+
+/**
+ * `claude -p` waits this long for background Agent/Task before abandoning them.
+ * Claude Code’s default is 10 minutes — too short for a coding subagent.
+ */
+export const CLAUDE_PRINT_BG_WAIT_CEILING_MS = 7_200_000;
+
+/**
+ * When Settings → Agents → Claude → Chrome is on, Sideboard passes `--chrome`
+ * and auto-approves the Claude-in-Chrome MCP + skill.
+ */
+export const CLAUDE_CHROME_ALLOWED_TOOLS = [
+  'mcp__claude-in-chrome',
+  'mcp__claude-in-chrome__*',
+  'Skill(claude-in-chrome)',
+] as const;
+

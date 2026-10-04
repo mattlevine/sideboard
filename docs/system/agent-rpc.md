@@ -6,8 +6,8 @@ queues and owns Dev-script children).
 
 This is the Orca-shaped split: one runtime process, live RPC, clients
 discover it from a metadata file. It is **not** MCP. Injected `sideboard
-mcp` stdio remains for harnesses that cannot register native tools yet
-(Claude CLI, Codex, OpenCode, orchestration Cursor).
+mcp` stdio remains for Codex and orchestration Cursor. Claude worktree
+turns use the Agent SDK runner; OpenCode loads a native plugin.
 
 See [`.claude/skills/agent-rpc/SKILL.md`](../../.claude/skills/agent-rpc/SKILL.md)
 for the migration rulebook.
@@ -24,8 +24,10 @@ return at 45s and the model loops). A held WebSocket call streams
 | Client | Transport | Auth |
 |--------|-----------|------|
 | Cursor worktree `customTools` | `ws://127.0.0.1:<port>/agent-rpc` | `authToken` on every request |
+| Claude worktree Agent SDK | same (in-process `createSdkMcpServer`) | same |
+| OpenCode plugin `tool()` | same (global WebSocket in the plugin) | same |
+| Codex / orchestration Cursor | Injected MCP stdio (legacy) | Process isolation |
 | Future mobile / `serve` | Same protocol, not bound yet | Do not bind `0.0.0.0` in this slice |
-| Claude / Codex / OpenCode | Injected MCP stdio (legacy) | Process isolation |
 
 Discovery: `{appDataDir}/agent-runtime.json` (mode `0600`), written when
 the RPC server starts, removed on stop if this pid still owns the file.
@@ -36,12 +38,12 @@ synchronously before closing sockets so Electron `will-quit` need not await.
 
 ## Pilot methods
 
-| RPC | Cursor tool | MCP |
+| RPC | Native tool | MCP |
 |-----|-------------|-----|
 | `runtime.ping` | (not a model tool) | — |
-| `ui.presentArtifact` | `present_artifact` | omitted when `SIDEBOARD_AGENT_RPC_NATIVE=1` |
-| `job.wait` | `wait_for_job` | omitted on that Cursor MCP |
-| `job.stop` | `stop_job` | omitted on that Cursor MCP |
+| `ui.presentArtifact` | `present_artifact` (Cursor/OpenCode); `mcp__sideboard_rpc__present_artifact` (Claude SDK) | omitted when `SIDEBOARD_AGENT_RPC_NATIVE=1` |
+| `job.wait` | `wait_for_job` / `mcp__sideboard_rpc__wait_for_job` | omitted on that harness MCP |
+| `job.stop` | `stop_job` / `mcp__sideboard_rpc__stop_job` | omitted on that harness MCP |
 
 `job.wait` and `job.stop` require an absolute worktree `cwd` in params
 (the desktop's own cwd is `/` when packaged). `job.wait` holds until
@@ -66,5 +68,8 @@ as the tool result; it never throws into the runner.
 | WebSocket server | `packages/core/src/agent-rpc/server.ts` |
 | Client (harness hooks) | `packages/core/src/agent-rpc/client.ts` |
 | Cursor native tools | `packages/core/src/agent-rpc/cursor-tools.ts` |
+| Shared execute() | `packages/core/src/agent-rpc/pilot-tools.ts` |
+| OpenCode plugin | `packages/core/src/agent-rpc/opencode-hook.ts` |
+| Claude runner | `packages/core/src/agents/claude-runner.ts` |
 | Desktop listen / quit | `apps/desktop/src/main/desktop-host.ts` |
 | Legacy MCP | `packages/core/src/mcp/server.ts` |

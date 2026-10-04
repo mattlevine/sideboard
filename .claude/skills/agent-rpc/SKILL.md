@@ -9,9 +9,9 @@ description: >-
 
 # Agent RPC
 
-MCP stdio is the **legacy** agent transport (Claude, Codex, OpenCode, and
-orchestration Cursor until those hooks land). The authority for agent host
-calls is JSON-RPC on a loopback WebSocket started by the desktop.
+MCP stdio is the **legacy** agent transport (Codex and orchestration Cursor
+until those hooks land). The authority for agent host calls is JSON-RPC on
+a loopback WebSocket started by the desktop.
 
 This is **not** an MCP shim. Do not spawn `sideboard mcp` to implement a
 new agent method. Do not add a stdio JSON-RPC that speaks MCP on one side
@@ -55,9 +55,9 @@ and `execute` is a WebSocket client.
 |---------|------|--------|
 | Cursor worktree | `@cursor/sdk` `customTools` | Pilot: `present_artifact`, `wait_for_job`, `stop_job` |
 | Cursor orchestration | same | Still MCP (fleet tools) |
-| Claude | Claude plugin / Agent SDK custom tools | Not started |
-| Codex | Custom tools or plugin | Not started |
-| OpenCode | Custom tools | Not started |
+| Claude | Agent SDK `createSdkMcpServer` (`claude-runner.ts`) | Pilot: same three (`mcp__sideboard_rpc__*`) |
+| OpenCode | `OPENCODE_CONFIG_DIR` plugin (`tool()` execute → WebSocket) | Pilot: same three |
+| Codex | — | Still MCP. Codex plugins only bundle MCP/apps, not in-process execute. Do not rip MCP. |
 
 Do not teach the model to `curl` the socket or Bash-out to a CLI as the
 primary path. That is not a hook.
@@ -67,7 +67,9 @@ primary path. That is not a hook.
 Migrating the remaining MCP tools is the same shape every time:
 
 1. Add handler + schema on the dispatcher.
-2. Expose it on the harness hook (Cursor `customTools` first).
+2. Expose it on every hooked harness (Cursor `customTools`, Claude SDK
+   server, OpenCode plugin). Codex stays on injected MCP until it has an
+   in-process execute hook.
 3. Omit that name from injected Sideboard MCP for that harness
    (`SIDEBOARD_AGENT_RPC_NATIVE=1` skips the pilot set; extend the omit
    list as names move).
@@ -81,9 +83,13 @@ porting the rest. Next batch: `ask_user`, `present_*`, run-scripts,
 
 ## Do not
 
-- Replace Claude/Codex/OpenCode in this skill’s first batches — they still
-  inject MCP until their hook exists. Shipping a socket nobody calls is
-  fine; ripping MCP from a harness with no hook is not.
+- Rip MCP from Codex (or orchestration Cursor) until that harness has an
+  in-process execute hook. Shipping a socket nobody calls is fine; stripping
+  tools with no replacement is not. Claude/OpenCode/Cursor worktree already
+  hook the pilot set.
+- Add a stdio MCP whose only job is to speak this WebSocket (a shim). Claude
+  Agent SDK in-process `createSdkMcpServer` is the documented custom-tool
+  hook, not a stdio shim.
 - Use vendor MCP (Linear, GitHub, PostHog) as the Sideboard control plane.
 - Bind `0.0.0.0` or skip `authToken`.
 - Document this as “Sideboard is an MCP server” in new copy. User-facing

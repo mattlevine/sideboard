@@ -7,7 +7,12 @@ import {
   resolveClaudeExecutable,
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
-import { mcpAllowToolsFromNames } from './claude-mcp.js';
+import {
+  BASE_ALLOWED_TOOLS,
+  CLAUDE_CHROME_ALLOWED_TOOLS,
+  CLAUDE_PRINT_BG_WAIT_CEILING_MS,
+  mcpAllowToolsFromNames,
+} from './claude-mcp.js';
 import { listUserClaudeMcpServerEntries } from './orch-mcp-isolation.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
 import {
@@ -27,43 +32,16 @@ import {
 import { dropCachedPrefixOnResume, splitTurnInputForSystemPrompt } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
 import { permissionMode } from './types.js';
+import { worktreeAgentRpc } from '../agent-rpc/rpc-env.js';
+import {
+  buildClaudeRpcTurnCommand,
+  withClaudePilotRpcTools,
+} from './claude-host.js';
 
-/**
- * Tools Sideboard auto-approves on every Claude turn.
- * `--allowedTools` does not restrict availability — it skips permission prompts.
- * Non-interactive `-p` turns have no TTY dialog, so anything not listed here
- * (with default `acceptEdits` autonomy) is denied. Include web tools so agents
- * can search/fetch without requiring Full autonomy / bypassPermissions.
- *
- * Background Agent/Task polls (`run_in_background`) need TaskOutput / TaskStop
- * or the parent cannot wait and those children look lost. EnterWorktree is how
- * `isolation: "worktree"` agents actually start. Skill is process guides.
- */
-const BASE_ALLOWED_TOOLS = [
-  'Edit',
-  'Write',
-  'Bash',
-  'Read',
-  'Glob',
-  'Grep',
-  'WebFetch',
-  'WebSearch',
-  // Subagents (Claude Code v2.1.63 renamed Task → Agent; allow both).
-  'Task',
-  'Agent',
-  'TaskOutput',
-  'TaskStop',
-  'EnterWorktree',
-  'ExitWorktree',
-  'Skill',
-];
-
-/**
- * `claude -p` waits this long for background Agent/Task before abandoning them.
- * Claude Code’s default is 10 minutes — too short for a coding subagent, so
- * Sideboard raises it unless the user already set the env.
- */
-export const CLAUDE_PRINT_BG_WAIT_CEILING_MS = 7_200_000;
+export {
+  CLAUDE_CHROME_ALLOWED_TOOLS,
+  CLAUDE_PRINT_BG_WAIT_CEILING_MS,
+};
 
 /** `pnpm dev` scopes the store to `<worktree>/.sideboard/dev-app-data`. */
 export function isLocalDevAppDataDir(
@@ -71,17 +49,6 @@ export function isLocalDevAppDataDir(
 ): boolean {
   return /[/\\]\.sideboard[/\\]dev-app-data(?:[/\\]|$)/.test(dir ?? '');
 }
-
-/**
- * When Settings → Agents → Claude → Chrome is on, Sideboard passes `--chrome`
- * and auto-approves the Claude-in-Chrome MCP + skill (otherwise browser actions
- * prompt and fail headlessly).
- */
-export const CLAUDE_CHROME_ALLOWED_TOOLS = [
-  'mcp__claude-in-chrome',
-  'mcp__claude-in-chrome__*',
-  'Skill(claude-in-chrome)',
-] as const;
 
 /** macOS ARG_MAX ~256KiB — keep `-p` prompt args under this (stdin for larger). */
 export const CLAUDE_PROMPT_ARG_MAX = 200_000;
@@ -652,8 +619,7 @@ export const claudeAdapter: AgentAdapter = {
     const mode = permissionMode(thread);
     const { isOrchestratorThread } = await import('../store/global-workspace.js');
     const isOrchestrator = isOrchestratorThread(thread);
-    // Sideboard MCP always (worktrees: present_*; coordinators: full fleet).
-    // Brightsy MCP only when logged in and the user asked (or this thread used it).
+    const rpc = worktreeAgentRpc(isOrchestrator);
     const injectedServers = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: shouldInjectBrightsyMcp(thread, {
@@ -661,6 +627,7 @@ export const claudeAdapter: AgentAdapter = {
       }),
       orchestratorThreadId: isOrchestrator ? thread.id : null,
       threadId: thread.id,
+      rpcNativeTools: Boolean(rpc),
     });
     const injectedBrightsyNames = injectedServers
       .filter((s) => s.name === 'brightsy' || s.name.startsWith('brightsy_'))
@@ -696,6 +663,28 @@ export const claudeAdapter: AgentAdapter = {
     }
     if (chromeOn) {
       allowedTools = [...allowedTools, ...CLAUDE_CHROME_ALLOWED_TOOLS];
+    }
+    if (rpc) {
+      return buildClaudeRpcTurnCommand({
+        prompt: promptText,
+        cwd: thread.worktreePath,
+        sessionId,
+        model: thread.model,
+        effort: thread.effort ?? (thread.fast ? 'low' : 'high'),
+        permissionMode: mode.claude,
+        systemPrompt,
+        claudePath: claude,
+        chrome: chromeOn,
+        mcpServers: Object.fromEntries(
+          injectedServers.map((s) => [
+            s.name,
+            { command: s.command, args: s.args, env: s.env },
+          ]),
+        ),
+        allowedTools: withClaudePilotRpcTools(allowedTools),
+        agentRpc: rpc,
+        isolateClaudeAiMcp: isOrchestrator || isLocalDevAppDataDir(),
+      });
     }
     // Plain-text `-p` prompt (not --input-format stream-json). Structured stream-json
     // user messages are merged into the API request where Claude Code already applies

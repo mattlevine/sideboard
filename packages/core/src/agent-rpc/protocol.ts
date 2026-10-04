@@ -13,6 +13,11 @@ export const AGENT_RPC_JOB_HOLD_MAX_MS = 120_000;
 export const AGENT_RPC_JOB_SLICE_MS = 10_000;
 
 export const AGENT_RPC_NATIVE_ENV = 'SIDEBOARD_AGENT_RPC_NATIVE';
+export const AGENT_RPC_URL_ENV = 'SIDEBOARD_AGENT_RPC_URL';
+export const AGENT_RPC_TOKEN_ENV = 'SIDEBOARD_AGENT_RPC_TOKEN';
+export const AGENT_RPC_CWD_ENV = 'SIDEBOARD_AGENT_RPC_CWD';
+/** Claude Agent SDK in-process MCP server name for the pilot tools. */
+export const AGENT_RPC_CLAUDE_SDK_SERVER = 'sideboard_rpc';
 
 export type JsonRpcId = string | number;
 
