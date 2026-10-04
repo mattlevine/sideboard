@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.263] - 2026-10-04
+
+### Changed
+
+- Product language matches Conductor: **project** is a registered repo, **workspace** is an isolated git worktree, **chat** is a conversation, **agent** is the harness. Create is **New workspace**; MCP tools are `list_projects`, `create_workspace`, `send_to_chat`, `list_chats`, and friends (legacy `threadId` still works). CLI `sideboard project` (alias `workspace`).
+- `wait_for_turn` omits previous-turn `text` and `usage` while the child is still running, so coordinators cannot treat the last reply as the new one.
+
+### Fixed
+
+- Finished `wait_for_turn` includes last-turn usage and a `lastActivityAt` fallback after the live sidecar is cleared.
+- `costUsd` is this turn. Claude’s session-cumulative `total_cost_usd` is `sessionCostUsd`.
+- Agent RPC leftovers: OpenCode WebSocket upgrades send `authToken`; packaged Cursor/Claude runners stage `ws` and the Claude SDK; worktree Claude copies user MCP under strict isolation.
+- Core DTS build types the Agent RPC `verifyClient` callback.
+
 ## [0.1.262] - 2026-10-03
 
 ### Changed
