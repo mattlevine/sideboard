@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveSidebarChatExpanded,
+  SIDEBAR_NEST_VISIBLE_ROWS,
   worktreeSidebarMeta,
 } from './sidebar-chat-expand';
 
@@ -13,7 +14,7 @@ describe('sidebar-chat-expand', () => {
       resolveSidebarChatExpanded({ chatCount: 1, selected: false }),
     ).toBe(false);
     expect(
-      resolveSidebarChatExpanded({ chatCount: 3, selected: true }),
+      resolveSidebarChatExpanded({ chatCount: 2, selected: true }),
     ).toBe(true);
   });
 
@@ -31,6 +32,10 @@ describe('sidebar-chat-expand', () => {
         collapsedWhileSelected: true,
       }),
     ).toBe(false);
+  });
+
+  it('keeps three nested agent rows visible before scrolling', () => {
+    expect(SIDEBAR_NEST_VISIBLE_ROWS).toBe(3);
   });
 });
 
@@ -68,5 +73,16 @@ describe('worktreeSidebarMeta', () => {
         archiving: true,
       }),
     ).toBe('Archiving…');
+  });
+
+  it('omits the spelled-out agent when the row shows a logo instead', () => {
+    expect(worktreeSidebarMeta({ agent: '', chatCount: 1 })).toBe('');
+    expect(
+      worktreeSidebarMeta({
+        agent: '',
+        chatCount: 1,
+        branch: 'feat/replace-spinner',
+      }),
+    ).toBe('feat/replace-spinner');
   });
 });

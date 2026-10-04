@@ -164,4 +164,16 @@ export function reorderChatIds(
   return next;
 }
 
+/** HTML5 payload for nested sidebar (and leftover chat-tab) drag-reorder. */
+export const SIDEBAR_CHAT_DRAG = 'application/x-sideboard-chat-tab';
+
+/** First half of the row/tab → insert before; second half → after. */
+export function dropPlaceFromMidpoint(
+  offset: number,
+  size: number,
+): 'before' | 'after' {
+  if (size <= 0) return 'after';
+  return offset < size / 2 ? 'before' : 'after';
+}
+
 export { unreadWorktreeKey as worktreeTabKey };

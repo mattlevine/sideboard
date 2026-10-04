@@ -1,10 +1,15 @@
 /** Nested chats open only while this worktree is selected and has more than one. */
+export const SIDEBAR_NEST_MIN_CHATS = 2;
+
+/** Visible nested agent rows before the list scrolls. */
+export const SIDEBAR_NEST_VISIBLE_ROWS = 3;
+
 export function resolveSidebarChatExpanded(opts: {
   chatCount: number;
   selected: boolean;
   collapsedWhileSelected?: boolean;
 }): boolean {
-  if (opts.chatCount < 2 || !opts.selected) return false;
+  if (opts.chatCount < SIDEBAR_NEST_MIN_CHATS || !opts.selected) return false;
   return !opts.collapsedWhileSelected;
 }
 
@@ -25,7 +30,9 @@ export function worktreeSidebarMeta(opts: {
   const agent = opts.agent.trim();
   if (branch) parts.push(branch);
   if (agent) parts.push(agent);
-  if (opts.chatCount > 1) parts.push(`${opts.chatCount} agents`);
+  if (opts.chatCount >= SIDEBAR_NEST_MIN_CHATS) {
+    parts.push(`${opts.chatCount} agents`);
+  }
   if (opts.port != null && opts.port > 0) parts.push(`:${opts.port}`);
   return parts.join(' · ');
 }

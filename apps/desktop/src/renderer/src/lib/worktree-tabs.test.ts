@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Thread } from '@sideboard-ai/core';
 import {
+  dropPlaceFromMidpoint,
   orderWorktreeChats,
   orderWorktreeChatsForKey,
   pickWorktreeChat,
@@ -141,5 +142,35 @@ describe('worktree-tabs', () => {
     expect(reorderChatIds(['a', 'b', 'c'], 'a', 'c', 'after')).toEqual(['b', 'c', 'a']);
     expect(reorderChatIds(['a', 'b', 'c'], 'a', 'a', 'before')).toEqual(['a', 'b', 'c']);
     expect(reorderChatIds(['a', 'b', 'c'], 'x', 'b', 'before')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('picks before/after from the pointer’s side of the midpoint', () => {
+    expect(dropPlaceFromMidpoint(0, 40)).toBe('before');
+    expect(dropPlaceFromMidpoint(19, 40)).toBe('before');
+    expect(dropPlaceFromMidpoint(20, 40)).toBe('after');
+    expect(dropPlaceFromMidpoint(8, 0)).toBe('after');
+  });
+
+  it('persists a nested-agent reorder for the worktree key', () => {
+    const a = { id: 'a', createdAt: '2026-01-01T00:00:00.000Z' };
+    const b = { id: 'b', createdAt: '2026-01-02T00:00:00.000Z' };
+    const c = { id: 'c', createdAt: '2026-01-03T00:00:00.000Z' };
+    const next = reorderChatIds(['a', 'b', 'c'], 'c', 'a', 'before');
+    writeWorktreeChatOrder('/wt/monaco', next);
+    expect(orderWorktreeChatsForKey([b, a, c], '/wt/monaco').map((t) => t.id)).toEqual([
+      'c',
+      'a',
+      'b',
+    ]);
+  });
+
+  it('persists orchestration agent order on the global workspace key', () => {
+    const a = { id: 'orch-a', createdAt: '2026-01-01T00:00:00.000Z' };
+    const b = { id: 'orch-b', createdAt: '2026-01-02T00:00:00.000Z' };
+    const c = { id: 'orch-c', createdAt: '2026-01-03T00:00:00.000Z' };
+    writeWorktreeChatOrder('__global__', ['orch-c', 'orch-a', 'orch-b']);
+    expect(
+      orderWorktreeChatsForKey([b, a, c], '__global__').map((t) => t.id),
+    ).toEqual(['orch-c', 'orch-a', 'orch-b']);
   });
 });

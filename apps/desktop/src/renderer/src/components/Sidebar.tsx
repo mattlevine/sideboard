@@ -15,13 +15,13 @@ import type { Thread } from '@sideboard-ai/core';
 import { WorktreeOwnershipFilter } from './WorktreeOwnershipFilter';
 import { WorktreeSortSelect } from './WorktreeSortSelect';
 import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
-import { nestedChatDisplayTitle } from '../lib/nested-chat-title';
-import { isChatUnread, isGroupUnread } from '../lib/unread-worktrees';
+import { isGroupUnread } from '../lib/unread-worktrees';
 import { pickWorktreeChat } from '../lib/worktree-tabs';
 import { useCaffeinateHold } from '../lib/caffeinate-tab';
 import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import { SidebarToggle } from './SidebarToggle';
+import { WorktreeNestedChats } from './WorktreeNestedChats';
 import { WorktreeSidebarRow } from './WorktreeSidebarRow';
 
 interface Props {
@@ -255,36 +255,19 @@ export function Sidebar({
               </div>
             ) : (
               <div className="worktree-block">
-                {/* Orchestration has no git worktree — agents sit directly under the header. */}
-                {globalThreads.map((chat) => {
-                  const active = view === 'thread' && chat.id === selectedId;
-                  const label = nestedChatDisplayTitle(chat, 'Orchestration');
-                  return (
-                    <WorktreeSidebarRow
-                      key={chat.id}
-                      primary={chat}
-                      group={[chat]}
-                      worktreeLabel={label}
-                      active={active}
-                      selected={multiSelected.has(chat.id)}
-                      selectedId={selectedId}
-                      multiSelected={multiSelected}
-                      archiving={archivingIds.has(chat.id)}
-                      unread={isChatUnread(chat, { active })}
-                      onSelect={onSelect}
-                      onMarkUnread={onMarkUnread}
-                      onRenameChat={onRenameChat}
-                      onCloseChat={onCloseChat}
-                      showArchive={Boolean(onArchive)}
-                      onRequestArchive={(chats) =>
-                        runArchive(chats.map((c) => c.id), {
-                          title: label,
-                          removesWorktree: false,
-                        })
-                      }
-                    />
-                  );
-                })}
+                {/* Same nested rows as worktree sub-agents: logo + name, drag-sort, 3-row scroll. */}
+                <WorktreeNestedChats
+                  chats={globalThreads}
+                  worktreeKey={GLOBAL_WORKSPACE_ID}
+                  parentTitle="Orchestration"
+                  selectedId={selectedId}
+                  active={view === 'thread'}
+                  multiSelected={multiSelected}
+                  onSelect={onSelect}
+                  onMarkUnread={onMarkUnread}
+                  onRenameChat={onRenameChat}
+                  onCloseChat={onCloseChat}
+                />
               </div>
             )}
           </div>

@@ -3,15 +3,17 @@ import { worktreeBoardStatus } from '@sideboard/home-board';
 import { worktreeAnchorLabel } from '@sideboard/worktree-labels';
 import type { Thread } from '@sideboard-ai/core';
 import { nestedChatDisplayTitle } from '../lib/nested-chat-title';
-import { isChatUnread, unreadWorktreeKey } from '../lib/unread-worktrees';
-import { orderWorktreeChatsForKey } from '../lib/worktree-tabs';
+import { unreadWorktreeKey } from '../lib/unread-worktrees';
 import {
   resolveSidebarChatExpanded,
+  SIDEBAR_NEST_MIN_CHATS,
   worktreeSidebarMeta,
 } from '../lib/sidebar-chat-expand';
 import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
+import { AgentKindIcon } from './AgentKindIcon';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { WorktreeEditCard } from './WorktreeEditCard';
+import { WorktreeNestedChats } from './WorktreeNestedChats';
 import { WorktreePrBadges } from './WorktreePrBadges';
 
 export function WorktreeSidebarRow({
@@ -102,18 +104,19 @@ export function WorktreeSidebarRow({
     selected: active,
     collapsedWhileSelected,
   });
-  const nestedChats = expanded ? orderWorktreeChatsForKey(group, expandKey) : [];
   const anchor = orch ? null : worktreeAnchorLabel(group);
   const parentTitle = orch ? worktreeLabel : (anchor?.title || worktreeLabel);
   const branchLine = !orch ? (anchor?.subtitle ?? null) : null;
   const metaLine = worktreeSidebarMeta({
-    agent: primary.agent,
+    agent: orch ? '' : primary.agent,
     chatCount: orch ? 1 : group.length,
     branch: branchLine,
     port: orch ? null : (group.find((t) => t.devPort != null)?.devPort ?? null),
     archiving,
   });
-  const showChevron = !orch && active && !archiving && group.length > 1;
+  const showChevron =
+    !orch && active && !archiving && group.length >= SIDEBAR_NEST_MIN_CHATS;
+  const showMetaRow = Boolean(metaLine) || showChevron;
   const renamingParent = orch && editingId === primary.id;
 
   function requestArchive() {
@@ -203,6 +206,7 @@ export function WorktreeSidebarRow({
               setDraft(parentTitle);
             }}
           >
+            {orch ? <AgentKindIcon agent={primary.agent} /> : null}
             {renamingParent ? (
               <input
                 className="nested-chat-input"
@@ -231,20 +235,22 @@ export function WorktreeSidebarRow({
               />
             )}
           </div>
-          <div className="worktree-agents-row">
-            <div className="thread-meta">{metaLine}</div>
-            {showChevron ? (
-              <button
-                type="button"
-                className={`worktree-expand${expanded ? ' is-open' : ''}`}
-                aria-label={expanded ? 'Collapse agents' : 'Expand agents'}
-                aria-expanded={expanded}
-                onClick={toggleExpanded}
-              >
-                {expanded ? '▾' : '▸'}
-              </button>
-            ) : null}
-          </div>
+          {showMetaRow ? (
+            <div className="worktree-agents-row">
+              {metaLine ? <div className="thread-meta">{metaLine}</div> : null}
+              {showChevron ? (
+                <button
+                  type="button"
+                  className={`worktree-expand${expanded ? ' is-open' : ''}`}
+                  aria-label={expanded ? 'Collapse agents' : 'Expand agents'}
+                  aria-expanded={expanded}
+                  onClick={toggleExpanded}
+                >
+                  {expanded ? '▾' : '▸'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {!archiving && orch && onCloseChat ? (
           <div
@@ -300,81 +306,19 @@ export function WorktreeSidebarRow({
           />
         ) : null}
       </div>
-      {nestedChats.length > 0 ? (
-        <div className="worktree-chats">
-          {nestedChats.map((chat) => {
-            const chatActive = active && chat.id === selectedId;
-            const chatUnread = isChatUnread(chat, { active: chatActive });
-            const renaming = editingId === chat.id;
-            const chatTitle = nestedChatDisplayTitle(chat, parentTitle);
-            return (
-              <div
-                key={chat.id}
-                className={`thread-item nested${chatActive ? ' active' : ''}${
-                  multiSelected.size > 1 && multiSelected.has(chat.id)
-                    ? ' selected'
-                    : ''
-                }${chatUnread ? ' unread' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (renaming) return;
-                  onSelect(chat.id, e.metaKey || e.ctrlKey || e.shiftKey);
-                }}
-                onDoubleClick={(e) => {
-                  if (!onRenameChat) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setEditingId(chat.id);
-                  setDraft(chatTitle);
-                }}
-                onContextMenu={(e) => {
-                  if (!onMarkUnread) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onMarkUnread(chat);
-                }}
-              >
-                <ThreadStatusIcon status={chat.status} unread={chatUnread} />
-                {renaming ? (
-                  <input
-                    className="nested-chat-input"
-                    value={draft}
-                    autoFocus
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={commitRename}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        commitRename();
-                      }
-                      if (e.key === 'Escape') setEditingId(null);
-                    }}
-                  />
-                ) : (
-                  <span className="thread-title-text" title={chatTitle}>
-                    {chatTitle}
-                  </span>
-                )}
-                <span className="nested-chat-agent">{chat.agent}</span>
-                {onCloseChat ? (
-                  <button
-                    type="button"
-                    className="nested-chat-close"
-                    title="Close chat"
-                    aria-label={`Close ${chatTitle}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCloseChat(chat);
-                    }}
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+      {expanded ? (
+        <WorktreeNestedChats
+          chats={group}
+          worktreeKey={expandKey}
+          parentTitle={parentTitle}
+          selectedId={selectedId}
+          active={active}
+          multiSelected={multiSelected}
+          onSelect={onSelect}
+          onMarkUnread={onMarkUnread}
+          onRenameChat={onRenameChat}
+          onCloseChat={onCloseChat}
+        />
       ) : null}
     </div>
   );

@@ -2395,6 +2395,7 @@ body.resizing-panels webview {
 .board-card-worktree .thread-title {
   display: flex;
   align-items: center;
+  gap: 6px;
   min-width: 0;
   text-overflow: unset;
   white-space: nowrap;
@@ -4525,24 +4526,64 @@ mark.chat-search-hit.chat-search-current {
 }
 
 .worktree-chats {
+  --nested-row-h: 26px;
+  --nested-row-gap: 2px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--nested-row-gap);
   /* Indent so nested status lines up under the parent title. */
   margin: 2px 2px 6px 22px;
   padding: 0;
+  max-height: calc(
+    var(--nested-visible, 3) * var(--nested-row-h) +
+      (var(--nested-visible, 3) - 1) * var(--nested-row-gap)
+  );
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+
+.worktree-chats::-webkit-scrollbar {
+  width: 6px;
+}
+
+.worktree-chats::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
 }
 
 .thread-item.nested {
+  flex: 0 0 var(--nested-row-h);
+  height: var(--nested-row-h);
+  min-height: var(--nested-row-h);
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 0 6px;
   border-radius: 6px;
   border-color: transparent;
+  -webkit-app-region: no-drag;
 }
 
 .thread-item.nested.active {
   background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.thread-item.nested.is-reorderable {
+  cursor: grab;
+}
+
+.thread-item.nested.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.thread-item.nested.drop-before {
+  box-shadow: inset 0 2px 0 var(--text);
+}
+
+.thread-item.nested.drop-after {
+  box-shadow: inset 0 -2px 0 var(--text);
 }
 
 .thread-item.nested .thread-status-icon {
@@ -4558,9 +4599,12 @@ mark.chat-search-hit.chat-search-current {
 .thread-item.nested .thread-title-text {
   flex: 1 1 0;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 400;
-  line-height: 1.25;
+  line-height: var(--nested-row-h);
   color: var(--text-secondary);
 }
 
@@ -4568,11 +4612,25 @@ mark.chat-search-hit.chat-search-current {
   color: var(--text);
 }
 
-.nested-chat-agent {
+.agent-kind-icon {
   flex: 0 0 auto;
-  color: var(--muted);
-  font-size: var(--font-size-tiny);
-  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+}
+
+.agent-kind-icon svg,
+.agent-kind-icon-img {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.agent-kind-icon-img {
+  object-fit: contain;
 }
 
 .nested-chat-close {
@@ -4600,13 +4658,15 @@ mark.chat-search-hit.chat-search-current {
 .nested-chat-input {
   flex: 1 1 0;
   min-width: 0;
+  height: 20px;
   border: none;
   border-radius: 4px;
   background: var(--bg);
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  padding: 2px 6px;
+  line-height: 20px;
+  padding: 0 6px;
 }
 
 .sidebar-tool-menu {
