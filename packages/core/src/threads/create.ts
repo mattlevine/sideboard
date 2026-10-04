@@ -234,8 +234,8 @@ export async function createThread(
     if (!sourceRef || sourceRef === 'HEAD' || sourceRef === 'default') {
       sourceRef = await resolveDefaultBranch(repoPath);
     } else {
-      // Worktree branch is still thread/<team>. Attach the existing GitHub PR
-      // for the source branch so the sidebar matches create-from-PR.
+      // Worktree branch is still a soccer-team placeholder. Attach the existing
+      // GitHub PR for the source branch so the sidebar matches create-from-PR.
       const existing = await getPrForHeadBranch(repoPath, sourceRef);
       if (existing) {
         const reusedPr = reuseLiveThread(input, repoPath, {
@@ -259,8 +259,8 @@ export async function createThread(
     throw new Error('Use adoptThread() for adopt sources');
   }
 
-  // Conductor-style: worktree dir + placeholder branch = soccer team.
-  // Tickets keep the identifier in the slug (`thread/eng-12-ajax`).
+  // Conductor-style: worktree dir + placeholder branch = soccer team slug.
+  // Tickets keep the identifier in the slug (`eng-12-ajax`).
   // Sidebar later shows renamed branch / PR title (not the create prompt).
   const team = allocateTeamSlug(repoPath);
   const slug =

@@ -29,6 +29,16 @@ import {
   resolveUsageOnLimit,
   type UsageOnLimit,
 } from './usage-on-limit.js';
+import {
+  EMPTY_MANAGED_ACCOUNTS,
+  ensureManagedAccountDir,
+  normalizeManagedAccounts,
+  withAddedAccount,
+  withRemovedAccount,
+  withSelectedAccount,
+  type ManagedAccountKind,
+  type ManagedAccountsState,
+} from './managed-accounts.js';
 
 export {
   isUsageOnLimit,
@@ -325,7 +335,7 @@ export function isChatTextScale(value: unknown): value is ChatTextScale {
 
 export interface AdvancedAppSettings {
   /**
-   * Ask the agent to rename the temporary `thread/<team>` branch on first send.
+   * Ask the agent to rename the temporary soccer-team branch on first send.
    * Conductor: Git → “Auto-rename placeholder branch on send” (default on).
    */
   autoRenameBranch?: boolean;
@@ -469,6 +479,8 @@ export interface AppSettings {
   projects: Record<string, ProjectProfileSettings>;
   /** Power-user / Conductor-style advanced preferences. */
   advanced: AdvancedAppSettings;
+  /** Isolated Claude/Codex logins (Settings → Agents → Accounts). */
+  accounts: ManagedAccountsState;
 }
 
 /** Integrations fields safe to send to the renderer (no token values). */
@@ -1047,6 +1059,7 @@ function normalizeSettings(raw: unknown): AppSettings {
   let defaults: DefaultsAppSettings = {};
   let projects: Record<string, ProjectProfileSettings> = {};
   let advanced: AdvancedAppSettings = {};
+  let accounts: ManagedAccountsState = { ...EMPTY_MANAGED_ACCOUNTS };
   if (raw && typeof raw === 'object') {
     if ('environment' in raw) {
       const source = (raw as { environment?: unknown }).environment;
@@ -1084,6 +1097,9 @@ function normalizeSettings(raw: unknown): AppSettings {
     if ('advanced' in raw) {
       advanced = normalizeAdvanced((raw as { advanced?: unknown }).advanced);
     }
+    if ('accounts' in raw) {
+      accounts = normalizeManagedAccounts((raw as { accounts?: unknown }).accounts);
+    }
   }
   return {
     environment: env,
@@ -1095,6 +1111,7 @@ function normalizeSettings(raw: unknown): AppSettings {
     defaults,
     projects,
     advanced,
+    accounts,
   };
 }
 
@@ -1108,6 +1125,7 @@ const EMPTY_SETTINGS: AppSettings = {
   defaults: {},
   projects: {},
   advanced: {},
+  accounts: { ...EMPTY_MANAGED_ACCOUNTS },
 };
 
 function readSettingsFile(): AppSettings {
@@ -1248,6 +1266,56 @@ export function saveAppSettings(settings: AppSettings): AppSettings {
   const normalized = normalizeSettings(settings);
   persistSplit(normalized);
   return normalized;
+}
+
+export function addManagedAccount(
+  kind: ManagedAccountKind,
+  label: string,
+): AppSettings {
+  const current = loadAppSettings();
+  const id = randomUUID();
+  const configDir = ensureManagedAccountDir(kind, id);
+  const trimmed = label.trim().slice(0, 80) || (kind === 'claude' ? 'Claude' : 'Codex');
+  const next = withAddedAccount(current.accounts, {
+    id,
+    kind,
+    label: trimmed,
+    configDir,
+    createdAt: new Date().toISOString(),
+  });
+  return saveAppSettings({ ...current, accounts: next });
+}
+
+export function selectManagedAccount(
+  kind: ManagedAccountKind,
+  accountId: string | null,
+): AppSettings {
+  const current = loadAppSettings();
+  return saveAppSettings({
+    ...current,
+    accounts: withSelectedAccount(current.accounts, kind, accountId),
+  });
+}
+
+export function removeManagedAccount(id: string): AppSettings {
+  const current = loadAppSettings();
+  return saveAppSettings({
+    ...current,
+    accounts: withRemovedAccount(current.accounts, id),
+  });
+}
+
+export function renameManagedAccount(id: string, label: string): AppSettings {
+  const current = loadAppSettings();
+  const trimmed = label.trim().slice(0, 80);
+  if (!trimmed) return current;
+  const accounts = current.accounts.accounts.map((a) =>
+    a.id === id ? { ...a, label: trimmed } : a,
+  );
+  return saveAppSettings({
+    ...current,
+    accounts: { ...current.accounts, accounts },
+  });
 }
 
 export function updateAppEnvironment(

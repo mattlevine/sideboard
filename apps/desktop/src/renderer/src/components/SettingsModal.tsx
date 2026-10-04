@@ -38,6 +38,7 @@ import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ConnectorsSettings } from './ConnectorsSettings';
 import { GitSettings } from './GitSettings';
 import { IssuesSettings } from './IssuesSettings';
+import { ManagedAccountsPanel } from './ManagedAccountsPanel';
 import { RemoteSettings } from './RemoteSettings';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { SchedulesSettings } from './SchedulesSettings';
@@ -109,6 +110,7 @@ function emptyAppSettings(): PublicAppSettings {
     defaults: {},
     projects: {},
     advanced: {},
+    accounts: { accounts: [], activeClaudeAccountId: null, activeCodexAccountId: null },
   };
 }
 
@@ -133,6 +135,11 @@ function normalizeSettings(next: PublicAppSettings): PublicAppSettings {
     defaults: next.defaults ?? {},
     projects: next.projects ?? {},
     advanced: next.advanced ?? {},
+    accounts: next.accounts ?? {
+      accounts: [],
+      activeClaudeAccountId: null,
+      activeCodexAccountId: null,
+    },
   };
 }
 
@@ -1307,6 +1314,16 @@ export function SettingsModal({
                   </>
                 )}
 
+                {(activeAgent.id === 'claude' || activeAgent.id === 'codex') && (
+                  <ManagedAccountsPanel
+                    kind={activeAgent.id}
+                    settings={settings}
+                    busy={busy}
+                    onApply={applySettings}
+                    onError={setError}
+                  />
+                )}
+
                 {(() => {
                   if (!isCliPathAgent(activeAgent.id)) return null;
                   const pathAgent = activeAgent.id;
@@ -1587,10 +1604,10 @@ export function SettingsModal({
                         Auto-rename placeholder branch on send
                       </div>
                       <p className="settings-hint">
-                        On the first agent turn, ask the agent to rename temporary{' '}
-                        <code>thread/&lt;team&gt;</code> branches to{' '}
-                        <code>prefix/ticket-description</code> when Settings → Git has a
-                        prefix; otherwise a short kebab-case task name.
+                        On the first agent turn, ask the agent to rename the temporary
+                        soccer-team branch to <code>prefix/ticket-description</code> when
+                        Settings → Git has a prefix; otherwise a short kebab-case task
+                        name.
                       </p>
                     </div>
                     <button
@@ -2022,6 +2039,7 @@ export function SettingsModal({
                     >
                       <option value="keep_going">Nothing — keep going</option>
                       <option value="confirm">Confirm with me</option>
+                      <option value="switch_account">Switch Claude/Codex account</option>
                       <option value="switch_agent">Switch agent</option>
                       <option value="wait_reset">Stop until the window resets</option>
                     </select>

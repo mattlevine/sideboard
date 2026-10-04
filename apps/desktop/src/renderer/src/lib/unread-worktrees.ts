@@ -2,6 +2,9 @@
  * Conductor-style unread worktrees: a sidebar row looks unread when an agent
  * response arrived after you last opened that worktree. Clicking in marks it seen.
  * Client-only (localStorage) — project headers stay visually separate.
+ *
+ * Nested chat rows use a per-chat last-seen key (`chat:<id>`). The worktree row
+ * is unread when any sibling chat is unread.
  */
 
 import type { Thread } from '@sideboard-ai/core';
@@ -42,6 +45,10 @@ export function unreadWorktreeKey(thread: Pick<Thread, 'worktreePath' | 'repoPat
   return normalizeKey(thread.repoPath || '');
 }
 
+export function unreadChatKey(threadId: string): string {
+  return `chat:${threadId.trim()}`;
+}
+
 /** Latest agent message timestamp in the group (Conductor: “responses you haven’t seen”). */
 export function latestAgentResponseAt(threads: Thread[]): string | null {
   let max = '';
@@ -68,6 +75,19 @@ export function markWorktreeSeen(key: string, at: string = new Date().toISOStrin
   return true;
 }
 
+export function markChatSeen(thread: Thread, at?: string): boolean {
+  const activity = at ?? latestAgentResponseAt([thread]) ?? new Date().toISOString();
+  return markWorktreeSeen(unreadChatKey(thread.id), activity);
+}
+
+/** Mark unread by parking last-seen just before the latest agent response. */
+export function markChatUnread(thread: Thread): boolean {
+  const activity = latestAgentResponseAt([thread]);
+  if (!activity) return false;
+  const prior = new Date(Date.parse(activity) - 1).toISOString();
+  return markWorktreeSeen(unreadChatKey(thread.id), prior);
+}
+
 /**
  * Seed last-seen for worktrees that have never been recorded so historical
  * rows don’t all flash unread on first launch — only future responses do.
@@ -86,11 +106,21 @@ export function baselineUnreadWorktrees(threads: Thread[]): boolean {
   const map = readMap();
   let changed = false;
   for (const [key, group] of byKey) {
-    if (map[key]) continue;
-    const activity = latestAgentResponseAt(group);
-    if (!activity) continue;
-    map[key] = activity;
-    changed = true;
+    if (!map[key]) {
+      const activity = latestAgentResponseAt(group);
+      if (activity) {
+        map[key] = activity;
+        changed = true;
+      }
+    }
+    for (const t of group) {
+      const chatKey = unreadChatKey(t.id);
+      if (map[chatKey]) continue;
+      const activity = latestAgentResponseAt([t]);
+      if (!activity) continue;
+      map[chatKey] = activity;
+      changed = true;
+    }
   }
   if (changed) writeMap(map);
   return changed;
@@ -105,4 +135,29 @@ export function isWorktreeUnread(
   const seen = getWorktreeLastSeen(key);
   if (seen == null) return false;
   return activityAt > seen;
+}
+
+export function isChatUnread(thread: Thread, opts: { active: boolean }): boolean {
+  return isWorktreeUnread(
+    unreadChatKey(thread.id),
+    latestAgentResponseAt([thread]),
+    opts,
+  );
+}
+
+export function isGroupUnread(group: Thread[], opts: { activeChatId: string | null }): boolean {
+  return group.some((t) => isChatUnread(t, { active: t.id === opts.activeChatId }));
+}
+
+/** Unread chats the user is not currently looking at (Dock badge). */
+export function countUnreadChats(
+  threads: Thread[],
+  opts: { activeChatId: string | null; viewIsThread: boolean },
+): number {
+  let n = 0;
+  for (const t of threads) {
+    const active = opts.viewIsThread && t.id === opts.activeChatId;
+    if (isChatUnread(t, { active })) n += 1;
+  }
+  return n;
 }

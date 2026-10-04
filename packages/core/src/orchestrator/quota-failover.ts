@@ -5,24 +5,35 @@ import {
   resolveQuotaFallbackAgent,
 } from '../agents/session-quota.js';
 import {
+  loadAppSettings,
   orchestrationQuotaFallbackAgent,
   usageOnLimit,
   type UsageOnLimit,
 } from '../store/app-settings.js';
+import {
+  nextManagedAccount,
+  type ManagedAccountKind,
+} from '../store/managed-accounts.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import { listThreads, updateThread } from '../store/thread-store.js';
 import { createChatTab } from '../threads/chat-tabs.js';
 import type { AgentKind, Thread, ThreadAttachment } from '../types/thread.js';
 
-export type QuotaFailoverAction = 'switch_agent' | 'wait_reset' | 'none';
+export type QuotaFailoverAction = 'switch_account' | 'switch_agent' | 'wait_reset' | 'none';
 
 export type QuotaFailoverPlan = {
   action: QuotaFailoverAction;
   reason: string;
   limitText: string;
   fallbackAgent?: AgentKind;
+  fallbackAccountId?: string | null;
+  fallbackAccountLabel?: string;
   resumeAt?: Date;
 };
+
+function managedKindForAgent(agent: AgentKind): ManagedAccountKind | null {
+  return agent === 'claude' || agent === 'codex' ? agent : null;
+}
 
 /** Decide host action when any chat hits a provider session/usage limit. */
 export function planOrchestrationQuotaFailover(
@@ -32,6 +43,7 @@ export function planOrchestrationQuotaFailover(
     onLimit?: UsageOnLimit;
     fallbackAgent?: AgentKind | null;
     now?: Date;
+    accounts?: ReturnType<typeof loadAppSettings>['accounts'];
   },
 ): QuotaFailoverPlan | null {
   if (!isSessionQuotaLimit(limitText)) return null;
@@ -50,9 +62,9 @@ export function planOrchestrationQuotaFailover(
     };
   }
 
-  // Already continued once onto another agent — don't cascade forever.
+  // Already continued once onto another agent/account — don't cascade forever.
   if (thread.quotaContinuedFromId) {
-    if (onLimit === 'switch_agent' && resumeAt) {
+    if ((onLimit === 'switch_agent' || onLimit === 'switch_account') && resumeAt) {
       return {
         action: 'wait_reset',
         reason: 'Already continued once; waiting for quota reset instead.',
@@ -80,6 +92,33 @@ export function planOrchestrationQuotaFailover(
       reason: 'Settings: wait for quota reset.',
       limitText,
       resumeAt,
+    };
+  }
+
+  if (onLimit === 'switch_account') {
+    const kind = managedKindForAgent(thread.agent);
+    if (!kind) {
+      return {
+        action: 'none',
+        reason: `switch_account configured but ${thread.agent} has no managed accounts.`,
+        limitText,
+      };
+    }
+    const accounts = opts?.accounts ?? loadAppSettings().accounts;
+    const next = nextManagedAccount(kind, thread.accountId ?? null, accounts);
+    if (!next) {
+      return {
+        action: 'none',
+        reason: 'switch_account configured but no other Claude/Codex account is available.',
+        limitText,
+      };
+    }
+    return {
+      action: 'switch_account',
+      reason: `Continue on ${kind} account “${next.label}” after session limit.`,
+      limitText,
+      fallbackAccountId: next.accountId,
+      fallbackAccountLabel: next.label,
     };
   }
 
@@ -163,6 +202,15 @@ export const QUOTA_CONTINUE_PROMPT = (fromAgent: AgentKind, fallback: AgentKind)
     'Proceed with the goal. Leave model Auto unless needed.',
   ].join(' ');
 
+export const QUOTA_CONTINUE_ACCOUNT_PROMPT = (
+  fromAgent: AgentKind,
+  accountLabel: string,
+) =>
+  [
+    `${fromAgent} hit a session/usage limit. Continue this chat on ${fromAgent} account “${accountLabel}” using the attached handoff.`,
+    'Proceed with the goal. Leave model Auto unless needed.',
+  ].join(' ');
+
 export const QUOTA_RESUME_PROMPT =
   'Session/usage limit window should have reset. Continue this chat from where you left off.';
 
@@ -187,6 +235,7 @@ export function createQuotaFailoverChat(
   from: Thread,
   fallbackAgent: AgentKind,
   limitText: string,
+  opts?: { accountId?: string | null; accountLabel?: string },
 ): Thread {
   const handoff = buildQuotaHandoffAttachment(from, limitText, fallbackAgent);
   const tab = createChatTab({
@@ -194,6 +243,7 @@ export function createQuotaFailoverChat(
     agent: fallbackAgent,
     model: null,
     attachments: [handoff],
+    ...(opts && 'accountId' in opts ? { accountId: opts.accountId } : {}),
   });
   const patch: Partial<Thread> = {
     quotaContinuedFromId: from.id,

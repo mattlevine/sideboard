@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.260] - 2026-10-03
+
+### Added
+
+- Worktree rows in the left sidebar show Add agent (`+`) immediately to the right of Archive.
+
+### Changed
+
+- Nested worktree chats and orchestration agents grow to their natural height instead of scrolling after three rows.
+
+## [0.1.259] - 2026-10-03
+
+### Added
+
+- Nested worktree chats show branded agent logos beside the name; the list scrolls after three rows and can be drag-reordered.
+- Orchestration agents use the same nested list (logos, tighter rows, 3-row scroll, drag-sort).
+- Titlebar breadcrumb is `project > PR/branch > agent` with Add agent; orchestration is `Orchestration > agent`.
+- Settings → Agents can add, switch, and rename managed Claude or Codex accounts, including quota failover.
+
+### Changed
+
+- New worktrees use a soccer-team slug (`ajax`) instead of `thread/ajax`. Leftover `thread/` refs still count as taken.
+- Request review reuses a worktree’s only unused idle agent instead of opening a second chat.
+
 ## [0.1.258] - 2026-10-02
 
 ### Fixed

@@ -85,6 +85,47 @@ describe('planOrchestrationQuotaFailover', () => {
     expect(plan?.fallbackAgent).toBe('cursor');
   });
 
+  it('switches to the next managed account when configured', () => {
+    const plan = planOrchestrationQuotaFailover(orchThread({ accountId: 'a' }), LIMIT, {
+      onLimit: 'switch_account',
+      accounts: {
+        accounts: [
+          {
+            id: 'a',
+            kind: 'claude',
+            label: 'work',
+            configDir: '/tmp/a',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+          {
+            id: 'b',
+            kind: 'claude',
+            label: 'personal',
+            configDir: '/tmp/b',
+            createdAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+        activeClaudeAccountId: 'a',
+        activeCodexAccountId: null,
+      },
+    });
+    expect(plan?.action).toBe('switch_account');
+    expect(plan?.fallbackAccountId).toBe('b');
+    expect(plan?.fallbackAccountLabel).toBe('personal');
+  });
+
+  it('does nothing for switch_account when no other account exists', () => {
+    const plan = planOrchestrationQuotaFailover(orchThread(), LIMIT, {
+      onLimit: 'switch_account',
+      accounts: {
+        accounts: [],
+        activeClaudeAccountId: null,
+        activeCodexAccountId: null,
+      },
+    });
+    expect(plan?.action).toBe('none');
+  });
+
   it('does nothing when the policy is keep going or confirm', () => {
     expect(
       planOrchestrationQuotaFailover(orchThread(), LIMIT, { onLimit: 'keep_going' })

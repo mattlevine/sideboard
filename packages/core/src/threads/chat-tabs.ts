@@ -198,6 +198,7 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     autonomy: input.autonomy ?? from.autonomy,
     attachments: input.attachments ?? [],
     status: 'idle',
+    ...(input.accountId !== undefined ? { accountId: input.accountId } : {}),
     ...mergeWorktreeActiveRuns(threadsSharingWorktree(binding.worktreePath)),
   });
   writeThread(thread);

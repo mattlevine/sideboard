@@ -28,13 +28,29 @@ export type ClaudeUsageClientOpts = {
   userAgent?: string;
   /** Skip the in-process cache (composer confirm before send). */
   force?: boolean;
+  /** Isolated Claude config dir for a managed account. */
+  configDir?: string;
 };
 
-let cache: { at: number; value: ClaudePlanUsage | null } | null = null;
+let cache: { at: number; dir: string; value: ClaudePlanUsage | null } | null = null;
 let errorUntil = 0;
 let inflight: Promise<ClaudePlanUsage | null> | null = null;
-let lastGood: { at: number; value: ClaudePlanUsage } | null = null;
+let lastGood: { at: number; dir: string; value: ClaudePlanUsage } | null = null;
 let claudeVersion: string | null = null;
+let cacheDirKey = '';
+
+function usageCacheDir(opts: ClaudeUsageClientOpts): string {
+  return opts.configDir?.trim() || '';
+}
+
+function adoptCacheDir(dir: string): void {
+  if (dir === cacheDirKey) return;
+  cache = null;
+  lastGood = null;
+  errorUntil = 0;
+  inflight = null;
+  cacheDirKey = dir;
+}
 
 export function resetClaudeUsageCacheForTests(): void {
   cache = null;
@@ -42,6 +58,7 @@ export function resetClaudeUsageCacheForTests(): void {
   inflight = null;
   lastGood = null;
   claudeVersion = null;
+  cacheDirKey = '';
 }
 
 /** Pull an access token from Claude Code's credentials JSON — never log the result. */
@@ -66,13 +83,13 @@ export function accessTokenFromCredentialsJson(raw: string): string | null {
   }
 }
 
-export function claudeCredentialsPath(): string {
-  const root = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude');
+export function claudeCredentialsPath(configDir?: string): string {
+  const root = configDir?.trim() || process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude');
   return join(root, '.credentials.json');
 }
 
-async function readFileAccessToken(): Promise<string | null> {
-  const path = claudeCredentialsPath();
+async function readFileAccessToken(configDir?: string): Promise<string | null> {
+  const path = claudeCredentialsPath(configDir);
   if (!existsSync(path)) return null;
   try {
     return accessTokenFromCredentialsJson(readFileSync(path, 'utf8'));
@@ -81,26 +98,33 @@ async function readFileAccessToken(): Promise<string | null> {
   }
 }
 
-async function readKeychainAccessToken(): Promise<string | null> {
+async function readKeychainAccessToken(configDir?: string): Promise<string | null> {
   if (process.platform !== 'darwin') return null;
+  const root = configDir?.trim();
+  // Claude Code 2.1+ can scope the keychain item to the config dir as account.
+  const accounts = root ? [root, undefined] : [undefined];
   for (const service of KEYCHAIN_SERVICES) {
-    const result = await run('security', ['find-generic-password', '-s', service, '-w'], {
-      reject: false,
-      timeoutMs: 4_000,
-    });
-    if (result.exitCode !== 0 || !result.stdout.trim()) continue;
-    const token = accessTokenFromCredentialsJson(result.stdout);
-    if (token) return token;
+    for (const account of accounts) {
+      const args = ['find-generic-password', '-s', service, '-w'];
+      if (account) args.splice(3, 0, '-a', account);
+      const result = await run('security', args, {
+        reject: false,
+        timeoutMs: 4_000,
+      });
+      if (result.exitCode !== 0 || !result.stdout.trim()) continue;
+      const token = accessTokenFromCredentialsJson(result.stdout);
+      if (token) return token;
+    }
   }
   return null;
 }
 
-export async function readClaudeAccessToken(): Promise<string | null> {
+export async function readClaudeAccessToken(configDir?: string): Promise<string | null> {
   const envToken = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
   if (envToken) return envToken;
-  const fromFile = await readFileAccessToken();
+  const fromFile = await readFileAccessToken(configDir);
   if (fromFile) return fromFile;
-  return readKeychainAccessToken();
+  return readKeychainAccessToken(configDir);
 }
 
 async function resolveClaudeUserAgent(): Promise<string> {
@@ -136,6 +160,7 @@ export async function getClaudePlanUsage(
   opts: ClaudeUsageClientOpts = {},
 ): Promise<ClaudePlanUsage | null> {
   const now = opts.now ?? Date.now();
+  adoptCacheDir(usageCacheDir(opts));
   // Honor 429 / transient backoff even for composer `force` — retrying a
   // rate-limited usage URL is what hid the meter and made the 429 worse.
   if (now < errorUntil) return reuseLast() ?? staleOk(now);
@@ -146,9 +171,9 @@ export async function getClaudePlanUsage(
 
   inflight = (async () => {
     try {
-      const token = await (opts.readAccessToken ?? readClaudeAccessToken)();
+      const token = await (opts.readAccessToken ?? (() => readClaudeAccessToken(opts.configDir)))();
       if (!token) {
-        cache = { at: now, value: null };
+        cache = { at: now, dir: cacheDirKey, value: null };
         return null;
       }
       const fetchFn = opts.fetch ?? (httpFetch as FetchLike);
@@ -169,13 +194,13 @@ export async function getClaudePlanUsage(
         clearTimeout(timer);
       }
       if (res.status === 401 || res.status === 403) {
-        cache = { at: now, value: null };
+        cache = { at: now, dir: cacheDirKey, value: null };
         return null;
       }
       if (res.status === 429) {
         errorUntil = now + CLAUDE_USAGE_ERROR_TTL_MS;
         const last = reuseLast();
-        if (last) cache = { at: now, value: last };
+        if (last) cache = { at: now, dir: cacheDirKey, value: last };
         return last;
       }
       if (!res.ok) {
@@ -183,8 +208,8 @@ export async function getClaudePlanUsage(
         return staleOk(now);
       }
       const usage = parseClaudeUsagePayload(await res.json(), new Date(now).toISOString());
-      cache = { at: now, value: usage };
-      if (usage) lastGood = { at: now, value: usage };
+      cache = { at: now, dir: cacheDirKey, value: usage };
+      if (usage) lastGood = { at: now, dir: cacheDirKey, value: usage };
       return usage;
     } catch {
       errorUntil = now + CLAUDE_USAGE_ERROR_TTL_MS;

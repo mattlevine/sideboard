@@ -11,13 +11,6 @@ import type {
   Thread,
 } from '../types/thread.js';
 import { worktreesRoot } from '../store/paths.js';
-import { listThreads } from '../store/thread-store.js';
-import {
-  allocateTeamName,
-  normalizeTakenSlug,
-  takenSlugsFromThread,
-  type TeamName,
-} from './teams.js';
 import { normalizeWorktreePath } from './worktree-labels.js';
 import {
   clampGithubPrBody,
@@ -500,9 +493,10 @@ export function isDefaultishSourceRef(ref: string | null | undefined): boolean {
 
 /**
  * Fallback `gh pr view` / checks selectors when the current branch has no open
- * PR. Create-from-branch still forks `thread/<team>`, so that name is not the
- * GitHub head. Prefer persisted URL, then the worktree branch, then the source
- * branch. {@link connectedPrSelectors} prepends the current-branch open PR.
+ * PR. Create-from-branch still forks a soccer-team placeholder branch, so that
+ * name is not the GitHub head. Prefer persisted URL, then the worktree branch,
+ * then the source branch. {@link connectedPrSelectors} prepends the current-branch
+ * open PR.
  */
 export function resolvePrSelectors(
   thread: Pick<Thread, 'prUrl' | 'sourceType' | 'sourceRef' | 'branchName'>,
@@ -1432,7 +1426,7 @@ export async function createThreadWorktree(opts: {
   sourceRef: string;
   slug: string;
 }): Promise<CreateWorktreeResult> {
-  let branchName = `thread/${opts.slug}`;
+  let branchName = opts.slug;
   const worktreePath = join(worktreesRoot(opts.repoPath), opts.slug);
 
   if (existsSync(worktreePath)) {
@@ -1484,7 +1478,7 @@ export async function createThreadWorktree(opts: {
 
 /**
  * Attach a worktree to an **existing** branch (stack layers).
- * Unlike {@link createThreadWorktree}, does not create `thread/<slug>`.
+ * Unlike {@link createThreadWorktree}, does not create a new placeholder branch.
  */
 export async function createExistingBranchWorktree(opts: {
   repoPath: string;
@@ -2107,63 +2101,4 @@ export {
   worktreeNameFromPath,
 } from './worktree-labels.js';
 
-function sameRepoPath(a: string, b: string): boolean {
-  return normalizeWorktreePath(a) === normalizeWorktreePath(b);
-}
-
-/** Local `thread/*` branch tips under `.git/refs/heads/thread` (best-effort). */
-function listLocalThreadBranchSlugs(repoPath: string): string[] {
-  const refsDir = join(repoPath, '.git', 'refs', 'heads', 'thread');
-  if (!existsSync(refsDir)) return [];
-  try {
-    return readdirSync(refsDir)
-      .filter((name) => !name.startsWith('.'))
-      .map((name) => normalizeTakenSlug(name));
-  } catch {
-    return [];
-  }
-}
-
-/** Slugs already used by worktree dirs, thread records, or `thread/<slug>` branches. */
-export function collectTakenTeamSlugs(repoPath: string): Set<string> {
-  const taken = new Set<string>();
-
-  const root = worktreesRoot(repoPath);
-  if (existsSync(root)) {
-    for (const entry of readdirSync(root, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name !== '.DS_Store') {
-        for (const slug of takenSlugsFromThread({ worktreePath: entry.name })) {
-          taken.add(slug);
-        }
-      }
-    }
-  }
-
-  for (const slug of listLocalThreadBranchSlugs(repoPath)) {
-    for (const token of takenSlugsFromThread({ branchName: slug })) {
-      taken.add(token);
-    }
-  }
-
-  for (const thread of listThreads({ includeArchived: true })) {
-    if (!sameRepoPath(thread.repoPath, repoPath)) continue;
-    for (const slug of takenSlugsFromThread(thread)) {
-      taken.add(slug);
-    }
-  }
-
-  return taken;
-}
-
-/** Pick an unused soccer team for the worktree directory / branch slug. */
-export function allocateTeamSlug(repoPath: string): TeamName {
-  const taken = collectTakenTeamSlugs(repoPath);
-  // Retry if a dir appeared between collect and allocate (or stale taken set).
-  for (let attempt = 0; attempt < 32; attempt++) {
-    const team = allocateTeamName(taken);
-    const path = join(worktreesRoot(repoPath), team.slug);
-    if (!existsSync(path)) return team;
-    taken.add(team.slug);
-  }
-  throw new Error('No available soccer team worktree directories left');
-}
+export { allocateTeamSlug, collectTakenTeamSlugs } from './team-slugs.js';

@@ -200,14 +200,14 @@ export async function startTerminalSession(
   threadRef: string,
   cols = 80,
   rows = 24,
-  opts?: { command?: string; args?: string[] },
+  opts?: { command?: string; args?: string[]; pane?: number },
 ): Promise<{ id: string; scrollback: string }> {
   const thread = orch.getThread(threadRef);
   if (!thread) throw new Error(`Thread not found: ${threadRef}`);
 
   const kind = terminalSessionKind(opts);
   const worktreeKey = normalizeWorktreePath(thread.worktreePath) || threadRef;
-  const reuseKey = terminalReuseKey(kind, worktreeKey, threadRef);
+  const reuseKey = terminalReuseKey(kind, worktreeKey, threadRef, opts?.pane);
   const existing = findReusableTerminalSession(sessions.values(), reuseKey, kind);
   if (existing) {
     // Do not ioctl with bootstrap cols/rows — see shouldResizeExistingTerminalOnStart.

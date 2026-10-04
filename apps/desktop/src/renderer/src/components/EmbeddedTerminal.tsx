@@ -14,6 +14,8 @@ interface Props {
   mode?: 'shell' | 'attach';
   /** False while the panel is parked (another lower tab). Refresh xterm when shown. */
   active?: boolean;
+  /** Extra shell pane (0 = primary shared PTY). */
+  pane?: number;
 }
 
 /**
@@ -29,6 +31,7 @@ export function EmbeddedTerminal({
   worktreePath,
   mode = 'shell',
   active = true,
+  pane = 0,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -69,11 +72,10 @@ export function EmbeddedTerminal({
           setError('Restart Sideboard to enable the embedded terminal.');
           return;
         }
-        const start =
+        const { id } =
           mode === 'attach' && typeof window.sideboard.terminal.attach === 'function'
-            ? window.sideboard.terminal.attach
-            : window.sideboard.terminal.start;
-        const { id } = await start(threadIdRef.current, 100, 24);
+            ? await window.sideboard.terminal.attach(threadIdRef.current, 100, 24)
+            : await window.sideboard.terminal.start(threadIdRef.current, 100, 24, pane);
         if (cancelled) return;
         setSessionId(id);
 
@@ -228,7 +230,7 @@ export function EmbeddedTerminal({
       termRef.current?.dispose();
       termRef.current = null;
     };
-  }, [worktreePath, mode]);
+  }, [worktreePath, mode, pane]);
 
   async function sendLine(e: React.FormEvent) {
     e.preventDefault();

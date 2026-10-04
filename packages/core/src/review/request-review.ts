@@ -3,8 +3,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Thread, ThreadAttachment } from '../types/thread.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
-import { createChatTab } from '../threads/chat-tabs.js';
-import { findThreadByRef } from '../store/thread-store.js';
+import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
+import { findThreadByRef, updateThread } from '../store/thread-store.js';
+import { REVIEW_TAB_TITLE } from './review-write-gate.js';
 import {
   REVIEW_REQUEST_TEMPLATE,
   REVIEW_SKILL_NAME,
@@ -243,16 +244,46 @@ export function readExistingReviewRequestFile(worktreePath: string): string | nu
 }
 
 export interface RequestReviewResult {
-  /** New Review chat tab. */
+  /** Review chat (reused idle singleton or a new tab). */
   tab: Thread;
-  /** Worktree thread that was reviewed (source of the tab). */
+  /** Worktree thread that was reviewed (source of the tab). Same as `tab` when reused. */
   from: Thread;
 }
 
 type SendFn = (threadRef: string, prompt: string) => Promise<Thread>;
 
+type ReviewReuseThread = Pick<Thread, 'id' | 'status' | 'messages' | 'queue'>;
+
 /**
- * Open a fresh "Review" chat tab, attach resolved guidelines, send the review prefill.
+ * True when this worktree has exactly one live agent and it has never been
+ * used (idle, no chat, no queued prompt). Review runs there instead of a
+ * second tab.
+ */
+export function canReuseIdleWorktreeAgentForReview(
+  from: ReviewReuseThread,
+  siblings: ReviewReuseThread[],
+): boolean {
+  const live = siblings.filter((t) => t.status !== 'archived');
+  if (live.length !== 1) return false;
+  const only = live[0]!;
+  if (only.id !== from.id) return false;
+  if (from.status !== 'idle') return false;
+  if ((from.queue?.length ?? 0) > 0) return false;
+  return (from.messages?.length ?? 0) === 0 && (only.messages?.length ?? 0) === 0;
+}
+
+function reviewGuidelinesAttachment(from: Thread): ThreadAttachment {
+  const guidelines = resolveReviewGuidelines(from.worktreePath, from.repoPath);
+  return buildReviewRequestAttachment(guidelines.content, {
+    path: guidelines.path,
+    name: guidelines.name,
+  });
+}
+
+/**
+ * Run a merge-readiness review on a worktree. Reuses the only unused agent
+ * when the checkout has a single idle chat with no messages; otherwise opens
+ * a new Review tab so existing work is not interrupted.
  */
 export async function requestReview(
   threadRef: string,
@@ -269,16 +300,22 @@ export async function requestReview(
     throw new Error(`Thread is archived: ${from.id}`);
   }
 
-  const guidelines = resolveReviewGuidelines(from.worktreePath, from.repoPath);
+  const attachment = reviewGuidelinesAttachment(from);
+  const siblings = threadsSharingWorktree(from.worktreePath);
+  if (canReuseIdleWorktreeAgentForReview(from, siblings)) {
+    const reused = updateThread(from.id, {
+      title: REVIEW_TAB_TITLE,
+      userSetTitle: true,
+      attachments: [...(from.attachments ?? []), attachment],
+    });
+    const started = await send(reused.id, REVIEW_REQUEST_PREFILL);
+    return { tab: started, from: reused };
+  }
+
   const tab = createChatTab({
     fromThreadId: from.id,
-    title: 'Review',
-    attachments: [
-      buildReviewRequestAttachment(guidelines.content, {
-        path: guidelines.path,
-        name: guidelines.name,
-      }),
-    ],
+    title: REVIEW_TAB_TITLE,
+    attachments: [attachment],
   });
   const started = await send(tab.id, REVIEW_REQUEST_PREFILL);
   return { tab: started, from };

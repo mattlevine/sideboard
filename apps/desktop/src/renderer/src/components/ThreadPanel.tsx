@@ -70,6 +70,7 @@ import { useLiveThread } from '../lib/live-paint-context';
 import { shouldShowClaudePlanUsage, useClaudePlanUsage } from '../lib/use-claude-usage';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
+import { AccountSwitcher } from './AccountSwitcher';
 import { ClaudeUsageMeter } from './ClaudeUsageMeter';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
@@ -189,8 +190,6 @@ interface Props {
   worktreeChats: Thread[];
   onRefresh: () => void;
   onSelectChat: (id: string, created?: Thread) => void;
-  /** Drag-reorder agent / orchestration tabs; parent persists the order. */
-  onReorderChats?: (ids: string[]) => void;
   /** When the active chat is archived and no sibling tabs remain (e.g. last orchestration). */
   onLeaveThread?: () => void;
   /**
@@ -713,9 +712,7 @@ export function ThreadPanel({
   worktreeChats,
   onRefresh,
   onSelectChat,
-  onReorderChats,
   onLeaveThread,
-  onArchiveThread,
   composerPrefill,
   onComposerPrefillConsumed,
   findChatCmd,
@@ -1861,23 +1858,6 @@ export function ThreadPanel({
     messages: thread.messages,
   });
 
-  async function archiveChatTab(id: string) {
-    const removesWorktree =
-      chats.length <= 1 && !isGlobalThread(thread) && !thread.cowboy;
-    const tab = chats.find((c) => c.id === id);
-    const title = tab?.title?.trim() || 'Untitled';
-    if (onArchiveThread) {
-      await onArchiveThread(id, { title, removesWorktree });
-      return;
-    }
-    await window.sideboard.archiveThread(id);
-    if (id === thread.id) {
-      const rest = chats.filter((c) => c.id !== id);
-      if (rest[0]) onSelectChat(rest[0].id);
-      else onLeaveThread?.();
-    }
-    onRefresh();
-  }
   const threadUsage = useMemo(() => {
     const fromMessages = sumUsage(thread.messages.map((m) => m.usage));
     // Live turn is not persisted yet — fold it into the tab Σ while streaming.
@@ -1912,9 +1892,10 @@ export function ThreadPanel({
   const contextRatio = occupancyFillRatio(forwardOccupancy, contextWindow);
   const contextCompacted = threadHasCompactedContext(forwardMessages);
   const showClaudePlan = shouldShowClaudePlanUsage(thread);
+  const [accountEpoch, setAccountEpoch] = useState(0);
   const claudePlanUsage = useClaudePlanUsage(
     showClaudePlan,
-    `${thread.status}:${thread.messages.length}`,
+    `${thread.status}:${thread.messages.length}:${accountEpoch}`,
   );
 
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
@@ -2292,6 +2273,7 @@ export function ThreadPanel({
         fileChanges={fileChanges}
         projectName={chrome.project}
         taskName={chrome.task}
+        agentName={chrome.agent}
         onBack={onLeaveThread}
         leftSidebarToggle={leftSidebarToggle}
         rightSidebarToggle={rightSidebarToggle}
@@ -2299,21 +2281,27 @@ export function ThreadPanel({
           thread.status === 'running' || thread.status === 'queued' ? thread.status : null
         }
         planUsage={
-          <ClaudeUsageMeter
-            usage={showClaudePlan ? claudePlanUsage : null}
-            contextRatio={contextRatio}
-            contextLabel={tabsContextLabel(
-              forwardOccupancy,
-              contextWindow,
-              threadUsage?.costUsd,
-              showCost,
-            )}
-            contextTooltip={contextMeterTooltip(latestContextUsage, contextWindow, {
-              occupancy: forwardOccupancy,
-              compacted: contextCompacted,
-              billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
-            })}
-          />
+          <>
+            <AccountSwitcher
+              agent={thread.agent}
+              onChanged={() => setAccountEpoch((n) => n + 1)}
+            />
+            <ClaudeUsageMeter
+              usage={showClaudePlan ? claudePlanUsage : null}
+              contextRatio={contextRatio}
+              contextLabel={tabsContextLabel(
+                forwardOccupancy,
+                contextWindow,
+                threadUsage?.costUsd,
+                showCost,
+              )}
+              contextTooltip={contextMeterTooltip(latestContextUsage, contextWindow, {
+                occupancy: forwardOccupancy,
+                compacted: contextCompacted,
+                billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+              })}
+            />
+          </>
         }
         openMenu={
           isGlobalThread(thread) ? undefined : (
@@ -2400,17 +2388,6 @@ export function ThreadPanel({
         onSelectChanges={() => onSelectChanges?.()}
         onCloseChanges={() => onCloseChanges?.()}
         onNewTab={(opts) => void newTab(opts)}
-        onRename={(id, title) =>
-          void window.sideboard.renameThread(id, title).then(onRefresh)
-        }
-        onCloseTab={(id) => {
-          const tab = chats.find((c) => c.id === id);
-          if (!tab) return;
-          void archiveChatTab(id).catch((err: unknown) => {
-            window.alert(err instanceof Error ? err.message : String(err));
-          });
-        }}
-        onReorderChats={onReorderChats}
         onFindChat={() => openChatSearch()}
       />
       {belowTabs}

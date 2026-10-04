@@ -72,6 +72,7 @@ describe('app settings', () => {
       defaults: {},
       projects: {},
       advanced: {},
+      accounts: { accounts: [], activeClaudeAccountId: null, activeCodexAccountId: null },
     });
     const target: NodeJS.ProcessEnv = { CURSOR_API_KEY: 'from-shell' };
     mod.applyAppEnvironment(target);
@@ -92,6 +93,7 @@ describe('app settings', () => {
       defaults: {},
       projects: {},
       advanced: {},
+      accounts: { accounts: [], activeClaudeAccountId: null, activeCodexAccountId: null },
     });
   });
 
@@ -878,6 +880,7 @@ describe('app settings', () => {
       defaults: {},
       projects: {},
       advanced: {},
+      accounts: { accounts: [], activeClaudeAccountId: null, activeCodexAccountId: null },
     });
 
     expect(saved.claude.executablePath).toBeUndefined();
@@ -893,5 +896,19 @@ describe('app settings', () => {
     const next = mod.updateClaudeSettings({ chromeEnabled: true });
     expect(next.environment.ANTHROPIC_API_KEY).toBe('sk-test');
     expect(next.claude.chromeEnabled).toBe(true);
+  });
+
+  it('adds and selects an isolated Claude account home', async () => {
+    const mod = await load();
+    const added = mod.addManagedAccount('claude', 'work');
+    expect(added.accounts.accounts).toHaveLength(1);
+    expect(added.accounts.accounts[0]?.kind).toBe('claude');
+    expect(added.accounts.accounts[0]?.label).toBe('work');
+    expect(added.accounts.activeClaudeAccountId).toBe(added.accounts.accounts[0]?.id);
+    const id = added.accounts.accounts[0]!.id;
+    const system = mod.selectManagedAccount('claude', null);
+    expect(system.accounts.activeClaudeAccountId).toBeNull();
+    const selected = mod.selectManagedAccount('claude', id);
+    expect(selected.accounts.activeClaudeAccountId).toBe(id);
   });
 });

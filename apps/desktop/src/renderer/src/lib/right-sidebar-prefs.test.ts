@@ -3,11 +3,13 @@ import {
   readRightSidebarLower,
   readRightSidebarOpen,
   readRightSidebarWidth,
+  readTerminalSplit,
   RIGHT_SIDEBAR_WIDTH_FALLBACK,
   shouldResetParkedSidebarPanes,
   writeRightSidebarLower,
   writeRightSidebarOpen,
   writeRightSidebarWidth,
+  writeTerminalSplit,
 } from './right-sidebar-prefs';
 
 function installLocalStorageMock() {
@@ -73,6 +75,16 @@ describe('right-sidebar-prefs', () => {
     writeRightSidebarLower('/wt/cruzeiro', 'setup');
     expect(readRightSidebarLower('/wt/monaco')).toBe('terminal');
     expect(readRightSidebarLower('/wt/cruzeiro')).toBe('setup');
+  });
+
+  it('remembers a 2-pane terminal split per worktree', () => {
+    expect(readTerminalSplit('/wt/monaco')).toBe(false);
+    writeTerminalSplit('/wt/monaco', true);
+    expect(readTerminalSplit('/wt/monaco')).toBe(true);
+    expect(readTerminalSplit('/wt/monaco/')).toBe(true);
+    expect(readTerminalSplit('/wt/cruzeiro')).toBe(false);
+    writeTerminalSplit('/wt/monaco', false);
+    expect(readTerminalSplit('/wt/monaco')).toBe(false);
   });
 
   it('falls back to legacy global key only when worktree is unset', () => {
