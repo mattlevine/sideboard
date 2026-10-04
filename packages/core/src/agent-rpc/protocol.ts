@@ -4,13 +4,15 @@ export const AGENT_RPC_PROTOCOL_VERSION = 1;
 export const AGENT_RPC_PATH = '/agent-rpc';
 export const AGENT_RPC_KEEPALIVE_MS = 10_000;
 /**
- * Max time one `job.wait` call stays open before returning `stillRunning`.
- * Must stay well under the Cursor runner's stream idle guard
+ * Max time one `job.wait` / `turn.wait` call stays open before returning
+ * `stillRunning`. Must stay well under the Cursor runner's stream idle guard
  * (`CURSOR_STREAM_IDLE_MS`, 180s): a blocked custom tool emits no stream
  * frames, and the runner ends the turn when the stream looks idle.
  */
 export const AGENT_RPC_JOB_HOLD_MAX_MS = 120_000;
 export const AGENT_RPC_JOB_SLICE_MS = 10_000;
+/** Query param on the WebSocket upgrade URL (also required on every request). */
+export const AGENT_RPC_TOKEN_QUERY = 'authToken';
 
 export const AGENT_RPC_NATIVE_ENV = 'SIDEBOARD_AGENT_RPC_NATIVE';
 export const AGENT_RPC_URL_ENV = 'SIDEBOARD_AGENT_RPC_URL';

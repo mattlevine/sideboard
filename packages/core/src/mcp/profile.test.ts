@@ -9,6 +9,7 @@ import {
   WORKTREE_MCP_TOOLS,
   agentRpcOwnsPilotTools,
   injectedSideboardMcpEnv,
+  shouldRegisterMcpWaitForTurn,
   sideboardMcpProfile,
   worktreeMcpToolNames,
 } from './profile.js';
@@ -29,6 +30,11 @@ describe('agentRpcOwnsPilotTools / injectedSideboardMcpEnv', () => {
     expect(native).not.toContain('wait_for_job');
     expect(native).not.toContain('stop_job');
     expect(native).toContain('ask_user');
+  });
+
+  it('omits wait_for_turn from orchestration MCP when Agent RPC owns the native tools', () => {
+    expect(shouldRegisterMcpWaitForTurn({})).toBe(true);
+    expect(shouldRegisterMcpWaitForTurn({ [AGENT_RPC_NATIVE_ENV]: '1' })).toBe(false);
   });
 
   it('builds the worktree env and only sets the native flag when asked', () => {

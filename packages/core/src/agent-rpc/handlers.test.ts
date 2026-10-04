@@ -4,10 +4,12 @@ import {
   handleJobWait,
   handlePresentArtifact,
   handleRuntimePing,
+  handleTurnWait,
   presentArtifactResult,
 } from './handlers.js';
 import { AGENT_RPC_PROTOCOL_VERSION } from './protocol.js';
 import type { WaitForJobResult } from '../mcp/wait-for-job.js';
+import type { WaitForTurnToolResult } from '../mcp/wait-for-turn.js';
 
 describe('agent-rpc handlers', () => {
   it('pings with the protocol version', async () => {
@@ -108,6 +110,67 @@ describe('agent-rpc handlers', () => {
     await expect(handleJobStop({ id: 'pack', cwd: 'wt' }, ctx)).rejects.toMatchObject({
       rpcCode: -32602,
     });
+  });
+
+  it('holds turn.wait until stillRunning is false and notifies progress', async () => {
+    const notifies: unknown[] = [];
+    const slices: WaitForTurnToolResult[] = [
+      {
+        id: 'child-1',
+        status: 'running',
+        taskState: 'working',
+        text: '',
+        lastError: null,
+        stillRunning: true,
+        progress: 'Read foo.ts',
+        lastActivityAt: 't1',
+        hint: 'Child is still working. Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts) or assume a hang while progress is updating.',
+        incomplete: false,
+      },
+      {
+        id: 'child-1',
+        status: 'idle',
+        taskState: 'completed',
+        text: 'done',
+        lastError: null,
+        stillRunning: false,
+        progress: null,
+        lastActivityAt: 't2',
+        hint: undefined,
+        incomplete: false,
+      },
+    ];
+    const waitFn = vi.fn(async (_ref: string) => slices.shift()!);
+    const result = await handleTurnWait(
+      { ref: 'child-1' },
+      { cwd: '/', notify: (_m, p) => notifies.push(p) },
+      waitFn,
+    );
+    expect(result.stillRunning).toBe(false);
+    expect(result.taskState).toBe('completed');
+    expect(result.text).toBe('done');
+    expect(waitFn).toHaveBeenCalledTimes(2);
+    expect(notifies).toHaveLength(1);
+    expect(waitFn.mock.calls[0]?.[0]).toBe('child-1');
+  });
+
+  it('turn.wait requires ref', async () => {
+    const waitFn = vi.fn(async () => ({
+      id: 'x',
+      status: 'idle',
+      taskState: 'completed' as const,
+      text: '',
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      hint: undefined,
+      incomplete: false,
+    }));
+    await expect(
+      handleTurnWait({}, { cwd: '/', notify: () => undefined }, waitFn),
+    ).rejects.toMatchObject({ rpcCode: -32602 });
+    expect(waitFn).not.toHaveBeenCalled();
   });
 });
 

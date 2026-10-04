@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sideboardCursorRpcTools } from './cursor-tools.js';
-import { createAgentRpcDispatcher, handleJobWait, type JobWaitFn } from './handlers.js';
+import { createAgentRpcDispatcher, handleJobWait, handleTurnWait, type JobWaitFn } from './handlers.js';
 import type { AgentRpcConnect } from './metadata.js';
 import { AgentRpcServer } from './server.js';
 
@@ -38,6 +38,19 @@ describe('sideboardCursorRpcTools', () => {
       handlers: {
         ...createAgentRpcDispatcher(),
         'job.wait': (params, ctx) => handleJobWait(params, ctx, waitFn),
+        'turn.wait': (params, ctx) =>
+          handleTurnWait(params, ctx, async (ref) => ({
+            id: ref,
+            status: 'idle',
+            taskState: 'completed',
+            text: 'child done',
+            lastError: null,
+            stillRunning: false,
+            progress: null,
+            lastActivityAt: null,
+            hint: undefined,
+            incomplete: false,
+          })),
       },
     });
     const meta = await server.listen({ host: '127.0.0.1', port: 0 });
@@ -53,6 +66,20 @@ describe('sideboardCursorRpcTools', () => {
   it('registers the Cursor worktree pilot set', () => {
     const tools = sideboardCursorRpcTools({ cwd: '/tmp/wt', rpc });
     expect(Object.keys(tools).sort()).toEqual(['present_artifact', 'stop_job', 'wait_for_job']);
+  });
+
+  it('registers wait_for_turn only for orchestration Cursor', () => {
+    const tools = sideboardCursorRpcTools({
+      cwd: '/tmp/wt',
+      rpc,
+      includeWaitForTurn: true,
+    });
+    expect(Object.keys(tools).sort()).toEqual([
+      'present_artifact',
+      'stop_job',
+      'wait_for_job',
+      'wait_for_turn',
+    ]);
   });
 
   it('present_artifact returns a compact ok payload without echoing content', async () => {
@@ -85,6 +112,18 @@ describe('sideboardCursorRpcTools', () => {
     expect(seenWaits.length).toBe(2);
     expect(progress).toHaveLength(1);
     expect(progress[0]?.toolCallId).toBe('call-1');
+  });
+
+  it('wait_for_turn calls turn.wait over the socket', async () => {
+    const tools = sideboardCursorRpcTools({
+      cwd: '/tmp/wt',
+      rpc,
+      includeWaitForTurn: true,
+    });
+    const raw = await tools.wait_for_turn!.execute({ ref: 'child-1' });
+    const parsed = JSON.parse(raw) as { stillRunning: boolean; text: string };
+    expect(parsed.stillRunning).toBe(false);
+    expect(parsed.text).toBe('child done');
   });
 
   it('a dead runtime surfaces as a tool error payload, not a thrown exception', async () => {

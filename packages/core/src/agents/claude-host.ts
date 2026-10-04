@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AGENT_RPC_CLAUDE_SDK_SERVER } from '../agent-rpc/protocol.js';
@@ -20,13 +21,24 @@ export function withClaudePilotRpcTools(allowed: string[]): string[] {
 }
 
 function entryDir(): string {
+  // Match cursor.ts: Electron main is CJS (`dist/index.cjs`). `import.meta.url`
+  // is missing there, and `process.cwd()` is `apps/desktop` — never a runner.
+  // eslint-disable-next-line camelcase
+  const cjsDir = typeof __dirname !== 'undefined' ? __dirname : '';
+  if (cjsDir) return cjsDir;
   try {
     return dirname(fileURLToPath(import.meta.url));
   } catch {
-    return process.cwd();
+    try {
+      const req = createRequire(process.cwd() + '/');
+      return dirname(req.resolve('@sideboard-ai/core'));
+    } catch {
+      return process.cwd();
+    }
   }
 }
 
+/** Resolve the compiled Claude SDK runner (tsup emits dist/agents/claude-runner.*). */
 export function claudeRunnerPath(): string {
   const packagedDir = packagedCursorRuntimeDir();
   if (packagedDir) {
@@ -35,9 +47,10 @@ export function claudeRunnerPath(): string {
   }
   const root = entryDir();
   const candidates = [
-    join(root, 'claude-runner.js'),
-    join(root, 'claude-runner.cjs'),
+    join(root, 'agents', 'claude-runner.js'),
+    join(root, 'agents', 'claude-runner.cjs'),
     join(root, 'dist', 'agents', 'claude-runner.js'),
+    join(root, 'dist', 'agents', 'claude-runner.cjs'),
     join(root, 'claude-runner.ts'),
     join(root, 'src', 'agents', 'claude-runner.ts'),
   ];

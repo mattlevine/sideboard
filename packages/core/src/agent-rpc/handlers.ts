@@ -6,6 +6,10 @@ import {
   type WaitForJobResult,
 } from '../mcp/wait-for-job.js';
 import {
+  waitForTurnToolResult,
+  type WaitForTurnToolResult,
+} from '../mcp/wait-for-turn.js';
+import {
   AGENT_RPC_JOB_HOLD_MAX_MS,
   AGENT_RPC_JOB_SLICE_MS,
   AGENT_RPC_PROTOCOL_VERSION,
@@ -178,11 +182,79 @@ export async function handleJobStop(
   return stopDetachedJob(jobCwd(rec), id, reason ? { reason } : undefined);
 }
 
+export type TurnWaitFn = (
+  ref: string,
+  timeoutMs: number,
+) => Promise<WaitForTurnToolResult>;
+
+async function defaultTurnWait(
+  ref: string,
+  timeoutMs: number,
+): Promise<WaitForTurnToolResult> {
+  const { getOrchestrator } = await import('../orchestrator/orchestrator.js');
+  const orch = getOrchestrator();
+  const thread = await orch.waitForTurn(ref, timeoutMs, {
+    resolveIfStillRunning: true,
+  });
+  const result = orch.getTurnResult(thread.id);
+  return waitForTurnToolResult({
+    id: thread.id,
+    status: result.status,
+    taskState: result.taskState,
+    text: result.text,
+    lastError: result.lastError,
+    stillRunning: result.stillRunning,
+    progress: result.progress,
+    lastActivityAt: result.lastActivityAt,
+  });
+}
+
+export async function handleTurnWait(
+  params: unknown,
+  ctx: AgentRpcCallContext,
+  waitFn: TurnWaitFn = defaultTurnWait,
+): Promise<WaitForTurnToolResult> {
+  const rec = asRecord(params);
+  const ref = str(rec.ref).trim();
+  if (!ref) throw invalidParams('ref is required');
+  const requested =
+    typeof rec.timeoutMs === 'number' && Number.isFinite(rec.timeoutMs)
+      ? rec.timeoutMs
+      : undefined;
+  const holdMax =
+    requested !== undefined
+      ? Math.min(Math.max(1_000, Math.floor(requested)), AGENT_RPC_JOB_HOLD_MAX_MS)
+      : AGENT_RPC_JOB_HOLD_MAX_MS;
+  const deadline = Date.now() + holdMax;
+  let last: WaitForTurnToolResult | undefined;
+  while (Date.now() < deadline) {
+    const slice = Math.min(AGENT_RPC_JOB_SLICE_MS, Math.max(50, deadline - Date.now()));
+    last = await waitFn(ref, slice);
+    if (!last.stillRunning) return last;
+    ctx.notify('runtime.progress', last);
+  }
+  return (
+    last ?? {
+      id: ref,
+      status: 'running',
+      taskState: 'working',
+      text: '',
+      lastError: null,
+      stillRunning: true,
+      progress: null,
+      lastActivityAt: null,
+      hint: 'Child is still working after max hold. Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts).',
+      incomplete: false,
+    }
+  );
+}
+
 export function createAgentRpcDispatcher(): Record<string, AgentRpcHandler> {
   return {
     'runtime.ping': handleRuntimePing,
     'ui.presentArtifact': handlePresentArtifact,
     'job.wait': handleJobWait,
     'job.stop': handleJobStop,
+    'turn.wait': handleTurnWait,
   };
 }

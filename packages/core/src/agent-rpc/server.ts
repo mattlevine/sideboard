@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
   AGENT_RPC_PATH,
   AGENT_RPC_PROTOCOL_VERSION,
+  AGENT_RPC_TOKEN_QUERY,
   isJsonRpcRequest,
   parseRpcFrame,
   RPC_INTERNAL_ERROR,
@@ -32,6 +33,15 @@ function tokensEqual(a: string, b: string): boolean {
   const right = Buffer.from(b);
   if (left.length !== right.length) return false;
   return timingSafeEqual(left, right);
+}
+
+export function authTokenFromUpgrade(req: IncomingMessage): string {
+  try {
+    const url = new URL(req.url ?? '', 'http://127.0.0.1');
+    return url.searchParams.get(AGENT_RPC_TOKEN_QUERY) ?? '';
+  } catch {
+    return '';
+  }
 }
 
 function sendJson(ws: WebSocket, value: unknown): void {
@@ -69,23 +79,44 @@ export class AgentRpcServer {
   async listen(opts: { host?: string; port?: number } = {}): Promise<AgentRuntimeMetadata> {
     const host = opts.host ?? '127.0.0.1';
     const port = opts.port ?? 0;
+    const authToken = randomBytes(24).toString('base64url');
+    // Token must exist before the TCP socket accepts upgrades so verifyClient
+    // can fail closed instead of racing the first connection.
+    this.meta = {
+      runtimeId: randomUUID(),
+      pid: process.pid,
+      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
+      authToken,
+      startedAt: Date.now(),
+      transports: [],
+    };
     const http = createServer((_req, res) => {
       res.statusCode = 404;
       res.end();
     });
-    const wss = new WebSocketServer({ server: http, path: AGENT_RPC_PATH });
+    const wss = new WebSocketServer({
+      server: http,
+      path: AGENT_RPC_PATH,
+      verifyClient: (info) => this.authorizeUpgrade(info.req),
+    });
     wss.on('connection', (ws) => this.attach(ws));
 
-    await new Promise<void>((resolve, reject) => {
-      http.once('error', reject);
-      http.listen(port, host, () => {
-        http.off('error', reject);
-        resolve();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        http.once('error', reject);
+        http.listen(port, host, () => {
+          http.off('error', reject);
+          resolve();
+        });
       });
-    });
+    } catch (err) {
+      this.meta = null;
+      throw err;
+    }
 
     const addr = http.address();
     if (!addr || typeof addr === 'string') {
+      this.meta = null;
       http.close();
       throw new Error('Agent RPC failed to bind a TCP port');
     }
@@ -93,15 +124,17 @@ export class AgentRpcServer {
     this.wss = wss;
     const url = `ws://${host}:${addr.port}${AGENT_RPC_PATH}`;
     this.meta = {
-      runtimeId: randomUUID(),
-      pid: process.pid,
-      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
-      authToken: randomBytes(24).toString('base64url'),
-      startedAt: Date.now(),
+      ...this.meta,
       transports: [{ kind: 'websocket', url }],
     };
     writeAgentRuntimeMetadata(this.meta);
     return this.meta;
+  }
+
+  private authorizeUpgrade(req: IncomingMessage): boolean {
+    const expected = this.meta?.authToken ?? '';
+    const got = authTokenFromUpgrade(req);
+    return Boolean(expected && got && tokensEqual(got, expected));
   }
 
   private attach(ws: WebSocket): void {

@@ -18,6 +18,25 @@ export const PILOT_TOOL_DESCRIPTIONS: Record<PilotToolName, string> = {
     'Stop a detached job you started with detached-job.cjs when it is hanging, producing no useful output, buffering forever, or doing the wrong thing (wrong project, infinite watch, huge dump). Do not stop a pack/test/deploy that is clearly making progress.',
 };
 
+export const WAIT_FOR_TURN_DESCRIPTION =
+  'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. This call stays open for up to ~2 minutes. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_thread a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_thread or tell the user. On input-required, wait for the user in that chat.';
+
+export const WAIT_FOR_TURN_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    ref: {
+      type: 'string',
+      description: 'Worktree thread id or ref to wait on (not the orchestrator)',
+    },
+    timeoutMs: {
+      type: 'number',
+      description:
+        'Optional cap for this hold (ms). Ignored above the runtime max (~2 minutes).',
+    },
+  },
+  required: ['ref'],
+};
+
 export const PILOT_TOOL_SCHEMAS: Record<PilotToolName, Record<string, unknown>> = {
   present_artifact: {
     type: 'object',
@@ -103,6 +122,10 @@ export type PilotRpcExecutors = {
     args: Record<string, unknown>,
     context?: PilotToolContext,
   ) => Promise<string>;
+  wait_for_turn: (
+    args: Record<string, unknown>,
+    context?: PilotToolContext,
+  ) => Promise<string>;
   close: () => void;
 };
 
@@ -142,6 +165,16 @@ export function createPilotRpcExecutors(
       }
     },
     stop_job: (args) => callJob('job.stop', args),
+    wait_for_turn: async (args, context) => {
+      const prev = waitToolCallId;
+      waitToolCallId =
+        typeof context?.toolCallId === 'string' ? context.toolCallId : undefined;
+      try {
+        return await call('turn.wait', args);
+      } finally {
+        waitToolCallId = prev;
+      }
+    },
     close: () => client.close(),
   };
 }

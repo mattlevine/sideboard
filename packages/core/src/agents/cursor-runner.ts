@@ -163,6 +163,7 @@ async function main(): Promise<number> {
     ? sideboardCursorRpcTools({
         cwd: req.cwd,
         rpc: req.agentRpc,
+        includeWaitForTurn: Boolean(req.rpcWaitForTurn),
         onProgress: (params, toolCallId) => {
           onRpcProgress();
           if (!toolCallId) return;

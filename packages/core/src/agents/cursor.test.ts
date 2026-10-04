@@ -161,14 +161,14 @@ describe('cursorAdapter.buildTurn', () => {
     expect(req.agentRpc).toEqual({ url, authToken: 'tok' });
     expect(req.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
 
-    // Orchestration keeps the fleet MCP and never gets the worktree hook.
     const orch = await cursorAdapter.buildTurn(
       { ...baseThread, sourceType: 'orchestration', repoPath: '__global__' } as typeof baseThread,
       { prompt: 'find work' },
     );
-    const orchReq = JSON.parse(orch.stdin!) as typeof req;
-    expect(orchReq.agentRpc).toBeUndefined();
-    expect(orchReq.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBeUndefined();
+    const orchReq = JSON.parse(orch.stdin!) as typeof req & { rpcWaitForTurn?: boolean };
+    expect(orchReq.agentRpc).toEqual({ url, authToken: 'tok' });
+    expect(orchReq.rpcWaitForTurn).toBe(true);
+    expect(orchReq.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
   });
 
   it('stays on MCP when agent-runtime.json names a dead desktop pid', async () => {
@@ -191,6 +191,15 @@ describe('cursorAdapter.buildTurn', () => {
     };
     expect(req.agentRpc).toBeUndefined();
     expect(req.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBeUndefined();
+
+    const orch = await cursorAdapter.buildTurn(
+      { ...baseThread, sourceType: 'orchestration', repoPath: '__global__' } as typeof baseThread,
+      { prompt: 'find work' },
+    );
+    const orchReq = JSON.parse(orch.stdin!) as typeof req & { rpcWaitForTurn?: boolean };
+    expect(orchReq.agentRpc).toBeUndefined();
+    expect(orchReq.rpcWaitForTurn).toBeUndefined();
+    expect(orchReq.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBeUndefined();
   });
 
   it('omits cachedPrefix on resumed Cursor sessions', async () => {

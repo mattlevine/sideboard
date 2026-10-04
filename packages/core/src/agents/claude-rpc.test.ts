@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { claudeAdapter } from './claude.js';
+import { claudeRunnerPath } from './claude-host.js';
 import type { Thread } from '../types/thread.js';
 import { AGENT_RPC_NATIVE_ENV, AGENT_RPC_CLAUDE_SDK_SERVER } from '../agent-rpc/protocol.js';
 import { withClaudePilotRpcTools } from './claude-host.js';
@@ -95,7 +96,10 @@ describe('Claude Agent RPC worktree hook', () => {
       transports: [{ kind: 'websocket', url }],
     });
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
-    expect(cmd.args.some((a) => a.includes('claude-runner'))).toBe(true);
+    const runner = cmd.args.find((a) => /claude-runner\.(js|cjs|ts)$/.test(a));
+    expect(runner).toBeDefined();
+    expect(existsSync(runner!)).toBe(true);
+    expect(runner).not.toMatch(/apps[/\\]desktop[/\\]claude-runner/);
     const req = JSON.parse(cmd.stdin!) as {
       agentRpc?: { url: string; authToken: string };
       allowedTools: string[];
@@ -122,5 +126,12 @@ describe('Claude Agent RPC worktree hook', () => {
     expect(cmd.file).toBe('claude');
     expect(cmd.args).toContain('-p');
     expect(cmd.args).toContain('mcp__sideboard__present_artifact');
+  });
+
+  it('resolves the Claude runner next to core, not desktop cwd', () => {
+    const runner = claudeRunnerPath();
+    expect(runner).toMatch(/claude-runner\.(js|cjs|ts)$/);
+    expect(existsSync(runner)).toBe(true);
+    expect(runner).not.toMatch(/apps[/\\]desktop[/\\]claude-runner/);
   });
 });

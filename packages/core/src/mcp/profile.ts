@@ -49,6 +49,16 @@ export const AGENT_RPC_PILOT_MCP_TOOLS = [
   'stop_job',
 ] as const;
 
+/** Fleet tools Cursor orchestration owns on Agent RPC; omit from that harness MCP. */
+export const AGENT_RPC_ORCH_MCP_TOOLS = ['wait_for_turn'] as const;
+
+/** False when Cursor orchestration registers `wait_for_turn` as a native RPC tool. */
+export function shouldRegisterMcpWaitForTurn(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return !agentRpcOwnsPilotTools(env);
+}
+
 /** Worktree MCP names after Agent RPC omit. `mcp/server.ts` registers from this list. */
 export function worktreeMcpToolNames(
   env: NodeJS.ProcessEnv = process.env,

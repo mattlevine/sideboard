@@ -3,6 +3,8 @@ import {
   createPilotRpcExecutors,
   PILOT_TOOL_DESCRIPTIONS,
   PILOT_TOOL_SCHEMAS,
+  WAIT_FOR_TURN_DESCRIPTION,
+  WAIT_FOR_TURN_SCHEMA,
   type PilotToolContext,
 } from './pilot-tools.js';
 
@@ -20,18 +22,20 @@ export type SideboardCursorRpcToolsOptions = {
   cwd: string;
   rpc: AgentRpcConnect;
   /**
-   * Called for every `runtime.progress` notification while a job call is held.
-   * The Cursor runner uses it to keep its stream-idle guard from ending the turn
-   * and to push a partial `wait_for_job` result so the log pane updates.
+   * Called for every `runtime.progress` notification while a job or turn wait
+   * is held. The Cursor runner uses it to keep its stream-idle guard from
+   * ending the turn and to push a partial tool result so the log pane updates.
    */
   onProgress?: (params: unknown, toolCallId?: string) => void;
+  /** Orchestration Cursor: register `wait_for_turn` as a native tool. */
+  includeWaitForTurn?: boolean;
 };
 
 export function sideboardCursorRpcTools(
   opts: SideboardCursorRpcToolsOptions,
 ): Record<string, SideboardCursorRpcTool> {
   const exec = createPilotRpcExecutors(opts);
-  return {
+  const tools: Record<string, SideboardCursorRpcTool> = {
     present_artifact: {
       description: PILOT_TOOL_DESCRIPTIONS.present_artifact,
       inputSchema: PILOT_TOOL_SCHEMAS.present_artifact,
@@ -48,4 +52,12 @@ export function sideboardCursorRpcTools(
       execute: exec.stop_job,
     },
   };
+  if (opts.includeWaitForTurn) {
+    tools.wait_for_turn = {
+      description: WAIT_FOR_TURN_DESCRIPTION,
+      inputSchema: WAIT_FOR_TURN_SCHEMA,
+      execute: exec.wait_for_turn,
+    };
+  }
+  return tools;
 }

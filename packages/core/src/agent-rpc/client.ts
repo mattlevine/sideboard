@@ -1,5 +1,6 @@
 import { WebSocket } from 'ws';
 import {
+  AGENT_RPC_TOKEN_QUERY,
   isJsonRpcNotification,
   parseRpcFrame,
   type JsonRpcId,
@@ -65,19 +66,49 @@ export class AgentRpcClient {
     });
   }
 
+  private socketUrl(): string {
+    const url = new URL(this.url);
+    url.searchParams.set(AGENT_RPC_TOKEN_QUERY, this.authToken);
+    return url.toString();
+  }
+
   private async ensureSocket(): Promise<WebSocket> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return this.ws;
-    const ws = new WebSocket(this.url);
+    const ws = new WebSocket(this.socketUrl());
     this.ws = ws;
     ws.on('message', (data) => this.onFrame(data.toString()));
     // Persistent listener: an un-listened `ws` 'error' is an uncaught
     // exception in the runner process. Fail in-flight calls instead.
     ws.on('error', (err) => this.drop(ws, err));
     ws.on('close', () => this.drop(ws, new Error('Agent RPC socket closed')));
+    ws.on('unexpected-response', (_req, res) => {
+      res.resume();
+      this.drop(
+        ws,
+        new Error(
+          res.statusCode === 401
+            ? 'Unauthorized'
+            : `Unexpected server response: ${res.statusCode}`,
+        ),
+      );
+    });
     await new Promise<void>((resolve, reject) => {
-      ws.once('error', reject);
+      const fail = (err: Error) => {
+        const message = err.message.includes('401') ? 'Unauthorized' : err.message;
+        reject(message === err.message ? err : new Error(message));
+      };
+      ws.once('unexpected-response', (_req, res) => {
+        fail(
+          new Error(
+            res.statusCode === 401
+              ? 'Unauthorized'
+              : `Unexpected server response: ${res.statusCode}`,
+          ),
+        );
+      });
+      ws.once('error', fail);
       ws.once('open', () => {
-        ws.off('error', reject);
+        ws.off('error', fail);
         resolve();
       });
     });

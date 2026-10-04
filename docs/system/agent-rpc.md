@@ -6,8 +6,9 @@ queues and owns Dev-script children).
 
 This is the Orca-shaped split: one runtime process, live RPC, clients
 discover it from a metadata file. It is **not** MCP. Injected `sideboard
-mcp` stdio remains for Codex and orchestration Cursor. Claude worktree
-turns use the Agent SDK runner; OpenCode loads a native plugin.
+mcp` stdio remains for Codex and for Claude/OpenCode orchestration. Claude
+worktree turns use the Agent SDK runner; OpenCode loads a native plugin.
+Cursor worktree and Cursor orchestration attach when the desktop pid is live.
 
 See [`.claude/skills/agent-rpc/SKILL.md`](../../.claude/skills/agent-rpc/SKILL.md)
 for the migration rulebook.
@@ -23,10 +24,11 @@ return at 45s and the model loops). A held WebSocket call streams
 
 | Client | Transport | Auth |
 |--------|-----------|------|
-| Cursor worktree `customTools` | `ws://127.0.0.1:<port>/agent-rpc` | `authToken` on every request |
+| Cursor worktree `customTools` | `ws://127.0.0.1:<port>/agent-rpc` | Upgrade query `authToken` plus the same token on every request |
+| Cursor orchestration `customTools` | same | same |
 | Claude worktree Agent SDK | same (in-process `createSdkMcpServer`) | same |
 | OpenCode plugin `tool()` | same (global WebSocket in the plugin) | same |
-| Codex / orchestration Cursor | Injected MCP stdio (legacy) | Process isolation |
+| Codex / Claude·OpenCode orchestration | Injected MCP stdio (legacy) | Process isolation |
 | Future mobile / `serve` | Same protocol, not bound yet | Do not bind `0.0.0.0` in this slice |
 
 Discovery: `{appDataDir}/agent-runtime.json` (mode `0600`), written when
@@ -44,16 +46,17 @@ synchronously before closing sockets so Electron `will-quit` need not await.
 | `ui.presentArtifact` | `present_artifact` (Cursor/OpenCode); `mcp__sideboard_rpc__present_artifact` (Claude SDK) | omitted when `SIDEBOARD_AGENT_RPC_NATIVE=1` |
 | `job.wait` | `wait_for_job` / `mcp__sideboard_rpc__wait_for_job` | omitted on that harness MCP |
 | `job.stop` | `stop_job` / `mcp__sideboard_rpc__stop_job` | omitted on that harness MCP |
+| `turn.wait` | `wait_for_turn` (Cursor orchestration `customTools`) | omitted on that harness MCP (`shouldRegisterMcpWaitForTurn`) |
 
 `job.wait` and `job.stop` require an absolute worktree `cwd` in params
-(the desktop's own cwd is `/` when packaged). `job.wait` holds until
-`stillRunning` is false or `AGENT_RPC_JOB_HOLD_MAX_MS` (120s), then returns
-`stillRunning: true` and the model calls again. The cap sits under the Cursor
-runner's stream-idle guard (`CURSOR_STREAM_IDLE_MS`, 180s); every
-`runtime.progress` slice also bumps that guard via
+(the desktop's own cwd is `/` when packaged). `job.wait` and `turn.wait`
+hold until `stillRunning` is false or `AGENT_RPC_JOB_HOLD_MAX_MS` (120s),
+then return `stillRunning: true` and the model calls again. The cap sits
+under the Cursor runner's stream-idle guard (`CURSOR_STREAM_IDLE_MS`, 180s);
+every `runtime.progress` slice also bumps that guard via
 `sideboardCursorRpcTools({ onProgress })` and emits a partial `tool_result`
-so the log pane appends `delta` during the hold. MCP `wait_for_job` stays 45s for
-unmigrated harnesses.
+so the log pane updates during the hold. MCP `wait_for_job` / `wait_for_turn`
+stay 45s for unmigrated harnesses.
 
 A harness hook that cannot reach the socket returns `{ ok: false, error }`
 as the tool result; it never throws into the runner.

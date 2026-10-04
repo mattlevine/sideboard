@@ -186,7 +186,7 @@ export const cursorAdapter: AgentAdapter = {
     // Sideboard always. Brightsy only when logged in and the user asked (or this
     // thread already used it). Cursor does not persist mcpServers across resume.
     const isOrchestrator = isOrchestratorThread(thread);
-    const rpc = !isOrchestrator ? agentRpcConnectFromMetadata() : null;
+    const rpc = agentRpcConnectFromMetadata();
     const injected = await buildInjectedMcpServers({
       includeSideboard: true,
       includeBrightsy: shouldInjectBrightsyMcp(thread, {
@@ -209,6 +209,7 @@ export const cursorAdapter: AgentAdapter = {
       apiKey,
       ...(isOrchestrator ? { isolateAmbientMcp: true } : {}),
       ...(rpc ? { agentRpc: rpc } : {}),
+      ...(isOrchestrator && rpc ? { rpcWaitForTurn: true } : {}),
       ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
     };
 

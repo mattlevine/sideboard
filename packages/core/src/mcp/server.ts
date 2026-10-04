@@ -16,7 +16,7 @@ import { listIssues } from '../integrations/issues.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
-import { sideboardMcpProfile, SIDEBOARD_THREAD_ID_ENV, worktreeMcpToolNames } from './profile.js';
+import { sideboardMcpProfile, SIDEBOARD_THREAD_ID_ENV, shouldRegisterMcpWaitForTurn, worktreeMcpToolNames } from './profile.js';
 import {
   PRESENT_PLAN_REQUIRES_PLAN_MODE,
   PRESENT_PLAN_TOOL_DESCRIPTION,
@@ -43,6 +43,7 @@ import {
 import {
   mcpWaitTaskHint,
   mcpWaitForTurnTimeoutMs,
+  waitForTurnToolResult,
 } from './wait-for-turn.js';
 import {
   mcpWaitForJobTimeoutMs,
@@ -1142,6 +1143,7 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
+  if (shouldRegisterMcpWaitForTurn()) {
   server.tool(
     'wait_for_turn',
     'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_thread a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_thread or tell the user. On input-required, wait for the user in that chat. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
@@ -1154,21 +1156,21 @@ export async function startMcpServer(): Promise<void> {
         resolveIfStillRunning: true,
       });
       const result = orch.getTurnResult(thread.id);
-      const hint = mcpWaitTaskHint(result.taskState, result.status);
-      return mcpJson({
-        id: thread.id,
-        status: result.status,
-        taskState: result.taskState,
-        text: result.text,
-        lastError: result.lastError,
-        stillRunning: result.stillRunning,
-        progress: result.progress,
-        lastActivityAt: result.lastActivityAt,
-        hint,
-        incomplete: needsCoordinatorAction(result.taskState),
-      });
+      return mcpJson(
+        waitForTurnToolResult({
+          id: thread.id,
+          status: result.status,
+          taskState: result.taskState,
+          text: result.text,
+          lastError: result.lastError,
+          stillRunning: result.stillRunning,
+          progress: result.progress,
+          lastActivityAt: result.lastActivityAt,
+        }),
+      );
     },
   );
+  }
 
   server.tool(
     'get_turn_result',

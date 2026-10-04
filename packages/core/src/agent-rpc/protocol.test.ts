@@ -47,7 +47,7 @@ describe('agent-rpc protocol', () => {
     );
   });
 
-  it('caps job.wait below the Cursor stream idle guard', () => {
+  it('caps job.wait and turn.wait below the Cursor stream idle guard', () => {
     expect(AGENT_RPC_JOB_HOLD_MAX_MS).toBeLessThan(CURSOR_STREAM_IDLE_MS);
   });
 });

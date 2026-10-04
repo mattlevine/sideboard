@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AgentRpcServer } from './server.js';
 import { AgentRpcClient } from './client.js';
-import { createAgentRpcDispatcher, handleJobWait, type JobWaitFn } from './handlers.js';
+import { createAgentRpcDispatcher, handleJobWait, handleTurnWait, type JobWaitFn, type TurnWaitFn } from './handlers.js';
 import { readAgentRuntimeMetadata } from './metadata.js';
 import { AGENT_RPC_PROTOCOL_VERSION } from './protocol.js';
 
@@ -32,6 +32,48 @@ describe('agent-rpc WebSocket server', () => {
     const client = new AgentRpcClient({ url: meta.transports[0]!.url, authToken: 'nope' });
     await expect(client.call('runtime.ping')).rejects.toThrow(/Unauthorized/i);
     client.close();
+  });
+
+  it('rejects an unauthenticated WebSocket upgrade', async () => {
+    server = new AgentRpcServer();
+    const meta = await server.listen({ host: '127.0.0.1', port: 0 });
+    const { WebSocket } = await import('ws');
+    const ws = new WebSocket(meta.transports[0]!.url);
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      ws.once('unexpected-response', (_req, res) => {
+        res.resume();
+        resolve(res.statusCode);
+      });
+      ws.once('open', () => {
+        ws.close();
+        reject(new Error('unauthenticated upgrade was accepted'));
+      });
+      ws.once('error', (err) => {
+        if (/401/.test(err.message)) resolve(401);
+      });
+    });
+    expect(status).toBe(401);
+  });
+
+  it('rejects a request with a missing authToken on an otherwise authenticated socket', async () => {
+    server = new AgentRpcServer();
+    const meta = await server.listen({ host: '127.0.0.1', port: 0 });
+    const { WebSocket } = await import('ws');
+    const url = new URL(meta.transports[0]!.url);
+    url.searchParams.set('authToken', meta.authToken);
+    const ws = new WebSocket(url.toString());
+    await new Promise<void>((resolve, reject) => {
+      ws.once('open', () => resolve());
+      ws.once('error', reject);
+    });
+    const reply = new Promise<string>((resolve) => {
+      ws.once('message', (data) => resolve(data.toString()));
+    });
+    ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'runtime.ping' }));
+    const parsed = JSON.parse(await reply) as { error?: { code: number; message: string } };
+    expect(parsed.error?.code).toBe(-32001);
+    expect(parsed.error?.message).toMatch(/Unauthorized/i);
+    ws.close();
   });
 
   it('pings and presents over the live socket', async () => {
@@ -89,6 +131,58 @@ describe('agent-rpc WebSocket server', () => {
     await expect(client.call('job.wait', { id: 'job-1', cwd: 'relative/path' })).rejects.toThrow(
       /absolute/i,
     );
+    client.close();
+  });
+
+  it('turn.wait holds on the socket and streams runtime.progress', async () => {
+    const slices = [
+      {
+        id: 'child-1',
+        status: 'running' as const,
+        taskState: 'working' as const,
+        text: '',
+        lastError: null,
+        stillRunning: true,
+        progress: 'Read a.ts',
+        lastActivityAt: 't1',
+        hint: 'working',
+        incomplete: false,
+      },
+      {
+        id: 'child-1',
+        status: 'idle' as const,
+        taskState: 'completed' as const,
+        text: 'ok',
+        lastError: null,
+        stillRunning: false,
+        progress: null,
+        lastActivityAt: 't2',
+        hint: undefined,
+        incomplete: false,
+      },
+    ];
+    const waitFn: TurnWaitFn = async () => slices.shift()!;
+    server = new AgentRpcServer({
+      handlers: {
+        ...createAgentRpcDispatcher(),
+        'turn.wait': (params, ctx) => handleTurnWait(params, ctx, waitFn),
+      },
+    });
+    const meta = await server.listen({ host: '127.0.0.1', port: 0 });
+    const client = new AgentRpcClient({ url: meta.transports[0]!.url, authToken: meta.authToken });
+    const progress: unknown[] = [];
+    client.onNotify((msg) => {
+      if (msg.method === 'runtime.progress') progress.push(msg.params);
+    });
+    const result = (await client.call('turn.wait', { ref: 'child-1' })) as {
+      stillRunning: boolean;
+      taskState: string;
+      text: string;
+    };
+    expect(result.stillRunning).toBe(false);
+    expect(result.taskState).toBe('completed');
+    expect(result.text).toBe('ok');
+    expect(progress).toHaveLength(1);
     client.close();
   });
 

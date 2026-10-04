@@ -22,8 +22,14 @@ export type CursorTurnRequest = {
    * Live desktop Agent RPC endpoint. When set, the runner registers
    * present_artifact / wait_for_job / stop_job as native `customTools` and the
    * injected Sideboard MCP omits them (see docs/system/agent-rpc.md).
+   * Orchestration also registers wait_for_turn when {@link CursorTurnRequest.rpcWaitForTurn}.
    */
   agentRpc?: AgentRpcConnect | null;
+  /**
+   * Orchestration Cursor: expose `wait_for_turn` as a native RPC tool.
+   * Worktree turns leave this unset so the model does not see fleet wait.
+   */
+  rpcWaitForTurn?: boolean;
   /**
    * Inline MCP servers for this turn (Sideboard / Brightsy).
    * Must be passed on create and resume — Cursor does not persist them.

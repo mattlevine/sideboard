@@ -6,7 +6,7 @@ import {
   AGENT_RPC_URL_ENV,
 } from './protocol.js';
 
-/** Worktree turns attach when the desktop pid is live; orchestration stays on MCP. */
+/** Worktree Claude/OpenCode attach when the desktop pid is live; their orchestration stays on MCP. Cursor orchestration attaches in `cursor.ts`. */
 export function worktreeAgentRpc(isOrchestrator: boolean): AgentRpcConnect | null {
   return isOrchestrator ? null : agentRpcConnectFromMetadata();
 }
