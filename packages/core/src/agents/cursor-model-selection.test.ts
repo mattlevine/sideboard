@@ -30,6 +30,23 @@ describe('buildCursorModelSelection', () => {
     });
   });
 
+  it('pins Grok 4.7 local runs to 256k context', () => {
+    expect(buildCursorModelSelection('grok-4.7', { effort: 'high', fast: false })).toEqual({
+      id: 'grok-4.7',
+      params: [
+        { id: 'context', value: '256k' },
+        { id: 'effort', value: 'high' },
+        { id: 'fast', value: 'false' },
+      ],
+    });
+  });
+
+  it('does not pin context on Grok 4.6', () => {
+    expect(buildCursorModelSelection('grok-4.6', { fast: false }).params).toEqual([
+      { id: 'fast', value: 'false' },
+    ]);
+  });
+
   it('normalizes legacy effort "normal" to medium', () => {
     const sel = buildCursorModelSelection('composer-2.5', {
       effort: 'normal',
