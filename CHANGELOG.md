@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `costUsd` is this turn. Claude’s session-cumulative `total_cost_usd` is `sessionCostUsd`.
 - Agent RPC leftovers: OpenCode WebSocket upgrades send `authToken`; packaged Cursor/Claude runners stage `ws` and the Claude SDK; worktree Claude copies user MCP under strict isolation.
 - Core DTS build types the Agent RPC `verifyClient` callback.
+- Desktop pack skips missing Claude SDK optional natives (`claude-agent-sdk-linux-*` on a Mac runner) so extraResources staging does not abort.
 
 ## [0.1.262] - 2026-10-03
 

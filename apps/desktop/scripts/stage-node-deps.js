@@ -109,6 +109,24 @@ function destForPackage(name, destNm) {
   return path.join(destNm, ...name.split('/'));
 }
 
+function currentClaudeSdkNative() {
+  return `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
+}
+
+/** Skip foreign optional natives (Cursor / Claude SDK). Missing optionals are also skipped. */
+function shouldSkipOptionalDep(dep, platformSdk) {
+  if (dep.startsWith('@cursor/sdk-')) return dep !== platformSdk;
+  if (/^@anthropic-ai\/claude-agent-sdk-(darwin|linux|win32|android)-/.test(dep)) {
+    return dep !== currentClaudeSdkNative();
+  }
+  return false;
+}
+
+function isMissingDepError(err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /Cannot find module|cannot find package\.json/i.test(msg);
+}
+
 function copyPackageAndDeps(name, fromFile, destNm, nestNm, recursed, platformSdk) {
   const pkgJsonPath = resolvePkgJson(name, fromFile);
   if (!pkgJsonPath) return;
@@ -139,8 +157,13 @@ function copyPackageAndDeps(name, fromFile, destNm, nestNm, recursed, platformSd
     copyPackageAndDeps(dep, pkgJsonPath, destNm, childNest, recursed, platformSdk);
   }
   for (const dep of Object.keys(pkg.optionalDependencies || {})) {
-    if (dep.startsWith('@cursor/sdk-') && dep !== platformSdk) continue;
-    copyPackageAndDeps(dep, pkgJsonPath, destNm, childNest, recursed, platformSdk);
+    if (shouldSkipOptionalDep(dep, platformSdk)) continue;
+    try {
+      copyPackageAndDeps(dep, pkgJsonPath, destNm, childNest, recursed, platformSdk);
+    } catch (err) {
+      if (isMissingDepError(err)) continue;
+      throw err;
+    }
   }
 }
 
