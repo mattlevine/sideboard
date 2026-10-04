@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Clicking **Orchestration** in the left sidebar opens it like a worktree: activity status on the parent, then nested agent chats (logos + status) while it is selected. The row `+` still opens the create-orchestrator modal.
+
 ## [0.1.260] - 2026-10-03
 
 ### Added

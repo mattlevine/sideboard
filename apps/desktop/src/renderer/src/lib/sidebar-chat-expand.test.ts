@@ -32,6 +32,23 @@ describe('sidebar-chat-expand', () => {
       }),
     ).toBe(false);
   });
+
+  it('nests a single orchestration agent under the parent when selected', () => {
+    expect(
+      resolveSidebarChatExpanded({
+        chatCount: 1,
+        selected: true,
+        minChats: 1,
+      }),
+    ).toBe(true);
+    expect(
+      resolveSidebarChatExpanded({
+        chatCount: 1,
+        selected: false,
+        minChats: 1,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('worktreeSidebarMeta', () => {

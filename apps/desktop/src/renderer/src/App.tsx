@@ -890,6 +890,10 @@ export function App() {
 
   const worktreeChats = useMemo(() => {
     if (!selected) return [];
+    if (isGlobalThread(selected)) {
+      const siblings = threads.filter((t) => t.repoPath === GLOBAL_WORKSPACE_ID);
+      return orderWorktreeChatsForKey(siblings, GLOBAL_WORKSPACE_ID);
+    }
     const siblings = threads.filter((t) =>
       sameWorktreePath(t.worktreePath, selected.worktreePath),
     );
@@ -898,7 +902,9 @@ export function App() {
 
   useEffect(() => {
     if (!selected) return;
-    const key = unreadWorktreeKey(selected);
+    const key = isGlobalThread(selected)
+      ? GLOBAL_WORKSPACE_ID
+      : unreadWorktreeKey(selected);
     if (key) writeLastWorktreeChatId(key, selected.id);
   }, [selected?.id, selected?.worktreePath, selected?.repoPath]);
 

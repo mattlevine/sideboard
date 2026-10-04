@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { worktreeBoardStatus } from '@sideboard/home-board';
 import { worktreeAnchorLabel } from '@sideboard/worktree-labels';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
-import { nestedChatDisplayTitle } from '../lib/nested-chat-title';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 import { unreadWorktreeKey } from '../lib/unread-worktrees';
 import {
@@ -11,7 +10,6 @@ import {
   worktreeSidebarMeta,
 } from '../lib/sidebar-chat-expand';
 import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
-import { AgentKindIcon } from './AgentKindIcon';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import type { NewChatTabOptions } from './ChatTabs';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
@@ -38,7 +36,9 @@ export function WorktreeSidebarRow({
   onRenameChat,
   onCloseChat,
   onAddAgent,
+  onNewOrchestration,
   multiSelected,
+  groupKey,
 }: {
   primary: Thread;
   group: Thread[];
@@ -52,18 +52,20 @@ export function WorktreeSidebarRow({
   reviewLabel?: string | null;
   onSelect: (id: string, multi: boolean) => void;
   showArchive?: boolean;
-  onRequestArchive: (chats: Thread[]) => void;
+  onRequestArchive?: (chats: Thread[]) => void;
   onOpenPr?: (threadId: string) => void;
   onMarkUnread?: (thread: Thread) => void;
   onRenameChat?: (id: string, title: string) => void;
   onCloseChat?: (thread: Thread) => void;
   onAddAgent?: (fromThreadId: string, opts: NewChatTabOptions) => void;
+  /** Orchestration parent +: open the create-orchestrator modal. */
+  onNewOrchestration?: () => void;
   multiSelected: Set<string>;
+  /** Override tab-order / last-chat key (orchestration uses the global workspace id). */
+  groupKey?: string;
 }) {
   const [gitCardOpen, setGitCardOpenState] = useState(false);
   const [collapsedWhileSelected, setCollapsedWhileSelected] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [addDefaults, setAddDefaults] = useState<{
     agent: AgentKind;
@@ -117,30 +119,32 @@ export function WorktreeSidebarRow({
 
   const orch = primary.sourceType === 'orchestration';
   const dirty = !orch && loaded && Boolean(stat?.dirty);
-  const expandKey = unreadWorktreeKey(primary);
+  const expandKey = groupKey?.trim() || unreadWorktreeKey(primary);
+  const nestMin = orch ? 1 : SIDEBAR_NEST_MIN_CHATS;
   const expanded = resolveSidebarChatExpanded({
     chatCount: group.length,
     selected: active,
     collapsedWhileSelected,
+    minChats: nestMin,
   });
   const anchor = orch ? null : worktreeAnchorLabel(group);
   const parentTitle = orch ? worktreeLabel : (anchor?.title || worktreeLabel);
   const branchLine = !orch ? (anchor?.subtitle ?? null) : null;
   const metaLine = worktreeSidebarMeta({
-    agent: orch ? '' : primary.agent,
-    chatCount: orch ? 1 : group.length,
+    agent: primary.agent,
+    chatCount: group.length,
     branch: branchLine,
     port: orch ? null : (group.find((t) => t.devPort != null)?.devPort ?? null),
     archiving,
   });
-  const showChevron =
-    !orch && active && !archiving && group.length >= SIDEBAR_NEST_MIN_CHATS;
+  const showChevron = active && !archiving && group.length >= nestMin;
   const showMetaRow = Boolean(metaLine) || showChevron;
-  const renamingParent = orch && editingId === primary.id;
+  const showNewOrch = orch && Boolean(onNewOrchestration) && !archiving;
   const showAddAgent = Boolean(onAddAgent) && !orch && !archiving;
-  const showWorktreeActions = showArchive || showAddAgent;
+  const showWorktreeActions = showArchive || showAddAgent || showNewOrch;
 
   function requestArchive() {
+    if (!onRequestArchive) return;
     if (orch) {
       onRequestArchive(group);
       return;
@@ -167,20 +171,6 @@ export function WorktreeSidebarRow({
       fast: defaults.fast,
     });
     setAddOpen(true);
-  }
-
-  function commitRename() {
-    if (!editingId || !onRenameChat) {
-      setEditingId(null);
-      return;
-    }
-    const title = draft.trim();
-    const current = group.find((c) => c.id === editingId);
-    const displayed = current
-      ? nestedChatDisplayTitle(current, parentTitle)
-      : '';
-    if (title && title !== displayed) onRenameChat(editingId, title);
-    setEditingId(null);
   }
 
   return (
@@ -229,37 +219,8 @@ export function WorktreeSidebarRow({
           />
         )}
         <div className="thread-item-body">
-          <div
-            className="thread-title"
-            title={parentTitle}
-            onDoubleClick={(e) => {
-              if (!orch || !onRenameChat || archiving) return;
-              e.preventDefault();
-              e.stopPropagation();
-              setEditingId(primary.id);
-              setDraft(parentTitle);
-            }}
-          >
-            {orch ? <AgentKindIcon agent={primary.agent} /> : null}
-            {renamingParent ? (
-              <input
-                className="nested-chat-input"
-                value={draft}
-                autoFocus
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commitRename}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    commitRename();
-                  }
-                  if (e.key === 'Escape') setEditingId(null);
-                }}
-              />
-            ) : (
-              <span className="thread-title-text">{parentTitle}</span>
-            )}
+          <div className="thread-title" title={parentTitle}>
+            <span className="thread-title-text">{parentTitle}</span>
             {primary.cowboy ? <span className="board-badge">cowboy</span> : null}
             {orch ? null : (
               <WorktreePrBadges
@@ -286,22 +247,7 @@ export function WorktreeSidebarRow({
             </div>
           ) : null}
         </div>
-        {!archiving && orch && onCloseChat ? (
-          <div
-            className="worktree-row-actions"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="nested-chat-close"
-              title="Close chat"
-              aria-label={`Close ${parentTitle}`}
-              onClick={() => onCloseChat(primary)}
-            >
-              ×
-            </button>
-          </div>
-        ) : !archiving && showWorktreeActions ? (
+        {!archiving && showWorktreeActions ? (
           <div
             className={`worktree-row-actions${addOpen ? ' is-open' : ''}`}
             onClick={(e) => e.stopPropagation()}
@@ -324,6 +270,17 @@ export function WorktreeSidebarRow({
                 aria-label={`Add agent to ${parentTitle}`}
                 title="Add agent"
                 onClick={() => void openAddAgent()}
+              >
+                +
+              </button>
+            ) : null}
+            {showNewOrch ? (
+              <button
+                type="button"
+                className="icon-btn worktree-add-agent-btn"
+                aria-label="New orchestration chat"
+                title="New orchestration chat"
+                onClick={() => onNewOrchestration?.()}
               >
                 +
               </button>

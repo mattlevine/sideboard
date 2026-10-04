@@ -134,13 +134,13 @@ export function orderWorktreeChatsForKey<T extends { id: string; createdAt: stri
  */
 export function pickWorktreeChat<
   T extends { id: string; createdAt: string; worktreePath: string; repoPath: string },
->(group: readonly T[], selectedId?: string | null): T | undefined {
+>(group: readonly T[], selectedId?: string | null, tabKey?: string): T | undefined {
   if (group.length === 0) return undefined;
   if (selectedId) {
     const current = group.find((t) => t.id === selectedId);
     if (current) return current;
   }
-  const key = unreadWorktreeKey(group[0]!);
+  const key = tabKey?.trim() || unreadWorktreeKey(group[0]!);
   const lastId = key ? readWorktreeTabPrefs(key).lastChatId : undefined;
   if (lastId) {
     const remembered = group.find((t) => t.id === lastId);
