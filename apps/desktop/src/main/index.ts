@@ -75,9 +75,7 @@ import {
   registerPackagedUserMcpClients,
   warmGithubAgentAuth,
   getAgentSetupInfo,
-  claimDesktopHost,
   getOrchestrator,
-  releaseDesktopHost,
   installAgent,
   listBranches,
   listBrightsyChatTargets,
@@ -202,6 +200,7 @@ import {
   type UpdateScheduledTaskPatch,
 } from '@sideboard-ai/core';
 import { closeTsServer, setupTsServer } from './tsserver';
+import { startDesktopHost, stopDesktopHost } from './desktop-host';
 
 /** Walk up from `startDir` to the nearest `.git` (worktree root or repo checkout). */
 function findWorktreeRoot(startDir: string): string | null {
@@ -1952,7 +1951,7 @@ app.whenReady().then(async () => {
   orch.setMaxConcurrent(maxConcurrentAgents());
   // MCP/CLI send_to_thread must not spawn worktree turns in the stdio child —
   // the board adopts persisted queues so live IPC reaches the chat UI.
-  claimDesktopHost();
+  startDesktopHost();
   applyDockIcon();
   bindArtifactPreviewProtocol();
   registerIpc();
@@ -2024,11 +2023,7 @@ app.on('will-quit', () => {
   } catch {
     // ignore
   }
-  try {
-    releaseDesktopHost();
-  } catch {
-    // ignore
-  }
+  stopDesktopHost();
   destroyUrlPreview();
   stopCloudConnectDaemon();
   stopSlackListenDaemon();

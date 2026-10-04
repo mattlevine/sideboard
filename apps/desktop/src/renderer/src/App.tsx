@@ -82,8 +82,7 @@ const LEFT_SIDEBAR_MAX = 480;
 const RIGHT_SIDEBAR_MIN = 240;
 const RIGHT_SIDEBAR_MAX = 560;
 function sameWorktreePath(a: string, b: string): boolean {
-  const norm = (p: string) => p.replace(/\/$/, '');
-  return norm(a) === norm(b);
+  return a.replace(/\/$/, '') === b.replace(/\/$/, '');
 }
 
 function projectReviewLabelsFromSettings(
@@ -1661,9 +1660,7 @@ export function App() {
       {appUpdate && (
         <div className="update-banner" role="status">
           <div className="update-banner-text">
-            <strong>
-              {appUpdate.phase === 'ready' ? 'Update ready' : 'Update available'}
-            </strong>
+            <strong>{appUpdate.phase === 'ready' ? 'Update ready' : 'Update available'}</strong>
             <span>
               {appUpdate.phase === 'ready'
                 ? `Sideboard ${appUpdate.version} is ready to install.`

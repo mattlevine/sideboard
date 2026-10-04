@@ -1,4 +1,4 @@
-import type { TaskState } from '../orchestrator/task-state.js';
+import { needsCoordinatorAction, type TaskState } from '../orchestrator/task-state.js';
 
 /**
  * MCP clients (Cursor, Claude Code) often kill a tool call around 60s.
@@ -65,4 +65,35 @@ export function mcpWaitTaskHint(
     default:
       return undefined;
   }
+}
+
+/** Payload for MCP `wait_for_turn` and Agent RPC `turn.wait`. */
+export type WaitForTurnToolResult = {
+  id: string;
+  status: string;
+  taskState: TaskState;
+  text: string;
+  lastError: string | null;
+  stillRunning: boolean;
+  progress: string | null;
+  lastActivityAt: string | null;
+  hint: string | undefined;
+  incomplete: boolean;
+};
+
+export function waitForTurnToolResult(input: {
+  id: string;
+  status: string;
+  taskState: TaskState;
+  text: string;
+  lastError: string | null;
+  stillRunning: boolean;
+  progress: string | null;
+  lastActivityAt: string | null;
+}): WaitForTurnToolResult {
+  return {
+    ...input,
+    hint: mcpWaitTaskHint(input.taskState, input.status),
+    incomplete: needsCoordinatorAction(input.taskState),
+  };
 }

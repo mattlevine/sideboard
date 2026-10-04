@@ -19,6 +19,7 @@ import {
 } from './injected-mcp.js';
 import { brightsyMcpServerName } from '../brightsy/connected-teams.js';
 import { wrapElectronAsNodeLaunch } from '../hook/nested-electron-env.js';
+import { AGENT_RPC_NATIVE_ENV } from '../agent-rpc/protocol.js';
 
 describe('injected-mcp', () => {
   it('exports allow-tool wildcards', () => {
@@ -281,6 +282,16 @@ describe('injected-mcp', () => {
     expect(servers[0]!.env?.SIDEBOARD_MCP_PROFILE).toBe('worktree');
     expect(servers[0]!.env?.SIDEBOARD_THREAD_ID).toBe('wt-thread-456');
     expect(servers[0]!.env?.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBeUndefined();
+  });
+
+  it('marks Cursor worktree MCP when Agent RPC owns the pilot tools', async () => {
+    const servers = await buildInjectedMcpServers({
+      includeSideboard: true,
+      includeBrightsy: false,
+      threadId: 'wt-rpc',
+      rpcNativeTools: true,
+    });
+    expect(servers[0]!.env?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
   });
 
   it('injects Brightsy refresh + DCR client id for each connected team', async () => {

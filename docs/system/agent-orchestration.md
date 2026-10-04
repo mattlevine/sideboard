@@ -23,7 +23,10 @@ The topology stays a **star**: one Global orchestrator talks down to worktree ch
 
 A2A also has `rejected` and `auth-required`. No Sideboard source yet — do not invent them.
 
-Do **not** stand up an A2A HTTP server per worktree. The agents Sideboard wraps (Claude CLI, Codex, OpenCode, Cursor SDK) speak MCP tools, not A2A. An HTTP facade for *this Mac's fleet* is a later interop option (Brightsy, a coworker's Sideboard, LangGraph), not how siblings on one laptop talk.
+Do **not** stand up an A2A HTTP server per worktree. Cursor worktree and
+Cursor orchestration, OpenCode worktree, and Claude worktree (Agent SDK
+runner) call Sideboard over Agent RPC. Codex and Claude/OpenCode
+orchestration still use injected MCP. See [agent-rpc.md](agent-rpc.md). An HTTP facade for *this Mac's fleet* is a later interop option (Brightsy, a coworker's Sideboard, LangGraph), not how siblings on one laptop talk.
 
 Do **not** route sibling talk through Claude Code `SendMessage` / Agent Teams. That is Claude↔Claude only, invisible on the board, and would bypass human-only git gates.
 

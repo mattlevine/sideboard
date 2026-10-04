@@ -23,5 +23,7 @@ apps/desktop/dist/
 # Sideboard workspace scratch (settings.toml already tracked stays tracked)
 .sideboard/
 .context/.sideboard/
+# Agent CLI scratch dumps (tracked notes under .context/cli/ stay tracked)
+.context/cli/cursor-tool-*.txt
 # Conductor-style machine-local overrides (apply to all worktrees of this repo)
 .conductor/settings.local.toml

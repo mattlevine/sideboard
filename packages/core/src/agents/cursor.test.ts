@@ -139,6 +139,69 @@ describe('cursorAdapter.buildTurn', () => {
     expect(req.isolateAmbientMcp).toBe(true);
   });
 
+  it('attaches Agent RPC and tells injected MCP to drop the pilot tools when the desktop runtime is live', async () => {
+    const { writeAgentRuntimeMetadata } = await import('../agent-rpc/metadata.js');
+    const { AGENT_RPC_NATIVE_ENV, AGENT_RPC_PROTOCOL_VERSION } = await import(
+      '../agent-rpc/protocol.js'
+    );
+    const url = 'ws://127.0.0.1:9/agent-rpc';
+    writeAgentRuntimeMetadata({
+      runtimeId: 'rt',
+      pid: process.pid,
+      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
+      authToken: 'tok',
+      startedAt: 1,
+      transports: [{ kind: 'websocket', url }],
+    });
+    const cmd = await cursorAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    const req = JSON.parse(cmd.stdin!) as {
+      agentRpc?: { url: string; authToken: string };
+      mcpServers?: Record<string, { env?: Record<string, string> }>;
+    };
+    expect(req.agentRpc).toEqual({ url, authToken: 'tok' });
+    expect(req.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
+
+    const orch = await cursorAdapter.buildTurn(
+      { ...baseThread, sourceType: 'orchestration', repoPath: '__global__' } as typeof baseThread,
+      { prompt: 'find work' },
+    );
+    const orchReq = JSON.parse(orch.stdin!) as typeof req & { rpcWaitForTurn?: boolean };
+    expect(orchReq.agentRpc).toEqual({ url, authToken: 'tok' });
+    expect(orchReq.rpcWaitForTurn).toBe(true);
+    expect(orchReq.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
+  });
+
+  it('stays on MCP when agent-runtime.json names a dead desktop pid', async () => {
+    const { writeAgentRuntimeMetadata } = await import('../agent-rpc/metadata.js');
+    const { AGENT_RPC_NATIVE_ENV, AGENT_RPC_PROTOCOL_VERSION } = await import(
+      '../agent-rpc/protocol.js'
+    );
+    writeAgentRuntimeMetadata({
+      runtimeId: 'rt-stale',
+      pid: 4_194_303,
+      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
+      authToken: 'stale',
+      startedAt: 1,
+      transports: [{ kind: 'websocket', url: 'ws://127.0.0.1:9/agent-rpc' }],
+    });
+    const cmd = await cursorAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    const req = JSON.parse(cmd.stdin!) as {
+      agentRpc?: unknown;
+      mcpServers?: Record<string, { env?: Record<string, string> }>;
+    };
+    expect(req.agentRpc).toBeUndefined();
+    expect(req.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBeUndefined();
+
+    const orch = await cursorAdapter.buildTurn(
+      { ...baseThread, sourceType: 'orchestration', repoPath: '__global__' } as typeof baseThread,
+      { prompt: 'find work' },
+    );
+    const orchReq = JSON.parse(orch.stdin!) as typeof req & { rpcWaitForTurn?: boolean };
+    expect(orchReq.agentRpc).toBeUndefined();
+    expect(orchReq.rpcWaitForTurn).toBeUndefined();
+    expect(orchReq.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBeUndefined();
+  });
+
   it('omits cachedPrefix on resumed Cursor sessions', async () => {
     const cmd = await cursorAdapter.buildTurn(
       { ...baseThread, sessionId: 'agent-abc' } as typeof baseThread,

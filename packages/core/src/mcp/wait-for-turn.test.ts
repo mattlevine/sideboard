@@ -11,6 +11,7 @@ import {
   mcpWaitForTurnTimeoutMs,
   mcpWaitStillRunningHint,
   mcpWaitTaskHint,
+  waitForTurnToolResult,
 } from './wait-for-turn.js';
 
 describe('mcpWaitForTurnTimeoutMs', () => {
@@ -52,5 +53,34 @@ describe('mcpWaitTaskHint', () => {
     expect(mcpWaitTaskHint('failed')).toBe(MCP_WAIT_ERROR_HINT);
     expect(mcpWaitTaskHint('failed', 'broken')).toBe(MCP_WAIT_BROKEN_HINT);
     expect(mcpWaitTaskHint('completed')).toBeUndefined();
+  });
+});
+
+describe('waitForTurnToolResult', () => {
+  it('sets incomplete for input-required and failed', () => {
+    const required = waitForTurnToolResult({
+      id: 't1',
+      status: 'idle',
+      taskState: 'input-required',
+      text: '',
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+    });
+    expect(required.incomplete).toBe(true);
+    expect(required.hint).toBe(MCP_WAIT_INPUT_REQUIRED_HINT);
+    const done = waitForTurnToolResult({
+      id: 't1',
+      status: 'idle',
+      taskState: 'completed',
+      text: 'ok',
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+    });
+    expect(done.incomplete).toBe(false);
+    expect(done.hint).toBeUndefined();
   });
 });

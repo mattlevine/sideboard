@@ -94,7 +94,7 @@ export function processGroupAlive(pgid: number): boolean {
     process.kill(-pgid, 0);
     return true;
   } catch (err) {
-    return err && typeof err === 'object' && 'code' in err && err.code === 'EPERM';
+    return Boolean(err && typeof err === 'object' && 'code' in err && err.code === 'EPERM');
   }
 }
 

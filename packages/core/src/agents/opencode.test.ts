@@ -94,6 +94,52 @@ describe('opencodeAdapter.buildTurn', () => {
     expect(parsed.mcp?.sideboard?.command?.length).toBeGreaterThan(0);
   });
 
+  it('loads an Agent RPC plugin and omits MCP pilots when the desktop runtime is live', async () => {
+    const { writeAgentRuntimeMetadata } = await import('../agent-rpc/metadata.js');
+    const { AGENT_RPC_NATIVE_ENV, AGENT_RPC_PROTOCOL_VERSION, AGENT_RPC_URL_ENV } =
+      await import('../agent-rpc/protocol.js');
+    const url = 'ws://127.0.0.1:9/agent-rpc';
+    writeAgentRuntimeMetadata({
+      runtimeId: 'rt',
+      pid: process.pid,
+      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
+      authToken: 'tok',
+      startedAt: 1,
+      transports: [{ kind: 'websocket', url }],
+    });
+    const cmd = await opencodeAdapter.buildTurn(baseThread, { prompt: 'list threads' });
+    expect(cmd.env?.[AGENT_RPC_URL_ENV]).toBe(url);
+    expect(cmd.env?.OPENCODE_CONFIG_DIR).toContain('agent-rpc/opencode');
+    const parsed = JSON.parse(cmd.env!.OPENCODE_CONFIG_CONTENT!) as {
+      mcp?: Record<string, { environment?: Record<string, string> }>;
+      plugin?: string[];
+    };
+    expect(parsed.mcp?.sideboard?.environment?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
+    expect(parsed.plugin?.some((p) => p.endsWith('sideboard-rpc.js'))).toBe(true);
+  });
+
+  it('keeps OpenCode on MCP when agent-runtime.json names a dead desktop pid', async () => {
+    const { writeAgentRuntimeMetadata } = await import('../agent-rpc/metadata.js');
+    const { AGENT_RPC_NATIVE_ENV, AGENT_RPC_PROTOCOL_VERSION, AGENT_RPC_URL_ENV } =
+      await import('../agent-rpc/protocol.js');
+    writeAgentRuntimeMetadata({
+      runtimeId: 'rt-stale',
+      pid: 4_194_303,
+      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
+      authToken: 'stale',
+      startedAt: 1,
+      transports: [{ kind: 'websocket', url: 'ws://127.0.0.1:9/agent-rpc' }],
+    });
+    const cmd = await opencodeAdapter.buildTurn(baseThread, { prompt: 'list threads' });
+    expect(cmd.env?.[AGENT_RPC_URL_ENV]).toBeUndefined();
+    const parsed = JSON.parse(cmd.env!.OPENCODE_CONFIG_CONTENT!) as {
+      mcp?: Record<string, { environment?: Record<string, string> }>;
+      plugin?: string[];
+    };
+    expect(parsed.mcp?.sideboard?.environment?.[AGENT_RPC_NATIVE_ENV]).toBeUndefined();
+    expect(parsed.plugin).toBeUndefined();
+  });
+
   it('disables user OpenCode MCP on orchestration turns only', async () => {
     const spy = vi
       .spyOn(orchMcpIsolation, 'listUserOpencodeMcpNames')

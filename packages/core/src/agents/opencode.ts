@@ -1,19 +1,10 @@
 import { existsSync } from 'node:fs';
 import { run } from '../git/run.js';
 import { resolveAgentExecutable } from '../store/app-settings.js';
-import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage, formatUnknownDetail } from './error-detail.js';
 import { withEventParentId } from './message-parts.js';
-import {
-  buildInjectedMcpServers,
-  shouldInjectBrightsyMcp,
-  toOpencodeMcpConfigContent,
-} from './injected-mcp.js';
-import {
-  listUserOpencodeMcpNames,
-  userMcpNamesToDisable,
-} from './orch-mcp-isolation.js';
+import { buildOpencodeHostEnv } from '../agent-rpc/opencode-host.js';
 import type { AgentModelInfo } from './model-info.js';
 import { flattenTurnInput, dropCachedPrefixOnResume } from './turn-input.js';
 import type { AgentAdapter, AttachCommand, TurnCommand } from './types.js';
@@ -218,25 +209,7 @@ export const opencodeAdapter: AgentAdapter = {
     if (model) {
       args.push('--model', model);
     }
-    const isOrchestrator = isOrchestratorThread(thread);
-    const injected = await buildInjectedMcpServers({
-      includeSideboard: true,
-      includeBrightsy: shouldInjectBrightsyMcp(thread, {
-        orchestrator: isOrchestrator,
-      }),
-      orchestratorThreadId: isOrchestrator ? thread.id : null,
-      threadId: thread.id,
-    });
-    const disableNames = isOrchestrator
-      ? userMcpNamesToDisable({
-          injectedNames: injected.map((s) => s.name),
-          names: listUserOpencodeMcpNames(),
-        })
-      : [];
-    const mcpContent =
-      injected.length > 0 || disableNames.length > 0
-        ? toOpencodeMcpConfigContent(injected, { disableNames })
-        : null;
+    const hostEnv = await buildOpencodeHostEnv(thread);
     return {
       file: resolveAgentExecutable('opencode'),
       args,
@@ -246,7 +219,7 @@ export const opencodeAdapter: AgentAdapter = {
       stdin: prompt,
       env: {
         OPENCODE_PERMISSION: mode.opencodePermission,
-        ...(mcpContent ? { OPENCODE_CONFIG_CONTENT: mcpContent } : {}),
+        ...hostEnv,
       },
     };
   },

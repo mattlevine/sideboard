@@ -16,7 +16,7 @@ import { listIssues } from '../integrations/issues.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
-import { sideboardMcpProfile, SIDEBOARD_THREAD_ID_ENV } from './profile.js';
+import { sideboardMcpProfile, SIDEBOARD_THREAD_ID_ENV, shouldRegisterMcpWaitForTurn, worktreeMcpToolNames } from './profile.js';
 import {
   PRESENT_PLAN_REQUIRES_PLAN_MODE,
   PRESENT_PLAN_TOOL_DESCRIPTION,
@@ -43,6 +43,7 @@ import {
 import {
   mcpWaitTaskHint,
   mcpWaitForTurnTimeoutMs,
+  waitForTurnToolResult,
 } from './wait-for-turn.js';
 import {
   mcpWaitForJobTimeoutMs,
@@ -72,6 +73,7 @@ import {
   resolveViewerProfileForRepo,
 } from '../store/app-settings.js';
 import { registerScheduleTools } from './schedule-tools.js';
+import { presentArtifactResult } from '../agent-rpc/handlers.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { formatGhLandError } from '../git/gh-errors.js';
 import { warmGithubAgentAuth } from '../git/git-auth-mode.js';
@@ -466,57 +468,46 @@ export async function startMcpServer(): Promise<void> {
   );
   }
 
-  server.tool(
-    'present_artifact',
-    'Show a document or live log in Sideboard’s side column. For html/svg/markdown/react, pass the FULL document and do not also fence that same body in chat. For type=log, pass only NEW lines (same artifact_id appends). Prefer type=log for long-running job output — do not resend HTML. type=react is a single default-export component (JSX/TSX); only react/react-dom imports.',
-    {
-      title: z.string().describe('Short title shown in the artifact pane header'),
-      type: z
-        .enum(['html', 'svg', 'markdown', 'react', 'log'])
-        .describe(
-          'html/svg/markdown/react replace the pane. log appends content to the same artifact_id (new lines only).',
-        ),
-      content: z
-        .string()
-        .describe(
-          'html/svg/markdown/react: full document. log: only the new lines since the last call (empty is ok for a status-only update).',
-        ),
-      artifact_id: z
-        .string()
-        .optional()
-        .describe('Stable id. Required for type=log so later calls append to the same pane.'),
-      status: z
-        .enum(['running', 'ok', 'failed', 'idle'])
-        .optional()
-        .describe('Log header pill: running (working), ok (done), failed, idle'),
-      phase: z.string().optional().describe('Log subtitle (Signing, Notarizing, …)'),
-      mode: z
-        .enum(['append', 'replace'])
-        .optional()
-        .describe('log only: append (default) or replace the buffer'),
-    },
-    async ({ title, type, artifact_id, status, phase, mode }) => {
-      const id =
-        artifact_id?.trim() ||
-        `artifact_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      // Desktop opens the pane from tool_use input. Do not echo `content` —
-      // it would double the document in the model's context.
-      const payload = {
-        ok: true,
-        artifact_id: id,
-        title,
-        type,
-        status,
-        phase,
-        mode: type === 'log' ? (mode ?? 'append') : undefined,
-        message:
-          type === 'log'
-            ? 'Log accepted. Same artifact_id appends; send only new lines next time.'
-            : 'Artifact accepted. Sideboard desktop opens it in the side column beside chat.',
-      };
-      return mcpJson(payload);
-    },
-  );
+  const mcpCatalog = new Set(worktreeMcpToolNames());
+  if (mcpCatalog.has('present_artifact')) {
+    server.tool(
+      'present_artifact',
+      'Show a document or live log in Sideboard’s side column. For html/svg/markdown/react, pass the FULL document and do not also fence that same body in chat. For type=log, pass only NEW lines (same artifact_id appends). Prefer type=log for long-running job output — do not resend HTML. type=react is a single default-export component (JSX/TSX); only react/react-dom imports.',
+      {
+        title: z.string().describe('Short title shown in the artifact pane header'),
+        type: z
+          .enum(['html', 'svg', 'markdown', 'react', 'log'])
+          .describe(
+            'html/svg/markdown/react replace the pane. log appends content to the same artifact_id (new lines only).',
+          ),
+        content: z
+          .string()
+          .describe(
+            'html/svg/markdown/react: full document. log: only the new lines since the last call (empty is ok for a status-only update).',
+          ),
+        artifact_id: z
+          .string()
+          .optional()
+          .describe('Stable id. Required for type=log so later calls append to the same pane.'),
+        status: z
+          .enum(['running', 'ok', 'failed', 'idle'])
+          .optional()
+          .describe('Log header pill: running (working), ok (done), failed, idle'),
+        phase: z.string().optional().describe('Log subtitle (Signing, Notarizing, …)'),
+        mode: z
+          .enum(['append', 'replace'])
+          .optional()
+          .describe('log only: append (default) or replace the buffer'),
+      },
+      async ({ title, type, artifact_id, status, phase, mode }) => {
+        // Desktop opens the pane from tool_use input. Do not echo `content` —
+        // it would double the document in the model's context.
+        return mcpJson(
+          presentArtifactResult({ title, type, artifact_id, status, phase, mode }),
+        );
+      },
+    );
+  }
 
   server.tool(
     'ask_user',
@@ -691,40 +682,42 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
-  server.tool(
-    'wait_for_job',
-    'Wait on a detached long job (tests, pack, deploy, connector CLI) started with detached-job.cjs. MCP clients kill tools around 60s, so this returns within 45s. Sideboard opens a type=log pane from this result (artifact_id = job id, content = delta). stillRunning is the source of truth — if true, call wait_for_job again. If the job is hanging, producing no useful output, or doing the wrong thing, call stop_job instead of looping forever. Do not end the turn or tell the user you will let them know later. If false, ok/failed is the result.',
-    {
-      id: z
-        .string()
-        .describe('Detached job id (same kebab-case id passed to detached-job.cjs start)'),
-      timeoutMs: z.number().optional(),
-    },
-    async ({ id, timeoutMs }) => {
-      const result = await waitForDetachedJob(process.cwd(), id, {
-        timeoutMs: mcpWaitForJobTimeoutMs(timeoutMs),
-      });
-      return mcpJson(result);
-    },
-  );
+  if (mcpCatalog.has('wait_for_job')) {
+    server.tool(
+      'wait_for_job',
+      'Wait on a detached long job (tests, pack, deploy, connector CLI) started with detached-job.cjs. MCP clients kill tools around 60s, so this returns within 45s. Sideboard opens a type=log pane from this result (artifact_id = job id, content = delta). stillRunning is the source of truth — if true, call wait_for_job again. If the job is hanging, producing no useful output, or doing the wrong thing, call stop_job instead of looping forever. Do not end the turn or tell the user you will let them know later. If false, ok/failed is the result.',
+      {
+        id: z
+          .string()
+          .describe('Detached job id (same kebab-case id passed to detached-job.cjs start)'),
+        timeoutMs: z.number().optional(),
+      },
+      async ({ id, timeoutMs }) => {
+        const result = await waitForDetachedJob(process.cwd(), id, {
+          timeoutMs: mcpWaitForJobTimeoutMs(timeoutMs),
+        });
+        return mcpJson(result);
+      },
+    );
 
-  server.tool(
-    'stop_job',
-    'Stop a detached job you started with detached-job.cjs when it is hanging, producing no useful output, buffering forever, or doing the wrong thing (wrong project, infinite watch, huge dump). Do not stop a pack/test/deploy that is clearly making progress. The type=log pane updates to status=failed with the last delta. Then decide the next step.',
-    {
-      id: z
-        .string()
-        .describe('Detached job id (same kebab-case id passed to detached-job.cjs start)'),
-      reason: z
-        .string()
-        .optional()
-        .describe('Why you are stopping (hanging, no progress, wrong output, already have the answer)'),
-    },
-    async ({ id, reason }) => {
-      const result = await stopDetachedJob(process.cwd(), id, { reason });
-      return mcpJson(result);
-    },
-  );
+    server.tool(
+      'stop_job',
+      'Stop a detached job you started with detached-job.cjs when it is hanging, producing no useful output, buffering forever, or doing the wrong thing (wrong project, infinite watch, huge dump). Do not stop a pack/test/deploy that is clearly making progress. The type=log pane updates to status=failed with the last delta. Then decide the next step.',
+      {
+        id: z
+          .string()
+          .describe('Detached job id (same kebab-case id passed to detached-job.cjs start)'),
+        reason: z
+          .string()
+          .optional()
+          .describe('Why you are stopping (hanging, no progress, wrong output, already have the answer)'),
+      },
+      async ({ id, reason }) => {
+        const result = await stopDetachedJob(process.cwd(), id, { reason });
+        return mcpJson(result);
+      },
+    );
+  }
 
   server.tool(
     'list_run_scripts',
@@ -1150,6 +1143,7 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
+  if (shouldRegisterMcpWaitForTurn()) {
   server.tool(
     'wait_for_turn',
     'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_thread a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_thread or tell the user. On input-required, wait for the user in that chat. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
@@ -1162,21 +1156,21 @@ export async function startMcpServer(): Promise<void> {
         resolveIfStillRunning: true,
       });
       const result = orch.getTurnResult(thread.id);
-      const hint = mcpWaitTaskHint(result.taskState, result.status);
-      return mcpJson({
-        id: thread.id,
-        status: result.status,
-        taskState: result.taskState,
-        text: result.text,
-        lastError: result.lastError,
-        stillRunning: result.stillRunning,
-        progress: result.progress,
-        lastActivityAt: result.lastActivityAt,
-        hint,
-        incomplete: needsCoordinatorAction(result.taskState),
-      });
+      return mcpJson(
+        waitForTurnToolResult({
+          id: thread.id,
+          status: result.status,
+          taskState: result.taskState,
+          text: result.text,
+          lastError: result.lastError,
+          stillRunning: result.stillRunning,
+          progress: result.progress,
+          lastActivityAt: result.lastActivityAt,
+        }),
+      );
     },
   );
+  }
 
   server.tool(
     'get_turn_result',
