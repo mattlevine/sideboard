@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Orchestration in the sidebar is an **agent** (Add agent / “No agents — use +”), not a chat, and no longer tells you to open Board to create one. The same wording is used on the board button, empty orchestrator pane, and schedule target.
+
 ## [0.1.261] - 2026-10-03
 
 ### Changed

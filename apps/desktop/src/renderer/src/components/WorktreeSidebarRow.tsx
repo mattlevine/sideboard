@@ -278,8 +278,8 @@ export function WorktreeSidebarRow({
               <button
                 type="button"
                 className="icon-btn worktree-add-agent-btn"
-                aria-label="New orchestration chat"
-                title="New orchestration chat"
+                aria-label="Add agent"
+                title="Add agent"
                 onClick={() => onNewOrchestration?.()}
               >
                 +

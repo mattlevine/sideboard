@@ -2566,7 +2566,7 @@ export function ThreadPanel({
                         <p>
                           {isGlobalThread(thread)
                             ? 'Steer worktree agents across registered repos with Sideboard MCP. Slack DMs and @mentions land here.'
-                            : 'Coordinate child worktree agents from this orchestration chat.'}{' '}
+                            : 'Coordinate child worktree agents from this orchestration agent.'}{' '}
                           Use <kbd>⌘L</kbd> to focus the composer.
                         </p>
                       </>

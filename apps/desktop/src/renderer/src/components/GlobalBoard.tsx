@@ -223,7 +223,7 @@ export function GlobalBoard({
           <button
             type="button"
             onClick={onNewOrchestration}
-            title="Start a new orchestration chat"
+            title="Start a new orchestration agent"
           >
             New orchestration
           </button>

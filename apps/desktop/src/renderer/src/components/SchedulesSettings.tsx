@@ -137,7 +137,7 @@ export function SchedulesSettings() {
   const threadLabel = useMemo(() => {
     const map = new Map(targetThreads.map((t) => [t.id, threadDisplayLabel(t)]));
     return (id: string | null) => {
-      if (!id) return 'New orchestration chat';
+      if (!id) return 'New orchestration agent';
       return map.get(id) ?? `${id.slice(0, 8)}…`;
     };
   }, [targetThreads]);
@@ -397,7 +397,7 @@ export function SchedulesSettings() {
               value={form.threadId}
               onChange={(e) => setForm((f) => ({ ...f, threadId: e.target.value }))}
             >
-              <option value="">New orchestration chat each run</option>
+              <option value="">New orchestration agent each run</option>
               {targetThreads.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.sourceType === 'orchestration'
@@ -437,7 +437,7 @@ export function SchedulesSettings() {
           {recurringNewChat && (
             <p className="settings-hint">
               Recurring jobs with no target chat open a new Global orchestration
-              chat each run.
+              agent each run.
             </p>
           )}
           <div className="settings-actions">

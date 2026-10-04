@@ -251,7 +251,7 @@ export function Sidebar({
                   <button
                     type="button"
                     className="workspace-name-btn"
-                    title="New orchestration chat"
+                    title="Add agent"
                     onClick={() => onNew(undefined, 'orchestration')}
                   >
                     <span className="workspace-glyph" aria-hidden />
@@ -260,14 +260,14 @@ export function Sidebar({
                   <button
                     type="button"
                     className="icon-btn"
-                    title="New orchestration chat"
+                    title="Add agent"
                     onClick={() => onNew(undefined, 'orchestration')}
                   >
                     +
                   </button>
                 </div>
                 <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                  No chats — open Board or use +
+                  No agents — use +
                 </div>
               </>
             ) : (
