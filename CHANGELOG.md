@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Orchestration in the sidebar is an **agent** (Add agent / “No agents — use +”), not a chat, and no longer tells you to open Board to create one. The same wording is used on the board button, empty orchestrator pane, and schedule target.
+- An empty project in the left sidebar says **No worktrees** (not “No threads”).
+
+### Fixed
+
+- Left-sidebar scrolling is only the **Projects** list. Orchestration, the Projects header, and the filter stay pinned.
 
 ## [0.1.261] - 2026-10-03
 

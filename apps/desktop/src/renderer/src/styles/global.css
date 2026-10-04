@@ -1889,20 +1889,31 @@ body.resizing-panels webview {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: clip;
   padding: 8px;
 }
 
-.sidebar-projects {
+.sidebar-pinned {
+  flex: 0 0 auto;
+  min-width: 0;
+  background: var(--bg-elevated);
+}
+
+.sidebar-orchestration {
   flex-shrink: 0;
   min-width: 0;
 }
 
+.sidebar-projects {
+  min-width: 0;
+}
+
 .thread-list .sidebar-projects {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .worktree-sort {
@@ -2119,6 +2130,7 @@ body.resizing-panels webview {
   align-items: center;
   gap: 6px;
   padding: 4px 2px 2px;
+  flex-shrink: 0;
 }
 
 .projects-label {
@@ -2137,6 +2149,7 @@ body.resizing-panels webview {
 }
 
 .sidebar-filter {
+  flex-shrink: 0;
   padding: 4px 4px 8px;
 }
 
