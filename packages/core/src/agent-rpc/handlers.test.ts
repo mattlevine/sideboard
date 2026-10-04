@@ -124,6 +124,7 @@ describe('agent-rpc handlers', () => {
         stillRunning: true,
         progress: 'Read foo.ts',
         lastActivityAt: 't1',
+        usage: null,
         hint: 'Child is still working. Call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts) or assume a hang while progress is updating.',
         incomplete: false,
       },
@@ -136,6 +137,7 @@ describe('agent-rpc handlers', () => {
         stillRunning: false,
         progress: null,
         lastActivityAt: 't2',
+        usage: { inputTokens: 12, outputTokens: 4, costUsd: 0.01 },
         hint: undefined,
         incomplete: false,
       },
@@ -149,6 +151,7 @@ describe('agent-rpc handlers', () => {
     expect(result.stillRunning).toBe(false);
     expect(result.taskState).toBe('completed');
     expect(result.text).toBe('done');
+    expect(result.usage).toEqual({ inputTokens: 12, outputTokens: 4, costUsd: 0.01 });
     expect(waitFn).toHaveBeenCalledTimes(2);
     expect(notifies).toHaveLength(1);
     expect(waitFn.mock.calls[0]?.[0]).toBe('child-1');
@@ -164,6 +167,7 @@ describe('agent-rpc handlers', () => {
       stillRunning: false,
       progress: null,
       lastActivityAt: null,
+      usage: null,
       hint: undefined,
       incomplete: false,
     }));

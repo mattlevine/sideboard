@@ -48,6 +48,7 @@ describe('sideboardCursorRpcTools', () => {
             stillRunning: false,
             progress: null,
             lastActivityAt: null,
+            usage: null,
             hint: undefined,
             incomplete: false,
           })),

@@ -118,6 +118,7 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.status).toBe('queued');
     expect(result.progress).toBe('Queued — waiting for a concurrency slot');
     expect(result.taskState).toBe('submitted');
+    expect(result.lastActivityAt).toBeNull();
   });
 
   it('does not treat leftover running status as live after the agent died', () => {
@@ -152,6 +153,13 @@ describe('Orchestrator.getTurnResult', () => {
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.stillRunning).toBe(true);
     expect(result.progress).toBeNull();
+  });
+
+  it('falls back lastActivityAt to last agent ts after the turn finishes', () => {
+    const thread = seed({ status: 'idle', agentText: 'done' });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(false);
+    expect(result.lastActivityAt).toBe(thread.messages.at(-1)?.ts);
   });
 
   it('includes last-turn usage and costUsd when present', () => {

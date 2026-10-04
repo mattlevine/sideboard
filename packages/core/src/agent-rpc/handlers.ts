@@ -206,6 +206,7 @@ async function defaultTurnWait(
     stillRunning: result.stillRunning,
     progress: result.progress,
     lastActivityAt: result.lastActivityAt,
+    usage: result.usage,
   });
 }
 
@@ -243,6 +244,7 @@ export async function handleTurnWait(
       stillRunning: true,
       progress: null,
       lastActivityAt: null,
+      usage: null,
       hint: 'Child is still working after max hold. Call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts).',
       incomplete: false,
     }

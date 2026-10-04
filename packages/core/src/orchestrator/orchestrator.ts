@@ -3001,7 +3001,9 @@ export class Orchestrator {
       lastError,
       stillRunning,
       progress: liveSummary ?? queuedHint,
-      lastActivityAt: live?.updatedAt ?? null,
+      lastActivityAt: stillRunning
+        ? live?.updatedAt ?? null
+        : lastAgent?.ts ?? thread.updatedAt ?? null,
       usage: lastAgent?.usage ?? null,
     };
   }

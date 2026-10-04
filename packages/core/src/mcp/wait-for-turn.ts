@@ -1,4 +1,5 @@
 import { needsCoordinatorAction, type TaskState } from '../orchestrator/task-state.js';
+import type { TokenUsage } from '../types/thread.js';
 
 /**
  * MCP clients (Cursor, Claude Code) often kill a tool call around 60s.
@@ -77,6 +78,8 @@ export type WaitForTurnToolResult = {
   stillRunning: boolean;
   progress: string | null;
   lastActivityAt: string | null;
+  /** Last finished agent turn tokens + costUsd when the provider reported them. */
+  usage: TokenUsage | null;
   hint: string | undefined;
   incomplete: boolean;
 };
@@ -90,9 +93,11 @@ export function waitForTurnToolResult(input: {
   stillRunning: boolean;
   progress: string | null;
   lastActivityAt: string | null;
+  usage?: TokenUsage | null;
 }): WaitForTurnToolResult {
   return {
     ...input,
+    usage: input.usage ?? null,
     hint: mcpWaitTaskHint(input.taskState, input.status),
     incomplete: needsCoordinatorAction(input.taskState),
   };

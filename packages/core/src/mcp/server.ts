@@ -1173,6 +1173,7 @@ export async function startMcpServer(): Promise<void> {
           stillRunning: result.stillRunning,
           progress: result.progress,
           lastActivityAt: result.lastActivityAt,
+          usage: result.usage,
         }),
       );
     },
