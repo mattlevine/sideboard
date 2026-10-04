@@ -239,19 +239,19 @@ export function Sidebar({
       </div>
 
       <div className="thread-list">
-        <div className="sidebar-projects">
+        <div className="sidebar-pinned">
         {(!q ||
           globalThreads.length > 0 ||
           'orchestration'.includes(q) ||
           'global'.includes(q)) && (
-          <div className="workspace-group">
+          <div className="workspace-group sidebar-orchestration">
             {globalThreads.length === 0 || !orchPrimary ? (
               <>
                 <div className="workspace-header">
                   <button
                     type="button"
                     className="workspace-name-btn"
-                    title="New orchestration chat"
+                    title="Add agent"
                     onClick={() => onNew(undefined, 'orchestration')}
                   >
                     <span className="workspace-glyph" aria-hidden />
@@ -260,14 +260,14 @@ export function Sidebar({
                   <button
                     type="button"
                     className="icon-btn"
-                    title="New orchestration chat"
+                    title="Add agent"
                     onClick={() => onNew(undefined, 'orchestration')}
                   >
                     +
                   </button>
                 </div>
                 <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                  No chats — open Board or use +
+                  No agents — use +
                 </div>
               </>
             ) : (
@@ -343,7 +343,9 @@ export function Sidebar({
             />
           </div>
         )}
+        </div>
 
+        <div className="sidebar-projects">
         {groupedByRepo.length === 0 && <div className="empty">No workspaces yet</div>}
         {groupedByRepo.map(({ path, repoThreads, groups }) => (
           <div key={path} className="workspace-group">
@@ -389,7 +391,7 @@ export function Sidebar({
             </div>
             {repoThreads.length === 0 && (
               <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                No threads
+                No worktrees
               </div>
             )}
             {groups.map((group) => {
