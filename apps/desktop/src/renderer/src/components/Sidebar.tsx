@@ -22,7 +22,6 @@ import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import type { NewChatTabOptions } from './ChatTabs';
 import { SidebarToggle } from './SidebarToggle';
-import { WorktreeNestedChats } from './WorktreeNestedChats';
 import { WorktreeSidebarRow } from './WorktreeSidebarRow';
 
 interface Props {
@@ -178,6 +177,19 @@ export function Sidebar({
     }));
   }, [byRepo, worktreeSort, ownership, githubLogin]);
 
+  const orchPrimary = pickWorktreeChat(
+    globalThreads,
+    selectedId,
+    GLOBAL_WORKSPACE_ID,
+  );
+  const orchActive =
+    view === 'thread' && globalThreads.some((t) => t.id === selectedId);
+  const orchSelected = globalThreads.some((t) => multiSelected.has(t.id));
+  const orchArchiving = globalThreads.some((t) => archivingIds.has(t.id));
+  const orchUnread = isGroupUnread(globalThreads, {
+    activeChatId: orchActive ? selectedId : null,
+  });
+
   return (
     <aside className="sidebar">
       <div className="sidebar-chrome">
@@ -233,43 +245,51 @@ export function Sidebar({
           'orchestration'.includes(q) ||
           'global'.includes(q)) && (
           <div className="workspace-group">
-            <div className="workspace-header">
-              <button
-                type="button"
-                className="workspace-name-btn"
-                title="New orchestration chat"
-                onClick={() => onNew(undefined, 'orchestration')}
-              >
-                <span className="workspace-glyph" aria-hidden />
-                <span className="workspace-name">Orchestration</span>
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title="New orchestration chat"
-                onClick={() => onNew(undefined, 'orchestration')}
-              >
-                +
-              </button>
-            </div>
-            {globalThreads.length === 0 ? (
-              <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                No chats — open Board or use +
-              </div>
+            {globalThreads.length === 0 || !orchPrimary ? (
+              <>
+                <div className="workspace-header">
+                  <button
+                    type="button"
+                    className="workspace-name-btn"
+                    title="New orchestration chat"
+                    onClick={() => onNew(undefined, 'orchestration')}
+                  >
+                    <span className="workspace-glyph" aria-hidden />
+                    <span className="workspace-name">Orchestration</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="New orchestration chat"
+                    onClick={() => onNew(undefined, 'orchestration')}
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="thread-meta" style={{ padding: '4px 8px' }}>
+                  No chats — open Board or use +
+                </div>
+              </>
             ) : (
               <div className="worktree-block">
-                {/* Same nested rows as worktree sub-agents: logo + name, drag-sort. */}
-                <WorktreeNestedChats
-                  chats={globalThreads}
-                  worktreeKey={GLOBAL_WORKSPACE_ID}
-                  parentTitle="Orchestration"
+                <WorktreeSidebarRow
+                  primary={orchPrimary}
+                  group={globalThreads}
+                  worktreeLabel="Orchestration"
+                  groupKey={GLOBAL_WORKSPACE_ID}
+                  githubLogin={githubLogin}
+                  active={orchActive}
+                  selected={orchSelected}
                   selectedId={selectedId}
-                  active={view === 'thread'}
                   multiSelected={multiSelected}
+                  archiving={orchArchiving}
+                  unread={orchUnread}
                   onSelect={onSelect}
                   onMarkUnread={onMarkUnread}
                   onRenameChat={onRenameChat}
                   onCloseChat={onCloseChat}
+                  onNewOrchestration={() => onNew(undefined, 'orchestration')}
+                  showArchive={false}
                 />
               </div>
             )}

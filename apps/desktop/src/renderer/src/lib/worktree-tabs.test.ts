@@ -137,6 +137,26 @@ describe('worktree-tabs', () => {
     expect(pickWorktreeChat(group, null)?.id).toBe('old');
   });
 
+  it('uses an explicit tab key for last-open orchestration chats', () => {
+    const group = [
+      thread({
+        id: 'orch-a',
+        worktreePath: '/tmp/sideboard-global',
+        repoPath: '__global__',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }),
+      thread({
+        id: 'orch-b',
+        worktreePath: '/tmp/sideboard-global',
+        repoPath: '__global__',
+        createdAt: '2026-01-02T00:00:00.000Z',
+      }),
+    ];
+    writeLastWorktreeChatId('__global__', 'orch-b');
+    expect(pickWorktreeChat(group, null, '__global__')?.id).toBe('orch-b');
+    expect(pickWorktreeChat(group, 'orch-a', '__global__')?.id).toBe('orch-a');
+  });
+
   it('reorders ids before or after a target', () => {
     expect(reorderChatIds(['a', 'b', 'c'], 'c', 'a', 'before')).toEqual(['c', 'a', 'b']);
     expect(reorderChatIds(['a', 'b', 'c'], 'a', 'c', 'after')).toEqual(['b', 'c', 'a']);

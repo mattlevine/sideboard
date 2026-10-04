@@ -5,8 +5,11 @@ export function resolveSidebarChatExpanded(opts: {
   chatCount: number;
   selected: boolean;
   collapsedWhileSelected?: boolean;
+  /** Default 2. Orchestration nests a single agent under the parent row. */
+  minChats?: number;
 }): boolean {
-  if (opts.chatCount < SIDEBAR_NEST_MIN_CHATS || !opts.selected) return false;
+  const min = opts.minChats ?? SIDEBAR_NEST_MIN_CHATS;
+  if (opts.chatCount < min || !opts.selected) return false;
   return !opts.collapsedWhileSelected;
 }
 
