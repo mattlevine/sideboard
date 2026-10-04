@@ -50,13 +50,12 @@ export interface TokenUsage {
   /** Cache hits, not included in `inputTokens` (Claude-shaped). */
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
-  /**
-   * Tokens occupying the context window on the last API request of this turn
-   * (input + cache). Distinct from billed totals, which sum every tool round.
-   */
+  /** Last-request occupancy (input + cache); billed totals sum every tool round. */
   lastRequestTokens?: number;
-  /** Provider-reported USD cost for this turn, when the agent CLI supplies it. */
+  /** USD for this turn (not Claude session total). */
   costUsd?: number;
+  /** Claude `total_cost_usd` session total; not additive. */
+  sessionCostUsd?: number;
 }
 
 export interface ThreadMessage {

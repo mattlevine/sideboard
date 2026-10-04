@@ -374,8 +374,7 @@ async function main(): Promise<void> {
     });
 
   const workspaceCmd = program
-    .command('project')
-    .alias('workspace')
+    .command('project').alias('workspace')
     .description('Manage registered projects (git repos)');
 
   workspaceCmd

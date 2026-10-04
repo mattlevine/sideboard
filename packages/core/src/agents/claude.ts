@@ -95,6 +95,8 @@ function usageFromClaude(usage: ClaudeUsage | undefined): TokenUsage | null {
  * Prefer summing `modelUsage.*.costUSD` (this call). Do not use
  * `total_cost_usd` when modelUsage is present — after `--resume` that field is
  * session-cumulative and would overcount when Sideboard sums message costs.
+ * When only `total_cost_usd` is present, still attach it as `costUsd` plus
+ * `sessionCostUsd`; spawn deltas it against prior turns via `withTurnScopedCost`.
  */
 function costUsdFromClaudeResult(obj: Record<string, unknown>): number | undefined {
   // CLI has used camelCase (modelUsage / costUSD) and snake_case in some builds.
@@ -113,6 +115,14 @@ function costUsdFromClaudeResult(obj: Record<string, unknown>): number | undefin
     }
     if (any) return sum;
   }
+  const totalCost = obj.total_cost_usd ?? obj.totalCostUsd;
+  if (totalCost != null && Number.isFinite(Number(totalCost))) {
+    return Number(totalCost);
+  }
+  return undefined;
+}
+
+function sessionCostUsdFromClaudeResult(obj: Record<string, unknown>): number | undefined {
   const totalCost = obj.total_cost_usd ?? obj.totalCostUsd;
   if (totalCost != null && Number.isFinite(Number(totalCost))) {
     return Number(totalCost);
@@ -865,6 +875,8 @@ export const claudeAdapter: AgentAdapter = {
         if (usage) {
           const costUsd = costUsdFromClaudeResult(obj);
           if (costUsd != null) usage.costUsd = costUsd;
+          const sessionCostUsd = sessionCostUsdFromClaudeResult(obj);
+          if (sessionCostUsd != null) usage.sessionCostUsd = sessionCostUsd;
           events.push({ type: 'usage', data: usage, scope: 'turn' });
         }
         if (events.length === 0) return null;

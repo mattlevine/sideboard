@@ -174,6 +174,6 @@ Worktree `pnpm install` / setup must keep the per-worktree store under `.context
 
 ## Cost / usage fields
 
-Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` (or a delta) when summing.
+Before treating a provider USD field as additive per turn (message chips, thread Σ, MCP `usage`), confirm it is turn-scoped under Sideboard’s session model — Claude `total_cost_usd` is session-cumulative after `--resume`; prefer per-result `modelUsage.*.costUSD` when it differs from that total, otherwise persist a delta in `withTurnScopedCost` (`costUsd` = this turn, `sessionCostUsd` = session total).
 
 Tabs-bar and the latest message chip meter use going-forward occupancy (remaining transcript / last request that fits the 1M window), never billed thread or turn Σ. Warn/hot colors are allowed from that fill (65% / 85%). Hover card stays billed `X tok`.

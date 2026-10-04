@@ -159,6 +159,7 @@ describe('coordinator-prompt', () => {
 
   it('fleet playbook tells coordinators how to read child spend', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('costUsd');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('not the Claude session total');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('taskState');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('input-required');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain(

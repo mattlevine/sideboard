@@ -5,6 +5,7 @@ import {
   pendingInjectedNotices,
 } from '../threads/injected-notices.js';
 import { deriveTaskState, type TaskState } from './task-state.js';
+import { lastActivityAtForWait } from '../mcp/wait-for-turn.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
@@ -368,11 +369,6 @@ function collectActiveRunPorts(runs: readonly ActiveRun[]): number[] {
     }
   }
   return [...ports];
-}
-
-function nonemptyIso(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
 }
 
 export class Orchestrator {
@@ -2973,7 +2969,6 @@ export class Orchestrator {
     stillRunning: boolean;
     progress: string | null;
     lastActivityAt: string | null;
-    /** Token + cost for the last finished agent turn, when reported. Null while stillRunning. */
     usage: TokenUsage | null;
   } {
     const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
@@ -2984,23 +2979,14 @@ export class Orchestrator {
     const finishedText =
       (rawText && !isInternalAgentStatusText(rawText) ? rawText : '') ||
       (thread.status === 'error' || thread.status === 'stopped' || thread.status === 'broken'
-        ? lastError ?? ''
-        : '');
-    // While submitted/working, lastAgent is the previous finished turn (or a
-    // partial stream). Coordinators that read `text` without stillRunning
-    // would treat that as this turn’s answer — omit it until the turn ends.
+        ? lastError ?? '' : '');
     const text = stillRunning ? '' : finishedText;
     const live = stillRunning ? readTurnLive(thread.id) : null;
-    const liveSummary =
-      live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
-    const queuedHint =
-      stillRunning && thread.status === 'queued' && !liveSummary
-        ? 'Queued — waiting for a concurrency slot'
-        : null;
+    const liveSummary = live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
+    const queuedHint = stillRunning && thread.status === 'queued' && !liveSummary
+      ? 'Queued — waiting for a concurrency slot' : null;
     const taskState = deriveTaskState({
-      status: thread.status,
-      stillRunning,
-      lastAgentParts: lastAgent?.parts,
+      status: thread.status, stillRunning, lastAgentParts: lastAgent?.parts,
     });
     return {
       text,
@@ -3010,11 +2996,9 @@ export class Orchestrator {
       lastError,
       stillRunning,
       progress: liveSummary ?? queuedHint,
-      lastActivityAt: stillRunning
-        ? live?.updatedAt ?? null
-        : nonemptyIso(thread.messages.at(-1)?.ts) ??
-          nonemptyIso(lastAgent?.ts) ??
-          nonemptyIso(thread.updatedAt),
+      lastActivityAt: lastActivityAtForWait(stillRunning, live?.updatedAt, [
+        thread.messages.at(-1)?.ts, lastAgent?.ts, thread.updatedAt,
+      ]),
       usage: stillRunning ? null : lastAgent?.usage ?? null,
     };
   }

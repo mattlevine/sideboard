@@ -68,6 +68,25 @@ export function mcpWaitTaskHint(
   }
 }
 
+export function nonemptyIso(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/** Live sidecar while running; last transcript/thread stamp once the turn ends. */
+export function lastActivityAtForWait(
+  stillRunning: boolean,
+  liveUpdatedAt: string | null | undefined,
+  fallbacks: Array<string | null | undefined>,
+): string | null {
+  if (stillRunning) return nonemptyIso(liveUpdatedAt);
+  for (const value of fallbacks) {
+    const iso = nonemptyIso(value);
+    if (iso) return iso;
+  }
+  return null;
+}
+
 /** Payload for MCP `wait_for_turn` and Agent RPC `turn.wait`. */
 export type WaitForTurnToolResult = {
   id: string;
@@ -78,7 +97,7 @@ export type WaitForTurnToolResult = {
   stillRunning: boolean;
   progress: string | null;
   lastActivityAt: string | null;
-  /** Last finished agent turn tokens + costUsd when reported. Null while stillRunning. */
+  /** Last finished agent turn tokens + costUsd when reported. Null while stillRunning. costUsd is this turn; sessionCostUsd is the provider session total when present. */
   usage: TokenUsage | null;
   hint: string | undefined;
   incomplete: boolean;
