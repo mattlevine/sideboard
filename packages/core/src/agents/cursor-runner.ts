@@ -156,7 +156,7 @@ async function main(): Promise<number> {
   // Built-in Read has no offset/limit in the SDK schema — whole files crash
   // the protobuf turn. Custom `read` slices; deny-wins does not apply to MCP.
   const customTools = {
-    read: slicedReadCustomToolConfig(req.cwd) as SDKCustomTool,
+    read: slicedReadCustomToolConfig(req.cwd) as unknown as SDKCustomTool,
   };
   const local = withCursorLocalHangGuards({
     cwd: req.cwd,
@@ -175,7 +175,7 @@ async function main(): Promise<number> {
     mode,
     local,
     name: 'Sideboard' as const,
-    disallowedTools: ['read'] as const,
+    disallowedTools: ['read'],
     ...(mcpServers ? { mcpServers } : {}),
   };
 
