@@ -826,7 +826,7 @@ function setupStoreWatcher(): void {
     }
     mainWindow?.webContents.send('threads:changed');
     if (!foreign) return;
-    // MCP stdio (separate process) enqueues via send_to_thread / run_dev_script;
+    // MCP stdio (separate process) enqueues via send_to_chat / run_dev_script;
     // when that child exits mid-wait, queues and runScriptRequest stay on disk.
     // Adopt them into the desktop drain / startDev.
     if (adoptTimer) clearTimeout(adoptTimer);
@@ -1949,7 +1949,7 @@ app.whenReady().then(async () => {
     app.setName('Sideboard');
   }
   orch.setMaxConcurrent(maxConcurrentAgents());
-  // MCP/CLI send_to_thread must not spawn worktree turns in the stdio child —
+  // MCP/CLI send_to_chat must not spawn worktree turns in the stdio child —
   // the board adopts persisted queues so live IPC reaches the chat UI.
   startDesktopHost();
   applyDockIcon();

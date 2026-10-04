@@ -50,11 +50,11 @@ After merge to the default branch, new worktrees inherit the file. Existing sibl
 
 | Graph idea | Here |
 |---|---|
-| Worker node | Worktree thread |
+| Worker node | Workspace chat |
 | Judge | Tests / typecheck / `getPrChecks` — not “the agent said done” |
 | Rulebook | This skill, sibling skills, `AGENTS.md`, `.claude/skills/review/SKILL.md` |
 | Blind reviewer | `request_review` (fresh tab, no worker chat) |
-| Disk queue | Worktrees + thread store; pending = no output / no passing judge |
+| Disk queue | Workspaces + chat store; pending = no output / no passing judge |
 | Human gate | `confirm_land` / purge |
 
 Do not lock Global / orchestration chat into a fixed topology. Exploratory fleet work stays a loop. Use this skill when you fan out the same shape across many items or threads.

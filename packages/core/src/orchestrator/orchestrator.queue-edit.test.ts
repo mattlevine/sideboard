@@ -363,7 +363,7 @@ describe('Orchestrator queued-message editing', () => {
 
     const updated = await orch.send(
       thread.id,
-      'Sideboard: child worktree [Fix](sideboard://thread/abc) stopped before finishing (status=stopped).',
+      'Sideboard: child worktree [Fix](sideboard://chat/abc) stopped before finishing (status=stopped).',
     );
     expect(kill).toHaveBeenCalledOnce();
     expect(updated.queue[0]).toMatch(/^Sideboard:/);

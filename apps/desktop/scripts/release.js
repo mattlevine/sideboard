@@ -237,9 +237,24 @@ if (doDesktop) {
     'cursor-runtime/core-dist/agents/cursor-runner.js',
   );
   const cursorExeca = path.join(appResources, 'cursor-runtime/node_modules/execa/index.js');
-  if (!fs.existsSync(cursorRunner) || !fs.existsSync(cursorExeca)) {
+  const cursorWs = path.join(appResources, 'cursor-runtime/node_modules/ws/package.json');
+  const cursorClaudeSdk = path.join(
+    appResources,
+    'cursor-runtime/node_modules/@anthropic-ai/claude-agent-sdk/package.json',
+  );
+  const claudeRunner = path.join(
+    appResources,
+    'cursor-runtime/core-dist/agents/claude-runner.js',
+  );
+  if (
+    !fs.existsSync(cursorRunner) ||
+    !fs.existsSync(cursorExeca) ||
+    !fs.existsSync(cursorWs) ||
+    !fs.existsSync(cursorClaudeSdk) ||
+    !fs.existsSync(claudeRunner)
+  ) {
     throw new Error(
-      'Packaged extraResources cursor-runtime is incomplete (runner or execa missing). Aborting release.',
+      'Packaged extraResources cursor-runtime is incomplete (runner, ws, or Claude SDK missing). Aborting release.',
     );
   }
   console.log('✅ Verified extraResources cursor-runtime');

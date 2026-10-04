@@ -18,7 +18,7 @@ interface Props {
   onFindChatConsumed?: () => void;
   leftSidebarToggle?: ReactNode;
   rightSidebarToggle?: ReactNode;
-  /** Open another thread from a sideboard://thread/<id> markdown link. */
+  /** Open another thread from a sideboard://chat/<id> markdown link. */
   onOpenThreadLink?: (threadRef: string) => void;
   openUrls?: string[];
   openUrl?: string | null;

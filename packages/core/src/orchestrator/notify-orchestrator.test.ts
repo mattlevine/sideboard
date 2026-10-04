@@ -71,7 +71,7 @@ describe('notify_orchestrator', () => {
     expect(sends).toHaveLength(1);
     expect(sends[0]!.id).toBe(parent.id);
     expect(sends[0]!.opts).toEqual({ followUp: 'queue' });
-    expect(sends[0]!.prompt).toContain('sideboard://thread/');
+    expect(sends[0]!.prompt).toContain('sideboard://chat/');
     expect(sends[0]!.prompt).toContain('is blocked');
     expect(sends[0]!.prompt).toContain('Waiting on VPN.');
     expect(sends[0]!.prompt).toContain('not a user command');
@@ -160,7 +160,7 @@ describe('notify_orchestrator', () => {
       message: 'Asked the user: Keep Fast?',
     });
     expect(prompt).toContain('input-required');
-    expect(prompt).toContain('[Fix panel](sideboard://thread/abc)');
+    expect(prompt).toContain('[Fix panel](sideboard://chat/abc)');
     expect(expandCanonicalGitRequest(prompt)).toBe(prompt);
   });
 });

@@ -4,6 +4,7 @@ Instructions for agents working **in this git repo**.
 
 Read [docs/system/README.md](docs/system/README.md) before changing code. Then open the docs that match the task:
 
+- [docs/system/glossary.md](docs/system/glossary.md) — project, workspace, chat, agent
 - [docs/system/architecture.md](docs/system/architecture.md) — packages, Slack/MCP/desktop
 - [docs/system/agent-rpc.md](docs/system/agent-rpc.md) — agent WebSocket JSON-RPC (Cursor worktree pilot; not an MCP shim)
 - [docs/system/agent-orchestration.md](docs/system/agent-orchestration.md) — `taskState`, A2A fit

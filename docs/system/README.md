@@ -4,6 +4,7 @@ Canonical instructions for agents working **on this repository** (not for Sidebo
 
 | Doc | When |
 |-----|------|
+| [glossary.md](glossary.md) | Project, workspace, chat, agent (Conductor/Orca-aligned names) |
 | [architecture.md](architecture.md) | Layout, packages, how Slack/MCP/desktop fit, process skills |
 | [agent-rpc.md](agent-rpc.md) | Agent WebSocket JSON-RPC (replacing MCP for harness hooks) |
 | [agent-orchestration.md](agent-orchestration.md) | `taskState`, `notify_orchestrator`, why not A2A HTTP / Claude Agent Teams |

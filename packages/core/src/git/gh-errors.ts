@@ -132,7 +132,7 @@ export function formatGhLandError(
       `GitHub rejected the pull request: the GraphQL body is too long ` +
       `(PR description / request size, limit ${GITHUB_PR_BODY_MAX_CHARS} characters).` +
       `${pushNote} Retry with a short title and body via \`gh pr create --body-file\` ` +
-      `(or send_to_thread so the worktree agent writes a brief description). ` +
+      `(or send_to_chat so the worktree agent writes a brief description). ` +
       `Do not paste a changelog or diff into --body.`
     );
   }

@@ -1894,8 +1894,13 @@ body.resizing-panels webview {
 }
 
 .sidebar-pinned {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  max-height: 42%;
+  min-height: 0;
   min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--bg-elevated);
 }
 

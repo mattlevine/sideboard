@@ -136,7 +136,7 @@ export function formatAccountProfilePlaybookLine(profile: ResolvedViewerProfile)
   if (!profile.accountNotes) return '';
   return (
     `- Account context (Settings → Agents): ${compactNotes(profile.accountNotes)}. ` +
-    `When they ask to find work, use this with list_issues (tickets) and list_prs(queue=review) (reviews) and show the options. Only create_thread and start when they also asked to start. ` +
+    `When they ask to find work, use this with list_issues (tickets) and list_prs(queue=review) (reviews) and show the options. Only create_workspace and start when they also asked to start. ` +
     `To change it, show the proposed text, ask_user (Save this context / Do not save), wait, then update_viewer_context(scope=account, confirmed=true).`
   );
 }
@@ -159,7 +159,7 @@ export function formatProjectProfilePlaybookLines(
   ].join('\n');
 }
 
-/** Suffix for list_workspaces / inventory lines (project context only). */
+/** Suffix for list_projects / inventory lines (project context only). */
 export function formatWorkspaceProfileSuffix(profile: ResolvedViewerProfile): string {
   if (!profile.projectNotes) return '';
   return `  context:${compactNotes(profile.projectNotes, 80)}`;

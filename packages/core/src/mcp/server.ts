@@ -99,7 +99,7 @@ import {
 } from './create-thread-agent.js';
 
 const MAX_ORCH_THREADS = 5;
-/** Hard ceiling so a stuck create_thread cannot pin the MCP stdio server forever. */
+/** Hard ceiling so a stuck create_workspace cannot pin the MCP stdio server forever. */
 const CREATE_THREAD_TIMEOUT_MS = 90_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -128,6 +128,7 @@ type CreateOrchThreadArgs = {
   agent?: AgentKind;
   model?: string | null;
   cowboy?: boolean;
+  parentChatId?: string;
   parentThreadId?: string;
   attachments?: ThreadAttachment[];
 };
@@ -141,7 +142,7 @@ async function createOrchChildThread(
   | { ok: false; text: string }
 > {
   const envParentId = process.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || '';
-  let parentId = args.parentThreadId?.trim() || '';
+  let parentId = args.parentChatId?.trim() || args.parentThreadId?.trim() || '';
   let parent = parentId ? orch.getThread(parentId) : null;
   let parentCorrectedFrom: string | undefined;
 
@@ -194,7 +195,7 @@ async function createOrchChildThread(
         attachments: args.attachments,
       }),
       CREATE_THREAD_TIMEOUT_MS,
-      'create_thread',
+      'create_workspace',
     );
     const alreadyStarted = priorIds.has(thread.id);
     const parentNote = parentCorrectedFrom
@@ -213,7 +214,8 @@ async function createOrchChildThread(
         model: thread.model,
         status: thread.status,
         cowboy: Boolean(thread.cowboy),
-        link: `sideboard://thread/${thread.id}`,
+        link: `sideboard://chat/${thread.id}`,
+        parentChatId: thread.parentThreadId,
         parentThreadId: thread.parentThreadId,
         ...(alreadyStarted ? { alreadyStarted: true } : {}),
         ...(opts.coercedFrom ? { agentCoercedFrom: opts.coercedFrom } : {}),
@@ -224,7 +226,7 @@ async function createOrchChildThread(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, text: `create_thread failed: ${message}` };
+    return { ok: false, text: `create_workspace failed: ${message}` };
   }
 }
 
@@ -236,8 +238,8 @@ function previewHint(preview: DevPreview): string {
 
 /**
  * Sideboard MCP server — agent-facing judgment surface.
- * Deliberately excludes ready-for-review confirm_land and purge_thread.
- * Orchestrators commit, push, and open PRs via `ask_git` / `send_to_thread`
+ * Deliberately excludes ready-for-review confirm_land and purge_chat.
+ * Orchestrators commit, push, and open PRs via `ask_git` / `send_to_chat`
  * — they do not run git/gh from the synthetic home. `ask_git` pushes itself when
  * the worktree is already clean. Merge (`ask_git` action=merge) only when the
  * user explicitly asked.
@@ -264,7 +266,7 @@ export async function startMcpServer(): Promise<void> {
   // the desktop orchestrator that owns activeTurns. Reclaiming here falsely
   // marks live parent turns as "Process died (reconciled on startup)".
   // Do not drain the whole fleet on every MCP stdio boot (present_* / tool
-  // calls): that steals queues into a short-lived process. send_to_thread
+  // calls): that steals queues into a short-lived process. send_to_chat
   // also skips drain while a desktop host pid is alive — otherwise the
   // worktree Cursor/Claude child runs here with no renderer IPC (blank chat)
   // and desktop Stop/Send now cannot see activeTurns. Desktop adopts
@@ -309,8 +311,8 @@ export async function startMcpServer(): Promise<void> {
 
   if (!worktreeProfile) {
   server.tool(
-    'list_workspaces',
-    'List registered Sideboard workspaces (repos). Each line is name, path, github:owner/repo when resolvable, and project context when set — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_thread. Account / project context (Settings → Agents / Projects) says which tickets and review PRs belong to the user.',
+    'list_projects',
+    'List registered projects (git repos). Each line is name, path, github:owner/repo when resolvable, and project context when set — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_workspace. Account / project context (Settings → Agents / Projects) says which tickets and review PRs belong to the user.',
     {},
     async () => {
       const workspaces = orch.listWorkspaces();
@@ -331,15 +333,15 @@ export async function startMcpServer(): Promise<void> {
       );
       return {
         content: [
-          { type: 'text', text: lines.join('\n') || '(no workspaces)' },
+          { type: 'text', text: lines.join('\n') || '(no projects)' },
         ],
       };
     },
   );
 
   server.tool(
-    'list_threads',
-    'List Sideboard threads across all workspaces (one summary line each — token-frugal). Includes parent id, last message preview, and live progress so you can see worktree children. Each line ends with sideboard://thread/<id> — use that URL in markdown links so the UI can open the chat.',
+    'list_chats',
+    'List chats across all projects (one summary line each — token-frugal). Includes parent id, last message preview, and live progress so you can see workspace children. Each line ends with sideboard://chat/<id> — use that URL in markdown links so the UI can open the chat.',
     {},
     async () => {
       const threads = orch.getThreads(true);
@@ -355,23 +357,23 @@ export async function startMcpServer(): Promise<void> {
         const err = t.lastError ? `  error:${t.lastError.replace(/\s+/g, ' ').slice(0, 60)}` : '';
         const progress =
           live?.summary && !isInternalAgentStatusText(live.summary) ? `  ${live.summary}` : '';
-        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${err}  sideboard://thread/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
+        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${err}  sideboard://chat/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
       });
       return {
-        content: [{ type: 'text', text: lines.join('\n') || '(no threads)' }],
+        content: [{ type: 'text', text: lines.join('\n') || '(no chats)' }],
       };
     },
   );
 
   server.tool(
     'list_board',
-    'Home Kanban of worktrees (New, Draft, Review, Merged) — one card per checkout; sibling chat tabs nest as inner cards. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_thread adds a worktree (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
+    'Home Kanban of worktrees (New, Draft, Review, Merged) — one card per checkout; sibling chat tabs nest as inner cards. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
         .string()
         .optional()
-        .describe('Limit to one workspace path from list_workspaces'),
+        .describe('Limit to one project path from list_projects'),
       kind: z
         .enum(['all', 'tickets', 'prs', 'branches', 'threads'])
         .optional()
@@ -422,13 +424,13 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'get_thread',
-    'Get a compact thread summary by id/ref. Includes last message preview, parentThreadId, and child worktree threads (status + lastText). While running, includes progress (last tool/thinking) and lastActivityAt. Includes usage (thread billed token + costUsd totals when providers reported cost) and lastTurnUsage.',
+    'get_chat',
+    'Get a compact chat summary by id/ref. Includes last message preview, parentChatId, and child workspace chats (status + lastText). While running, includes progress (last tool/thinking) and lastActivityAt. Includes usage (billed token + costUsd totals when providers reported cost) and lastTurnUsage.',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
       if (!t) {
-        return { content: [{ type: 'text', text: `Thread not found: ${ref}` }], isError: true };
+        return { content: [{ type: 'text', text: `Chat not found: ${ref}` }], isError: true };
       }
       const stillRunning = orch.threadLooksLive(t);
       const live = stillRunning ? readTurnLive(t.id) : null;
@@ -445,6 +447,7 @@ export async function startMcpServer(): Promise<void> {
         branchName: t.branchName,
         worktreePath: t.worktreePath,
         sessionId: t.sessionId,
+        parentChatId: t.parentThreadId,
         parentThreadId: t.parentThreadId,
         children: childThreadRefs(t.id, orch.getThreads(false)),
         queueLength: t.queue.length,
@@ -963,8 +966,8 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'create_thread',
-    `Create a worktree thread (chat) from branch, pr, or ticket. A ticket, PR, or named branch may have only one live worktree — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_workspaces. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentThreadId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Omit agent/model — Sideboard applies ${accountDefaultsHint}. Do not pass your own agent or agent=cursor; those are ignored. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_thread to chat.`,
+    'create_workspace',
+    `Create a workspace (isolated git worktree + first chat) from branch, pr, or ticket. A ticket, PR, or named branch may have only one live worktree — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_projects. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentChatId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Omit agent/model — Sideboard applies ${accountDefaultsHint}. Do not pass your own agent or agent=cursor; those are ignored. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_chat to chat.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -989,12 +992,16 @@ export async function startMcpServer(): Promise<void> {
         .describe(
           'If true, work in the project folder on the default branch (no thread/* worktree). Requires Settings → Advanced → Cowboy mode. Land is commit+push to that branch. Archive does not delete the folder.',
         ),
-      parentThreadId: z
+      parentChatId: z
         .string()
         .optional()
         .describe(
           'Orchestration: omit (preferred) or pass YOUR chat id from the turn reminder / AGENTS.md. Do not invent uuids.',
         ),
+      parentThreadId: z
+        .string()
+        .optional()
+        .describe('Legacy alias for parentChatId.'),
     },
     async (args) => {
       const result = await createOrchChildThread(orch, args, resolveNewThreadOptions);
@@ -1007,13 +1014,13 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'start_board_card',
-    'Same as create_thread for a ticket, PR, or named branch (attaches issue text when Sideboard can resolve it). Does not create a second worktree when one already matches — returns that thread (alreadyStarted). Then send_to_thread.',
+    'Same as create_workspace for a ticket, PR, or named branch (attaches issue text when Sideboard can resolve it). Does not create a second worktree when one already matches — returns that thread (alreadyStarted). Then send_to_chat.',
     {
       kind: z.enum(['ticket', 'pr', 'branch']),
       ref: z
         .string()
         .describe('Ticket identifier (ENG-12), PR number (44), or branch name from list_board'),
-      repoPath: z.string().describe('Workspace path from list_workspaces / list_board'),
+      repoPath: z.string().describe('Project path from list_projects / list_board'),
       title: z.string().optional(),
     },
     async ({ kind, ref, repoPath, title }) => {
@@ -1036,7 +1043,7 @@ export async function startMcpServer(): Promise<void> {
           id: existing.id,
           title: existing.title,
           status: existing.status,
-          link: `sideboard://thread/${existing.id}`,
+          link: `sideboard://chat/${existing.id}`,
         });
       }
 
@@ -1117,8 +1124,8 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'send_to_thread',
-    'Steer a prompt on a worktree thread chat (Settings → Follow-up, default steer: front of the queue, skips the inbox; while the desktop board is running it starts as soon as the in-flight turn yields). Use after create_thread to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_thread to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
+    'send_to_chat',
+    'Steer a prompt on a workspace chat (Settings → Follow-up, default steer: front of the queue, skips the inbox; while the desktop board is running it starts as soon as the in-flight turn yields). Use after create_workspace to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_chat to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
     {
       ref: z.string(),
       prompt: z.string(),
@@ -1146,7 +1153,7 @@ export async function startMcpServer(): Promise<void> {
   if (shouldRegisterMcpWaitForTurn()) {
   server.tool(
     'wait_for_turn',
-    'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_thread a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_thread or tell the user. On input-required, wait for the user in that chat. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
+    'Wait until the chat finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, text and usage are empty (they would be the previous turn) — read progress and call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat. When finished, text is this turn’s assistant reply and usage is that turn’s tokens + costUsd (this turn, not the Claude session total; sessionCostUsd is the provider session total when present).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -1166,6 +1173,7 @@ export async function startMcpServer(): Promise<void> {
           stillRunning: result.stillRunning,
           progress: result.progress,
           lastActivityAt: result.lastActivityAt,
+          usage: result.usage,
         }),
       );
     },
@@ -1174,7 +1182,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_turn_result',
-    'Assistant message when the turn finished, or live progress while stillRunning. Not the full transcript. Includes taskState (A2A lifecycle) and usage for the last agent turn (tokens + costUsd when reported).',
+    'Assistant message and last-turn usage when the turn finished. While stillRunning (submitted/working), text and usage are empty so a previous reply cannot be mistaken for this turn — use progress for tools/thinking. Not the full transcript. Includes taskState (A2A lifecycle).',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);
@@ -1188,7 +1196,7 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'stop_thread',
+    'stop_chat',
     'Force-stop a thread: kill any in-flight agent turn AND clear queued prompts so drainQueue cannot continue. Does not archive the worktree. Optional force defaults to true.',
     {
       ref: z.string(),
@@ -1198,7 +1206,7 @@ export async function startMcpServer(): Promise<void> {
       const t = orch.getThread(ref);
       if (!t) {
         return {
-          content: [{ type: 'text', text: `Thread not found: ${ref}` }],
+          content: [{ type: 'text', text: `Chat not found: ${ref}` }],
           isError: true,
         };
       }
@@ -1214,14 +1222,14 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'archive_thread',
+    'archive_chat',
     'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Coordinators commit, push, and open PRs by asking the worktree agent (ask_git). Merge only when the user explicitly asked.',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
       if (!t) {
         return {
-          content: [{ type: 'text', text: `Thread not found: ${ref}` }],
+          content: [{ type: 'text', text: `Chat not found: ${ref}` }],
           isError: true,
         };
       }
@@ -1241,7 +1249,7 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'restore_thread',
+    'restore_chat',
     'Restore an archived thread (recreates worktree from branch when needed)',
     { ref: z.string() },
     async ({ ref }) => {
@@ -1303,7 +1311,7 @@ export async function startMcpServer(): Promise<void> {
           title: tab.title,
           status: tab.status,
           fromThreadId: from?.id ?? ref,
-          link: `sideboard://thread/${tab.id}`,
+          link: `sideboard://chat/${tab.id}`,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1331,7 +1339,7 @@ export async function startMcpServer(): Promise<void> {
           status: thread.status,
           queueLength: thread.queue.length,
           action,
-          link: `sideboard://thread/${thread.id}`,
+          link: `sideboard://chat/${thread.id}`,
         });
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err);
@@ -1342,7 +1350,7 @@ export async function startMcpServer(): Promise<void> {
             action,
             lastError: message,
             hint: /body is too long/i.test(message)
-              ? 'Branch is already pushed. send_to_thread so the worktree agent runs gh pr create --draft --assignee @me -R <origin> --body-file <short.md>. Keep the description short.'
+              ? 'Branch is already pushed. send_to_chat so the worktree agent runs gh pr create --draft --assignee @me -R <origin> --body-file <short.md>. Keep the description short.'
               : undefined,
           },
           true,
@@ -1371,8 +1379,8 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'fork_worktree',
-    'Fork a worktree agent chat into a NEW git worktree + chat (desktop “Fork to new workspace”). Seeds a transcript (through through_index, default all). Optional agent override. Leave model unset for Auto (default) — only pass model when you have a reason. Not for the orchestrator. Then send_to_thread / wait_for_turn (loop while stillRunning) on the returned id.',
+    'fork_workspace',
+    'Fork a worktree agent chat into a NEW git worktree + chat (desktop “Fork to new workspace”). Seeds a transcript (through through_index, default all). Optional agent override. Leave model unset for Auto (default) — only pass model when you have a reason. Not for the orchestrator. Then send_to_chat / wait_for_turn (loop while stillRunning) on the returned id.',
     {
       ref: z.string().describe('Worktree thread id/ref to fork'),
       through_index: z
@@ -1407,7 +1415,7 @@ export async function startMcpServer(): Promise<void> {
           branchName: thread.branchName,
           worktreePath: thread.worktreePath,
           fromThreadId: source?.id ?? ref,
-          link: `sideboard://thread/${thread.id}`,
+          link: `sideboard://chat/${thread.id}`,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1418,7 +1426,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fork_chat',
-    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Slack / Global orchestrators use this to continue an orchestration chat on another agent after session limits. Then send_to_thread / wait_for_turn (loop while stillRunning) on the returned id. Use fork_worktree only for worktree agents that need a new git worktree.',
+    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Slack / Global orchestrators use this to continue an orchestration chat on another agent after session limits. Then send_to_chat / wait_for_turn (loop while stillRunning) on the returned id. Use fork_workspace only for worktree agents that need a new git worktree.',
     {
       ref: z.string().describe('Thread id/ref to fork (worktree agent or orchestration chat)'),
       through_index: z
@@ -1438,7 +1446,7 @@ export async function startMcpServer(): Promise<void> {
         const source = orch.getThread(ref);
         if (!source) {
           return {
-            content: [{ type: 'text', text: `Thread not found: ${ref}` }],
+            content: [{ type: 'text', text: `Chat not found: ${ref}` }],
             isError: true,
           };
         }
@@ -1458,7 +1466,7 @@ export async function startMcpServer(): Promise<void> {
           sourceType: tab.sourceType,
           worktreePath: tab.worktreePath,
           fromThreadId: source.id,
-          link: `sideboard://thread/${tab.id}`,
+          link: `sideboard://chat/${tab.id}`,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1478,7 +1486,7 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'add_workspace',
+    'add_project',
     'Register a git repo as a Sideboard workspace',
     { repoPath: z.string() },
     async ({ repoPath }) => {
@@ -1488,7 +1496,7 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'remove_workspace',
+    'remove_project',
     'Unregister a Sideboard workspace (does not archive threads)',
     { repoPath: z.string() },
     async ({ repoPath }) => {
@@ -1523,7 +1531,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_branches',
-    'List git branches in a registered workspace. Pass repoPath from list_workspaces (unmerged into the default branch by default — for create_thread sourceType=branch).',
+    'List git branches in a registered workspace. Pass repoPath from list_projects (unmerged into the default branch by default — for create_workspace sourceType=branch).',
     {
       repoPath: z.string(),
       unmergedOnly: z.boolean().optional(),
@@ -1546,7 +1554,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_prs',
-    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_workspaces. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled with this project\'s ready-for-review GitHub label (Settings → Projects; default eng-review) with no individual user reviewer. Prefer teams that match Settings → Agents / Projects roles for this repo. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_thread with sourceType=pr.',
+    'List GitHub PRs for a registered workspace (the review surface for assigned ticket work — not the tickets). Pass repoPath from list_projects. "Get me N tickets to review" → queue=review and limit=N: open non-draft PRs labeled with this project\'s ready-for-review GitHub label (Settings → Projects; default eng-review) with no individual user reviewer. Prefer teams that match Settings → Agents / Projects roles for this repo. A team like engineering-team is not a claim (you are on that team). Also: state (open|closed|merged|all|review), label, reviewer (me|unassigned|login), query, limit (default 40, max 250). Then create_workspace with sourceType=pr.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('GitHub search tokens (title, draft:true, …)'),
@@ -1638,7 +1646,7 @@ export async function startMcpServer(): Promise<void> {
           stackLayer: t.stackLayer,
           worktreePath: t.worktreePath,
           prUrl: t.prUrl,
-          link: `sideboard://thread/${t.id}`,
+          link: `sideboard://chat/${t.id}`,
         })),
       });
     },
@@ -1660,7 +1668,7 @@ export async function startMcpServer(): Promise<void> {
         branchName: result.thread.branchName,
         stackLayer: result.thread.stackLayer,
         worktreePath: result.thread.worktreePath,
-        link: `sideboard://thread/${result.thread.id}`,
+        link: `sideboard://chat/${result.thread.id}`,
       });
     },
   );
@@ -1692,7 +1700,7 @@ export async function startMcpServer(): Promise<void> {
           branchName: t.branchName,
           stackLayer: t.stackLayer,
           worktreePath: t.worktreePath,
-          link: `sideboard://thread/${t.id}`,
+          link: `sideboard://chat/${t.id}`,
         })),
       });
     },
@@ -1700,7 +1708,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Pass updatedSince for new/updated tickets and new comments (“any updates since yesterday?”). Then create_thread with sourceType=ticket.',
+    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Pass updatedSince for new/updated tickets and new comments (“any updates since yesterday?”). Then create_workspace with sourceType=ticket.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('Search title, identifier, or description'),

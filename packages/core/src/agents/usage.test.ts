@@ -5,6 +5,7 @@ import {
   fromInclusiveInputUsage,
   requestOccupancy,
   sumUsageList,
+  withTurnScopedCost,
 } from './usage.js';
 
 describe('fromInclusiveInputUsage', () => {
@@ -192,5 +193,69 @@ describe('applyTurnUsage', () => {
     );
     expect(withCost.lastRequestTokens).toBe(80);
     expect(withCost.costUsd).toBe(0.01);
+  });
+});
+
+describe('withTurnScopedCost', () => {
+  const tokens = { inputTokens: 10, outputTokens: 5 };
+
+  it('treats the first session total as this turn', () => {
+    expect(
+      withTurnScopedCost(
+        { ...tokens, costUsd: 0.081, sessionCostUsd: 0.081 },
+        [],
+      ).costUsd,
+    ).toBeCloseTo(0.081);
+  });
+
+  it('subtracts prior session spend so costUsd matches this turn', () => {
+    const previous = [
+      {
+        role: 'agent' as const,
+        usage: { ...tokens, costUsd: 0.081, sessionCostUsd: 0.081 },
+      },
+      {
+        role: 'agent' as const,
+        usage: { ...tokens, outputTokens: 264, costUsd: 0.017, sessionCostUsd: 0.098 },
+      },
+    ];
+    const third = withTurnScopedCost(
+      { ...tokens, outputTokens: 106, costUsd: 0.11, sessionCostUsd: 0.11 },
+      previous,
+    );
+    expect(third.costUsd).toBeCloseTo(0.012);
+    expect(third.sessionCostUsd).toBeCloseTo(0.11);
+    expect(third.outputTokens).toBe(106);
+  });
+
+  it('keeps modelUsage cost when it differs from the session total', () => {
+    expect(
+      withTurnScopedCost(
+        { ...tokens, costUsd: 0.015, sessionCostUsd: 0.1 },
+        [{ role: 'agent', usage: { ...tokens, costUsd: 0.085, sessionCostUsd: 0.085 } }],
+      ).costUsd,
+    ).toBeCloseTo(0.015);
+  });
+
+  it('deltas when modelUsage matches the session total after resume', () => {
+    expect(
+      withTurnScopedCost(
+        { ...tokens, costUsd: 0.1, sessionCostUsd: 0.1 },
+        [{ role: 'agent', usage: { ...tokens, costUsd: 0.085, sessionCostUsd: 0.085 } }],
+      ).costUsd,
+    ).toBeCloseTo(0.015);
+  });
+
+  it('recovers when older messages stored session totals as costUsd', () => {
+    const previous = [
+      { role: 'agent' as const, usage: { ...tokens, costUsd: 0.081 } },
+      { role: 'agent' as const, usage: { ...tokens, costUsd: 0.098 } },
+    ];
+    expect(
+      withTurnScopedCost(
+        { ...tokens, costUsd: 0.11, sessionCostUsd: 0.11 },
+        previous,
+      ).costUsd,
+    ).toBeCloseTo(0.012);
   });
 });

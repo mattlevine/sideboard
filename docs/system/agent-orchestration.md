@@ -2,7 +2,7 @@
 
 How Sideboard coordinates worktree agents, and what we are **not** building yet.
 
-The topology stays a **star**: one Global orchestrator talks down to worktree children via `create_thread` → `send_to_thread` → `wait_for_turn`. Worktree MCP stays small (`present_*` / `ask_user` / jobs / run scripts / `notify_orchestrator` / issue tools) so the cached tool prefix does not grow. Children do not call `send_to_thread`.
+The topology stays a **star**: one Global orchestrator talks down to worktree children via `create_workspace` → `send_to_chat` → `wait_for_turn`. Worktree MCP stays small (`present_*` / `ask_user` / jobs / run scripts / `notify_orchestrator` / issue tools) so the cached tool prefix does not grow. Children do not call `send_to_chat`.
 
 ## Task state (shipped)
 

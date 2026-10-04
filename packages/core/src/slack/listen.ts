@@ -130,7 +130,7 @@ function slackCoordinatorGone(err: unknown): boolean {
 
 /**
  * Kill an in-flight Slack coordinator turn so a follow-up can start immediately.
- * Same force-stop as MCP `send_to_thread` (`clearQueue: true`).
+ * Same force-stop as MCP `send_to_chat` (`clearQueue: true`).
  * Does not create a chat — empty-board inbound is handled in handleSlackInbound.
  */
 export function interruptSlackCoordinatorForInbound(

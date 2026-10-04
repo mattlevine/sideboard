@@ -144,7 +144,7 @@ export const cursorAdapter: AgentAdapter = {
   kind: 'cursor',
 
   async detect(): Promise<AgentStatus> {
-    // Do not call Cursor.models.list here — create_thread (esp. under a Codex
+    // Do not call Cursor.models.list here — create_workspace (esp. under a Codex
     // orchestrator MCP child) would hang the whole stdio server on a network
     // wait. Presence of the SDK + API key is enough; turns fail later if auth is bad.
     if (!isCursorSdkInstalled()) {

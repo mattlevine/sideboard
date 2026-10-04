@@ -332,7 +332,7 @@ export async function buildInjectedMcpServers(opts: {
   includeBrightsy?: boolean;
   /**
    * When set (orchestration turns), Sideboard MCP inherits this as
-   * SIDEBOARD_ORCHESTRATOR_THREAD_ID so create_thread can default/fix
+   * SIDEBOARD_ORCHESTRATOR_THREAD_ID so create_workspace can default/fix
    * parentThreadId even if the agent hallucinates a stale id.
    */
   orchestratorThreadId?: string | null;
@@ -470,7 +470,7 @@ export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
     // Shell approval_policy=never does not cover MCP; without this, headless
     // exec often cancels present_* / other Sideboard tools as "user cancelled".
     args.push('-c', `${prefix}.default_tools_approval_mode=${JSON.stringify('approve')}`);
-    // create_thread does git fetch + detect; default 60s is tight under load.
+    // create_workspace does git fetch + detect; default 60s is tight under load.
     args.push('-c', `${prefix}.tool_timeout_sec=300`);
     args.push('-c', `${prefix}.startup_timeout_sec=30`);
   }
@@ -515,11 +515,11 @@ function stripElectronFromUserMcpEntry(
   return next;
 }
 
-/** Persist injected MCP servers to a temp Claude `--mcp-config` JSON. */
-export function writeMcpServersConfig(
+/** Injected + copied user MCP entries (same record `--mcp-config` / SDK `mcpServers` use). */
+export function mcpServersRecord(
   servers: InjectedMcpServer[],
   extraServers?: Record<string, Record<string, unknown>>,
-): string | null {
+): Record<string, Record<string, unknown>> {
   const mcpServers: Record<string, Record<string, unknown>> = {};
   for (const s of servers) {
     const env = mcpSpawnEnv(s.env);
@@ -536,6 +536,15 @@ export function writeMcpServersConfig(
       mcpServers[name] = stripElectronFromUserMcpEntry(entry);
     }
   }
+  return mcpServers;
+}
+
+/** Persist injected MCP servers to a temp Claude `--mcp-config` JSON. */
+export function writeMcpServersConfig(
+  servers: InjectedMcpServer[],
+  extraServers?: Record<string, Record<string, unknown>>,
+): string | null {
+  const mcpServers = mcpServersRecord(servers, extraServers);
   if (Object.keys(mcpServers).length === 0) return null;
 
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-mcp-'));

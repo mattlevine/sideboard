@@ -374,16 +374,16 @@ async function main(): Promise<void> {
     });
 
   const workspaceCmd = program
-    .command('workspace')
-    .description('Manage registered Sideboard workspaces (repos)');
+    .command('project').alias('workspace')
+    .description('Manage registered projects (git repos)');
 
   workspaceCmd
     .command('ls')
-    .description('List workspaces')
+    .description('List projects')
     .action(() => {
       const list = orch.listWorkspaces();
       if (!list.length) {
-        console.log('(no workspaces)');
+        console.log('(no projects)');
         return;
       }
       for (const w of list) {
@@ -626,10 +626,10 @@ async function main(): Promise<void> {
         'You operate from the Global workspace (no git home). Use Sideboard MCP tools only.',
         'Use Sideboard MCP tools for persistent cross-agent threads, land/dev lifecycle, and work that outlives this session.',
         'For same-session Claude subtasks, prefer Claude Code native Agent(isolation: "worktree") instead.',
-        'You cannot confirm_land or purge_thread — those stay human-only. Commit, push, and open PRs via ask_git on the worktree thread. Merge via ask_git only when the user explicitly asked.',
+        'You cannot confirm_land or purge_chat — those stay human-only. Commit, push, and open PRs via ask_git on the worktree thread. Merge via ask_git only when the user explicitly asked.',
         `Goal: ${goal}`,
         repoPath ? `Pinned repo (legacy): ${repoPath}` : 'Workspace: Global',
-        `Parent thread id (pass as parentThreadId when creating children): ${thread.id}`,
+        `Parent chat id (pass as parentChatId when creating children): ${thread.id}`,
       ].join('\n');
 
       // Prefer PATH `sideboard mcp` so global installs work (not process.argv[1]).

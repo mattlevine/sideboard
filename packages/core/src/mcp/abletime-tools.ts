@@ -243,7 +243,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_ensure_task',
-    'Find or create an AbleTime task for this work, then create_thread with sourceType=ticket.',
+    'Find or create an AbleTime task for this work, then create_workspace with sourceType=ticket.',
     {
       title: z.string(),
       description: z.string().optional(),

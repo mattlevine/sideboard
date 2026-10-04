@@ -27,7 +27,7 @@ import { sanitizeAgentHostEnv } from '../hook/agent-host-env.js';
 import { applyWorktreePkgCacheEnv } from '../hook/worktree-pkg-cache.js';
 import { applyAgentRunnerHeapEnv } from './node-launch.js';
 import { ensureAgentPath } from './path.js';
-import { applyTurnUsage } from './usage.js';
+import { applyTurnUsage, withTurnScopedCost } from './usage.js';
 import type { AgentTurnInput } from './turn-input.js';
 import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 
@@ -226,8 +226,12 @@ export async function spawnAgentTurn(
           continue;
         }
         if (parsed.type === 'usage') {
-          usage = applyTurnUsage(usage, parsed.data, parsed.scope ?? 'request');
-          outbound.push(parsed);
+          const data =
+            parsed.scope === 'turn'
+              ? withTurnScopedCost(parsed.data, thread.messages)
+              : parsed.data;
+          usage = applyTurnUsage(usage, data, parsed.scope ?? 'request');
+          outbound.push({ ...parsed, data });
           continue;
         }
         if (parsed.type === 'stdout') {

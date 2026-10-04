@@ -97,7 +97,8 @@ export class AgentRpcServer {
     const wss = new WebSocketServer({
       server: http,
       path: AGENT_RPC_PATH,
-      verifyClient: (info) => this.authorizeUpgrade(info.req),
+      verifyClient: (info: { req: IncomingMessage }) =>
+        this.authorizeUpgrade(info.req),
     });
     wss.on('connection', (ws) => this.attach(ws));
 

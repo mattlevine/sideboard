@@ -5,6 +5,7 @@ import {
   pendingInjectedNotices,
 } from '../threads/injected-notices.js';
 import { deriveTaskState, type TaskState } from './task-state.js';
+import { lastActivityAtForWait } from '../mcp/wait-for-turn.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
@@ -313,7 +314,7 @@ export async function waitForPidExit(
  * use Settings → Follow-up behavior (default steer) so those do not sit
  * in the queue while the user asked to interrupt.
  *
- * Orchestrator → worktree talk (`send_to_thread`, `ask_git`) must
+ * Orchestrator → worktree talk (`send_to_chat`, `ask_git`) must
  * pass {@link resolveOrchChildFollowUp} so those prompts steer by default.
  * Create/reuse first prompts still queue unless the caller opts in.
  */
@@ -873,7 +874,7 @@ export class Orchestrator {
       try {
         appendMessage(threadId, {
           role: 'agent',
-          text: `Session limit on ${thread.agent}. Sideboard continued on account “${plan.fallbackAccountLabel}” in [${next.title}](sideboard://thread/${next.id}).`,
+          text: `Session limit on ${thread.agent}. Sideboard continued on account “${plan.fallbackAccountLabel}” in [${next.title}](sideboard://chat/${next.id}).`,
           ts: new Date().toISOString(),
         });
         this.emit({
@@ -919,7 +920,7 @@ export class Orchestrator {
       try {
         appendMessage(threadId, {
           role: 'agent',
-          text: `Session limit on ${thread.agent}. Sideboard continued on ${plan.fallbackAgent} (Auto) in [${next.title}](sideboard://thread/${next.id}).`,
+          text: `Session limit on ${thread.agent}. Sideboard continued on ${plan.fallbackAgent} (Auto) in [${next.title}](sideboard://chat/${next.id}).`,
           ts: new Date().toISOString(),
         });
         this.emit({
@@ -2181,7 +2182,7 @@ export class Orchestrator {
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       // Idle stop (archive, leftover status) is not a mid-turn death.
-      // MCP force_stop / stop_thread pass notifyParent: false — the caller already knows.
+      // MCP force_stop / stop_chat pass notifyParent: false — the caller already knows.
       if (inFlight && opts?.notifyParent !== false) {
         notifyParentOfChildHalt(stopped, 'stopped', (id, prompt) => this.send(id, prompt));
       }
@@ -2968,30 +2969,24 @@ export class Orchestrator {
     stillRunning: boolean;
     progress: string | null;
     lastActivityAt: string | null;
-    /** Token + cost for the last finished agent turn, when reported. */
     usage: TokenUsage | null;
   } {
     const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
     const lastAgent = lastAgentReply(thread.messages);
     const lastError = thread.lastError ?? null;
+    const stillRunning = this.threadLooksLive(thread);
     const rawText = (lastAgent?.text ?? '').trim();
-    const text =
+    const finishedText =
       (rawText && !isInternalAgentStatusText(rawText) ? rawText : '') ||
       (thread.status === 'error' || thread.status === 'stopped' || thread.status === 'broken'
-        ? lastError ?? ''
-        : '');
-    const stillRunning = this.threadLooksLive(thread);
+        ? lastError ?? '' : '');
+    const text = stillRunning ? '' : finishedText;
     const live = stillRunning ? readTurnLive(thread.id) : null;
-    const liveSummary =
-      live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
-    const queuedHint =
-      stillRunning && thread.status === 'queued' && !liveSummary
-        ? 'Queued — waiting for a concurrency slot'
-        : null;
+    const liveSummary = live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
+    const queuedHint = stillRunning && thread.status === 'queued' && !liveSummary
+      ? 'Queued — waiting for a concurrency slot' : null;
     const taskState = deriveTaskState({
-      status: thread.status,
-      stillRunning,
-      lastAgentParts: lastAgent?.parts,
+      status: thread.status, stillRunning, lastAgentParts: lastAgent?.parts,
     });
     return {
       text,
@@ -3001,8 +2996,10 @@ export class Orchestrator {
       lastError,
       stillRunning,
       progress: liveSummary ?? queuedHint,
-      lastActivityAt: live?.updatedAt ?? null,
-      usage: lastAgent?.usage ?? null,
+      lastActivityAt: lastActivityAtForWait(stillRunning, live?.updatedAt, [
+        thread.messages.at(-1)?.ts, lastAgent?.ts, thread.updatedAt,
+      ]),
+      usage: stillRunning ? null : lastAgent?.usage ?? null,
     };
   }
 

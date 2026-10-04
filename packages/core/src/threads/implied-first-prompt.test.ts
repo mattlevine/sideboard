@@ -25,7 +25,7 @@ describe('resolveCreateFirstPrompt', () => {
     expect(resolveCreateFirstPrompt({ sourceType: 'pr' })).toBeUndefined();
   });
 
-  it('leaves orchestration children waiting for send_to_thread', () => {
+  it('leaves orchestration children waiting for send_to_chat', () => {
     expect(
       resolveCreateFirstPrompt({
         sourceType: 'ticket',

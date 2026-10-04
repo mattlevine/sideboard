@@ -743,7 +743,7 @@ Goal: fix skill chat display.
     );
     expect(event).toEqual({
       type: 'usage',
-      data: { inputTokens: 10, outputTokens: 5, costUsd: 0.042 },
+      data: { inputTokens: 10, outputTokens: 5, costUsd: 0.042, sessionCostUsd: 0.042 },
       scope: 'turn',
     });
   });
@@ -765,7 +765,7 @@ Goal: fix skill chat display.
     );
     expect(event).toEqual({
       type: 'usage',
-      data: { inputTokens: 10, outputTokens: 5, costUsd: 0.015 },
+      data: { inputTokens: 10, outputTokens: 5, costUsd: 0.015, sessionCostUsd: 0.1 },
       scope: 'turn',
     });
   });

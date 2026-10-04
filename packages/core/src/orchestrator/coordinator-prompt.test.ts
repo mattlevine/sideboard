@@ -143,25 +143,29 @@ describe('coordinator-prompt', () => {
     expect(text).toContain('oversee worktree agents');
     expect(text).toContain('synthetic empty cwd');
     expect(text).toContain('abc-123');
-    expect(text).toContain('YOUR orchestration thread id');
-    expect(text).toContain('parentThreadId="abc-123"');
+    expect(text).toContain('YOUR orchestration chat id');
+    expect(text).toContain('parentChatId="abc-123"');
     expect(text).toContain('AGENTS.md');
     expect(text).toContain('list_board');
-    expect(text).toContain('list_threads');
-    expect(text).toContain('sideboard://thread/');
+    expect(text).toContain('list_chats');
+    expect(text).toContain('sideboard://chat/');
     expect(text).toContain('Merge only if the user asked');
     expect(text).not.toContain('Typical flow (existing)');
     expect(text).not.toContain('force_stop: true');
-    expect(text).not.toContain('add_workspace');
+    expect(text).not.toContain('add_project');
     expect(text).not.toContain('set_caffeinate');
     expect(text.length).toBeLessThan(900);
   });
 
   it('fleet playbook tells coordinators how to read child spend', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('costUsd');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('not the Claude session total');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('taskState');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('input-required');
-    expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_thread.*usage/s);
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'If stillRunning, text and usage are empty (they would be the previous turn)',
+    );
+    expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_chat.*usage/s);
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_turn_result.*usage/s);
   });
 
@@ -176,7 +180,7 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Ticket updates:');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('update_viewer_context');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('scope=project');
-    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('repoPath from list_workspaces');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('repoPath from list_projects');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('confirmed=true');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('never pass your own agent or agent=cursor');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('CURSOR_API_KEY');
@@ -204,14 +208,14 @@ describe('coordinator-prompt', () => {
       const claude = readFileSync(join(cwd, 'CLAUDE.md'), 'utf8');
       const agents = readFileSync(join(cwd, 'AGENTS.md'), 'utf8');
       expect(claude).toContain('Orchestration');
-      expect(claude).toContain('create_thread');
+      expect(claude).toContain('create_workspace');
       expect(claude).toContain('Do not pass your own agent or `agent=cursor`');
       expect(claude).toContain('Settings → Default agent');
       expect(claude).toContain('oversee worktree agents');
       expect(claude).toContain('normal');
-      expect(claude).toContain('add_workspace');
+      expect(claude).toContain('add_project');
       expect(claude).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-      expect(claude).toContain('parentThreadId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+      expect(claude).toContain('parentChatId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
       expect(claude).toBe(agents);
       expect(claude).toContain(COORDINATOR_TOOL_PLAYBOOK.slice(0, 80));
       expect(claude).toContain('list_board');

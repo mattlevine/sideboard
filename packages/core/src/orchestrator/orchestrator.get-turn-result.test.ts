@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { threadFilePath } from '../store/paths.js';
-import { createEmptyThread, writeThread } from '../store/thread-store.js';
+import { createEmptyThread, readThread, writeThread } from '../store/thread-store.js';
 import { Orchestrator } from './orchestrator.js';
 
 function stampUpdatedAt(threadId: string, updatedAt: string): void {
@@ -109,6 +109,47 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.progress).toBe('Read foo.ts (3 tools)');
     expect(result.lastActivityAt).toBe('2026-08-20T21:00:00.000Z');
     expect(result.taskState).toBe('working');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
+  });
+
+  it('omits previous-turn text and usage while the child is still working', async () => {
+    const { writeTurnLive } = await import('../store/turn-live.js');
+    const thread = seed({
+      status: 'running',
+      agentText: 'On branch matt/foo\ncommit abc\nv0.1.262',
+    });
+    thread.messages[0]!.usage = { inputTokens: 40, outputTokens: 8, costUsd: 0.02 };
+    writeThread(thread);
+    writeTurnLive(thread.id, {
+      updatedAt: new Date().toISOString(),
+      summary: 'Read wait-for-turn.ts (2 tools)',
+      toolCount: 2,
+    });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.taskState).toBe('working');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
+    expect(result.progress).toBe('Read wait-for-turn.ts (2 tools)');
+  });
+
+  it('omits in-progress assistant text until the turn finishes', () => {
+    const thread = seed({ status: 'running', agentText: 'On branch matt/foo' });
+    thread.messages.push(
+      { role: 'user', text: 'fix wait_for_turn', ts: new Date().toISOString() },
+      {
+        role: 'agent',
+        text: 'Looking at wait-for-turn.ts…',
+        ts: new Date().toISOString(),
+      },
+    );
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.taskState).toBe('working');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
   });
 
   it('explains queued threads that have not started yet', () => {
@@ -118,6 +159,24 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.status).toBe('queued');
     expect(result.progress).toBe('Queued — waiting for a concurrency slot');
     expect(result.taskState).toBe('submitted');
+    expect(result.lastActivityAt).toBeNull();
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
+  });
+
+  it('omits previous-turn text while a follow-up is queued', () => {
+    const thread = seed({
+      status: 'queued',
+      queue: ['do the next thing'],
+      agentText: 'Pushed a draft.',
+    });
+    thread.messages[0]!.usage = { inputTokens: 10, outputTokens: 2, costUsd: 0.01 };
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.taskState).toBe('submitted');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
   });
 
   it('does not treat leftover running status as live after the agent died', () => {
@@ -152,6 +211,20 @@ describe('Orchestrator.getTurnResult', () => {
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.stillRunning).toBe(true);
     expect(result.progress).toBeNull();
+  });
+
+  it('falls back lastActivityAt to last agent ts after the turn finishes', () => {
+    const thread = seed({ status: 'idle', agentText: 'done' });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(false);
+    expect(result.lastActivityAt).toBe(thread.messages.at(-1)?.ts);
+  });
+
+  it('uses thread.updatedAt when a finished turn has no messages', () => {
+    const thread = seed({ status: 'idle' });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(false);
+    expect(result.lastActivityAt).toBe(readThread(thread.id)?.updatedAt);
   });
 
   it('includes last-turn usage and costUsd when present', () => {
@@ -207,6 +280,21 @@ describe('Orchestrator.getTurnResult', () => {
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.text).toBe('Pushed a draft.');
     expect(result.taskState).toBe('completed');
+  });
+
+  it('keeps last-turn usage when trailing gate chatter follows the reply', () => {
+    const thread = seed({ status: 'idle', agentText: 'Pushed a draft.' });
+    thread.messages[0]!.usage = { inputTokens: 40, outputTokens: 8, costUsd: 0.02 };
+    thread.messages.push({
+      role: 'agent',
+      text: 'Agent is running. Waiting for gate to pass.',
+      ts: '2026-10-04T22:00:00.000Z',
+    });
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.text).toBe('Pushed a draft.');
+    expect(result.usage).toEqual({ inputTokens: 40, outputTokens: 8, costUsd: 0.02 });
+    expect(result.lastActivityAt).toBe('2026-10-04T22:00:00.000Z');
   });
 
   it('marks input-required when the turn ended on ask_user', () => {

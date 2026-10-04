@@ -50,13 +50,12 @@ export interface TokenUsage {
   /** Cache hits, not included in `inputTokens` (Claude-shaped). */
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
-  /**
-   * Tokens occupying the context window on the last API request of this turn
-   * (input + cache). Distinct from billed totals, which sum every tool round.
-   */
+  /** Last-request occupancy (input + cache); billed totals sum every tool round. */
   lastRequestTokens?: number;
-  /** Provider-reported USD cost for this turn, when the agent CLI supplies it. */
+  /** USD for this turn (not Claude session total). */
   costUsd?: number;
+  /** Claude `total_cost_usd` session total; not additive. */
+  sessionCostUsd?: number;
 }
 
 export interface ThreadMessage {
@@ -93,6 +92,7 @@ export interface ThreadAttachment {
   previewDataUrl?: string;
 }
 
+/** Persisted chat record (product word: chat). One conversation tab. */
 export interface Thread {
   id: string;
   title: string;
@@ -681,7 +681,7 @@ export interface ActiveRun {
 }
 
 /**
- * MCP/CLI → desktop run-script request (same path as `send_to_thread` queues).
+ * MCP/CLI → desktop run-script request (same path as `send_to_chat` queues).
  * Desktop claims, runs `startDev`/`stopDev`, then fulfills or sets `error`.
  */
 export interface RunScriptRequest {
@@ -750,7 +750,7 @@ export interface CreateThreadInput {
    */
   cowboy?: boolean;
   /**
-   * When false, always create a new worktree (fork_worktree, best-of-n).
+   * When false, always create a new worktree (fork_workspace, best-of-n).
    * Default true: a ticket, PR, or named branch may have only one live worktree —
    * return that thread instead of a second checkout.
    */

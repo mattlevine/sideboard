@@ -1,7 +1,7 @@
 import { isCloudCoordinatorThread } from '../store/global-workspace.js';
 import type { Thread } from '../types/thread.js';
 
-/** Non-null when MCP must refuse archive_thread for this thread. */
+/** Non-null when MCP must refuse archive_chat for this thread. */
 export function mcpArchiveBlockedReason(
   thread: Pick<Thread, 'sourceType' | 'sourceRef' | 'title' | 'repoPath'>,
 ): string | null {

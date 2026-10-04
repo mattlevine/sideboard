@@ -2,7 +2,7 @@
  * When a user creates a worktree from a ticket and does not type extra
  * instructions, treat that as “resolve this issue” and start the first turn.
  *
- * Orchestration children (`parentThreadId`) still wait for `send_to_thread`.
+ * Orchestration children (`parentThreadId`) still wait for `send_to_chat`.
  * Reused live worktrees with existing chat history are not nudged again.
  */
 

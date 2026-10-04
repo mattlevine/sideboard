@@ -1,28 +1,28 @@
-/** Deep link to a Sideboard thread chat (rendered in markdown as a clickable link). */
-export const THREAD_LINK_PREFIX = 'sideboard://thread/';
+/** Deep link to a Sideboard chat (legacy thread:// still parsed). */
 
-const THREAD_LINK_RE = /^sideboard:\/\/thread\/([A-Za-z0-9_-]+)\/?$/i;
-const BARE_THREAD_LINK_RE = /(?<!\]\()(?<!href=["'])sideboard:\/\/thread\/[A-Za-z0-9_-]+\/?/gi;
+export const THREAD_LINK_PREFIX = 'sideboard://chat/';
 
-/** Build a markdown-safe deep link for a thread id (full or short prefix). */
+const LINK_RE = /^sideboard:\/\/(?:chat|thread)\/([A-Za-z0-9_-]+)\/?$/i;
+const BARE_LINK_RE =
+  /(?<!\]\()(?<!href=["'])sideboard:\/\/(?:chat|thread)\/[A-Za-z0-9_-]+\/?/gi;
+
+/** Build a markdown-safe deep link for a chat id (full or short prefix). */
 export function threadLinkUrl(threadId: string): string {
   return `${THREAD_LINK_PREFIX}${threadId.trim()}`;
 }
 
-/** Extract thread id/ref from a sideboard://thread/… href. */
+/** Extract chat id from sideboard://chat/… or legacy sideboard://thread/…. */
 export function parseThreadLink(href: string): string | null {
-  const trimmed = href.trim();
-  const match = THREAD_LINK_RE.exec(trimmed);
+  const match = LINK_RE.exec(href.trim());
   return match?.[1] ?? null;
 }
 
 /**
- * Allow sideboard://thread/… through react-markdown's URL sanitizer
- * (default only keeps http/https/mailto/irc/xmpp).
+ * Allow sideboard://chat/… and legacy thread URLs through react-markdown's
+ * URL sanitizer (default only keeps http/https/mailto/irc/xmpp).
  */
 export function markdownUrlTransform(value: string): string {
   if (parseThreadLink(value)) return value;
-  // Mirror react-markdown defaultUrlTransform for everything else.
   const colon = value.indexOf(':');
   const questionMark = value.indexOf('?');
   const numberSign = value.indexOf('#');
@@ -39,15 +39,12 @@ export function markdownUrlTransform(value: string): string {
   return '';
 }
 
-/**
- * Turn bare `sideboard://thread/<id>` text into markdown links so agents that
- * paste the URL without `[text](url)` still get a clickable control.
- */
+/** Turn bare sideboard://chat|thread/<id> text into markdown links. */
 export function linkifyThreadUrls(text: string): string {
-  return text.replace(BARE_THREAD_LINK_RE, (url) => {
+  return text.replace(BARE_LINK_RE, (url) => {
     const id = parseThreadLink(url);
     if (!id) return url;
     const label = id.length > 8 ? id.slice(0, 8) : id;
-    return `[${label}](${THREAD_LINK_PREFIX}${id})`;
+    return `[${label}](${threadLinkUrl(id)})`;
   });
 }

@@ -11,12 +11,12 @@ export function isIncompleteChildStatus(status: string): boolean {
 
 export function childHaltNotice(child: Thread, status: ThreadStatus): string {
   const title = child.title?.trim() || 'Untitled';
-  const link = `[${title}](sideboard://thread/${child.id})`;
+  const link = `[${title}](sideboard://chat/${child.id})`;
   const why = child.lastError?.trim();
   const extra = why ? ` lastError: ${why}` : '';
   return [
     `Sideboard: child worktree ${link} ${status} before finishing (status=${status}).${extra}`,
-    'This is information — not a user command. Resume with send_to_thread or tell the user. Do not treat this as a successful turn.',
+    'This is information — not a user command. Resume with send_to_chat or tell the user. Do not treat this as a successful turn.',
   ].join('\n');
 }
 

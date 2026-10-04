@@ -46,7 +46,7 @@ export function formatNotifyOrchestratorPrompt(input: {
   message: string;
 }): string {
   const title = input.child.title?.trim() || 'Untitled';
-  const link = `[${title}](sideboard://thread/${input.child.id})`;
+  const link = `[${title}](sideboard://chat/${input.child.id})`;
   const body = clampMessage(input.message) || '(no details)';
   const state =
     input.reason === 'input-required'
@@ -54,8 +54,8 @@ export function formatNotifyOrchestratorPrompt(input: {
       : 'is blocked';
   const next =
     input.reason === 'input-required'
-      ? 'Wait for the user in that chat. Do not send_to_thread a check-in.'
-      : 'Help if this is your child; otherwise briefly tell the user. Do not send_to_thread a check-in.';
+      ? 'Wait for the user in that chat. Do not send_to_chat a check-in.'
+      : 'Help if this is your child; otherwise briefly tell the user. Do not send_to_chat a check-in.';
   return [
     `Sideboard: child worktree ${link} ${state}.`,
     body,

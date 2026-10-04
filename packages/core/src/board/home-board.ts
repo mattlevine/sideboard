@@ -13,7 +13,7 @@ const GLOBAL_WORKSPACE_ID = '__global__';
 
 /**
  * Home Kanban work item — every worktree checkout, however it was created
- * (sidebar Create, MCP create_thread, adopt,
+ * (sidebar Create, MCP create_workspace, adopt,
  * cowboy). Sibling chat tabs share one card. Orchestration / Global chats
  * stay in the sidebar, not the board.
  */
@@ -1244,7 +1244,7 @@ function toThreadCard(group: Thread[]): HomeBoardThreadCard {
     sourceRef: thread.sourceRef,
     repoPath: thread.repoPath,
     prUrl: withPr.prUrl,
-    link: `sideboard://thread/${thread.id}`,
+    link: `sideboard://chat/${thread.id}`,
     ...(group.length > 1 ? { chatCount: group.length } : {}),
   };
 }
@@ -1351,7 +1351,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of worktrees (one card per checkout; sibling chat tabs nest as inner cards). Do not create a second worktree for a ticket, PR, or named branch that already has a live checkout — create_thread / start_board_card return that thread (alreadyStarted). Creating from the default branch still opens a new isolated worktree. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of workspaces (one card per checkout; sibling chat tabs nest as inner cards). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that chat (alreadyStarted). Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(
