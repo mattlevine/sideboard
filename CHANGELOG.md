@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.260] - 2026-10-03
+
+### Added
+
+- Worktree rows in the left sidebar show Add agent (`+`) immediately to the right of Archive.
+
+### Changed
+
+- Nested worktree chats and orchestration agents grow to their natural height instead of scrolling after three rows.
+
 ## [0.1.259] - 2026-10-03
 
 ### Added
