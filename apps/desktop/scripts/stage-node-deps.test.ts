@@ -116,4 +116,41 @@ describe('stage-node-deps', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('skips missing optional natives so Mac pack does not require linux-x64 Claude SDK', () => {
+    const root = mkdtempSync(join(tmpdir(), 'stage-optional-'));
+    try {
+      const src = join(root, 'src');
+      const destNm = join(root, 'dest', 'node_modules');
+      mkdirSync(destNm, { recursive: true });
+      writeJson(join(src, 'package.json'), {
+        name: 'fake-root',
+        private: true,
+        dependencies: { host: '1.0.0' },
+      });
+      writeJson(join(src, 'node_modules/host/package.json'), {
+        name: 'host',
+        version: '1.0.0',
+        optionalDependencies: {
+          '@anthropic-ai/claude-agent-sdk-linux-x64': '1.0.0',
+          'present-optional': '1.0.0',
+          'missing-optional': '1.0.0',
+        },
+      });
+      writeJson(join(src, 'node_modules/present-optional/package.json'), {
+        name: 'present-optional',
+        version: '1.0.0',
+      });
+      copyProductionDeps({
+        destNm,
+        fromFile: join(src, 'package.json'),
+        names: ['host'],
+      });
+      expect(existsSync(join(destNm, 'present-optional/package.json'))).toBe(true);
+      expect(existsSync(join(destNm, '@anthropic-ai/claude-agent-sdk-linux-x64'))).toBe(false);
+      expect(existsSync(join(destNm, 'missing-optional'))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
