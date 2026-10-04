@@ -515,11 +515,11 @@ function stripElectronFromUserMcpEntry(
   return next;
 }
 
-/** Persist injected MCP servers to a temp Claude `--mcp-config` JSON. */
-export function writeMcpServersConfig(
+/** Injected + copied user MCP entries (same record `--mcp-config` / SDK `mcpServers` use). */
+export function mcpServersRecord(
   servers: InjectedMcpServer[],
   extraServers?: Record<string, Record<string, unknown>>,
-): string | null {
+): Record<string, Record<string, unknown>> {
   const mcpServers: Record<string, Record<string, unknown>> = {};
   for (const s of servers) {
     const env = mcpSpawnEnv(s.env);
@@ -536,6 +536,15 @@ export function writeMcpServersConfig(
       mcpServers[name] = stripElectronFromUserMcpEntry(entry);
     }
   }
+  return mcpServers;
+}
+
+/** Persist injected MCP servers to a temp Claude `--mcp-config` JSON. */
+export function writeMcpServersConfig(
+  servers: InjectedMcpServer[],
+  extraServers?: Record<string, Record<string, unknown>>,
+): string | null {
+  const mcpServers = mcpServersRecord(servers, extraServers);
   if (Object.keys(mcpServers).length === 0) return null;
 
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-mcp-'));

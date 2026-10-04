@@ -7,9 +7,10 @@
  * to the asar so a real node can exec the runner without nested Chromium.
  *
  * `@cursor/sdk` is user-installed (`npm i -g`), not staged here. The runner
- * still imports `execa` / `smol-toml` from this tree. Those resolve in the
- * repo by walking up to root node_modules; inside Sideboard.app that walk
- * stops at Resources/. Flattening by package name is not enough either
+ * still imports `execa` / `smol-toml` / `ws` from this tree, and the Claude
+ * runner also needs `@anthropic-ai/claude-agent-sdk` and `zod`. Those resolve
+ * in the repo by walking up to root node_modules; inside Sideboard.app that
+ * walk stops at Resources/. Flattening by package name is not enough either
  * (execa@9 vs extract-zip's get-stream@5).
  *
  * MCP stdio lives in a separate extraResources tree (`sideboard-mcp`), not
@@ -46,6 +47,20 @@ function assertIsolatedRunnerLoads() {
       throw new Error('Isolated cursor-runtime missing execa after copy');
     }
     assertIsolatedEsmImport(execaEntry, 'execa (cursor-runtime)');
+    const wsPkg = path.join(isolated, 'node_modules', 'ws', 'package.json');
+    if (!fs.existsSync(wsPkg)) {
+      throw new Error('Isolated cursor-runtime missing ws after copy');
+    }
+    const claudeSdk = path.join(
+      isolated,
+      'node_modules',
+      '@anthropic-ai',
+      'claude-agent-sdk',
+      'package.json',
+    );
+    if (!fs.existsSync(claudeSdk)) {
+      throw new Error('Isolated cursor-runtime missing @anthropic-ai/claude-agent-sdk after copy');
+    }
     const runner = path.join(isolated, 'core-dist', 'agents', 'cursor-runner.js');
     const result = spawnSync(process.execPath, [runner], {
       encoding: 'utf8',
@@ -59,6 +74,20 @@ function assertIsolatedRunnerLoads() {
     }
     if (!/empty stdin/i.test(out)) {
       throw new Error(`Isolated cursor-runtime unexpected output:\n${out}`);
+    }
+    const claudeRunner = path.join(isolated, 'core-dist', 'agents', 'claude-runner.js');
+    const claudeResult = spawnSync(process.execPath, [claudeRunner], {
+      encoding: 'utf8',
+      input: '',
+      timeout: 20000,
+      env: { ...process.env, NODE_PATH: '' },
+    });
+    const claudeOut = `${claudeResult.stdout || ''}${claudeResult.stderr || ''}`;
+    if (LOAD_FAILURE_RE.test(claudeOut)) {
+      throw new Error(`Isolated claude-runner failed to load:\n${claudeOut}`);
+    }
+    if (!/empty stdin/i.test(claudeOut)) {
+      throw new Error(`Isolated claude-runner unexpected output:\n${claudeOut}`);
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -77,7 +106,7 @@ fs.writeFileSync(
 const packageCount = copyProductionDeps({
   destNm,
   fromFile: corePkg,
-  names: ['execa', 'smol-toml'],
+  names: ['execa', 'smol-toml', 'ws', 'zod', '@anthropic-ai/claude-agent-sdk'],
   platformSdk,
 });
 

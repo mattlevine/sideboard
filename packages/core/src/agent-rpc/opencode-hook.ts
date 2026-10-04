@@ -8,6 +8,7 @@ import {
 import {
   AGENT_RPC_CWD_ENV,
   AGENT_RPC_TOKEN_ENV,
+  AGENT_RPC_TOKEN_QUERY,
   AGENT_RPC_URL_ENV,
 } from './protocol.js';
 
@@ -30,6 +31,12 @@ function jsonError(err) {
   return jsonResult({ ok: false, error: err instanceof Error ? err.message : String(err) })
 }
 
+function socketUrl() {
+  const u = new URL(URL)
+  u.searchParams.set(${JSON.stringify(AGENT_RPC_TOKEN_QUERY)}, TOKEN)
+  return u.toString()
+}
+
 function call(method, params) {
   if (!URL || !TOKEN) {
     return Promise.resolve(jsonError(new Error("Agent RPC runtime is not running")))
@@ -42,7 +49,7 @@ function call(method, params) {
       try { ws.close() } catch {}
       resolve(value)
     }
-    const ws = new WebSocket(URL)
+    const ws = new WebSocket(socketUrl())
     const id = Date.now()
     ws.addEventListener("open", () => {
       ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params, authToken: TOKEN }))

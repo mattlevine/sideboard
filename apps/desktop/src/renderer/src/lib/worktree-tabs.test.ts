@@ -157,6 +157,25 @@ describe('worktree-tabs', () => {
     expect(pickWorktreeChat(group, 'orch-a', '__global__')?.id).toBe('orch-a');
   });
 
+  it('falls back to the cwd last-chat key when __global__ is empty', () => {
+    const group = [
+      thread({
+        id: 'orch-a',
+        worktreePath: '/tmp/sideboard-global',
+        repoPath: '__global__',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }),
+      thread({
+        id: 'orch-b',
+        worktreePath: '/tmp/sideboard-global',
+        repoPath: '__global__',
+        createdAt: '2026-01-02T00:00:00.000Z',
+      }),
+    ];
+    writeLastWorktreeChatId('/tmp/sideboard-global', 'orch-b');
+    expect(pickWorktreeChat(group, null, '__global__')?.id).toBe('orch-b');
+  });
+
   it('reorders ids before or after a target', () => {
     expect(reorderChatIds(['a', 'b', 'c'], 'c', 'a', 'before')).toEqual(['c', 'a', 'b']);
     expect(reorderChatIds(['a', 'b', 'c'], 'a', 'c', 'after')).toEqual(['b', 'c', 'a']);

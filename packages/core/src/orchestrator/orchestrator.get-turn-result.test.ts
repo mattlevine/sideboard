@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { threadFilePath } from '../store/paths.js';
-import { createEmptyThread, writeThread } from '../store/thread-store.js';
+import { createEmptyThread, readThread, writeThread } from '../store/thread-store.js';
 import { Orchestrator } from './orchestrator.js';
 
 function stampUpdatedAt(threadId: string, updatedAt: string): void {
@@ -162,6 +162,13 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.lastActivityAt).toBe(thread.messages.at(-1)?.ts);
   });
 
+  it('uses thread.updatedAt when a finished turn has no messages', () => {
+    const thread = seed({ status: 'idle' });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(false);
+    expect(result.lastActivityAt).toBe(readThread(thread.id)?.updatedAt);
+  });
+
   it('includes last-turn usage and costUsd when present', () => {
     const worktreePath = join(dataDir, 'wt-usage');
     mkdirSync(worktreePath, { recursive: true });
@@ -215,6 +222,21 @@ describe('Orchestrator.getTurnResult', () => {
     const result = new Orchestrator().getTurnResult(thread.id);
     expect(result.text).toBe('Pushed a draft.');
     expect(result.taskState).toBe('completed');
+  });
+
+  it('keeps last-turn usage when trailing gate chatter follows the reply', () => {
+    const thread = seed({ status: 'idle', agentText: 'Pushed a draft.' });
+    thread.messages[0]!.usage = { inputTokens: 40, outputTokens: 8, costUsd: 0.02 };
+    thread.messages.push({
+      role: 'agent',
+      text: 'Agent is running. Waiting for gate to pass.',
+      ts: '2026-10-04T22:00:00.000Z',
+    });
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.text).toBe('Pushed a draft.');
+    expect(result.usage).toEqual({ inputTokens: 40, outputTokens: 8, costUsd: 0.02 });
+    expect(result.lastActivityAt).toBe('2026-10-04T22:00:00.000Z');
   });
 
   it('marks input-required when the turn ended on ask_user', () => {

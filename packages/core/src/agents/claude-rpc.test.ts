@@ -15,6 +15,8 @@ const claudeSettings = {
   abletimeConnected: false,
 };
 
+const userClaudeMcpEntries: Record<string, Record<string, unknown>> = {};
+
 vi.mock('../store/app-settings.js', () => ({
   resolveClaudeExecutable: () => claudeSettings.executablePath || 'claude',
   claudeChromeEnabled: () => Boolean(claudeSettings.chromeEnabled),
@@ -28,6 +30,14 @@ vi.mock('../store/app-settings.js', () => ({
     },
   }),
 }));
+
+vi.mock('./orch-mcp-isolation.js', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('./orch-mcp-isolation.js')>();
+  return {
+    ...orig,
+    listUserClaudeMcpServerEntries: () => ({ ...userClaudeMcpEntries }),
+  };
+});
 
 vi.mock('../git/run.js', () => ({
   run: vi.fn(async (cmd: string, _args: string[]) => {
@@ -64,6 +74,7 @@ describe('Claude Agent RPC worktree hook', () => {
     vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
     vi.stubEnv('SIDEBOARD_SECRET_VAULT', 'plain');
     claudeSettings.chromeEnabled = false;
+    for (const key of Object.keys(userClaudeMcpEntries)) delete userClaudeMcpEntries[key];
   });
 
   afterEach(() => {
@@ -109,6 +120,51 @@ describe('Claude Agent RPC worktree hook', () => {
     expect(req.allowedTools).toContain(`mcp__${AGENT_RPC_CLAUDE_SDK_SERVER}__present_artifact`);
     expect(req.allowedTools).not.toContain('mcp__sideboard__present_artifact');
     expect(req.mcpServers?.sideboard?.env?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
+  });
+
+  it('copies user ~/.claude.json MCP into the RPC servers and keeps them off ~/.claude settings', async () => {
+    userClaudeMcpEntries.gmail = { command: 'npx', args: ['-y', 'gmail'] };
+    const { writeAgentRuntimeMetadata } = await import('../agent-rpc/metadata.js');
+    const { AGENT_RPC_PROTOCOL_VERSION } = await import('../agent-rpc/protocol.js');
+    writeAgentRuntimeMetadata({
+      runtimeId: 'rt',
+      pid: process.pid,
+      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
+      authToken: 'tok',
+      startedAt: 1,
+      transports: [{ kind: 'websocket', url: 'ws://127.0.0.1:9/agent-rpc' }],
+    });
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    const req = JSON.parse(cmd.stdin!) as {
+      mcpServers?: Record<string, { command?: string; args?: string[] }>;
+      allowedTools: string[];
+      isolateClaudeAiMcp?: boolean;
+    };
+    expect(req.mcpServers?.gmail).toEqual({ command: 'npx', args: ['-y', 'gmail'] });
+    expect(req.allowedTools).toContain('mcp__gmail');
+    expect(req.isolateClaudeAiMcp).toBe(false);
+  });
+
+  it('still copies user MCP on local-dev RPC turns while isolating claude.ai', async () => {
+    userClaudeMcpEntries.gmail = { command: 'npx', args: ['-y', 'gmail'] };
+    vi.stubEnv('SIDEBOARD_APP_DATA', join(dataDir, '.sideboard', 'dev-app-data'));
+    const { writeAgentRuntimeMetadata } = await import('../agent-rpc/metadata.js');
+    const { AGENT_RPC_PROTOCOL_VERSION } = await import('../agent-rpc/protocol.js');
+    writeAgentRuntimeMetadata({
+      runtimeId: 'rt',
+      pid: process.pid,
+      protocolVersion: AGENT_RPC_PROTOCOL_VERSION,
+      authToken: 'tok',
+      startedAt: 1,
+      transports: [{ kind: 'websocket', url: 'ws://127.0.0.1:9/agent-rpc' }],
+    });
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
+    const req = JSON.parse(cmd.stdin!) as {
+      mcpServers?: Record<string, { command?: string }>;
+      isolateClaudeAiMcp?: boolean;
+    };
+    expect(req.mcpServers?.gmail?.command).toBe('npx');
+    expect(req.isolateClaudeAiMcp).toBe(true);
   });
 
   it('keeps the Claude CLI and MCP pilots when the desktop pid is dead', async () => {

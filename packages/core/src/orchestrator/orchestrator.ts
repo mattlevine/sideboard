@@ -370,6 +370,11 @@ function collectActiveRunPorts(runs: readonly ActiveRun[]): number[] {
   return [...ports];
 }
 
+function nonemptyIso(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export class Orchestrator {
   readonly events = new EventEmitter();
   private readonly processes = new Map<string, RegisteredProcess>();
@@ -3003,7 +3008,9 @@ export class Orchestrator {
       progress: liveSummary ?? queuedHint,
       lastActivityAt: stillRunning
         ? live?.updatedAt ?? null
-        : lastAgent?.ts ?? thread.updatedAt ?? null,
+        : nonemptyIso(thread.messages.at(-1)?.ts) ??
+          nonemptyIso(lastAgent?.ts) ??
+          nonemptyIso(thread.updatedAt),
       usage: lastAgent?.usage ?? null,
     };
   }

@@ -10,14 +10,7 @@ export type ClaudeTurnRequest = {
   systemPrompt?: string;
   claudePath: string;
   chrome?: boolean;
-  mcpServers: Record<
-    string,
-    {
-      command: string;
-      args?: string[];
-      env?: Record<string, string>;
-    }
-  >;
+  mcpServers: Record<string, Record<string, unknown>>;
   allowedTools: string[];
   agentRpc: AgentRpcConnect;
   isolateClaudeAiMcp?: boolean;

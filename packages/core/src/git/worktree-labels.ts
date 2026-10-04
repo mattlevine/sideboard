@@ -61,7 +61,11 @@ export function isPlaceholderBranch(branchName: string, worktreePath: string): b
   if (!branch || branch === 'HEAD') return true;
   if (branch.startsWith('thread/')) return true;
   const dir = worktreeNameFromPath(worktreePath).toLowerCase();
-  return branch.toLowerCase() === dir;
+  const lower = branch.toLowerCase();
+  if (lower === dir) return true;
+  // `git worktree add -b` collisions keep the folder (`ajax`) and suffix the
+  // branch (`ajax-2`). Those are still placeholders until first-turn rename.
+  return Boolean(dir) && lower.startsWith(`${dir}-`) && /-\d+$/.test(lower);
 }
 
 /** Branch shown in the UI — team nickname while placeholder, else the real branch. */

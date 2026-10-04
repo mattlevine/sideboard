@@ -24,6 +24,7 @@ import {
 import {
   brightsyMcpAllowedTools,
   buildInjectedMcpServers,
+  mcpServersRecord,
   SIDEBOARD_MCP_ALLOWED_TOOLS,
   shouldInjectBrightsyMcp,
   sideboardWorktreeAllowedTools,
@@ -675,12 +676,7 @@ export const claudeAdapter: AgentAdapter = {
         systemPrompt,
         claudePath: claude,
         chrome: chromeOn,
-        mcpServers: Object.fromEntries(
-          injectedServers.map((s) => [
-            s.name,
-            { command: s.command, args: s.args, env: s.env },
-          ]),
-        ),
+        mcpServers: mcpServersRecord(injectedServers, userMcpEntries),
         allowedTools: withClaudePilotRpcTools(allowedTools),
         agentRpc: rpc,
         isolateClaudeAiMcp: isOrchestrator || isLocalDevAppDataDir(),

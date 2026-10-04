@@ -31,6 +31,7 @@ describe('OpenCode Agent RPC plugin', () => {
     expect(src).toContain('job.wait');
     expect(src).toContain('job.stop');
     expect(src).toContain('new WebSocket');
+    expect(src).toContain('searchParams.set("authToken", TOKEN)');
     expect(src).not.toContain('sideboard mcp');
   });
 });

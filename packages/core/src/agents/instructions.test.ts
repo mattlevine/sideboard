@@ -387,6 +387,15 @@ describe('formatRenameBranchDirective', () => {
     ).toBeNull();
   });
 
+  it('still treats collision-suffixed placeholder branches as temporary', () => {
+    const text = formatRenameBranchDirective({
+      worktreePath: '/tmp/sideboard/workspaces/app/ajax',
+      branchName: 'ajax-2',
+    });
+    expect(text).toMatch(/git branch -m/i);
+    expect(text).toContain('ajax-2');
+  });
+
   it('keeps the ticket id in the suggested rename for issue worktrees', () => {
     const text = formatRenameBranchDirective({
       worktreePath: '/tmp/sideboard/workspaces/app/eng-12-paris',

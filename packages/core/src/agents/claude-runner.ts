@@ -62,11 +62,7 @@ async function main(): Promise<void> {
     [AGENT_RPC_CLAUDE_SDK_SERVER]: server,
   };
   for (const [name, spec] of Object.entries(req.mcpServers ?? {})) {
-    mcpServers[name] = {
-      command: spec.command,
-      args: spec.args ?? [],
-      env: spec.env,
-    };
+    mcpServers[name] = spec;
   }
 
   try {
@@ -83,7 +79,9 @@ async function main(): Promise<void> {
     if (req.systemPrompt) options.appendSystemPrompt = req.systemPrompt;
     if (req.effort) options.effort = req.effort;
     if (req.chrome) options.chrome = true;
-    if (req.isolateClaudeAiMcp) options.settingSources = [];
+    // Match CLI `--strict-mcp-config`: only servers we pass (injected + copied
+    // user stdio). Default settingSources would merge ~/.claude.json and nest.
+    options.settingSources = [];
 
     for await (const message of sdk.query({ prompt: req.prompt, options })) {
       emit(message);

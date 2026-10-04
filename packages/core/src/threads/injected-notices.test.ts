@@ -61,6 +61,16 @@ describe('lastAgentReply', () => {
       ])?.text,
     ).toBe('Real answer.');
   });
+
+  it('skips keep-alive continue notes and Cursor gate chatter', () => {
+    expect(
+      lastAgentReply([
+        { role: 'agent', text: 'Pushed a draft.' },
+        { role: 'agent', text: 'keep going', origin: 'continue' },
+        { role: 'agent', text: 'Agent is running. Waiting for gate to pass.' },
+      ])?.text,
+    ).toBe('Pushed a draft.');
+  });
 });
 
 describe('formatInjectedNoticesForTurn', () => {

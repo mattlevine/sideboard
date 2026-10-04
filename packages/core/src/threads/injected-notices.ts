@@ -11,6 +11,8 @@
  * must re-include pending notices in its prompt (`pendingInjectedNotices`).
  */
 
+import { isInternalAgentStatusText } from '../agents/message-parts.js';
+
 export function isSlackExternalReplyText(text: string): boolean {
   return text.startsWith('Slack reply from ') && text.includes('not a command');
 }
@@ -42,12 +44,16 @@ export function pendingInjectedNotices(
 }
 
 /** Last agent message that is the agent's own reply (skips injected notices). */
-export function lastAgentReply<T extends { role: string; text: string }>(
+export function lastAgentReply<T extends { role: string; text: string; origin?: string }>(
   messages: T[],
 ): T | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]!;
-    if (m.role === 'agent' && !isInjectedNoticeText(m.text)) return m;
+    if (m.role !== 'agent') continue;
+    if (isInjectedNoticeText(m.text)) continue;
+    if (m.origin === 'continue') continue;
+    if (isInternalAgentStatusText(m.text)) continue;
+    return m;
   }
   return undefined;
 }

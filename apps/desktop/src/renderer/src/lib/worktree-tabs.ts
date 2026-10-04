@@ -146,6 +146,18 @@ export function pickWorktreeChat<
     const remembered = group.find((t) => t.id === lastId);
     if (remembered) return remembered;
   }
+  // Orchestration last-chat is stored under `__global__`. Prefs from before
+  // that key existed used the global cwd (`unreadWorktreeKey`).
+  if (tabKey?.trim()) {
+    const legacyKey = unreadWorktreeKey(group[0]!);
+    if (legacyKey && legacyKey !== key) {
+      const legacyId = readWorktreeTabPrefs(legacyKey).lastChatId;
+      if (legacyId) {
+        const remembered = group.find((t) => t.id === legacyId);
+        if (remembered) return remembered;
+      }
+    }
+  }
   return orderWorktreeChats(group, null)[0];
 }
 
