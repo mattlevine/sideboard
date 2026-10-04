@@ -2456,7 +2456,8 @@ body.resizing-panels webview {
 }
 
 .thread-item:hover .worktree-row-actions,
-.worktree-row-actions:focus-within {
+.worktree-row-actions:focus-within,
+.worktree-row-actions.is-open {
   opacity: 1;
   pointer-events: auto;
 }
@@ -4534,23 +4535,6 @@ mark.chat-search-hit.chat-search-current {
   /* Indent so nested status lines up under the parent title. */
   margin: 2px 2px 6px 22px;
   padding: 0;
-  max-height: calc(
-    var(--nested-visible, 3) * var(--nested-row-h) +
-      (var(--nested-visible, 3) - 1) * var(--nested-row-gap)
-  );
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  overscroll-behavior: contain;
-}
-
-.worktree-chats::-webkit-scrollbar {
-  width: 6px;
-}
-
-.worktree-chats::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 999px;
 }
 
 .thread-item.nested {
@@ -4691,6 +4675,22 @@ mark.chat-search-hit.chat-search-current {
 
 .worktree-remove-btn:hover,
 .worktree-remove-btn.is-hot {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.worktree-add-agent-btn {
+  margin-left: 0;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.worktree-add-agent-btn:hover {
   color: var(--text);
   background: var(--bg-hover);
 }

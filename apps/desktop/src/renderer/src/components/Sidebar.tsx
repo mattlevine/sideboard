@@ -20,6 +20,7 @@ import { pickWorktreeChat } from '../lib/worktree-tabs';
 import { useCaffeinateHold } from '../lib/caffeinate-tab';
 import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
+import type { NewChatTabOptions } from './ChatTabs';
 import { SidebarToggle } from './SidebarToggle';
 import { WorktreeNestedChats } from './WorktreeNestedChats';
 import { WorktreeSidebarRow } from './WorktreeSidebarRow';
@@ -58,6 +59,7 @@ interface Props {
   onMarkUnread?: (thread: Thread) => void;
   onRenameChat?: (id: string, title: string) => void;
   onCloseChat?: (thread: Thread) => void;
+  onAddAgent?: (fromThreadId: string, opts: NewChatTabOptions) => void;
 }
 
 function repoName(repoPath: string): string {
@@ -98,6 +100,7 @@ export function Sidebar({
   onMarkUnread,
   onRenameChat,
   onCloseChat,
+  onAddAgent,
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -255,7 +258,7 @@ export function Sidebar({
               </div>
             ) : (
               <div className="worktree-block">
-                {/* Same nested rows as worktree sub-agents: logo + name, drag-sort, 3-row scroll. */}
+                {/* Same nested rows as worktree sub-agents: logo + name, drag-sort. */}
                 <WorktreeNestedChats
                   chats={globalThreads}
                   worktreeKey={GLOBAL_WORKSPACE_ID}
@@ -400,6 +403,7 @@ export function Sidebar({
                     onMarkUnread={onMarkUnread}
                     onRenameChat={onRenameChat}
                     onCloseChat={onCloseChat}
+                    onAddAgent={onAddAgent}
                     showArchive={Boolean(onArchive)}
                     onRequestArchive={(chats) =>
                       runArchive(

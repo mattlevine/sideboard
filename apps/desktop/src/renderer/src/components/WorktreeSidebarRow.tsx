@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { worktreeBoardStatus } from '@sideboard/home-board';
 import { worktreeAnchorLabel } from '@sideboard/worktree-labels';
-import type { Thread } from '@sideboard-ai/core';
+import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { nestedChatDisplayTitle } from '../lib/nested-chat-title';
+import { loadThreadDefaults } from '../lib/thread-defaults';
 import { unreadWorktreeKey } from '../lib/unread-worktrees';
 import {
   resolveSidebarChatExpanded,
@@ -11,6 +12,8 @@ import {
 } from '../lib/sidebar-chat-expand';
 import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { AgentKindIcon } from './AgentKindIcon';
+import { AgentOptionsPicker } from './AgentOptionsPicker';
+import type { NewChatTabOptions } from './ChatTabs';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { WorktreeEditCard } from './WorktreeEditCard';
 import { WorktreeNestedChats } from './WorktreeNestedChats';
@@ -34,6 +37,7 @@ export function WorktreeSidebarRow({
   onMarkUnread,
   onRenameChat,
   onCloseChat,
+  onAddAgent,
   multiSelected,
 }: {
   primary: Thread;
@@ -53,12 +57,27 @@ export function WorktreeSidebarRow({
   onMarkUnread?: (thread: Thread) => void;
   onRenameChat?: (id: string, title: string) => void;
   onCloseChat?: (thread: Thread) => void;
+  onAddAgent?: (fromThreadId: string, opts: NewChatTabOptions) => void;
   multiSelected: Set<string>;
 }) {
   const [gitCardOpen, setGitCardOpenState] = useState(false);
   const [collapsedWhileSelected, setCollapsedWhileSelected] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDefaults, setAddDefaults] = useState<{
+    agent: AgentKind;
+    model: string | null;
+    autonomy: Autonomy;
+    effort: ThinkingEffort;
+    fast: boolean;
+  }>({
+    agent: 'claude',
+    model: null,
+    autonomy: 'default',
+    effort: 'high',
+    fast: false,
+  });
   const rowRef = useRef<HTMLDivElement>(null);
   const gitCloseTimer = useRef<number | null>(null);
   const { stat, loaded } = useWorktreeDirtyStat(
@@ -118,6 +137,8 @@ export function WorktreeSidebarRow({
     !orch && active && !archiving && group.length >= SIDEBAR_NEST_MIN_CHATS;
   const showMetaRow = Boolean(metaLine) || showChevron;
   const renamingParent = orch && editingId === primary.id;
+  const showAddAgent = Boolean(onAddAgent) && !orch && !archiving;
+  const showWorktreeActions = showArchive || showAddAgent;
 
   function requestArchive() {
     if (orch) {
@@ -133,6 +154,19 @@ export function WorktreeSidebarRow({
   function toggleExpanded(e: { stopPropagation(): void }) {
     e.stopPropagation();
     setCollapsedWhileSelected((was) => !was);
+  }
+
+  async function openAddAgent() {
+    setGitCardOpen(false);
+    const defaults = await loadThreadDefaults();
+    setAddDefaults({
+      agent: defaults.agent,
+      model: defaults.model,
+      autonomy: 'default',
+      effort: defaults.effort,
+      fast: defaults.fast,
+    });
+    setAddOpen(true);
   }
 
   function commitRename() {
@@ -162,7 +196,7 @@ export function WorktreeSidebarRow({
         }${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
         aria-busy={archiving}
         onMouseEnter={() => {
-          if (!orch) setGitCardOpen(true);
+          if (!orch && !addOpen) setGitCardOpen(true);
         }}
         onMouseLeave={() => {
           if (!orch) setGitCardOpen(false);
@@ -267,20 +301,33 @@ export function WorktreeSidebarRow({
               ×
             </button>
           </div>
-        ) : !archiving && showArchive ? (
+        ) : !archiving && showWorktreeActions ? (
           <div
-            className="worktree-row-actions"
+            className={`worktree-row-actions${addOpen ? ' is-open' : ''}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              className="icon-btn worktree-remove-btn"
-              aria-label={`Archive ${parentTitle}`}
-              title="Archive"
-              onClick={requestArchive}
-            >
-              ▤
-            </button>
+            {showArchive ? (
+              <button
+                type="button"
+                className="icon-btn worktree-remove-btn"
+                aria-label={`Archive ${parentTitle}`}
+                title="Archive"
+                onClick={requestArchive}
+              >
+                ▤
+              </button>
+            ) : null}
+            {showAddAgent ? (
+              <button
+                type="button"
+                className="icon-btn worktree-add-agent-btn"
+                aria-label={`Add agent to ${parentTitle}`}
+                title="Add agent"
+                onClick={() => void openAddAgent()}
+              >
+                +
+              </button>
+            ) : null}
           </div>
         ) : null}
         {!archiving && !orch ? (
@@ -306,6 +353,22 @@ export function WorktreeSidebarRow({
           />
         ) : null}
       </div>
+      <AgentOptionsPicker
+        open={addOpen}
+        value={addDefaults}
+        title="Add agent"
+        confirmLabel="Add agent"
+        onClose={() => setAddOpen(false)}
+        onApply={(next) => {
+          onAddAgent?.(primary.id, {
+            agent: next.agent,
+            model: next.model,
+            autonomy: next.autonomy,
+            effort: next.effort,
+            fast: next.fast,
+          });
+        }}
+      />
       {expanded ? (
         <WorktreeNestedChats
           chats={group}

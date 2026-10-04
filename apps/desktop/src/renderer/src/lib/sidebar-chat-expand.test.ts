@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveSidebarChatExpanded,
-  SIDEBAR_NEST_VISIBLE_ROWS,
   worktreeSidebarMeta,
 } from './sidebar-chat-expand';
 
@@ -32,10 +31,6 @@ describe('sidebar-chat-expand', () => {
         collapsedWhileSelected: true,
       }),
     ).toBe(false);
-  });
-
-  it('keeps three nested agent rows visible before scrolling', () => {
-    expect(SIDEBAR_NEST_VISIBLE_ROWS).toBe(3);
   });
 });
 

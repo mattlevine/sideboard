@@ -1,13 +1,6 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type DragEvent,
-} from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { Thread } from '@sideboard-ai/core';
 import { nestedChatDisplayTitle } from '../lib/nested-chat-title';
-import { SIDEBAR_NEST_VISIBLE_ROWS } from '../lib/sidebar-chat-expand';
 import { isChatUnread } from '../lib/unread-worktrees';
 import {
   dropPlaceFromMidpoint,
@@ -140,14 +133,7 @@ export function WorktreeNestedChats({
   }
 
   return (
-    <div
-      className="worktree-chats"
-      style={
-        {
-          '--nested-visible': SIDEBAR_NEST_VISIBLE_ROWS,
-        } as CSSProperties
-      }
-    >
+    <div className="worktree-chats">
       {ordered.map((chat) => {
         const chatActive = active && chat.id === selectedId;
         const chatUnread = isChatUnread(chat, { active: chatActive });

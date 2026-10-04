@@ -1,9 +1,6 @@
 /** Nested chats open only while this worktree is selected and has more than one. */
 export const SIDEBAR_NEST_MIN_CHATS = 2;
 
-/** Visible nested agent rows before the list scrolls. */
-export const SIDEBAR_NEST_VISIBLE_ROWS = 3;
-
 export function resolveSidebarChatExpanded(opts: {
   chatCount: number;
   selected: boolean;

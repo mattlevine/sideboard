@@ -1247,6 +1247,14 @@ export function App() {
             }}
             onRenameChat={(id, title) => void window.sideboard.renameThread(id, title).then(() => refresh())}
             onCloseChat={(chat) => void archiveThreadsAndRefresh([chat.id], { title: chat.title?.trim() || 'Untitled', removesWorktree: false })}
+            onAddAgent={(fromThreadId, opts) => {
+              void window.sideboard
+                .createChatTab({ fromThreadId, ...opts })
+                .then(selectCreatedThread)
+                .catch((err: unknown) => {
+                  window.alert(err instanceof Error ? err.message : String(err));
+                });
+            }}
             onToggleSidebar={toggleLeftSidebar}
             onOpenSettings={() => setSettingsOpen(true)}
           />
