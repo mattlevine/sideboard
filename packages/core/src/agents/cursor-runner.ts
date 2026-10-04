@@ -34,6 +34,7 @@ import {
 } from './cursor-session.js';
 import { formatUnknownDetail } from './error-detail.js';
 import { slicedReadCustomToolConfig } from './sliced-file-read.js';
+import { sideboardCursorRpcTools } from '../agent-rpc/cursor-tools.js';
 import { clipAgentEventForEmit } from './tool-result-clip.js';
 import {
   cursorCostOnlyUsageEvent,
@@ -155,8 +156,32 @@ async function main(): Promise<number> {
   const isolateSources: NonNullable<LocalAgentOptions['settingSources']> = [];
   // Built-in Read has no offset/limit in the SDK schema — whole files crash
   // the protobuf turn. Custom `read` slices; deny-wins does not apply to MCP.
+  // A held wait_for_job emits no stream frames; its progress notifications
+  // bump the current turn's activity so iterateUntilIdle does not end the turn.
+  let onRpcProgress: () => void = () => {};
+  const rpcTools = req.agentRpc
+    ? sideboardCursorRpcTools({
+        cwd: req.cwd,
+        rpc: req.agentRpc,
+        onProgress: (params, toolCallId) => {
+          onRpcProgress();
+          if (!toolCallId) return;
+          try {
+            emit({
+              type: 'tool_result',
+              id: toolCallId,
+              content: JSON.stringify(params),
+              partial: true,
+            });
+          } catch {
+            /* best-effort live log pane */
+          }
+        },
+      })
+    : {};
   const customTools = {
     read: slicedReadCustomToolConfig(req.cwd) as unknown as SDKCustomTool,
+    ...(rpcTools as unknown as Record<string, SDKCustomTool>),
   };
   const local = withCursorLocalHangGuards({
     cwd: req.cwd,
@@ -278,6 +303,7 @@ async function main(): Promise<number> {
     const bump = (): void => {
       activity.at = Date.now();
     };
+    onRpcProgress = bump;
 
     let usageBefore: CursorAgentUsageSnapshot | null = null;
     try {

@@ -10,7 +10,7 @@ import {
   ensureConnectedBrightsyTeamTokens,
   type ConnectedBrightsyTeam,
 } from '../brightsy/connected-teams.js';
-import { SIDEBOARD_MCP_PROFILE_ENV, SIDEBOARD_THREAD_ID_ENV } from '../mcp/profile.js';
+import { injectedSideboardMcpEnv } from '../mcp/profile.js';
 import { loadAppSettings } from '../store/app-settings.js';
 import { appDataDir } from '../store/paths.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
@@ -341,29 +341,20 @@ export async function buildInjectedMcpServers(opts: {
    * notify_orchestrator binds this tab, not a sibling on the same cwd.
    */
   threadId?: string | null;
+  /**
+   * The harness registers present_artifact / wait_for_job / stop_job natively
+   * over Agent RPC; the injected MCP must not expose duplicates.
+   */
+  rpcNativeTools?: boolean;
 }): Promise<InjectedMcpServer[]> {
   const servers: InjectedMcpServer[] = [];
 
   if (opts.includeSideboard) {
     const sideboard = await resolveSideboardMcpServer();
-    // Always pin MCP to the same app-data dir as the host (desktop `pnpm dev`
-    // uses `.sideboard/dev-app-data`). Without this, Codex MCP often starts with
-    // a stripped env and writes to ~/Library/.../sideboard — so real desktop
-    // parentThreadIds look "missing" and children vanish from the UI.
-    const orchId = opts.orchestratorThreadId?.trim();
-    const profile = orchId ? 'orchestration' : 'worktree';
-    const threadId = opts.threadId?.trim() || orchId;
     sideboard.env = {
       ...(sideboard.env ?? {}),
-      SIDEBOARD_APP_DATA: appDataDir(),
-      [SIDEBOARD_MCP_PROFILE_ENV]: profile,
+      ...injectedSideboardMcpEnv(opts),
     };
-    if (orchId) {
-      sideboard.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID = orchId;
-    }
-    if (threadId) {
-      sideboard.env[SIDEBOARD_THREAD_ID_ENV] = threadId;
-    }
     // Cursor (and some CLIs) spawn MCP with this env only. GitHub auth is a
     // warmed credential store + GH_CONFIG_DIR — never GH_TOKEN in MCP env.
     try {

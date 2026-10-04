@@ -1,3 +1,6 @@
+import { AGENT_RPC_NATIVE_ENV } from '../agent-rpc/protocol.js';
+import { appDataDir } from '../store/paths.js';
+
 /** Injected Sideboard MCP: worktree turns list UI + schedules + Account issue tools; orchestration gets the fleet. */
 export type SideboardMcpProfile = 'worktree' | 'orchestration';
 
@@ -6,7 +9,56 @@ export const SIDEBOARD_MCP_PROFILE_ENV = 'SIDEBOARD_MCP_PROFILE';
 /** Calling chat id on injected Sideboard MCP (worktree notify_orchestrator). */
 export const SIDEBOARD_THREAD_ID_ENV = 'SIDEBOARD_THREAD_ID';
 
-/** UI + schedule tools always registered when SIDEBOARD_MCP_PROFILE=worktree. */
+/**
+ * True when the harness registers `present_artifact` / `wait_for_job` /
+ * `stop_job` natively over Agent RPC, so this MCP must not duplicate them.
+ */
+export function agentRpcOwnsPilotTools(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return env[AGENT_RPC_NATIVE_ENV]?.trim() === '1';
+}
+
+/**
+ * Env the injected Sideboard MCP child needs to join the host: same app-data
+ * dir (desktop `pnpm dev` uses `.sideboard/dev-app-data`; a stripped Codex env
+ * would otherwise write to ~/Library and hide children from the UI), the
+ * profile, the calling thread, and whether Agent RPC owns the pilot tools.
+ */
+export function injectedSideboardMcpEnv(opts: {
+  orchestratorThreadId?: string | null;
+  threadId?: string | null;
+  rpcNativeTools?: boolean;
+}): Record<string, string> {
+  const orchId = opts.orchestratorThreadId?.trim();
+  const threadId = opts.threadId?.trim() || orchId;
+  const env: Record<string, string> = {
+    SIDEBOARD_APP_DATA: appDataDir(),
+    [SIDEBOARD_MCP_PROFILE_ENV]: orchId ? 'orchestration' : 'worktree',
+  };
+  if (orchId) env.SIDEBOARD_ORCHESTRATOR_THREAD_ID = orchId;
+  if (threadId) env[SIDEBOARD_THREAD_ID_ENV] = threadId;
+  if (opts.rpcNativeTools) env[AGENT_RPC_NATIVE_ENV] = '1';
+  return env;
+}
+
+/** Tools the Cursor worktree hook owns; injected MCP must omit them when the flag is set. */
+export const AGENT_RPC_PILOT_MCP_TOOLS = [
+  'present_artifact',
+  'wait_for_job',
+  'stop_job',
+] as const;
+
+/** Worktree MCP names after Agent RPC omit. `mcp/server.ts` registers from this list. */
+export function worktreeMcpToolNames(
+  env: NodeJS.ProcessEnv = process.env,
+): readonly string[] {
+  if (!agentRpcOwnsPilotTools(env)) return WORKTREE_MCP_TOOLS;
+  const omit = new Set<string>(AGENT_RPC_PILOT_MCP_TOOLS);
+  return WORKTREE_MCP_TOOLS.filter((name) => !omit.has(name));
+}
+
+/** Full worktree MCP catalog. `worktreeMcpToolNames` drops Agent RPC pilots when native. */
 export const WORKTREE_MCP_TOOLS = [
   'present_artifact',
   'ask_user',

@@ -5,13 +5,14 @@ Canonical instructions for agents working **on this repository** (not for Sidebo
 | Doc | When |
 |-----|------|
 | [architecture.md](architecture.md) | Layout, packages, how Slack/MCP/desktop fit, process skills |
+| [agent-rpc.md](agent-rpc.md) | Agent WebSocket JSON-RPC (replacing MCP for harness hooks) |
 | [agent-orchestration.md](agent-orchestration.md) | `taskState`, `notify_orchestrator`, why not A2A HTTP / Claude Agent Teams |
 | [conventions.md](conventions.md) | Build, test, docs, release |
 | [safety.md](safety.md) | Human-only land/purge, user-gated merge, secrets, remote control |
 | [deploy.md](deploy.md) | Marketing site + Slack relay on Fly |
 | [slack-marketplace.md](slack-marketplace.md) | Public Distribution + Slack Marketplace prerequisites |
 
-Recurring multi-item / fan-out work: follow [`.claude/skills/graph-engineering/SKILL.md`](../../.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`). Desktop / npm cuts: [`.claude/skills/release/SKILL.md`](../../.claude/skills/release/SKILL.md) (`/release`). Long jobs: `/long-running` (Sideboard product skill; this repo also has [`.claude/skills/long-running/SKILL.md`](../../.claude/skills/long-running/SKILL.md)). New process guides go in `.claude/skills/<name>/SKILL.md`, not `.sideboard/skills`.
+Recurring multi-item / fan-out work: follow [`.claude/skills/graph-engineering/SKILL.md`](../../.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`). Agent host methods: [`.claude/skills/agent-rpc/SKILL.md`](../../.claude/skills/agent-rpc/SKILL.md) (`/agent-rpc`). Desktop / npm cuts: [`.claude/skills/release/SKILL.md`](../../.claude/skills/release/SKILL.md) (`/release`). Long jobs: `/long-running` (Sideboard product skill; this repo also has [`.claude/skills/long-running/SKILL.md`](../../.claude/skills/long-running/SKILL.md)). New process guides go in `.claude/skills/<name>/SKILL.md`, not `.sideboard/skills`.
 
 Product / user docs (not required for every change):
 

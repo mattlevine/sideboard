@@ -181,6 +181,16 @@ export { cleanupArchivedHistory, shouldRunHistoryCleanup } from './store/history
 export type { HistoryCleanupResult } from './store/history-cleanup.js';
 export { startMcpServer } from './mcp/server.js';
 export {
+  AGENT_RPC_PROTOCOL_VERSION,
+  AGENT_RPC_NATIVE_ENV,
+  startAgentRpcServer,
+  stopAgentRpcServer,
+  getAgentRpcServer,
+  readAgentRuntimeMetadata,
+  agentRpcConnectFromMetadata,
+} from './agent-rpc/index.js';
+export type { AgentRuntimeMetadata, AgentRpcConnect } from './agent-rpc/index.js';
+export {
   sideboardMcpProfile,
   SIDEBOARD_MCP_PROFILE_ENV,
   WORKTREE_MCP_TOOLS,

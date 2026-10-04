@@ -1,12 +1,57 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AGENT_RPC_NATIVE_ENV } from '../agent-rpc/protocol.js';
 import {
   SIDEBOARD_MCP_PROFILE_ENV,
+  SIDEBOARD_THREAD_ID_ENV,
   WORKTREE_ABLETIME_MCP_TOOLS,
   WORKTREE_GITHUB_MCP_TOOLS,
   WORKTREE_LINEAR_MCP_TOOLS,
   WORKTREE_MCP_TOOLS,
+  agentRpcOwnsPilotTools,
+  injectedSideboardMcpEnv,
   sideboardMcpProfile,
+  worktreeMcpToolNames,
 } from './profile.js';
+
+describe('agentRpcOwnsPilotTools / injectedSideboardMcpEnv', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('is off unless the injected env says the harness owns the pilot tools', () => {
+    expect(agentRpcOwnsPilotTools({})).toBe(false);
+    expect(agentRpcOwnsPilotTools({ [AGENT_RPC_NATIVE_ENV]: '0' })).toBe(false);
+    expect(agentRpcOwnsPilotTools({ [AGENT_RPC_NATIVE_ENV]: '1' })).toBe(true);
+  });
+
+  it('omits the pilot tools from the worktree MCP catalog when Agent RPC owns them', () => {
+    expect(worktreeMcpToolNames({})).toEqual([...WORKTREE_MCP_TOOLS]);
+    const native = worktreeMcpToolNames({ [AGENT_RPC_NATIVE_ENV]: '1' });
+    expect(native).not.toContain('present_artifact');
+    expect(native).not.toContain('wait_for_job');
+    expect(native).not.toContain('stop_job');
+    expect(native).toContain('ask_user');
+  });
+
+  it('builds the worktree env and only sets the native flag when asked', () => {
+    vi.stubEnv('SIDEBOARD_APP_DATA', '/tmp/sb-app-data');
+    const plain = injectedSideboardMcpEnv({ threadId: 't1' });
+    expect(plain.SIDEBOARD_APP_DATA).toBe('/tmp/sb-app-data');
+    expect(plain[SIDEBOARD_MCP_PROFILE_ENV]).toBe('worktree');
+    expect(plain[SIDEBOARD_THREAD_ID_ENV]).toBe('t1');
+    expect(plain.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBeUndefined();
+    expect(plain[AGENT_RPC_NATIVE_ENV]).toBeUndefined();
+    expect(agentRpcOwnsPilotTools(plain)).toBe(false);
+
+    const native = injectedSideboardMcpEnv({ threadId: 't1', rpcNativeTools: true });
+    expect(agentRpcOwnsPilotTools(native)).toBe(true);
+  });
+
+  it('orchestration env carries the orchestrator id and falls back to it as the thread id', () => {
+    const env = injectedSideboardMcpEnv({ orchestratorThreadId: ' orch-1 ' });
+    expect(env[SIDEBOARD_MCP_PROFILE_ENV]).toBe('orchestration');
+    expect(env.SIDEBOARD_ORCHESTRATOR_THREAD_ID).toBe('orch-1');
+    expect(env[SIDEBOARD_THREAD_ID_ENV]).toBe('orch-1');
+  });
+});
 
 describe('sideboardMcpProfile', () => {
   it('defaults to orchestration (CLI / Cursor MCP keep the fleet)', () => {
