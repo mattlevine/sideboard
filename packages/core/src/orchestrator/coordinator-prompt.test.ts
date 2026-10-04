@@ -161,6 +161,9 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('costUsd');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('taskState');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('input-required');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'If stillRunning, text and usage are empty (they would be the previous turn)',
+    );
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_chat.*usage/s);
     expect(COORDINATOR_TOOL_PLAYBOOK).toMatch(/get_turn_result.*usage/s);
   });

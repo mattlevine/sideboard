@@ -99,4 +99,22 @@ describe('waitForTurnToolResult', () => {
     });
     expect(result.usage).toEqual({ inputTokens: 100, outputTokens: 20, costUsd: 0.04 });
   });
+
+  it('keeps text empty while stillRunning so a previous reply cannot look current', () => {
+    const result = waitForTurnToolResult({
+      id: 't1',
+      status: 'running',
+      taskState: 'working',
+      text: '',
+      lastError: null,
+      stillRunning: true,
+      progress: 'Read wait-for-turn.ts',
+      lastActivityAt: '2026-10-04T00:00:00.000Z',
+      usage: null,
+    });
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
+    expect(result.stillRunning).toBe(true);
+    expect(result.hint).toBe(MCP_WAIT_STILL_RUNNING_HINT);
+  });
 });

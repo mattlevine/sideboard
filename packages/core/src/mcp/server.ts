@@ -1153,7 +1153,7 @@ export async function startMcpServer(): Promise<void> {
   if (shouldRegisterMcpWaitForTurn()) {
   server.tool(
     'wait_for_turn',
-    'Wait until the chat finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_chat a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat. When finished, usage is the last agent turn’s tokens + costUsd (when the provider reported cost).',
+    'Wait until the chat finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, text and usage are empty (they would be the previous turn) — read progress and call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat. When finished, text is this turn’s assistant reply and usage is that turn’s tokens + costUsd (when the provider reported cost).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -1182,7 +1182,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_turn_result',
-    'Assistant message when the turn finished, or live progress while stillRunning. Not the full transcript. Includes taskState (A2A lifecycle) and usage for the last agent turn (tokens + costUsd when reported).',
+    'Assistant message and last-turn usage when the turn finished. While stillRunning (submitted/working), text and usage are empty so a previous reply cannot be mistaken for this turn — use progress for tools/thinking. Not the full transcript. Includes taskState (A2A lifecycle).',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);

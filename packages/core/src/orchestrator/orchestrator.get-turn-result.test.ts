@@ -109,6 +109,47 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.progress).toBe('Read foo.ts (3 tools)');
     expect(result.lastActivityAt).toBe('2026-08-20T21:00:00.000Z');
     expect(result.taskState).toBe('working');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
+  });
+
+  it('omits previous-turn text and usage while the child is still working', async () => {
+    const { writeTurnLive } = await import('../store/turn-live.js');
+    const thread = seed({
+      status: 'running',
+      agentText: 'On branch matt/foo\ncommit abc\nv0.1.262',
+    });
+    thread.messages[0]!.usage = { inputTokens: 40, outputTokens: 8, costUsd: 0.02 };
+    writeThread(thread);
+    writeTurnLive(thread.id, {
+      updatedAt: new Date().toISOString(),
+      summary: 'Read wait-for-turn.ts (2 tools)',
+      toolCount: 2,
+    });
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.taskState).toBe('working');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
+    expect(result.progress).toBe('Read wait-for-turn.ts (2 tools)');
+  });
+
+  it('omits in-progress assistant text until the turn finishes', () => {
+    const thread = seed({ status: 'running', agentText: 'On branch matt/foo' });
+    thread.messages.push(
+      { role: 'user', text: 'fix wait_for_turn', ts: new Date().toISOString() },
+      {
+        role: 'agent',
+        text: 'Looking at wait-for-turn.ts…',
+        ts: new Date().toISOString(),
+      },
+    );
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.taskState).toBe('working');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
   });
 
   it('explains queued threads that have not started yet', () => {
@@ -119,6 +160,23 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.progress).toBe('Queued — waiting for a concurrency slot');
     expect(result.taskState).toBe('submitted');
     expect(result.lastActivityAt).toBeNull();
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
+  });
+
+  it('omits previous-turn text while a follow-up is queued', () => {
+    const thread = seed({
+      status: 'queued',
+      queue: ['do the next thing'],
+      agentText: 'Pushed a draft.',
+    });
+    thread.messages[0]!.usage = { inputTokens: 10, outputTokens: 2, costUsd: 0.01 };
+    writeThread(thread);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.stillRunning).toBe(true);
+    expect(result.taskState).toBe('submitted');
+    expect(result.text).toBe('');
+    expect(result.usage).toBeNull();
   });
 
   it('does not treat leftover running status as live after the agent died', () => {

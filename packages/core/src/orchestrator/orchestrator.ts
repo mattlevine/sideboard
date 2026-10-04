@@ -2973,19 +2973,23 @@ export class Orchestrator {
     stillRunning: boolean;
     progress: string | null;
     lastActivityAt: string | null;
-    /** Token + cost for the last finished agent turn, when reported. */
+    /** Token + cost for the last finished agent turn, when reported. Null while stillRunning. */
     usage: TokenUsage | null;
   } {
     const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
     const lastAgent = lastAgentReply(thread.messages);
     const lastError = thread.lastError ?? null;
+    const stillRunning = this.threadLooksLive(thread);
     const rawText = (lastAgent?.text ?? '').trim();
-    const text =
+    const finishedText =
       (rawText && !isInternalAgentStatusText(rawText) ? rawText : '') ||
       (thread.status === 'error' || thread.status === 'stopped' || thread.status === 'broken'
         ? lastError ?? ''
         : '');
-    const stillRunning = this.threadLooksLive(thread);
+    // While submitted/working, lastAgent is the previous finished turn (or a
+    // partial stream). Coordinators that read `text` without stillRunning
+    // would treat that as this turn’s answer — omit it until the turn ends.
+    const text = stillRunning ? '' : finishedText;
     const live = stillRunning ? readTurnLive(thread.id) : null;
     const liveSummary =
       live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
@@ -3011,7 +3015,7 @@ export class Orchestrator {
         : nonemptyIso(thread.messages.at(-1)?.ts) ??
           nonemptyIso(lastAgent?.ts) ??
           nonemptyIso(thread.updatedAt),
-      usage: lastAgent?.usage ?? null,
+      usage: stillRunning ? null : lastAgent?.usage ?? null,
     };
   }
 

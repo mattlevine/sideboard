@@ -78,7 +78,7 @@ export type WaitForTurnToolResult = {
   stillRunning: boolean;
   progress: string | null;
   lastActivityAt: string | null;
-  /** Last finished agent turn tokens + costUsd when the provider reported them. */
+  /** Last finished agent turn tokens + costUsd when reported. Null while stillRunning. */
   usage: TokenUsage | null;
   hint: string | undefined;
   incomplete: boolean;
