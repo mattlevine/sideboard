@@ -124,7 +124,7 @@ describe('agent-rpc handlers', () => {
         stillRunning: true,
         progress: 'Read foo.ts',
         lastActivityAt: 't1',
-        hint: 'Child is still working. Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts) or assume a hang while progress is updating.',
+        hint: 'Child is still working. Call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts) or assume a hang while progress is updating.',
         incomplete: false,
       },
       {

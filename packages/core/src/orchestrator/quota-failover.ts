@@ -142,7 +142,7 @@ export function buildQuotaHandoffAttachment(
     .slice(0, 40)
     .map(
       (t) =>
-        `- ${t.title} · ${t.status} · ${t.agent} · sideboard://thread/${t.id}`,
+        `- ${t.title} · ${t.status} · ${t.agent} · sideboard://chat/${t.id}`,
     );
 
   const recent = from.messages
@@ -158,7 +158,7 @@ export function buildQuotaHandoffAttachment(
   const instructions = orch
     ? [
         '- Continue fleet orchestration from this handoff.',
-        '- Prefer Sideboard MCP (list_board, list_threads, get_thread, send_to_thread, …) for live status.',
+        '- Prefer Sideboard MCP (list_board, list_chats, get_chat, send_to_chat, …) for live status.',
         '- Leave model Auto unless there is a specific reason to pin one.',
         `- Do not wait on the limited ${from.agent} account; keep going on ${fallbackAgent}.`,
       ]
@@ -179,7 +179,7 @@ export function buildQuotaHandoffAttachment(
     from.sourceRef?.trim() || '(none)',
     '',
     `## Child threads`,
-    children.length ? children.join('\n') : '(none listed — call list_threads)',
+    children.length ? children.join('\n') : '(none listed — call list_chats)',
     '',
     `## Recent turns (truncated)`,
     recent.length ? recent.join('\n') : '(none)',

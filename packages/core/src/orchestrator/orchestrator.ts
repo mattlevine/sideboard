@@ -313,7 +313,7 @@ export async function waitForPidExit(
  * use Settings → Follow-up behavior (default steer) so those do not sit
  * in the queue while the user asked to interrupt.
  *
- * Orchestrator → worktree talk (`send_to_thread`, `ask_git`) must
+ * Orchestrator → worktree talk (`send_to_chat`, `ask_git`) must
  * pass {@link resolveOrchChildFollowUp} so those prompts steer by default.
  * Create/reuse first prompts still queue unless the caller opts in.
  */
@@ -873,7 +873,7 @@ export class Orchestrator {
       try {
         appendMessage(threadId, {
           role: 'agent',
-          text: `Session limit on ${thread.agent}. Sideboard continued on account “${plan.fallbackAccountLabel}” in [${next.title}](sideboard://thread/${next.id}).`,
+          text: `Session limit on ${thread.agent}. Sideboard continued on account “${plan.fallbackAccountLabel}” in [${next.title}](sideboard://chat/${next.id}).`,
           ts: new Date().toISOString(),
         });
         this.emit({
@@ -919,7 +919,7 @@ export class Orchestrator {
       try {
         appendMessage(threadId, {
           role: 'agent',
-          text: `Session limit on ${thread.agent}. Sideboard continued on ${plan.fallbackAgent} (Auto) in [${next.title}](sideboard://thread/${next.id}).`,
+          text: `Session limit on ${thread.agent}. Sideboard continued on ${plan.fallbackAgent} (Auto) in [${next.title}](sideboard://chat/${next.id}).`,
           ts: new Date().toISOString(),
         });
         this.emit({
@@ -2181,7 +2181,7 @@ export class Orchestrator {
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       // Idle stop (archive, leftover status) is not a mid-turn death.
-      // MCP force_stop / stop_thread pass notifyParent: false — the caller already knows.
+      // MCP force_stop / stop_chat pass notifyParent: false — the caller already knows.
       if (inFlight && opts?.notifyParent !== false) {
         notifyParentOfChildHalt(stopped, 'stopped', (id, prompt) => this.send(id, prompt));
       }

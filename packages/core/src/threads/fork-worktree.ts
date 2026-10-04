@@ -21,7 +21,7 @@ export async function forkThreadWorktree(
   const from = requireThread(input.threadId);
   if (isOrchestratorThread(from)) {
     throw new Error(
-      'fork_worktree targets a worktree agent thread (not the orchestrator). Pass a child/worktree thread ref.',
+      'fork_workspace targets a worktree agent thread (not the orchestrator). Pass a child/worktree thread ref.',
     );
   }
   if (!from.branchName?.trim() || !from.repoPath?.trim()) {

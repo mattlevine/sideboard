@@ -339,7 +339,7 @@ export function Sidebar({
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter workspaces & threads…"
+              placeholder="Filter projects & workspaces…"
             />
           </div>
         )}
@@ -354,7 +354,7 @@ export function Sidebar({
                 <button
                   type="button"
                   className="workspace-name-btn"
-                  title={`New thread in ${repoName(path)}`}
+                  title={`New workspace in ${repoName(path)}`}
                   onClick={() => onNew(path)}
                 >
                   <span className="workspace-glyph" aria-hidden />
@@ -383,7 +383,7 @@ export function Sidebar({
               <button
                 type="button"
                 className="icon-btn"
-                title={`New thread in ${repoName(path)}`}
+                title={`New workspace in ${repoName(path)}`}
                 onClick={() => onNew(path)}
               >
                 +

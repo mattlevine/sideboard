@@ -26,7 +26,7 @@ interface Props {
   knownFilePaths?: string[];
   worktreePath?: string;
   onFileReferenceClick?: (link: FilePathLink) => void;
-  /** Open a Sideboard thread from a sideboard://thread/<id> markdown link. */
+  /** Open a Sideboard thread from a sideboard://chat/<id> markdown link. */
   onThreadLinkClick?: (threadRef: string) => void;
   /**
    * Optional in-app handler for http(s) URLs (e.g. PR review preview tab).

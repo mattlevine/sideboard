@@ -40,7 +40,7 @@ async function resolveProjectRepoPath(repoPath?: string): Promise<string | null>
 }
 
 const PROJECT_PATH_HINT =
-  'Pass repoPath from list_workspaces. Orchestration cwd is synthetic and empty — do not omit repoPath for project context.';
+  'Pass repoPath from list_projects. Orchestration cwd is synthetic and empty — do not omit repoPath for project context.';
 
 export const VIEWER_CONTEXT_MCP_TOOLS = [
   'get_viewer_context',
@@ -50,7 +50,7 @@ export const VIEWER_CONTEXT_MCP_TOOLS = [
 export function registerViewerContextTools(server: McpServer): void {
   server.tool(
     'get_viewer_context',
-    'Read account and project user context (Settings → Agents / Projects): roles, tickets, and review queues as freeform text. Orchestration must pass repoPath from list_workspaces for project context. Worktree turns may omit repoPath (uses cwd).',
+    'Read account and project user context (Settings → Agents / Projects): roles, tickets, and review queues as freeform text. Orchestration must pass repoPath from list_projects for project context. Worktree turns may omit repoPath (uses cwd).',
     {
       repoPath: z
         .string()
@@ -90,7 +90,7 @@ export function registerViewerContextTools(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          'Required for scope=project from orchestration (path from list_workspaces). Worktree turns may omit it (cwd).',
+          'Required for scope=project from orchestration (path from list_projects). Worktree turns may omit it (cwd).',
         ),
     },
     async ({ scope, context, confirmed, repoPath }) => {

@@ -262,13 +262,13 @@ describe('formatWorktreeDirective', () => {
     expect(text).toContain('/tmp/sideboard/workspaces/app/paris');
     expect(text).toContain('/Users/me/Projects/app');
     expect(text).toMatch(/do NOT edit/i);
-    expect(text).toMatch(/Stay inside the worktree/i);
+    expect(text).toMatch(/Stay inside this workspace/i);
     expect(text).toMatch(/Worktree folder nickname/i);
     expect(text).toMatch(/never the worktree nickname/i);
     expect(text).toMatch(/gh pr create --draft --assignee @me -R/i);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/create_schedule/);
-    expect(text).toMatch(/threadId=self/);
+    expect(text).toMatch(/chatId=self/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
     expect(text).toMatch(/not 3000/);
     expect(text).toMatch(/preview=window/);

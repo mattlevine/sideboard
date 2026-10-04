@@ -14,17 +14,17 @@ export function mcpWaitForTurnTimeoutMs(requested?: number): number {
 }
 
 export const MCP_WAIT_STILL_RUNNING_HINT =
-  'Child is still working. Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts) or assume a hang while progress is updating.';
+  'Child is still working. Call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts) or assume a hang while progress is updating.';
 
 export const MCP_WAIT_QUEUED_HINT =
-  'Child is queued waiting for a concurrency slot — it has not started yet. Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts), force_stop, or assume it failed to start.';
+  'Child is queued waiting for a concurrency slot — it has not started yet. Call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts), force_stop, or assume it failed to start.';
 
 export function mcpWaitStillRunningHint(status: string): string {
   return status === 'queued' ? MCP_WAIT_QUEUED_HINT : MCP_WAIT_STILL_RUNNING_HINT;
 }
 
 export const MCP_WAIT_STOPPED_HINT =
-  'Child was stopped before the turn finished. Do not treat this as success. send_to_thread to resume, or tell the user.';
+  'Child was stopped before the turn finished. Do not treat this as success. send_to_chat to resume, or tell the user.';
 
 export const MCP_WAIT_BROKEN_HINT =
   'Child worktree is broken (missing on disk). Tell the user — do not treat this as success.';
@@ -33,7 +33,7 @@ export const MCP_WAIT_ERROR_HINT =
   'Child turn failed. lastError/text is the failure — switch agent, tell the user, or retry. Do not treat empty text as success.';
 
 export const MCP_WAIT_INPUT_REQUIRED_HINT =
-  'Child asked the user a question (ask_user). taskState is input-required. Wait for the user to answer in that chat — do not send_to_thread a check-in.';
+  'Child asked the user a question (ask_user). taskState is input-required. Wait for the user to answer in that chat — do not send_to_chat a check-in.';
 
 /** Hint when wait_for_turn / get_turn_result is no longer stillRunning. */
 export function mcpWaitFinishedHint(status: string): string | undefined {

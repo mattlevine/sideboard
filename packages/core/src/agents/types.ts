@@ -53,7 +53,7 @@ export function permissionMode(
 } {
   // Orchestrators spawn Sideboard MCP which creates worktrees + thread files
   // outside `--cd`. Codex workspace-write can seatbelt those MCP children and
-  // hang create_thread; Claude does not — so Claude orch works and Codex does not.
+  // hang create_workspace; Claude does not — so Claude orch works and Codex does not.
   if (thread.sourceType === 'orchestration') {
     return {
       claude: 'acceptEdits',

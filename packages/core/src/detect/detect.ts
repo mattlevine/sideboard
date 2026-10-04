@@ -11,7 +11,7 @@ export async function detectAgents(): Promise<AgentStatus[]> {
  * Verify one agent is installed/authenticated.
  * Only probes that agent — never runs every detector. Nested `codex mcp list`
  * / `codex login status` while a parent `codex exec` holds ~/.codex SQLite locks
- * can block create_thread MCP forever.
+ * can block create_workspace MCP forever.
  */
 const REQUIRE_AGENT_TIMEOUT_MS = 8_000;
 

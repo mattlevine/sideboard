@@ -19,7 +19,7 @@ export const PILOT_TOOL_DESCRIPTIONS: Record<PilotToolName, string> = {
 };
 
 export const WAIT_FOR_TURN_DESCRIPTION =
-  'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. This call stays open for up to ~2 minutes. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_thread a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_thread or tell the user. On input-required, wait for the user in that chat.';
+  'Wait until the thread finishes its current/queued turn, or return early with a live progress snapshot. This call stays open for up to ~2 minutes. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, call wait_for_turn again — do not send_to_chat a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat.';
 
 export const WAIT_FOR_TURN_SCHEMA: Record<string, unknown> = {
   type: 'object',

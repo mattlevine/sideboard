@@ -205,7 +205,7 @@ describe('global-workspace', () => {
               {
                 type: 'tool',
                 id: '1',
-                name: 'mcp__sideboard__list_threads',
+                name: 'mcp__sideboard__list_chats',
                 input: {},
                 status: 'done',
               },

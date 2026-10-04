@@ -243,7 +243,7 @@ export async function handleTurnWait(
       stillRunning: true,
       progress: null,
       lastActivityAt: null,
-      hint: 'Child is still working after max hold. Call wait_for_turn again. Do not send_to_thread a check-in (that steers / interrupts).',
+      hint: 'Child is still working after max hold. Call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts).',
       incomplete: false,
     }
   );

@@ -7,7 +7,7 @@ import {
 
 /**
  * The desktop is the single agent runtime: it claims the host pid file (so
- * MCP/CLI `send_to_thread` never spawns worktree turns in the stdio child) and
+ * MCP/CLI `send_to_chat` never spawns worktree turns in the stdio child) and
  * owns the loopback Agent RPC server that Cursor (worktree and orchestration)
  * native tools call.
  * Listen is fire-and-forget so a bind failure cannot block the window.

@@ -63,7 +63,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'create_schedule',
-    'Create a local schedule that, when due, sends a prompt to an existing chat (threadId) or starts a new Global orchestration chat (omit threadId). Pass threadId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without threadId open a new Global chat each run. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
+    'Create a local schedule that, when due, sends a prompt to an existing chat (chatId) or starts a new Global orchestration chat (omit chatId). Pass chatId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without chatId open a new Global chat each run. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
     {
       prompt: z.string().describe('User message / goal queued when the schedule fires'),
       name: z.string().optional(),
@@ -71,12 +71,16 @@ export function registerScheduleTools(server: McpServer): void {
       every: z.string().optional().describe('Interval such as 15m, 1h, 6h, 1d'),
       cron: z.string().optional().describe('5-field cron expression'),
       tz: z.string().optional().describe('IANA timezone for cron (default: system)'),
-      threadId: z
+      chatId: z
         .string()
         .optional()
         .describe(
-          'Existing chat id (orchestration or worktree), or "self" for this chat. Omit to create a new Global chat on fire.',
+          'Existing chat id (orchestration or workspace), or "self" for this chat. Omit to create a new Global chat on fire.',
         ),
+      threadId: z
+        .string()
+        .optional()
+        .describe('Legacy alias for chatId.'),
       agent: z
         .enum(['claude', 'cursor', 'codex', 'opencode'])
         .optional()
@@ -86,11 +90,12 @@ export function registerScheduleTools(server: McpServer): void {
     async (args) => {
       try {
         const when = parseWhen(args);
-        const threadId = resolveScheduleThreadId(args.threadId);
-        if (args.threadId?.trim().toLowerCase() === 'self' && !threadId) {
+        const rawChatId = args.chatId ?? args.threadId;
+        const threadId = resolveScheduleThreadId(rawChatId);
+        if (rawChatId?.trim().toLowerCase() === 'self' && !threadId) {
           return fail(
             new Error(
-              'threadId=self needs this chat id (SIDEBOARD_THREAD_ID or SIDEBOARD_ORCHESTRATOR_THREAD_ID)',
+              'chatId=self needs this chat id (SIDEBOARD_THREAD_ID or SIDEBOARD_ORCHESTRATOR_THREAD_ID)',
             ),
           );
         }
@@ -106,8 +111,8 @@ export function registerScheduleTools(server: McpServer): void {
         return text({
           schedule,
           hint: scheduleNeedsCaffeinate(schedule)
-            ? 'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run. Caffeinate while schedules are enabled is now on so the Mac can stay awake until this job is due.'
-            : 'Fires while Sideboard.app is running. Recurring jobs without threadId create a new orchestration chat each run.',
+            ? 'Fires while Sideboard.app is running. Recurring jobs without chatId create a new orchestration chat each run. Caffeinate while schedules are enabled is now on so the Mac can stay awake until this job is due.'
+            : 'Fires while Sideboard.app is running. Recurring jobs without chatId create a new orchestration chat each run.',
         });
       } catch (err) {
         return fail(err);
@@ -117,7 +122,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'update_schedule',
-    'Update a local schedule (prompt, cadence, target thread, enabled). Pass id from list_schedules.',
+    'Update a local schedule (prompt, cadence, target chat, enabled). Pass id from list_schedules.',
     {
       id: z.string(),
       prompt: z.string().optional(),
@@ -126,12 +131,16 @@ export function registerScheduleTools(server: McpServer): void {
       every: z.string().optional(),
       cron: z.string().optional(),
       tz: z.string().optional(),
-      threadId: z
+      chatId: z
         .string()
         .optional()
         .describe(
-          'Existing chat (orchestration or worktree), "self", or empty string to create a new Global chat each run',
+          'Existing chat (orchestration or workspace), "self", or empty string to create a new Global chat each run',
         ),
+      threadId: z
+        .string()
+        .optional()
+        .describe('Legacy alias for chatId.'),
       agent: z.enum(['claude', 'cursor', 'codex', 'opencode']).optional(),
       model: z.string().optional(),
       enabled: z.boolean().optional(),
@@ -148,12 +157,13 @@ export function registerScheduleTools(server: McpServer): void {
             })
           : undefined;
         let threadId: string | null | undefined;
-        if (args.threadId !== undefined) {
-          threadId = resolveScheduleThreadId(args.threadId);
-          if (args.threadId.trim().toLowerCase() === 'self' && !threadId) {
+        const rawChatId = args.chatId ?? args.threadId;
+        if (rawChatId !== undefined) {
+          threadId = resolveScheduleThreadId(rawChatId);
+          if (rawChatId.trim().toLowerCase() === 'self' && !threadId) {
             return fail(
               new Error(
-                'threadId=self needs this chat id (SIDEBOARD_THREAD_ID or SIDEBOARD_ORCHESTRATOR_THREAD_ID)',
+                'chatId=self needs this chat id (SIDEBOARD_THREAD_ID or SIDEBOARD_ORCHESTRATOR_THREAD_ID)',
               ),
             );
           }

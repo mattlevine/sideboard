@@ -46,7 +46,7 @@ describe('formatSlackInboundPrompt', () => {
     const prompt = formatSlackInboundPrompt(msg({ text: 'hello again' }));
     expect(prompt).toBe('Slack DM\n\nhello again');
     expect(prompt).not.toContain('COORDINATOR');
-    expect(prompt).not.toContain('list_workspaces');
+    expect(prompt).not.toContain('list_projects');
     expect(prompt).not.toContain('team_id');
   });
 
@@ -64,7 +64,7 @@ describe('formatSlackWorkingText', () => {
     expect(formatSlackWorkingText('Working…')).toBe('Thinking…');
     expect(formatSlackWorkingText('thinking...')).toBe('Thinking…');
     expect(formatSlackWorkingText('Thinking…')).toBe('Thinking…');
-    expect(formatSlackWorkingText('create_thread')).toBe('create_thread');
+    expect(formatSlackWorkingText('create_workspace')).toBe('create_workspace');
   });
 });
 
@@ -568,11 +568,11 @@ describe('handleSlackInbound interrupt', () => {
     expect(posts.some((p) => p.includes('Thinking…'))).toBe(true);
     writeTurnLive(coord.id, {
       updatedAt: new Date().toISOString(),
-      summary: 'create_thread',
+      summary: 'create_workspace',
       toolCount: 1,
     });
     await new Promise((r) => setTimeout(r, 30));
-    expect(updates.some((u) => u.includes('create_thread'))).toBe(true);
+    expect(updates.some((u) => u.includes('create_workspace'))).toBe(true);
     releaseWait!();
     await inbound;
     expect(updates.some((u) => u.includes('all done'))).toBe(true);

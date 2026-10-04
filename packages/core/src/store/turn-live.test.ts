@@ -83,7 +83,7 @@ describe('noteTurnLiveEvent', () => {
     noteTurnLiveEvent(thread.id, {
       type: 'tool_use',
       id: 't1',
-      name: 'mcp__sideboard__get_thread',
+      name: 'mcp__sideboard__get_chat',
       input: { ref: thread.id },
     });
 

@@ -154,7 +154,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function codexLooksAuthenticated(): boolean {
   // Never spawn `codex login status` / `codex mcp list` from detect — nested under
   // an active `codex exec` those CLIs can block forever on ~/.codex SQLite locks,
-  // which hangs Sideboard MCP create_thread (orchestrator → create agent=codex).
+  // which hangs Sideboard MCP create_workspace (orchestrator → create agent=codex).
   const authPath = join(homedir(), '.codex', 'auth.json');
   if (!existsSync(authPath)) return false;
   try {

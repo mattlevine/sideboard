@@ -97,7 +97,7 @@ describe('child halt notice', () => {
     expect(notifyParentOfChildHalt(child, 'stopped', send)).toBe(false);
     expect(sends).toHaveLength(1);
     expect(sends[0]!.id).toBe(parent.id);
-    expect(sends[0]!.prompt).toContain('sideboard://thread/');
+    expect(sends[0]!.prompt).toContain('sideboard://chat/');
     expect(sends[0]!.prompt).toContain('stopped before finishing');
     expect(sends[0]!.prompt).toContain('Process died');
   });
@@ -148,6 +148,6 @@ describe('child halt notice', () => {
       repoPath: join(dataDir, 'repo'),
       agent: 'cursor',
     });
-    expect(childHaltNotice(child, 'stopped')).toMatch(/send_to_thread/);
+    expect(childHaltNotice(child, 'stopped')).toMatch(/send_to_chat/);
   });
 });

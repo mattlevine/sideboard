@@ -635,7 +635,7 @@ export function CreateModal({
       <div
         className={`modal create-modal${busy ? ' is-creating' : ''}${createDragOver ? ' drag-over' : ''}`}
         role="dialog"
-        aria-label="New thread"
+        aria-label="New workspace"
         aria-busy={busy}
         onClick={(e) => e.stopPropagation()}
         onDragEnter={(e) => {
@@ -770,7 +770,7 @@ export function CreateModal({
                   setMoreMenuOpen(false);
                 }}
               >
-                <span>{mode === 'create' ? '✓ ' : ''}New thread</span>
+                <span>{mode === 'create' ? '✓ ' : ''}New workspace</span>
               </button>
               <button
                 type="button"

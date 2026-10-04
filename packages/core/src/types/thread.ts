@@ -93,6 +93,7 @@ export interface ThreadAttachment {
   previewDataUrl?: string;
 }
 
+/** Persisted chat record (product word: chat). One conversation tab. */
 export interface Thread {
   id: string;
   title: string;
@@ -681,7 +682,7 @@ export interface ActiveRun {
 }
 
 /**
- * MCP/CLI → desktop run-script request (same path as `send_to_thread` queues).
+ * MCP/CLI → desktop run-script request (same path as `send_to_chat` queues).
  * Desktop claims, runs `startDev`/`stopDev`, then fulfills or sets `error`.
  */
 export interface RunScriptRequest {
@@ -750,7 +751,7 @@ export interface CreateThreadInput {
    */
   cowboy?: boolean;
   /**
-   * When false, always create a new worktree (fork_worktree, best-of-n).
+   * When false, always create a new worktree (fork_workspace, best-of-n).
    * Default true: a ticket, PR, or named branch may have only one live worktree —
    * return that thread instead of a second checkout.
    */

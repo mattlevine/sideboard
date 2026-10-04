@@ -240,7 +240,7 @@ interface Props {
   onSelectPrPage?: () => void;
   onClosePrPage?: () => void;
   onShowChat?: () => void;
-  /** Open another thread from a sideboard://thread/<id> markdown link. */
+  /** Open another thread from a sideboard://chat/<id> markdown link. */
   onOpenThreadLink?: (threadRef: string) => void;
   /** Hide embedded BrowserView while a modal covers the app (e.g. Settings). */
   urlPreviewSuspended?: boolean;

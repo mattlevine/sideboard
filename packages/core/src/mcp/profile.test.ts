@@ -101,7 +101,7 @@ describe('sideboardMcpProfile', () => {
       'delete_schedule',
       'run_schedule',
     ]);
-    expect(WORKTREE_MCP_TOOLS).not.toContain('list_threads');
+    expect(WORKTREE_MCP_TOOLS).not.toContain('list_chats');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_board');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_teams');
     expect([...WORKTREE_GITHUB_MCP_TOOLS]).toEqual([

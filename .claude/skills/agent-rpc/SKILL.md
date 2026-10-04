@@ -86,7 +86,7 @@ Migrating the remaining MCP tools is the same shape every time:
 Pilot methods (`ui.presentArtifact`, `job.wait`, `job.stop`, `turn.wait`)
 before porting the rest. Next batch: `ask_user`, `present_*`, run-scripts,
 `notify_orchestrator`, then Account issue tools, then the remaining
-orchestration fleet (`send_to_thread`, `create_thread`, …).
+orchestration fleet (`send_to_chat`, `create_workspace`, …).
 
 ## Do not
 
