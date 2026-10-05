@@ -205,7 +205,7 @@ def page(meta: dict, body: str) -> str:
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css?v=20261004">
+<link rel="stylesheet" href="/styles.css?v=20261004-2">
 </head>
 <body>
 <header class="nav">

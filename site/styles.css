@@ -124,11 +124,12 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 .btn-primary { background: #f7f8f8; color: #0c0d0f }
 .btn-primary:hover { background: #e4e6e8; color: #0c0d0f }
 .btn-ghost {
-  border-color: transparent;
+  border-color: var(--line-strong);
   color: var(--text);
   background: transparent;
 }
 .btn-ghost:hover { background: rgba(255, 255, 255, 0.06); color: var(--text) }
+.btn-ico { flex: none; display: block }
 .btn-white { background: #fff; color: #0c0d0f }
 .btn-white:hover { background: #e8eaed; color: #0c0d0f }
 
