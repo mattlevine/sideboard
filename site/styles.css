@@ -207,29 +207,10 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   padding: 0 28px;
 }
 .shot-frame {
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--line-strong);
-  background: #0e0f12;
-  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  /* Screenshots already include their own window chrome and rounded corners
+     (transparent PNGs), so no border/background here — just a soft lift. */
+  filter: drop-shadow(0 28px 60px rgba(0, 0, 0, 0.5));
 }
-.shot-bar {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 11px 14px;
-  background: #16181c;
-  border-bottom: 1px solid var(--line);
-}
-.shot-bar span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #3a3d42;
-}
-.shot-bar span:nth-child(1) { background: #ff5f57 }
-.shot-bar span:nth-child(2) { background: #febc2e }
-.shot-bar span:nth-child(3) { background: #28c840 }
 .shot-cap {
   text-align: center;
   font-size: 13px;
