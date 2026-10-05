@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   inboundFromSocketFrame,
   isSlackStopCommand,
+  lifecycleFromSocketFrame,
   openSlackSocketUrl,
   parseSlackSocketFrame,
   resolveWebSocket,
@@ -81,6 +82,33 @@ describe('Slack Socket Mode frames', () => {
       ),
     ).toMatchObject({ kind: 'dm', text: 'no type' });
     expect(inboundFromSocketFrame(dmFrame({ text: '<@Ubot>' }))).toBeNull();
+  });
+
+  it('parses App Home opens and uninstall', () => {
+    expect(
+      lifecycleFromSocketFrame({
+        type: 'events_api',
+        payload: {
+          team_id: 'T1',
+          event: { type: 'app_home_opened', user: 'U1', tab: 'home' },
+        },
+      }),
+    ).toEqual({ kind: 'app_home_opened', teamId: 'T1', userId: 'U1' });
+    expect(
+      lifecycleFromSocketFrame({
+        type: 'events_api',
+        payload: {
+          team_id: 'T1',
+          event: { type: 'app_home_opened', user: 'U1', tab: 'messages' },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      lifecycleFromSocketFrame({
+        type: 'events_api',
+        payload: { team_id: 'T9', event: { type: 'app_uninstalled' } },
+      }),
+    ).toEqual({ kind: 'app_uninstalled', teamId: 'T9' });
   });
 
   it('strips mentions and recognizes stop', () => {

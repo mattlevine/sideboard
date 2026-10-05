@@ -9,7 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Slack Marketplace readiness: drop user `search:read` (MCP `slack_search` is gone) and user `chat:write`, and unused bot `team:read`. Existing workspaces must reinstall after the Slack dashboard picks up the new scopes.
+- Slack App Home (Home tab) walks a new installer through download → name this Mac → DM the bot, plus support. Uninstalling the app in Slack drops that workspace on the Mac.
+- When no Mac is online, a DM/@mention gets a setup error in Slack instead of silence. The OAuth success page points at Settings → Remote → Slack.
 - README and marketing-site screenshots refreshed (`sideboard-desktop-review-v7.png`, `site/desktop.png`, `site/board.png`) at native 2662×1736 PNG (144 dpi) so they stay sharp on retina.
+
+### Removed
+
+- MCP `slack_search` (`search.messages`). Use `slack_list_channels` + `slack_read`.
 
 ## [0.1.263] - 2026-10-04
 

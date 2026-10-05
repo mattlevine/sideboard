@@ -7,6 +7,7 @@ import {
   type SlackRelayClientMessage,
   type SlackRelayServerMessage,
 } from './relay-protocol.js';
+import { publishSlackAppHome, SLACK_NO_MAC_ONLINE_REPLY } from './app-home.js';
 
 export interface SlackRelaySocket {
   send(data: string): void;
@@ -19,6 +20,7 @@ export interface SlackRelaySession {
   userId: string;
   deviceId: string;
   deviceLabel: string;
+  botToken: string;
   socket: SlackRelaySocket;
   connectedAt: number;
 }
@@ -55,6 +57,8 @@ export class SlackRelayHub {
   private readonly sessions = new Map<string, SlackRelaySession>();
   private readonly bySocket = new Map<SlackRelaySocket, string>();
   private readonly pendingClaims = new Map<string, PendingClaim>();
+  /** Workspace bot tokens for App Home + "no Mac online" replies (in-memory). */
+  private readonly botByTeam = new Map<string, string>();
   private seq = 0;
   private readonly fetchImpl?: typeof fetch;
   private readonly authTest: (
@@ -206,11 +210,13 @@ export class SlackRelayHub {
       userId: claimedUser,
       deviceId: claimedDevice,
       deviceLabel: label,
+      botToken: bot,
       socket,
       connectedAt: Date.now(),
     };
     this.sessions.set(key, session);
     this.bySocket.set(socket, key);
+    this.rememberBot(claimedTeam, bot);
     this.send(socket, {
       type: 'registered',
       teamId: claimedTeam,
@@ -218,6 +224,7 @@ export class SlackRelayHub {
       deviceId: claimedDevice,
     });
     this.log(`desktop registered ${key} (${label})`);
+    void this.handleAppHomeOpened(claimedTeam, claimedUser);
   }
 
   /**
@@ -234,6 +241,7 @@ export class SlackRelayHub {
     const online = this.sessionsForUser(message.teamId, userId);
     if (online.length === 0) {
       this.log(`no desktop for ${slackRelayUserKey(message.teamId, userId)} — skip`);
+      void this.replyNoMacOnline(message);
       return false;
     }
 
@@ -289,6 +297,81 @@ export class SlackRelayHub {
       return;
     }
     this.send(socket, { type: 'claim_denied', eventId });
+  }
+
+  rememberBot(teamId: string, botToken: string): void {
+    const t = teamId.trim();
+    const tok = botToken.trim();
+    if (t && tok) this.botByTeam.set(t, tok);
+  }
+
+  botTokenFor(teamId: string): string | null {
+    const t = teamId.trim();
+    const remembered = this.botByTeam.get(t)?.trim();
+    if (remembered) return remembered;
+    for (const session of this.sessions.values()) {
+      if (session.teamId === t && session.botToken.trim()) return session.botToken.trim();
+    }
+    return null;
+  }
+
+  uninstallTeam(teamId: string): void {
+    const t = teamId.trim();
+    if (!t) return;
+    this.botByTeam.delete(t);
+    for (const session of [...this.sessions.values()]) {
+      if (session.teamId !== t) continue;
+      this.send(session.socket, { type: 'uninstalled', teamId: t });
+      try {
+        session.socket.close(4001, 'uninstalled');
+      } catch {
+        // ignore
+      }
+      this.detachSocket(session.socket);
+    }
+    this.log(`uninstalled ${t}`);
+  }
+
+  async handleAppHomeOpened(teamId: string, userId: string): Promise<void> {
+    const token = this.botTokenFor(teamId);
+    const fetchImpl = this.fetchImpl;
+    const uid = userId.trim();
+    if (!token || !fetchImpl || !uid) return;
+    const sessions = this.sessionsForUser(teamId, uid);
+    try {
+      await publishSlackAppHome({
+        token,
+        userId: uid,
+        online: sessions.length > 0,
+        deviceLabel: sessions[0]?.deviceLabel,
+        fetchImpl,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.log(`app home publish failed: ${errMsg}`);
+    }
+  }
+
+  private async replyNoMacOnline(message: SlackInboundMessage): Promise<void> {
+    const token = this.botTokenFor(message.teamId);
+    const fetchImpl = this.fetchImpl;
+    if (!token || !fetchImpl) return;
+    try {
+      await slackApi(
+        token,
+        'chat.postMessage',
+        {
+          channel: message.channelId,
+          text: SLACK_NO_MAC_ONLINE_REPLY,
+          thread_ts:
+            message.kind === 'mention' ? message.threadTs || message.ts : undefined,
+        },
+        fetchImpl,
+      );
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.log(`no-mac reply failed: ${errMsg}`);
+    }
   }
 
   private send(socket: SlackRelaySocket, msg: SlackRelayServerMessage): void {

@@ -107,7 +107,7 @@ export function RemoteSettings({
                     {ws.team_name}
                     <span className="settings-hint"> · {ws.team_id}</span>
                     {!ws.has_user_token ? (
-                      <span className="settings-hint"> · search needs user token</span>
+                      <span className="settings-hint"> · reconnect via browser</span>
                     ) : null}
                   </p>
                 </div>

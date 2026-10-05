@@ -24,7 +24,7 @@ import {
   type SlackInboundMessage,
   type SlackSocketModeOptions,
 } from './socket-mode.js';
-import { listSlackWorkspacesRaw, slackTokenFor } from './workspaces.js';
+import { listSlackWorkspacesRaw, slackTokenFor, disconnectSlackWorkspace } from './workspaces.js';
 import { getSlackReplyTarget, setSlackReplyTarget } from './reply-target.js';
 import { slackRelayUrl } from './baked-app.js';
 import { runSlackRelayClient } from './relay-client.js';
@@ -32,11 +32,12 @@ import { runSlackRelayClient } from './relay-client.js';
 export {
   inboundFromSocketFrame,
   isSlackStopCommand,
+  lifecycleFromSocketFrame,
   parseSlackSocketFrame,
   runSlackSocketMode,
   stripSlackMentions,
 } from './socket-mode.js';
-export type { SlackInboundMessage } from './socket-mode.js';
+export type { SlackInboundMessage, SlackLifecycleEvent } from './socket-mode.js';
 
 export const SLACK_LISTEN_STOPPED_REPLY =
   'Sideboard stopped the in-progress turn. Send another message when you want to continue.';
@@ -792,6 +793,10 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
         userToken: w.user_token!.trim(),
       })),
       onEvent: onInbound,
+      onUninstalled: (teamId) => {
+        disconnectSlackWorkspace(teamId);
+        log(`dropped workspace ${teamId} after Slack uninstall`);
+      },
     });
   } finally {
     off();

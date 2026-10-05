@@ -26,6 +26,8 @@ export interface SlackRelayClientOptions {
   deviceLabel?: string;
   signal?: AbortSignal;
   onEvent: (msg: SlackInboundMessage) => void | Promise<void>;
+  /** Workspace removed the Slack app — drop local tokens for that team. */
+  onUninstalled?: (teamId: string) => void;
   onLog?: (line: string) => void;
   WebSocketImpl?: SlackWebSocketCtor;
   /** Tests: override keepalive cadence. */
@@ -230,6 +232,11 @@ function connectSession(
       }
       if (msg.type === 'error') {
         log(`relay error: ${msg.message}`);
+        return;
+      }
+      if (msg.type === 'uninstalled') {
+        log(`Slack app uninstalled · ${msg.teamId}`);
+        opts.onUninstalled?.(msg.teamId);
         return;
       }
       if (msg.type === 'registered') {

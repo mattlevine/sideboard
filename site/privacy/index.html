@@ -31,7 +31,7 @@
 <article style="max-width:720px;margin:0 auto;padding:56px 40px 110px">
 <span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Privacy</span>
 <h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:18px 0 8px;color:#edf0f3">Privacy policy</h1>
-<p style="margin:0;color:#8b949c;font-size:14px">Last updated 29 August 2026. Sideboard is a local Mac app plus a Slack relay at <code>relay.sideboard.cloud</code>.</p>
+<p style="margin:0;color:#8b949c;font-size:14px">Last updated 5 October 2026. Sideboard is a local Mac app plus a Slack relay at <code>relay.sideboard.cloud</code>.</p>
 
 <h2>What this covers</h2>
 <p>This policy describes data handled by the Sideboard desktop/CLI on your computer and by the hosted Slack relay. It is written for people who install the Sideboard Slack app. The marketing site at www.sideboard.cloud does not require an account.</p>
@@ -40,7 +40,7 @@
 <ul>
 <li><strong>On your Mac.</strong> Slack workspace tokens, team and user ids, device name, thread/worktree metadata, and chat you have with agents. Optional tokens for GitHub, Linear, AbleTime, Vercel, Supabase, PostHog, and Sentry also live in the encrypted vault on disk — not in the renderer or in git. Slack workspaces are stored as <code>slack-workspaces.json</code>.</li>
 <li><strong>Through the Slack relay.</strong> Slack OAuth codes and the resulting bot/user tokens (held in memory for about five minutes so the desktop can fetch them), then Slack message text, channel ids, user ids, and team ids needed to route DMs and @mentions to your Mac. The relay does not receive git repos, secrets, or VPN-only traffic.</li>
-<li><strong>We do not</strong> require a Sideboard cloud account. We do not sell Slack data. We do not use Slack data to train Sideboard models — Sideboard does not host a model.</li>
+<li><strong>We do not</strong> require a Sideboard cloud account. We do not sell Slack data. We do not use Slack data to train Sideboard models — Sideboard does not host a model. We do not request Slack’s <code>search:read</code> scope; agents list and read channels you connect rather than running workspace-wide Slack search.</li>
 </ul>
 
 <h2>How it is used</h2>

@@ -2,12 +2,12 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { slackOAuthAuthorizeUrl, SLACK_OAUTH_REDIRECT, startSlackOAuth } from './oauth.js';
+import { slackOAuthAuthorizeUrl, SLACK_OAUTH_REDIRECT, startSlackOAuth, SLACK_BOT_SCOPES, SLACK_USER_SCOPES } from './oauth.js';
 import { BAKED_SLACK_CLIENT_ID, hasBakedSlackOAuth } from './baked-app.js';
 import { exchangeSlackOAuthCode, SlackOAuthPendingStore } from './oauth-exchange.js';
 
 describe('slack OAuth URL', () => {
-  it('includes client_id, user_scope search, and https redirect', () => {
+  it('includes client_id, user history scopes, and https redirect', () => {
     const url = slackOAuthAuthorizeUrl('CLIENT', 'state123');
     expect(url).toContain('https://slack.com/oauth/v2/authorize?');
     expect(url).not.toContain('brightsy.slack.com');
@@ -15,12 +15,32 @@ describe('slack OAuth URL', () => {
     expect(url).toContain('state=state123');
     expect(url).toContain(encodeURIComponent(SLACK_OAUTH_REDIRECT));
     expect(SLACK_OAUTH_REDIRECT).toBe('https://relay.sideboard.cloud/slack/callback');
-    expect(url).toContain(encodeURIComponent('search:read'));
+    expect(url).not.toContain(encodeURIComponent('search:read'));
+    expect(url).not.toContain(encodeURIComponent('team:read'));
     expect(url).toContain(encodeURIComponent('app_mentions:read'));
     expect(url).toContain(encodeURIComponent('reactions:write'));
     expect(url).toContain(encodeURIComponent('im:write'));
     expect(url).toContain(encodeURIComponent('chat:write.public'));
     expect(url).toContain('user_scope=');
+    expect(url).toContain(encodeURIComponent('channels:history'));
+    const userScope = new URL(url).searchParams.get('user_scope') ?? '';
+    expect(userScope.split(',')).not.toContain('search:read');
+    expect(userScope.split(',')).not.toContain('chat:write');
+    expect(new URL(url).searchParams.get('scope')).toBe(SLACK_BOT_SCOPES);
+    expect(userScope).toBe(SLACK_USER_SCOPES);
+  });
+
+  it('Add to Slack on the marketing site matches OAuth scopes', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const html = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../../site/slack/index.html'),
+      'utf8',
+    );
+    expect(html).not.toContain('search:read');
+    expect(html).toContain(`scope=${SLACK_BOT_SCOPES}`);
+    expect(html).toContain(`user_scope=${SLACK_USER_SCOPES}`);
   });
 });
 
@@ -123,7 +143,7 @@ describe('exchangeSlackOAuthCode', () => {
             ok: true,
             access_token: 'xoxb-bot',
             scope: 'chat:write',
-            authed_user: { id: 'U1', access_token: 'xoxp-user', scope: 'search:read' },
+            authed_user: { id: 'U1', access_token: 'xoxp-user', scope: 'channels:history' },
             team: { id: 'T9', name: 'Nine' },
           }),
         );

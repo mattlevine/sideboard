@@ -89,7 +89,7 @@ export async function startSlackRelayServer(
   const hub =
     opts.hub ??
     new SlackRelayHub({
-      fetchImpl: opts.fetchImpl,
+      fetchImpl: opts.fetchImpl ?? fetch,
       onLog: log,
     });
 
@@ -135,11 +135,17 @@ export async function startSlackRelayServer(
         fetchImpl: opts.fetchImpl,
       });
       pending.put(state, { ok: true, payload });
+      if (payload.bot_token) {
+        hub.rememberBot(payload.team_id, payload.bot_token);
+        if (payload.user_id) {
+          void hub.handleAppHomeOpened(payload.team_id, payload.user_id);
+        }
+      }
       sendHtml(
         res,
         200,
         'Slack connected',
-        '<h1>Slack workspace connected</h1><p>You can close this tab and return to Sideboard.</p>',
+        '<h1>Slack workspace connected</h1><p>Open <strong>Sideboard → Settings → Remote → Slack</strong>. Confirm Relay connected, name this Mac, then DM @Sideboard.</p><p>Need the app? <a href="https://www.sideboard.cloud/slack/">Download Sideboard</a>.</p>',
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -295,6 +301,13 @@ export async function startSlackRelayServer(
         onLog: (line) => log(line),
         onEvent: (msg) => {
           hub.routeEvent(msg);
+        },
+        onLifecycle: (event) => {
+          if (event.kind === 'app_home_opened') {
+            void hub.handleAppHomeOpened(event.teamId, event.userId);
+            return;
+          }
+          hub.uninstallTeam(event.teamId);
         },
       }).catch((err) => {
         if (ac.signal.aborted) return;
