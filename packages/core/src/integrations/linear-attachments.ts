@@ -53,8 +53,8 @@ export interface LinearIssueAttachment {
 }
 
 export type LinearAttachmentSource = {
-  description?: string;
-  comments?: { nodes?: Array<{ body?: string }> };
+  description?: string | null;
+  comments?: { nodes?: Array<{ body?: string | null }> };
   attachments?: {
     nodes?: Array<{
       id?: string;
