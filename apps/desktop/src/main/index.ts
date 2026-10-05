@@ -60,6 +60,10 @@ import {
 
 // Must run before app.ready so artifact iframes can load outside renderer CSP.
 registerArtifactPreviewScheme();
+app.commandLine.appendSwitch(
+  'enable-features',
+  'OnDeviceWebSpeechAvailable,OnDeviceSpeechRecognition',
+);
 
 import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';

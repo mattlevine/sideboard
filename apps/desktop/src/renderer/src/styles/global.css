@@ -6961,10 +6961,6 @@ button.chat-earlier-toggle:hover {
   display: block;
 }
 
-.composer-box.expanded .dictation-mic {
-  align-self: flex-end;
-}
-
 .stop-btn {
   width: 32px;
   height: 32px;
@@ -11655,13 +11651,6 @@ body:has(.update-banner) .team-toast-stack {
   position: relative;
 }
 
-.create-composer-mic {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 2;
-}
-
 .create-composer-wrap .composer-ac {
   left: 0;
   right: 0;
@@ -11677,7 +11666,7 @@ body:has(.update-banner) .team-toast-stack {
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
-  padding: 0 48px 0 0;
+  padding: 0;
   outline: none;
 }
 

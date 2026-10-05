@@ -2965,12 +2965,15 @@ export function ThreadPanel({
               }}
             />
             {!composerExpanded && <span className="composer-focus-hint">⌘L to focus</span>}
-            <DictationMicButton
-              listening={dictation.listening}
-              supported={dictation.supported}
-              error={dictation.error}
-              onToggle={dictation.toggle}
-            />
+            {!composerExpanded && (
+              <DictationMicButton
+                listening={dictation.listening}
+                supported={dictation.supported}
+                error={dictation.error}
+                onHoldStart={dictation.start}
+                onHoldEnd={dictation.stop}
+              />
+            )}
             {!composerExpanded && agentActive && (
               <button
                 type="button"
@@ -3081,6 +3084,13 @@ export function ThreadPanel({
                 >
                   +
                 </button>
+                <DictationMicButton
+                  listening={dictation.listening}
+                  supported={dictation.supported}
+                  error={dictation.error}
+                  onHoldStart={dictation.start}
+                  onHoldEnd={dictation.stop}
+                />
                 <FloatingMenu
                   open={plusOpen}
                   onClose={() => setPlusOpen(false)}

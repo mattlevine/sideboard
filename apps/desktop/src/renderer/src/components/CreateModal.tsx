@@ -939,24 +939,16 @@ export function CreateModal({
                 }
               }}
             />
-            <div className="create-composer-mic">
-              <DictationMicButton
-                listening={dictation.listening}
-                supported={dictation.supported}
-                error={dictation.error}
-                disabled={busy}
-                onToggle={dictation.toggle}
-              />
-            </div>
           </div>
         </div>
 
-        {(agentsLoaded && !agentOk) || error ? (
+        {(agentsLoaded && !agentOk) || error || dictation.error ? (
           <div className="create-errors">
             {agentsLoaded && !agentOk && (
               <p>{agentStatus?.reason ?? 'Agent unavailable'}</p>
             )}
             {error && <p>{error}</p>}
+            {dictation.error && <p>{dictation.error}</p>}
           </div>
         ) : null}
 
@@ -974,6 +966,14 @@ export function CreateModal({
             }
             rightSlot={
               <>
+                <DictationMicButton
+                  listening={dictation.listening}
+                  supported={dictation.supported}
+                  error={dictation.error}
+                  disabled={busy}
+                  onHoldStart={dictation.start}
+                  onHoldEnd={dictation.stop}
+                />
                 <label className="create-more-toggle" title="Keep dialog open after create">
                   <button
                     type="button"
