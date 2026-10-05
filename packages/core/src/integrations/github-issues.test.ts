@@ -1,7 +1,11 @@
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   commentGitHubIssue,
   createGitHubIssue,
+  downloadGitHubIssueAttachment,
   getGitHubIssue,
   githubRelationEditFlag,
   listGitHubIssueCommentsSince,
@@ -18,10 +22,12 @@ vi.mock('../git/worktree.js', () => ({
 const gh = vi.fn();
 vi.mock('../git/run.js', () => ({
   gh: (...args: unknown[]) => gh(...args),
+  resolveGhAuthToken: async () => 'ghs_test',
 }));
 
 afterEach(() => {
   gh.mockReset();
+  vi.unstubAllGlobals();
 });
 
 describe('parseGitHubIssueNumber', () => {
@@ -58,6 +64,7 @@ describe('github issue writes', () => {
     const issue = await getGitHubIssue('#12', { repoPath: '/tmp/repo' });
     expect(issue.identifier).toBe('#12');
     expect(issue.comments[0]?.body).toBe('Looks good');
+    expect(issue.attachments).toEqual([]);
     expect(gh.mock.calls[0]?.[0]).toEqual(
       expect.arrayContaining(['issue', 'view', '12', '-R', 'acme/app']),
     );
@@ -274,5 +281,58 @@ describe('listGitHubIssueCommentsSince', () => {
     expect(gh).toHaveBeenCalledTimes(2);
     expect(String(gh.mock.calls[0]?.[0]?.[1] ?? '')).toContain('per_page=100');
     expect(String(gh.mock.calls[1]?.[0]?.[1] ?? '')).toContain('page=2');
+  });
+
+  it('lists user-attachment URLs from the body and comments', async () => {
+    gh.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        number: 12,
+        title: 'Fix login',
+        url: 'https://github.com/acme/app/issues/12',
+        body: 'See ![shot](https://github.com/user-attachments/assets/abc-123)',
+        labels: [],
+        assignees: [],
+        comments: [
+          {
+            body: 'Also https://private-user-images.githubusercontent.com/1/x.png',
+            author: { login: 'ada' },
+          },
+        ],
+      }),
+      stderr: '',
+    });
+    const issue = await getGitHubIssue('#12', { repoPath: '/tmp/repo' });
+    expect(issue.attachments.map((item) => item.url)).toEqual([
+      'https://github.com/user-attachments/assets/abc-123',
+      'https://private-user-images.githubusercontent.com/1/x.png',
+    ]);
+  });
+
+  it('downloads a GitHub user-attachment with gh auth', async () => {
+    const worktree = mkdtempSync(join(tmpdir(), 'sb-gh-att-'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer ghs_test');
+        return {
+          ok: true,
+          headers: {
+            get(name: string) {
+              if (name === 'content-type') return 'image/png';
+              if (name === 'content-disposition') return 'attachment; filename="shot.png"';
+              return null;
+            },
+          },
+          arrayBuffer: async () => new Uint8Array([9, 8, 7]).buffer,
+        };
+      }),
+    );
+    const saved = await downloadGitHubIssueAttachment(
+      { url: 'https://github.com/user-attachments/assets/abc-123' },
+      { repoPath: worktree },
+    );
+    expect(saved.path).toBe('.context/attachments/shot.png');
+    expect(readFileSync(join(worktree, saved.path))).toEqual(Buffer.from([9, 8, 7]));
   });
 });

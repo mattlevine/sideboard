@@ -1,7 +1,11 @@
 import { ghRepoSelectArgs, resolveGithubRepoSlug, resolveRepoRoot } from '../git/worktree.js';
 import { gh } from '../git/run.js';
 import type { IssueActivityComment, IssueInfo } from '../types/thread.js';
+import { extractGitHubIssueAttachments } from './github-issue-attachments.js';
+import type { IssueVendorAttachment } from './issue-attachments.js';
 import { previewIssueCommentBody } from './issue-since.js';
+
+export { downloadGitHubIssueAttachment } from './github-issue-attachments.js';
 
 export interface GitHubIssueComment {
   id?: string;
@@ -22,6 +26,7 @@ export interface GitHubIssue {
   labels: string[];
   assignees: string[];
   comments: GitHubIssueComment[];
+  attachments: IssueVendorAttachment[];
 }
 
 function requireGhOk(
@@ -102,7 +107,8 @@ function toGitHubIssue(raw: Record<string, unknown>): GitHubIssue {
     throw new Error('GitHub issue response was missing a number');
   }
   const assignees = mapAssignees(raw.assignees);
-  return {
+  const comments = mapComments(raw.comments);
+  const issue: GitHubIssue = {
     id: `gh-${number}`,
     identifier: `#${number}`,
     number,
@@ -112,8 +118,11 @@ function toGitHubIssue(raw: Record<string, unknown>): GitHubIssue {
     state: typeof raw.state === 'string' ? raw.state : undefined,
     labels: mapLabels(raw.labels),
     assignees,
-    comments: mapComments(raw.comments),
+    comments,
+    attachments: [],
   };
+  issue.attachments = extractGitHubIssueAttachments(issue);
+  return issue;
 }
 
 export function toGitHubIssueInfo(issue: GitHubIssue): IssueInfo {

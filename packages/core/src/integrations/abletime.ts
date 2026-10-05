@@ -9,16 +9,13 @@ import {
   normalizeAbleTimeHost,
   rewriteAbleTimeError,
 } from './abletime-mcp.js';
+import { mapAbleTimeAttachments } from './abletime-attachments.js';
 import { textFromAbleTimeDoc } from './abletime-rest.js';
+import type { IssueVendorAttachment } from './issue-attachments.js';
 
-const CLOSED_STATES = new Set([
-  'done',
-  'completed',
-  'canceled',
-  'cancelled',
-  'archived',
-  'closed',
-]);
+export { downloadAbleTimeAttachment } from './abletime-attachments.js';
+
+const CLOSED_STATES = new Set(['done', 'completed', 'canceled', 'cancelled', 'archived', 'closed']);
 
 export interface AbleTimeComment {
   id?: string;
@@ -40,6 +37,7 @@ export interface AbleTimeTask {
   assignee?: { id?: string; name: string };
   labels: string[];
   comments: AbleTimeComment[];
+  attachments: IssueVendorAttachment[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -113,9 +111,8 @@ function labelsOf(record: Record<string, unknown>): string[] {
 }
 
 function commentsOf(record: Record<string, unknown>): AbleTimeComment[] {
-  const raw = record.comments ?? record.notes ?? record.discussion;
   const out: AbleTimeComment[] = [];
-  for (const item of asList(raw)) {
+  for (const item of asList(record.comments ?? record.notes ?? record.discussion)) {
     const rec = asRecord(item);
     if (!rec) continue;
     const body =
@@ -125,15 +122,16 @@ function commentsOf(record: Record<string, unknown>): AbleTimeComment[] {
     const user =
       firstString(asRecord(rec.user) ?? asRecord(rec.author), ['name', 'display_name', 'username']) ||
       firstString(rec, ['user_name', 'author', 'username']);
-    const comment: AbleTimeComment = { body };
     const id = firstString(rec, ['id', 'comment_id', 'commentId']);
-    if (id) comment.id = id;
     const url = firstString(rec, ['url', 'permalink']);
-    if (url) comment.url = url;
     const createdAt = firstString(rec, ['created_at', 'createdAt', 'created']);
-    if (createdAt) comment.createdAt = createdAt;
-    if (user) comment.user = user;
-    out.push(comment);
+    out.push({
+      body,
+      ...(id ? { id } : {}),
+      ...(url ? { url } : {}),
+      ...(createdAt ? { createdAt } : {}),
+      ...(user ? { user } : {}),
+    });
   }
   return out;
 }
@@ -189,6 +187,7 @@ export function mapAbleTimeTask(raw: unknown, host?: string | null): AbleTimeTas
     assignee: assigneeOf(nested),
     labels: labelsOf(nested),
     comments: commentsOf(nested),
+    attachments: mapAbleTimeAttachments(nested),
     createdAt:
       firstString(nested, ['created_at', 'createdAt', 'created', 'dateCreated']) || undefined,
     updatedAt:

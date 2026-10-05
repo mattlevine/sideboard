@@ -108,6 +108,7 @@ export function formatAbleTimeTaskPayload(task: AbleTimeTask, include?: McpIssue
     description: task.description,
     state: task.state,
     comments: task.comments,
+    attachments: task.attachments,
   };
   if (include === 'full') return base;
   const meta = emptyMeta();

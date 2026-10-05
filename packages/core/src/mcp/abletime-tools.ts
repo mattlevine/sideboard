@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   commentAbleTimeTask,
   createAbleTimeTask,
+  downloadAbleTimeAttachment,
   ensureAbleTimeTask,
   getAbleTimeOrientation,
   getAbleTimeTask,
@@ -72,6 +73,7 @@ export const ABLETIME_MCP_TOOL_NAMES = [
   'abletime_list_tasks',
   'abletime_search_tasks',
   'abletime_get_task',
+  'abletime_download_attachment',
   'abletime_comment',
   'abletime_update_task',
   'abletime_create_task',
@@ -144,11 +146,31 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_get_task',
-    'Get one AbleTime task by id or reference (e.g. CRM-232): description, state, comments. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload.',
+    'Get one AbleTime task by id or reference (e.g. CRM-232): description, state, comments, attachments. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. To save a file, call abletime_download_attachment with the attachment id or url (writes `.context/attachments/`; do not dump bytes into the tool result).',
     { id: z.string(), include: mcpIssueIncludeSchema },
     async ({ id, include }) => {
       try {
         return text(formatAbleTimeTaskPayload(await getAbleTimeTask(id), include));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.tool(
+    'abletime_download_attachment',
+    'Download an AbleTime task file into `.context/attachments/` using Account AbleTime auth. Pass the attachment id or URL from abletime_get_task. Returns the worktree-relative path — Read that file; do not dump bytes into chat.',
+    {
+      id: z.string().describe('Attachment id or URL from abletime_get_task.'),
+      name: z.string().optional().describe('Optional filename override.'),
+      repoPath: z
+        .string()
+        .optional()
+        .describe('Workspace / worktree path. Omit on a worktree turn (uses cwd).'),
+    },
+    async ({ id, name, repoPath }) => {
+      try {
+        return text(await downloadAbleTimeAttachment({ id, name }, { destPath: repoPath }));
       } catch (err) {
         return fail(err);
       }

@@ -164,8 +164,7 @@ function restTaskToRaw(
   const identifier = asString(rec.taskRef) || asString(rec.reference) || id;
   const title = asString(rec.title);
   if (!id && !identifier && !title) return null;
-  const assigned = asString(rec.assignedUserId);
-  const assignee = assigned ? users.get(assigned) : undefined;
+  const assignee = users.get(asString(rec.assignedUserId));
   const comments = asList(rec.comments).map((item) => {
     const comment = asRecord(item) ?? {};
     const user = userDisplayName(comment);
@@ -193,6 +192,7 @@ function restTaskToRaw(
     parentId: asString(rec.parentTaskId) || asString(rec.parentId),
     tags: rec.tags,
     comments,
+    attachments: rec.attachments ?? rec.files ?? rec.media,
     createdAt: asString(rec.dateCreated) || asString(rec.createdAt),
     updatedAt: asString(rec.lastUpdate) || asString(rec.updatedAt),
     ...(assignee ? { assignee } : {}),
@@ -281,7 +281,7 @@ async function getTaskRaw(id: string, opts: RestOpts): Promise<Record<string, un
     listUsers(opts),
     abletimeRestRequest(`/tasks/${encodeURIComponent(taskId)}`, {
       ...opts,
-      query: { expand: 'comments' },
+      query: { expand: 'comments,attachments' },
     }),
   ]);
   const task = restTaskToRaw(raw, users);

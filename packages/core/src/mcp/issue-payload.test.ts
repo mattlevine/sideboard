@@ -89,6 +89,7 @@ describe('formatGitHubIssuePayload', () => {
       labels: [],
       assignees: [],
       comments: [],
+      attachments: [],
     };
     expect(formatGitHubIssuePayload(issue, 'full')).toBe(issue);
     const crushed = formatGitHubIssuePayload(issue);
@@ -106,6 +107,7 @@ describe('formatAbleTimeTaskPayload', () => {
       url: 'https://track.abletime.com/1',
       labels: [],
       comments: [{ body: 'Pinged the customer' }],
+      attachments: [],
       description: 'Follow up',
       state: 'open',
       assignee: { name: 'Ada' },

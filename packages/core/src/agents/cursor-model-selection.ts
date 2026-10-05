@@ -4,8 +4,9 @@
  * Always sends an explicit `fast` param. Omitting it lets Cursor default Fast
  * on Pro+ for Grok (and other models that support the param), which bills ~2×.
  *
- * Local `Agent.create({ local })` rejects Grok 4.7's catalog default (500k
- * context). Pin the standard 256k window; 500k is cloud-only today.
+ * Grok 4.7's catalog uses `reasoning_effort` (not `effort`) plus a `context`
+ * param. Local `Agent.create({ local })` rejects the listed default (500k);
+ * pin 256k. Sending `effort` is an invalid registry param even at 256k.
  */
 export function buildCursorModelSelection(
   model: string | null | undefined,
@@ -17,8 +18,9 @@ export function buildCursorModelSelection(
     !raw || raw.toLowerCase() === 'auto' || raw.toLowerCase() === 'default'
       ? 'default'
       : raw;
+  const isGrok47 = /^grok-4\.7(?:$|-)/i.test(id);
   const params: Array<{ id: string; value: string }> = [];
-  if (/^grok-4\.7(?:$|-)/i.test(id)) {
+  if (isGrok47) {
     params.push({ id: 'context', value: '256k' });
   }
   const effort = (opts.effort ?? '').trim().toLowerCase();
@@ -33,7 +35,12 @@ export function buildCursorModelSelection(
         ? effort
         : '';
   if (normalized) {
-    params.push({ id: 'effort', value: normalized });
+    // Catalog: grok-4.7 → reasoning_effort (low|medium|high|xhigh); older
+    // Grok / Claude still use `effort`. Max is Sideboard-only — clamp to xhigh.
+    params.push({
+      id: isGrok47 ? 'reasoning_effort' : 'effort',
+      value: isGrok47 && normalized === 'max' ? 'xhigh' : normalized,
+    });
   }
   // Explicit true/false — never omit (Cursor Pro+ defaults Fast for Grok).
   params.push({ id: 'fast', value: opts.fast ? 'true' : 'false' });
