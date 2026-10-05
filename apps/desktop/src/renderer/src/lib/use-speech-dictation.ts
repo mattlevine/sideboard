@@ -37,47 +37,39 @@ export function useSpeechDictation(opts: {
     const rec = recRef.current;
     recRef.current = null;
     if (!rec) return;
+    rec.onstart = null;
     rec.onresult = null;
     rec.onerror = null;
     rec.onend = null;
     try {
-      rec.stop();
+      rec.abort();
     } catch {
       try {
-        rec.abort();
+        rec.stop();
       } catch {
         /* ignore */
       }
     }
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(() => {
     const Ctor = speechRecognitionCtor();
     if (!Ctor) {
       setError('Dictation is not available in this window.');
       return;
     }
-    stop();
+    if (recRef.current) stop();
     setError(null);
-    try {
-      const ask = window.sideboard.askMicrophoneAccess;
-      if (typeof ask === 'function') {
-        const ok = await ask();
-        if (!ok) {
-          setError(dictationErrorMessage('not-allowed'));
-          return;
-        }
-      }
-    } catch {
-      setError(dictationErrorMessage('not-allowed'));
-      return;
-    }
 
     const rec = new Ctor();
     rec.lang = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US';
     rec.continuous = true;
     rec.interimResults = true;
     baseRef.current = getValueRef.current();
+    rec.onstart = () => {
+      if (!wantRef.current) return;
+      setListening(true);
+    };
     rec.onresult = (event) => {
       const spoken = speechEventTranscript(event.results);
       setValueRef.current(composeDictationPrompt(baseRef.current, spoken));
@@ -105,15 +97,29 @@ export function useSpeechDictation(opts: {
     };
     recRef.current = rec;
     wantRef.current = true;
-    setListening(true);
     try {
       rec.start();
     } catch {
       wantRef.current = false;
-      setListening(false);
       recRef.current = null;
+      setListening(false);
       setError('Could not start dictation.');
+      return;
     }
+
+    const ask = window.sideboard.askMicrophoneAccess;
+    if (typeof ask !== 'function') return;
+    void ask()
+      .then((ok) => {
+        if (ok || !wantRef.current) return;
+        stop();
+        setError(dictationErrorMessage('not-allowed'));
+      })
+      .catch(() => {
+        if (!wantRef.current) return;
+        stop();
+        setError(dictationErrorMessage('not-allowed'));
+      });
   }, [stop]);
 
   useEffect(() => () => stop(), [stop]);
@@ -124,7 +130,7 @@ export function useSpeechDictation(opts: {
   const toggle = useCallback(() => {
     if (opts.disabled) return;
     if (wantRef.current) stop();
-    else void start();
+    else start();
   }, [opts.disabled, start, stop]);
 
   return { listening, supported, error, toggle, stop };

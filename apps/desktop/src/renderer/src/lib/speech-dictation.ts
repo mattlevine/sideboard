@@ -32,6 +32,7 @@ export type SpeechRecognitionHandle = {
   continuous: boolean;
   interimResults: boolean;
   onresult: ((event: { results: ArrayLike<{ 0?: { transcript?: string } }> }) => void) | null;
+  onstart: (() => void) | null;
   onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;

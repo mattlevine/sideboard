@@ -6935,16 +6935,26 @@ button.chat-earlier-toggle:hover {
   flex-shrink: 0;
   color: var(--muted);
   background: var(--bg-elevated);
+  outline: none;
+  box-shadow: none;
 }
 
 .dictation-mic:hover:not(:disabled) {
   color: var(--text);
 }
 
+.dictation-mic:focus,
+.dictation-mic:focus-visible,
+.dictation-mic:active {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--border);
+}
+
 .dictation-mic.listening {
-  color: #fff;
-  background: #b33b3b;
-  border-color: #b33b3b;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
 }
 
 .dictation-mic-icon {

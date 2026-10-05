@@ -940,7 +940,6 @@ export function ThreadPanel({
     agentPickerOpen ||
     issuePickerOpen ||
     workspacePickerOpen ||
-    dictation.listening ||
     (thread.attachments?.length ?? 0) > 0;
 
   const acQuery = useMemo(() => getAutocompleteQuery(prompt, cursor), [prompt, cursor]);
