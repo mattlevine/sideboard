@@ -1744,22 +1744,26 @@ export function RightSidebar({
                 <span>{`Open :${primaryPort}`}</span>
               </button>
             ) : null}
-            {primaryRunning ? (
-              <button
-                type="button"
-                className="dev-stop-btn"
-                title={`Stop ${scriptDisplayName(primaryScriptName ?? 'Dev')} (⌘R)`}
-                onClick={() => {
-                  setRunMenuOpen(false);
-                  void toggleDev();
-                }}
-              >
-                <RunScriptIcon name="stop" />
-                <span>Stop</span>
-                <kbd>⌘R</kbd>
-              </button>
-            ) : (
-              <div className="dev-composite-group">
+            <div className="dev-composite-group">
+              {primaryRunning ? (
+                <button
+                  type="button"
+                  className="dev-composite"
+                  title={`Stop ${scriptDisplayName(primaryScriptName ?? 'Dev')} (⌘R). Other run scripts keep going.`}
+                  onClick={() => {
+                    setRunMenuOpen(false);
+                    void toggleDev();
+                  }}
+                >
+                  <RunScriptIcon name="stop" />
+                  <span>
+                    {(thread.activeRuns?.length ?? 0) > 1 && primaryScriptName
+                      ? `Stop ${scriptDisplayName(primaryScriptName)}`
+                      : 'Stop'}
+                  </span>
+                  <kbd>⌘R</kbd>
+                </button>
+              ) : (
                 <button
                   type="button"
                   className="dev-composite"
@@ -1782,44 +1786,23 @@ export function RightSidebar({
                   </span>
                   <kbd>⌘R</kbd>
                 </button>
-                <button
-                  type="button"
-                  className={`dev-script-chevron${runMenuOpen ? ' open' : ''}`}
-                  title="Run scripts"
-                  aria-haspopup="menu"
-                  aria-expanded={runMenuOpen}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    reloadRunScripts();
-                    setRunMenuOpen((open) => !open);
-                  }}
-                >
-                  ▾
-                </button>
-              </div>
-            )}
-
-            {/* Conductor Terminal is Stop-only; script picker stays on Run. */}
-            {primaryRunning && lower === 'run' ? (
-              <div className="dev-script-menu standalone">
-                <button
-                  type="button"
-                  className={`dev-script-menu-btn${runMenuOpen ? ' open' : ''}`}
-                  title="Run scripts"
-                  aria-haspopup="menu"
-                  aria-expanded={runMenuOpen}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    reloadRunScripts();
-                    setRunMenuOpen((open) => !open);
-                  }}
-                >
-                  ▾
-                </button>
-              </div>
-            ) : null}
+              )}
+              <button
+                type="button"
+                className={`dev-script-chevron${runMenuOpen ? ' open' : ''}`}
+                title="Run scripts — several can stay up together"
+                aria-haspopup="menu"
+                aria-expanded={runMenuOpen}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  reloadRunScripts();
+                  setRunMenuOpen((open) => !open);
+                }}
+              >
+                ▾
+              </button>
+            </div>
 
             {runMenuOpen ? (
               <ul className="dev-script-dropdown" role="menu">

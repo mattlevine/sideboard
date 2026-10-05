@@ -79,6 +79,8 @@ const api: IpcApi = {
   disconnectSlackWorkspace: (teamId) =>
     ipcRenderer.invoke('disconnectSlackWorkspace', teamId),
   getSlackListenStatus: () => ipcRenderer.invoke('getSlackListenStatus'),
+  getRemoteStatus: () => ipcRenderer.invoke('getRemoteStatus'),
+  requestRemotePairingCode: () => ipcRenderer.invoke('requestRemotePairingCode'),
   setSlackListen: (opts) => ipcRenderer.invoke('setSlackListen', opts),
   getCaffeinateHold: () => ipcRenderer.invoke('getCaffeinateHold'),
   onCaffeinateHoldChanged: (listener) => {

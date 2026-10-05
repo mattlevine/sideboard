@@ -73,21 +73,8 @@ export interface CloudConnectStatus {
   lastLog: string | null;
 }
 
-/** Live status of Sideboard Slack Listen (hosted relay). */
-export interface SlackListenStatus {
-  enabled: boolean;
-  running: boolean;
-  hasAppToken: boolean;
-  /** Built-in Sideboard Slack app Client ID/Secret are present (not sent to renderer). */
-  bakedOAuth: boolean;
-  /** How inbound events arrive when listening. */
-  mode: 'relay' | null;
-  workspaceCount: number;
-  /** This Mac’s Slack destination label (Personal / Work). */
-  deviceLabel: string | null;
-  lastError: string | null;
-  lastLog: string | null;
-}
+import type { RemoteHostStatus, SlackListenStatus } from './listen-status.js';
+export type { RemoteHostStatus, SlackListenStatus };
 
 /** Open-worktree cube targets (Finder, Cursor, VS Code, …). */
 export type WorktreeOpenerId =
@@ -291,6 +278,10 @@ export interface IpcApi {
   }): Promise<IssueInfo & { created: boolean }>;
   /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */
   getSlackListenStatus(): Promise<SlackListenStatus>;
+  /** Phone remote: this Mac registered on the relay. */
+  getRemoteStatus(): Promise<RemoteHostStatus>;
+  /** Ask the relay for a short pairing code the phone can enter. */
+  requestRemotePairingCode(): Promise<RemoteHostStatus>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
   /** Live caffeinate: chat hold and/or Settings (agents running / Slack Listen). */
   getCaffeinateHold(): Promise<CaffeinateHoldState & { appCaffeinated: boolean }>;

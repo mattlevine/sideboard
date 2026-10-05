@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Run scripts in one worktree can stay up together. Each script keeps its own port range, so starting or restarting desktop does not take the phone app’s port. The Run menu stays open while the default script is running.
+- Away-from-desk chat is the Sideboard phone app (`apps/mobile`), paired from Settings → Remote. The Mac registers on `wss://relay.sideboard.cloud/remote` and runs those messages on a Global orchestrator chat. Slack Listen no longer starts, and Slack MCP tools are not registered.
+- The phone can pair with more than one Mac. It lists each desktop by the name saved in Settings → Remote and opens the one you pick. Chat goes only to that Mac.
+- Marketing site describes the phone app as the remote. The old Slack landing redirects to the phone docs.
 - Slack Marketplace readiness: drop user `search:read` (MCP `slack_search` is gone) and user `chat:write`, and unused bot `team:read`. Existing workspaces must reinstall after the Slack dashboard picks up the new scopes.
+- Production Slack OAuth redirect is HTTPS-only (`relay.sideboard.cloud`). Localhost is no longer on the app manifest.
 - Slack App Home (Home tab) walks a new installer through download → name this Mac → DM the bot, plus support. Uninstalling the app in Slack drops that workspace on the Mac.
 - When no Mac is online, a DM/@mention gets a setup error in Slack instead of silence. The OAuth success page points at Settings → Remote → Slack.
 - README and marketing-site screenshots refreshed (`sideboard-desktop-review-v7.png`, `site/desktop.png`, `site/board.png`) at native 2662×1736 PNG (144 dpi) so they stay sharp on retina.

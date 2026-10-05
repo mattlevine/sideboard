@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir, hostname } from 'node:os';
+import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import {
   coerceOrchestratorAgent,
@@ -227,6 +227,8 @@ export interface IntegrationsSettings {
   slackDeviceId?: string;
   /** Human label for this Mac destination, e.g. Personal / Work. */
   slackDeviceLabel?: string;
+  /** Secret that proves this Mac to the phone relay. Vaulted. */
+  remoteHostSecret?: string;
   /**
    * How agents and Sideboard git helpers authenticate GitHub.
    * Omitted = {@link getGithubGitAuthMode} default (`auto`).
@@ -492,6 +494,7 @@ export type PublicIntegrationsSettings = Omit<
   | 'linearClientSecret'
   | 'slackClientSecret'
   | 'slackAppToken'
+  | 'remoteHostSecret'
   | 'githubPat'
   | 'abletimeAccessToken'
   | 'abletimeRefreshToken'
@@ -569,6 +572,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
   delete integrations.linearClientSecret;
   delete integrations.slackClientSecret;
   delete integrations.slackAppToken;
+  delete integrations.remoteHostSecret;
   delete integrations.githubPat;
   delete integrations.abletimeAccessToken;
   delete integrations.abletimeRefreshToken;
@@ -737,6 +741,10 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (typeof source.slackDeviceLabel === 'string') {
     const label = source.slackDeviceLabel.trim().slice(0, 64);
     if (label) out.slackDeviceLabel = label;
+  }
+  if (typeof source.remoteHostSecret === 'string') {
+    const secret = source.remoteHostSecret.trim();
+    if (secret) out.remoteHostSecret = secret;
   }
   if (
     typeof source.githubGitAuthMode === 'string' &&
@@ -1148,6 +1156,7 @@ function diskHoldsSecrets(disk: AppSettings): boolean {
       disk.integrations.linearClientSecret ||
       disk.integrations.slackClientSecret ||
       disk.integrations.slackAppToken ||
+      disk.integrations.remoteHostSecret ||
       disk.integrations.githubPat ||
       disk.integrations.abletimeAccessToken ||
       disk.integrations.abletimeRefreshToken ||
@@ -1181,6 +1190,9 @@ function mergeVault(disk: AppSettings): AppSettings {
   if (vault.slackAppToken && !integrations.slackAppToken) {
     integrations.slackAppToken = vault.slackAppToken;
   }
+  if (vault.remoteHostSecret && !integrations.remoteHostSecret) {
+    integrations.remoteHostSecret = vault.remoteHostSecret;
+  }
   if (vault.githubPat && !integrations.githubPat) {
     integrations.githubPat = vault.githubPat;
   }
@@ -1213,6 +1225,7 @@ function persistSplit(settings: AppSettings): void {
   const linearClientSecret = integrations.linearClientSecret;
   const slackClientSecret = integrations.slackClientSecret;
   const slackAppToken = integrations.slackAppToken;
+  const remoteHostSecret = integrations.remoteHostSecret;
   const githubPat = integrations.githubPat;
   const abletimeAccessToken = integrations.abletimeAccessToken;
   const abletimeRefreshToken = integrations.abletimeRefreshToken;
@@ -1226,6 +1239,7 @@ function persistSplit(settings: AppSettings): void {
   delete integrations.linearClientSecret;
   delete integrations.slackClientSecret;
   delete integrations.slackAppToken;
+  delete integrations.remoteHostSecret;
   delete integrations.githubPat;
   delete integrations.abletimeAccessToken;
   delete integrations.abletimeRefreshToken;
@@ -1244,6 +1258,7 @@ function persistSplit(settings: AppSettings): void {
     linearClientSecret,
     slackClientSecret,
     slackAppToken,
+    remoteHostSecret,
     githubPat,
     abletimeAccessToken,
     abletimeRefreshToken,
@@ -1431,6 +1446,7 @@ export function updateIntegrationsSettings(
     slackListenEnabled?: boolean | null;
     slackDeviceId?: string | null;
     slackDeviceLabel?: string | null;
+    remoteHostSecret?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
     abletimeAccessToken?: string | null;
@@ -1518,6 +1534,13 @@ export function updateIntegrationsSettings(
       delete integrations.slackDeviceLabel;
     } else {
       integrations.slackDeviceLabel = patch.slackDeviceLabel.trim().slice(0, 64);
+    }
+  }
+  if ('remoteHostSecret' in patch) {
+    if (patch.remoteHostSecret == null || patch.remoteHostSecret.trim() === '') {
+      delete integrations.remoteHostSecret;
+    } else {
+      integrations.remoteHostSecret = patch.remoteHostSecret.trim();
     }
   }
   if ('githubGitAuthMode' in patch) {
@@ -2210,34 +2233,6 @@ export function slackListenEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return settings.integrations.slackListenEnabled === true;
-}
-
-/**
- * Stable per-Mac identity for the Slack relay so Personal and Work can both
- * stay online as separate destinations.
- */
-export function ensureSlackDeviceIdentity(
-  settings: AppSettings = loadAppSettings(),
-): { deviceId: string; deviceLabel: string } {
-  let deviceId = settings.integrations.slackDeviceId?.trim() ?? '';
-  let deviceLabel = settings.integrations.slackDeviceLabel?.trim() ?? '';
-  const patch: { slackDeviceId?: string; slackDeviceLabel?: string } = {};
-  if (!deviceId) {
-    deviceId = randomUUID();
-    patch.slackDeviceId = deviceId;
-  }
-  if (!deviceLabel) {
-    try {
-      deviceLabel = hostname().split('.')[0]?.trim() || 'This Mac';
-    } catch {
-      deviceLabel = 'This Mac';
-    }
-    patch.slackDeviceLabel = deviceLabel;
-  }
-  if (Object.keys(patch).length > 0) {
-    updateIntegrationsSettings(patch);
-  }
-  return { deviceId, deviceLabel };
 }
 
 /**

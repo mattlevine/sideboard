@@ -63,7 +63,7 @@ describe('caffeinateIndicatorTooltip', () => {
       'Sideboard is keeping this Mac awake (orchestration chat)',
     );
     expect(caffeinateIndicatorTooltip(['chat', 'slack'])).toBe(
-      'Sideboard is keeping this Mac awake (orchestration chat and Slack Listen)',
+      'Sideboard is keeping this Mac awake (orchestration chat and phone remote)',
     );
     expect(caffeinateIndicatorTooltip(['schedules'])).toBe(
       'Sideboard is keeping this Mac awake (scheduled tasks)',

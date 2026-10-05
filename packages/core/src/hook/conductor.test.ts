@@ -470,6 +470,39 @@ describe('reservePortRange sticky ports', () => {
       child.kill('SIGKILL');
     }
   });
+
+  it('leaves another script’s free reserved ports alone', async () => {
+    const blocked = await reservePortRange(3);
+    const avoid = blocked.map((h) => h.port);
+    await Promise.all(blocked.map((h) => h.release()));
+    const held = await reservePortRange(3, { avoid });
+    try {
+      expect(held.map((h) => h.port).some((p) => avoid.includes(p))).toBe(false);
+    } finally {
+      await Promise.all(held.map((h) => h.release()));
+    }
+  });
+
+  it('does not kill another script when its port is reserved', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-avoid-kill-'));
+    const probe = await reservePort();
+    const port = probe.port;
+    await probe.release();
+    const child = await occupyPort(port, wt);
+    try {
+      const held = await reservePortRange(1, {
+        preferred: [port],
+        worktreePath: wt,
+        avoid: [port],
+      });
+      expect(held[0]!.port).not.toBe(port);
+      await held[0]!.release();
+      expect(child.exitCode).toBeNull();
+      expect(child.killed).toBe(false);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
 });
 
 describe('startDevServer sticky ports', () => {
@@ -491,5 +524,24 @@ describe('startDevServer sticky ports', () => {
     expect(second!.ports).toEqual(ports);
     second!.kill();
     await second!.done;
+  });
+
+  it('gives each script its own ports so they can run together', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-two-scripts-'));
+    mkdirSync(join(wt, '.sideboard'));
+    writeFileSync(
+      join(wt, '.sideboard', 'settings.toml'),
+      `[scripts.run.dev]\ncommand = "echo desktop"\n[scripts.run.mobile]\ncommand = "echo mobile"\n`,
+    );
+    const desktop = await startDevServer(wt, wt, undefined, { scriptName: 'dev' });
+    const mobile = await startDevServer(wt, wt, undefined, { scriptName: 'mobile' });
+    expect(desktop).not.toBeNull();
+    expect(mobile).not.toBeNull();
+    const overlap = desktop!.ports.filter((p) => mobile!.ports.includes(p));
+    expect(overlap).toEqual([]);
+    desktop!.kill();
+    mobile!.kill();
+    await desktop!.done;
+    await mobile!.done;
   });
 });

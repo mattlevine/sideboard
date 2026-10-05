@@ -21,7 +21,7 @@
 <nav class="nav-links">
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
 </nav>
 <a class="btn btn-primary btn-sm" href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg">Download for Mac</a>
@@ -32,8 +32,8 @@
 <h1>Compare</h1>
 <article>
 <p>Short positioning. Not a feature-complete matrix.</p>
-<p>Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard does that too. The comparison that matters is the <strong>orchestration tier</strong>: an agent that can reason about other threads, a board where you can see that, and Slack / CLI / MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs).</p>
-<p>Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (Slack, CLI, MCP) are what stayed on this machine.</p>
+<p>Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard does that too. The comparison that matters is the <strong>orchestration tier</strong>: an agent that can reason about other threads, a board where you can see that, and a phone app, CLI, and MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs).</p>
+<p>Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (phone, CLI, MCP) are what stayed on this machine.</p>
 <h2>vs Conductor (Melty)</h2>
 <p>Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is <a href="https://www.conductor.build/pricing">Conductor Cloud</a> (Pro / Teams): Vercel sandboxes in us-east-1, agents that keep running after you close the laptop, multiplayer, and an API against <strong>cloud</strong> workspaces. Cloud session data is stored on Conductor’s servers; local sessions stay on disk.</p>
 <p>A serious local orchestration tier would compete with that upsell. Sideboard is the option that keeps the fleet on this machine.</p>
@@ -50,17 +50,17 @@
 <tr>
 <td>Team / remote</td>
 <td>Cloud multiplayer and shared workspaces</td>
-<td>Slack to this Mac; <code>slack_post</code> a review ping; replies come back as info</td>
+<td>Phone app paired to this Mac; you pick which desktop to open</td>
 </tr>
 <tr>
 <td>Away from the laptop</td>
 <td>Cloud sandbox keeps running</td>
-<td>Slack reaches this Mac only while it is awake (opt-in caffeinate). Local schedules fire the same way.</td>
+<td>The phone reaches this Mac only while it is awake (opt-in caffeinate). Local schedules fire the same way.</td>
 </tr>
 <tr>
 <td>Session data</td>
 <td>Cloud: Conductor’s servers. Local: your disk</td>
-<td>Your Mac. Relay routes Slack chat only</td>
+<td>Your Mac. Relay routes phone chat only</td>
 </tr>
 <tr>
 <td>Work on <code>main</code> in the project folder</td>
@@ -73,7 +73,7 @@
 <td><code>attach</code> / <code>adopt</code> — move in and out of native CLIs</td>
 </tr>
 </tbody></table>
-<p>Use Conductor when you want their finished Mac workspace UI, or their cloud sandboxes (always-on, off-VPN, paid). Use Sideboard when the fleet should stay on this machine and Slack / CLI / MCP is how you and a coworker enter the loop.</p>
+<p>Use Conductor when you want their finished Mac workspace UI, or their cloud sandboxes (always-on, off-VPN, paid). Use Sideboard when the fleet should stay on this machine and the phone app, CLI, and MCP are how you enter the loop.</p>
 <h2>vs Orca</h2>
 <p><a href="https://www.onorca.dev/">Orca</a> is an <strong>agent development environment</strong> (ADE): parallel worktrees plus terminals, an embedded browser, design mode, a CLI that agents can drive, remote worktrees over SSH, and a mobile companion. It is open source (MIT) and runs on macOS, Windows, and Linux. Bring-your-own-agent is the default — dozens of CLI harnesses.</p>
 <p>Sideboard is not trying to be an IDE. It is the layer above the IDE: a kanban of the fleet, an orchestrator MCP, and remotes so other systems can reach this Mac.</p>
@@ -85,12 +85,12 @@
 <tr>
 <td>Surfaces</td>
 <td>App, terminal, browser, mobile</td>
-<td>Desktop board, CLI, MCP, Slack</td>
+<td>Desktop board, CLI, MCP, phone</td>
 </tr>
 <tr>
 <td>Other systems</td>
 <td>Orca CLI; mobile companion</td>
-<td><code>sideboard</code> CLI, stdio MCP, Slack to this Mac</td>
+<td><code>sideboard</code> CLI, stdio MCP, phone paired to this Mac</td>
 </tr>
 <tr>
 <td>Desktop OS</td>
@@ -103,12 +103,12 @@
 <td>Always this Mac</td>
 </tr>
 </tbody></table>
-<p>Use Orca when you want the whole agent IDE (terminal + browser + design mode) and you are happy driving it from that app. Use Sideboard when you want an orchestrator other agents can call, a board of the fleet, and Slack without moving compute off this machine.</p>
+<p>Use Orca when you want the whole agent IDE (terminal + browser + design mode) and you are happy driving it from that app. Use Sideboard when you want an orchestrator other agents can call, a board of the fleet, and a phone app without moving compute off this machine.</p>
 <h2>vs “open Conductor” clones</h2>
 <p>Several projects aim to recreate Conductor’s local board (worktrees + terminals + diffs). Sideboard’s wedge is different:</p>
 <ol>
 <li><strong>Local orchestration</strong> — MCP so an agent can drive the fleet, and a board so you can see it, without a cloud workspace</li>
-<li><strong>Slack to this Mac</strong> — inbound to the orchestrator, outbound review pings, replies as information — not a rented sandbox</li>
+<li><strong>Phone to this Mac</strong> — pair from Settings → Remote and pick which desktop to open. Message text only, not a rented sandbox</li>
 <li><strong>Handoff</strong> — attach/adopt/Conductor import, not a closed session cage</li>
 <li><strong>Surface split</strong> — CLI (zero tokens) vs MCP (judgment) vs desktop (board)</li>
 </ol>
@@ -124,7 +124,7 @@
 <nav>
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="/privacy/">Privacy</a>
 <a href="/support/">Support</a>
 <a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>

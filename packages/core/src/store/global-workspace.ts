@@ -299,6 +299,35 @@ export function ensureSlackCoordinator(
   });
 }
 
+/** One Global chat for the phone paired to this Mac. */
+export function remoteCoordinatorSourceRef(deviceId: string): string {
+  const id = deviceId.trim();
+  if (!id) throw new Error('Remote coordinator needs a device id');
+  return `remote:${id}`;
+}
+
+export function findRemoteCoordinator(deviceId: string): Thread | undefined {
+  const ref = remoteCoordinatorSourceRef(deviceId);
+  return listThreads({ includeArchived: true }).find(
+    (t) => t.status !== 'archived' && t.sourceRef === ref && isGlobalThread(t),
+  );
+}
+
+export function ensureRemoteCoordinator(deviceId: string, agent: AgentKind): Thread {
+  const defaults = resolveOrchestratorDefaults();
+  const desired = assertOrchestratorCapableAgent(agent);
+  const existing = findRemoteCoordinator(deviceId);
+  if (existing) return existing;
+  return createGlobalChat({
+    sourceRef: remoteCoordinatorSourceRef(deviceId),
+    title: 'Phone',
+    agent: desired,
+    model: defaults.model,
+    effort: defaults.effort,
+    fast: defaults.fast,
+  });
+}
+
 /** Find or create the singleton Brightsy cloud coordinator under Global. */
 export function ensureCloudCoordinator(agent: AgentKind): Thread {
   const defaults = resolveOrchestratorDefaults();

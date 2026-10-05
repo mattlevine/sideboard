@@ -53,7 +53,6 @@ import {
 import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
-import { registerSlackTools } from './slack-tools.js';
 import { registerConnectedIssueVendorTools } from './issue-vendor-tools.js';
 import { registerViewerContextTools } from './viewer-context-tools.js';
 import {
@@ -758,7 +757,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'run_dev_script',
-    'Start a .sideboard/.conductor run script (same as the desktop Dev / play button). Logs and Stop appear in the thread UI — do not detached-job or shell-spawn the same command. Returns {port, ports, url, preview}. preview=url → open url (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). The port is allocated SIDEBOARD_PORT, not 3000. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
+    'Start a .sideboard/.conductor run script (same as the desktop Dev / play button). Several named scripts can run at once; each gets its own port, and starting one does not stop the others. Logs and Stop appear in the thread UI — do not detached-job or shell-spawn the same command. Returns {port, ports, url, preview}. preview=url → open url (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). The port is allocated SIDEBOARD_PORT, not 3000. Worktree turns may omit ref (uses cwd). Omit name for the default script.',
     {
       ref: z
         .string()
@@ -920,7 +919,6 @@ export async function startMcpServer(): Promise<void> {
   registerScheduleTools(server);
 
   if (!worktreeProfile) {
-  registerSlackTools(server);
   registerConnectedIssueVendorTools(server);
   const { getCaffeinateHold, setCaffeinateHold } = await import(
     '../store/caffeinate-hold.js'

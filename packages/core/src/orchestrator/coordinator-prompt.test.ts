@@ -237,7 +237,7 @@ describe('coordinator-prompt', () => {
       expect(claude).toMatch(/If the user gave a goal/);
       expect(claude).toContain('set_caffeinate');
       expect(claude).toContain('create_schedule');
-      expect(claude).toContain('slack_replies');
+      expect(claude).toContain('phone remote');
       expect(claude).toContain('Sideboard MCP');
       expect(claude).toMatch(/Prefer official CLIs/);
       expect(claude).toMatch(/Do not add vendor MCPs/);

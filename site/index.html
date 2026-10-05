@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sideboard — orchestrate a fleet of coding agents on your Mac</title>
-<meta name="description" content="Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, Slack, CLI, and MCP — on this Mac, not a rented cloud.">
+<meta name="description" content="Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.">
 <meta property="og:title" content="Sideboard — orchestrate a fleet of coding agents on your Mac">
-<meta property="og:description" content="Parallel agents on this Mac. A board, an orchestrator, and Slack / CLI / MCP so other systems can reach them. Local-first, Apache-2.0.">
+<meta property="og:description" content="Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.sideboard.cloud/">
 <meta property="og:image" content="https://www.sideboard.cloud/board.png">
@@ -22,7 +22,7 @@
       <a href="#product">Product</a>
       <a href="/docs/">Docs</a>
       <a href="/docs/compare/">Compare</a>
-      <a href="/slack/">Slack</a>
+      <a href="/docs/remote/">Phone</a>
       <a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
     </nav>
     <a class="btn btn-primary btn-sm" href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg">Download for Mac</a>
@@ -32,7 +32,7 @@
 <section class="hero wrap">
   <span class="eyebrow">Local-first · Apache-2.0 · Bring your own subscriptions</span>
   <h1>Orchestrate a fleet of coding agents on your Mac.</h1>
-  <p class="lede">Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the whole fleet. An orchestrator that can drive it. Slack, CLI, and MCP so other systems can reach this machine — without a cloud workspace.</p>
+  <p class="lede">Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the whole fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine — without a cloud workspace.</p>
   <div class="cta-row">
     <a class="btn btn-primary btn-lg" href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg">
       <svg class="btn-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -69,7 +69,7 @@
   <div class="tabs" role="tablist" aria-label="Product surfaces">
     <button type="button" class="is-on" data-tab="board" role="tab" aria-selected="true">Board</button>
     <button type="button" data-tab="orchestrate" role="tab" aria-selected="false">Orchestration</button>
-    <button type="button" data-tab="slack" role="tab" aria-selected="false">Slack</button>
+    <button type="button" data-tab="phone" role="tab" aria-selected="false">Phone</button>
     <button type="button" data-tab="anywhere" role="tab" aria-selected="false">CLI &amp; MCP</button>
     <button type="button" data-tab="worktree" role="tab" aria-selected="false">Worktree</button>
   </div>
@@ -101,17 +101,17 @@
       </div>
     </div>
   </div>
-  <div class="panel" data-panel="slack" hidden>
+  <div class="panel" data-panel="phone" hidden>
     <div class="panel-grid">
       <div>
         <span class="kicker">Remote</span>
-        <h3>Slack to this Mac, not a rented sandbox</h3>
-        <p>DM or @mention the orchestrator from anywhere. It can ping a coworker to review a PR a worktree just pushed; their reply comes back as information, not a command. Agents, repos, and VPN-only APIs stay on this machine.</p>
+        <h3>Your phone, to this Mac</h3>
+        <p>Pair the Sideboard phone app from Settings → Remote. It lists every Mac you have paired and you choose which desktop to open. Agents, repos, and VPN-only APIs stay on that machine.</p>
       </div>
-      <div class="mock mock-slack" aria-hidden="true">
-        <div class="msg you">work: check the failing CI</div>
-        <div class="msg bot">2 worktrees pushed. Pinging @dana to review PR #241.</div>
-        <div class="msg peer">@dana — looks good, ship it</div>
+      <div class="mock mock-phone" aria-hidden="true">
+        <div class="msg you">Work</div>
+        <div class="msg you">check the failing CI</div>
+        <div class="msg bot">CI is red on api-auth. Want me to look?</div>
       </div>
     </div>
   </div>
@@ -151,7 +151,7 @@ sideboard land &lt;thread&gt;</pre>
     <div>
       <span class="kicker">Why it exists</span>
       <h2>Started as a local port. Kept the rest on this machine.</h2>
-      <p class="sub">When Conductor moved the interesting part of a worktree board into a paid cloud, Sideboard began as an open port of the local loop. Then came the pieces that still belong on this Mac: an orchestration tier, a kanban of the fleet, Slack so you can reach it from somewhere else, and CLI / MCP so other systems can drive it — without moving the repo off the network you already sit on.</p>
+      <p class="sub">When Conductor moved the interesting part of a worktree board into a paid cloud, Sideboard began as an open port of the local loop. Then came the pieces that still belong on this Mac: an orchestration tier, a kanban of the fleet, a phone app so you can reach it from somewhere else, and CLI / MCP so other systems can drive it — without moving the repo off the network you already sit on.</p>
       <p class="sub"><a href="https://www.conductor.build/">Conductor</a> is the polished Mac board (and a $50/mo cloud). <a href="https://www.onorca.dev/">Orca</a> is the agent IDE — terminals, browser, mobile. Sideboard is the local orchestration layer both of those leave on the table.</p>
       <a class="btn btn-ghost" href="/docs/compare/" style="margin-top:22px">Peer-by-peer compare</a>
     </div>
@@ -182,17 +182,17 @@ sideboard land &lt;thread&gt;</pre>
         <tr>
           <td>Reach it from other systems</td>
           <td>Product app, or cloud MCP</td>
-          <td>CLI, MCP, Slack to this Mac</td>
+          <td>CLI, MCP, phone to this Mac</td>
         </tr>
         <tr>
-          <td>Coworker in the loop</td>
-          <td>Shared cloud workspace</td>
-          <td>Slack review ping; reply as info</td>
+          <td>Reach it from your phone</td>
+          <td>Cloud app or shared workspace</td>
+          <td>Pair the phone, pick the Mac</td>
         </tr>
         <tr>
           <td>Keep going when you step away</td>
           <td>Always-on sandbox</td>
-          <td>Slack + opt-in caffeinate</td>
+          <td>Phone + opt-in caffeinate</td>
         </tr>
         <tr>
           <td>Drop into the native CLI</td>
@@ -211,7 +211,7 @@ sideboard land &lt;thread&gt;</pre>
 
 <section class="section wrap">
   <h2>Accessible from other systems.</h2>
-  <p class="sub">The Mac is the runtime. Everything else is a remote. Register MCP once and any of your agents can see the fleet. Slack is how a phone or a coworker gets in. The CLI is how you script it.</p>
+  <p class="sub">The Mac is the runtime. Everything else is a remote. Register MCP once and any of your agents can see the fleet. The phone app is how you get in when you are away from the desk. The CLI is how you script it.</p>
   <div class="reach">
     <div class="card">
       <h3>CLI</h3>
@@ -222,21 +222,17 @@ sideboard land &lt;thread&gt;</pre>
       <p><code>claude mcp add --scope user sideboard -- sideboard mcp</code> — then that agent can orchestrate from outside the app.</p>
     </div>
     <div class="card">
-      <h3>Slack</h3>
-      <p>DM <code>work: check the failing CI</code>. Prefix matches the Mac name. Agents never leave this machine.</p>
+      <h3>Phone</h3>
+      <p>Pair from Settings → Remote, then pick Work or Personal. Agents never leave that Mac.</p>
     </div>
   </div>
 </section>
 
 <section class="wrap">
-  <div class="slack-band">
-    <h2>Slack is remote control, not a cloud workspace.</h2>
-    <p>DMs and @mentions reach the global orchestrator on this Mac. What stays here: agents, worktrees, repos, and secrets — including anything only reachable on the VPN. What leaves: Slack message text, through the relay.</p>
-    <div class="cta-row" style="justify-content:flex-start;margin-top:26px">
-      <code class="cli-pill">work: check the failing CI</code>
-      <code class="cli-pill">@sideboard personal: ship it</code>
-    </div>
-    <p style="margin-top:22px;font-size:14px">The machine has to stay awake — Settings → Advanced → Caffeinate while Listen is on. <a href="/slack/">Set up Slack →</a></p>
+  <div class="phone-band">
+    <h2>The phone is remote control, not a cloud workspace.</h2>
+    <p>Pair it from Settings → Remote. Name each Mac. The phone lists those desktops and you pick which one to open. What stays here: agents, worktrees, repos, and secrets — including anything only reachable on the VPN. What leaves: message text, through the relay.</p>
+    <p style="margin-top:22px;font-size:14px">The machine has to stay awake — Settings → Advanced → Caffeinate while the phone remote is connected. <a href="/docs/remote/">Pair a phone →</a></p>
   </div>
 </section>
 
@@ -245,11 +241,11 @@ sideboard land &lt;thread&gt;</pre>
   <div class="faq-list">
     <details open>
       <summary>How is this different from Conductor?</summary>
-      <p>Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is cloud sandboxes, multiplayer, a cloud API, and a mobile app. Sideboard keeps orchestration on this machine: MCP, a kanban, Slack to the Mac, CLI. Use Conductor if you want their finished workspace UI or always-on Vercel sandboxes. Use Sideboard if the fleet should stay on the VPN you already sit on.</p>
+      <p>Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is cloud sandboxes, multiplayer, a cloud API, and a mobile app. Sideboard keeps orchestration on this machine: MCP, a kanban, a phone app to the Mac, CLI. Use Conductor if you want their finished workspace UI or always-on Vercel sandboxes. Use Sideboard if the fleet should stay on the VPN you already sit on.</p>
     </details>
     <details>
       <summary>How is this different from Orca?</summary>
-      <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, mobile companion, Windows and Linux. Sideboard is not trying to be an IDE. It is the orchestration tier: a board, an agent that can drive other threads, and remotes (Slack, CLI, MCP) so other systems can reach this Mac.</p>
+      <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, mobile companion, Windows and Linux. Sideboard is not trying to be an IDE. It is the orchestration tier: a board, an agent that can drive other threads, and remotes (phone, CLI, MCP) so you can reach this Mac.</p>
     </details>
     <details>
       <summary>Do I pay Sideboard for models?</summary>
@@ -257,11 +253,11 @@ sideboard land &lt;thread&gt;</pre>
     </details>
     <details>
       <summary>Does it keep running if I close the laptop?</summary>
-      <p>No — that is the cloud-sandbox trade. Slack and scheduled jobs reach this Mac only while it is awake. Opt in to caffeinate from Settings → Advanced (or from an orchestration chat) when you step away. If you need always-on off-VPN compute, Conductor Cloud and similar sandboxes are the fit.</p>
+      <p>No — that is the cloud-sandbox trade. The phone and scheduled jobs reach this Mac only while it is awake. Opt in to caffeinate from Settings → Advanced (or from an orchestration chat) when you step away. If you need always-on off-VPN compute, Conductor Cloud and similar sandboxes are the fit.</p>
     </details>
     <details>
       <summary>Can I use it without the desktop app?</summary>
-      <p>Yes. <code>npm i -g @sideboard-ai/cli</code> ships the CLI and the stdio MCP server. The desktop is the board and the Slack listener.</p>
+      <p>Yes. <code>npm i -g @sideboard-ai/cli</code> ships the CLI and the stdio MCP server. The desktop is the board. The phone app talks to that desktop.</p>
     </details>
   </div>
 </section>
@@ -269,7 +265,7 @@ sideboard land &lt;thread&gt;</pre>
 <section class="wrap split-fit">
   <div class="card">
     <h3>It fits if…</h3>
-    <p>You already run several local CLI agents on a Mac — especially one on a corporate VPN — and you want an orchestrator you can see, an agent can drive, and Slack / MCP / CLI can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.</p>
+    <p>You already run several local CLI agents on a Mac — especially one on a corporate VPN — and you want an orchestrator you can see, an agent can drive, and a phone app, MCP, or the CLI can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.</p>
   </div>
   <div class="card">
     <h3>Use something else if…</h3>
@@ -293,7 +289,7 @@ sideboard land &lt;thread&gt;</pre>
     <nav>
       <a href="/docs/">Docs</a>
       <a href="/docs/compare/">Compare</a>
-      <a href="/slack/">Slack</a>
+      <a href="/docs/remote/">Phone</a>
       <a href="/privacy/">Privacy</a>
       <a href="/support/">Support</a>
       <a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>

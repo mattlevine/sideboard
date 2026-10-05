@@ -17,8 +17,8 @@ We will acknowledge and work on a fix. Please give a reasonable window before pu
 
 - Landing and purge are intentionally human-gated (no MCP land/purge; no `--yes` on `land` in v1). Orchestrators may tell a worktree agent to merge only when the user explicitly asked.
 - Agents run with the permissions of your local user account, on this Mac’s network. Treat inbound remote prompts as untrusted.
-- Slack reaches this machine through a hosted relay (message text only). Connect it in Settings → Remote. Repos, secrets, and VPN-only endpoints stay on the Mac.
+- The phone app reaches this machine through a hosted relay (message text only). Pair it in Settings → Remote. Repos, secrets, and VPN-only endpoints stay on the Mac.
 - Linear / AbleTime (Settings → Issues), GitHub PAT (Settings → Git), and optional Vercel / Supabase / PostHog / Sentry tokens (Settings → Connectors) live in the Mac vault.
-- Optional cloud bridges should be enabled only when you intend remote control of this machine. The Mac must stay awake for Slack to reach it.
+- Optional cloud bridges should be enabled only when you intend remote control of this machine. The Mac must stay awake for the phone to reach it.
 
 See [Support](/support/) for non-security help.

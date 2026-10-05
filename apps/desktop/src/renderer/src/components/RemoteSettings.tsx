@@ -1,10 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { PublicAppSettings, SlackListenStatus, SlackWorkspaceInfo } from '@sideboard-ai/core';
-
-function isOauthCancelled(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return /sign-in cancelled/i.test(message);
-}
+import type { PublicAppSettings, RemoteHostStatus } from '@sideboard-ai/core';
 
 export function RemoteSettings({
   settings,
@@ -19,47 +14,28 @@ export function RemoteSettings({
   setBusy: (busy: boolean) => void;
   setError: (error: string | null) => void;
 }) {
-  const [slackWorkspaces, setSlackWorkspaces] = useState<SlackWorkspaceInfo[]>([]);
-  const [slackListen, setSlackListen] = useState<SlackListenStatus | null>(null);
-  const [slackTokenDraft, setSlackTokenDraft] = useState('');
-  const [slackOauthBusy, setSlackOauthBusy] = useState(false);
-  const [slackDeviceLabelDraft, setSlackDeviceLabelDraft] = useState('');
+  const [remote, setRemote] = useState<RemoteHostStatus | null>(null);
+  const [labelDraft, setLabelDraft] = useState('');
 
   useEffect(() => {
-    void Promise.all([
-      window.sideboard.getSlackWorkspaces().catch(() => [] as SlackWorkspaceInfo[]),
-      typeof window.sideboard.getSlackListenStatus === 'function'
-        ? window.sideboard.getSlackListenStatus().catch(() => null)
-        : Promise.resolve(null),
-    ]).then(([slack, slackIn]) => {
-      setSlackWorkspaces(slack);
-      setSlackListen(slackIn);
-      if (slackIn?.deviceLabel?.trim()) {
-        setSlackDeviceLabelDraft((prev) => prev || slackIn.deviceLabel!.trim());
-      }
-    });
+    void window.sideboard.getRemoteStatus?.().then(setRemote).catch(() => undefined);
   }, []);
 
   useEffect(() => {
-    setSlackDeviceLabelDraft((prev) => {
-      const saved = settings.integrations.slackDeviceLabel?.trim();
-      return saved || prev;
-    });
+    setLabelDraft((prev) => settings.integrations.slackDeviceLabel?.trim() || prev);
   }, [settings.integrations.slackDeviceLabel]);
 
   useEffect(() => {
-    const api = window.sideboard.getSlackListenStatus;
+    const api = window.sideboard.getRemoteStatus;
     if (typeof api !== 'function') return;
     const id = window.setInterval(() => {
-      void api()
-        .then(setSlackListen)
-        .catch(() => undefined);
-    }, 2500);
+      void api().then(setRemote).catch(() => undefined);
+    }, 2000);
     return () => window.clearInterval(id);
   }, []);
 
-  async function saveSlackDeviceLabel() {
-    const label = slackDeviceLabelDraft.trim();
+  async function saveLabel() {
+    const label = labelDraft.trim();
     if (!label) return;
     setBusy(true);
     setError(null);
@@ -68,11 +44,7 @@ export function RemoteSettings({
         slackDeviceLabel: label,
       });
       applySettings(next);
-      setSlackDeviceLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
-      const listenApi = window.sideboard.getSlackListenStatus;
-      if (typeof listenApi === 'function') {
-        setSlackListen(await listenApi().catch(() => null));
-      }
+      setLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -80,218 +52,75 @@ export function RemoteSettings({
     }
   }
 
+  const status = remote?.phoneConnected
+    ? 'Phone connected'
+    : remote?.connected
+      ? 'Relay connected'
+      : remote?.running
+        ? 'Connecting…'
+        : 'Remote is off';
+
   return (
     <div className="settings-body">
       <p className="settings-lead">
-        Slack remote-controls this Mac. DMs and @mentions go to the Global orchestrator.
+        The Sideboard phone app chats with the Global orchestrator on this Mac. Agents stay here.
       </p>
 
       <div className="settings-section settings-section-card">
-        <div className="settings-section-title">Slack</div>
+        <div className="settings-section-title">This Mac</div>
         <p className="settings-hint">
-          Click <strong>Add via browser</strong> to install the Sideboard Slack app into a
-          workspace. Listening starts automatically. Until the Slack app has{' '}
-          <strong>Public Distribution</strong> on, Slack only offers the home workspace (Brightsy)
-          — that is a Slack app setting, not a Sideboard picker.
+          Name shown in the phone’s desktop list. A phone can pair with more than one Mac and
+          you pick which one to open. Keep Sideboard open. The relay only carries message text.
         </p>
-        {slackWorkspaces.length > 0 ? (
-          <div className="settings-check-list" style={{ marginTop: 10 }}>
-            {slackWorkspaces.map((ws) => (
-              <div key={ws.team_id} className="settings-toggle-row">
-                <div>
-                  <p className="settings-status-text">
-                    <span
-                      className="settings-dot ok"
-                      style={{ display: 'inline-block', marginRight: 8 }}
-                    />
-                    {ws.team_name}
-                    <span className="settings-hint"> · {ws.team_id}</span>
-                    {!ws.has_user_token ? (
-                      <span className="settings-hint"> · reconnect via browser</span>
-                    ) : null}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={busy || slackOauthBusy}
-                  onClick={() => {
-                    setBusy(true);
-                    setError(null);
-                    void window.sideboard
-                      .disconnectSlackWorkspace(ws.team_id)
-                      .then((list) => {
-                        setSlackWorkspaces(list);
-                        return window.sideboard.getSlackListenStatus?.();
-                      })
-                      .then((status) => {
-                        if (status) setSlackListen(status);
-                      })
-                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  Disconnect
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="settings-hint" style={{ marginTop: 8 }}>
-            No workspaces connected yet.
-          </p>
-        )}
-        <div className="row" style={{ marginTop: 10, gap: 8 }}>
+        <p className="settings-status-text" style={{ marginTop: 10 }}>
+          <span
+            className={`settings-dot ${remote?.connected ? 'ok' : ''}`}
+            style={{ display: 'inline-block', marginRight: 8 }}
+          />
+          {status}
+          {remote?.deviceLabel ? <span className="settings-hint"> · {remote.deviceLabel}</span> : null}
+        </p>
+        {remote?.lastError ? <p className="settings-hint">{remote.lastError}</p> : null}
+        <div className="settings-key-row" style={{ marginTop: 12 }}>
           <input
-            type="password"
-            value={slackTokenDraft}
-            onChange={(e) => setSlackTokenDraft(e.target.value)}
-            placeholder="xoxb-… or xoxp-…"
-            style={{ flex: 1 }}
-            autoComplete="off"
+            type="text"
+            value={labelDraft}
+            onChange={(e) => setLabelDraft(e.target.value)}
+            placeholder="Work"
           />
           <button
             type="button"
-            className="primary"
-            disabled={busy || slackOauthBusy || !slackTokenDraft.trim()}
-            onClick={() => {
-              setBusy(true);
-              setError(null);
-              void window.sideboard
-                .connectSlackToken(slackTokenDraft.trim())
-                .then((list) => {
-                  setSlackWorkspaces(list);
-                  setSlackTokenDraft('');
-                  return window.sideboard.getSlackListenStatus?.();
-                })
-                .then((status) => {
-                  if (status) setSlackListen(status);
-                })
-                .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                .finally(() => setBusy(false));
-            }}
+            disabled={
+              busy ||
+              !labelDraft.trim() ||
+              labelDraft.trim() === (settings.integrations.slackDeviceLabel?.trim() || '')
+            }
+            onClick={() => void saveLabel()}
           >
-            Add workspace
+            Save name
           </button>
-          <button
-            type="button"
-            disabled={busy || slackOauthBusy}
-            onClick={() => {
-              setSlackOauthBusy(true);
-              setError(null);
-              void window.sideboard
-                .startSlackOAuth()
-                .then((list) => {
-                  setSlackWorkspaces(list);
-                  return window.sideboard.getSlackListenStatus?.();
-                })
-                .then((status) => {
-                  if (status) setSlackListen(status);
-                })
-                .catch((err) => {
-                  if (isOauthCancelled(err)) return;
-                  setError(err instanceof Error ? err.message : String(err));
-                })
-                .finally(() => setSlackOauthBusy(false));
-            }}
-          >
-            {slackOauthBusy ? 'Waiting for Slack…' : 'Add via browser'}
-          </button>
-          {slackOauthBusy ? (
-            <button
-              type="button"
-              onClick={() => {
-                void window.sideboard.cancelSlackOAuth();
-              }}
-            >
-              Cancel
-            </button>
-          ) : null}
         </div>
-        <div style={{ marginTop: 16 }}>
-          <div className="settings-section-title">This Mac</div>
-          <p className="settings-hint">
-            Each MacBook is its own Slack destination. Name this one <strong>Personal</strong> or{' '}
-            <strong>Work</strong>. Replies come back as <code>Work: …</code> so you know which Mac
-            answered. Address one with <code>work:</code> or <code>personal:</code> at the start of
-            the DM (case doesn&apos;t matter).
-          </p>
-          <div className="row" style={{ marginTop: 8, gap: 8 }}>
-            <input
-              value={slackDeviceLabelDraft}
-              onChange={(e) => setSlackDeviceLabelDraft(e.target.value)}
-              placeholder="Personal"
-              style={{ flex: 1 }}
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              className="primary"
-              disabled={
-                busy ||
-                !slackDeviceLabelDraft.trim() ||
-                slackDeviceLabelDraft.trim() ===
-                  (settings.integrations.slackDeviceLabel?.trim() || '')
-              }
-              onClick={() => void saveSlackDeviceLabel()}
-            >
-              Save name
-            </button>
-          </div>
-        </div>
-        <div style={{ marginTop: 16 }}>
-          <div className="settings-section-title">Listening</div>
-          <p className="settings-hint">
-            DMs to the bot and @mentions go to the Global orchestrator. Keep Sideboard running.
-          </p>
-        </div>
-        <p className="settings-hint" style={{ marginTop: 8 }}>
-          {slackListen?.workspaceCount
-            ? slackListen.running
-              ? `${
-                  slackListen.mode === 'relay' ? 'Relay connected' : 'Listening'
-                }${slackListen.deviceLabel ? ` · ${slackListen.deviceLabel}` : ''} · ${slackListen.workspaceCount} workspace${slackListen.workspaceCount === 1 ? '' : 's'}`
-              : slackListen.lastError
-                ? `Not connected — ${slackListen.lastError}`
-                : slackListen.mode
-                  ? 'Connecting…'
-                  : 'Listen is not available on this Mac yet.'
-            : 'Connect a workspace to start listening.'}
+      </div>
+
+      <div className="settings-section settings-section-card">
+        <div className="settings-section-title">Pair a phone</div>
+        <p className="settings-hint">
+          Open the Sideboard app on your phone and enter this code. It expires in 10 minutes.
         </p>
-        {slackListen?.lastLog ? (
-          <p className="settings-hint settings-cloud-log">{slackListen.lastLog}</p>
+        {remote?.pairingCode ? (
+          <p className="settings-status-text" style={{ fontSize: 28, letterSpacing: 4 }}>
+            {remote.pairingCode}
+          </p>
         ) : null}
-        <p className="settings-hint" style={{ marginTop: 12 }}>
-          Connect a workspace with Add via browser. Listening only receives your Slack user&apos;s
-          messages on this Mac.
-        </p>
-        <div style={{ marginTop: 16 }}>
-          <div className="settings-section-title">Community</div>
-          <p className="settings-hint">
-            Product questions go to the Sideboard community Slack (
-            <code>sideboard-ai.slack.com</code>
-            ). Open that URL, enter your email, then the confirmation code Slack sends. That
-            workspace is not the same as installing the Sideboard app into your own team with Add
-            via browser.
-          </p>
-          <div className="row" style={{ marginTop: 8, gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => {
-                void window.sideboard.openExternal('https://sideboard-ai.slack.com');
-              }}
-            >
-              Join community Slack
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void window.sideboard.openExternal('https://www.sideboard.cloud/support/');
-              }}
-            >
-              How to join
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          disabled={busy || !remote?.connected}
+          onClick={() => {
+            void window.sideboard.requestRemotePairingCode?.().then(setRemote);
+          }}
+        >
+          Show pairing code
+        </button>
       </div>
     </div>
   );

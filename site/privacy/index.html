@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy — Sideboard</title>
-<meta name="description" content="What Sideboard collects, how Slack data is used, how long it is kept, and how to request access or deletion.">
+<meta name="description" content="What Sideboard collects, how phone messages are used, how long they are kept, and how to request access or deletion.">
 <meta property="og:title" content="Privacy — Sideboard">
-<meta property="og:description" content="What Sideboard collects, how Slack data is used, and how to request deletion.">
+<meta property="og:description" content="What Sideboard collects, how phone messages are used, and how to request deletion.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.sideboard.cloud/privacy/">
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
@@ -21,7 +21,7 @@
 <a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i><i></i></span>Sideboard</a>
 <nav class="nav-links">
 <a href="/docs/">Docs</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="/support/">Support</a>
 <a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
 </nav>
@@ -31,42 +31,42 @@
 <article style="max-width:720px;margin:0 auto;padding:56px 40px 110px">
 <span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Privacy</span>
 <h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:18px 0 8px;color:#edf0f3">Privacy policy</h1>
-<p style="margin:0;color:#8b949c;font-size:14px">Last updated 5 October 2026. Sideboard is a local Mac app plus a Slack relay at <code>relay.sideboard.cloud</code>.</p>
+<p style="margin:0;color:#8b949c;font-size:14px">Last updated 5 October 2026. Sideboard is a local Mac app plus a phone relay at <code>relay.sideboard.cloud</code>.</p>
 
 <h2>What this covers</h2>
-<p>This policy describes data handled by the Sideboard desktop/CLI on your computer and by the hosted Slack relay. It is written for people who install the Sideboard Slack app. The marketing site at www.sideboard.cloud does not require an account.</p>
+<p>This policy describes data handled by the Sideboard desktop and CLI on your computer, the Sideboard phone app, and the hosted relay. The marketing site at www.sideboard.cloud does not require an account.</p>
 
 <h2>What we collect</h2>
 <ul>
-<li><strong>On your Mac.</strong> Slack workspace tokens, team and user ids, device name, thread/worktree metadata, and chat you have with agents. Optional tokens for GitHub, Linear, AbleTime, Vercel, Supabase, PostHog, and Sentry also live in the encrypted vault on disk — not in the renderer or in git. Slack workspaces are stored as <code>slack-workspaces.json</code>.</li>
-<li><strong>Through the Slack relay.</strong> Slack OAuth codes and the resulting bot/user tokens (held in memory for about five minutes so the desktop can fetch them), then Slack message text, channel ids, user ids, and team ids needed to route DMs and @mentions to your Mac. The relay does not receive git repos, secrets, or VPN-only traffic.</li>
-<li><strong>We do not</strong> require a Sideboard cloud account. We do not sell Slack data. We do not use Slack data to train Sideboard models — Sideboard does not host a model. We do not request Slack’s <code>search:read</code> scope; agents list and read channels you connect rather than running workspace-wide Slack search.</li>
+<li><strong>On your Mac.</strong> This Mac’s name, a host secret used to register with the relay, thread/worktree metadata, and chat you have with agents. Optional tokens for GitHub, Linear, AbleTime, Vercel, Supabase, PostHog, and Sentry also live in the encrypted vault on disk — not in the renderer or in git.</li>
+<li><strong>On your phone.</strong> The pairing session for each Mac you connect (device name and a session token), stored on the phone so you can pick a desktop later.</li>
+<li><strong>Through the relay.</strong> Pairing codes, those session tokens, and message text needed to carry a prompt or reply between the phone and your Mac. The relay does not receive git repos, secrets, or VPN-only traffic.</li>
+<li><strong>We do not</strong> require a Sideboard cloud account. We do not sell message text. We do not use it to train Sideboard models — Sideboard does not host a model.</li>
 </ul>
 
 <h2>How it is used</h2>
-<p>Slack message text is delivered to the Sideboard orchestrator on your Mac so you can drive agents from Slack and so review-ping replies can show up in chat. Agents you installed (Claude Code, Codex, OpenCode, Cursor, and others) may send that prompt text to the model provider <em>you</em> configured. Those providers have their own policies. Sideboard does not retain a product-side copy of Slack messages after they are handed to your Mac.</p>
-<p>OAuth exists so Listen can prove which Slack user owns this Mac and so the bot can post replies. The client secret stays on the relay, not in the Mac app.</p>
+<p>Phone message text is delivered to the Sideboard orchestrator on the Mac you picked so you can drive agents from the phone. Agents you installed (Claude Code, Codex, OpenCode, Cursor, and others) may send that prompt text to the model provider <em>you</em> configured. Those providers have their own policies. Sideboard does not retain a product-side copy of those messages after they are handed to your Mac.</p>
 
 <h2>Where it lives and how long</h2>
 <ul>
-<li><strong>Your Mac</strong> — until you disconnect the Slack workspace in Settings, uninstall Sideboard, or delete the local data directory.</li>
-<li><strong>Relay (Fly, region sjc)</strong> — in-memory sessions while your desktop is connected; OAuth pending results expire after about five minutes. Message text is not stored as a Sideboard database.</li>
-<li><strong>Slack</strong> — messages remain in your workspace under Slack’s own retention. Uninstalling the Sideboard app does not delete Slack history.</li>
+<li><strong>Your Mac</strong> — until you uninstall Sideboard or delete the local data directory.</li>
+<li><strong>Your phone</strong> — until you forget that desktop in the app or delete the app.</li>
+<li><strong>Relay</strong> — in-memory sessions while your desktop is connected. A relay restart drops pairing sessions; the phone pairs again. Message text is not stored as a Sideboard database.</li>
 </ul>
 
 <h2>Access, transfer, and deletion</h2>
-<p>You can disconnect a workspace in Sideboard → Settings → Remote → Slack, and remove the app from your Slack workspace (Apps → Sideboard → Remove). That drops tokens on the Mac and stops Listen for that team.</p>
-<p>To request access, export, or deletion of data Sideboard still holds (for example a leftover vault file, or a question about relay logs), email <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. That address is enough; you do not need another account. We will respond within two business days. For GDPR/CCPA-style deletion requests, say so in the email and include the Slack team id if you have it.</p>
+<p>Forget a desktop in the phone app to drop that session on the phone. Uninstall Sideboard on the Mac to drop local chats and the host secret.</p>
+<p>To request access, export, or deletion of data Sideboard still holds (for example a leftover vault file, or a question about relay logs), email <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. That address is enough; you do not need another account. We will respond within two business days. For GDPR/CCPA-style deletion requests, say so in the email.</p>
 
 <h2>Contact</h2>
-<p>Privacy and data requests: <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. Also see <a href="/support/">Support</a> and <a href="/slack/">how the Slack app works</a>.</p>
+<p>Privacy and data requests: <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. Also see <a href="/support/">Support</a> and <a href="/docs/remote/">how the phone app pairs</a>.</p>
 </article>
 <footer class="foot">
 <div class="foot-inner">
 <a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.cloud</a>
 <nav>
 <a href="/docs/">Docs</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="/privacy/">Privacy</a>
 <a href="/support/">Support</a>
 <a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>

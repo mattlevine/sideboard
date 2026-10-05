@@ -93,7 +93,7 @@ export function formatDevAccessHint(
     const bits = live.map(describeLiveDevRun).join('; ');
     return `This worktree's Dev apps: ${bits}. preview=url → open the URL; preview=window → Electron window is the app. MCP \`get_run_log\` reads the Run-tab terminal. Do not guess :3000.`;
   }
-  return 'To open the project Dev app: MCP `run_dev_script` (same as the desktop Dev button) returns `{url, port, preview}` (`SIDEBOARD_PORT`, not 3000). preview=url → open that URL (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). If already running, `list_run_scripts` `active[].url`. `get_run_log` reads the Run-tab terminal (tail). `stop_dev_script` to stop.';
+  return 'To open a project Dev app: MCP `run_dev_script` (same as the desktop Dev button; pass `name` for one script — several can run at once, each with its own port) returns `{url, port, preview}` (`SIDEBOARD_PORT`, not 3000). preview=url → open that URL (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). If already running, `list_run_scripts` `active[].url`. `get_run_log` reads that script’s Run-tab terminal (tail). `stop_dev_script` stops one script; omit name to stop all.';
 }
 
 /**
@@ -364,7 +364,7 @@ export function formatLongRunningDirective(opts?: {
     '- Hanging, no useful output, or the wrong thing → `stop_job` (or the helper with `stop <id>`). Do not stop a pack/test/deploy that is clearly making progress.',
     '- Stay in the loop until stillRunning is false (or you stopped it). ok → finish the task. failed / stopped → read the log, fix or narrow the command, start once.',
     'State: `.context/.sideboard/detached-jobs/<id>/` (local scratch). Full guide: `/long-running` (always available).',
-    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` / `get_run_log`. `get_run_log` is the Run-tab terminal (tail; raise `tail` only if truncated). Do not detached-job or shell-spawn that same command. `run_dev_script` returns `{url, port, preview}` (`SIDEBOARD_PORT`). preview=url → open that URL; preview=window → Electron window is the app (url is renderer/HMR only). Never guess :3000.',
+    'Project Dev / run scripts (`.sideboard` `[scripts.run.*]`, same as the desktop Dev button): use MCP `list_run_scripts` / `run_dev_script` / `stop_dev_script` / `get_run_log`. Pass `name` to start one script; several can run at once, each with its own port. `get_run_log` is that script’s Run-tab terminal (tail; raise `tail` only if truncated). Do not detached-job or shell-spawn that same command. `run_dev_script` returns `{url, port, preview}` (`SIDEBOARD_PORT`). preview=url → open that URL; preview=window → Electron window is the app (url is renderer/HMR only). Never guess :3000.',
   ].join('\n');
 }
 
@@ -399,5 +399,5 @@ export function formatArtifactDirective(): string {
  * Covers the side column and the composer multiple-choice picker.
  */
 export function formatUiReminder(): string {
-  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. ask_user wakes the parent orchestrator; notify_orchestrator if blocked without a picker. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button) returns {url, port, preview} (SIDEBOARD_PORT — never guess :3000). preview=url → open url; preview=window → Electron window is the app, url is renderer/HMR only. list_run_scripts active[].url if already running; get_run_log for the Run-tab terminal; stop_dev_script to stop.';
+  return 'Sideboard UI: markdown table is enough to read data; present_schema if they ask to edit/filter (even after markdown); present_files for the file manager. html fence or present_artifact, not both for the same document. type=log appends (same artifact_id, new lines only). ask_user only for a real multiple-choice (not hellos, “what next?”, or after a review) — reply in chat. ask_user wakes the parent orchestrator; notify_orchestrator if blocked without a picker. Do not say artifacts/CMS UI are unavailable. Dev / preview: run_dev_script (same as the Dev button; pass name — several scripts can run at once) returns {url, port, preview} (SIDEBOARD_PORT — never guess :3000). preview=url → open url; preview=window → Electron window is the app, url is renderer/HMR only. list_run_scripts active[].url if already running; get_run_log for that script’s Run-tab terminal; stop_dev_script to stop one.';
 }

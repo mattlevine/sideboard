@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Sideboard",
+    "slug": "sideboard",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "cloud.sideboard.mobile"
+    },
+    "android": {
+      "package": "cloud.sideboard.mobile"
+    }
+  }
+}

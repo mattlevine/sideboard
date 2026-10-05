@@ -8,10 +8,8 @@ import {
   outboundReplyFromTurn,
   type OutboundTurnSnapshot,
 } from '../orchestrator/outbound-turn-reply.js';
-import {
-  ensureSlackDeviceIdentity,
-  resolveOrchestratorDefaults,
-} from '../store/app-settings.js';
+import { ensureSlackDeviceIdentity } from '../store/device-identity.js';
+import { resolveOrchestratorDefaults } from '../store/app-settings.js';
 import {
   ensureSlackCoordinator,
   findSlackCoordinator,
@@ -32,12 +30,11 @@ import { runSlackRelayClient } from './relay-client.js';
 export {
   inboundFromSocketFrame,
   isSlackStopCommand,
-  lifecycleFromSocketFrame,
   parseSlackSocketFrame,
   runSlackSocketMode,
   stripSlackMentions,
 } from './socket-mode.js';
-export type { SlackInboundMessage, SlackLifecycleEvent } from './socket-mode.js';
+export type { SlackInboundMessage } from './socket-mode.js';
 
 export const SLACK_LISTEN_STOPPED_REPLY =
   'Sideboard stopped the in-progress turn. Send another message when you want to continue.';
@@ -776,9 +773,7 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
       );
     }
     const device = ensureSlackDeviceIdentity();
-    log(
-      `Relay listen · ${device.deviceLabel} · ${withIdentity.length} workspace${withIdentity.length === 1 ? '' : 's'} as Slack user: ${withIdentity.map((w) => `${w.team_name}/${w.user_id}`).join(', ')}`,
-    );
+    log(`Relay listen · ${device.deviceLabel} · ${withIdentity.length} workspace${withIdentity.length === 1 ? '' : 's'} as Slack user: ${withIdentity.map((w) => `${w.team_name}/${w.user_id}`).join(', ')}`);
     await runSlackRelayClient({
       url: relay,
       signal: opts.signal,
@@ -793,10 +788,7 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
         userToken: w.user_token!.trim(),
       })),
       onEvent: onInbound,
-      onUninstalled: (teamId) => {
-        disconnectSlackWorkspace(teamId);
-        log(`dropped workspace ${teamId} after Slack uninstall`);
-      },
+      onUninstalled: (teamId) => { disconnectSlackWorkspace(teamId); log(`dropped workspace ${teamId} after Slack uninstall`); },
     });
   } finally {
     off();

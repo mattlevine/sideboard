@@ -20,13 +20,16 @@ import {
 } from './relay-protocol.js';
 import { SlackRelayHub } from './relay-hub.js';
 import { hostnameAllowed, requestHostname, tryServeStatic } from './relay-static.js';
+import { RemoteHub } from '../remote/hub.js';
+import { REMOTE_RELAY_PATH } from '../remote/protocol.js';
 import {
   ableTimeOAuthBouncePage,
   ableTimeOAuthLocalBounceUrl,
 } from '../integrations/abletime-oauth.js';
 
 export interface SlackRelayServerOptions {
-  appToken: string;
+  /** Required unless skipSocketMode. Phone remote does not use this token. */
+  appToken?: string;
   /** OAuth client secret — from Fly `SIDEBOARD_SLACK_CLIENT_SECRET`. Never ship in the DMG. */
   clientSecret?: string;
   clientId?: string;
@@ -76,8 +79,8 @@ export async function startSlackRelayServer(
   opts: SlackRelayServerOptions,
 ): Promise<SlackRelayServerHandle> {
   const log = opts.onLog ?? console.log;
-  const appToken = opts.appToken.trim();
-  if (!appToken.startsWith('xapp-')) {
+  const appToken = opts.appToken?.trim() ?? '';
+  if (!opts.skipSocketMode && !appToken.startsWith('xapp-')) {
     throw new Error('SIDEBOARD_SLACK_APP_TOKEN must be an xapp-… app-level token');
   }
 
@@ -92,6 +95,7 @@ export async function startSlackRelayServer(
       fetchImpl: opts.fetchImpl ?? fetch,
       onLog: log,
     });
+  const remoteHub = new RemoteHub();
 
   const handleCallback = async (reqUrl: string, res: ServerResponse): Promise<boolean> => {
     const url = parseSlackOAuthCallbackUrl(reqUrl);
@@ -276,6 +280,29 @@ export async function startSlackRelayServer(
     });
   });
 
+  const remoteWss = new WebSocketServer({ server: httpServer, path: REMOTE_RELAY_PATH });
+  remoteWss.on('connection', (ws: WebSocket) => {
+    const socket = {
+      send: (data: string) => {
+        if (ws.readyState === ws.OPEN) ws.send(data);
+      },
+      close: (code?: number, reason?: string) => {
+        try {
+          ws.close(code, reason);
+        } catch {
+          // ignore
+        }
+      },
+    };
+    log('remote client connected');
+    ws.on('message', (data) => {
+      const raw = typeof data === 'string' ? data : data.toString('utf8');
+      remoteHub.handleClientMessage(socket, raw);
+    });
+    ws.on('close', () => remoteHub.detachSocket(socket));
+    ws.on('error', () => remoteHub.detachSocket(socket));
+  });
+
   const port = opts.port ?? 0;
   const host = opts.host ?? '0.0.0.0';
   await new Promise<void>((resolve, reject) => {
@@ -324,6 +351,9 @@ export async function startSlackRelayServer(
       ac.abort();
       await new Promise<void>((resolve) => {
         wss.close(() => resolve());
+      });
+      await new Promise<void>((resolve) => {
+        remoteWss.close(() => resolve());
       });
       await new Promise<void>((resolve, reject) => {
         httpServer.close((err) => (err ? reject(err) : resolve()));
