@@ -14,7 +14,7 @@ Sideboard is CLI + MCP + a Mac desktop for that tier. Agents are plugs (Claude C
 
 Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for Slack to reach them, and for scheduled jobs to fire — opt in from Settings → Advanced.
 
-![Sideboard desktop — chat with a log preview, worktree files, and the run panel](docs/assets/sideboard-desktop-review-v6.png)
+![Sideboard desktop — chat with a log preview, worktree files, and the run panel](docs/assets/sideboard-desktop-review-v7.png)
 
 **Agents and backends are plugs, not the product.** CLI, MCP, and the desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is **JSON Schema → table/form**, not a CMS shell. The agent can invent a schema for whatever data it needs; wire inline JSON or another datasource later. CLI and MCP also run without the desktop app. Slack is built in ([setup](#slack)).
 
