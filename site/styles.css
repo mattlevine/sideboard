@@ -352,6 +352,11 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
+.mock-worktree {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
 .mock-col {
   display: flex;
   flex-direction: column;
