@@ -24,4 +24,4 @@ Mechanical control (list, send, diff, land) stays on the Sideboard CLI — zero 
 
 Connect the Sideboard MCP from each harness so an agent can drive the board. Typical stdio command: `sideboard mcp` (or `npx -y sideboard-mcp`). Packaged Sideboard.app writes the absolute Node + bundled MCP path on launch.
 
-See [Remote integrations](/docs/remote/) for Settings → Agents vs Git / Issues / Slack / Connectors.
+See [Remote integrations](/docs/remote/) for Settings → Agents vs Git / Issues / Remote / Connectors.

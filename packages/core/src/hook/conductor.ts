@@ -7,7 +7,6 @@ import {
   realpathSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { createServer } from 'node:net';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { execa, type ResultPromise } from 'execa';
 import { createInterface } from 'node:readline';
@@ -31,10 +30,22 @@ import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mo
 import { ensureReviewGuidelinesFile } from '../review/request-review.js';
 import { ensureWorktreeSideboardIgnored } from '../git/worktree-exclude.js';
 import {
+  loadOtherScriptRunPorts,
   loadWorktreeRunPorts,
   saveWorktreeRunPorts,
 } from './worktree-run-ports.js';
 import { processGroupAlive } from '../mcp/wait-for-job.js';
+import {
+  PORT_RANGE_SIZE,
+  allocatePort,
+  allocatePortRange,
+  reservePort,
+  reservePortRange,
+  tryReservePort,
+  tryReservePorts,
+  type PortReservation,
+  type ReservePortRangeOpts,
+} from './port-range.js';
 
 export {
   loadWorktreeRunPorts,
@@ -42,6 +53,17 @@ export {
   worktreeRunPortsPath,
   RUN_PORTS_REL,
 } from './worktree-run-ports.js';
+
+export {
+  PORT_RANGE_SIZE,
+  allocatePort,
+  allocatePortRange,
+  reservePort,
+  reservePortRange,
+  tryReservePort,
+  tryReservePorts,
+};
+export type { PortReservation, ReservePortRangeOpts };
 
 export type SetupRunResult = {
   ran: boolean;
@@ -63,10 +85,6 @@ export {
   settingsSourceLabel,
   workspaceSettingsSourceLabel,
 };
-
-export const PORT_RANGE_SIZE = 10;
-const RECLAIM_RETRY_DELAY_MS = 40;
-const RECLAIM_TRIES = 8;
 
 /** Match a simple glob (`*` and `?`) against a basename or relative path. */
 function matchSimpleGlob(pattern: string, name: string): boolean {
@@ -674,226 +692,6 @@ export function getRunMode(
   return loadWorkspaceSettings(worktreePath, repoPath)?.runMode ?? 'concurrent';
 }
 
-export type PortReservation = {
-  port: number;
-  /** Stop holding the port so a child can bind it. Idempotent. */
-  release: () => Promise<void>;
-};
-
-/**
- * Bind an ephemeral port and keep the socket open until `release()`.
- * Closing then rebinding races other worktrees / agents (TOCTOU) — especially
- * with Vite `strictPort: true`, which fails Start instead of falling back.
- */
-export async function reservePort(): Promise<PortReservation> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    let released = false;
-    const release = (): Promise<void> =>
-      new Promise((res) => {
-        if (released) {
-          res();
-          return;
-        }
-        released = true;
-        server.close(() => res());
-      });
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address();
-      if (!addr || typeof addr === 'string') {
-        void release().then(() => reject(new Error('Failed to allocate port')));
-        return;
-      }
-      resolve({ port: addr.port, release });
-    });
-    server.on('error', reject);
-  });
-}
-
-/** @deprecated Prefer reservePort — releasing immediately reopens the race. */
-export async function allocatePort(): Promise<number> {
-  const held = await reservePort();
-  await held.release();
-  return held.port;
-}
-
-export async function tryReservePort(port: number): Promise<PortReservation | null> {
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) return null;
-  return new Promise((resolve) => {
-    const server = createServer();
-    let released = false;
-    const release = (): Promise<void> =>
-      new Promise((res) => {
-        if (released) {
-          res();
-          return;
-        }
-        released = true;
-        server.close(() => res());
-      });
-    server.once('error', () => {
-      try {
-        server.close();
-      } catch {
-        // never listened
-      }
-      resolve(null);
-    });
-    server.listen(port, '127.0.0.1', () => {
-      resolve({ port, release });
-    });
-  });
-}
-
-/** Reserve every port or none. */
-export async function tryReservePorts(
-  ports: number[],
-): Promise<PortReservation[] | null> {
-  const held: PortReservation[] = [];
-  for (const port of ports) {
-    const next = await tryReservePort(port);
-    if (!next) {
-      await Promise.all(held.map((h) => h.release()));
-      return null;
-    }
-    held.push(next);
-  }
-  return held;
-}
-
-function normalizePreferredPorts(ports: number[] | undefined, size: number): number[] {
-  if (!ports?.length) return [];
-  const seen = new Set<number>();
-  const out: number[] = [];
-  for (const p of ports) {
-    if (!Number.isInteger(p) || p <= 0 || p > 65535 || seen.has(p)) continue;
-    seen.add(p);
-    out.push(p);
-    if (out.length >= size) break;
-  }
-  return out;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fillPortRange(
-  held: PortReservation[],
-  size: number,
-): Promise<PortReservation[]> {
-  if (held.length >= size) return held;
-  const base = held[0]?.port;
-  const taken = new Set(held.map((h) => h.port));
-  try {
-    let offset = 0;
-    while (held.length < size) {
-      const candidate = base != null ? base + offset : null;
-      offset += 1;
-      if (candidate != null && taken.has(candidate)) continue;
-      const next =
-        candidate != null ? await tryReservePort(candidate) : null;
-      if (next) {
-        held.push(next);
-        taken.add(next.port);
-      } else {
-        const ephemeral = await reservePort();
-        held.push(ephemeral);
-        taken.add(ephemeral.port);
-      }
-    }
-    return held;
-  } catch (err) {
-    await Promise.all(held.map((h) => h.release()));
-    throw err;
-  }
-}
-
-/** Reserve whatever is free. Unlike tryReservePorts, do not release on the first miss. */
-async function tryReserveAvailablePorts(
-  ports: number[],
-): Promise<PortReservation[]> {
-  const held: PortReservation[] = [];
-  for (const port of ports) {
-    const next = await tryReservePort(port);
-    if (next) held.push(next);
-  }
-  return held;
-}
-
-/**
- * Reuse this worktree's last range. SIDEBOARD_PORT is preferred[0] — succeed
- * with a partial hold when a sibling already bound a later slot.
- */
-async function reclaimPreferredPorts(
-  ports: number[],
-  worktreePath: string | undefined,
-): Promise<PortReservation[] | null> {
-  const primary = ports[0];
-  if (primary == null) return null;
-
-  const takePrimary = async (): Promise<PortReservation[] | null> => {
-    const held = await tryReserveAvailablePorts(ports);
-    if (held.some((h) => h.port === primary)) return held;
-    await Promise.all(held.map((h) => h.release()));
-    return null;
-  };
-
-  let held = await takePrimary();
-  if (held) return held;
-  if (worktreePath) {
-    killStaleWorktreeListeners(ports, worktreePath, 'SIGTERM');
-  } else {
-    killListenersOnPorts(ports);
-  }
-  for (let i = 0; i < RECLAIM_TRIES; i++) {
-    await delay(RECLAIM_RETRY_DELAY_MS);
-    held = await takePrimary();
-    if (held) return held;
-    if (i === 2 && worktreePath) {
-      killStaleWorktreeListeners(ports, worktreePath, 'SIGKILL');
-    }
-  }
-  return null;
-}
-
-export type ReservePortRangeOpts = {
-  /** Reuse this worktree's last assignment when still free (or reclaimable). */
-  preferred?: number[];
-  /** When preferred ports are busy, kill leftovers whose cwd is this worktree. */
-  worktreePath?: string;
-};
-
-/**
- * Hold a block of ports (Conductor: CONDUCTOR_PORT … +9) until release.
- * Callers must `release()` immediately before spawning the child that binds them.
- * When `preferred` is set, reuse those ports — reclaim a leftover Dev instance
- * on them instead of allocating a new range. SIDEBOARD_PORT is preferred[0];
- * a sibling holding a later slot must not force a new block.
- */
-export async function reservePortRange(
-  size = PORT_RANGE_SIZE,
-  opts?: ReservePortRangeOpts,
-): Promise<PortReservation[]> {
-  const preferred = normalizePreferredPorts(opts?.preferred, size);
-  if (preferred.length) {
-    const reused = await reclaimPreferredPorts(preferred, opts?.worktreePath);
-    if (reused) return fillPortRange(reused, size);
-  }
-
-  const held: PortReservation[] = [await reservePort()];
-  return fillPortRange(held, size);
-}
-
-/** Allocate a contiguous block, releasing holds immediately (legacy / tests). */
-export async function allocatePortRange(
-  size = PORT_RANGE_SIZE,
-): Promise<number[]> {
-  const held = await reservePortRange(size);
-  const ports = held.map((h) => h.port);
-  await Promise.all(held.map((h) => h.release()));
-  return ports;
-}
 
 export interface DevServerHandle {
   pid: number | undefined;
@@ -920,6 +718,7 @@ export async function startDevServer(
   const held = await reservePortRange(PORT_RANGE_SIZE, {
     preferred: preferred ?? undefined,
     worktreePath,
+    avoid: loadOtherScriptRunPorts(worktreePath, script.name),
   });
   const ports = held.map((h) => h.port);
   saveWorktreeRunPorts(worktreePath, script.name, ports);

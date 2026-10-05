@@ -30,7 +30,8 @@ export type SlackRelayServerMessage =
   | { type: 'claim_ok'; eventId: string }
   | { type: 'claim_denied'; eventId: string }
   | { type: 'error'; message: string }
-  | { type: 'pong' };
+  | { type: 'pong' }
+  | { type: 'uninstalled'; teamId: string };
 
 export function slackRelaySessionKey(
   teamId: string,
@@ -88,6 +89,11 @@ export function parseSlackRelayServerMessage(raw: string): SlackRelayServerMessa
     const parsed = JSON.parse(raw) as SlackRelayServerMessage;
     if (!parsed || typeof parsed !== 'object' || !('type' in parsed)) return null;
     if (parsed.type === 'pong') return { type: 'pong' };
+    if (parsed.type === 'uninstalled') {
+      const teamId = typeof parsed.teamId === 'string' ? parsed.teamId.trim() : '';
+      if (!teamId) return null;
+      return { type: 'uninstalled', teamId };
+    }
     if (parsed.type === 'registered') {
       const teamId = typeof parsed.teamId === 'string' ? parsed.teamId.trim() : '';
       const userId = typeof parsed.userId === 'string' ? parsed.userId.trim() : '';

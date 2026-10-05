@@ -93,6 +93,15 @@ export function RunScriptIcon({ name }: { name?: string | null }) {
           <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" {...stroke} />
         </Svg>
       );
+    case 'smartphone':
+    case 'phone':
+    case 'mobile':
+      return (
+        <Svg>
+          <rect x="7" y="2" width="10" height="20" rx="2" {...stroke} />
+          <line x1="11" y1="18" x2="13" y2="18" {...stroke} />
+        </Svg>
+      );
     case 'square':
     case 'stop':
       return (

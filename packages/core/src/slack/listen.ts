@@ -8,10 +8,8 @@ import {
   outboundReplyFromTurn,
   type OutboundTurnSnapshot,
 } from '../orchestrator/outbound-turn-reply.js';
-import {
-  ensureSlackDeviceIdentity,
-  resolveOrchestratorDefaults,
-} from '../store/app-settings.js';
+import { ensureSlackDeviceIdentity } from '../store/device-identity.js';
+import { resolveOrchestratorDefaults } from '../store/app-settings.js';
 import {
   ensureSlackCoordinator,
   findSlackCoordinator,
@@ -24,7 +22,7 @@ import {
   type SlackInboundMessage,
   type SlackSocketModeOptions,
 } from './socket-mode.js';
-import { listSlackWorkspacesRaw, slackTokenFor } from './workspaces.js';
+import { listSlackWorkspacesRaw, slackTokenFor, disconnectSlackWorkspace } from './workspaces.js';
 import { getSlackReplyTarget, setSlackReplyTarget } from './reply-target.js';
 import { slackRelayUrl } from './baked-app.js';
 import { runSlackRelayClient } from './relay-client.js';
@@ -775,9 +773,7 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
       );
     }
     const device = ensureSlackDeviceIdentity();
-    log(
-      `Relay listen · ${device.deviceLabel} · ${withIdentity.length} workspace${withIdentity.length === 1 ? '' : 's'} as Slack user: ${withIdentity.map((w) => `${w.team_name}/${w.user_id}`).join(', ')}`,
-    );
+    log(`Relay listen · ${device.deviceLabel} · ${withIdentity.length} workspace${withIdentity.length === 1 ? '' : 's'} as Slack user: ${withIdentity.map((w) => `${w.team_name}/${w.user_id}`).join(', ')}`);
     await runSlackRelayClient({
       url: relay,
       signal: opts.signal,
@@ -792,6 +788,7 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
         userToken: w.user_token!.trim(),
       })),
       onEvent: onInbound,
+      onUninstalled: (teamId) => { disconnectSlackWorkspace(teamId); log(`dropped workspace ${teamId} after Slack uninstall`); },
     });
   } finally {
     off();

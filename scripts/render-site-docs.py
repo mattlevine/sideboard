@@ -23,7 +23,7 @@ PAGES = {
     "remote.md": {
         "out": "remote/index.html",
         "title": "Remote integrations — Sideboard",
-        "description": "Settings map, Slack relay, connectors, and what leaves the Mac.",
+        "description": "Settings map, phone remote, connectors, and what leaves the Mac.",
         "h1": "Remote integrations",
     },
     "skills.md": {

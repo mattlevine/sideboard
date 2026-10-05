@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Docs — Sideboard</title>
-<meta name="description" content="Install the CLI and desktop, connect Settings (Agents, Git, Issues, Remote, Connectors), wire up Slack and Linear, and configure worktrees per repo.">
+<meta name="description" content="Install the CLI and desktop, connect Settings (Agents, Git, Issues, Remote, Connectors), pair the phone app, and configure worktrees per repo.">
 <meta property="og:title" content="Docs — Sideboard">
-<meta property="og:description" content="Install the CLI and desktop, connect Settings (Agents, Git, Issues, Remote, Connectors), wire up Slack and Linear, and configure worktrees per repo.">
+<meta property="og:description" content="Install the CLI and desktop, connect Settings (Agents, Git, Issues, Remote, Connectors), pair the phone app, and configure worktrees per repo.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sideboard.cloud/">
 <meta property="og:image" content="https://sideboard.cloud/desktop.png">
@@ -21,7 +21,7 @@
 <nav class="nav-links">
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
 </nav>
 <a class="btn btn-primary btn-sm" href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg">Download for Mac</a>
@@ -31,7 +31,7 @@
 <section style="max-width:1180px;margin:0 auto;padding:56px 40px 0">
 <span class="eyebrow">Docs</span>
 <h1 style="font-weight:700;font-size:60px;line-height:1.06;letter-spacing:-.035em;margin:20px 0 0;max-width:800px">Everything you need to run the fleet</h1>
-<p style="font-size:20px;line-height:1.55;max-width:620px;margin:20px 0 0;color:#b3bcc4">Start with the CLI — it's the fastest way to see whether Sideboard fits how you already work. The desktop, MCP and Slack layer on top of the same local orchestrator.</p>
+<p style="font-size:20px;line-height:1.55;max-width:620px;margin:20px 0 0;color:#b3bcc4">Start with the CLI — it's the fastest way to see whether Sideboard fits how you already work. The desktop, MCP, and phone app layer on top of the same local orchestrator.</p>
 </section>
 
 <section id="install" style="max-width:1180px;margin:0 auto;padding:72px 40px 0">
@@ -127,7 +127,7 @@ args = ["mcp"]</pre>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Remote</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Slack remote-controls this Mac. Add a workspace, name this destination, wait for Relay connected.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">The phone app remote-controls this Mac. Name it, show a pairing code, then pick that desktop in the app.</p>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Connectors</h4>
@@ -181,9 +181,9 @@ sideboard schedule run &lt;id&gt;</pre>
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Schedules</h4>
 <p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Local jobs that wake an orchestration chat. Opt-in caffeinate so overnight runs can fire.</p>
 </a>
-<a href="/slack/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
-<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Slack</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings → Remote. Connect a workspace, name this Mac, and address it by prefix from a DM or channel.</p>
+<a href="/docs/remote/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Phone</h4>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings → Remote. Name this Mac, show a pairing code, and pick that desktop in the phone app.</p>
 </a>
 <a href="/docs/agents/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Agents</h4>
@@ -191,7 +191,7 @@ sideboard schedule run &lt;id&gt;</pre>
 </a>
 <a href="/docs/remote/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Remote integrations</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings map, Slack relay, Linear, optional connectors, and what does and doesn't leave the machine.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings map, phone relay, Linear, optional connectors, and what does and doesn't leave the machine.</p>
 </a>
 <a href="/docs/skills/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Process skills</h4>
@@ -243,7 +243,7 @@ default = true</pre>
 <nav>
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="/privacy/">Privacy</a>
 <a href="/support/">Support</a>
 <a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>

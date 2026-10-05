@@ -20,14 +20,8 @@ import {
   switchBrightsyAccount,
   connectBrightsyTeam,
   disconnectBrightsyTeam,
-  listSlackWorkspaces,
-  connectSlackToken,
-  disconnectSlackWorkspace,
-  startSlackOAuth,
   startLinearOAuth,
   disconnectLinear,
-  runSlackListen,
-  SLACK_OAUTH_REDIRECT,
   LINEAR_OAUTH_REDIRECT,
   createSchedule,
   deleteSchedule,
@@ -909,86 +903,6 @@ async function main(): Promise<void> {
             : 'No teams connected',
         ),
       );
-    });
-
-  const slackCmd = program
-    .command('slack')
-    .description(
-      'Slack workspaces + Listen (DMs / @mentions → orchestrator)',
-    );
-
-  slackCmd
-    .command('teams')
-    .description('List connected Slack workspaces')
-    .action(() => {
-      const teams = listSlackWorkspaces();
-      if (teams.length === 0) {
-        console.log(chalk.dim('No Slack workspaces. sideboard slack connect --token xoxb-…'));
-        return;
-      }
-      for (const t of teams) {
-        console.log(
-          `${t.team_name.padEnd(24)}  ${t.team_id}${t.has_user_token ? '' : chalk.dim('  (no search)')}`,
-        );
-      }
-    });
-
-  slackCmd
-    .command('connect')
-    .description('Add a workspace from a bot or user token')
-    .requiredOption('--token <token>', 'xoxb- or xoxp- token')
-    .action(async (opts) => {
-      const info = await connectSlackToken(opts.token);
-      console.log(chalk.green(`Connected ${info.team_name} (${info.team_id})`));
-    });
-
-  slackCmd
-    .command('login')
-    .description(`Browser OAuth (Slack app redirect ${SLACK_OAUTH_REDIRECT})`)
-    .action(async () => {
-      const info = await startSlackOAuth({
-        openUrl: async (url) => {
-          console.log(chalk.dim(url));
-          const opener =
-            process.platform === 'darwin'
-              ? 'open'
-              : process.platform === 'win32'
-                ? 'cmd'
-                : 'xdg-open';
-          const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
-          spawn(opener, args, { detached: true, stdio: 'ignore' }).unref();
-        },
-      });
-      console.log(chalk.green(`Connected ${info.team_name} (${info.team_id})`));
-    });
-
-  slackCmd
-    .command('disconnect')
-    .argument('<team_id>', 'Slack team id (T…)')
-    .description('Remove a connected Slack workspace')
-    .action((teamId) => {
-      disconnectSlackWorkspace(teamId);
-      console.log(chalk.green(`Disconnected ${teamId}`));
-    });
-
-  slackCmd
-    .command('listen')
-    .description(
-      'Listen: DMs and @mentions → Global orchestrator.',
-    )
-    .action(async () => {
-      const ac = new AbortController();
-      const stop = () => ac.abort();
-      process.on('SIGINT', stop);
-      process.on('SIGTERM', stop);
-      console.log(
-        chalk.bold('Sideboard Slack Listen'),
-        chalk.dim('(Ctrl+C to stop)'),
-      );
-      await runSlackListen({
-        signal: ac.signal,
-        onLog: (line) => console.log(chalk.dim(line)),
-      });
     });
 
   const linearCmd = program

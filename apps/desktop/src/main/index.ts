@@ -27,6 +27,15 @@ import {
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { setupTextContextMenu } from './text-context-menu';
 import { formatUpdaterCheckError } from './updater-error';
+import {
+  bindRemoteHostActivity,
+  isRemoteHostRunning,
+  readRemoteStatus,
+  refreshRemoteDeviceLabel,
+  requestRemotePairing,
+  restartRemoteHost,
+  startRemoteHost,
+} from './remote-host-daemon';
 import { initDesktopSecretVault } from './secret-vault';
 import {
   caffeinateIndicatorReasons,
@@ -115,13 +124,10 @@ import {
   type OptionalServiceId,
   ensureAbleTimeTask,
   toAbleTimeIssueInfo,
-  runSlackListen,
   resolveSlackListenMode,
   slackAppLevelToken,
   slackRelayUrl,
   hasBakedSlackOAuth,
-  pollSlackOutboundWatches,
-  resolveOrchestratorDefaults,
   followUpBehavior,
   ensureSlackDeviceIdentity,
   loadAppSettings,
@@ -424,77 +430,8 @@ function stopSlackListenDaemon(): void {
   syncCaffeinate();
 }
 
-function startSlackListenDaemon(): void {
-  if (slackListenAbort) return;
-  const settings = loadAppSettings();
-  if (listSlackWorkspaces().length === 0) return;
-  ensureSlackDeviceIdentity(settings);
-  const mode = resolveSlackListenMode({
-    relayUrl: slackRelayUrl(),
-    workspaceCount: listSlackWorkspaces().length,
-  });
-  if (!mode) {
-    slackListenLastError =
-      'Listen needs a connected workspace (Add via browser).';
-    slackListenLastLog = slackListenLastError;
-    return;
-  }
-
-  const ac = new AbortController();
-  slackListenAbort = ac;
-  slackListenRunning = true;
-  slackListenLastError = null;
-  slackListenLastLog = 'Starting Slack relay…';
-  syncCaffeinate();
-
-  void runSlackListen({
-    agent: resolveOrchestratorDefaults(settings).agent,
-    signal: ac.signal,
-    fetchImpl: net.fetch.bind(net) as typeof fetch,
-    onLog: (line) => {
-      slackListenLastLog = line;
-      if (
-        line.startsWith('socket error:') ||
-        line.startsWith('event error:') ||
-        line.startsWith('relay error:') ||
-        line.startsWith('post error:') ||
-        line.startsWith('react error:')
-      ) {
-        slackListenLastError = line;
-      } else if (
-        line.startsWith('Relay connected') ||
-        line.startsWith('Relay registered') ||
-        line.startsWith('run ') ||
-        line.startsWith('replied ') ||
-        line.startsWith('busy ')
-      ) {
-        slackListenLastError = null;
-      }
-    },
-  })
-    .catch((err) => {
-      slackListenLastError = err instanceof Error ? err.message : String(err);
-      slackListenLastLog = slackListenLastError;
-    })
-    .finally(() => {
-      if (slackListenAbort === ac) {
-        slackListenAbort = null;
-        slackListenRunning = false;
-        syncCaffeinate();
-      }
-    });
-}
-
 function syncSlackListenDaemon(): SlackListenStatus {
-  const mode = resolveSlackListenMode({
-    relayUrl: slackRelayUrl(),
-    workspaceCount: listSlackWorkspaces().length,
-  });
-  if (mode) {
-    startSlackListenDaemon();
-  } else {
-    stopSlackListenDaemon();
-  }
+  stopSlackListenDaemon();
   return readSlackListenStatus();
 }
 
@@ -663,7 +600,7 @@ function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
     whileRunning: caffeinateWhileRunningEnabled(),
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
-    slackListenRunning,
+    slackListenRunning: slackListenRunning || isRemoteHostRunning(),
     whileSchedules: caffeinateWhileSchedulesEnabled(),
     schedulesEnabled: hasEnabledSchedules(),
   });
@@ -688,7 +625,7 @@ function syncCaffeinateIndicator(): void {
     whileRunning: caffeinateWhileRunningEnabled(),
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
-    slackListenRunning,
+    slackListenRunning: slackListenRunning || isRemoteHostRunning(),
     whileSchedules: caffeinateWhileSchedulesEnabled(),
     schedulesEnabled: hasEnabledSchedules(),
   });
@@ -930,7 +867,7 @@ function syncCaffeinate(): void {
   }
   const keepAwake =
     (caffeinateWhileRunningEnabled() && orch.getRuntime().running > 0) ||
-    (caffeinateWhileSlackListenEnabled() && slackListenRunning) ||
+    (caffeinateWhileSlackListenEnabled() && (slackListenRunning || isRemoteHostRunning())) ||
     (caffeinateWhileSchedulesEnabled() && hasEnabledSchedules());
   if (keepAwake && !caffeinateProc) {
     try {
@@ -1149,6 +1086,11 @@ function registerIpc(): void {
         stopSlackListenDaemon();
         syncSlackListenDaemon();
       }
+      if ('slackDeviceId' in next) {
+        restartRemoteHost();
+      } else if ('slackDeviceLabel' in next) {
+        refreshRemoteDeviceLabel();
+      }
       return toPublicAppSettings(saved);
     },
   );
@@ -1296,6 +1238,8 @@ function registerIpc(): void {
     return list;
   });
   ipcMain.handle('getSlackListenStatus', () => readSlackListenStatus());
+  ipcMain.handle('getRemoteStatus', () => readRemoteStatus());
+  ipcMain.handle('requestRemotePairingCode', () => requestRemotePairing());
   ipcMain.handle('setSlackListen', (_e, opts: { enabled: boolean }) =>
     setSlackListen(opts),
   );
@@ -1960,12 +1904,7 @@ app.whenReady().then(async () => {
   setupSchedulesWatcher();
   setupCaffeinateHoldWatcher();
   setupUpdater();
-  // Poll slack_post reply watches in main (inject into posting chat).
-  const pollSlackOutbound = () => {
-    void pollSlackOutboundWatches().catch(() => undefined);
-  };
-  pollSlackOutbound();
-  setInterval(pollSlackOutbound, 12_000);
+  // Slack reply watches are off. The phone remote is the away-from-desk session.
   // Worktree agents can die without writing a thread file; reclaim stale
   // `running` so wait_for_turn and the parent orchestrator notice.
   setInterval(() => {
@@ -2002,7 +1941,9 @@ app.whenReady().then(async () => {
   orch.listWorkspaces();
   createWindow();
   if (mainWindow) setupTsServer(mainWindow);
-  syncSlackListenDaemon();
+  bindRemoteHostActivity(syncCaffeinate);
+  stopSlackListenDaemon();
+  startRemoteHost();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

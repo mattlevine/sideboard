@@ -22,7 +22,7 @@ export function caffeinateIndicatorReasons(opts: {
 const LABELS: Record<CaffeinateReason, string> = {
   chat: 'orchestration chat',
   running: 'agents running',
-  slack: 'Slack Listen',
+  slack: 'phone remote',
   schedules: 'scheduled tasks',
 };
 

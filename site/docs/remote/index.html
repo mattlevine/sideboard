@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Remote integrations — Sideboard</title>
-<meta name="description" content="Settings map, Slack relay, connectors, and what leaves the Mac.">
+<meta name="description" content="Settings map, phone relay, connectors, and what leaves the Mac.">
 <meta property="og:title" content="Remote integrations — Sideboard">
-<meta property="og:description" content="Settings map, Slack relay, connectors, and what leaves the Mac.">
+<meta property="og:description" content="Settings map, phone relay, connectors, and what leaves the Mac.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.sideboard.cloud/docs/">
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
@@ -21,7 +21,7 @@
 <nav class="nav-links">
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
 </nav>
 <a class="btn btn-primary btn-sm" href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg">Download for Mac</a>
@@ -31,7 +31,7 @@
 <p style="margin:0 0 8px"><a class="back" href="/docs/">← Docs</a></p>
 <h1>Remote integrations</h1>
 <article>
-<p>Desktop Settings splits connections by job. Slack is remote control. Linear and AbleTime are issue tracking. Vercel, Supabase, PostHog, and Sentry are optional project services. GitHub git auth is its own panel.</p>
+<p>Desktop Settings splits connections by job. The phone app is remote control. Linear and AbleTime are issue tracking. Vercel, Supabase, PostHog, and Sentry are optional project services. GitHub git auth is its own panel.</p>
 <table><thead><tr>
 <th>Panel</th>
 <th>What</th>
@@ -50,7 +50,7 @@
 </tr>
 <tr>
 <td><strong>Settings → Remote</strong></td>
-<td>Slack workspaces, this Mac’s name, Listen / Relay</td>
+<td>This Mac’s name, phone pairing code, relay status</td>
 </tr>
 <tr>
 <td><strong>Settings → Connectors</strong></td>
@@ -58,45 +58,10 @@
 </tr>
 </tbody></table>
 <p>Connections are owned by Sideboard, not per-agent MCP. Optional connector tokens inject env into worktree agents; prefer official CLIs (<code>vercel</code>, <code>supabase</code>, <code>sentry-cli</code>) or the PostHog HTTP API. Write CLI/HTTP dumps to <code>.context/cli/</code> (not <code>.context/attachments/</code>) and read a slice. Do not add vendor MCPs.</p>
-<h2>Slack</h2>
-<p>Slack is remote control for the <strong>local</strong> orchestrator. Agents, worktrees, and repos stay on this Mac (corporate VPN, private git, internal APIs). Message text goes through <code>relay.sideboard.cloud</code>; the relay does not host worktrees. The Mac must stay awake — Slack cannot reach a sleeping machine. For unattended Listen, enable <strong>Settings → Advanced → Caffeinate while Slack Listen is on</strong>, or <code>set_caffeinate</code> from the orchestration chat.</p>
-<p>Full Slack landing and Add to Slack: <a href="/slack/">sideboard.cloud/slack</a>. Product questions: join the Sideboard community at <a href="https://sideboard-ai.slack.com">sideboard-ai.slack.com</a> — that is a public workspace, not a substitute for <strong>Add via browser</strong> on your own team. Join steps: <a href="/support/">Support</a>.</p>
-<h3>Connect</h3>
-<p><strong>Settings → Remote → Slack</strong></p>
-<ol>
-<li><strong>Add via browser</strong> — install the official Sideboard Slack app (required for Listen; proves which Slack user owns this Mac). OAuth redirect: <code>https://relay.sideboard.cloud/slack/callback</code> (the relay exchanges the code; the Mac never holds the client secret).</li>
-<li><strong>This Mac</strong> — name the destination (<code>Personal</code>, <code>Work</code>, …). Personal and Work can both stay online.</li>
-<li>Keep Sideboard running until status shows <code>Relay connected · …</code>. Use <strong>Cancel</strong> in Settings if you close the Slack tab.</li>
-</ol>
-<p>Messages route to the Slack user who connected that Mac. Someone else needs their own Sideboard online.</p>
-<h3>Destinations (Personal / Work)</h3>
-<table><thead><tr>
-<th>Where</th>
-<th>What to type</th>
-</tr></thead><tbody>
-<tr>
-<td><strong>DM the bot</strong></td>
-<td><code>work: Check the failing CI</code></td>
-</tr>
-<tr>
-<td><strong>Channel / thread</strong></td>
-<td><code>@sideboard work: Check the failing CI</code></td>
-</tr>
-</tbody></table>
-<p>Prefix matches the <strong>This Mac</strong> name (case-insensitive). Mentions are stripped before routing.</p>
-<ul>
-<li>One Mac online → it handles unprefixed messages.</li>
-<li>Both online → unprefixed races to the first claim. Replies are signed (<code>Work: …</code>) so you can see who answered, then address that Mac with <code>work:</code> / <code>personal:</code>.</li>
-<li>A follow-up message interrupts the in-progress turn and starts a new one. Send <code>stop</code> to cancel without a replacement prompt.</li>
-<li>Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat and replies there.</li>
-</ul>
-<p>If a DM never gets 👀 and no new Global chat appears, Listen is not registered with the relay. Quit and reopen Sideboard so it reconnects. Settings → Remote → Slack should show <code>Relay connected</code>.</p>
-<h3>CLI</h3>
-<pre><code>sideboard slack teams
-sideboard slack login
-sideboard slack listen</code></pre>
-<p>Agents can also call MCP <code>list_teams</code> / <code>slack_list_channels</code> / <code>slack_list_users</code> / <code>slack_search</code> / <code>slack_read</code> / <code>slack_post</code> / <code>slack_replies</code> once a workspace is connected.</p>
-<p>When <code>slack_post</code> notifies someone, their reply is relayed into the orchestration chat as information (not a command).</p>
+<h2>Phone</h2>
+<p>The phone app is remote control for the <strong>local</strong> orchestrator. Agents, worktrees, and repos stay on this Mac. Message text goes through <code>relay.sideboard.cloud</code> at <code>/remote</code>. The relay does not host worktrees. The Mac must stay awake — enable <strong>Settings → Advanced → Caffeinate while the phone remote is connected</strong>, or <code>set_caffeinate</code> from the orchestration chat.</p>
+<p><strong>Settings → Remote</strong> shows Relay connected and <strong>Show pairing code</strong>. Enter that code in the Sideboard phone app. The phone lists every Mac it has paired, using the name from Settings → Remote, and you choose which desktop to open. Send <code>stop</code> to cancel a turn. <code>ask_user</code> options show up as buttons.</p>
+<p>Product questions: <a href="/support/">Support</a>.</p>
 <p>See <a href="/docs/agents/">Agents</a> and <a href="/docs/compare/">Compare</a>.</p>
 </article>
 </div>
@@ -106,7 +71,7 @@ sideboard slack listen</code></pre>
 <nav>
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="/privacy/">Privacy</a>
 <a href="/support/">Support</a>
 <a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>

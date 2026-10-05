@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  loadOtherScriptRunPorts,
   loadWorktreeRunPorts,
   saveWorktreeRunPorts,
   worktreeRunPortsPath,
@@ -16,6 +17,9 @@ describe('worktree run ports', () => {
     saveWorktreeRunPorts(wt, 'test', [42000]);
     expect(loadWorktreeRunPorts(wt, 'dev')).toEqual([41234, 41235]);
     expect(loadWorktreeRunPorts(wt, 'test')).toEqual([42000]);
+    expect(loadOtherScriptRunPorts(wt, 'dev')).toEqual([42000]);
+    expect(loadOtherScriptRunPorts(wt, 'test')).toEqual([41234, 41235]);
+    expect(loadOtherScriptRunPorts(wt, 'mobile')).toEqual([41234, 41235, 42000]);
     const written = JSON.parse(readFileSync(worktreeRunPortsPath(wt), 'utf8')) as {
       scripts: Record<string, number[]>;
     };

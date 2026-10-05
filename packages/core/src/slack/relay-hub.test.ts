@@ -246,4 +246,50 @@ describe('SlackRelayHub', () => {
       }),
     ).toBe(false);
   });
+
+  it('tells Slack when no Mac is online', async () => {
+    const posted: string[] = [];
+    const hub = new SlackRelayHub({
+      fetchImpl: (async (url, init) => {
+        posted.push(`${url} ${String(init?.body ?? '')}`);
+        return new Response(JSON.stringify({ ok: true }));
+      }) as typeof fetch,
+    });
+    hub.rememberBot('T1', 'xoxb-bot');
+    expect(
+      hub.routeEvent({
+        teamId: 'T1',
+        channelId: 'D1',
+        ts: '1.0',
+        userId: 'Ualice',
+        text: 'hello',
+        kind: 'dm',
+      }),
+    ).toBe(false);
+    await vi.waitFor(() => expect(posted.some((p) => p.includes('chat.postMessage'))).toBe(true));
+    expect(posted.join(' ')).toContain('No+Sideboard+Mac');
+  });
+
+  it('notifies the desktop and drops sessions on uninstall', async () => {
+    const matt = fakeSocket();
+    const hub = new SlackRelayHub({
+      authTest: async (token) =>
+        token.startsWith('xoxp-')
+          ? { ok: true, team_id: 'T1', user_id: 'Umatt' }
+          : { ok: true, team_id: 'T1', user_id: 'Bbot' },
+    });
+    await hub.register(
+      matt.socket,
+      'T1',
+      'Umatt',
+      'matt-mac',
+      'Personal',
+      'xoxb-bot',
+      'xoxp-user',
+    );
+    hub.uninstallTeam('T1');
+    expect(JSON.parse(matt.sent.at(-1)!)).toEqual({ type: 'uninstalled', teamId: 'T1' });
+    expect(hub.sessionFor('T1', 'Umatt', 'matt-mac')).toBeNull();
+    expect(hub.botTokenFor('T1')).toBeNull();
+  });
 });

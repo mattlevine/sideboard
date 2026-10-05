@@ -97,7 +97,7 @@ describe('Slack relay static marketing site', () => {
 
     const health = await fetch(`${origin}/health`);
     expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({ ok: true, service: 'sideboard-slack-relay' });
+    expect(await health.json()).toMatchObject({ ok: true, service: 'sideboard-relay' });
 
     const escape = await fetch(`${origin}/%2e%2e/package.json`);
     expect(escape.status).toBe(404);
@@ -124,7 +124,7 @@ describe('Slack relay static marketing site', () => {
     expect(www.body).toContain('Site');
 
     const relay = await request(handle.port, '/', 'relay.sideboard.cloud');
-    expect(JSON.parse(relay.body)).toMatchObject({ ok: true, service: 'sideboard-slack-relay' });
+    expect(JSON.parse(relay.body)).toMatchObject({ ok: true, service: 'sideboard-relay' });
 
     const apex = await request(handle.port, '/docs', 'sideboard.cloud');
     expect(apex.status).toBe(301);
@@ -138,6 +138,6 @@ describe('Slack relay static marketing site', () => {
     });
     handles.push(handle);
     const res = await fetch(`http://127.0.0.1:${handle.port}/`);
-    expect(await res.json()).toMatchObject({ ok: true, service: 'sideboard-slack-relay' });
+    expect(await res.json()).toMatchObject({ ok: true, service: 'sideboard-relay' });
   });
 });

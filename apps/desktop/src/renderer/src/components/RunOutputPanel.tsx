@@ -44,6 +44,7 @@ export const RunOutputPanel = memo(function RunOutputPanel({
   clearRequest,
 }: Props) {
   const [runLogs, setRunLogs] = useState<Record<string, string>>({});
+  const [focusScript, setFocusScript] = useState<string | null>(null);
   const painterRef = useRef<ReturnType<typeof createKeyedScriptOutputPainter> | null>(null);
   const logPreRef = useRef<HTMLPreElement>(null);
   const hydrateEpochRef = useRef(0);
@@ -102,6 +103,7 @@ export const RunOutputPanel = memo(function RunOutputPanel({
     // the previous run after Start empties the pane. Do not re-hydrate here —
     // beginRunLog has not run yet, so a refetch would be the stale file.
     hydrateEpochRef.current += 1;
+    setFocusScript(clearRequest.scriptName);
     painterRef.current?.clear(clearRequest.scriptName);
   }, [clearRequest?.token, clearRequest?.scriptName]);
 
@@ -123,6 +125,18 @@ export const RunOutputPanel = memo(function RunOutputPanel({
   }, [runLogs]);
 
   const hasLog = running || Object.values(runLogs).some(Boolean);
+  const scriptNames = [
+    ...new Set([
+      ...activeRuns.map((r) => r.scriptName),
+      ...Object.keys(runLogs).filter((name) => runLogs[name]),
+    ]),
+  ];
+  const focused =
+    focusScript && scriptNames.includes(focusScript) ? focusScript : null;
+  const shown = scriptNames
+    .filter((name) => !focused || name === focused)
+    .map((name) => ({ name, log: runLogs[name] ?? '' }))
+    .filter((row) => row.log);
   const label =
     primaryScriptName ??
     activeRuns[0]?.scriptName ??
@@ -133,12 +147,29 @@ export const RunOutputPanel = memo(function RunOutputPanel({
     <div className={`run-panel${hasLog ? ' has-log' : ''}`}>
       {hasLog ? (
         <>
-          <div className="run-log-header">Running {scriptDisplayName(label)}</div>
+          {scriptNames.length > 1 ? (
+            <div className="run-log-header run-log-scripts">
+              <span>Running</span>
+              {scriptNames.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className={`run-log-script${focused === name ? ' active' : ''}`}
+                  onClick={() =>
+                    setFocusScript((current) => (current === name ? null : name))
+                  }
+                >
+                  {scriptDisplayName(name)}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="run-log-header">Running {scriptDisplayName(label)}</div>
+          )}
           <pre ref={logPreRef} className="setup-output has-output run-log">
-            {Object.entries(runLogs)
-              .filter(([, log]) => log)
-              .map(([name, log]) =>
-                activeRuns.length > 1 ? `[${name}]\n${log}` : log,
+            {shown
+              .map((row) =>
+                shown.length > 1 ? `[${row.name}]\n${row.log}` : row.log,
               )
               .join('\n\n') || 'Starting…'}
           </pre>

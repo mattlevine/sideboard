@@ -9,7 +9,7 @@ pnpm 9 workspace (`packages/*`, `apps/*`). Node ≥ 20. Public packages share on
 | `packages/core` | `@sideboard-ai/core` | Orchestration, worktrees, store, MCP, Slack, git |
 | `packages/cli` | `@sideboard-ai/cli` | `sideboard` / `side` CLI (`sideboard mcp` / `sideboard-mcp`) |
 | `apps/desktop` | `@sideboard-ai/desktop` | Electron board (depends on core via `workspace:*`). **Apple Silicon (arm64) only** — electron-builder dmg+zip; no Intel/x64. |
-| `apps/slack-relay` | `@sideboard-ai/slack-relay` | Hosted Fly relay (Socket Mode + OAuth + static `site/`) |
+| `apps/relay` | `@sideboard-ai/relay` | Hosted Fly relay (phone remote, static `site/`, legacy Slack) |
 
 CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 
@@ -33,7 +33,7 @@ CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 | Board UI | `apps/desktop/src/renderer/` |
 | Desktop Settings | `apps/desktop/src/renderer/src/components/` — Agents (`SettingsModal`), Git, Issues, Remote, Connectors |
 | Electron main / IPC | `apps/desktop/src/main/` |
-| Slack listen / relay / OAuth | `packages/core/src/slack/`, `apps/slack-relay/` |
+| Slack listen / relay / OAuth | `packages/core/src/slack/`, `apps/relay/` |
 | Slack Marketplace / Public Distribution | [slack-marketplace.md](slack-marketplace.md) |
 | Marketing site | `site/` — same Fly app as the relay; [deploy.md](deploy.md) |
 | Git worktrees / land | `packages/core/src/git/`, `packages/core/src/land/` |

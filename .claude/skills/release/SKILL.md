@@ -32,7 +32,7 @@ Do **all** of the following:
 4. **Marketing** — update `site/` (and `site/docs/`) when the public story changed (install, Slack, features). Homepage download buttons already point at `/releases/latest`; still refresh copy/screenshots if this cut warrants it.
 5. **Changelog** — move `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`.
 6. **Commit + push** — Release commit, retarget `vX.Y.Z`, open or update the thread PR against **origin**.
-7. **Deploy if needed** — if this cut changed `site/` or `apps/slack-relay/`, Fly-deploy the relay+site (below). Skip Fly when those trees are untouched.
+7. **Deploy if needed** — if this cut changed `site/` or `apps/relay/`, Fly-deploy the relay+site (below). Skip Fly when those trees are untouched.
 
 Merge the PR only when asked. Do not publish npm unless they explicitly said **publish npm** or **full release including npm**.
 
@@ -74,10 +74,10 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
 
    `present_artifact` `type=log` `artifact_id=gha-release` with `content=delta` only. CI on the same commit title is **not** a second Release — only the tag workflow publishes.
 10. On desktop job **heap OOM** or **`SecKeychainUnlock` / `set-key-partition-list`**: fix `release.yml` (heap → `NODE_OPTIONS`; keychain → import-cert step, do not pass `CSC_LINK` into electron-builder), land that on main, retarget the **same** `vX.Y.Z` (do not bump). `publish-npm.js` skips versions already on npm. This is not the Apple Developer agreement prompt (that fails at notarization).
-11. **Deploy if needed.** When `site/` or `apps/slack-relay/` changed in this cut:
+11. **Deploy if needed.** When `site/` or `apps/relay/` changed in this cut:
 
     ```bash
-    node scripts/detached-job.cjs start fly-deploy -- fly deploy --config apps/slack-relay/fly.toml --dockerfile apps/slack-relay/Dockerfile .
+    node scripts/detached-job.cjs start fly-deploy -- fly deploy --config apps/relay/fly.toml --dockerfile apps/relay/Dockerfile .
     node scripts/detached-job.cjs wait fly-deploy
     ```
 

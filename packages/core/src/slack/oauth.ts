@@ -31,17 +31,15 @@ export const SLACK_BOT_SCOPES = [
   'reactions:write',
   'users:read',
   'users:read.email',
-  'team:read',
 ].join(',');
 
+/** User history for MCP `slack_read` / `slack_list_*`. No `search:read` (Marketplace). */
 export const SLACK_USER_SCOPES = [
-  'search:read',
   'channels:history',
   'channels:read',
   'groups:history',
   'im:history',
   'mpim:history',
-  'chat:write',
   'users:read',
 ].join(',');
 

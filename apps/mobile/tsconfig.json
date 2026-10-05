@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-native",
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "extends": "expo/tsconfig.base",
+  "include": ["App.tsx", "desktops.ts", "index.js"]
+}

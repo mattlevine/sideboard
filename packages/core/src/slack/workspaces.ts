@@ -130,17 +130,8 @@ export async function connectSlackToken(rawToken: string): Promise<SlackWorkspac
 
 export function slackTokenFor(
   ws: SlackWorkspace,
-  kind: 'search' | 'write' | 'read' = 'read',
+  kind: 'write' | 'read' = 'read',
 ): string {
-  if (kind === 'search') {
-    const token = ws.user_token?.trim();
-    if (!token) {
-      throw new Error(
-        `Slack search needs a user token for ${ws.team_name}. Reconnect via Settings → Remote → Slack (browser) or paste an xoxp- token.`,
-      );
-    }
-    return token;
-  }
   // Prefer the bot token so chat.postMessage lands as the app, not the user
   // (user tokens from OAuth often lack chat:write).
   const token = (kind === 'write'

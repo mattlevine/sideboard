@@ -63,7 +63,7 @@ Also true, and useful on the way:
 
 Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration)
 
-Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
+Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.cloud` is the phone remote and legacy Slack). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
 ## Install
 
@@ -300,7 +300,7 @@ Once connected, agents get tools to:
 - **Schedules** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration and worktree). `threadId=self` continues this chat; omit `threadId` to start a new Global chat when due. Jobs fire only while Sideboard.app is running. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled**. Orchestration chats can also `set_caffeinate`.
 - **Setup / run** — `run_setup` (also runs automatically on new worktrees), `list_run_scripts`, `run_dev_script`, `stop_dev_script`, `get_run_log`
 - **Inspect / review / PRs** — `get_diff`; `get_pr_checks` (snapshot); `request_review` (opens a Review chat tab on a worktree thread). The review stays in chat so you can read it and type next steps before the PR or ticket author is notified — no immediate Post/Keep picker. `ask_git` (commit & push, draft PR, ready for review, resolve conflicts, merge — same prompts as the desktop git buttons). If a goal is given (Greptile 5/5, CI green), the worktree agent watch-fix-pushes until it lands. Merge only when the user explicitly asked.
-- **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while Slack Listen is on, and while schedules are enabled.
+- **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while the phone remote is connected, and while schedules are enabled.
 
 Ready-for-review land (`confirm_land`) and `purge_chat` stay human-only. Coordinators commit, push, and open PRs by asking the worktree agent. They merge only when the user explicitly asked.
 
@@ -357,67 +357,37 @@ sideboard linear disconnect
 
 Callback URL for the Sideboard Linear OAuth app: `http://127.0.0.1:19848/callback`. Override the client with `SIDEBOARD_LINEAR_CLIENT_ID` (secret optional — the desktop uses PKCE). You will not see that baked app under *your* Linear **API → OAuth applications** — it lives on Sideboard’s Linear workspace. Authorized copies show under workspace **Settings → Applications** after you connect.
 
-## Slack
+## Phone
 
-Slack is the remote surface for the **same local orchestrator** — not a cloud workspace. DMs and `@mentions` go to the Global orchestrator on this Mac; it can `slack_post` a coworker to review a PR a worktree just pushed; their reply is copied back into your orchestration chat as information (not a command) and the orchestrator continues. Replies from the orchestrator post back to Slack.
-
-Each MacBook is its own destination (Personal, Work, …).
+The Sideboard phone app is the remote surface for the **same local orchestrator**. Pair it from **Settings → Remote**. Messages go to a Global chat on this Mac. Agents, worktrees, and repos stay here.
 
 ```
 ┌────────────────┐     hosted relay      ┌──────────────────┐
-│ Slack          │ ─────────────────────► │ Sideboard Mac    │
-│ DM / @mention  │     (WSS)              │ (Personal/Work)  │
-└────────────────┘ ◄── chat.postMessage ──└────────┬─────────┘
+│ Phone app      │ ─────────────────────► │ Sideboard Mac    │
+│ composer       │     (WSS /remote)      │                  │
+└────────────────┘ ◄──── replies ─────────└────────┬─────────┘
                                                    │
                                                    ▼
                                           Global orchestrator → worktrees
 ```
 
-**What stays on this Mac.** Agents, worktrees, repos, and secrets — including anything only reachable on the corporate VPN. **What leaves:** Slack message text, via `relay.sideboard.cloud`. The relay does not host worktrees.
+**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** message text, via `relay.sideboard.cloud`. The relay does not host worktrees.
 
-Keep the desktop app running after you connect a workspace. Slack cannot reach the fleet if this machine is asleep. For unattended Listen, enable **Settings → Advanced → Caffeinate while Slack Listen is on**, or turn on `set_caffeinate` from the orchestration chat when you step away (and off when you are done).
+Keep the desktop app running. The phone cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
 
-### Connect
+### Pair
 
-**Settings → Remote → Slack**
+1. Open Sideboard on the Mac. **Settings → Remote** should show Relay connected. Name this Mac if you want.
+2. **Show pairing code.**
+3. In the phone app, enter that code. The next messages open a Global chat titled Phone.
 
-1. **Add via browser** — installs the official Sideboard Slack app into a workspace (use this; paste-only bot tokens cannot prove which Slack user owns the Mac). Until **Manage Distribution → Activate Public Distribution** is on, Slack sends that flow to the app’s home workspace (`brightsy.slack.com`) and will not list other teams. Slack requires an HTTPS redirect; Sideboard uses `https://relay.sideboard.cloud/slack/callback`. The relay exchanges the OAuth code (the client secret stays on the server). Sideboard polls until that finishes.
-2. **This Mac** — name the destination (`Personal`, `Work`, …). Each Mac gets a stable id; both can stay online at once.
-3. Listening starts when a workspace is connected. Status should show `Relay connected · Personal` (or your name).
+A phone can pair with more than one Mac. Name each one in **Settings → Remote** (Work, Personal). The phone lists those desktops and you choose which one to open. Pairing again adds another Mac. Messages go only to the desktop you picked.
 
-Use **Cancel** in Settings if you close the Slack tab — closing the browser does not stop the wait.
+Send `stop` to cancel the in-progress turn. When the coordinator calls `ask_user`, the phone shows the options.
 
-Someone else messaging the bot needs **their** Sideboard online — messages route to the Slack user who connected that Mac, not to tabs on yours.
+Override the relay with `SIDEBOARD_REMOTE_RELAY_URL` (default `wss://relay.sideboard.cloud/remote`).
 
-Env overrides (optional): `SIDEBOARD_SLACK_RELAY_URL` (e.g. local `ws://127.0.0.1:8787/slack/desktop`), `SIDEBOARD_SLACK_OAUTH_REDIRECT` (defaults to `https://relay.sideboard.cloud/slack/callback`).
-
-### Talk to a Mac from Slack
-
-| Where | What to type |
-|-------|----------------|
-| **DM the bot** | `work: Check the failing CI` |
-| **Channel / thread** | `@sideboard work: Check the failing CI` |
-
-The destination prefix is the **This Mac** name (case does not matter). Mentions are stripped before routing, so `work:` is what selects the Mac.
-
-- One Mac online → it handles unprefixed messages.
-- Personal and Work both online → unprefixed messages go to whichever claims first. Replies are signed (`Work: …`) so you can see who answered, then address that Mac with `work:` / `personal:`.
-- A follow-up message interrupts the in-progress turn and starts a new one. Send `stop` to cancel without a replacement prompt.
-- Closing the Slack coordinator chat (or every Global tab) does not disable Listen. The next DM/@mention opens a new Global chat.
-- Long turns post one `Thinking…` message after ~20s and edit it with the current tool. The final answer replaces that message.
-- If a DM never gets 👀, quit and reopen Sideboard so Listen re-registers. You do not need an orchestration chat already open.
-
-### CLI
-
-```bash
-sideboard slack teams
-sideboard slack login          # browser OAuth
-sideboard slack listen         # same listen path as the desktop
-```
-
-Agents can also call MCP `list_teams` / `slack_list_channels` / `slack_list_users` / `slack_search` / `slack_read` / `slack_post` / `slack_replies` once a workspace is connected (optional `github_url` for a PR or permalink).
-
-If someone replies in Slack to a message Sideboard posted, that reply is copied into the orchestration chat as information (not a command) and the posting chat gets a follow-up turn. If you were talking to the orchestrator from Slack, Sideboard FYIs you there too.
+The phone project is `apps/mobile` (`pnpm --filter @sideboard-ai/mobile start`).
 
 More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 
@@ -432,7 +402,7 @@ More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 | PostHog | `POSTHOG_PERSONAL_API_KEY`, optional `POSTHOG_HOST` | HTTP API (no first-class CLI) |
 | Sentry | `SENTRY_AUTH_TOKEN`, optional `SENTRY_URL` | `sentry-cli` |
 
-Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supabase`, or `sentry-cli` is missing, **Install CLI** runs `npm i -g` (opens Terminal if npm needs sudo). Sideboard does not auto-install on Connect. Agents write CLI/HTTP dumps to `.context/cli/` (local scratch; not composer drops in `.context/attachments/`) and read a slice — never raw `--json` / `--expand` into the tool result. Slack is **Settings → Remote**, not here.
+Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supabase`, or `sentry-cli` is missing, **Install CLI** runs `npm i -g` (opens Terminal if npm needs sudo). Sideboard does not auto-install on Connect. Agents write CLI/HTTP dumps to `.context/cli/` (local scratch; not composer drops in `.context/attachments/`) and read a slice — never raw `--json` / `--expand` into the tool result. The phone remote is **Settings → Remote**, not here.
 
 ## Scheduled orchestration
 
@@ -502,7 +472,12 @@ setup = "pnpm install"
 [scripts.run.dev]
 command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-3000}} pnpm --filter web dev"
 default = true
+
+[scripts.run.mobile]
+command = "pnpm --filter mobile start -- --port ${SIDEBOARD_PORT}"
 ```
+
+Each `[scripts.run.*]` script gets its own port range. Starting or restarting one does not take another’s ports, so desktop and mobile (or any pair) can stay up together. The Run menu lists every script; ⌘R only toggles the default.
 
 For Electron / electron-vite apps, add `preview = "window"` on that run script. Sideboard still allocates `SIDEBOARD_PORT` for the Vite renderer, but agents are told the **native window** is the app — `http://localhost:<port>` is HMR only (a browser tab will not have preload/IPC). If `preview` is omitted, Sideboard infers `window` from `electron` / `electron-vite` in the command or the filtered package.
 

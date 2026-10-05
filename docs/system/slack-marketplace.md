@@ -38,13 +38,13 @@ Marketplace rejects `search:read` and dislikes broad user `*:history` without a 
 | Bot `chat:write`, `chat:write.public`, `reactions:write` | Yes | Replies, post to public channels the bot is not in, seen reaction |
 | Bot `channels:read` / `groups:read` / `users:read` | Yes | MCP list channels/users; resolve `#name` / `@user` |
 | Bot `channels:history` / `groups:history` | Yes | MCP `slack_read` + `slack_replies` in channels the bot is in |
-| Bot `team:read` | Drop unless we call `team.info` | Workspace name today comes from `auth.test` |
-| Bot `users:read.email` | Drop unless we demo email lookup | `users.lookupByEmail` for `slack_post to=email`; not needed for Listen |
+| Bot `team:read` | **Dropped** | Workspace name comes from `auth.test` |
+| Bot `users:read.email` | Yes | `users.lookupByEmail` for `slack_post to=email` |
 | User `channels:read` + `*:history` + `users:read` | Yes (MCP) | `slack_list_*` / `slack_read` as the installer; Slack allows user history for MCP |
-| User `chat:write` | **Drop** | Posts as `@Sideboard` with the bot token |
-| User `search:read` | **Drop** | Explicitly unsuitable for Marketplace |
+| User `chat:write` | **Dropped** | Posts as `@Sideboard` with the bot token |
+| User `search:read` | **Dropped** | Unsuitable for Marketplace; MCP `slack_search` removed |
 
-Update `docs/slack-app-manifest.yaml` and `packages/core/src/slack/oauth.ts` together. Removing scopes requires every workspace to reinstall.
+Code is updated (`docs/slack-app-manifest.yaml`, `packages/core/src/slack/oauth.ts`, Add to Slack on `/slack/`). **Still apply the manifest in the Slack dashboard** — every workspace must reinstall.
 
 ### 2. Public Distribution
 
@@ -64,16 +64,16 @@ Marketplace landing must be a **public web page for the Slack app**, not GitHub.
 | Privacy | `/privacy/` | Data collected, use, retention, access/transfer/delete, contact email (not GitHub-only) |
 | Support | `/support/` | Email or form, no extra account, respond within **2 business days** |
 
-Deploy via [deploy.md](deploy.md). Footer on the marketing homepage should link Privacy + Support.
+Deploy via [deploy.md](deploy.md). Pages live in `site/` (privacy, support, `/slack/`). Footer on the marketing homepage links Privacy + Support. Redeploy the Fly relay after this lands so www.sideboard.cloud serves the updated copy.
 
 ### 4. Product UX Slack will test
 
 They install as a brand-new customer, including **uninstall**.
 
-- **App Home** (Home tab on): first-run “download Sideboard / name this Mac / DM the bot”, plus support email. Messages tab can stay for DMs.
-- Subscribe to `app_uninstalled` and delete that workspace’s tokens on the Mac + any relay state.
-- Post-OAuth success page: “Open Sideboard → Settings → Remote → Slack” (not a dead end).
-- Meaningful errors when no Mac is online (not “something went wrong”).
+- **App Home** (Home tab on): first-run “download Sideboard / name this Mac / DM the bot”, plus support email. Messages tab can stay for DMs. **Done in code** — apply the manifest (home tab + `app_home_opened`) in the Slack dashboard.
+- Subscribe to `app_uninstalled` and delete that workspace’s tokens on the Mac + any relay state. **Done in code** — apply `app_uninstalled` in the dashboard, then reinstall.
+- Post-OAuth success page: “Open Sideboard → Settings → Remote → Slack” (not a dead end). **Done.**
+- Meaningful errors when no Mac is online (not “something went wrong”). **Done** — relay posts a setup reply.
 - LLM disclaimer on landing + long description; Security & Compliance: models are the user’s local agents (Claude / Codex / OpenCode / Cursor); Slack text is not used to train LLMs.
 
 ### 5. Traction gate (blocks submit)
@@ -97,8 +97,8 @@ They install as a brand-new customer, including **uninstall**.
 | P2 | Tested install, onboard, e2e, **uninstall** on a non-dev workspace | Unmet | Script a Brightsy-external workspace run; record video | Date, workspace (not Brightsy), what was tested: |
 | P3 | ≥ 5 active workspaces (28 days) | Unmet | Human: get 5 real teams on Listen | Count / date: |
 | P4 | ≥ 10 weekly active users | Unmet | Same | Count / date: |
-| P5 | Prepared to maintain + support (2 business days) | Unmet | Support page + monitored inbox | Support email: |
-| P6 | Meets guidelines (no forbidden scopes / remote-exec / LLM training) | Unmet | Cut `search:read` + user `chat:write` from the app; then paste **Scope reasons** below | See Scope reasons |
+| P5 | Prepared to maintain + support (2 business days) | Pages ready | Support page + monitored inbox — apply after Fly deploy | support@sideboard.cloud |
+| P6 | Meets guidelines (no forbidden scopes / remote-exec / LLM training) | Code ready | Apply dropped scopes in the Slack dashboard; paste **Scope reasons** below. Framing: agents run on the Mac they installed; relay carries message text only; not a downloadable shell script. | See Scope reasons |
 | P7 | Not private beta / unfinished | Unmet | Desktop + Slack path used in production by those 5 teams | |
 
 Do not submit while any row is Unmet. Slack returns incomplete apps and **resets the preliminary-review queue**.
@@ -115,7 +115,7 @@ Do not submit while any row is Unmet. Slack returns incomplete apps and **resets
 
 ### Scope reasons
 
-Paste into Slack’s “Please add reasons for your app to request this scope.” Say **how Sideboard uses it**, not what the scope means ([data access](https://docs.slack.dev/slack-marketplace/slack-marketplace-app-guidelines-and-requirements/#data)). Two products: **Listen** (DM / `@Sideboard` → Mac orchestrator) and **MCP** (`slack_list_*`, `slack_read`, `slack_search`, `slack_post` on that Mac). Do not include drop-listed scopes in a Marketplace submit.
+Paste into Slack’s “Please add reasons for your app to request this scope.” Say **how Sideboard uses it**, not what the scope means ([data access](https://docs.slack.dev/slack-marketplace/slack-marketplace-app-guidelines-and-requirements/#data)). Two products: **Listen** (DM / `@Sideboard` → Mac orchestrator) and **MCP** (`slack_list_*`, `slack_read`, `slack_post` on that Mac). Do not include drop-listed scopes in a Marketplace submit.
 
 #### Bot token — paste
 
@@ -161,11 +161,8 @@ Same history/replies APIs in private channels the bot was added to.
 **`users:read`**  
 `users.list` / `users.info` so MCP `slack_list_users` can pick a person for a DM, and so reply-watching shows a display name instead of a user id.
 
-**`users:read.email`** — drop unless the review video shows email lookup.  
+**`users:read.email`**  
 `users.lookupByEmail` and email fields on `users.list` so `slack_post to=name@company.com` resolves to a user. We do not send email.
-
-**`team:read`** — drop unless we call `team.info`.  
-Workspace name in Settings → Remote today comes from `auth.test`, which does not need this scope.
 
 #### User token — paste (MCP only)
 
@@ -189,15 +186,13 @@ Same for the installer’s group DMs.
 **`users:read`**  
 Resolve people while acting as the installer (`slack_list_users` / destination lookup) when the bot token is missing or insufficient.
 
-**`chat:write`** — **drop.** Posting is as `@Sideboard` with the bot token. User `chat:write` is only a fallback for pasted `xoxp-` tokens.
-
-**`search:read`** — **drop before Marketplace.** Powers MCP `slack_search` → `search.messages`. Slack lists this scope as unsuitable for listing. Remove from the dashboard, `packages/core/src/slack/oauth.ts`, and `docs/slack-app-manifest.yaml` (every workspace must reinstall). Public Distribution can still ship with it; listing cannot.
+User `chat:write` and `search:read` are **not requested**. Posting is as `@Sideboard` with the bot token. Agents list/read channels instead of `search.messages`.
 
 ### Security & compliance (LLM)
 
 - Models: plugs on the user’s Mac (Claude Code, Codex, OpenCode, Cursor). Sideboard does not host a model.
 - Slack message text: relayed to that Mac; **not** used to train LLMs.
-- Retention: message text transits `relay.sideboard.cloud`; tokens live in the Mac vault (`slack-workspaces.json`). Details go in `/privacy/` once written.
+- Retention: message text transits `relay.sideboard.cloud`; tokens live in the Mac vault (`slack-workspaces.json`). See `/privacy/`.
 - Tenancy / residency: user’s Mac + Fly relay (sjc). Confirm in privacy page.
 
 ### Test account details (for Slack reviewers)
@@ -215,7 +210,7 @@ Resolve people while acting as the installer (`slack_list_users` / destination l
 
 ## Don’t
 
-- Don’t submit with `search:read` still on the app.
+- Don’t submit with `search:read` still on the **dashboard** app (repo scopes already dropped; workspaces must reinstall).
 - Don’t point the Marketplace landing at GitHub.
 - Don’t leave localhost as a production OAuth redirect.
 - Don’t promise Marketplace listing until the remote-execution go/no-go is decided.

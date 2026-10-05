@@ -1,12 +1,12 @@
 {
-  "name": "@sideboard-ai/slack-relay",
+  "name": "@sideboard-ai/relay",
   "version": "0.1.70",
   "private": true,
-  "description": "Hosted Slack inbound relay for the official Sideboard Slack app",
+  "description": "Hosted Sideboard relay (phone remote, marketing site, legacy Slack)",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "sideboard-slack-relay": "./dist/index.js"
+    "sideboard-relay": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup --config tsup.config.ts",

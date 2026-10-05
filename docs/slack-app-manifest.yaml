@@ -14,14 +14,16 @@ display_information:
   background_color: "#111827"
   long_description: >-
     Sideboard is a local control plane for AI coding agents. This Slack app sends
-    DMs and @mentions to the Sideboard orchestrator on your machine and posts
-    replies back in-thread. It also lets agents list channels, search, read, and
-    post across every Slack workspace you connect in Settings → Remote.
-    No public Event URL — inbound uses Socket Mode.
+    DMs and @mentions to the Sideboard orchestrator on the Mac you installed
+    (not a rented VM and not a downloadable shell script) and posts replies
+    back in-thread. Agents can list channels, read, and post across workspaces
+    you connect in Settings → Remote. Slack message text is not used to train
+    LLMs; Sideboard does not host a model. No public Event URL — inbound uses
+    Socket Mode.
 
 features:
   app_home:
-    home_tab_enabled: false
+    home_tab_enabled: true
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   bot_user:
@@ -31,7 +33,6 @@ features:
 oauth_config:
   redirect_urls:
     - https://relay.sideboard.cloud/slack/callback
-    - http://127.0.0.1:19847/slack/callback
   scopes:
     bot:
       - app_mentions:read
@@ -47,17 +48,14 @@ oauth_config:
       - im:write
       - mpim:history
       - mpim:read
-      - team:read
       - users:read
       - users:read.email
     user:
       - channels:history
       - channels:read
-      - chat:write
       - groups:history
       - im:history
       - mpim:history
-      - search:read
       - users:read
 
 settings:
@@ -66,6 +64,8 @@ settings:
   token_rotation_enabled: false
   event_subscriptions:
     bot_events:
+      - app_home_opened
       - app_mention
+      - app_uninstalled
       - message.im
       - message.mpim

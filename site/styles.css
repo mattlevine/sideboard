@@ -392,32 +392,32 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 .mock-row b { color: var(--blue); font-weight: 600 }
 .mock-row.dim { color: var(--faint) }
 .mock-row.ok { color: #7fe0a3; border-color: rgba(40, 200, 100, 0.3) }
-.mock-slack {
+.mock-phone {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 10px;
 }
-.mock-slack .msg {
+.mock-phone .msg {
   padding: 11px 14px;
   border-radius: 14px;
   font-size: 14px;
   line-height: 1.4;
   max-width: 88%;
 }
-.mock-slack .you {
+.mock-phone .you {
   align-self: flex-end;
   background: rgba(59, 158, 255, 0.14);
   border: 1px solid rgba(59, 158, 255, 0.3);
   color: #dbeafe;
 }
-.mock-slack .bot {
+.mock-phone .bot {
   align-self: flex-start;
   background: #141519;
   border: 1px solid var(--line);
   color: #cfd6dd;
 }
-.mock-slack .peer {
+.mock-phone .peer {
   align-self: flex-start;
   background: #141519;
   border: 1px solid var(--line);
@@ -493,7 +493,7 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   color: #8cc8f5;
 }
 
-.slack-band {
+.phone-band {
   margin-top: 96px;
   border-radius: 28px;
   padding: 56px;
@@ -503,14 +503,14 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   overflow: hidden;
   position: relative;
 }
-.slack-band h2, .slack-band p { color: #fff }
-.slack-band p { opacity: 0.86; max-width: 640px }
-.slack-band .cli-pill {
+.phone-band h2, .phone-band p { color: #fff }
+.phone-band p { opacity: 0.86; max-width: 640px }
+.phone-band .cli-pill {
   background: rgba(255, 255, 255, 0.12);
   border-color: transparent;
   color: #fff;
 }
-.slack-band a { color: #fff; font-weight: 700 }
+.phone-band a { color: #fff; font-weight: 700 }
 
 .faq { margin-top: 96px }
 .faq-list { margin-top: 28px; border-top: 1px solid var(--line) }
@@ -634,7 +634,7 @@ article th { color: var(--text); background: var(--card) }
   .panel-grid, .origin-grid, .cards, .reach, .split-fit {
     grid-template-columns: 1fr;
   }
-  .slack-band { padding: 36px 24px }
+  .phone-band { padding: 36px 24px }
   .nav-inner { gap: 12px 16px }
   .nav-links { gap: 14px }
   .origin-grid { overflow-x: auto }

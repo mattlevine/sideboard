@@ -34,7 +34,12 @@ export interface SlackSocketEvent {
   ts?: string;
   thread_ts?: string;
   team?: string;
+  tab?: string;
 }
+
+export type SlackLifecycleEvent =
+  | { kind: 'app_home_opened'; teamId: string; userId: string }
+  | { kind: 'app_uninstalled'; teamId: string };
 
 export interface SlackInboundMessage {
   teamId: string;
@@ -51,6 +56,8 @@ export interface SlackSocketModeOptions {
   signal?: AbortSignal;
   onLog?: (line: string) => void;
   onEvent: (msg: SlackInboundMessage) => void | Promise<void>;
+  /** App Home / uninstall — not forwarded to a Mac as a chat turn. */
+  onLifecycle?: (event: SlackLifecycleEvent) => void | Promise<void>;
   fetchImpl?: typeof fetch;
   WebSocketImpl?: SlackWebSocketCtor;
 }
@@ -115,6 +122,29 @@ export function inboundFromSocketFrame(
     text,
     kind: isMention ? 'mention' : 'dm',
   };
+}
+
+/**
+ * App Home opens and workspace uninstall. Acked like other Events API envelopes.
+ */
+export function lifecycleFromSocketFrame(
+  frame: SlackSocketFrame,
+): SlackLifecycleEvent | null {
+  if (frame.type !== 'events_api') return null;
+  const event = frame.payload?.event;
+  if (!event?.type) return null;
+  const teamId = (frame.payload?.team_id || event.team || '').trim();
+  if (!teamId) return null;
+  if (event.type === 'app_uninstalled') {
+    return { kind: 'app_uninstalled', teamId };
+  }
+  if (event.type === 'app_home_opened') {
+    if (event.tab && event.tab !== 'home') return null;
+    const userId = event.user?.trim();
+    if (!userId) return null;
+    return { kind: 'app_home_opened', teamId, userId };
+  }
+  return null;
 }
 
 export async function openSlackSocketUrl(
@@ -303,11 +333,20 @@ function connectSession(
         return;
       }
       const inbound = inboundFromSocketFrame(frame);
-      if (!inbound) return;
-      void Promise.resolve(opts.onEvent(inbound)).catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log(`event error: ${msg}`);
-      });
+      if (inbound) {
+        void Promise.resolve(opts.onEvent(inbound)).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log(`event error: ${msg}`);
+        });
+        return;
+      }
+      const life = lifecycleFromSocketFrame(frame);
+      if (life && opts.onLifecycle) {
+        void Promise.resolve(opts.onLifecycle(life)).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log(`lifecycle error: ${msg}`);
+        });
+      }
     });
   });
 }

@@ -34,18 +34,37 @@ function parseFile(raw: string): RunPortsFile {
   }
 }
 
+function readScripts(worktreePath: string): Record<string, number[]> {
+  if (!worktreePath.trim()) return {};
+  try {
+    const raw = readFileSync(worktreeRunPortsPath(worktreePath), 'utf8');
+    return parseFile(raw).scripts ?? {};
+  } catch {
+    return {};
+  }
+}
+
 export function loadWorktreeRunPorts(
   worktreePath: string,
   scriptName: string,
 ): number[] | null {
-  if (!worktreePath.trim() || !scriptName.trim()) return null;
-  try {
-    const raw = readFileSync(worktreeRunPortsPath(worktreePath), 'utf8');
-    const ports = parseFile(raw).scripts?.[scriptName];
-    return ports?.length ? ports : null;
-  } catch {
-    return null;
+  if (!scriptName.trim()) return null;
+  const ports = readScripts(worktreePath)[scriptName];
+  return ports?.length ? ports : null;
+}
+
+/** Ports saved for every run script in this worktree except `scriptName`. */
+export function loadOtherScriptRunPorts(
+  worktreePath: string,
+  scriptName: string,
+): number[] {
+  const scripts = readScripts(worktreePath);
+  const ports: number[] = [];
+  for (const [name, list] of Object.entries(scripts)) {
+    if (name === scriptName) continue;
+    ports.push(...list);
   }
+  return ports;
 }
 
 export function saveWorktreeRunPorts(

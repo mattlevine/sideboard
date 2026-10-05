@@ -1774,11 +1774,11 @@ export function SettingsModal({
                   <div className="settings-toggle-row">
                     <div>
                       <div className="settings-section-title">
-                        Caffeinate while Slack Listen is on
+                        Caffeinate while the phone remote is connected
                       </div>
                       <p className="settings-hint">
-                        Keep the Mac awake while Sideboard is listening for Slack DMs and
-                        @mentions (macOS only; lid-close may still sleep on battery).
+                        Keep the Mac awake so the phone can reach the orchestrator (macOS only;
+                        lid-close may still sleep on battery).
                       </p>
                     </div>
                     <button
