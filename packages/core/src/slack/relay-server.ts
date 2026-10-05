@@ -194,7 +194,7 @@ export async function startSlackRelayServer(
       if (req.url === '/health') {
         sendJson(res, 200, {
           ok: true,
-          service: 'sideboard-slack-relay',
+          service: 'sideboard-relay',
           sessions: hub.listSessions().length,
           oauth: Boolean(clientSecret),
         });
@@ -217,7 +217,7 @@ export async function startSlackRelayServer(
       if (req.url === '/') {
         sendJson(res, 200, {
           ok: true,
-          service: 'sideboard-slack-relay',
+          service: 'sideboard-relay',
           sessions: hub.listSessions().length,
           oauth: Boolean(clientSecret),
         });

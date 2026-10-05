@@ -140,6 +140,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@babel/runtime':
+        specifier: ^7.20.0
+        version: 7.29.7
       '@react-native-async-storage/async-storage':
         specifier: 1.23.1
         version: 1.23.1(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(encoding@0.1.13)(react@18.3.1))
@@ -163,7 +166,7 @@ importers:
         specifier: ~5.8.2
         version: 5.8.3
 
-  apps/slack-relay:
+  apps/relay:
     dependencies:
       '@sideboard-ai/core':
         specifier: workspace:*

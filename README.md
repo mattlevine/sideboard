@@ -63,7 +63,7 @@ Also true, and useful on the way:
 
 Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration)
 
-Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the Slack relay; `relay.sideboard.cloud` stays Slack-only). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
+Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.cloud` is the phone remote and legacy Slack). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
 ## Install
 

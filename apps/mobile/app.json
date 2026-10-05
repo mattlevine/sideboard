@@ -4,10 +4,15 @@
     "slug": "sideboard",
     "version": "0.0.1",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "cloud.sideboard.mobile"
+      "bundleIdentifier": "cloud.sideboard.mobile",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "cloud.sideboard.mobile"
