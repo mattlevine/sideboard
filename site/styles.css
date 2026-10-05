@@ -339,6 +339,100 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   margin-bottom: 10px;
 }
 
+.mock {
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: #0e0f12;
+  padding: 18px;
+  min-height: 300px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+}
+.mock-board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.mock-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #141519;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+}
+.mock-col-h {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 650;
+}
+.mock-col i {
+  display: block;
+  height: 34px;
+  border-radius: 8px;
+  background: #1d1f24;
+  border: 1px solid var(--line);
+}
+.mock-col i.hot {
+  border-color: rgba(59, 158, 255, 0.5);
+  background: rgba(59, 158, 255, 0.12);
+}
+.mock-col i.done {
+  border-color: rgba(40, 200, 100, 0.4);
+  background: rgba(40, 200, 100, 0.1);
+}
+.mock-chat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.mock-row {
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #141519;
+  border: 1px solid var(--line);
+  color: #cfd6dd;
+}
+.mock-row b { color: var(--blue); font-weight: 600 }
+.mock-row.dim { color: var(--faint) }
+.mock-row.ok { color: #7fe0a3; border-color: rgba(40, 200, 100, 0.3) }
+.mock-slack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+.mock-slack .msg {
+  padding: 11px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 88%;
+}
+.mock-slack .you {
+  align-self: flex-end;
+  background: rgba(59, 158, 255, 0.14);
+  border: 1px solid rgba(59, 158, 255, 0.3);
+  color: #dbeafe;
+}
+.mock-slack .bot {
+  align-self: flex-start;
+  background: #141519;
+  border: 1px solid var(--line);
+  color: #cfd6dd;
+}
+.mock-slack .peer {
+  align-self: flex-start;
+  background: #141519;
+  border: 1px solid var(--line);
+  color: #9aa3ad;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -75,8 +75,11 @@
         <h3>See the whole fleet at a glance</h3>
         <p>Status, live output, and fan-out across every thread. One agent per worktree, all of them on one board instead of eight terminal tabs. Columns follow the work: New, Draft, Review, Merged.</p>
       </div>
-      <div class="shot-frame">
-        <img src="board.png" width="2662" height="1736" alt="Global board of Sideboard worktrees">
+      <div class="mock mock-board" aria-hidden="true">
+        <div class="mock-col"><span class="mock-col-h">New</span><i></i><i></i></div>
+        <div class="mock-col"><span class="mock-col-h">Draft</span><i class="hot"></i><i></i><i></i></div>
+        <div class="mock-col"><span class="mock-col-h">Review</span><i></i></div>
+        <div class="mock-col"><span class="mock-col-h">Merged</span><i class="done"></i><i class="done"></i></div>
       </div>
     </div>
   </div>
@@ -87,8 +90,12 @@
         <h3>An agent that can reason about the other threads</h3>
         <p>The orchestrator is an agent too. It can list threads, wait on turns, read diffs, fork worktrees, schedule jobs, and open panes in the desktop. Mechanical control stays on the CLI and costs zero tokens. MCP is for judgment across the fleet.</p>
       </div>
-      <div class="shot-frame">
-        <img src="desktop.png" width="2662" height="1736" alt="Sideboard orchestration chat beside a worktree">
+      <div class="mock mock-chat" aria-hidden="true">
+        <div class="mock-row"><b>orchestrator</b> list_threads · 6 active</div>
+        <div class="mock-row dim">wait_for_turn → thread/api-auth</div>
+        <div class="mock-row">read_diff · +182 −9</div>
+        <div class="mock-row dim">fork_worktree → thread/retry-backoff</div>
+        <div class="mock-row ok">✓ scheduled nightly smoke</div>
       </div>
     </div>
   </div>
@@ -99,8 +106,10 @@
         <h3>Slack to this Mac, not a rented sandbox</h3>
         <p>DM or @mention the orchestrator from anywhere. It can ping a coworker to review a PR a worktree just pushed; their reply comes back as information, not a command. Agents, repos, and VPN-only APIs stay on this machine.</p>
       </div>
-      <div class="shot-frame">
-        <img src="desktop.png" width="2662" height="1736" alt="Worktree chat Sideboard can drive from Slack">
+      <div class="mock mock-slack" aria-hidden="true">
+        <div class="msg you">work: check the failing CI</div>
+        <div class="msg bot">2 worktrees pushed. Pinging @dana to review PR #241.</div>
+        <div class="msg peer">@dana — looks good, ship it</div>
       </div>
     </div>
   </div>
