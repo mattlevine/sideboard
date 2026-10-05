@@ -108,7 +108,7 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   justify-content: center;
   gap: 8px;
   padding: 12px 20px;
-  border-radius: 999px;
+  border-radius: 12px;
   text-decoration: none;
   font-weight: 600;
   font-size: 14px;
@@ -121,14 +121,15 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 }
 .btn-sm { padding: 9px 16px; font-size: 13px }
 .btn-lg { padding: 14px 24px; font-size: 15px }
-.btn-primary { background: var(--blue-fill); color: #fff }
-.btn-primary:hover { background: #2a95e6; color: #fff }
+.btn-primary { background: #f7f8f8; color: #0c0d0f }
+.btn-primary:hover { background: #e4e6e8; color: #0c0d0f }
 .btn-ghost {
   border-color: var(--line-strong);
   color: var(--text);
-  background: rgba(255, 255, 255, 0.03);
+  background: transparent;
 }
-.btn-ghost:hover { background: rgba(255, 255, 255, 0.07); color: var(--text) }
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.06); color: var(--text) }
+.btn-ico { flex: none; display: block }
 .btn-white { background: #fff; color: #0c0d0f }
 .btn-white:hover { background: #e8eaed; color: #0c0d0f }
 
@@ -207,9 +208,13 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   padding: 0 28px;
 }
 .shot-frame {
-  /* Screenshots already include their own window chrome and rounded corners
-     (transparent PNGs), so no border/background here — just a soft lift. */
-  filter: drop-shadow(0 28px 60px rgba(0, 0, 0, 0.5));
+  /* Tight chrome: a thin inset mat around the screenshot (which keeps its own
+     window corners), with a modest shadow — tighter than the earlier frame. */
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #0e0f12;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 .shot-cap {
   text-align: center;

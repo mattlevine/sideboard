@@ -205,7 +205,7 @@ def page(meta: dict, body: str) -> str:
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/styles.css?v=20261004-2">
 </head>
 <body>
 <header class="nav">
@@ -215,7 +215,7 @@ def page(meta: dict, body: str) -> str:
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
 <a href="/slack/">Slack</a>
-<a href="https://github.com/mattlevine/sideboard">GitHub</a>
+<a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
 </nav>
 <a class="btn btn-primary btn-sm" href="{DL}">Download for Mac</a>
 </div>
