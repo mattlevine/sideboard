@@ -61,45 +61,6 @@ export function textFromAbleTimeDoc(value: unknown): string {
   return chunks.join('').trim();
 }
 
-export interface AbleTimeDocFile {
-  id?: string;
-  name: string;
-  url: string;
-}
-
-/** Image / file nodes in a ProseMirror doc (description or comment). */
-export function filesFromAbleTimeDoc(value: unknown): AbleTimeDocFile[] {
-  const out: AbleTimeDocFile[] = [];
-  const seen = new Set<string>();
-  const walk = (node: unknown) => {
-    const rec = asRecord(node);
-    if (!rec) return;
-    const attrs = asRecord(rec.attrs) ?? rec;
-    const url =
-      asString(attrs.src) ||
-      asString(attrs.href) ||
-      asString(attrs.url) ||
-      asString(attrs.fileUrl) ||
-      asString(attrs.downloadUrl);
-    if (url && !seen.has(url)) {
-      seen.add(url);
-      out.push({
-        id: asString(attrs.id) || asString(attrs.fileId) || undefined,
-        name:
-          asString(attrs.name) ||
-          asString(attrs.title) ||
-          asString(attrs.filename) ||
-          asString(attrs.alt) ||
-          'attachment',
-        url,
-      });
-    }
-    if (Array.isArray(rec.content)) rec.content.forEach(walk);
-  };
-  walk(value);
-  return out;
-}
-
 export function abletimeRestUrl(
   path: string,
   host?: string | null,
@@ -203,8 +164,7 @@ function restTaskToRaw(
   const identifier = asString(rec.taskRef) || asString(rec.reference) || id;
   const title = asString(rec.title);
   if (!id && !identifier && !title) return null;
-  const assigned = asString(rec.assignedUserId);
-  const assignee = assigned ? users.get(assigned) : undefined;
+  const assignee = users.get(asString(rec.assignedUserId));
   const comments = asList(rec.comments).map((item) => {
     const comment = asRecord(item) ?? {};
     const user = userDisplayName(comment);
