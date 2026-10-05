@@ -221,7 +221,7 @@ export interface IntegrationsSettings {
   /** When true, desktop/CLI listen for Slack DMs and @mentions via Socket Mode. */
   slackListenEnabled?: boolean;
   /**
-   * Stable per-Mac id for the Slack relay (Personal vs Work can both stay online).
+   * Stable per-Mac id on the relay (Personal vs Work can both stay online).
    * Generated once; do not copy between machines.
    */
   slackDeviceId?: string;

@@ -7,8 +7,8 @@ import {
 } from './app-settings.js';
 
 /**
- * Stable per-Mac identity for the Slack relay so Personal and Work can both
- * stay online as separate destinations.
+ * Stable per-Mac identity on the relay so Personal and Work can both
+ * stay online as separate destinations. Phone remote uses the same id.
  */
 export function ensureSlackDeviceIdentity(
   settings: AppSettings = loadAppSettings(),

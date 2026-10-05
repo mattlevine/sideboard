@@ -3,6 +3,8 @@ import { lookupPreferPublicDns } from '../slack/public-dns.js';
 import { handleRemoteInbound, type RemoteOutbound } from './listen.js';
 import {
   parseRemoteServerMessage,
+  REMOTE_PING_INTERVAL_MS,
+  REMOTE_PONG_TIMEOUT_MS,
   type RemoteHostMessage,
   type RemoteServerMessage,
 } from './protocol.js';
@@ -16,6 +18,9 @@ export interface RemoteHostClientOptions {
   onStatus?: (status: { connected: boolean; phoneConnected: boolean }) => void;
   onPairingCode?: (code: string | null) => void;
   onLog?: (line: string) => void;
+  /** Tests: override keepalive cadence. */
+  pingIntervalMs?: number;
+  pongTimeoutMs?: number;
 }
 
 export interface RemoteHostHandle {
@@ -26,6 +31,40 @@ export interface RemoteHostHandle {
 
 const BACKOFF_START_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
+
+/** JSON ping/pong. A missing pong means the socket is half-open and should reconnect. */
+export function createRemoteKeepalive(opts: {
+  intervalMs: number;
+  pongTimeoutMs: number;
+  sendPing: () => void;
+  onTimeout: () => void;
+}): { gotPong: () => void; stop: () => void } {
+  let pongTimer: ReturnType<typeof setTimeout> | null = null;
+  const arm = () => {
+    if (pongTimer) clearTimeout(pongTimer);
+    pongTimer = setTimeout(() => {
+      pongTimer = null;
+      opts.onTimeout();
+    }, opts.pongTimeoutMs);
+  };
+  const ping = () => {
+    opts.sendPing();
+    arm();
+  };
+  ping();
+  const pingTimer = setInterval(ping, opts.intervalMs);
+  return {
+    gotPong() {
+      if (pongTimer) clearTimeout(pongTimer);
+      pongTimer = null;
+    },
+    stop() {
+      clearInterval(pingTimer);
+      if (pongTimer) clearTimeout(pongTimer);
+      pongTimer = null;
+    },
+  };
+}
 
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -47,6 +86,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
   let socket: WsWebSocket | null = null;
   let wantPair = false;
   let deviceLabel = opts.deviceLabel;
+  let keepalive: ReturnType<typeof createRemoteKeepalive> | null = null;
 
   const send = (msg: RemoteHostMessage) => {
     if (!socket || socket.readyState !== socket.OPEN) return;
@@ -93,6 +133,8 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
       const finish = (err?: Error) => {
         if (settled) return;
         settled = true;
+        keepalive?.stop();
+        keepalive = null;
         opts.signal?.removeEventListener('abort', onAbort);
         if (err) reject(err);
         else resolve();
@@ -111,6 +153,20 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         opts.onStatus?.({ connected: true, phoneConnected: false });
         sendRegister();
         if (wantPair) send({ type: 'host_pair' });
+        keepalive = createRemoteKeepalive({
+          intervalMs: opts.pingIntervalMs ?? REMOTE_PING_INTERVAL_MS,
+          pongTimeoutMs: opts.pongTimeoutMs ?? REMOTE_PONG_TIMEOUT_MS,
+          sendPing: () => send({ type: 'ping' }),
+          onTimeout: () => {
+            log('remote error: ping timeout');
+            finish(new Error('remote ping timeout'));
+            try {
+              ws.close();
+            } catch {
+              // ignore
+            }
+          },
+        });
       });
       ws.on('message', (data) => {
         const raw = typeof data === 'string' ? data : data.toString('utf8');
@@ -142,6 +198,10 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
     if (msg.type === 'phone_left') {
       opts.onStatus?.({ connected: true, phoneConnected: false });
       log('phone left');
+      return;
+    }
+    if (msg.type === 'pong') {
+      keepalive?.gotPong();
       return;
     }
     if (msg.type === 'error') {
@@ -178,7 +238,6 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
   return {
     requestPairingCode() {
       wantPair = true;
-      opts.onPairingCode?.(null);
       send({ type: 'host_pair' });
     },
     updateIdentity(label: string) {

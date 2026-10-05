@@ -68,7 +68,7 @@ Helpers: `packages/core/src/orchestrator/notify-orchestrator.ts`.
 ## Follow-ups (not in this change)
 
 1. **`list_peers` / `send_to_peer`** on the worktree MCP profile (≤3 terse tools). Information-only, when a sibling actually needs it — not automatic on every merge.
-2. **A2A Agent Card** for the fleet (localhost or the Slack relay) only if an external orchestrator needs to delegate onto this Mac.
+2. **A2A Agent Card** for the fleet (localhost or the relay) only if an external orchestrator needs to delegate onto this Mac.
 
 ## Where to change what
 

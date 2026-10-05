@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
+import { createRelayLink, type RelayLink } from './relay-link';
 
 const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
 
@@ -74,13 +75,34 @@ export default function App() {
   const desktopsRef = useRef(desktops);
   const activeIdRef = useRef(activeId);
   const urlRef = useRef(url);
-  const socketRef = useRef<WebSocket | null>(null);
-  const queueRef = useRef<object[]>([]);
   const pendingTokenRef = useRef<string | null>(null);
+  const screenRef = useRef(screen);
+  const attachedRef = useRef(false);
+  const pendingSendRef = useRef<object | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
+  const linkRef = useRef<RelayLink | null>(null);
   desktopsRef.current = desktops;
   activeIdRef.current = activeId;
   urlRef.current = url;
+  screenRef.current = screen;
+  if (!linkRef.current) {
+    linkRef.current = createRelayLink({
+      url: () => urlRef.current.trim() || DEFAULT_URL,
+      onMessage: (raw) => onMessageRef.current(raw),
+      onError: (message) => setError(message),
+      onClose: () => {
+        attachedRef.current = false;
+      },
+      attached: () => attachedRef.current,
+      inChat: () => screenRef.current === 'chat',
+      sessionToken: () => {
+        const id = activeIdRef.current;
+        const desktop = id ? desktopsRef.current.find((row) => row.deviceId === id) : undefined;
+        return desktop?.sessionToken ?? pendingTokenRef.current;
+      },
+    });
+  }
+  const link = linkRef.current;
 
   function patchDesktop(sessionToken: string, patch: Partial<Desktop>) {
     setDesktops((prev) => {
@@ -133,12 +155,17 @@ export default function App() {
       remember(desktop);
       setActiveId(desktop.deviceId);
       pendingTokenRef.current = desktop.sessionToken;
+      attachedRef.current = true;
+      link.cancelResume();
+      const pending = pendingSendRef.current;
+      pendingSendRef.current = null;
       setError(null);
       setScreen('chat');
       setTranscripts((prev) => ({
         ...prev,
-        [desktop.deviceId]: { ...(prev[desktop.deviceId] ?? EMPTY), working: false },
+        [desktop.deviceId]: { ...(prev[desktop.deviceId] ?? EMPTY), working: Boolean(pending) },
       }));
+      if (pending) link.send(pending);
       return;
     }
     if (msg.type === 'assistant' || msg.type === 'ask_user') {
@@ -157,57 +184,53 @@ export default function App() {
       });
       return;
     }
+    if (msg.type === 'pong') {
+      link.notePong();
+      return;
+    }
     if (msg.type === 'host_offline') {
+      attachedRef.current = false;
       const token = pendingTokenRef.current;
       if (token) patchDesktop(token, { online: false });
-      setError('That Mac is offline. Open Sideboard on it, then choose it again.');
+      setError(
+        screenRef.current === 'chat'
+          ? 'That Mac is offline. Reconnecting…'
+          : 'That Mac is offline. Open Sideboard on it, then choose it again.',
+      );
       const id = activeIdRef.current;
       if (id) {
         setTranscripts((prev) => ({
           ...prev,
-          [id]: { ...(prev[id] ?? EMPTY), working: false },
+          [id]: { ...(prev[id] ?? EMPTY), working: Boolean(pendingSendRef.current) },
         }));
       }
+      link.scheduleResume();
       return;
     }
     if (msg.type === 'error') {
       const token = pendingTokenRef.current;
-      if (token && /pair again/i.test(msg.message)) patchDesktop(token, { online: false, expired: true });
+      if (token && /pair again/i.test(msg.message)) {
+        patchDesktop(token, { online: false, expired: true });
+        attachedRef.current = false;
+        pendingSendRef.current = null;
+        link.cancelResume();
+      }
       setError(msg.message);
     }
   };
 
-  function sendWhenOpen(payload: object) {
-    const ws = socketRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(payload));
-      return;
-    }
-    queueRef.current.push(payload);
-    if (ws && ws.readyState === WebSocket.CONNECTING) return;
-    const next = new WebSocket(urlRef.current.trim() || DEFAULT_URL);
-    socketRef.current = next;
-    next.onmessage = (event) => onMessageRef.current(String(event.data));
-    next.onopen = () => {
-      const queued = queueRef.current;
-      queueRef.current = [];
-      for (const item of queued) next.send(JSON.stringify(item));
-    };
-    next.onerror = () => setError('Could not reach the relay.');
-    next.onclose = () => {
-      if (socketRef.current === next) socketRef.current = null;
-    };
-  }
-
   function showDesktops() {
+    link.cancelResume();
     setError(null);
     const tokens = desktopsRef.current.map((row) => row.sessionToken);
     if (tokens.length === 0) {
+      screenRef.current = 'pair';
       setScreen('pair');
       return;
     }
+    screenRef.current = 'desktops';
     setScreen('desktops');
-    sendWhenOpen({ type: 'list_hosts', sessionTokens: tokens });
+    link.send({ type: 'list_hosts', sessionTokens: tokens });
   }
 
   function choose(desktop: Desktop) {
@@ -218,7 +241,7 @@ export default function App() {
     }
     setError(null);
     pendingTokenRef.current = desktop.sessionToken;
-    sendWhenOpen({ type: 'resume', sessionToken: desktop.sessionToken });
+    link.send({ type: 'resume', sessionToken: desktop.sessionToken });
   }
 
   function forget(deviceId: string) {
@@ -226,16 +249,18 @@ export default function App() {
     const next = desktopsRef.current.filter((row) => row.deviceId !== deviceId);
     setDesktops(next);
     persist(next);
-    if (wasActive) setActiveId(null);
-    if (next.length === 0) setScreen('pair');
-    else if (wasActive) setScreen('desktops');
+    if (wasActive) {
+      setActiveId(null);
+      link.cancelResume();
+      screenRef.current = next.length === 0 ? 'pair' : 'desktops';
+      setScreen(screenRef.current);
+    } else if (next.length === 0) setScreen((screenRef.current = 'pair'));
   }
 
   function sendText(text: string) {
     const body = text.trim();
-    const ws = socketRef.current;
     const id = activeIdRef.current;
-    if (!body || !id || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!body || !id) return;
     setTranscripts((prev) => {
       const current = prev[id] ?? EMPTY;
       return {
@@ -248,7 +273,16 @@ export default function App() {
       };
     });
     setDraft('');
-    ws.send(JSON.stringify(body.toLowerCase() === 'stop' ? { type: 'stop' } : { type: 'prompt', text: body }));
+    const payload = body.toLowerCase() === 'stop' ? { type: 'stop' } : { type: 'prompt', text: body };
+    if (attachedRef.current) {
+      link.send(payload);
+      return;
+    }
+    pendingSendRef.current = payload;
+    const desktop = desktopsRef.current.find((row) => row.deviceId === id);
+    const token = desktop?.sessionToken ?? pendingTokenRef.current;
+    if (token) link.send({ type: 'resume', sessionToken: token });
+    link.scheduleResume();
   }
 
   useEffect(() => {
@@ -262,7 +296,7 @@ export default function App() {
       const rows = saved.map((row) => ({ ...row, online: null, expired: false }));
       setDesktops(rows);
       setScreen('desktops');
-      sendWhenOpen({ type: 'list_hosts', sessionTokens: rows.map((row) => row.sessionToken) });
+      link.send({ type: 'list_hosts', sessionTokens: rows.map((row) => row.sessionToken) });
     });
     return () => {
       cancelled = true;
@@ -354,7 +388,7 @@ export default function App() {
             if (!next) return;
             setError(null);
             pendingTokenRef.current = null;
-            sendWhenOpen({ type: 'pair', code: next });
+            link.send({ type: 'pair', code: next });
           }}
         >
           <Text style={styles.buttonText}>Pair</Text>

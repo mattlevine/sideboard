@@ -20,6 +20,7 @@ let remoteLastLog: string | null = null;
 let remoteAbort: AbortController | null = null;
 let remoteRequestPair: (() => void) | null = null;
 let remoteUpdateIdentity: ((deviceLabel: string) => void) | null = null;
+const pairingWaiters = new Set<(code: string) => void>();
 
 export function isRemoteHostRunning(): boolean {
   return remoteHostRunning;
@@ -43,6 +44,7 @@ export function stopRemoteHost(): void {
   remoteAbort = null;
   remoteRequestPair = null;
   remoteUpdateIdentity = null;
+  pairingWaiters.clear();
   remoteHostRunning = false;
   remoteConnected = false;
   remotePhoneConnected = false;
@@ -67,6 +69,10 @@ export function startRemoteHost(): void {
     signal: ac.signal,
     onPairingCode: (code) => {
       remotePairingCode = code;
+      if (!code) return;
+      for (const waiter of pairingWaiters) waiter(code);
+      pairingWaiters.clear();
+      onActivity();
     },
     onStatus: (status) => {
       remoteConnected = status.connected;
@@ -96,7 +102,21 @@ export function refreshRemoteDeviceLabel(): void {
   else startRemoteHost();
 }
 
-export function requestRemotePairing(): RemoteHostStatus {
-  remoteRequestPair?.();
-  return readRemoteStatus();
+export function requestRemotePairing(): Promise<RemoteHostStatus> {
+  const previous = remotePairingCode;
+  if (!remoteRequestPair) return Promise.resolve(readRemoteStatus());
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      pairingWaiters.delete(onCode);
+      resolve(readRemoteStatus());
+    };
+    const onCode = (code: string) => {
+      if (code !== previous) finish();
+    };
+    const timer = setTimeout(finish, 5000);
+    pairingWaiters.add(onCode);
+    remoteRequestPair?.();
+    if (remotePairingCode && remotePairingCode !== previous) finish();
+  });
 }

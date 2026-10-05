@@ -46,6 +46,13 @@ function pairedToken(phone: { messages: RemoteServerMessage[] }): string {
 }
 
 describe('RemoteHub', () => {
+  it('answers ping with pong', () => {
+    const hub = new RemoteHub();
+    const socket = fakeSocket();
+    hub.handleClientMessage(socket, JSON.stringify({ type: 'ping' }));
+    expect(last(socket)).toEqual({ type: 'pong' });
+  });
+
   it('pairs a phone to a registered Mac and forwards a prompt', () => {
     const hub = new RemoteHub();
     const mac = fakeSocket();

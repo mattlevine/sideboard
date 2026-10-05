@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { startSlackRelayServer } from './relay-server.js';
+import { startRelayServer } from './server.js';
 
-describe('Slack relay OAuth exchange', () => {
+describe('relay Slack OAuth exchange', () => {
   const handles: Array<{ close: () => Promise<void> }> = [];
 
   afterEach(async () => {
@@ -10,7 +10,7 @@ describe('Slack relay OAuth exchange', () => {
 
   it('exchanges the code on the relay and does not echo it on /slack/oauth/result until consumed', async () => {
     const slackCalls: string[] = [];
-    const handle = await startSlackRelayServer({
+    const handle = await startRelayServer({
       appToken: 'xapp-test',
       clientSecret: 'relay-secret',
       clientId: 'CID',
@@ -55,7 +55,7 @@ describe('Slack relay OAuth exchange', () => {
   });
 
   it('records access_denied for the desktop poll without leaking a code', async () => {
-    const handle = await startSlackRelayServer({
+    const handle = await startRelayServer({
       appToken: 'xapp-test',
       clientSecret: 'relay-secret',
       skipSocketMode: true,
@@ -74,7 +74,7 @@ describe('Slack relay OAuth exchange', () => {
   });
 
   it('bounces AbleTime HTTPS callback onto the desktop listener', async () => {
-    const handle = await startSlackRelayServer({
+    const handle = await startRelayServer({
       appToken: 'xapp-test',
       skipSocketMode: true,
     });

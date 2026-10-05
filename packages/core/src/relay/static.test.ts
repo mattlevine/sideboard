@@ -3,8 +3,8 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveStaticPath } from './relay-static.js';
-import { startSlackRelayServer } from './relay-server.js';
+import { resolveStaticPath } from './static.js';
+import { startRelayServer } from './server.js';
 
 function request(
   port: number,
@@ -59,7 +59,7 @@ describe('resolveStaticPath', () => {
   });
 });
 
-describe('Slack relay static marketing site', () => {
+describe('relay static marketing site', () => {
   const handles: Array<{ close: () => Promise<void> }> = [];
 
   afterEach(async () => {
@@ -73,7 +73,7 @@ describe('Slack relay static marketing site', () => {
     await writeFile(path.join(root, 'docs/index.html'), '<!DOCTYPE html><title>Docs</title><h1>Docs</h1>');
     await writeFile(path.join(root, 'styles.css'), 'body{color:#111}');
 
-    const handle = await startSlackRelayServer({
+    const handle = await startRelayServer({
       appToken: 'xapp-test',
       clientSecret: 'relay-secret',
       skipSocketMode: true,
@@ -109,7 +109,7 @@ describe('Slack relay static marketing site', () => {
   it('serves the site only on staticHosts and redirects the apex', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'sideboard-site-'));
     await writeFile(path.join(root, 'index.html'), '<!DOCTYPE html><h1>Site</h1>');
-    const handle = await startSlackRelayServer({
+    const handle = await startRelayServer({
       appToken: 'xapp-test',
       skipSocketMode: true,
       staticRoot: root,
@@ -132,7 +132,7 @@ describe('Slack relay static marketing site', () => {
   });
 
   it('keeps JSON on / when staticRoot is unset', async () => {
-    const handle = await startSlackRelayServer({
+    const handle = await startRelayServer({
       appToken: 'xapp-test',
       skipSocketMode: true,
     });

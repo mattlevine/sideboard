@@ -1,9 +1,9 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startSlackRelayServer } from '@sideboard-ai/core';
+import { startRelayServer } from '@sideboard-ai/core';
 
 /**
- * Hosted Slack inbound relay.
+ * Hosted Sideboard relay.
  *
  * Env:
  *   SIDEBOARD_SLACK_APP_TOKEN      optional xapp-… — Slack Listen is off when this is unset
@@ -17,11 +17,11 @@ import { startSlackRelayServer } from '@sideboard-ai/core';
  *   SIDEBOARD_SITE_CANONICAL       canonical site host (default: www.sideboard.cloud)
  *
  * Phone and Mac connect at wss://relay.sideboard.cloud/remote.
- * Legacy Slack desktops still use wss://relay.sideboard.cloud/slack/desktop when
+ * Slack desktops use wss://relay.sideboard.cloud/slack/desktop when
  * SIDEBOARD_SLACK_APP_TOKEN is set. GET /slack/callback exchanges Slack OAuth.
  * GET / on www.sideboard.cloud serves the marketing site. GET
  * /oauth/abletime/callback bounces AbleTime OAuth to the desktop listener.
- * relay.sideboard.cloud stays Slack + JSON. GET /health stays JSON for Fly checks.
+ * GET /health stays JSON for Fly checks.
  */
 async function main(): Promise<void> {
   const appToken = process.env.SIDEBOARD_SLACK_APP_TOKEN?.trim() ?? '';
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  const handle = await startSlackRelayServer({
+  const handle = await startRelayServer({
     appToken,
     clientSecret,
     skipSocketMode: true,
