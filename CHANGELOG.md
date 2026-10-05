@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.264] - 2026-10-05
+
+### Fixed
+
+- Local Cursor Grok 4.7 turns no longer fail with `Invalid parameters`: send catalog `reasoning_effort` (not `effort`), keep the 256k context pin, and map Sideboard `max` to `xhigh`.
+- Desktop pack skips missing Claude SDK natives when staging the Cursor runtime.
+
 ### Changed
 
-- README and marketing-site screenshots refreshed (`sideboard-desktop-review-v7.png`, `site/desktop.png`, `site/board.png`) at native 2662×1736 PNG (144 dpi) so they stay sharp on retina.
+- Marketing site restaged against Conductor and Orca: GitHub CTA, desktop + board screenshots, glossary/docs copy.
 
 ## [0.1.263] - 2026-10-04
 
