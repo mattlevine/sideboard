@@ -93,6 +93,7 @@ describe('buildTextContextMenuItems', () => {
     expect(items?.map((i) => ('role' in i ? i.role : i.type))).toEqual([
       'copy',
       'quote',
+      'readAloud',
       'searchChat',
       'selectChatText',
     ]);
@@ -127,6 +128,7 @@ describe('buildTextContextMenuItems', () => {
       { isMac: true },
     );
     expect(items?.some((i) => i.type === 'quote')).toBe(false);
+    expect(items?.some((i) => i.type === 'readAloud')).toBe(false);
     expect(items?.map((i) => ('role' in i ? i.role : i.type))).toEqual([
       'undo',
       'redo',

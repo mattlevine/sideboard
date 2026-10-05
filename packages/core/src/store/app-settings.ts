@@ -335,6 +335,25 @@ export function isChatTextScale(value: unknown): value is ChatTextScale {
   return (CHAT_TEXT_SCALES as readonly unknown[]).includes(value);
 }
 
+/** Web Speech API `utterance.rate` for chat Read Aloud. */
+export const READ_ALOUD_RATE_MIN = 0.5;
+export const READ_ALOUD_RATE_MAX = 3;
+export const READ_ALOUD_RATE_DEFAULT = 1;
+
+export function clampReadAloudRate(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return READ_ALOUD_RATE_DEFAULT;
+  return Math.min(
+    READ_ALOUD_RATE_MAX,
+    Math.max(READ_ALOUD_RATE_MIN, Math.round(value * 10) / 10),
+  );
+}
+
+export function sanitizeReadAloudVoiceURI(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const uri = value.trim().slice(0, 400);
+  return uri || undefined;
+}
+
 export interface AdvancedAppSettings {
   /**
    * Ask the agent to rename the temporary soccer-team branch on first send.
@@ -457,6 +476,16 @@ export interface AdvancedAppSettings {
    * Audio bytes live under app data `sounds/agent-done.<ext>`.
    */
   agentDoneCustomSoundName?: string;
+  /**
+   * Speech rate for chat Read Aloud (Web Speech API `utterance.rate`).
+   * Omitted = {@link READ_ALOUD_RATE_DEFAULT} (1).
+   */
+  readAloudRate?: number;
+  /**
+   * Preferred `SpeechSynthesisVoice.voiceURI` for chat Read Aloud.
+   * Omitted = the engine default voice.
+   */
+  readAloudVoiceURI?: string;
 }
 
 export interface AppSettings {
@@ -1054,6 +1083,11 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
     const name = source.agentDoneCustomSoundName.trim();
     if (name) out.agentDoneCustomSoundName = name.slice(0, 200);
   }
+  if (typeof source.readAloudRate === 'number' && Number.isFinite(source.readAloudRate)) {
+    out.readAloudRate = clampReadAloudRate(source.readAloudRate);
+  }
+  const voiceURI = sanitizeReadAloudVoiceURI(source.readAloudVoiceURI);
+  if (voiceURI) out.readAloudVoiceURI = voiceURI;
   return out;
 }
 
@@ -2406,6 +2440,16 @@ export function updateAdvancedSettings(
     if (name) advanced.agentDoneCustomSoundName = name.slice(0, 200);
     else delete advanced.agentDoneCustomSoundName;
   }
+  if (typeof patch.readAloudRate === 'number' && Number.isFinite(patch.readAloudRate)) {
+    advanced.readAloudRate = clampReadAloudRate(patch.readAloudRate);
+  }
+  if (patch.readAloudVoiceURI === null || patch.readAloudVoiceURI === '') {
+    delete advanced.readAloudVoiceURI;
+  } else if (typeof patch.readAloudVoiceURI === 'string') {
+    const voiceURI = sanitizeReadAloudVoiceURI(patch.readAloudVoiceURI);
+    if (voiceURI) advanced.readAloudVoiceURI = voiceURI;
+    else delete advanced.readAloudVoiceURI;
+  }
   return saveAppSettings({ ...current, advanced });
 }
 
@@ -2553,6 +2597,18 @@ export function followUpBehavior(
   settings: AppSettings = loadAppSettings(),
 ): FollowUpBehavior {
   return settings.advanced.followUpBehavior === 'queue' ? 'queue' : 'steer';
+}
+
+/** Chat Read Aloud speed (Web Speech API rate; default 1). */
+export function readAloudRate(settings: AppSettings = loadAppSettings()): number {
+  return clampReadAloudRate(settings.advanced.readAloudRate);
+}
+
+/** Preferred system voice URI for chat Read Aloud, or undefined for the engine default. */
+export function readAloudVoiceURI(
+  settings: AppSettings = loadAppSettings(),
+): string | undefined {
+  return sanitizeReadAloudVoiceURI(settings.advanced.readAloudVoiceURI);
 }
 
 /** Default: none (silent). Prefer `goal` when the user enables a sound. */

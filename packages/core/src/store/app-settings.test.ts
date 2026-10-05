@@ -676,6 +676,19 @@ describe('app settings', () => {
       'none',
     );
     expect(mod.agentDoneSound()).toBe('none');
+    expect(mod.readAloudRate()).toBe(1);
+    expect(mod.readAloudVoiceURI()).toBeUndefined();
+    expect(mod.updateAdvancedSettings({ readAloudRate: 1.7 }).advanced.readAloudRate).toBe(1.7);
+    expect(mod.readAloudRate()).toBe(1.7);
+    expect(mod.updateAdvancedSettings({ readAloudRate: 9 }).advanced.readAloudRate).toBe(3);
+    expect(
+      mod.updateAdvancedSettings({ readAloudVoiceURI: 'com.apple.voice.compact.en-US.Samantha' })
+        .advanced.readAloudVoiceURI,
+    ).toBe('com.apple.voice.compact.en-US.Samantha');
+    expect(mod.readAloudVoiceURI()).toBe('com.apple.voice.compact.en-US.Samantha');
+    expect(mod.updateAdvancedSettings({ readAloudVoiceURI: '' }).advanced.readAloudVoiceURI).toBe(
+      undefined,
+    );
     expect(
       mod.updateAdvancedSettings({
         agentDoneSound: 'custom',

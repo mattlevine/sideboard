@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Chat selection context menu includes **Read Aloud**. A player modal uses the system Web Speech voices (grouped by language), live speed from 0.5×–3×, and saves the rate and voice you leave it on as the default.
+
 ## [0.1.265] - 2026-10-05
 
 ### Changed

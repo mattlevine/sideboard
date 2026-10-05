@@ -48,6 +48,16 @@ function toElectronItem(
       },
     };
   }
+  if (item.type === 'readAloud') {
+    return {
+      label: 'Read Aloud',
+      click: () => {
+        const text = (params.selectionText ?? '').trim();
+        if (!text || win.isDestroyed()) return;
+        win.webContents.send('menu:read-aloud', text.slice(0, 50_000));
+      },
+    };
+  }
   if (item.type === 'searchChat') {
     return {
       label: 'Search Chat',

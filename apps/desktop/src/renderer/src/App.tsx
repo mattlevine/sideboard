@@ -35,6 +35,7 @@ import {
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
 import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { applyChatTextScale, resolveChatTextScale } from './lib/chat-text-scale';
+import { clampReadAloudRate, sanitizeReadAloudVoiceURI } from './lib/read-aloud';
 import { ShowCostProvider } from './lib/show-cost';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
@@ -46,6 +47,7 @@ import { GlobalBoard } from './components/GlobalBoard';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
+import { ReadAloudModal } from './components/ReadAloudModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
 import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
@@ -184,6 +186,9 @@ export function App() {
   const [teamToasts, setTeamToasts] = useState<TeamToastItem[]>([]);
   const [prefill, setPrefill] = useState<string | undefined>();
   const [findChatCmd, setFindChatCmd] = useState<{ nonce: number; query: string } | null>(null);
+  const [readAloud, setReadAloud] = useState<{ text: string; nonce: number } | null>(null);
+  const [readAloudRate, setReadAloudRate] = useState(1);
+  const [readAloudVoiceURI, setReadAloudVoiceURI] = useState('');
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
@@ -369,6 +374,14 @@ export function App() {
   const [agentDoneSound, setAgentDoneSound] = useState<AgentDoneSound>('none');
   const agentDoneSoundRef = useRef<AgentDoneSound>('none');
   agentDoneSoundRef.current = agentDoneSound;
+  const persistReadAloudDefaults = useCallback((next: { rate: number; voiceURI: string }) => {
+    setReadAloudRate(next.rate);
+    setReadAloudVoiceURI(next.voiceURI);
+    void window.sideboard.updateAdvancedSettings({
+      readAloudRate: next.rate,
+      readAloudVoiceURI: next.voiceURI,
+    });
+  }, []);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -549,6 +562,8 @@ export function App() {
       setAgentDoneSound(
         isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
       );
+      setReadAloudRate(clampReadAloudRate(s.advanced?.readAloudRate));
+      setReadAloudVoiceURI(sanitizeReadAloudVoiceURI(s.advanced?.readAloudVoiceURI));
       setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
     });
   }, []);
@@ -736,6 +751,11 @@ export function App() {
       if (!text.trim()) return;
       setPrefill(text);
     });
+    const offReadAloud = window.sideboardUpdate.onReadAloud?.((text) => {
+      const next = text.trim();
+      if (!next) return;
+      setReadAloud({ text: next, nonce: Date.now() });
+    });
     const offFindChat = window.sideboardUpdate.onFindChat?.((text) => {
       setFindChatCmd({ nonce: Date.now(), query: typeof text === 'string' ? text : '' });
     });
@@ -749,6 +769,7 @@ export function App() {
       offUpdateError();
       offOpenSettings();
       offQuoteSelection?.();
+      offReadAloud?.();
       offFindChat?.();
     };
   }, [refresh, refreshThread, livePaintStore]);
@@ -1600,6 +1621,17 @@ export function App() {
         />
       )}
 
+      {readAloud && (
+        <ReadAloudModal
+          key={readAloud.nonce}
+          text={readAloud.text}
+          rate={readAloudRate}
+          voiceURI={readAloudVoiceURI}
+          onDefaultsChange={persistReadAloudDefaults}
+          onClose={() => setReadAloud(null)}
+        />
+      )}
+
       {settingsOpen && (
         <SettingsModal
           initialNav={settingsInitialNav}
@@ -1648,6 +1680,8 @@ export function App() {
             setAgentDoneSound(
               isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
             );
+            setReadAloudRate(clampReadAloudRate(s.advanced?.readAloudRate));
+            setReadAloudVoiceURI(sanitizeReadAloudVoiceURI(s.advanced?.readAloudVoiceURI));
             setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
           }}
           onClose={() => {

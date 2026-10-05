@@ -26,6 +26,7 @@ export type TextContextMenuItem =
     }
   | { type: 'copyLink'; url: string }
   | { type: 'quote' }
+  | { type: 'readAloud' }
   | { type: 'searchChat' }
   | { type: 'selectChatText' };
 
@@ -149,7 +150,7 @@ export function buildTextContextMenuItems(
       items.push({ type: 'role', role: 'copy', enabled: flags.canCopy ?? true });
     }
     if (hasSelection && target.inChatText) {
-      items.push({ type: 'quote' });
+      items.push({ type: 'quote' }, { type: 'readAloud' });
     }
     if (target.inChatText) {
       items.push({ type: 'searchChat' }, { type: 'selectChatText' });
