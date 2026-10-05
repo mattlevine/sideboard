@@ -107,12 +107,15 @@ describe('sideboardMcpProfile', () => {
     expect([...WORKTREE_GITHUB_MCP_TOOLS]).toEqual([
       'github_search_issues',
       'github_get_issue',
+      'github_download_attachment',
       'github_comment',
       'github_update_issue',
       'github_create_issue',
     ]);
     expect(WORKTREE_LINEAR_MCP_TOOLS).toContain('linear_comment');
+    expect(WORKTREE_LINEAR_MCP_TOOLS).toContain('linear_download_attachment');
     expect(WORKTREE_ABLETIME_MCP_TOOLS).toContain('abletime_comment');
+    expect(WORKTREE_ABLETIME_MCP_TOOLS).toContain('abletime_download_attachment');
     expect(WORKTREE_ABLETIME_MCP_TOOLS).toContain('abletime_update_task');
   });
 });

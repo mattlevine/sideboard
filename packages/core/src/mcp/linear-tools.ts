@@ -4,6 +4,7 @@ import { parseIssueSince } from '../integrations/issue-since.js';
 import {
   commentLinearIssue,
   createLinearIssue,
+  downloadLinearAttachment,
   getLinearIssue,
   listLinearCommentsSince,
   listLinearIssuesFiltered,
@@ -42,6 +43,7 @@ export const LINEAR_MCP_TOOL_NAMES = [
   'linear_list_teams',
   'linear_search_issues',
   'linear_get_issue',
+  'linear_download_attachment',
   'linear_create_issue',
   'linear_update_issue',
   'linear_comment',
@@ -127,11 +129,31 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_get_issue',
-    'Get a Linear issue by uuid or identifier (ENG-123): description, comments, relations, parent/children. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload.',
+    'Get a Linear issue by uuid or identifier (ENG-123): description, comments, relations, parent/children, attachments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. To save a file, call linear_download_attachment with the attachment id or url (writes `.context/attachments/`; do not dump bytes into the tool result).',
     { id: z.string(), include: mcpIssueIncludeSchema },
     async ({ id, include }) => {
       try {
         return text(formatLinearIssuePayload(await getLinearIssue(id), include));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.tool(
+    'linear_download_attachment',
+    'Download a Linear file attachment into `.context/attachments/` using Account Linear auth. Pass the attachment uuid or uploads.linear.app URL from linear_get_issue. Returns the worktree-relative path — Read that file; do not dump bytes into chat.',
+    {
+      id: z.string().describe('Attachment uuid or upload URL from linear_get_issue.'),
+      name: z.string().optional().describe('Optional filename override.'),
+      repoPath: z
+        .string()
+        .optional()
+        .describe('Workspace / worktree path. Omit on a worktree turn (uses cwd).'),
+    },
+    async ({ id, name, repoPath }) => {
+      try {
+        return text(await downloadLinearAttachment({ id, name }, { destPath: repoPath }));
       } catch (err) {
         return fail(err);
       }

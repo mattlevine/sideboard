@@ -99,6 +99,7 @@ describe('abletime helpers', () => {
       labels: ['bug'],
       assignee: { name: 'Grant' },
       comments: [],
+      attachments: [],
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-09-10T12:00:00.000Z',
     });
@@ -107,10 +108,33 @@ describe('abletime helpers', () => {
       reference: 'CRM-232',
       title: 'Fix login',
       comments: [{ id: 'c1', body: 'Looks good', user: { name: 'Ada' } }],
+      attachments: [{ id: 'f1', name: 'shot.png', url: 'https://track.abletime.com/files/f1.png' }],
+      description: {
+        type: 'doc',
+        content: [
+          {
+            type: 'image',
+            attrs: { src: 'https://cdn.abletime.com/a.png', filename: 'a.png' },
+          },
+        ],
+      },
     });
     expect(withComments?.comments).toEqual([
       expect.objectContaining({ id: 'c1', body: 'Looks good', user: 'Ada' }),
     ]);
+    expect(withComments?.attachments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'f1',
+          name: 'shot.png',
+          url: 'https://track.abletime.com/files/f1.png',
+        }),
+        expect.objectContaining({
+          url: 'https://cdn.abletime.com/a.png',
+          name: 'a.png',
+        }),
+      ]),
+    );
     expect(toAbleTimeIssueInfo(task!)).toMatchObject({
       identifier: 'CRM-232',
       provider: 'abletime',

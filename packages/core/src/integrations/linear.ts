@@ -1,7 +1,11 @@
 import { httpFetch } from '../http/fetch.js';
 import type { IssueActivityComment, IssueInfo } from '../types/thread.js';
 import { previewIssueCommentBody } from './issue-since.js';
+import { mapLinearAttachments, type LinearIssueAttachment } from './linear-attachments.js';
 import { getLinearAuthToken, linearAuthorizationHeader } from './linear-oauth.js';
+
+export type { LinearIssueAttachment } from './linear-attachments.js';
+export { downloadLinearAttachment } from './linear-attachments.js';
 
 const LINEAR_GRAPHQL = 'https://api.linear.app/graphql';
 
@@ -79,7 +83,7 @@ const ISSUE_FIELDS = `
     }
   }
   attachments(first: 20) {
-    nodes { id title url subtitle }
+    nodes { id title url subtitle sourceType }
   }
 `;
 
@@ -298,7 +302,13 @@ type LinearIssueNode = {
     }>;
   };
   attachments?: {
-    nodes?: Array<{ id?: string; title?: string; url?: string; subtitle?: string }>;
+    nodes?: Array<{
+      id?: string;
+      title?: string;
+      url?: string;
+      subtitle?: string;
+      sourceType?: string;
+    }>;
   };
 };
 
@@ -353,13 +363,6 @@ export interface LinearIssueComment {
   createdAt?: string;
   updatedAt?: string;
   user?: { id: string; name: string };
-}
-
-export interface LinearIssueAttachment {
-  id: string;
-  title: string;
-  url: string;
-  subtitle?: string;
 }
 
 export interface LinearIssue {
@@ -604,22 +607,6 @@ function mapComments(node: LinearIssueNode): LinearIssueComment[] {
   return out;
 }
 
-function mapAttachments(node: LinearIssueNode): LinearIssueAttachment[] {
-  const out: LinearIssueAttachment[] = [];
-  for (const attachment of node.attachments?.nodes ?? []) {
-    const id = String(attachment.id ?? '');
-    const url = String(attachment.url ?? '').trim();
-    if (!id && !url) continue;
-    out.push({
-      id,
-      title: String(attachment.title ?? ''),
-      url,
-      subtitle: attachment.subtitle?.trim() || undefined,
-    });
-  }
-  return out;
-}
-
 function mapIssue(node: LinearIssueNode): LinearIssue {
   const team = node.team;
   return {
@@ -663,9 +650,10 @@ function mapIssue(node: LinearIssueNode): LinearIssue {
     }),
     relations: mapRelations(node),
     comments: mapComments(node),
-    attachments: mapAttachments(node),
+    attachments: mapLinearAttachments(node),
   };
 }
+
 function toIssueInfo(issue: LinearIssue): IssueInfo {
   return {
     id: issue.id,
