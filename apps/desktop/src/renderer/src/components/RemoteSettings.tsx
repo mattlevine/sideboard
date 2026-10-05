@@ -16,6 +16,7 @@ export function RemoteSettings({
 }) {
   const [remote, setRemote] = useState<RemoteHostStatus | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
+  const [pairing, setPairing] = useState(false);
 
   useEffect(() => {
     void window.sideboard.getRemoteStatus?.().then(setRemote).catch(() => undefined);
@@ -114,12 +115,22 @@ export function RemoteSettings({
         ) : null}
         <button
           type="button"
-          disabled={busy || !remote?.connected}
+          disabled={busy || pairing || !remote?.connected}
           onClick={() => {
-            void window.sideboard.requestRemotePairingCode?.().then(setRemote);
+            setPairing(true);
+            void window.sideboard
+              .requestRemotePairingCode?.()
+              .then((next) => {
+                if (!next) return;
+                setRemote((current) => {
+                  if (next.pairingCode || !current?.pairingCode) return next;
+                  return { ...next, pairingCode: current.pairingCode };
+                });
+              })
+              .finally(() => setPairing(false));
           }}
         >
-          Show pairing code
+          {pairing ? 'Getting code…' : 'Show pairing code'}
         </button>
       </div>
     </div>

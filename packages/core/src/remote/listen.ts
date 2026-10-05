@@ -37,6 +37,28 @@ function enqueue(fn: () => Promise<void>): void {
 }
 
 /**
+ * Kill an in-flight phone turn before the handle queue runs.
+ * `stop` inside the queue cannot unblock the previous `waitForTurn`.
+ */
+export function interruptRemoteCoordinator(
+  deviceId: string,
+  log: (line: string) => void = () => undefined,
+): boolean {
+  try {
+    const live = findRemoteCoordinator(deviceId);
+    if (!live) return false;
+    const fresh = readThread(live.id) ?? live;
+    if (fresh.status !== 'running' && fresh.status !== 'queued') return false;
+    getOrchestrator().stop(fresh.id, { clearQueue: true });
+    log(`interrupt phone → coordinator ${fresh.id.slice(0, 8)} (${fresh.status})`);
+    return true;
+  } catch (err) {
+    log(`interrupt: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
+
+/**
  * Phone text → Global orchestrator on this Mac → reply or ask_user buttons.
  * Same turn loop as Slack Listen, without Slack.
  */
@@ -51,20 +73,13 @@ export function handleRemoteInbound(
 ): void {
   const generation = ++inboundGeneration;
   const log = opts.onLog ?? (() => undefined);
+  const body = text.trim();
+  if (body) interruptRemoteCoordinator(opts.deviceId, log);
   enqueue(async () => {
     if (generation !== inboundGeneration) return;
     const agent = coerceOrchestratorAgent(opts.agent ?? resolveOrchestratorDefaults().agent);
-    const body = text.trim();
     if (!body) return;
     if (isRemoteStopCommand(body)) {
-      const live = findRemoteCoordinator(opts.deviceId);
-      if (live) {
-        try {
-          getOrchestrator().stop(live.id, { clearQueue: true });
-        } catch (err) {
-          log(`stop: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
       if (generation !== inboundGeneration) return;
       opts.onOutbound({ type: 'assistant', text: REMOTE_STOPPED_REPLY });
       return;

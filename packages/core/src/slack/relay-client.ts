@@ -66,7 +66,7 @@ function send(ws: { send(data: string): void }, msg: SlackRelayClientMessage): v
 }
 
 /**
- * Desktop client: connect to the hosted Slack relay, register this Mac as a
+ * Slack desktop client: connect to the relay, register this Mac as a
  * destination for the OAuth Slack user, claim inbound events before handling.
  */
 export async function runSlackRelayClient(opts: SlackRelayClientOptions): Promise<void> {
@@ -80,11 +80,11 @@ export async function runSlackRelayClient(opts: SlackRelayClientOptions): Promis
       } as unknown as SlackWebSocketCtor);
   const url = opts.url.trim();
   const deviceId = opts.deviceId.trim();
-  if (!url) throw new Error('Slack relay URL is empty');
-  if (!deviceId) throw new Error('Slack relay needs a deviceId for this Mac');
+  if (!url) throw new Error('Relay URL is empty');
+  if (!deviceId) throw new Error('Relay needs a deviceId for this Mac');
   if (opts.workspaces.length === 0) {
     throw new Error(
-      'Slack relay needs a connected workspace with bot + user tokens (Add via browser).',
+      'Relay needs a connected Slack workspace with bot + user tokens (Add via browser).',
     );
   }
 

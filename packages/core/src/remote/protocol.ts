@@ -2,6 +2,10 @@
 
 export const REMOTE_RELAY_PATH = '/remote';
 
+/** Keep Fly and home NAT from dropping an idle phone or Mac socket. */
+export const REMOTE_PING_INTERVAL_MS = 20_000;
+export const REMOTE_PONG_TIMEOUT_MS = 15_000;
+
 export const BAKED_REMOTE_RELAY_URL = `wss://relay.sideboard.cloud${REMOTE_RELAY_PATH}`;
 
 export function remoteRelayUrl(): string {

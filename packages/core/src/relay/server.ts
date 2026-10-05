@@ -6,28 +6,28 @@ import {
   slackOAuthHtmlPage,
   escapeHtml,
   SLACK_RELAY_DESKTOP_PATH,
-} from './oauth-redirect.js';
+} from '../slack/oauth-redirect.js';
 import {
   exchangeSlackOAuthCode,
   SlackOAuthPendingStore,
   slackOAuthRelayClientId,
   slackOAuthRelayRedirectUri,
-} from './oauth-exchange.js';
-import { runSlackSocketMode } from './socket-mode.js';
+} from '../slack/oauth-exchange.js';
+import { runSlackSocketMode } from '../slack/socket-mode.js';
 import {
   parseSlackRelayClientMessage,
   SLACK_RELAY_PING_INTERVAL_MS,
-} from './relay-protocol.js';
-import { SlackRelayHub } from './relay-hub.js';
-import { hostnameAllowed, requestHostname, tryServeStatic } from './relay-static.js';
+} from '../slack/relay-protocol.js';
+import { SlackRelayHub } from '../slack/relay-hub.js';
+import { hostnameAllowed, requestHostname, tryServeStatic } from './static.js';
 import { RemoteHub } from '../remote/hub.js';
-import { REMOTE_RELAY_PATH } from '../remote/protocol.js';
+import { REMOTE_PING_INTERVAL_MS, REMOTE_RELAY_PATH } from '../remote/protocol.js';
 import {
   ableTimeOAuthBouncePage,
   ableTimeOAuthLocalBounceUrl,
 } from '../integrations/abletime-oauth.js';
 
-export interface SlackRelayServerOptions {
+export interface RelayServerOptions {
   /** Required unless skipSocketMode. Phone remote does not use this token. */
   appToken?: string;
   /** OAuth client secret — from Fly `SIDEBOARD_SLACK_CLIENT_SECRET`. Never ship in the DMG. */
@@ -53,7 +53,7 @@ export interface SlackRelayServerOptions {
   canonicalSiteHost?: string;
 }
 
-export interface SlackRelayServerHandle {
+export interface RelayServerHandle {
   port: number;
   url: string;
   hub: SlackRelayHub;
@@ -70,14 +70,42 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/** Protocol ping so Fly and NAT keep an idle WebSocket. */
+export function startRelaySocketPing(
+  ws: {
+    readyState: number;
+    OPEN: number;
+    ping: () => void;
+    on: (event: 'close' | 'error', fn: () => void) => void;
+  },
+  intervalMs: number,
+): () => void {
+  const ping = setInterval(() => {
+    if (ws.readyState !== ws.OPEN) {
+      clearInterval(ping);
+      return;
+    }
+    try {
+      ws.ping();
+    } catch {
+      clearInterval(ping);
+    }
+  }, intervalMs);
+  const stop = () => clearInterval(ping);
+  ws.on('close', stop);
+  ws.on('error', stop);
+  return stop;
+}
+
 /**
- * Hosted Slack inbound relay: one Socket Mode connection (xapp- on the server)
- * plus desktop WebSocket sessions that register via bot-token auth.test.
+ * Hosted relay. Phone and Mac use `/remote`. The marketing site and AbleTime
+ * OAuth bounce are served here too. Slack desktops use `/slack/desktop`, and
+ * Socket Mode runs only when an xapp- token is set.
  * GET /slack/callback exchanges Slack OAuth (client secret stays here).
  */
-export async function startSlackRelayServer(
-  opts: SlackRelayServerOptions,
-): Promise<SlackRelayServerHandle> {
+export async function startRelayServer(
+  opts: RelayServerOptions,
+): Promise<RelayServerHandle> {
   const log = opts.onLog ?? console.log;
   const appToken = opts.appToken?.trim() ?? '';
   if (!opts.skipSocketMode && !appToken.startsWith('xapp-')) {
@@ -248,20 +276,7 @@ export async function startSlackRelayServer(
         }
       },
     };
-    const ping = setInterval(() => {
-      if (ws.readyState !== ws.OPEN) {
-        clearInterval(ping);
-        return;
-      }
-      try {
-        ws.ping();
-      } catch {
-        clearInterval(ping);
-      }
-    }, SLACK_RELAY_PING_INTERVAL_MS);
-    const stopPing = () => clearInterval(ping);
-    ws.on('close', stopPing);
-    ws.on('error', stopPing);
+    startRelaySocketPing(ws, SLACK_RELAY_PING_INTERVAL_MS);
     log('desktop connected');
     ws.on('message', (data) => {
       const raw = typeof data === 'string' ? data : data.toString('utf8');
@@ -294,6 +309,7 @@ export async function startSlackRelayServer(
         }
       },
     };
+    startRelaySocketPing(ws, REMOTE_PING_INTERVAL_MS);
     log('remote client connected');
     ws.on('message', (data) => {
       const raw = typeof data === 'string' ? data : data.toString('utf8');
