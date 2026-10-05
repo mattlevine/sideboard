@@ -1,6 +1,15 @@
 import { ghRepoSelectArgs, resolveGithubRepoSlug, resolveRepoRoot } from '../git/worktree.js';
-import { gh } from '../git/run.js';
+import { gh, resolveGhAuthToken } from '../git/run.js';
 import type { IssueActivityComment, IssueInfo } from '../types/thread.js';
+import {
+  downloadAuthenticatedFile,
+  extractHttpUrls,
+  hostMatches,
+  issueAttachmentWorktreePath,
+  mergeIssueAttachments,
+  type DownloadedIssueAttachment,
+  type IssueVendorAttachment,
+} from './issue-attachments.js';
 import { previewIssueCommentBody } from './issue-since.js';
 
 export interface GitHubIssueComment {
@@ -22,6 +31,7 @@ export interface GitHubIssue {
   labels: string[];
   assignees: string[];
   comments: GitHubIssueComment[];
+  attachments: IssueVendorAttachment[];
 }
 
 function requireGhOk(
@@ -96,13 +106,48 @@ function mapComments(raw: unknown): GitHubIssueComment[] {
     .filter((item): item is GitHubIssueComment => Boolean(item));
 }
 
+const GITHUB_FILE_HOSTS = ['github.com', 'githubusercontent.com'] as const;
+
+export function isGitHubIssueAttachmentUrl(url: string): boolean {
+  if (!hostMatches(url, GITHUB_FILE_HOSTS)) return false;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname;
+    if (host === 'github.com' || host.endsWith('.github.com')) {
+      return path.startsWith('/user-attachments/');
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function extractGitHubIssueAttachments(
+  issue: Pick<GitHubIssue, 'body' | 'comments'>,
+): IssueVendorAttachment[] {
+  const texts = [issue.body ?? '', ...issue.comments.map((comment) => comment.body)];
+  return mergeIssueAttachments(
+    texts.flatMap((text) =>
+      extractHttpUrls(text)
+        .filter(isGitHubIssueAttachmentUrl)
+        .map((url) => ({
+          id: url,
+          name: url.split('/').pop() || 'attachment',
+          url,
+        })),
+    ),
+  );
+}
+
 function toGitHubIssue(raw: Record<string, unknown>): GitHubIssue {
   const number = Number(raw.number);
   if (!Number.isFinite(number) || number <= 0) {
     throw new Error('GitHub issue response was missing a number');
   }
   const assignees = mapAssignees(raw.assignees);
-  return {
+  const comments = mapComments(raw.comments);
+  const issue: GitHubIssue = {
     id: `gh-${number}`,
     identifier: `#${number}`,
     number,
@@ -112,8 +157,11 @@ function toGitHubIssue(raw: Record<string, unknown>): GitHubIssue {
     state: typeof raw.state === 'string' ? raw.state : undefined,
     labels: mapLabels(raw.labels),
     assignees,
-    comments: mapComments(raw.comments),
+    comments,
+    attachments: [],
   };
+  issue.attachments = extractGitHubIssueAttachments(issue);
+  return issue;
 }
 
 export function toGitHubIssueInfo(issue: GitHubIssue): IssueInfo {
@@ -254,6 +302,37 @@ export async function getGitHubIssue(
     throw new Error(`GitHub issue not found: #${number}`);
   }
   return toGitHubIssue(parsed as Record<string, unknown>);
+}
+
+/**
+ * Download a GitHub issue file (user-attachments / githubusercontent) using
+ * Account `gh` into `.context/attachments/`. Pass the URL from
+ * `github_get_issue` attachments.
+ */
+export async function downloadGitHubIssueAttachment(
+  input: { url: string; name?: string },
+  opts?: { repoPath?: string | null },
+): Promise<DownloadedIssueAttachment> {
+  const url = input.url.trim();
+  if (!url) throw new Error('GitHub attachment URL is required');
+  if (!isGitHubIssueAttachmentUrl(url)) {
+    throw new Error(
+      `GitHub attachment URL must be github.com/user-attachments/… or githubusercontent.com (got ${url})`,
+    );
+  }
+  const { cwd } = await resolveGitHubIssueRepo(opts?.repoPath);
+  const token = await resolveGhAuthToken(cwd);
+  return downloadAuthenticatedFile({
+    url,
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/octet-stream',
+        }
+      : { Accept: 'application/octet-stream' },
+    worktreePath: issueAttachmentWorktreePath(opts?.repoPath ?? cwd),
+    name: input.name,
+  });
 }
 
 export async function commentGitHubIssue(

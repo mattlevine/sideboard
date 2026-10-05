@@ -4,6 +4,7 @@ import { resolveRepoRoot } from '../git/worktree.js';
 import {
   commentGitHubIssue,
   createGitHubIssue,
+  downloadGitHubIssueAttachment,
   getGitHubIssue,
   listGitHubIssueCommentsSince,
   updateGitHubIssue,
@@ -37,6 +38,7 @@ const repoPathSchema = z
 export const GITHUB_ISSUE_MCP_TOOL_NAMES = [
   'github_search_issues',
   'github_get_issue',
+  'github_download_attachment',
   'github_comment',
   'github_update_issue',
   'github_create_issue',
@@ -106,11 +108,28 @@ export function registerGithubIssueTools(server: McpServer): void {
 
   server.tool(
     'github_get_issue',
-    'Get a GitHub issue (#123 or URL): body, comments, state. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. Uses Account gh.',
+    'Get a GitHub issue (#123 or URL): body, comments, state, attachments. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. Uses Account gh. To save a file, call github_download_attachment with the attachment URL (writes `.context/attachments/`; do not dump bytes into the tool result).',
     { id: z.string(), include: mcpIssueIncludeSchema, repoPath: repoPathSchema },
     async ({ id, include, repoPath }) => {
       try {
         return text(formatGitHubIssuePayload(await getGitHubIssue(id, { repoPath }), include));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.tool(
+    'github_download_attachment',
+    'Download a GitHub issue file (github.com/user-attachments/… or githubusercontent.com) into `.context/attachments/` using Account gh. Pass the URL from github_get_issue attachments. Returns the worktree-relative path — Read that file; do not dump bytes into chat.',
+    {
+      url: z.string().describe('Attachment URL from github_get_issue.'),
+      name: z.string().optional().describe('Optional filename override.'),
+      repoPath: repoPathSchema,
+    },
+    async ({ url, name, repoPath }) => {
+      try {
+        return text(await downloadGitHubIssueAttachment({ url, name }, { repoPath }));
       } catch (err) {
         return fail(err);
       }

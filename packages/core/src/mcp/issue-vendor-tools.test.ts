@@ -46,6 +46,7 @@ describe('registerConnectedIssueVendorTools', () => {
     vendor.registerConnectedIssueVendorTools(server);
     expect(names).toContain('github_search_issues');
     expect(names).toContain('github_get_issue');
+    expect(names).toContain('github_download_attachment');
     expect(names).toContain('github_comment');
     expect(names).toContain('github_update_issue');
     expect(names).toContain('github_create_issue');
@@ -61,6 +62,7 @@ describe('registerConnectedIssueVendorTools', () => {
     expect(names).toContain('github_get_issue');
     expect(names).toContain('linear_search_issues');
     expect(names).toContain('linear_get_issue');
+    expect(names).toContain('linear_download_attachment');
     expect(names).not.toContain('abletime_orientation');
   });
 
@@ -71,6 +73,7 @@ describe('registerConnectedIssueVendorTools', () => {
     vendor.registerConnectedIssueVendorTools(server);
     expect(names).toContain('github_get_issue');
     expect(names).toContain('abletime_orientation');
+    expect(names).toContain('abletime_download_attachment');
     expect(names).toContain('abletime_ensure_task');
     expect(names).toContain('abletime_comment');
     expect(names).not.toContain('linear_search_issues');

@@ -95,6 +95,7 @@ export const WORKTREE_MCP_TOOLS = [
 export const WORKTREE_GITHUB_MCP_TOOLS = [
   'github_search_issues',
   'github_get_issue',
+  'github_download_attachment',
   'github_comment',
   'github_update_issue',
   'github_create_issue',
@@ -105,6 +106,7 @@ export const WORKTREE_LINEAR_MCP_TOOLS = [
   'linear_list_teams',
   'linear_search_issues',
   'linear_get_issue',
+  'linear_download_attachment',
   'linear_create_issue',
   'linear_update_issue',
   'linear_comment',
@@ -117,6 +119,7 @@ export const WORKTREE_ABLETIME_MCP_TOOLS = [
   'abletime_list_tasks',
   'abletime_search_tasks',
   'abletime_get_task',
+  'abletime_download_attachment',
   'abletime_comment',
   'abletime_update_task',
   'abletime_create_task',

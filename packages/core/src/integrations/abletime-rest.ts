@@ -61,6 +61,45 @@ export function textFromAbleTimeDoc(value: unknown): string {
   return chunks.join('').trim();
 }
 
+export interface AbleTimeDocFile {
+  id?: string;
+  name: string;
+  url: string;
+}
+
+/** Image / file nodes in a ProseMirror doc (description or comment). */
+export function filesFromAbleTimeDoc(value: unknown): AbleTimeDocFile[] {
+  const out: AbleTimeDocFile[] = [];
+  const seen = new Set<string>();
+  const walk = (node: unknown) => {
+    const rec = asRecord(node);
+    if (!rec) return;
+    const attrs = asRecord(rec.attrs) ?? rec;
+    const url =
+      asString(attrs.src) ||
+      asString(attrs.href) ||
+      asString(attrs.url) ||
+      asString(attrs.fileUrl) ||
+      asString(attrs.downloadUrl);
+    if (url && !seen.has(url)) {
+      seen.add(url);
+      out.push({
+        id: asString(attrs.id) || asString(attrs.fileId) || undefined,
+        name:
+          asString(attrs.name) ||
+          asString(attrs.title) ||
+          asString(attrs.filename) ||
+          asString(attrs.alt) ||
+          'attachment',
+        url,
+      });
+    }
+    if (Array.isArray(rec.content)) rec.content.forEach(walk);
+  };
+  walk(value);
+  return out;
+}
+
 export function abletimeRestUrl(
   path: string,
   host?: string | null,
@@ -193,6 +232,7 @@ function restTaskToRaw(
     parentId: asString(rec.parentTaskId) || asString(rec.parentId),
     tags: rec.tags,
     comments,
+    attachments: rec.attachments ?? rec.files ?? rec.media,
     createdAt: asString(rec.dateCreated) || asString(rec.createdAt),
     updatedAt: asString(rec.lastUpdate) || asString(rec.updatedAt),
     ...(assignee ? { assignee } : {}),
@@ -281,7 +321,7 @@ async function getTaskRaw(id: string, opts: RestOpts): Promise<Record<string, un
     listUsers(opts),
     abletimeRestRequest(`/tasks/${encodeURIComponent(taskId)}`, {
       ...opts,
-      query: { expand: 'comments' },
+      query: { expand: 'comments,attachments' },
     }),
   ]);
   const task = restTaskToRaw(raw, users);

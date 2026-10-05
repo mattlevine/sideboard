@@ -208,6 +208,9 @@ describe('formatIssueToolsDirective', () => {
     expect(text).toMatch(/github_search_issues/);
     expect(text).toMatch(/updatedSince/);
     expect(text).toMatch(/linear_get_issue/);
+    expect(text).toMatch(/linear_download_attachment/);
+    expect(text).toMatch(/github_download_attachment/);
+    expect(text).toMatch(/abletime_download_attachment/);
     expect(text).toMatch(/github_comment/);
     expect(text).toMatch(/abletime_update_task/);
     expect(text).toMatch(/vendor issue MCP/);
