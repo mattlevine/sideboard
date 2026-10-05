@@ -215,7 +215,7 @@ def page(meta: dict, body: str) -> str:
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
 <a href="/slack/">Slack</a>
-<a href="https://github.com/mattlevine/sideboard">GitHub</a>
+<a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
 </nav>
 <a class="btn btn-primary btn-sm" href="{DL}">Download for Mac</a>
 </div>
