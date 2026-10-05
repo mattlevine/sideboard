@@ -209,8 +209,8 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 .shot-frame {
   /* Tight chrome: a thin inset mat around the screenshot (which keeps its own
      window corners), with a modest shadow — tighter than the earlier frame. */
-  padding: 8px;
-  border-radius: 14px;
+  padding: 4px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: #0e0f12;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
