@@ -23,6 +23,7 @@ import {
   partsToAssistantText,
   stripBrightsyNdjsonNoise,
 } from './message-parts.js';
+import { foldDuplicateStdout, textSoFar } from './stdout-replay.js';
 import { sanitizeAgentHostEnv } from '../hook/agent-host-env.js';
 import { applyWorktreePkgCacheEnv } from '../hook/worktree-pkg-cache.js';
 import { applyAgentRunnerHeapEnv } from './node-launch.js';
@@ -219,7 +220,8 @@ export async function spawnAgentTurn(
           events = normalizeParseResult(parseBrightsyCliLine(line));
         }
       }
-      for (const parsed of events) {
+      for (const event of events) {
+        let parsed = event;
         if (parsed.type === 'session_id') {
           sessionId = parsed.data;
           outbound.push(parsed);
@@ -238,13 +240,12 @@ export async function spawnAgentTurn(
           if (thread.agent === 'brightsy' && isBrightsyNdjsonLine(parsed.data)) {
             continue;
           }
-          // Claude emits assistant text then a result event with the same string.
-          if (
-            assistantText &&
-            (parsed.data === assistantText || assistantText.endsWith(parsed.data))
-          ) {
-            continue;
-          }
+          // Claude streams tokens, then replays the same paragraphs as an
+          // assistant snapshot and again as the result string. Keep a longer
+          // snapshot's new tail; drop a chunk that is already on screen.
+          const folded = foldDuplicateStdout(textSoFar(parts, parsed.parentId), parsed.data);
+          if (folded == null) continue;
+          if (folded !== parsed.data) parsed = { ...parsed, data: folded };
         }
         parts = applyAgentEvent(parts, parsed);
         if (parsed.type === 'stdout') {
