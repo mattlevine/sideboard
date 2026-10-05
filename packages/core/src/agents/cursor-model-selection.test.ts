@@ -30,15 +30,23 @@ describe('buildCursorModelSelection', () => {
     });
   });
 
-  it('pins Grok 4.7 local runs to 256k context', () => {
+  it('pins Grok 4.7 local runs to 256k context and catalog reasoning_effort', () => {
     expect(buildCursorModelSelection('grok-4.7', { effort: 'high', fast: false })).toEqual({
       id: 'grok-4.7',
       params: [
         { id: 'context', value: '256k' },
-        { id: 'effort', value: 'high' },
+        { id: 'reasoning_effort', value: 'high' },
         { id: 'fast', value: 'false' },
       ],
     });
+  });
+
+  it('maps Grok 4.7 Sideboard max effort to catalog xhigh', () => {
+    expect(buildCursorModelSelection('grok-4.7', { effort: 'max', fast: false }).params).toEqual([
+      { id: 'context', value: '256k' },
+      { id: 'reasoning_effort', value: 'xhigh' },
+      { id: 'fast', value: 'false' },
+    ]);
   });
 
   it('does not pin context on Grok 4.6', () => {
