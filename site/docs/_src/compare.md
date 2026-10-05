@@ -2,7 +2,9 @@
 
 Short positioning. Not a feature-complete matrix.
 
-Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard does that too. The comparison that matters is the **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and Slack so a coworker can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs).
+Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard does that too. The comparison that matters is the **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and Slack / CLI / MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs).
+
+Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (Slack, CLI, MCP) are what stayed on this machine.
 
 ## vs Conductor (Melty)
 
@@ -20,7 +22,23 @@ A serious local orchestration tier would compete with that upsell. Sideboard is 
 | Work on `main` in the project folder | Always a sidecar worktree | Opt-in cowboy (Settings → Advanced; off by default) |
 | Lock-in | Sessions live in the app | `attach` / `adopt` — move in and out of native CLIs |
 
-Use Conductor when you want their finished Mac workspace UI, or their cloud sandboxes (always-on, off-VPN, paid). Use Sideboard when the fleet should stay on this machine and Slack is how you and a coworker enter the loop.
+Use Conductor when you want their finished Mac workspace UI, or their cloud sandboxes (always-on, off-VPN, paid). Use Sideboard when the fleet should stay on this machine and Slack / CLI / MCP is how you and a coworker enter the loop.
+
+## vs Orca
+
+[Orca](https://www.onorca.dev/) is an **agent development environment** (ADE): parallel worktrees plus terminals, an embedded browser, design mode, a CLI that agents can drive, remote worktrees over SSH, and a mobile companion. It is open source (MIT) and runs on macOS, Windows, and Linux. Bring-your-own-agent is the default — dozens of CLI harnesses.
+
+Sideboard is not trying to be an IDE. It is the layer above the IDE: a kanban of the fleet, an orchestrator MCP, and remotes so other systems can reach this Mac.
+
+| | Orca | Sideboard |
+|-|------|-----------|
+| Category | Agent IDE / ADE | Local orchestration for a fleet |
+| Surfaces | App, terminal, browser, mobile | Desktop board, CLI, MCP, Slack |
+| Other systems | Orca CLI; mobile companion | `sideboard` CLI, stdio MCP, Slack to this Mac |
+| Desktop OS | macOS, Windows, Linux | macOS (Apple Silicon) |
+| Compute | Local by default; SSH / your VPS | Always this Mac |
+
+Use Orca when you want the whole agent IDE (terminal + browser + design mode) and you are happy driving it from that app. Use Sideboard when you want an orchestrator other agents can call, a board of the fleet, and Slack without moving compute off this machine.
 
 ## vs “open Conductor” clones
 

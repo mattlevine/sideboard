@@ -1,14 +1,14 @@
 # Sideboard
 
-**Local orchestration for a fleet of coding agents.** On your Mac, on the network you already sit on.
+**Orchestrate a fleet of coding agents on your Mac.** Isolated git worktrees. A kanban of the whole fleet. An orchestrator that can drive it. Slack, CLI, and MCP so other systems can reach this machine — without a cloud workspace.
 
-One agent per git worktree is a crowded pattern in 2026 — Conductor, Cursor’s Agents window, Claude Code, and OSS boards (Superset, Emdash, Claude Squad) all spawn that. The remaining job is an **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and Slack so a coworker can enter the loop — without moving the repo into someone else’s cloud.
+One agent per git worktree is a crowded pattern in 2026 — Conductor, Orca, Cursor’s Agents window, Claude Code, and OSS boards (Superset, Emdash, Claude Squad) all spawn that. The remaining job is an **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and remotes so a coworker or another tool can enter the loop — without moving the repo into someone else’s cloud.
 
-Sideboard is CLI + MCP + a Mac desktop for that tier. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). Compute stays on this machine (corporate VPN, private git, internal APIs). Slack is remote control, not a rented sandbox.
+Sideboard started as a local port when Conductor moved that tier into a paid cloud, then added the pieces that still belong on this Mac: MCP orchestration, a global kanban, Slack remote, and CLI / MCP so other systems can drive it. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). Compute stays on this machine (corporate VPN, private git, internal APIs). Slack is remote control, not a rented sandbox.
 
 1. **A global board for you** — status, live output, and fan-out across every thread
 2. **An MCP for the agents** — list threads, wait on turns, read diffs, orchestrate the fleet, and present artifacts, schemas, and files in the desktop UI
-3. **Slack to this Mac** — DM/@mention the orchestrator; it can ping a coworker to review a PR a worktree just pushed; their reply comes back as information
+3. **Slack, CLI, and MCP to this Mac** — DM/@mention the orchestrator; register MCP from any harness; script the fleet without the GUI
 
 `attach` / `adopt` remain the door back to the native harness — move in and out of Sideboard as you choose.
 
@@ -20,15 +20,15 @@ Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The M
 
 ## Who it's for
 
-Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and Slack can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
+Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and Slack / CLI / MCP can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
 
-Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
+Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), a full agent IDE ([Orca](https://www.onorca.dev/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
 
 Peer-by-peer notes: [Compare](docs/COMPARE.md).
 
 ## Why it exists
 
-Spawning worktrees is the shared primitive. Boards that stay human-only tend to put fleet orchestration in a **paid cloud**. Sideboard puts that tier on the Mac you already use, on the VPN it is already on:
+Spawning worktrees is the shared primitive. When Conductor moved fleet orchestration into a **paid cloud**, Sideboard started as a local port, then kept the rest on this Mac: an orchestrator, a kanban, Slack, and CLI / MCP so other systems can drive it — on the VPN you already sit on:
 
 | Job | Typical tools | Sideboard |
 |-----|---------------|-----------|

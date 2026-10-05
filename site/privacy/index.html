@@ -12,23 +12,19 @@
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}h2{font-size:22px;margin:36px 0 10px}p,li{font-size:16px;line-height:1.65;color:#b3bcc4}ul{padding-left:1.2em}</style>
-<style>.nav-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}</style>
+<link rel="stylesheet" href="/styles.css">
+<style>article h2{font-size:22px;margin:36px 0 10px}article p,article li{font-size:16px;line-height:1.65;color:#b3bcc4}article ul{padding-left:1.2em}</style>
 </head>
 <body>
-<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
-<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
-<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
-<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
-<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
-<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
-</span>
-<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
-</a>
-<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
-<a href="/slack/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Slack</a>
-<a href="/support/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Support</a>
-<a href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">Download for Mac</a>
+<header class="nav">
+<div class="nav-inner">
+<a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i><i></i></span>Sideboard</a>
+<nav class="nav-links">
+<a href="/docs/">Docs</a>
+<a href="/slack/">Slack</a>
+<a href="/support/">Support</a>
+</nav>
+<a class="btn btn-primary btn-sm" href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg">Download for Mac</a>
 </div>
 </header>
 <article style="max-width:720px;margin:0 auto;padding:56px 40px 110px">
@@ -64,14 +60,17 @@
 <h2>Contact</h2>
 <p>Privacy and data requests: <a href="mailto:support@sideboard.cloud">support@sideboard.cloud</a>. Also see <a href="/support/">Support</a> and <a href="/slack/">how the Slack app works</a>.</p>
 </article>
-<footer style="border-top:1px solid #26292d">
-<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
-<span style="font-weight:700;font-size:16px;margin-right:auto">sideboard.cloud</span>
-<a href="/slack/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Slack</a>
-<a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Docs</a>
-<a href="/privacy/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Privacy</a>
-<a href="/support/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Support</a>
-<a href="https://www.npmjs.com/package/@sideboard-ai/cli" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">npm</a>
+<footer class="foot">
+<div class="foot-inner">
+<a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.cloud</a>
+<nav>
+<a href="/docs/">Docs</a>
+<a href="/slack/">Slack</a>
+<a href="/privacy/">Privacy</a>
+<a href="/support/">Support</a>
+<a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>
+</nav>
+<span class="muted">Apache-2.0</span>
 </div>
 </footer>
 </body>
