@@ -12,28 +12,24 @@
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<style>html{scroll-padding-top:84px}body{margin:0;background:#17181a;color:#edf0f3;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}::selection{background:rgba(15,126,212,.35)}a{color:#57aeee}a:hover{color:#8cc8f5}:focus-visible{outline:2px solid #0f7ed4;outline-offset:2px}code,pre{font-family:ui-monospace,"SF Mono",Menlo,monospace}article h2{font-weight:700;font-size:28px;letter-spacing:-.02em;margin:40px 0 12px}article h3{font-weight:700;font-size:20px;margin:28px 0 10px}article p{font-size:16.5px;line-height:1.65;color:#b3bcc4;margin:0 0 14px}article li{font-size:16.5px;line-height:1.6;color:#b3bcc4;margin:0 0 8px}article ul,article ol{margin:0 0 18px;padding-left:22px}article pre{margin:0 0 18px;padding:20px;border-radius:18px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:14px;line-height:1.8;overflow-x:auto}article code{font-size:13.5px;color:#8cc8f5}article pre code{color:#dfe5ea}article table{width:100%;border-collapse:collapse;margin:0 0 22px;font-size:14.5px}article th,article td{text-align:left;padding:10px 12px;border:1px solid #2c3036;vertical-align:top;color:#b3bcc4}article th{color:#edf0f3;background:#202226}</style>
-<style>.nav-link:hover{color:#edf0f3}.btn-blue:hover{background:#2a95e6}</style>
+<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header style="position:sticky;top:0;z-index:50;background:#17181a;border-bottom:1px solid #26292d">
-<div style="display:flex;align-items:center;gap:26px;padding:18px 40px;max-width:1180px;margin:0 auto;flex-wrap:wrap">
-<a href="/" style="display:flex;align-items:center;gap:11px;margin-right:auto;text-decoration:none;color:#edf0f3">
-<span style="position:relative;display:inline-block;width:28px;height:28px;flex:none">
-<span style="position:absolute;left:7px;top:7px;width:19px;height:19px;border-radius:3px;background:#0f7ed4;transform:rotate(14deg)"></span>
-<span style="position:absolute;left:2px;top:2px;width:19px;height:19px;border-radius:3px;border:2px solid #d7dbdf;transform:rotate(14deg)"></span>
-</span>
-<span style="font-weight:700;font-size:21px;letter-spacing:-.01em">Sideboard</span>
-</a>
-<a href="/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Home</a>
-<a href="/docs/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Docs</a>
-<a href="/slack/" style="color:#c3cad1;text-decoration:none;font-size:15px" class="nav-link">Slack</a>
-<a href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg" style="display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:#0f7ed4;color:#fff;text-decoration:none;font-weight:700;font-size:14px" class="btn-blue">Download for Mac</a>
+<header class="nav">
+<div class="nav-inner">
+<a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i><i></i></span>Sideboard</a>
+<nav class="nav-links">
+<a href="/docs/">Docs</a>
+<a href="/docs/compare/">Compare</a>
+<a href="/slack/">Slack</a>
+<a href="https://github.com/mattlevine/sideboard">GitHub</a>
+</nav>
+<a class="btn btn-primary btn-sm" href="https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg">Download for Mac</a>
 </div>
 </header>
-<div style="max-width:800px;margin:0 auto;padding:56px 40px 110px">
-<p style="margin:0 0 8px"><a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px">← Docs</a></p>
-<h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:0 0 24px">Process skills</h1>
+<div class="page">
+<p style="margin:0 0 8px"><a class="back" href="/docs/">← Docs</a></p>
+<h1>Process skills</h1>
 <article>
 <p>When the same shape of work will happen again, write a Claude Code project skill at <code>.claude/skills/&lt;name&gt;/SKILL.md</code> and commit it. Sideboard’s composer <code>/name</code> expander, Claude Code, and <code>attach</code> all load that path — so the guide works outside Sideboard. Do not put new skills in <code>.sideboard/skills</code> (Sideboard still scans it; other agents do not). Point Codex/OpenCode at the file from <code>AGENTS.md</code>. Optional: symlink <code>.cursor/skills/&lt;name&gt;</code> to the Claude skill.</p>
 <ul>
@@ -45,14 +41,18 @@
 <p>Merge-readiness notes go in <code>.claude/skills/review/SKILL.md</code> when that skill already exists. Sideboard does not create a review skill.</p>
 </article>
 </div>
-<footer style="border-top:1px solid #26292d">
-<div style="max-width:1180px;margin:0 auto;padding:36px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:22px">
-<span style="font-weight:700;font-size:16px;margin-right:auto">sideboard.cloud</span>
-<a href="/docs/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Docs</a>
-<a href="/slack/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Slack</a>
-<a href="/privacy/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Privacy</a>
-<a href="/support/" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">Support</a>
-<a href="https://www.npmjs.com/package/@sideboard-ai/cli" style="color:#8b949c;text-decoration:none;font-size:14px" class="nav-link">npm</a>
+<footer class="foot">
+<div class="foot-inner">
+<a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.cloud</a>
+<nav>
+<a href="/docs/">Docs</a>
+<a href="/docs/compare/">Compare</a>
+<a href="/slack/">Slack</a>
+<a href="/privacy/">Privacy</a>
+<a href="/support/">Support</a>
+<a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>
+</nav>
+<span class="muted">Apache-2.0</span>
 </div>
 </footer>
 </body>
