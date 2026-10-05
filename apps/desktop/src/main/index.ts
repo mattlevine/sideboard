@@ -26,6 +26,7 @@ import {
 } from './artifact-preview';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { setupTextContextMenu } from './text-context-menu';
+import { askMicrophoneAccess, setupMicrophonePermissions } from './microphone-access';
 import { formatUpdaterCheckError } from './updater-error';
 import {
   bindRemoteHostActivity,
@@ -1798,6 +1799,7 @@ function registerIpc(): void {
     }
     return result.filePaths.map((p) => attachmentFromAbsolutePath(p));
   });
+  ipcMain.handle('askMicrophoneAccess', () => askMicrophoneAccess());
   ipcMain.handle('attachmentsFromPaths', (_e, absolutePaths: string[]) => {
     const paths = Array.isArray(absolutePaths)
       ? absolutePaths.filter((p): p is string => typeof p === 'string' && p.length > 0)
@@ -1898,6 +1900,7 @@ app.whenReady().then(async () => {
   startDesktopHost();
   applyDockIcon();
   bindArtifactPreviewProtocol();
+  setupMicrophonePermissions();
   registerIpc();
   setupNotifications();
   setupStoreWatcher();

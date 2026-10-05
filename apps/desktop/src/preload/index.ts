@@ -244,6 +244,7 @@ const api: IpcApi = {
   setRepoPath: (path) => ipcRenderer.invoke('setRepoPath', path),
   pickRepoPath: () => ipcRenderer.invoke('pickRepoPath'),
   pickFiles: (threadRef) => ipcRenderer.invoke('pickFiles', threadRef ?? null),
+  askMicrophoneAccess: () => ipcRenderer.invoke('askMicrophoneAccess') as Promise<boolean>,
   attachmentsFromPaths: (absolutePaths) =>
     ipcRenderer.invoke('attachmentsFromPaths', absolutePaths),
   attachmentsFromBuffers: (buffers) =>

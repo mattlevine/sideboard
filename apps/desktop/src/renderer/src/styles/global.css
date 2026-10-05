@@ -6931,6 +6931,30 @@ button.chat-earlier-toggle:hover {
   opacity: 0.35;
 }
 
+.dictation-mic {
+  flex-shrink: 0;
+  color: var(--muted);
+  background: var(--bg-elevated);
+}
+
+.dictation-mic:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.dictation-mic.listening {
+  color: #fff;
+  background: #b33b3b;
+  border-color: #b33b3b;
+}
+
+.dictation-mic-icon {
+  display: block;
+}
+
+.composer-box.expanded .dictation-mic {
+  align-self: flex-end;
+}
+
 .stop-btn {
   width: 32px;
   height: 32px;
@@ -11621,6 +11645,13 @@ body:has(.update-banner) .team-toast-stack {
   position: relative;
 }
 
+.create-composer-mic {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+}
+
 .create-composer-wrap .composer-ac {
   left: 0;
   right: 0;
@@ -11636,7 +11667,7 @@ body:has(.update-banner) .team-toast-stack {
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
-  padding: 0;
+  padding: 0 48px 0 0;
   outline: none;
 }
 

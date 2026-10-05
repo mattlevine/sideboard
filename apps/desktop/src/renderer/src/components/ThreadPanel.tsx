@@ -109,6 +109,7 @@ import {
 } from './ComposerAutocomplete';
 import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';
 import { ComposerAttachmentChips } from './ComposerOptionsToolbar';
+import { DictationMicButton } from './DictationMicButton';
 import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { ChatSearchBar } from './ChatSearchBar';
@@ -160,6 +161,7 @@ import {
 } from '../lib/visible-follow-up-queue';
 import { visibleComposerAttachments } from '../lib/composer-attachments';
 import { getComposerDraft, rememberComposerDraft } from '../lib/composer-draft';
+import { useSpeechDictation } from '../lib/use-speech-dictation';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -755,6 +757,11 @@ export function ThreadPanel({
   const showCost = useShowCost();
   const followUpBehavior = useFollowUpBehavior();
   const [prompt, setPrompt] = useState(() => getComposerDraft(thread.id));
+  const dictation = useSpeechDictation({
+    getValue: () => prompt,
+    setValue: setPrompt,
+    resetKey: thread.id,
+  });
   useEffect(() => {
     rememberComposerDraft(thread.id, prompt);
   }, [thread.id, prompt]);
@@ -933,6 +940,7 @@ export function ThreadPanel({
     agentPickerOpen ||
     issuePickerOpen ||
     workspacePickerOpen ||
+    dictation.listening ||
     (thread.attachments?.length ?? 0) > 0;
 
   const acQuery = useMemo(() => getAutocompleteQuery(prompt, cursor), [prompt, cursor]);
@@ -1546,6 +1554,7 @@ export function ThreadPanel({
   }
 
   async function send() {
+    dictation.stop();
     const text = prompt.trim();
     if (!text) return;
     const queueing = followUpBusy && !steeringFollowUp;
@@ -2957,6 +2966,12 @@ export function ThreadPanel({
               }}
             />
             {!composerExpanded && <span className="composer-focus-hint">⌘L to focus</span>}
+            <DictationMicButton
+              listening={dictation.listening}
+              supported={dictation.supported}
+              error={dictation.error}
+              onToggle={dictation.toggle}
+            />
             {!composerExpanded && agentActive && (
               <button
                 type="button"

@@ -26,6 +26,7 @@ import {
   type CreateFromSelection,
 } from './CreateFromPicker';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
+import { DictationMicButton } from './DictationMicButton';
 import { FloatingMenu } from './FloatingMenu';
 import {
   absolutePathsFromFiles,
@@ -39,6 +40,7 @@ import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
 import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defaults';
 import { createModalHasDraft } from '../lib/create-modal-draft';
 import { ConfirmDialog } from './ConfirmDialog';
+import { useSpeechDictation } from '../lib/use-speech-dictation';
 
 type Mode = 'create' | 'orchestration';
 
@@ -182,6 +184,15 @@ export function CreateModal({
   const [abletimeConnected, setAbletimeConnected] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [goal, setGoal] = useState('');
+  const dictation = useSpeechDictation({
+    getValue: () => (mode === 'orchestration' ? goal : prompt),
+    setValue: (next) => {
+      if (mode === 'orchestration') setGoal(next);
+      else setPrompt(next);
+    },
+    resetKey: mode,
+    disabled: busy,
+  });
   const [createMore, setCreateMore] = useState(false);
   const [cowboyAllowed, setCowboyAllowed] = useState(false);
   const [cowboy, setCowboy] = useState(false);
@@ -435,6 +446,7 @@ export function CreateModal({
   }
 
   async function submit() {
+    dictation.stop();
     if (mode !== 'orchestration' && !repoPath) {
       setError('Add a project first');
       return;
@@ -927,6 +939,15 @@ export function CreateModal({
                 }
               }}
             />
+            <div className="create-composer-mic">
+              <DictationMicButton
+                listening={dictation.listening}
+                supported={dictation.supported}
+                error={dictation.error}
+                disabled={busy}
+                onToggle={dictation.toggle}
+              />
+            </div>
           </div>
         </div>
 

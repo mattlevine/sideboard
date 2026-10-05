@@ -602,6 +602,8 @@ export interface IpcApi {
    * When `threadRef` is set, files are staged into the worktree (same as drop).
    */
   pickFiles(threadRef?: string | null): Promise<ThreadAttachment[]>;
+  /** Prompt macOS for microphone access (dictation). Non-darwin is always true. */
+  askMicrophoneAccess(): Promise<boolean>;
   /** Build composer attachments from absolute paths without a worktree (create modal). */
   attachmentsFromPaths(absolutePaths: string[]): Promise<ThreadAttachment[]>;
   /** Build composer attachments from in-memory file buffers (create modal drop fallback). */
