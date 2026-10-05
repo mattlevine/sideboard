@@ -7,7 +7,7 @@ import { BAKED_SLACK_CLIENT_ID, hasBakedSlackOAuth } from './baked-app.js';
 import { exchangeSlackOAuthCode, SlackOAuthPendingStore } from './oauth-exchange.js';
 
 describe('slack OAuth URL', () => {
-  it('includes client_id, user_scope search, and https redirect', () => {
+  it('includes client_id, user_scope, and https redirect', () => {
     const url = slackOAuthAuthorizeUrl('CLIENT', 'state123');
     expect(url).toContain('https://slack.com/oauth/v2/authorize?');
     expect(url).not.toContain('brightsy.slack.com');
@@ -15,11 +15,12 @@ describe('slack OAuth URL', () => {
     expect(url).toContain('state=state123');
     expect(url).toContain(encodeURIComponent(SLACK_OAUTH_REDIRECT));
     expect(SLACK_OAUTH_REDIRECT).toBe('https://relay.sideboard.cloud/slack/callback');
-    expect(url).toContain(encodeURIComponent('search:read'));
+    expect(url).not.toContain(encodeURIComponent('search:read'));
     expect(url).toContain(encodeURIComponent('app_mentions:read'));
     expect(url).toContain(encodeURIComponent('reactions:write'));
     expect(url).toContain(encodeURIComponent('im:write'));
     expect(url).toContain(encodeURIComponent('chat:write.public'));
+    expect(url).not.toContain(encodeURIComponent('team:read'));
     expect(url).toContain('user_scope=');
   });
 });
@@ -123,7 +124,7 @@ describe('exchangeSlackOAuthCode', () => {
             ok: true,
             access_token: 'xoxb-bot',
             scope: 'chat:write',
-            authed_user: { id: 'U1', access_token: 'xoxp-user', scope: 'search:read' },
+            authed_user: { id: 'U1', access_token: 'xoxp-user', scope: 'channels:history' },
             team: { id: 'T9', name: 'Nine' },
           }),
         );

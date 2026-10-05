@@ -928,7 +928,7 @@ async function main(): Promise<void> {
       }
       for (const t of teams) {
         console.log(
-          `${t.team_name.padEnd(24)}  ${t.team_id}${t.has_user_token ? '' : chalk.dim('  (no search)')}`,
+          `${t.team_name.padEnd(24)}  ${t.team_id}${t.has_user_token ? '' : chalk.dim('  (bot only)')}`,
         );
       }
     });

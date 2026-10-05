@@ -36,7 +36,7 @@ function fail(err: unknown) {
 export function registerSlackTools(server: McpServer): void {
   server.tool(
     'list_teams',
-    'List Slack workspaces connected in Settings → Remote. Each row is team_id + name. Pass team_id to slack_list_channels, slack_list_users, slack_search, slack_read, slack_post, and slack_replies.',
+    'List Slack workspaces connected in Settings → Remote. Each row is team_id + name. Pass team_id to slack_list_channels, slack_list_users, slack_read, slack_post, and slack_replies.',
     {},
     async () => {
       const teams = listSlackWorkspaces();
@@ -50,7 +50,6 @@ export function registerSlackTools(server: McpServer): void {
         teams: teams.map((t) => ({
           team_id: t.team_id,
           name: t.team_name,
-          search: t.has_user_token,
         })),
       });
     },
@@ -113,53 +112,6 @@ export function registerSlackTools(server: McpServer): void {
           team_name: ws.team_name,
           query: query?.trim() || undefined,
           users,
-        });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.tool(
-    'slack_search',
-    'Search messages in a connected Slack workspace (needs a user token). Pass team_id from list_teams.',
-    {
-      team_id: z.string(),
-      query: z.string(),
-      count: z.number().optional(),
-    },
-    async ({ team_id, query, count }) => {
-      try {
-        const ws = requireSlackWorkspace(team_id);
-        const token = slackTokenFor(ws, 'search');
-        const data = await slackApi<{
-          messages?: {
-            matches?: Array<{
-              iid?: string;
-              channel?: { id?: string; name?: string };
-              user?: string;
-              username?: string;
-              ts?: string;
-              text?: string;
-              permalink?: string;
-            }>;
-          };
-        }>(token, 'search.messages', {
-          query,
-          count: Math.min(50, Math.max(1, count ?? 10)),
-          sort: 'timestamp',
-        });
-        return text({
-          team_id: ws.team_id,
-          team_name: ws.team_name,
-          query,
-          matches: (data.messages?.matches ?? []).map((m) => ({
-            channel: m.channel?.name || m.channel?.id,
-            user: m.username || m.user,
-            ts: m.ts,
-            text: m.text,
-            permalink: m.permalink,
-          })),
         });
       } catch (err) {
         return fail(err);

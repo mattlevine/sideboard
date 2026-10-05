@@ -19,7 +19,7 @@ Coding-from-Slack is an accepted Marketplace category. [Cursor’s Slack app](ht
 
 Sideboard is the same *job* as Cursor Slack with a different *runtime*: messages go to the user’s already-running Mac, not Anysphere’s VM. That is the remaining review risk (looks more like remote control of a machine). Framing that helps: no downloadable shell script; compute stays on the Mac they installed; relay carries message text only.
 
-**Decision:** Marketplace is **not** off the table. We still do **not** need it to install on other teams — Public Distribution is enough. Marketplace is the only way to drop the “not approved” OAuth banner. Skip the listing unless that banner (or discovery) matters; if we submit, copy Cursor’s shape (LLM disclaimer, landing, scopes we can demo) and be explicit that agents run on this Mac.
+**Decision (2026-10-05):** We are going for the Marketplace listing. The goal is not discovery but removing the “not approved by Slack” OAuth banner for people who install from the link inside the desktop app. Public Distribution alone keeps the banner. Cost accepted: `search:read` / MCP `slack_search` are gone. When we submit, copy Cursor’s shape (LLM disclaimer, landing, scopes we can demo) and be explicit that agents run on this Mac.
 
 Also forbidden: `search:read`, using Slack data to train LLMs, apps with **&lt; 5 active workspaces** and **&lt; 10 weekly active users**.
 
@@ -38,13 +38,13 @@ Marketplace rejects `search:read` and dislikes broad user `*:history` without a 
 | Bot `chat:write`, `chat:write.public`, `reactions:write` | Yes | Replies, post to public channels the bot is not in, seen reaction |
 | Bot `channels:read` / `groups:read` / `users:read` | Yes | MCP list channels/users; resolve `#name` / `@user` |
 | Bot `channels:history` / `groups:history` | Yes | MCP `slack_read` + `slack_replies` in channels the bot is in |
-| Bot `team:read` | Drop unless we call `team.info` | Workspace name today comes from `auth.test` |
-| Bot `users:read.email` | Drop unless we demo email lookup | `users.lookupByEmail` for `slack_post to=email`; not needed for Listen |
+| Bot `team:read` | **Dropped** | Never called `team.info`; workspace name comes from `auth.test` |
+| Bot `users:read.email` | Yes | `users.lookupByEmail` for `slack_post to=email` — show it in the review video |
 | User `channels:read` + `*:history` + `users:read` | Yes (MCP) | `slack_list_*` / `slack_read` as the installer; Slack allows user history for MCP |
-| User `chat:write` | **Drop** | Posts as `@Sideboard` with the bot token |
-| User `search:read` | **Drop** | Explicitly unsuitable for Marketplace |
+| User `chat:write` | Yes (kept) | Fallback when a workspace has only a user token; normal posts use the bot |
+| User `search:read` | **Dropped** (MCP `slack_search` removed) | Explicitly unsuitable for Marketplace |
 
-Update `docs/slack-app-manifest.yaml` and `packages/core/src/slack/oauth.ts` together. Removing scopes requires every workspace to reinstall.
+Update `docs/slack-app-manifest.yaml`, `packages/core/src/slack/oauth.ts`, and the Add to Slack URL in `site/slack/index.html` together, then the Slack dashboard. Removing scopes requires every workspace to reinstall.
 
 ### 2. Public Distribution
 
@@ -98,7 +98,7 @@ They install as a brand-new customer, including **uninstall**.
 | P3 | ≥ 5 active workspaces (28 days) | Unmet | Human: get 5 real teams on Listen | Count / date: |
 | P4 | ≥ 10 weekly active users | Unmet | Same | Count / date: |
 | P5 | Prepared to maintain + support (2 business days) | Unmet | Support page + monitored inbox | Support email: |
-| P6 | Meets guidelines (no forbidden scopes / remote-exec / LLM training) | Unmet | Cut `search:read` + user `chat:write` from the app; then paste **Scope reasons** below | See Scope reasons |
+| P6 | Meets guidelines (no forbidden scopes / remote-exec / LLM training) | Unmet | `search:read` + `team:read` cut in code; remove from the Slack dashboard once the desktop release that stops requesting them ships | See Scope reasons |
 | P7 | Not private beta / unfinished | Unmet | Desktop + Slack path used in production by those 5 teams | |
 
 Do not submit while any row is Unmet. Slack returns incomplete apps and **resets the preliminary-review queue**.
@@ -115,7 +115,7 @@ Do not submit while any row is Unmet. Slack returns incomplete apps and **resets
 
 ### Scope reasons
 
-Paste into Slack’s “Please add reasons for your app to request this scope.” Say **how Sideboard uses it**, not what the scope means ([data access](https://docs.slack.dev/slack-marketplace/slack-marketplace-app-guidelines-and-requirements/#data)). Two products: **Listen** (DM / `@Sideboard` → Mac orchestrator) and **MCP** (`slack_list_*`, `slack_read`, `slack_search`, `slack_post` on that Mac). Do not include drop-listed scopes in a Marketplace submit.
+Paste into Slack’s “Please add reasons for your app to request this scope.” Say **how Sideboard uses it**, not what the scope means ([data access](https://docs.slack.dev/slack-marketplace/slack-marketplace-app-guidelines-and-requirements/#data)). Two products: **Listen** (DM / `@Sideboard` → Mac orchestrator) and **MCP** (`slack_list_*`, `slack_read`, `slack_post` on that Mac).
 
 #### Bot token — paste
 
@@ -161,11 +161,8 @@ Same history/replies APIs in private channels the bot was added to.
 **`users:read`**  
 `users.list` / `users.info` so MCP `slack_list_users` can pick a person for a DM, and so reply-watching shows a display name instead of a user id.
 
-**`users:read.email`** — drop unless the review video shows email lookup.  
+**`users:read.email`**  
 `users.lookupByEmail` and email fields on `users.list` so `slack_post to=name@company.com` resolves to a user. We do not send email.
-
-**`team:read`** — drop unless we call `team.info`.  
-Workspace name in Settings → Remote today comes from `auth.test`, which does not need this scope.
 
 #### User token — paste (MCP only)
 
@@ -189,9 +186,10 @@ Same for the installer’s group DMs.
 **`users:read`**  
 Resolve people while acting as the installer (`slack_list_users` / destination lookup) when the bot token is missing or insufficient.
 
-**`chat:write`** — **drop.** Posting is as `@Sideboard` with the bot token. User `chat:write` is only a fallback for pasted `xoxp-` tokens.
+**`chat:write`** (kept)  
+Fallback only: if a workspace is connected with just a user token, a message the user explicitly asks their agent to send is posted as them. Normal posting uses the `@Sideboard` bot token.
 
-**`search:read`** — **drop before Marketplace.** Powers MCP `slack_search` → `search.messages`. Slack lists this scope as unsuitable for listing. Remove from the dashboard, `packages/core/src/slack/oauth.ts`, and `docs/slack-app-manifest.yaml` (every workspace must reinstall). Public Distribution can still ship with it; listing cannot.
+Dropped (no longer requested): user `search:read` (Marketplace-forbidden; MCP `slack_search` removed), bot `team:read` (unused).
 
 ### Security & compliance (LLM)
 
@@ -215,7 +213,7 @@ Resolve people while acting as the installer (`slack_list_users` / destination l
 
 ## Don’t
 
-- Don’t submit with `search:read` still on the app.
+- Don’t re-add `search:read` (or `slack_search`) to the app.
 - Don’t point the Marketplace landing at GitHub.
 - Don’t leave localhost as a production OAuth redirect.
 - Don’t promise Marketplace listing until the remote-execution go/no-go is decided.

@@ -31,11 +31,9 @@ export const SLACK_BOT_SCOPES = [
   'reactions:write',
   'users:read',
   'users:read.email',
-  'team:read',
 ].join(',');
 
 export const SLACK_USER_SCOPES = [
-  'search:read',
   'channels:history',
   'channels:read',
   'groups:history',

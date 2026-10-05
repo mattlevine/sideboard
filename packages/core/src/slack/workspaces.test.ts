@@ -73,7 +73,6 @@ describe('slack workspaces store', () => {
     const ws = mod.getSlackWorkspace('T99');
     expect(ws?.bot_token).toBe('xoxb-bot');
     expect(ws?.user_token).toBe('xoxp-user');
-    expect(mod.slackTokenFor(ws!, 'search')).toBe('xoxp-user');
     expect(mod.slackTokenFor(ws!, 'write')).toBe('xoxb-bot');
     expect(mod.slackTokenFor(ws!, 'read')).toBe('xoxp-user');
   });
