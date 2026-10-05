@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.265] - 2026-10-05
+
 ### Changed
 
 - Run scripts in one worktree can stay up together. Each script keeps its own port range, so starting or restarting desktop does not take the phone app’s port. The Run menu stays open while the default script is running.
