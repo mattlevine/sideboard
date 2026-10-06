@@ -1557,8 +1557,8 @@ export function ThreadPanel({
   }
 
   async function send() {
-    dictation.stop();
-    const text = prompt.trim();
+    const dictated = await dictation.stop();
+    const text = (dictated ?? prompt).trim();
     if (!text) return;
     const queueing = followUpBusy && !steeringFollowUp;
     if (!followUpBusy && busy) return;

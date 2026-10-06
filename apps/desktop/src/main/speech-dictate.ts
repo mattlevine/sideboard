@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { app } from 'electron';
 import {
+  isFifoWouldBlock,
   isNoSpeechDictateStderr,
   mapSpeechDictateError,
   parseLiveDictateLine,
@@ -340,7 +341,6 @@ export async function startLiveSpeechDictate(
     );
   }
   const timeout = setTimeout(() => {
-    if (liveSession !== session) return;
     const stderrFile = existsSync(stderrPath) ? readFileSync(stderrPath, 'utf8').trim() : '';
     session.rejectReady(
       new Error(mapSpeechDictateError(stderrFile || 'Could not start dictation.')),
@@ -355,6 +355,22 @@ export async function startLiveSpeechDictate(
     throw err;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+function flushLivePcmPending(session: LiveSession): void {
+  const fd = session.pcmFd;
+  if (fd == null || session.pcmPending.length === 0) return;
+  for (let i = 0; i < 4 && session.pcmPending.length > 0; i++) {
+    try {
+      const n = writeSync(fd, session.pcmPending);
+      if (!Number.isFinite(n) || n <= 0) return;
+      session.pcmPending = session.pcmPending.subarray(n);
+    } catch (err) {
+      if (isFifoWouldBlock(err)) return;
+      session.pcmPending = Buffer.alloc(0);
+      return;
+    }
   }
 }
 
@@ -374,6 +390,8 @@ export async function stopLiveSpeechDictate(): Promise<void> {
   const session = liveSession;
   if (!session) return;
   session.closing = true;
+  session.rejectReady(new Error('stopped'));
+  flushLivePcmPending(session);
   closeLivePcm(session);
   consumeLiveStdout(session);
   const timeout = setTimeout(() => {

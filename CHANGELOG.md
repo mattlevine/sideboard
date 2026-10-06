@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.270] - 2026-10-05
+
+### Fixed
+
+- The composer mic, stop, and send buttons stay on the row when the chat pane is narrow. The model name truncates first, and chip labels become icons below 560px. The new-workspace footer keeps Create visible the same way.
+- Send and Create wait for a fallback dictation transcript instead of submitting before the text is in the field. Clicking the mic again while that transcription is running does not cancel it.
+- Stopping dictation while the helper is still starting unblocks the start wait, and leftover audio bytes are written before the pipe closes.
+
 ## [0.1.269] - 2026-10-05
 
 ### Fixed

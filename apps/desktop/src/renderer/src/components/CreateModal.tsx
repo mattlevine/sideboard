@@ -447,7 +447,7 @@ export function CreateModal({
   }
 
   async function submit() {
-    dictation.stop();
+    const dictated = await dictation.stop();
     if (mode !== 'orchestration' && !repoPath) {
       setError('Add a project first');
       return;
@@ -468,7 +468,7 @@ export function CreateModal({
             : selection.ref
       : null;
     const firstPrompt =
-      mode === 'orchestration' ? goal.trim() : prompt.trim();
+      mode === 'orchestration' ? (dictated ?? goal).trim() : (dictated ?? prompt).trim();
     const hasPrompt = Boolean(
       firstPrompt ||
         (mode !== 'orchestration' &&

@@ -35,7 +35,8 @@ export function useSpeechDictation(opts: {
   error: string | null;
   clearError: () => void;
   start: () => void;
-  stop: () => void;
+  /** Resolves with the composer text when this stop applied a transcript. */
+  stop: () => Promise<string | undefined>;
 } {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export function useSpeechDictation(opts: {
   const pendingSpokenRef = useRef<string | null>(null);
   const spokenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  const stopInFlightRef = useRef<Promise<string | undefined> | null>(null);
   const getValueRef = useRef(opts.getValue);
   const setValueRef = useRef(opts.setValue);
   getValueRef.current = opts.getValue;
@@ -83,13 +85,15 @@ export function useSpeechDictation(opts: {
     setListening(false);
   }, [detachLive]);
 
-  const applySpokenNow = useCallback((spoken: string, gen: number) => {
-    if (gen !== genRef.current) return;
+  const applySpokenNow = useCallback((spoken: string, gen: number): string | undefined => {
+    if (gen !== genRef.current) return undefined;
     const next = spoken.replace(/\s+/g, ' ').trim();
-    if (!next) return;
+    if (!next) return undefined;
     gotSpeechRef.current = true;
     setError(null);
-    setValueRef.current(composeDictationPrompt(baseRef.current, next));
+    const composed = composeDictationPrompt(baseRef.current, next);
+    setValueRef.current(composed);
+    return composed;
   }, []);
 
   const applySpoken = useCallback(
@@ -107,14 +111,15 @@ export function useSpeechDictation(opts: {
   );
 
   const flushSpoken = useCallback(
-    (gen: number) => {
+    (gen: number): string | undefined => {
       if (spokenTimerRef.current) {
         clearTimeout(spokenTimerRef.current);
         spokenTimerRef.current = null;
       }
       const pending = pendingSpokenRef.current;
       pendingSpokenRef.current = null;
-      if (pending) applySpokenNow(pending, gen);
+      if (!pending) return undefined;
+      return applySpokenNow(pending, gen);
     },
     [applySpokenNow],
   );
@@ -139,51 +144,63 @@ export function useSpeechDictation(opts: {
     [applySpoken],
   );
 
-  const transcribe = useCallback((samples: Float32Array, sampleRate: number, gen: number) => {
+  const transcribe = useCallback((samples: Float32Array, sampleRate: number, gen: number): Promise<string | undefined> => {
     const prepared = prepareDictationWav(samples, sampleRate);
     if (prepared.seconds < DICTATION_MIN_SECONDS) {
       setListening(false);
       setError(dictationErrorMessage('too-short'));
-      return;
+      return Promise.resolve(undefined);
     }
     if (prepared.rms < DICTATION_MIN_RMS) {
       setListening(false);
       setError(dictationErrorMessage('silent'));
-      return;
+      return Promise.resolve(undefined);
     }
     const run = window.sideboard.transcribeDictation;
     if (typeof run !== 'function') {
       setListening(false);
       setError('Dictation is not available in this window.');
-      return;
+      return Promise.resolve(undefined);
     }
     const locale = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US';
-    void run(arrayBufferToBase64(prepared.wav), locale)
-      .then((spoken) => {
-        if (gen !== genRef.current) return;
-        if (!spoken.trim()) {
-          setError(dictationErrorMessage('no-speech'));
-          return;
-        }
-        applySpokenNow(spoken, gen);
-      })
-      .catch((err) => {
-        if (gen !== genRef.current) return;
-        setError(err instanceof Error ? err.message : dictationErrorMessage(undefined));
-      })
-      .finally(() => {
-        if (gen === genRef.current) setListening(false);
-      });
+    return new Promise((resolve) => {
+      void run(arrayBufferToBase64(prepared.wav), locale)
+        .then((spoken) => {
+          if (gen !== genRef.current) {
+            resolve(undefined);
+            return;
+          }
+          if (!spoken.trim()) {
+            setError(dictationErrorMessage('no-speech'));
+            resolve(undefined);
+            return;
+          }
+          resolve(applySpokenNow(spoken, gen));
+        })
+        .catch((err) => {
+          if (gen === genRef.current) {
+            setError(err instanceof Error ? err.message : dictationErrorMessage(undefined));
+          }
+          resolve(undefined);
+        })
+        .finally(() => {
+          if (gen === genRef.current) setListening(false);
+        });
+    });
   }, [applySpokenNow]);
 
-  const stop = useCallback(() => {
+  const stop = useCallback((): Promise<string | undefined> => {
+    if (stopInFlightRef.current) return stopInFlightRef.current;
     wantRef.current = false;
     const gen = genRef.current;
     const pending = startingRef.current;
     const attempted = liveAttemptedRef.current;
-    void (async () => {
+    const job = (async (): Promise<string | undefined> => {
+      if (attempted || liveActiveRef.current) {
+        void window.sideboard.stopLiveDictation?.();
+      }
       if (pending) await pending;
-      if (gen !== genRef.current) return;
+      if (gen !== genRef.current) return undefined;
       const session = sessionRef.current;
       sessionRef.current = null;
       const clip = session?.finish() ?? { samples: new Float32Array(0), sampleRate: DICTATION_TARGET_RATE };
@@ -198,19 +215,23 @@ export function useSpeechDictation(opts: {
         } catch {
           /* helper already gone */
         }
-        if (gen !== genRef.current) return;
-        flushSpoken(gen);
+        if (gen !== genRef.current) return undefined;
+        const flushed = flushSpoken(gen);
         unsubRef.current?.();
         unsubRef.current = null;
         if (!gotSpeechRef.current) {
-          transcribe(clip.samples, clip.sampleRate, gen);
-          return;
+          return transcribe(clip.samples, clip.sampleRate, gen);
         }
         setListening(false);
-        return;
+        return flushed;
       }
-      transcribe(clip.samples, clip.sampleRate, gen);
+      return transcribe(clip.samples, clip.sampleRate, gen);
     })();
+    const tracked = job.finally(() => {
+      if (stopInFlightRef.current === tracked) stopInFlightRef.current = null;
+    });
+    stopInFlightRef.current = tracked;
+    return tracked;
   }, [flushSpoken, transcribe]);
 
   const start = useCallback(() => {
@@ -255,26 +276,33 @@ export function useSpeechDictation(opts: {
       let liveP = Promise.resolve();
       if (typeof startLive === 'function') {
         liveAttemptedRef.current = true;
-        liveP = startLive(locale).then(() => {
-          if (gen !== genRef.current || !wantRef.current) {
-            void window.sideboard.stopLiveDictation?.();
+        liveP = startLive(locale)
+          .then(() => {
+            if (gen !== genRef.current || !wantRef.current) {
+              void window.sideboard.stopLiveDictation?.();
+              liveActiveRef.current = false;
+              liveReadyRef.current = false;
+              queuedPcmRef.current = [];
+              return;
+            }
+            const flushQueue = () => {
+              const push = window.sideboard.pushLiveDictationAudio;
+              const queued = queuedPcmRef.current;
+              queuedPcmRef.current = [];
+              if (typeof push !== 'function') return;
+              for (const b64 of queued) push(b64);
+            };
+            liveActiveRef.current = true;
+            flushQueue();
+            liveReadyRef.current = true;
+            flushQueue();
+          })
+          .catch((err: unknown) => {
             liveActiveRef.current = false;
             liveReadyRef.current = false;
-            queuedPcmRef.current = [];
-            return;
-          }
-          const flushQueue = () => {
-            const push = window.sideboard.pushLiveDictationAudio;
-            const queued = queuedPcmRef.current;
-            queuedPcmRef.current = [];
-            if (typeof push !== 'function') return;
-            for (const b64 of queued) push(b64);
-          };
-          liveActiveRef.current = true;
-          flushQueue();
-          liveReadyRef.current = true;
-          flushQueue();
-        });
+            if (!wantRef.current || gen !== genRef.current) return;
+            throw err;
+          });
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {

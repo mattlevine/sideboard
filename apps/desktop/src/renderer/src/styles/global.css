@@ -6240,6 +6240,7 @@ button.chat-earlier-toggle:hover {
   align-items: flex-start;
   gap: 8px;
   position: relative;
+  min-width: 0;
 }
 
 .composer-ac {
@@ -6326,7 +6327,10 @@ button.chat-earlier-toggle:hover {
 }
 
 .composer-focus-hint {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
@@ -6368,6 +6372,8 @@ button.chat-earlier-toggle:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .composer-left,
@@ -6376,6 +6382,28 @@ button.chat-earlier-toggle:hover {
   align-items: center;
   gap: 6px;
   position: relative;
+}
+
+.composer-left {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+/* Mic, send, and stop stay full size. Chips yield when the pane is narrow. */
+.composer-right {
+  flex: 0 0 auto;
+}
+
+.composer-left > .chip:first-child {
+  min-width: 0;
+  flex-shrink: 1;
+  max-width: 100%;
+}
+
+.composer-left > .chip:first-child .chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chip {
@@ -6406,8 +6434,10 @@ button.chat-earlier-toggle:hover {
   min-width: 0;
 }
 
-/* Narrow composer (split panes / skinny chat): icons only — titles keep the meaning. */
-@container composer (max-width: 420px) {
+/* Narrow composer (split panes / skinny chat): icons only — titles keep the meaning.
+   The mic sits with send/stop, so labels have to drop before the old 420px line
+   or those buttons clip against the pane edge. */
+@container composer (max-width: 560px) {
   .composer-toolbar .chip-label {
     display: none;
   }
@@ -6415,6 +6445,14 @@ button.chat-earlier-toggle:hover {
   .composer-toolbar .chip {
     padding: 5px 7px;
     gap: 0;
+  }
+
+  .composer-focus-hint {
+    display: none;
+  }
+
+  .create-more-toggle > span {
+    display: none;
   }
 }
 
@@ -6925,6 +6963,7 @@ button.chat-earlier-toggle:hover {
   justify-content: center;
   font-size: 16px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .send-btn {
@@ -6977,6 +7016,7 @@ button.chat-earlier-toggle:hover {
   height: 32px;
   border-radius: 8px;
   padding: 0;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -11754,6 +11794,8 @@ body:has(.update-banner) .team-toast-stack {
   cursor: pointer;
   user-select: none;
   margin-right: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .create-more-switch {
@@ -11783,6 +11825,8 @@ body:has(.update-banner) .team-toast-stack {
   color: #111;
   font-weight: 600;
   font-size: 13px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .create-submit-btn:hover:not(:disabled) {
