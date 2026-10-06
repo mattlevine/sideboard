@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.268] - 2026-10-05
+
 ### Fixed
 
 - Stopping the mic while dictation is still starting now tears down the speech helper instead of leaving it running and falling back to a WAV clip.
