@@ -98,6 +98,7 @@ describe('formatLongRunningReminder', () => {
     expect(text).toMatch(/present_artifact type=log/);
     expect(text).toMatch(/stop_job/);
     expect(text).toMatch(/let the user know later/);
+    expect(text).toMatch(/background poll/);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
     expect(text).toMatch(/get_run_log/);
@@ -133,6 +134,8 @@ describe('formatPrGateDirective', () => {
     expect(text).toMatch(/watch-fix-push/);
     expect(text).toMatch(/Greptile 5\/5/);
     expect(text).toMatch(/gh pr checks --watch/);
+    expect(text).toMatch(/wait_for_job/);
+    expect(text).toMatch(/background poll/);
     expect(text).toMatch(/5\/5 and zero unresolved/);
   });
 });

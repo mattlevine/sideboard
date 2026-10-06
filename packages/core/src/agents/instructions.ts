@@ -312,7 +312,7 @@ export function formatPrGateDirective(): string {
   return [
     'If a goal is given (not after every push):',
     '- Enter a watch-fix-push loop and stay in it until that goal is met or you are blocked (examples: “Greptile 5/5”, “CI green”, “until checks pass”). Do not stop after one red run or one review cycle.',
-    '- Wait with `/long-running`: `gh pr checks --watch` (add `-R <origin>` when needed). Present the log. Do not ask the human to poll.',
+    '- Wait with `/long-running`: detach `gh pr checks --watch` (add `-R <origin>` when needed), then loop `wait_for_job` until stillRunning is false. Do not end the turn — a background poll / Task notify does not resume this chat. Do not ask the human to poll.',
     '- Greptile 5/5: wait for the greptile check; read the latest `N/5` from the PR body or Greptile’s most recently *updated* issue comment; also fetch unresolved review comments / the “Prompt to fix all with AI” block. Done = **5/5 and zero unresolved Greptile comments**. If Greptile is idle, comment `@greptile review`. Cap about 5 iterations, then report leftovers. Do not merge unless asked.',
   ].join('\n');
 }
@@ -374,7 +374,7 @@ export function formatLongRunningReminder(opts?: {
   activeRuns?: readonly DevAccessRun[] | null;
 }): string {
   const invoke = formatDetachedJobInvoke(opts?.scriptPath);
-  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn. Project Dev button: list_run_scripts / run_dev_script / stop_dev_script / get_run_log (UI-connected — not detached-job). ${formatDevAccessHint(opts?.activeRuns)}`;
+  return `Long jobs: \`${invoke} start <id> -- <cmd>\`, loop wait_for_job (or detached-job wait). The log pane updates from wait JSON; present_artifact type=log is optional. stop_job if hanging or wrong. Do not say you will let the user know later — stay in the turn. A background poll / Task notify does not resume this chat. Project Dev button: list_run_scripts / run_dev_script / stop_dev_script / get_run_log (UI-connected — not detached-job). ${formatDevAccessHint(opts?.activeRuns)}`;
 }
 
 /**
