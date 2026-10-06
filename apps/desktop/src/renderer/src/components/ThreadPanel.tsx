@@ -73,6 +73,7 @@ import { ChatTabs } from './ChatTabs';
 import { AccountSwitcher } from './AccountSwitcher';
 import { ClaudeUsageMeter } from './ClaudeUsageMeter';
 import { ConfirmDialog } from './ConfirmDialog';
+import { DictationPermissionDialog } from './DictationPermissionDialog';
 import {
   claudeUsageOverLimitWindows,
   formatClaudeUsageOverLimitConfirm,
@@ -109,6 +110,7 @@ import {
 } from './ComposerAutocomplete';
 import { LinkIssuePicker, LinkWorkspacePicker } from './ComposerLinkPickers';
 import { ComposerAttachmentChips } from './ComposerOptionsToolbar';
+import { DictationMicButton } from './DictationMicButton';
 import { FileEditor } from './FileEditor';
 import { FloatingMenu } from './FloatingMenu';
 import { ChatSearchBar } from './ChatSearchBar';
@@ -160,6 +162,7 @@ import {
 } from '../lib/visible-follow-up-queue';
 import { visibleComposerAttachments } from '../lib/composer-attachments';
 import { getComposerDraft, rememberComposerDraft } from '../lib/composer-draft';
+import { useSpeechDictation } from '../lib/use-speech-dictation';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -250,6 +253,8 @@ interface Props {
   rightSidebarToggle?: ReactNode;
   /** Rendered under the tab strip (orchestrator child-thread chips). */
   belowTabs?: ReactNode;
+  /** Speak artifact text with the app Read Aloud modal. */
+  onReadAloud?: (text: string) => void;
 }
 
 const queuedIconStroke = {
@@ -746,6 +751,7 @@ export function ThreadPanel({
   leftSidebarToggle,
   rightSidebarToggle,
   belowTabs,
+  onReadAloud,
 }: Props) {
   const live = useLiveThread(thread.id);
   const liveOutput = live.output;
@@ -755,6 +761,11 @@ export function ThreadPanel({
   const showCost = useShowCost();
   const followUpBehavior = useFollowUpBehavior();
   const [prompt, setPrompt] = useState(() => getComposerDraft(thread.id));
+  const dictation = useSpeechDictation({
+    getValue: () => prompt,
+    setValue: setPrompt,
+    resetKey: thread.id,
+  });
   useEffect(() => {
     rememberComposerDraft(thread.id, prompt);
   }, [thread.id, prompt]);
@@ -1546,6 +1557,7 @@ export function ThreadPanel({
   }
 
   async function send() {
+    dictation.stop();
     const text = prompt.trim();
     if (!text) return;
     const queueing = followUpBusy && !steeringFollowUp;
@@ -2232,6 +2244,7 @@ export function ThreadPanel({
 
   return (
     <section className="panel thread-main">
+      <DictationPermissionDialog error={dictation.error} onDismiss={dictation.clearError} />
       {usageLimitConfirm ? (
         <ConfirmDialog
           title={
@@ -2957,6 +2970,15 @@ export function ThreadPanel({
               }}
             />
             {!composerExpanded && <span className="composer-focus-hint">⌘L to focus</span>}
+            {!composerExpanded && (
+              <DictationMicButton
+                listening={dictation.listening}
+                supported={dictation.supported}
+                error={dictation.error}
+                onStart={dictation.start}
+                onStop={dictation.stop}
+              />
+            )}
             {!composerExpanded && agentActive && (
               <button
                 type="button"
@@ -3067,6 +3089,13 @@ export function ThreadPanel({
                 >
                   +
                 </button>
+                <DictationMicButton
+                  listening={dictation.listening}
+                  supported={dictation.supported}
+                  error={dictation.error}
+                  onStart={dictation.start}
+                  onStop={dictation.stop}
+                />
                 <FloatingMenu
                   open={plusOpen}
                   onClose={() => setPlusOpen(false)}
@@ -3162,6 +3191,7 @@ export function ThreadPanel({
             onActivate={activateRightTab}
             onCloseTab={closeRightTab}
             onSchemaContentChange={updateSchemaTab}
+            onReadAloud={onReadAloud}
             worktreeThreadId={thread.id}
             filePicker={filePicker}
             onFilePickerChange={setFilePicker}

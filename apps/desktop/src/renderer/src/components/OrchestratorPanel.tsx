@@ -30,6 +30,7 @@ interface Props {
   prPageOpen?: boolean;
   onSelectPrPage?: () => void;
   onClosePrPage?: () => void;
+  onReadAloud?: (text: string) => void;
 }
 
 function countStatus(threads: Thread[], status: Thread['status']): number {
@@ -61,6 +62,7 @@ export function OrchestratorPanel({
   prPageOpen,
   onSelectPrPage,
   onClosePrPage,
+  onReadAloud,
 }: Props) {
   const global = isGlobalThread(thread);
   const childSummary = useMemo(() => {
@@ -141,6 +143,7 @@ export function OrchestratorPanel({
           prPageOpen={prPageOpen}
           onSelectPrPage={onSelectPrPage}
           onClosePrPage={onClosePrPage}
+          onReadAloud={onReadAloud}
           belowTabs={childList}
         />
       </div>

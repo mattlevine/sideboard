@@ -24,6 +24,7 @@ import {
   HISTORY_MAX_COUNT_DEFAULT,
   HISTORY_MAX_DAYS_DEFAULT,
 } from './history-retention.js';
+import { copyReadAloudFromUnknown, patchReadAloudSettings } from './read-aloud-settings.js';
 import {
   isUsageOnLimit,
   resolveUsageOnLimit,
@@ -457,6 +458,8 @@ export interface AdvancedAppSettings {
    * Audio bytes live under app data `sounds/agent-done.<ext>`.
    */
   agentDoneCustomSoundName?: string;
+  readAloudRate?: number;
+  readAloudVoiceURI?: string;
 }
 
 export interface AppSettings {
@@ -1054,6 +1057,7 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
     const name = source.agentDoneCustomSoundName.trim();
     if (name) out.agentDoneCustomSoundName = name.slice(0, 200);
   }
+  copyReadAloudFromUnknown(source, out);
   return out;
 }
 
@@ -2406,6 +2410,7 @@ export function updateAdvancedSettings(
     if (name) advanced.agentDoneCustomSoundName = name.slice(0, 200);
     else delete advanced.agentDoneCustomSoundName;
   }
+  patchReadAloudSettings(patch, advanced);
   return saveAppSettings({ ...current, advanced });
 }
 

@@ -26,6 +26,8 @@ import {
 } from './artifact-preview';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { setupTextContextMenu } from './text-context-menu';
+import { askMicrophoneAccess, setupMicrophonePermissions } from './microphone-access';
+import { transcribeWavFile } from './speech-dictate';
 import { formatUpdaterCheckError } from './updater-error';
 import {
   bindRemoteHostActivity,
@@ -1798,6 +1800,21 @@ function registerIpc(): void {
     }
     return result.filePaths.map((p) => attachmentFromAbsolutePath(p));
   });
+  ipcMain.handle('askMicrophoneAccess', () => askMicrophoneAccess());
+  ipcMain.handle('getDictationPrivacyHelp', () => ({ packaged: app.isPackaged }));
+  ipcMain.handle(
+    'transcribeDictation',
+    async (_e, wavBase64: string, locale?: string) => {
+      if (process.platform !== 'darwin') {
+        throw new Error('Dictation is only available on macOS.');
+      }
+      if (typeof wavBase64 !== 'string' || wavBase64.length === 0 || wavBase64.length > 16_000_000) {
+        throw new Error('Click the mic, speak, then click it again to stop.');
+      }
+      const buf = Buffer.from(wavBase64, 'base64');
+      return transcribeWavFile(buf, typeof locale === 'string' && locale ? locale : 'en-US');
+    },
+  );
   ipcMain.handle('attachmentsFromPaths', (_e, absolutePaths: string[]) => {
     const paths = Array.isArray(absolutePaths)
       ? absolutePaths.filter((p): p is string => typeof p === 'string' && p.length > 0)
@@ -1824,7 +1841,9 @@ function registerIpc(): void {
     } catch {
       return;
     }
-    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+    if (!['http:', 'https:', 'mailto:', 'x-apple.systempreferences:'].includes(parsed.protocol)) {
+      return;
+    }
     await shell.openExternal(parsed.href);
   });
 
@@ -1898,6 +1917,7 @@ app.whenReady().then(async () => {
   startDesktopHost();
   applyDockIcon();
   bindArtifactPreviewProtocol();
+  setupMicrophonePermissions();
   registerIpc();
   setupNotifications();
   setupStoreWatcher();

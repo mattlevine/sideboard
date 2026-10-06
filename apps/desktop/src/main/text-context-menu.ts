@@ -48,6 +48,16 @@ function toElectronItem(
       },
     };
   }
+  if (item.type === 'readAloud') {
+    return {
+      label: 'Read Aloud',
+      click: () => {
+        const text = (params.selectionText ?? '').trim();
+        if (!text || win.isDestroyed()) return;
+        win.webContents.send('menu:read-aloud', text.slice(0, 50_000));
+      },
+    };
+  }
   if (item.type === 'searchChat') {
     return {
       label: 'Search Chat',
@@ -69,7 +79,7 @@ function toElectronItem(
 async function popupTextContextMenu(win: BrowserWindow, params: ContextMenuParams): Promise<void> {
   if (win.isDestroyed() || !isMainFrame(win, params)) return;
 
-  let target: TextContextTarget = { inChatText: false, skipNativeMenu: false };
+  let target: TextContextTarget = { inChatText: false, inArtifactText: false, skipNativeMenu: false };
   try {
     const raw = (await win.webContents.executeJavaScript(
       textContextTargetScript(params.x, params.y),
@@ -77,6 +87,7 @@ async function popupTextContextMenu(win: BrowserWindow, params: ContextMenuParam
     if (raw && typeof raw === 'object') {
       target = {
         inChatText: Boolean(raw.inChatText),
+        inArtifactText: Boolean(raw.inArtifactText),
         skipNativeMenu: Boolean(raw.skipNativeMenu),
       };
     }

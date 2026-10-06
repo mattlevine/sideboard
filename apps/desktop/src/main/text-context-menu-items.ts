@@ -4,9 +4,11 @@ export const SKIP_NATIVE_TEXT_MENU_SELECTOR =
 
 /** Chat message prose — Quote and message-scoped Select All. */
 export const CHAT_TEXT_SELECTOR = '[data-chat-text]';
+export const ARTIFACT_TEXT_SELECTOR = '[data-artifact-text]';
 
 export type TextContextTarget = {
   inChatText: boolean;
+  inArtifactText: boolean;
   skipNativeMenu: boolean;
 };
 
@@ -26,6 +28,7 @@ export type TextContextMenuItem =
     }
   | { type: 'copyLink'; url: string }
   | { type: 'quote' }
+  | { type: 'readAloud' }
   | { type: 'searchChat' }
   | { type: 'selectChatText' };
 
@@ -53,10 +56,11 @@ export function safeContextLinkUrl(href: string | undefined): string | null {
 }
 
 export function resolveTextContextTarget(el: { closest: (sel: string) => unknown } | null): TextContextTarget {
-  if (!el) return { inChatText: false, skipNativeMenu: false };
+  if (!el) return { inChatText: false, inArtifactText: false, skipNativeMenu: false };
   return {
     skipNativeMenu: Boolean(el.closest(SKIP_NATIVE_TEXT_MENU_SELECTOR)),
     inChatText: Boolean(el.closest(CHAT_TEXT_SELECTOR)),
+    inArtifactText: Boolean(el.closest(ARTIFACT_TEXT_SELECTOR)),
   };
 }
 
@@ -65,10 +69,11 @@ export function textContextTargetScript(x: number, y: number): string {
   const py = Number.isFinite(y) ? Math.round(y) : 0;
   return `(() => {
     const el = document.elementFromPoint(${px}, ${py});
-    if (!el) return { inChatText: false, skipNativeMenu: false };
+    if (!el) return { inChatText: false, inArtifactText: false, skipNativeMenu: false };
     return {
       skipNativeMenu: Boolean(el.closest(${JSON.stringify(SKIP_NATIVE_TEXT_MENU_SELECTOR)})),
       inChatText: Boolean(el.closest(${JSON.stringify(CHAT_TEXT_SELECTOR)})),
+      inArtifactText: Boolean(el.closest(${JSON.stringify(ARTIFACT_TEXT_SELECTOR)})),
     };
   })()`;
 }
@@ -149,7 +154,9 @@ export function buildTextContextMenuItems(
       items.push({ type: 'role', role: 'copy', enabled: flags.canCopy ?? true });
     }
     if (hasSelection && target.inChatText) {
-      items.push({ type: 'quote' });
+      items.push({ type: 'quote' }, { type: 'readAloud' });
+    } else if (hasSelection && target.inArtifactText) {
+      items.push({ type: 'readAloud' });
     }
     if (target.inChatText) {
       items.push({ type: 'searchChat' }, { type: 'selectChatText' });

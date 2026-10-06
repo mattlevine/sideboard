@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Sideboard Dictation</string>
+    <key>CFBundleExecutable</key>
+    <string>speech-dictate</string>
+    <key>CFBundleIdentifier</key>
+    <string>ai.sideboard.dictation</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Sideboard Dictation</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Sideboard uses the microphone so you can dictate into the composer.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Sideboard transcribes what you dictate into the composer.</string>
+  </dict>
+</plist>

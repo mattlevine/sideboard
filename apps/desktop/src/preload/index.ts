@@ -244,6 +244,11 @@ const api: IpcApi = {
   setRepoPath: (path) => ipcRenderer.invoke('setRepoPath', path),
   pickRepoPath: () => ipcRenderer.invoke('pickRepoPath'),
   pickFiles: (threadRef) => ipcRenderer.invoke('pickFiles', threadRef ?? null),
+  askMicrophoneAccess: () => ipcRenderer.invoke('askMicrophoneAccess') as Promise<boolean>,
+  transcribeDictation: (wavBase64, locale) =>
+    ipcRenderer.invoke('transcribeDictation', wavBase64, locale) as Promise<string>,
+  getDictationPrivacyHelp: () =>
+    ipcRenderer.invoke('getDictationPrivacyHelp') as Promise<{ packaged: boolean }>,
   attachmentsFromPaths: (absolutePaths) =>
     ipcRenderer.invoke('attachmentsFromPaths', absolutePaths),
   attachmentsFromBuffers: (buffers) =>
@@ -339,6 +344,13 @@ contextBridge.exposeInMainWorld('sideboardUpdate', {
     };
     ipcRenderer.on('menu:quote-selection', handler);
     return () => ipcRenderer.removeListener('menu:quote-selection', handler);
+  },
+  onReadAloud: (listener: (text: string) => void) => {
+    const handler = (_event: IpcRendererEvent, text: string) => {
+      if (typeof text === 'string') listener(text);
+    };
+    ipcRenderer.on('menu:read-aloud', handler);
+    return () => ipcRenderer.removeListener('menu:read-aloud', handler);
   },
   onFindChat: (listener: (text: string) => void) => {
     const handler = (_event: IpcRendererEvent, text: string) => {

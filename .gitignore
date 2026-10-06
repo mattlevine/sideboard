@@ -14,6 +14,7 @@ apps/desktop/build/cursor-runtime/
 apps/desktop/build/sideboard-mcp/
 apps/desktop/build/node/
 apps/desktop/build/node-cache/
+apps/desktop/build/speech-dictate.app/
 apps/desktop/dist/
 *.dmg
 *.zip

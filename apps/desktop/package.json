@@ -1,6 +1,6 @@
 {
   "name": "@sideboard-ai/desktop",
-  "version": "0.1.265",
+  "version": "0.1.266",
   "private": true,
   "description": "Sideboard desktop — agent-agnostic worktree orchestration",
   "license": "Apache-2.0",
@@ -14,8 +14,8 @@
     "test": "vitest run --passWithNoTests",
     "postinstall": "electron-rebuild -f -w better-sqlite3,node-pty || true",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3,node-pty",
-    "dist": "pnpm run build && node scripts/stage-bundled-node.js && node scripts/stage-sideboard-mcp.js && node scripts/stage-cursor-runtime.js && electron-builder --mac",
-    "dist:dir": "pnpm run build && node scripts/stage-bundled-node.js && node scripts/stage-sideboard-mcp.js && node scripts/stage-cursor-runtime.js && electron-builder --mac --dir",
+    "dist": "pnpm run build && node scripts/stage-bundled-node.js && node scripts/stage-sideboard-mcp.js && node scripts/stage-cursor-runtime.js && node scripts/stage-speech-dictate.js && electron-builder --mac",
+    "dist:dir": "pnpm run build && node scripts/stage-bundled-node.js && node scripts/stage-sideboard-mcp.js && node scripts/stage-cursor-runtime.js && node scripts/stage-speech-dictate.js && electron-builder --mac --dir",
     "dist:mac": "node scripts/release.js patch mac never",
     "pack": "pnpm run dist:dir",
     "release": "node scripts/release.js"
@@ -88,6 +88,10 @@
       {
         "from": "build/sideboard-mcp",
         "to": "sideboard-mcp"
+      },
+      {
+        "from": "build/speech-dictate.app",
+        "to": "speech-dictate.app"
       }
     ],
     "mac": {
@@ -110,7 +114,11 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Sideboard uses the microphone so you can dictate into the composer.",
+        "NSSpeechRecognitionUsageDescription": "Sideboard transcribes what you dictate into the composer."
+      }
     },
     "publish": [
       {

@@ -26,6 +26,8 @@ import {
   type CreateFromSelection,
 } from './CreateFromPicker';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
+import { DictationPermissionDialog } from './DictationPermissionDialog';
+import { CreateModalFooterActions } from './CreateModalFooterActions';
 import { FloatingMenu } from './FloatingMenu';
 import {
   absolutePathsFromFiles,
@@ -39,6 +41,7 @@ import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
 import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defaults';
 import { createModalHasDraft } from '../lib/create-modal-draft';
 import { ConfirmDialog } from './ConfirmDialog';
+import { useSpeechDictation } from '../lib/use-speech-dictation';
 
 type Mode = 'create' | 'orchestration';
 
@@ -182,6 +185,15 @@ export function CreateModal({
   const [abletimeConnected, setAbletimeConnected] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [goal, setGoal] = useState('');
+  const dictation = useSpeechDictation({
+    getValue: () => (mode === 'orchestration' ? goal : prompt),
+    setValue: (next) => {
+      if (mode === 'orchestration') setGoal(next);
+      else setPrompt(next);
+    },
+    resetKey: mode,
+    disabled: busy,
+  });
   const [createMore, setCreateMore] = useState(false);
   const [cowboyAllowed, setCowboyAllowed] = useState(false);
   const [cowboy, setCowboy] = useState(false);
@@ -435,6 +447,7 @@ export function CreateModal({
   }
 
   async function submit() {
+    dictation.stop();
     if (mode !== 'orchestration' && !repoPath) {
       setError('Add a project first');
       return;
@@ -952,38 +965,14 @@ export function CreateModal({
               mode === 'orchestration' ? ORCHESTRATOR_AGENT_KINDS : undefined
             }
             rightSlot={
-              <>
-                <label className="create-more-toggle" title="Keep dialog open after create">
-                  <button
-                    type="button"
-                    className={`settings-switch create-more-switch${createMore ? ' on' : ''}`}
-                    role="switch"
-                    aria-checked={createMore}
-                    disabled={busy}
-                    onClick={() => setCreateMore((v) => !v)}
-                  >
-                    <span className="settings-switch-knob" />
-                  </button>
-                  <span>Create more</span>
-                </label>
-                <button
-                  type="button"
-                  className={`create-submit-btn${busy ? ' is-busy' : ''}`}
-                  disabled={!canSubmit}
-                  onClick={() => void submit()}
-                >
-                  {busy ? (
-                    <>
-                      <span className="create-submit-spinner" aria-hidden />
-                      Creating
-                    </>
-                  ) : (
-                    <>
-                      Create <kbd>↵</kbd>
-                    </>
-                  )}
-                </button>
-              </>
+              <CreateModalFooterActions
+                dictation={dictation}
+                busy={busy}
+                createMore={createMore}
+                onToggleCreateMore={() => setCreateMore((v) => !v)}
+                canSubmit={canSubmit}
+                onSubmit={() => void submit()}
+              />
             }
           />
         </div>
@@ -1001,6 +990,7 @@ export function CreateModal({
         onOpenIssues={onOpenIssues}
       />
     </div>
+    <DictationPermissionDialog error={dictation.error} onDismiss={dictation.clearError} />
     {discardOpen ? (
       <ConfirmDialog
         title="Discard draft?"

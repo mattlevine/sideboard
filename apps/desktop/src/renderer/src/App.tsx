@@ -13,7 +13,6 @@ import type {
   FollowUpBehavior,
   OrchestratorEvent,
   OrchestratorRuntime,
-  PublicAppSettings,
   Thread,
   ThreadAttachment,
   Workspace,
@@ -33,9 +32,11 @@ import {
   withoutLiveThreads,
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
+import { projectReviewLabelsFromSettings } from './lib/project-review-labels';
 import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { applyChatTextScale, resolveChatTextScale } from './lib/chat-text-scale';
 import { ShowCostProvider } from './lib/show-cost';
+import { useReadAloudSession } from './lib/use-read-aloud-session';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
@@ -83,17 +84,6 @@ const RIGHT_SIDEBAR_MIN = 240;
 const RIGHT_SIDEBAR_MAX = 560;
 function sameWorktreePath(a: string, b: string): boolean {
   return a.replace(/\/$/, '') === b.replace(/\/$/, '');
-}
-
-function projectReviewLabelsFromSettings(
-  projects: PublicAppSettings['projects'] | undefined,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [path, profile] of Object.entries(projects ?? {})) {
-    const label = profile.reviewLabel?.trim();
-    if (label) out[path] = label;
-  }
-  return out;
 }
 
 function readSidebarPref(key: string, fallback: boolean): boolean {
@@ -184,6 +174,7 @@ export function App() {
   const [teamToasts, setTeamToasts] = useState<TeamToastItem[]>([]);
   const [prefill, setPrefill] = useState<string | undefined>();
   const [findChatCmd, setFindChatCmd] = useState<{ nonce: number; query: string } | null>(null);
+  const readAloud = useReadAloudSession();
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
@@ -1346,6 +1337,7 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
+              onReadAloud: readAloud.open,
             };
             const urlPreviewProps = {
               openUrls,
@@ -1394,6 +1386,7 @@ export function App() {
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
               onOpenThreadLink={openThreadByRef}
+              onReadAloud={readAloud.open}
               {...urlPreviewProps}
             />
           ) : (
@@ -1600,6 +1593,8 @@ export function App() {
         />
       )}
 
+      {readAloud.modal}
+
       {settingsOpen && (
         <SettingsModal
           initialNav={settingsInitialNav}
@@ -1648,6 +1643,7 @@ export function App() {
             setAgentDoneSound(
               isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
             );
+            readAloud.applyFromSettings(s);
             setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
           }}
           onClose={() => {
