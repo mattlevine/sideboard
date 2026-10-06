@@ -96,7 +96,7 @@ pnpm release patch mac       # desktop GitHub Release only
 pnpm release patch all never # dry-run / local artifacts
 ```
 
-Pushing a `v*` tag to origin is what runs [`.github/workflows/release.yml`](.github/workflows/release.yml) (npm OIDC + Mac Electron). There is no **Run workflow** button. Worktree / chat agents: bump, commit the Release, merge, then retarget `vX.Y.Z` onto that commit and push the tag — do **not** pack Electron in the turn. Watch **Actions → Release**; use `/long-running` only to wait on `gh run watch`. Local `pnpm release patch mac` is for a human at a real terminal.
+Pushing a `v*` tag to origin is what runs [`.github/workflows/release.yml`](.github/workflows/release.yml) (npm OIDC + Mac Electron). There is no **Run workflow** button. Worktree / chat agents: bump, commit the Release, merge, then retarget `vX.Y.Z` onto that commit and push the tag — do **not** pack Electron in the turn. Watch **Actions → Release**; use `/long-running` with `scripts/watch-gha-run.cjs` (do not `gh run watch`). Local `pnpm release patch mac` is for a human at a real terminal.
 
 After `npm i -g @sideboard-ai/cli`, MCP is `sideboard mcp` (or `npx sideboard-mcp`).
 

@@ -42,6 +42,9 @@ jobs:
 
   release-desktop-mac:
     runs-on: macos-latest
+    # Successful cuts finish in 16–27 min. v0.1.271 sat 90+ min on the signed
+    # step with no logs (BlobNotFound) until someone cancelled. Default is 6h.
+    timeout-minutes: 50
     env:
       # electron-vite OOM'd at the default ~2 GiB heap on macos-latest (v0.1.142).
       NODE_OPTIONS: --max-old-space-size=8192
@@ -98,6 +101,7 @@ jobs:
           fi
           echo "SIDEBOARD_MAC_SIGNED=1" >> "$GITHUB_ENV"
       - name: Build & publish Electron (signed)
+        timeout-minutes: 45
         working-directory: apps/desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

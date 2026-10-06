@@ -69,8 +69,10 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
 
    ```bash
    RUN=$(gh run list --workflow=release.yml --limit 1 --json databaseId,headBranch --jq '.[0].databaseId')
-   node scripts/detached-job.cjs start gha-release -- gh run watch "$RUN" --exit-status
+   node scripts/detached-job.cjs start gha-release -- node scripts/watch-gha-run.cjs "$RUN"
    ```
+
+   Do **not** `gh run watch`. It reprints the full TTY every 3 seconds and stalls the log pane. `watch-gha-run.cjs` polls `gh run view` and prints only when jobs/steps change.
 
    `present_artifact` `type=log` `artifact_id=gha-release` with `content=delta` only. CI on the same commit title is **not** a second Release — only the tag workflow publishes.
 10. On desktop job **heap OOM** or **`SecKeychainUnlock` / `set-key-partition-list`**: fix `release.yml` (heap → `NODE_OPTIONS`; keychain → import-cert step, do not pass `CSC_LINK` into electron-builder), land that on main, retarget the **same** `vX.Y.Z` (do not bump). `publish-npm.js` skips versions already on npm. This is not the Apple Developer agreement prompt (that fails at notarization).
@@ -111,7 +113,7 @@ Three jobs, all on the same tag push:
 | Job | Runner | What it does |
 |---|---|---|
 | `release-cli` | `ubuntu-latest` | Builds/tests, then publishes `@sideboard-ai/core` + `@sideboard-ai/cli` via **npm trusted publishing (OIDC)**. |
-| `release-desktop-mac` | `macos-latest` | Import Developer ID into a runner keychain, Vite + stage Node/MCP/Cursor runtime and `speech-dictate.app`, then `electron-builder --mac --publish always` without `CSC_LINK` (GitHub Release + `latest-mac.yml`). If the ~250MB zip 500s on `uploads.github.com` (`Error saving asset`), the same step retries that file (and `latest-mac.yml`) with `gh release upload`. |
+| `release-desktop-mac` | `macos-latest` | Import Developer ID into a runner keychain, Vite + stage Node/MCP/Cursor runtime and `speech-dictate.app`, then `electron-builder --mac --publish always` without `CSC_LINK` (GitHub Release + `latest-mac.yml`). If the ~250MB zip 500s on `uploads.github.com` (`Error saving asset`), the same step retries that file (and `latest-mac.yml`) with `gh release upload`. Job `timeout-minutes: 50` (signed step 45) so a wedged notarize/dmg does not sit for the 6h default. |
 | `publish-downloads` | `ubuntu-latest` | After the Mac job, copies those assets to the public Tigris bucket (`download.sideboard.cloud`) via `scripts/publish-tigris.sh`. Needs repo secrets `TIGRIS_ACCESS_KEY_ID` and `TIGRIS_SECRET_ACCESS_KEY`. Also writes `Sideboard-latest-arm64.dmg` and removes older versioned objects. Auto-update still reads GitHub until `build.publish` is switched to the generic URL. |
 
 `release-cli` uses `permissions: id-token: write`. Do **not** gate it on `if: secrets.NPM_TOKEN` — GitHub rejects the `secrets` context in `if` (`Unrecognized named-value: 'secrets'`). Do **not** set `NODE_AUTH_TOKEN` or `setup-node` `registry-url` on that job; both skip the OIDC exchange. Trusted publisher on npmjs.com: `mattlevine/sideboard`, workflow file `.github/workflows/release.yml`, **no Environment name**. The `NPM_TOKEN` repo secret is unused for this job.
