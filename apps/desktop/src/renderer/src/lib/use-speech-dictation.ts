@@ -52,7 +52,6 @@ export function useSpeechDictation(opts: {
   const gotSpeechRef = useRef(false);
   const pendingSpokenRef = useRef<string | null>(null);
   const spokenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const energyRef = useRef({ sumSq: 0, n: 0 });
   const unsubRef = useRef<(() => void) | null>(null);
   const getValueRef = useRef(opts.getValue);
   const setValueRef = useRef(opts.setValue);
@@ -201,22 +200,12 @@ export function useSpeechDictation(opts: {
         }
         if (gen !== genRef.current) return;
         flushSpoken(gen);
-        if (!gotSpeechRef.current) {
-          const seconds = energyRef.current.n / (clip.sampleRate || DICTATION_TARGET_RATE);
-          const rms =
-            energyRef.current.n > 0
-              ? Math.sqrt(energyRef.current.sumSq / energyRef.current.n)
-              : 0;
-          if (seconds < DICTATION_MIN_SECONDS) {
-            setError(dictationErrorMessage('too-short'));
-          } else if (rms < DICTATION_MIN_RMS) {
-            setError(dictationErrorMessage('silent'));
-          } else {
-            setError(dictationErrorMessage('no-speech'));
-          }
-        }
         unsubRef.current?.();
         unsubRef.current = null;
+        if (!gotSpeechRef.current) {
+          transcribe(clip.samples, clip.sampleRate, gen);
+          return;
+        }
         setListening(false);
         return;
       }
@@ -241,7 +230,6 @@ export function useSpeechDictation(opts: {
     liveAttemptedRef.current = false;
     queuedPcmRef.current = [];
     pendingSpokenRef.current = null;
-    energyRef.current = { sumSq: 0, n: 0 };
     if (spokenTimerRef.current) {
       clearTimeout(spokenTimerRef.current);
       spokenTimerRef.current = null;
@@ -319,16 +307,8 @@ export function useSpeechDictation(opts: {
       proc.onaudioprocess = (event) => {
         if (!wantRef.current) return;
         const channel = event.inputBuffer.getChannelData(0);
-        const energy = energyRef.current;
-        for (let i = 0; i < channel.length; i++) {
-          const v = channel[i] ?? 0;
-          energy.sumSq += v * v;
-          energy.n += 1;
-        }
         const live = liveReadyRef.current;
-        if (!live) {
-          chunks.push(new Float32Array(channel));
-        }
+        chunks.push(new Float32Array(channel));
         const down = downsampleMono(channel, ctx.sampleRate || 48_000, DICTATION_TARGET_RATE);
         if (down.length === 0) return;
         const b64 = pcm16Base64(float32ToPcm16(down));
