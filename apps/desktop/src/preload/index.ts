@@ -245,6 +245,8 @@ const api: IpcApi = {
   pickRepoPath: () => ipcRenderer.invoke('pickRepoPath'),
   pickFiles: (threadRef) => ipcRenderer.invoke('pickFiles', threadRef ?? null),
   askMicrophoneAccess: () => ipcRenderer.invoke('askMicrophoneAccess') as Promise<boolean>,
+  transcribeDictation: (wavBase64, locale) =>
+    ipcRenderer.invoke('transcribeDictation', wavBase64, locale) as Promise<string>,
   attachmentsFromPaths: (absolutePaths) =>
     ipcRenderer.invoke('attachmentsFromPaths', absolutePaths),
   attachmentsFromBuffers: (buffers) =>

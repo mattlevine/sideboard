@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Chat selection context menu includes **Read Aloud**. A player modal uses the system Web Speech voices (grouped by language), live speed from 0.5×–3×, and saves the rate and voice you leave it on as the default.
-- A microphone next to Send on the chat composer and the new-workspace / new-orchestrator dialogs. Hold it to dictate into the message field.
+- A microphone next to Send on the chat composer and the new-workspace / new-orchestrator dialogs. Hold it to dictate; macOS Speech transcribes into the field (Chromium’s Google upload is not used).
 
 ## [0.1.265] - 2026-10-05
 

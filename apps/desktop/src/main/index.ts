@@ -27,6 +27,7 @@ import {
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { setupTextContextMenu } from './text-context-menu';
 import { askMicrophoneAccess, setupMicrophonePermissions } from './microphone-access';
+import { transcribeWavFile } from './speech-dictate';
 import { formatUpdaterCheckError } from './updater-error';
 import {
   bindRemoteHostActivity,
@@ -60,10 +61,6 @@ import {
 
 // Must run before app.ready so artifact iframes can load outside renderer CSP.
 registerArtifactPreviewScheme();
-app.commandLine.appendSwitch(
-  'enable-features',
-  'OnDeviceWebSpeechAvailable,OnDeviceSpeechRecognition',
-);
 
 import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -1804,6 +1801,19 @@ function registerIpc(): void {
     return result.filePaths.map((p) => attachmentFromAbsolutePath(p));
   });
   ipcMain.handle('askMicrophoneAccess', () => askMicrophoneAccess());
+  ipcMain.handle(
+    'transcribeDictation',
+    async (_e, wavBase64: string, locale?: string) => {
+      if (process.platform !== 'darwin') {
+        throw new Error('Dictation is only available on macOS.');
+      }
+      if (typeof wavBase64 !== 'string' || wavBase64.length === 0 || wavBase64.length > 16_000_000) {
+        throw new Error('No microphone input. Hold the mic and speak, then release.');
+      }
+      const buf = Buffer.from(wavBase64, 'base64');
+      return transcribeWavFile(buf, typeof locale === 'string' && locale ? locale : 'en-US');
+    },
+  );
   ipcMain.handle('attachmentsFromPaths', (_e, absolutePaths: string[]) => {
     const paths = Array.isArray(absolutePaths)
       ? absolutePaths.filter((p): p is string => typeof p === 'string' && p.length > 0)

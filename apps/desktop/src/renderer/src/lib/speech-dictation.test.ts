@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  arrayBufferToBase64,
   composeDictationPrompt,
+  concatFloat32,
+  dictationCaptureSupported,
   dictationErrorMessage,
-  speechEventTranscript,
-  speechRecognitionSupported,
+  encodeWavPcm16,
 } from './speech-dictation';
 
 describe('composeDictationPrompt', () => {
@@ -22,20 +24,23 @@ describe('composeDictationPrompt', () => {
   });
 });
 
-describe('speechEventTranscript', () => {
-  it('joins engine result transcripts', () => {
-    expect(
-      speechEventTranscript([{ 0: { transcript: 'hello ' } }, { 0: { transcript: 'world' } }]),
-    ).toBe('hello world');
+describe('dictationCaptureSupported', () => {
+  it('requires getUserMedia', () => {
+    expect(dictationCaptureSupported({})).toBe(false);
+    expect(dictationCaptureSupported({ mediaDevices: { getUserMedia: async () => null } })).toBe(
+      true,
+    );
   });
 });
 
-describe('speechRecognitionSupported', () => {
-  it('detects the Chromium webkit constructor', () => {
-    expect(speechRecognitionSupported({})).toBe(false);
-    expect(speechRecognitionSupported({ webkitSpeechRecognition: function Webkit() {} })).toBe(
-      true,
-    );
+describe('encodeWavPcm16', () => {
+  it('writes a mono PCM WAV header', () => {
+    const wav = encodeWavPcm16(concatFloat32([new Float32Array([0, 0.5, -0.5])]), 16_000);
+    const bytes = new Uint8Array(wav);
+    expect(String.fromCharCode(...bytes.slice(0, 4))).toBe('RIFF');
+    expect(String.fromCharCode(...bytes.slice(8, 12))).toBe('WAVE');
+    expect(bytes.byteLength).toBe(44 + 6);
+    expect(arrayBufferToBase64(wav).length).toBeGreaterThan(8);
   });
 });
 

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  arrayBufferToBase64,
   composeDictationPrompt,
+  concatFloat32,
+  dictationCaptureSupported,
   dictationErrorMessage,
-  speechEventTranscript,
-  speechRecognitionCtor,
-  speechRecognitionSupported,
-  type SpeechRecognitionHandle,
+  encodeWavPcm16,
 } from './speech-dictation';
+
+type MicSession = {
+  finish: () => ArrayBuffer;
+};
 
 export function useSpeechDictation(opts: {
   getValue: () => string;
@@ -22,106 +26,129 @@ export function useSpeechDictation(opts: {
 } {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const supported = speechRecognitionSupported();
-  const recRef = useRef<SpeechRecognitionHandle | null>(null);
+  const supported = dictationCaptureSupported();
   const wantRef = useRef(false);
-  const baseRef = useRef('');
+  const sessionRef = useRef<MicSession | null>(null);
+  const genRef = useRef(0);
   const getValueRef = useRef(opts.getValue);
   const setValueRef = useRef(opts.setValue);
   getValueRef.current = opts.getValue;
   setValueRef.current = opts.setValue;
 
+  const discard = useCallback(() => {
+    genRef.current += 1;
+    wantRef.current = false;
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    session?.finish();
+    setListening(false);
+  }, []);
+
   const stop = useCallback(() => {
     wantRef.current = false;
-    const rec = recRef.current;
-    if (!rec) {
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    if (!session) {
       setListening(false);
       return;
     }
-    try {
-      rec.stop();
-    } catch {
-      rec.onstart = null;
-      rec.onresult = null;
-      rec.onerror = null;
-      rec.onend = null;
-      recRef.current = null;
+    const gen = genRef.current;
+    const wav = session.finish();
+    const locale = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US';
+    const transcribe = window.sideboard.transcribeDictation;
+    if (typeof transcribe !== 'function') {
       setListening(false);
-      try {
-        rec.abort();
-      } catch {
-        /* ignore */
-      }
+      setError('Dictation is not available in this window.');
+      return;
     }
+    void transcribe(arrayBufferToBase64(wav), locale)
+      .then((spoken) => {
+        if (gen !== genRef.current) return;
+        if (!spoken.trim()) {
+          setError(dictationErrorMessage('no-speech'));
+          return;
+        }
+        setError(null);
+        setValueRef.current(composeDictationPrompt(getValueRef.current(), spoken));
+      })
+      .catch((err) => {
+        if (gen !== genRef.current) return;
+        setError(err instanceof Error ? err.message : dictationErrorMessage(undefined));
+      })
+      .finally(() => {
+        if (gen === genRef.current) setListening(false);
+      });
   }, []);
 
   const start = useCallback(() => {
     if (opts.disabled) return;
-    if (wantRef.current && recRef.current) return;
-    const Ctor = speechRecognitionCtor();
-    if (!Ctor) {
+    if (wantRef.current) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setError('Dictation is not available in this window.');
       return;
     }
-    if (recRef.current) stop();
-    setError(null);
-
-    const rec = new Ctor();
-    rec.lang = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US';
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
-    baseRef.current = getValueRef.current();
-    rec.onstart = () => {
-      if (!wantRef.current) return;
-      setListening(true);
-    };
-    rec.onresult = (event) => {
-      const spoken = speechEventTranscript(event.results);
-      setValueRef.current(composeDictationPrompt(baseRef.current, spoken));
-    };
-    rec.onerror = (event) => {
-      if (event.error === 'no-speech' || event.error === 'aborted') return;
-      setError(dictationErrorMessage(event.error));
-      wantRef.current = false;
-      setListening(false);
-    };
-    rec.onend = () => {
-      if (wantRef.current) {
-        try {
-          rec.start();
-          return;
-        } catch {
-          wantRef.current = false;
-        }
-      }
-      rec.onstart = null;
-      rec.onresult = null;
-      rec.onerror = null;
-      rec.onend = null;
-      if (recRef.current === rec) recRef.current = null;
-      setListening(false);
-    };
-    recRef.current = rec;
     wantRef.current = true;
-    try {
-      rec.start();
-    } catch {
-      wantRef.current = false;
-      recRef.current = null;
-      setListening(false);
-      setError('Could not start dictation.');
-      return;
-    }
-
+    genRef.current += 1;
+    setError(null);
+    setListening(true);
     const ask = window.sideboard.askMicrophoneAccess;
     if (typeof ask === 'function') void ask().catch(() => {});
-  }, [opts.disabled, stop]);
 
-  useEffect(() => () => stop(), [stop]);
+    void navigator.mediaDevices
+      .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .then(async (stream) => {
+        if (!wantRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const ctx = new AudioContext();
+        await ctx.resume();
+        if (!wantRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          void ctx.close();
+          return;
+        }
+        const src = ctx.createMediaStreamSource(stream);
+        const proc = ctx.createScriptProcessor(4096, 1, 1);
+        const chunks: Float32Array[] = [];
+        proc.onaudioprocess = (event) => {
+          if (!wantRef.current) return;
+          chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        };
+        const mute = ctx.createGain();
+        mute.gain.value = 0;
+        src.connect(proc);
+        proc.connect(mute);
+        mute.connect(ctx.destination);
+        sessionRef.current = {
+          finish: () => {
+            try {
+              proc.disconnect();
+              src.disconnect();
+              mute.disconnect();
+            } catch {
+              /* ignore */
+            }
+            stream.getTracks().forEach((t) => t.stop());
+            const rate = ctx.sampleRate || 48_000;
+            void ctx.close();
+            return encodeWavPcm16(concatFloat32(chunks), rate);
+          },
+        };
+      })
+      .catch((err) => {
+        wantRef.current = false;
+        sessionRef.current = null;
+        setListening(false);
+        const name = err && typeof err === 'object' && 'name' in err ? String(err.name) : '';
+        setError(dictationErrorMessage(name || undefined));
+      });
+  }, [opts.disabled]);
+
+  useEffect(() => () => discard(), [discard]);
   useEffect(() => {
-    stop();
-  }, [opts.resetKey, stop]);
+    discard();
+  }, [opts.resetKey, discard]);
 
   return { listening, supported, error, start, stop };
 }
