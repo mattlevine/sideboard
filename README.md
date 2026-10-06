@@ -387,7 +387,7 @@ Send `stop` to cancel the in-progress turn. When the coordinator calls `ask_user
 
 Override the relay with `SIDEBOARD_REMOTE_RELAY_URL` (default `wss://relay.sideboard.cloud/remote`).
 
-The phone project is `apps/mobile`. The Run menu’s **Mobile** entry starts it and opens the iOS Simulator (`pnpm --filter @sideboard-ai/mobile exec expo start --ios`). Pair that simulator, or a device running Expo Go, from **Settings → Remote**.
+The phone project is `apps/mobile`. The Run menu’s **Mobile** entry starts Metro and opens the iOS Simulator when that app is installed. If Simulator.app is missing, Metro stays up and Expo Go opens on a simulator that is already booted. Pair from **Settings → Remote**.
 
 More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 

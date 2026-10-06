@@ -19,7 +19,8 @@ command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-5173}} pnpm --filter @sidebo
 default = true
 icon = "play"
 
-# Expo for apps/mobile. The Run log is not a TTY, so this opens the iOS Simulator.
+# Expo for apps/mobile. Opens the Simulator when that app is installed;
+# otherwise Metro stays up and Expo Go opens on a booted simulator.
 [scripts.run.mobile]
-command = "pnpm --filter @sideboard-ai/mobile exec expo start --ios --port ${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-8081}}"
+command = "sh apps/mobile/start-dev.sh"
 icon = "smartphone"
