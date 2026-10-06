@@ -9,6 +9,7 @@ import {
   dictationCaptureSupported,
   dictationErrorMessage,
   downsampleMono,
+  enqueueLivePcm,
   float32ToPcm16,
   prepareDictationWav,
 } from './speech-dictation';
@@ -46,6 +47,8 @@ export function useSpeechDictation(opts: {
   const baseRef = useRef('');
   const liveActiveRef = useRef(false);
   const liveReadyRef = useRef(false);
+  const liveAttemptedRef = useRef(false);
+  const queuedPcmRef = useRef<string[]>([]);
   const gotSpeechRef = useRef(false);
   const pendingSpokenRef = useRef<string | null>(null);
   const spokenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +64,8 @@ export function useSpeechDictation(opts: {
     unsubRef.current = null;
     liveReadyRef.current = false;
     liveActiveRef.current = false;
+    liveAttemptedRef.current = false;
+    queuedPcmRef.current = [];
     void window.sideboard.stopLiveDictation?.();
   }, []);
 
@@ -176,16 +181,19 @@ export function useSpeechDictation(opts: {
     wantRef.current = false;
     const gen = genRef.current;
     const pending = startingRef.current;
-    const live = liveActiveRef.current;
+    const attempted = liveAttemptedRef.current;
     void (async () => {
       if (pending) await pending;
       if (gen !== genRef.current) return;
       const session = sessionRef.current;
       sessionRef.current = null;
       const clip = session?.finish() ?? { samples: new Float32Array(0), sampleRate: DICTATION_TARGET_RATE };
+      const live = liveActiveRef.current || attempted;
       if (live) {
         liveReadyRef.current = false;
         liveActiveRef.current = false;
+        liveAttemptedRef.current = false;
+        queuedPcmRef.current = [];
         try {
           await window.sideboard.stopLiveDictation?.();
         } catch {
@@ -230,6 +238,8 @@ export function useSpeechDictation(opts: {
     gotSpeechRef.current = false;
     liveActiveRef.current = false;
     liveReadyRef.current = false;
+    liveAttemptedRef.current = false;
+    queuedPcmRef.current = [];
     pendingSpokenRef.current = null;
     energyRef.current = { sumSq: 0, n: 0 };
     if (spokenTimerRef.current) {
@@ -254,14 +264,30 @@ export function useSpeechDictation(opts: {
       }
       const locale = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US';
       const startLive = window.sideboard.startLiveDictation;
-      const liveP =
-        typeof startLive === 'function'
-          ? startLive(locale).then(() => {
-              if (gen !== genRef.current || !wantRef.current) return;
-              liveActiveRef.current = true;
-              liveReadyRef.current = true;
-            })
-          : Promise.resolve();
+      let liveP = Promise.resolve();
+      if (typeof startLive === 'function') {
+        liveAttemptedRef.current = true;
+        liveP = startLive(locale).then(() => {
+          if (gen !== genRef.current || !wantRef.current) {
+            void window.sideboard.stopLiveDictation?.();
+            liveActiveRef.current = false;
+            liveReadyRef.current = false;
+            queuedPcmRef.current = [];
+            return;
+          }
+          const flushQueue = () => {
+            const push = window.sideboard.pushLiveDictationAudio;
+            const queued = queuedPcmRef.current;
+            queuedPcmRef.current = [];
+            if (typeof push !== 'function') return;
+            for (const b64 of queued) push(b64);
+          };
+          liveActiveRef.current = true;
+          flushQueue();
+          liveReadyRef.current = true;
+          flushQueue();
+        });
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -272,6 +298,7 @@ export function useSpeechDictation(opts: {
       });
       if (!wantRef.current || gen !== genRef.current) {
         stream.getTracks().forEach((t) => t.stop());
+        void window.sideboard.stopLiveDictation?.();
         return;
       }
       const ctx = new AudioContext();
@@ -279,6 +306,7 @@ export function useSpeechDictation(opts: {
       if (!wantRef.current || gen !== genRef.current) {
         stream.getTracks().forEach((t) => t.stop());
         void ctx.close();
+        void window.sideboard.stopLiveDictation?.();
         return;
       }
       const src = ctx.createMediaStreamSource(stream);
@@ -303,9 +331,12 @@ export function useSpeechDictation(opts: {
         }
         const down = downsampleMono(channel, ctx.sampleRate || 48_000, DICTATION_TARGET_RATE);
         if (down.length === 0) return;
+        const b64 = pcm16Base64(float32ToPcm16(down));
         if (live) {
-          window.sideboard.pushLiveDictationAudio?.(pcm16Base64(float32ToPcm16(down)));
+          window.sideboard.pushLiveDictationAudio?.(b64);
+          return;
         }
+        if (liveAttemptedRef.current) enqueueLivePcm(queuedPcmRef.current, b64);
       };
       src.connect(proc);
       proc.connect(sink);

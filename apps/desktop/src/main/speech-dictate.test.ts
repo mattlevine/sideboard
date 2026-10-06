@@ -6,6 +6,7 @@ import {
   speechDictateLiveOpenArgs,
   speechDictateOpenArgs,
   speechDictateSourcePaths,
+  writeLivePcmCarry,
 } from './speech-dictate-util';
 
 describe('mapSpeechDictateError', () => {
@@ -115,5 +116,35 @@ describe('isFifoWouldBlock', () => {
     expect(isFifoWouldBlock({ code: 'EAGAIN' })).toBe(true);
     expect(isFifoWouldBlock({ code: 'EWOULDBLOCK' })).toBe(true);
     expect(isFifoWouldBlock({ code: 'EPIPE' })).toBe(false);
+  });
+});
+
+describe('writeLivePcmCarry', () => {
+  it('keeps unwritten bytes so 16-bit frames stay aligned', () => {
+    const leftover = writeLivePcmCarry(() => 2, Buffer.alloc(0), Buffer.from([1, 2, 3, 4]));
+    expect([...leftover]).toEqual([3, 4]);
+  });
+
+  it('keeps the whole buffer when the pipe would block', () => {
+    const err = Object.assign(new Error('eagain'), { code: 'EAGAIN' });
+    const leftover = writeLivePcmCarry(
+      () => {
+        throw err;
+      },
+      Buffer.from([1, 2]),
+      Buffer.from([3, 4]),
+    );
+    expect([...leftover]).toEqual([1, 2, 3, 4]);
+  });
+
+  it('clears leftover when the helper is gone', () => {
+    const leftover = writeLivePcmCarry(
+      () => {
+        throw Object.assign(new Error('epipe'), { code: 'EPIPE' });
+      },
+      Buffer.from([1, 2]),
+      Buffer.from([3, 4]),
+    );
+    expect(leftover.length).toBe(0);
   });
 });

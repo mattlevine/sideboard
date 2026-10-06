@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Stopping the mic while dictation is still starting now tears down the speech helper instead of leaving it running and falling back to a WAV clip.
+- The first second of speech after clicking the mic is queued and flushed when the helper is ready, so opening words are not dropped.
+- Short non-blocking FIFO writes keep leftover PCM bytes so 16-bit frames stay aligned.
+
 ## [0.1.267] - 2026-10-05
 
 ### Changed
