@@ -1,5 +1,17 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -7,7 +19,10 @@ import { app } from 'electron';
 import {
   isNoSpeechDictateStderr,
   mapSpeechDictateError,
+  isFifoWouldBlock,
+  parseLiveDictateLine,
   SPEECH_DICTATE_BUNDLE_ID,
+  speechDictateLiveOpenArgs,
   speechDictateOpenArgs,
   speechDictateSourcePaths,
 } from './speech-dictate-util';
@@ -82,11 +97,6 @@ export function ensureSpeechDictateHelper(opts?: {
     if (helperNeedsRebuild(helperBinary(staged), swift, plist)) {
       return compileSpeechDictateApp(staged, swift, plist);
     }
-    try {
-      signSpeechDictateApp(staged);
-    } catch {
-      /* already signed */
-    }
     return staged;
   }
   if (!existsSync(swift) || !existsSync(plist)) {
@@ -94,11 +104,6 @@ export function ensureSpeechDictateHelper(opts?: {
   }
   const appRoot = opts?.appRoot ?? join(app.getPath('userData'), 'speech-dictate.app');
   if (!helperNeedsRebuild(helperBinary(appRoot), swift, plist)) {
-    try {
-      signSpeechDictateApp(appRoot);
-    } catch {
-      /* already signed */
-    }
     return appRoot;
   }
   return compileSpeechDictateApp(appRoot, swift, plist);
@@ -167,5 +172,218 @@ export async function transcribeWavFile(
     throw err;
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export type LiveDictateEvent =
+  | { type: 'partial'; text: string }
+  | { type: 'final'; text: string }
+  | { type: 'error'; message: string };
+
+type LiveSession = {
+  dir: string;
+  pcmFd: number | null;
+  stdoutPath: string;
+  stderrPath: string;
+  offset: number;
+  carry: string;
+  poll: ReturnType<typeof setInterval> | null;
+  onEvent: (ev: LiveDictateEvent) => void;
+  ready: Promise<void>;
+  resolveReady: () => void;
+  rejectReady: (err: Error) => void;
+  ended: Promise<void>;
+  resolveEnded: () => void;
+  closing: boolean;
+};
+
+let liveSession: LiveSession | null = null;
+
+function consumeLiveStdout(session: LiveSession): void {
+  let raw: Buffer;
+  try {
+    raw = readFileSync(session.stdoutPath);
+  } catch {
+    return;
+  }
+  if (raw.length <= session.offset) return;
+  const chunk = raw.subarray(session.offset).toString('utf8');
+  session.offset = raw.length;
+  session.carry += chunk;
+  const lines = session.carry.split('\n');
+  session.carry = lines.pop() ?? '';
+  for (const line of lines) {
+    const parsed = parseLiveDictateLine(line);
+    if (!parsed) continue;
+    if (parsed.k === 'r') {
+      session.resolveReady();
+      continue;
+    }
+    if (parsed.k === 'p') {
+      session.onEvent({ type: 'partial', text: parsed.t });
+      continue;
+    }
+    if (parsed.k === 'f') {
+      session.onEvent({ type: 'final', text: parsed.t });
+      if (session.closing) session.resolveEnded();
+      continue;
+    }
+    if (parsed.k === 'e') {
+      const message = mapSpeechDictateError(parsed.t || 'Could not transcribe dictation.');
+      session.onEvent({ type: 'error', message });
+      session.rejectReady(new Error(message));
+      session.resolveEnded();
+    }
+  }
+}
+
+function closeLivePcm(session: LiveSession): void {
+  if (session.pcmFd == null) return;
+  try {
+    closeSync(session.pcmFd);
+  } catch {
+    /* already closed */
+  }
+  session.pcmFd = null;
+}
+
+function disposeLiveSession(session: LiveSession): void {
+  if (session.poll) {
+    clearInterval(session.poll);
+    session.poll = null;
+  }
+  closeLivePcm(session);
+  rmSync(session.dir, { recursive: true, force: true });
+}
+
+export async function startLiveSpeechDictate(
+  locale: string,
+  onEvent: (ev: LiveDictateEvent) => void,
+): Promise<void> {
+  await stopLiveSpeechDictate();
+  const appRoot = ensureSpeechDictateHelper();
+  const dir = mkdtempSync(join(tmpdir(), 'sideboard-dictate-live-'));
+  const fifoPath = join(dir, 'in.pcm');
+  const stdoutPath = join(dir, 'out.jsonl');
+  const stderrPath = join(dir, 'err.txt');
+  writeFileSync(stdoutPath, '');
+  writeFileSync(stderrPath, '');
+  execFileSync('mkfifo', [fifoPath], { timeout: 5_000 });
+  const pcmFd = openSync(fifoPath, constants.O_RDWR | constants.O_NONBLOCK);
+  let readySettled = false;
+  let resolveReady = () => {};
+  let rejectReady = (_err: Error) => {};
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = () => {
+      if (readySettled) return;
+      readySettled = true;
+      resolve();
+    };
+    rejectReady = (err) => {
+      if (readySettled) return;
+      readySettled = true;
+      reject(err);
+    };
+  });
+  let endedSettled = false;
+  let resolveEnded = () => {};
+  const ended = new Promise<void>((resolve) => {
+    resolveEnded = () => {
+      if (endedSettled) return;
+      endedSettled = true;
+      resolve();
+    };
+  });
+  const session: LiveSession = {
+    dir,
+    pcmFd,
+    stdoutPath,
+    stderrPath,
+    offset: 0,
+    carry: '',
+    poll: null,
+    onEvent,
+    ready,
+    resolveReady,
+    rejectReady,
+    ended,
+    resolveEnded,
+    closing: false,
+  };
+  liveSession = session;
+  session.poll = setInterval(() => {
+    if (liveSession !== session) return;
+    consumeLiveStdout(session);
+  }, 40);
+  try {
+    await execFileAsync(
+      'open',
+      speechDictateLiveOpenArgs({
+        appRoot,
+        fifoPath,
+        locale,
+        stdoutPath,
+        stderrPath,
+      }),
+      { timeout: 15_000 },
+    );
+  } catch (err) {
+    const stderrFile = existsSync(stderrPath) ? readFileSync(stderrPath, 'utf8') : '';
+    disposeLiveSession(session);
+    if (liveSession === session) liveSession = null;
+    throw new Error(
+      mapSpeechDictateError(
+        stderrFile || (err instanceof Error ? err.message : String(err)),
+      ),
+    );
+  }
+  const timeout = setTimeout(() => {
+    if (liveSession !== session) return;
+    const stderrFile = existsSync(stderrPath) ? readFileSync(stderrPath, 'utf8').trim() : '';
+    session.rejectReady(
+      new Error(mapSpeechDictateError(stderrFile || 'Could not start dictation.')),
+    );
+  }, 20_000);
+  try {
+    await session.ready;
+  } catch (err) {
+    stopSpeechDictateHelper();
+    disposeLiveSession(session);
+    if (liveSession === session) liveSession = null;
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function pushLiveSpeechPcm(pcm: Buffer): void {
+  const session = liveSession;
+  if (!session || session.pcmFd == null) return;
+  if (pcm.byteLength === 0 || pcm.byteLength > 64 * 1024) return;
+  try {
+    writeSync(session.pcmFd, pcm);
+  } catch (err) {
+    if (isFifoWouldBlock(err)) return;
+    /* helper gone */
+  }
+}
+
+export async function stopLiveSpeechDictate(): Promise<void> {
+  const session = liveSession;
+  if (!session) return;
+  session.closing = true;
+  closeLivePcm(session);
+  consumeLiveStdout(session);
+  const timeout = setTimeout(() => {
+    stopSpeechDictateHelper();
+    session.resolveEnded();
+  }, 4_000);
+  try {
+    await session.ended;
+  } finally {
+    clearTimeout(timeout);
+    consumeLiveStdout(session);
+    disposeLiveSession(session);
+    if (liveSession === session) liveSession = null;
   }
 }

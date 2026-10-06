@@ -9,6 +9,7 @@ import {
   dictationPrivacySettingsUrl,
   dictationTccNames,
   encodeWavPcm16,
+  float32ToPcm16,
   isDictationPermissionError,
   prepareDictationWav,
 } from './speech-dictation';
@@ -24,6 +25,12 @@ describe('composeDictationPrompt', () => {
     expect(composeDictationPrompt('Fix ', 'the login')).toBe('Fix the login');
   });
 
+  it('replaces growing live partials when the base stays fixed', () => {
+    const base = 'Fix';
+    expect(composeDictationPrompt(base, 'the')).toBe('Fix the');
+    expect(composeDictationPrompt(base, 'the login')).toBe('Fix the login');
+  });
+
   it('ignores empty speech', () => {
     expect(composeDictationPrompt('Keep', '   ')).toBe('Keep');
   });
@@ -35,6 +42,17 @@ describe('dictationCaptureSupported', () => {
     expect(dictationCaptureSupported({ mediaDevices: { getUserMedia: async () => null } })).toBe(
       true,
     );
+  });
+});
+
+describe('float32ToPcm16', () => {
+  it('encodes little-endian frames', () => {
+    const pcm = float32ToPcm16(new Float32Array([0, 1, -1]));
+    expect(pcm.byteLength).toBe(6);
+    const view = new DataView(pcm.buffer);
+    expect(view.getInt16(0, true)).toBe(0);
+    expect(view.getInt16(2, true)).toBe(0x7fff);
+    expect(view.getInt16(4, true)).toBe(-0x8000);
   });
 });
 

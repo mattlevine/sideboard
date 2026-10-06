@@ -36,6 +36,55 @@ export function speechDictateOpenArgs(opts: {
   ];
 }
 
+/** Live session: no -W so `open` returns while the helper reads the FIFO. */
+export function speechDictateLiveOpenArgs(opts: {
+  appRoot: string;
+  fifoPath: string;
+  locale: string;
+  stdoutPath: string;
+  stderrPath: string;
+}): string[] {
+  return [
+    '-n',
+    '-g',
+    '-j',
+    '-a',
+    opts.appRoot,
+    '--stdout',
+    opts.stdoutPath,
+    '--stderr',
+    opts.stderrPath,
+    '--args',
+    '--live',
+    opts.fifoPath,
+    opts.locale,
+  ];
+}
+
+export function isFifoWouldBlock(err: unknown): boolean {
+  return Boolean(
+    err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      ((err as { code?: string }).code === 'EAGAIN' ||
+        (err as { code?: string }).code === 'EWOULDBLOCK'),
+  );
+}
+
+export function parseLiveDictateLine(
+  line: string,
+): { k: string; t: string } | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('{')) return null;
+  try {
+    const obj = JSON.parse(trimmed) as { k?: unknown; t?: unknown };
+    if (typeof obj.k !== 'string') return null;
+    return { k: obj.k, t: typeof obj.t === 'string' ? obj.t : '' };
+  } catch {
+    return null;
+  }
+}
+
 export function isNoSpeechDictateStderr(stderr: string): boolean {
   return /no speech/i.test(stderr);
 }

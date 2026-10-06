@@ -27,7 +27,12 @@ import {
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { setupTextContextMenu } from './text-context-menu';
 import { askMicrophoneAccess, setupMicrophonePermissions } from './microphone-access';
-import { transcribeWavFile } from './speech-dictate';
+import {
+  pushLiveSpeechPcm,
+  startLiveSpeechDictate,
+  stopLiveSpeechDictate,
+  transcribeWavFile,
+} from './speech-dictate';
 import { formatUpdaterCheckError } from './updater-error';
 import {
   bindRemoteHostActivity,
@@ -1815,6 +1820,31 @@ function registerIpc(): void {
       return transcribeWavFile(buf, typeof locale === 'string' && locale ? locale : 'en-US');
     },
   );
+  ipcMain.handle('startLiveDictation', async (event, locale?: string) => {
+    if (process.platform !== 'darwin') {
+      throw new Error('Dictation is only available on macOS.');
+    }
+    const loc = typeof locale === 'string' && locale ? locale : 'en-US';
+    const sender = event.sender;
+    await startLiveSpeechDictate(loc, (ev) => {
+      if (sender.isDestroyed()) return;
+      if (ev.type === 'partial' || ev.type === 'final') {
+        sender.send('liveDictationTranscript', {
+          text: ev.text,
+          isFinal: ev.type === 'final',
+        });
+        return;
+      }
+      sender.send('liveDictationError', { message: ev.message });
+    });
+  });
+  ipcMain.on('liveDictationAudio', (_event, pcm16Base64: string) => {
+    if (typeof pcm16Base64 !== 'string' || pcm16Base64.length === 0 || pcm16Base64.length > 200_000) {
+      return;
+    }
+    pushLiveSpeechPcm(Buffer.from(pcm16Base64, 'base64'));
+  });
+  ipcMain.handle('stopLiveDictation', () => stopLiveSpeechDictate());
   ipcMain.handle('attachmentsFromPaths', (_e, absolutePaths: string[]) => {
     const paths = Array.isArray(absolutePaths)
       ? absolutePaths.filter((p): p is string => typeof p === 'string' && p.length > 0)

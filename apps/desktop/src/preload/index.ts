@@ -247,6 +247,26 @@ const api: IpcApi = {
   askMicrophoneAccess: () => ipcRenderer.invoke('askMicrophoneAccess') as Promise<boolean>,
   transcribeDictation: (wavBase64, locale) =>
     ipcRenderer.invoke('transcribeDictation', wavBase64, locale) as Promise<string>,
+  startLiveDictation: (locale) =>
+    ipcRenderer.invoke('startLiveDictation', locale) as Promise<void>,
+  pushLiveDictationAudio: (pcm16Base64) => {
+    ipcRenderer.send('liveDictationAudio', pcm16Base64);
+  },
+  stopLiveDictation: () => ipcRenderer.invoke('stopLiveDictation') as Promise<void>,
+  onLiveDictationTranscript: (listener) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: { text: string; isFinal: boolean },
+    ) => listener(payload);
+    ipcRenderer.on('liveDictationTranscript', handler);
+    return () => ipcRenderer.removeListener('liveDictationTranscript', handler);
+  },
+  onLiveDictationError: (listener) => {
+    const handler = (_event: IpcRendererEvent, payload: { message: string }) =>
+      listener(payload);
+    ipcRenderer.on('liveDictationError', handler);
+    return () => ipcRenderer.removeListener('liveDictationError', handler);
+  },
   getDictationPrivacyHelp: () =>
     ipcRenderer.invoke('getDictationPrivacyHelp') as Promise<{ packaged: boolean }>,
   attachmentsFromPaths: (absolutePaths) =>

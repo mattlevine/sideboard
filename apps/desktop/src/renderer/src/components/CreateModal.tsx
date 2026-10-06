@@ -185,6 +185,10 @@ export function CreateModal({
   const [abletimeConnected, setAbletimeConnected] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [goal, setGoal] = useState('');
+  const [createMore, setCreateMore] = useState(false);
+  const [cowboyAllowed, setCowboyAllowed] = useState(false);
+  const [cowboy, setCowboy] = useState(false);
+  const [busy, setBusy] = useState(false);
   const dictation = useSpeechDictation({
     getValue: () => (mode === 'orchestration' ? goal : prompt),
     setValue: (next) => {
@@ -194,10 +198,6 @@ export function CreateModal({
     resetKey: mode,
     disabled: busy,
   });
-  const [createMore, setCreateMore] = useState(false);
-  const [cowboyAllowed, setCowboyAllowed] = useState(false);
-  const [cowboy, setCowboy] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [createDragOver, setCreateDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
