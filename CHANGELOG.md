@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- New workspace and new orchestration agent dialogs no longer blank the app. The dictation hook was reading `busy` before that state existed (`ReferenceError` on first render).
+
 ## [0.1.266] - 2026-10-05
 
 ### Added
