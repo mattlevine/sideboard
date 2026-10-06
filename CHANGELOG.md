@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.269] - 2026-10-05
+
+### Fixed
+
+- Composer dictation works when Siri & Dictation is turned off. Live recognition no longer forces on-device speech, which aborted with "Siri and Dictation are disabled." If live dictation still returns nothing, the mic transcribes the recording it captured.
+
 ## [0.1.268] - 2026-10-05
 
 ### Fixed
