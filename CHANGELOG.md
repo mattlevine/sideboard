@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.271] - 2026-10-06
+
 ### Added
 
 - The Run menu includes **Mobile** for this repo. It starts Expo for `apps/mobile` on its own port and opens the iOS Simulator beside the desktop Dev app.
