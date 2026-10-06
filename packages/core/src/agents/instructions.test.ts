@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { looksLikeDeferredDonePromise } from '../mcp/wait-for-job.js';
 import {
   formatArtifactDirective,
   formatLongRunningDirective,
@@ -85,6 +86,7 @@ describe('formatLongRunningDirective', () => {
     expect(text).toMatch(/preview|SIDEBOARD_PORT/);
     expect(text).toMatch(/:3000/);
     expect(text).toMatch(/Electron|preview=window/);
+    expect(looksLikeDeferredDonePromise(text)).toBe(false);
   });
 });
 
@@ -98,11 +100,12 @@ describe('formatLongRunningReminder', () => {
     expect(text).toMatch(/present_artifact type=log/);
     expect(text).toMatch(/stop_job/);
     expect(text).toMatch(/let the user know later/);
-    expect(text).toMatch(/background poll/);
+    expect(text).toMatch(/native CLI Task/);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/stop_dev_script/);
     expect(text).toMatch(/get_run_log/);
     expect(text).toMatch(/SIDEBOARD_PORT|:3000/);
+    expect(looksLikeDeferredDonePromise(text)).toBe(false);
   });
 
   it('names the live Dev URL when a run script is already up', () => {
@@ -135,8 +138,9 @@ describe('formatPrGateDirective', () => {
     expect(text).toMatch(/Greptile 5\/5/);
     expect(text).toMatch(/gh pr checks --watch/);
     expect(text).toMatch(/wait_for_job/);
-    expect(text).toMatch(/background poll/);
+    expect(text).toMatch(/native CLI Task/);
     expect(text).toMatch(/5\/5 and zero unresolved/);
+    expect(looksLikeDeferredDonePromise(text)).toBe(false);
   });
 });
 

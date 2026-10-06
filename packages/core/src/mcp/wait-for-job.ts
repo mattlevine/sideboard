@@ -162,7 +162,6 @@ export function looksLikeDeferredDonePromise(text: string | null | undefined): b
     /\blet you know when\b/i.test(unquoted) ||
     /\b(check back|ping me)\s+when\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will)\s+(report|update you)\s+when\b/i.test(unquoted) ||
-    /\bbackground poll\b/i.test(unquoted) ||
     /\bwill notify (?:me|you) when\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will) be notified when\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will)\s+(?:keep|continue)\s+(?:watching|waiting|polling|checking)\b/i.test(
@@ -221,7 +220,7 @@ export function formatJobStillRunningContinuePrompt(jobIds: string[]): string {
 export function formatDeferredDoneContinuePrompt(): string {
   return [
     'You ended the turn after promising to report later, but no detached job is running.',
-    'A native background poll / Task / bash notify does not resume this chat (Claude, Cursor, Codex, OpenCode).',
+    'A native CLI Task or bash notify does not resume this chat (Claude, Cursor, Codex, OpenCode).',
     'If tests/pack/deploy still need to run: start once with detached-job.cjs, then loop wait_for_job until stillRunning is false (the log pane updates from wait JSON).',
     'Do not say you will let the user know later.',
   ].join(' ');

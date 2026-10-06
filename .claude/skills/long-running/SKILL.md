@@ -13,7 +13,7 @@ Sideboard ships this method to **every** worktree agent (`/long-running` is a pr
 
 A Sideboard or Cursor **worktree turn** SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted. `block_until_ms: 0` is not enough — the child stays in that group.
 
-Do **not** ask the human to check back. Detach, then **wait** in 45s slices (same idea as MCP `wait_for_turn`) until `stillRunning` is false. Do not end the turn with “I’ll let you know” or “a background poll will notify me.” Native background bash/Task notify (Claude, Cursor, Codex, OpenCode) does **not** resume a Sideboard chat.
+Do **not** ask the human to check back. Detach, then **wait** in 45s slices (same idea as MCP `wait_for_turn`) until `stillRunning` is false. Do not end the turn after starting a job — a native CLI Task or bash notify does **not** resume a Sideboard chat (Claude, Cursor, Codex, OpenCode).
 
 ## Tool
 
