@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.266] - 2026-10-05
+
 ### Added
 
 - Chat selection context menu includes **Read Aloud**. A player modal uses the system Web Speech voices (grouped by language), live speed from 0.5×–3×, and saves the rate and voice you leave it on as the default. Artifact documents have the same player (header button, and selected markdown/log text).
