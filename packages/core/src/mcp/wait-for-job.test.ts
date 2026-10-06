@@ -30,6 +30,20 @@ describe('looksLikeDeferredDonePromise', () => {
     expect(looksLikeDeferredDonePromise('Check back when the pack is done.')).toBe(true);
   });
 
+  it('matches Claude / Cursor / Codex background-notify farewells', () => {
+    expect(
+      looksLikeDeferredDonePromise(
+        'A background poll will notify me when the checks finish.',
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeDeferredDonePromise("I'll keep watching in the background."),
+    ).toBe(true);
+    expect(
+      looksLikeDeferredDonePromise("I'll come back when the pack finishes."),
+    ).toBe(true);
+  });
+
   it('ignores a finished report', () => {
     expect(looksLikeDeferredDonePromise('Tests passed. Ready to commit.')).toBe(false);
     expect(looksLikeDeferredDonePromise('')).toBe(false);
@@ -156,6 +170,36 @@ describe('planJobContinue', () => {
         continueCount: 0,
         alreadyNudged: true,
         isOrchestrator: false,
+      }).action,
+    ).toBe('none');
+  });
+
+  it('resumes Claude, Cursor, Codex, and OpenCode worktrees the same way', () => {
+    const chatText = 'A background poll will notify me when the checks finish.';
+    for (const agent of ['claude', 'cursor', 'codex', 'opencode'] as const) {
+      const d = planJobContinue({
+        runningJobIds: ['pr-checks'],
+        chatText,
+        queueLength: 0,
+        continueCount: 0,
+        alreadyNudged: false,
+        isOrchestrator: false,
+        agent,
+      });
+      expect(d.action).toBe('wait');
+    }
+  });
+
+  it('does not resume Brightsy (no wait_for_job loop)', () => {
+    expect(
+      planJobContinue({
+        runningJobIds: ['core-test'],
+        chatText: "I'll let you know when they're done.",
+        queueLength: 0,
+        continueCount: 0,
+        alreadyNudged: false,
+        isOrchestrator: false,
+        agent: 'brightsy',
       }).action,
     ).toBe('none');
   });

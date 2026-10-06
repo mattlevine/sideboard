@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.273] - 2026-10-06
+
+### Fixed
+
+- Ending a turn with “a background poll will notify me” (Claude) or “I’ll keep watching in the background” (Cursor) now queues the same keep-alive as “I’ll let you know.” Codex and OpenCode get that continue too. Native background notify still does not resume the chat on its own.
+
 ## [0.1.272] - 2026-10-06
 
 ### Changed
