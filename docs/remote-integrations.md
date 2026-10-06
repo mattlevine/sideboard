@@ -18,7 +18,7 @@ Same phone steps as the [README](../README.md#phone). Linear / AbleTime: [README
 
 The phone app is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac. Message text goes through `relay.sideboard.cloud` at `/remote`. The relay does not host worktrees. The Mac must stay awake. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from the orchestration chat.
 
-**Settings → Remote** shows Relay connected, this Mac’s name, and **Show pairing code**. Enter that code in `apps/mobile`. The phone keeps every Mac it has paired and you choose which desktop to open. Send `stop` to cancel a turn. `ask_user` options render as buttons on the phone.
+**Settings → Remote** shows Relay connected, this Mac’s name, and **Show pairing code**. Start `apps/mobile` from the Run menu (**Mobile**) or with `pnpm --filter @sideboard-ai/mobile start`, then enter that code. The phone keeps every Mac it has paired and you choose which desktop to open. Send `stop` to cancel a turn. `ask_user` options render as buttons on the phone.
 
 Env override: `SIDEBOARD_REMOTE_RELAY_URL` (default `wss://relay.sideboard.cloud/remote`).
 
