@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Mac signed desktop job times out after 50 minutes (signed step 45) instead of sitting for GitHub's 6h default when notarize or dmg wedges.
+
+### Fixed
+
+- Watching a GitHub Actions release no longer reprints the full job checklist every 3 seconds. `gh run watch` was flooding the Sideboard log pane and stalling typing. Agents poll `gh run view` through `scripts/watch-gha-run.cjs` and print only when jobs or steps change.
+
 ## [0.1.271] - 2026-10-06
 
 ### Added

@@ -102,6 +102,8 @@ On miss, fix, commit, push, and watch again until the goal is met or you are blo
 Default: push/retarget the `v*` tag and watch Actions — do not pack locally. Full steps: [`.claude/skills/release/SKILL.md`](../release/SKILL.md).
 
 ```bash
-node scripts/detached-job.cjs start gha-release -- gh run watch <run-id> --exit-status
+node scripts/detached-job.cjs start gha-release -- node scripts/watch-gha-run.cjs <run-id>
 node scripts/detached-job.cjs wait gha-release
 ```
+
+Do **not** `gh run watch` (full TTY reprint every 3s; stalls the log pane).

@@ -86,4 +86,8 @@ node <detached-job.cjs> start pr-checks -- gh pr checks --watch
 \`\`\`
 
 On miss, fix, commit, push, and watch again until the goal is met or you are blocked. Do not ask the human to poll. Do not merge unless asked.
+
+## GitHub Actions runs
+
+Do **not** \`gh run watch\`. It reprints the full TTY every 3 seconds and floods the Sideboard log pane. Poll \`gh run view --json status,conclusion,jobs\` every 20–30s and print only when status or the in-progress step changes.
 `;
