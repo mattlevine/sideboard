@@ -18,3 +18,8 @@ run_mode = "concurrent"
 command = "PORT=${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-5173}} pnpm --filter @sideboard-ai/desktop run dev"
 default = true
 icon = "play"
+
+# Expo for apps/mobile. The Run log is not a TTY, so this opens the iOS Simulator.
+[scripts.run.mobile]
+command = "pnpm --filter @sideboard-ai/mobile start -- --ios --non-interactive --port ${SIDEBOARD_PORT:-${CONDUCTOR_PORT:-8081}}"
+icon = "smartphone"
