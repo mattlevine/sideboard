@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.274] - 2026-10-06
+
 ### Fixed
 
 - The keep-alive detector no longer treats the words “background poll” as a farewell. Those words were in the every-turn reminder, so paraphrasing the instruction after finished work could queue another wait. Continue still keys off a live detached job from this turn, plus specific promises (“will notify me when”, “I’ll keep watching”). The shared `wait_for_job` tool text (Claude, Cursor, Codex MCP, OpenCode) already said “let them know,” not “let you know.”
