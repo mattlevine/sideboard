@@ -873,7 +873,7 @@ export function RightSidebar({
   /** Origin has every local commit and the working tree is clean. */
   const originInSync = gitMetaReady && !hasLocalChanges;
   const prBase =
-    prMeta?.baseRefName?.trim().replace(/^refs\/heads\//, '') || 'main';
+    prMeta?.baseRefName?.trim().replace(/^refs\/heads\//, '') || '';
 
   // Light poll while checks are pending or the PR is in a merge queue.
   useEffect(() => {
@@ -1231,9 +1231,13 @@ export function RightSidebar({
                       : gitAction === 'queued'
                         ? 'In GitHub merge queue — open on GitHub'
                         : gitAction === 'resolve'
-                        ? `Ask the agent to merge origin/${prBase} and resolve conflicts`
+                        ? prBase
+                          ? `Ask the agent to merge origin/${prBase} and resolve conflicts`
+                          : 'Ask the agent to merge the PR base and resolve conflicts'
                         : gitAction === 'update'
-                          ? `Ask the agent to update this branch from origin/${prBase}`
+                          ? prBase
+                            ? `Ask the agent to update this branch from origin/${prBase}`
+                            : 'Ask the agent to update this branch from the PR base'
                         : gitAction === 'ready-for-review'
                           ? 'Ask the agent to mark this draft pull request ready for review'
                           : gitAction === 'checks-failing'
@@ -1245,7 +1249,9 @@ export function RightSidebar({
                           : gitAction === 'changes-requested'
                           ? 'A reviewer requested changes — open the pull request'
                           : gitAction === 'merge'
-                          ? 'Ask the agent to merge this pull request'
+                          ? prBase && prBase !== 'main' && prBase !== 'master'
+                            ? `Ask the agent to merge this pull request into ${prBase}`
+                            : 'Ask the agent to merge this pull request'
                           : gitAction === 'commit-push' || gitAction === 'cowboy-commit-push' || gitAction === 'cowboy-push'
                             ? 'Ask the agent to commit and push'
                             : 'Ask the agent to create a pull request'

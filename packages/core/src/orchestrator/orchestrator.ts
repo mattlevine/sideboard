@@ -3479,12 +3479,14 @@ export class Orchestrator {
       );
     }
     let prBase: string | undefined;
-    if (action === 'resolve-conflicts') {
+    if (action === 'resolve-conflicts' || action === 'merge') {
       try {
-        const details = await this.getPrDetails(threadRef);
-        prBase = details?.baseRefName?.trim() || undefined;
+        // getPrMeta is the cheap pill payload (includes baseRefName). Full
+        // getPrDetails also has it but pulls comments/reviews/commits.
+        const meta = await this.getPrMeta(threadRef);
+        prBase = meta?.baseRefName?.trim() || undefined;
       } catch {
-        // Fall back to the generic merge-remote-branch phrase.
+        // Fall back to the generic phrase (Merge PR. / merge-remote-branch).
       }
     }
     const settings = loadWorkspaceSettings(thread.worktreePath, thread.repoPath);

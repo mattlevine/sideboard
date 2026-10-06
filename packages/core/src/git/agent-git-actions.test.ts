@@ -16,6 +16,14 @@ describe('agentGitPrompt', () => {
     );
     expect(agentGitPrompt('ready-for-review')).toBe('Ready for review.');
     expect(agentGitPrompt('merge')).toBe('Merge PR.');
+    expect(agentGitPrompt('merge', { prBase: 'main' })).toBe('Merge PR.');
+    expect(agentGitPrompt('merge', { prBase: 'master' })).toBe('Merge PR.');
+    expect(agentGitPrompt('merge', { prBase: 'develop' })).toBe(
+      'Merge PR into develop.',
+    );
+    expect(agentGitPrompt('merge', { prBase: 'refs/heads/matt/parent' })).toBe(
+      'Merge PR into matt/parent.',
+    );
   });
 
   it('names the PR base when resolving conflicts', () => {
@@ -38,6 +46,14 @@ describe('expandCanonicalGitRequest', () => {
     expect(out).toMatch(/do not ask for clarification/);
     expect(out).toMatch(/git push -u origin HEAD/);
     expect(expandCanonicalGitRequest('Merge PR.')).toMatch(/gh stack merge/);
+    const intoParent = expandCanonicalGitRequest(
+      agentGitPrompt('merge', { prBase: 'matt/parent' }),
+    );
+    expect(intoParent.startsWith('Merge PR into matt/parent.')).toBe(true);
+    expect(intoParent).toMatch(/into `matt\/parent`/);
+    expect(intoParent).toMatch(/gh pr merge/);
+    expect(intoParent).toMatch(/do not use `gh stack merge`/);
+    expect(intoParent).not.toMatch(/If `gh stack view` shows a stack/);
     expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.')).toMatch(
       /gh pr create --draft --assignee @me -R/,
     );
@@ -53,8 +69,14 @@ describe('expandCanonicalGitRequest', () => {
   it('names the base when resolving conflicts', () => {
     const out = expandCanonicalGitRequest(agentGitPrompt('resolve-conflicts', { prBase: 'main' }));
     expect(out).toMatch(/Fetch the PR base \(`main`\)/);
+    const intoParent = expandCanonicalGitRequest(
+      agentGitPrompt('resolve-conflicts', { prBase: 'matt/parent' }),
+    );
+    expect(intoParent).toMatch(/origin\/matt\/parent/);
+    expect(intoParent).toMatch(/not main\/master/);
+    expect(intoParent).toMatch(/Do not merge origin\/main/);
     expect(expandCanonicalGitRequest(agentGitPrompt('resolve-conflicts'))).toMatch(
-      /Fetch the PR base, merge/,
+      /do not assume main/,
     );
   });
 
@@ -99,6 +121,12 @@ describe('resolveSidebarGitPrompt', () => {
   it('falls back to the canonical phrase when an override is blank', () => {
     expect(resolveSidebarGitPrompt('merge', { createPr: 'unused' })).toBe(
       'Merge PR.',
+    );
+    expect(
+      resolveSidebarGitPrompt('merge', { prBase: 'main', createPr: 'unused' }),
+    ).toBe('Merge PR.');
+    expect(resolveSidebarGitPrompt('merge', { prBase: 'release/1.2' })).toBe(
+      'Merge PR into release/1.2.',
     );
     expect(
       resolveSidebarGitPrompt('create-web', { createPr: '   ' }),

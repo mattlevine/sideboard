@@ -14,6 +14,17 @@ export type AgentGitAction = (typeof AGENT_GIT_ACTIONS)[number];
 /** Desktop right-sidebar git buttons, including the primary Create PR action. */
 export type SidebarGitAction = AgentGitAction | 'create-pr';
 
+function namedPrBase(prBase?: string | null): string | null {
+  const base = prBase?.trim().replace(/^refs\/heads\//, '').replace(/^origin\//, '');
+  return base || null;
+}
+
+/** GitHub default-branch names used in the merge expansion / "never push to main" rules. */
+function isMainishPrBase(base: string): boolean {
+  const n = base.toLowerCase();
+  return n === 'main' || n === 'master';
+}
+
 export function agentGitPrompt(
   action: AgentGitAction,
   opts?: { prBase?: string | null },
@@ -26,14 +37,19 @@ export function agentGitPrompt(
     case 'create-web':
       return 'Commit, push, and open a PR in the browser.';
     case 'resolve-conflicts': {
-      const base = opts?.prBase?.trim().replace(/^refs\/heads\//, '');
+      const base = namedPrBase(opts?.prBase);
       const named = base ? ` (${base})` : '';
       return `Merge the remote branch${named} into your branch and resolve conflicts. Then, commit and push your changes.`;
     }
     case 'ready-for-review':
       return 'Ready for review.';
-    case 'merge':
+    case 'merge': {
+      const base = namedPrBase(opts?.prBase);
+      if (base && !isMainishPrBase(base)) {
+        return `Merge PR into ${base}.`;
+      }
       return 'Merge PR.';
+    }
   }
 }
 
@@ -69,6 +85,8 @@ export function resolveSidebarGitPrompt(
 const RESOLVE_CONFLICTS_RE =
   /^Merge the remote branch(?: \(([^)]+)\))? into your branch and resolve conflicts\. Then, commit and push your changes\.$/;
 
+const MERGE_INTO_RE = /^Merge PR into (.+)\.$/;
+
 /**
  * What each canonical phrase means for the worktree agent. Sent with the
  * request itself (only when that phrase is used) instead of listing every
@@ -83,10 +101,19 @@ function gitActionExpansion(action: AgentGitAction, base: string | null): string
     case 'create-web':
       return 'Commit, push, then `gh pr create --web --assignee @me -R <origin-owner/name>`. Use a different `--assignee` only if the user named someone else.';
     case 'resolve-conflicts':
-      return `Fetch the PR base${base ? ` (\`${base}\`)` : ''}, merge it into this branch, resolve conflicts carefully, then commit and push until the PR is mergeable.`;
+      if (base && !isMainishPrBase(base)) {
+        return `Fetch \`origin/${base}\` (this PR's base — not main/master), merge it into this branch, resolve conflicts carefully, then commit and push until the PR is mergeable. Do not merge origin/main.`;
+      }
+      if (base) {
+        return `Fetch the PR base (\`${base}\`), merge it into this branch, resolve conflicts carefully, then commit and push until the PR is mergeable.`;
+      }
+      return 'Look up this PR\'s base with `gh pr view --json baseRefName` and merge that remote branch into this branch (do not assume main). Resolve conflicts carefully, then commit and push until the PR is mergeable.';
     case 'ready-for-review':
       return 'This phrase is the explicit ask to mark this thread\'s draft pull request ready for review on GitHub (`gh pr ready -R <origin-owner/name>` or `gh pr ready`). Update title/body if the purpose drifted. Do not merge.';
     case 'merge':
+      if (base && !isMainishPrBase(base)) {
+        return `This phrase is the explicit ask to merge this thread's open pull request into \`${base}\` on GitHub with \`gh pr merge\` (respect repo defaults / squash vs merge). This PR targets \`${base}\`, not main — do not use \`gh stack merge\` and do not retarget or merge into main/master. Do not force-push main/master or merge locally into the main checkout.`;
+      }
       return 'This phrase is the explicit ask to merge this thread\'s open pull request on GitHub. If `gh stack view` shows a stack, use `gh stack merge`; otherwise `gh pr merge` (respect repo defaults / squash vs merge). Do not force-push main/master or merge locally into the main checkout.';
   }
 }
@@ -112,6 +139,13 @@ export function expandCanonicalGitRequest(prompt: string): string {
     if (m) {
       action = 'resolve-conflicts';
       base = m[1] ?? null;
+    }
+  }
+  if (!action) {
+    const m = MERGE_INTO_RE.exec(trimmed);
+    if (m) {
+      action = 'merge';
+      base = m[1]?.trim() || null;
     }
   }
   let expansion: string | null = action ? gitActionExpansion(action, base) : null;

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Sidebar **Resolve** (and **Update**) names the PR's actual base. When that base is not main/master, the agent is told to merge `origin/<base>` and not origin/main. The Checks “fix merge conflicts” path no longer defaults a missing base to main.
+- Sidebar **Merge** names the PR base when it is not main/master and tells the worktree agent to `gh pr merge` into that branch. Stack-into-main (`gh stack merge`) stays the instruction only when the PR targets main or master.
 - The Mobile run script calls `expo start` directly. `pnpm start --` was forwarding a literal `--`, and this Expo does not accept `--non-interactive`.
 - Mobile no longer exits when the Simulator app is missing. Metro stays up, and Expo Go opens on a simulator that is already booted.
 - The phone relay accepts `wss://…/remote`. The Slack socket was answering that upgrade with 400, so Show pairing code never received a code.
