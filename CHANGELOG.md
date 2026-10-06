@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Run menu includes **Mobile** for this repo. It starts Expo for `apps/mobile` on its own port and opens the iOS Simulator beside the desktop Dev app.
 
+### Fixed
+
+- The Mobile run script calls `expo start` directly. `pnpm start --` was forwarding a literal `--`, and this Expo does not accept `--non-interactive`.
+
 ## [0.1.270] - 2026-10-05
 
 ### Fixed
