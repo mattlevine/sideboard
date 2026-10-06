@@ -19,12 +19,12 @@ import { app } from 'electron';
 import {
   isNoSpeechDictateStderr,
   mapSpeechDictateError,
-  isFifoWouldBlock,
   parseLiveDictateLine,
   SPEECH_DICTATE_BUNDLE_ID,
   speechDictateLiveOpenArgs,
   speechDictateOpenArgs,
   speechDictateSourcePaths,
+  writeLivePcmCarry,
 } from './speech-dictate-util';
 
 const execFileAsync = promisify(execFile);
@@ -195,6 +195,7 @@ type LiveSession = {
   ended: Promise<void>;
   resolveEnded: () => void;
   closing: boolean;
+  pcmPending: Buffer;
 };
 
 let liveSession: LiveSession | null = null;
@@ -309,6 +310,7 @@ export async function startLiveSpeechDictate(
     ended,
     resolveEnded,
     closing: false,
+    pcmPending: Buffer.alloc(0),
   };
   liveSession = session;
   session.poll = setInterval(() => {
@@ -360,12 +362,12 @@ export function pushLiveSpeechPcm(pcm: Buffer): void {
   const session = liveSession;
   if (!session || session.pcmFd == null) return;
   if (pcm.byteLength === 0 || pcm.byteLength > 64 * 1024) return;
-  try {
-    writeSync(session.pcmFd, pcm);
-  } catch (err) {
-    if (isFifoWouldBlock(err)) return;
-    /* helper gone */
-  }
+  const fd = session.pcmFd;
+  session.pcmPending = writeLivePcmCarry(
+    (buf) => writeSync(fd, buf),
+    session.pcmPending,
+    pcm,
+  );
 }
 
 export async function stopLiveSpeechDictate(): Promise<void> {

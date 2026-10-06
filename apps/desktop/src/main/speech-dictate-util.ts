@@ -71,6 +71,36 @@ export function isFifoWouldBlock(err: unknown): boolean {
   );
 }
 
+/** Cap leftover PCM so a stalled helper cannot grow forever (keep even-byte frames). */
+export const LIVE_PCM_PENDING_MAX = 32 * 1024;
+
+export function trimPcmCarry(buf: Buffer): Buffer {
+  if (buf.length <= LIVE_PCM_PENDING_MAX) return buf;
+  const extra = buf.length - LIVE_PCM_PENDING_MAX;
+  const drop = extra + (extra % 2);
+  return buf.subarray(Math.min(drop, buf.length));
+}
+
+/** Write as much as the FIFO accepts; keep the rest (never split silently). */
+export function writeLivePcmCarry(
+  write: (buf: Buffer) => number,
+  pending: Buffer,
+  next: Buffer,
+): Buffer {
+  const combined =
+    pending.length === 0 ? next : next.length === 0 ? pending : Buffer.concat([pending, next]);
+  if (combined.length === 0) return pending;
+  try {
+    const n = write(combined);
+    if (!Number.isFinite(n) || n <= 0) return trimPcmCarry(combined);
+    if (n >= combined.length) return Buffer.alloc(0);
+    return trimPcmCarry(combined.subarray(n));
+  } catch (err) {
+    if (isFifoWouldBlock(err)) return trimPcmCarry(combined);
+    return Buffer.alloc(0);
+  }
+}
+
 export function parseLiveDictateLine(
   line: string,
 ): { k: string; t: string } | null {

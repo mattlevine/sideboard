@@ -9,6 +9,7 @@ import {
   dictationPrivacySettingsUrl,
   dictationTccNames,
   encodeWavPcm16,
+  enqueueLivePcm,
   float32ToPcm16,
   isDictationPermissionError,
   prepareDictationWav,
@@ -33,6 +34,14 @@ describe('composeDictationPrompt', () => {
 
   it('ignores empty speech', () => {
     expect(composeDictationPrompt('Keep', '   ')).toBe('Keep');
+  });
+});
+
+describe('enqueueLivePcm', () => {
+  it('keeps only the newest bounded chunks', () => {
+    const queue: string[] = [];
+    for (let i = 0; i < 15; i++) enqueueLivePcm(queue, String(i), 12);
+    expect(queue).toEqual(Array.from({ length: 12 }, (_, i) => String(i + 3)));
   });
 });
 

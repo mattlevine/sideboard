@@ -1,3 +1,16 @@
+/** ~1s of 16 kHz PCM chunks while the live helper starts (4096 @ 48 kHz → ~12). */
+export const LIVE_PCM_QUEUE_MAX = 12;
+
+export function enqueueLivePcm(
+  queue: string[],
+  chunk: string,
+  max = LIVE_PCM_QUEUE_MAX,
+): string[] {
+  queue.push(chunk);
+  if (queue.length > max) queue.splice(0, queue.length - max);
+  return queue;
+}
+
 export function composeDictationPrompt(base: string, spoken: string): string {
   const next = spoken.replace(/\s+/g, ' ').trim();
   if (!next) return base;
