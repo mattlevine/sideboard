@@ -98,9 +98,9 @@ if live {
     let request = SFSpeechAudioBufferRecognitionRequest()
     request.shouldReportPartialResults = true
     request.taskHint = .dictation
-    if rec.supportsOnDeviceRecognition {
-      request.requiresOnDeviceRecognition = true
-    }
+    // Do not set requiresOnDeviceRecognition. Forcing it aborts at once with
+    // "Siri and Dictation are disabled" when that system feature is off, while
+    // the same recognizer succeeds without the flag.
     guard
       let format = AVAudioFormat(
         commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)
