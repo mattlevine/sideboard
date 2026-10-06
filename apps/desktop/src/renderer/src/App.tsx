@@ -13,7 +13,6 @@ import type {
   FollowUpBehavior,
   OrchestratorEvent,
   OrchestratorRuntime,
-  PublicAppSettings,
   Thread,
   ThreadAttachment,
   Workspace,
@@ -33,10 +32,11 @@ import {
   withoutLiveThreads,
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
+import { projectReviewLabelsFromSettings } from './lib/project-review-labels';
 import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { applyChatTextScale, resolveChatTextScale } from './lib/chat-text-scale';
-import { clampReadAloudRate, sanitizeReadAloudVoiceURI } from './lib/read-aloud';
 import { ShowCostProvider } from './lib/show-cost';
+import { useReadAloudSession } from './lib/use-read-aloud-session';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
@@ -47,7 +47,6 @@ import { GlobalBoard } from './components/GlobalBoard';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
-import { ReadAloudModal } from './components/ReadAloudModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
 import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
@@ -85,17 +84,6 @@ const RIGHT_SIDEBAR_MIN = 240;
 const RIGHT_SIDEBAR_MAX = 560;
 function sameWorktreePath(a: string, b: string): boolean {
   return a.replace(/\/$/, '') === b.replace(/\/$/, '');
-}
-
-function projectReviewLabelsFromSettings(
-  projects: PublicAppSettings['projects'] | undefined,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [path, profile] of Object.entries(projects ?? {})) {
-    const label = profile.reviewLabel?.trim();
-    if (label) out[path] = label;
-  }
-  return out;
 }
 
 function readSidebarPref(key: string, fallback: boolean): boolean {
@@ -186,9 +174,7 @@ export function App() {
   const [teamToasts, setTeamToasts] = useState<TeamToastItem[]>([]);
   const [prefill, setPrefill] = useState<string | undefined>();
   const [findChatCmd, setFindChatCmd] = useState<{ nonce: number; query: string } | null>(null);
-  const [readAloud, setReadAloud] = useState<{ text: string; nonce: number } | null>(null);
-  const [readAloudRate, setReadAloudRate] = useState(1);
-  const [readAloudVoiceURI, setReadAloudVoiceURI] = useState('');
+  const readAloud = useReadAloudSession();
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [openFileView, setOpenFileView] = useState<'edit' | 'diff'>('edit');
@@ -374,14 +360,6 @@ export function App() {
   const [agentDoneSound, setAgentDoneSound] = useState<AgentDoneSound>('none');
   const agentDoneSoundRef = useRef<AgentDoneSound>('none');
   agentDoneSoundRef.current = agentDoneSound;
-  const persistReadAloudDefaults = useCallback((next: { rate: number; voiceURI: string }) => {
-    setReadAloudRate(next.rate);
-    setReadAloudVoiceURI(next.voiceURI);
-    void window.sideboard.updateAdvancedSettings({
-      readAloudRate: next.rate,
-      readAloudVoiceURI: next.voiceURI,
-    });
-  }, []);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
     readSidebarPref('sideboard.leftSidebar', true),
   );
@@ -562,8 +540,6 @@ export function App() {
       setAgentDoneSound(
         isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
       );
-      setReadAloudRate(clampReadAloudRate(s.advanced?.readAloudRate));
-      setReadAloudVoiceURI(sanitizeReadAloudVoiceURI(s.advanced?.readAloudVoiceURI));
       setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
     });
   }, []);
@@ -751,11 +727,6 @@ export function App() {
       if (!text.trim()) return;
       setPrefill(text);
     });
-    const offReadAloud = window.sideboardUpdate.onReadAloud?.((text) => {
-      const next = text.trim();
-      if (!next) return;
-      setReadAloud({ text: next, nonce: Date.now() });
-    });
     const offFindChat = window.sideboardUpdate.onFindChat?.((text) => {
       setFindChatCmd({ nonce: Date.now(), query: typeof text === 'string' ? text : '' });
     });
@@ -769,7 +740,6 @@ export function App() {
       offUpdateError();
       offOpenSettings();
       offQuoteSelection?.();
-      offReadAloud?.();
       offFindChat?.();
     };
   }, [refresh, refreshThread, livePaintStore]);
@@ -1367,6 +1337,7 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
+              onReadAloud: readAloud.open,
             };
             const urlPreviewProps = {
               openUrls,
@@ -1415,6 +1386,7 @@ export function App() {
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
               onOpenThreadLink={openThreadByRef}
+              onReadAloud={readAloud.open}
               {...urlPreviewProps}
             />
           ) : (
@@ -1621,16 +1593,7 @@ export function App() {
         />
       )}
 
-      {readAloud && (
-        <ReadAloudModal
-          key={readAloud.nonce}
-          text={readAloud.text}
-          rate={readAloudRate}
-          voiceURI={readAloudVoiceURI}
-          onDefaultsChange={persistReadAloudDefaults}
-          onClose={() => setReadAloud(null)}
-        />
-      )}
+      {readAloud.modal}
 
       {settingsOpen && (
         <SettingsModal
@@ -1680,8 +1643,7 @@ export function App() {
             setAgentDoneSound(
               isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
             );
-            setReadAloudRate(clampReadAloudRate(s.advanced?.readAloudRate));
-            setReadAloudVoiceURI(sanitizeReadAloudVoiceURI(s.advanced?.readAloudVoiceURI));
+            readAloud.applyFromSettings(s);
             setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
           }}
           onClose={() => {

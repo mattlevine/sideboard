@@ -10,6 +10,12 @@ guard args.count >= 2 else {
 
 let nsApp = NSApplication.shared
 nsApp.setActivationPolicy(.accessory)
+nsApp.finishLaunching()
+
+if Bundle.main.object(forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription") == nil {
+  FileHandle.standardError.write(Data("missing-usage-description\n".utf8))
+  exit(1)
+}
 
 let url = URL(fileURLWithPath: args[1])
 let localeId = args.count > 2 ? args[2] : Locale.current.identifier

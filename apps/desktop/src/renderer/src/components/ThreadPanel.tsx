@@ -73,6 +73,7 @@ import { ChatTabs } from './ChatTabs';
 import { AccountSwitcher } from './AccountSwitcher';
 import { ClaudeUsageMeter } from './ClaudeUsageMeter';
 import { ConfirmDialog } from './ConfirmDialog';
+import { DictationPermissionDialog } from './DictationPermissionDialog';
 import {
   claudeUsageOverLimitWindows,
   formatClaudeUsageOverLimitConfirm,
@@ -252,6 +253,8 @@ interface Props {
   rightSidebarToggle?: ReactNode;
   /** Rendered under the tab strip (orchestrator child-thread chips). */
   belowTabs?: ReactNode;
+  /** Speak artifact text with the app Read Aloud modal. */
+  onReadAloud?: (text: string) => void;
 }
 
 const queuedIconStroke = {
@@ -748,6 +751,7 @@ export function ThreadPanel({
   leftSidebarToggle,
   rightSidebarToggle,
   belowTabs,
+  onReadAloud,
 }: Props) {
   const live = useLiveThread(thread.id);
   const liveOutput = live.output;
@@ -2240,6 +2244,7 @@ export function ThreadPanel({
 
   return (
     <section className="panel thread-main">
+      <DictationPermissionDialog error={dictation.error} onDismiss={dictation.clearError} />
       {usageLimitConfirm ? (
         <ConfirmDialog
           title={
@@ -2970,8 +2975,8 @@ export function ThreadPanel({
                 listening={dictation.listening}
                 supported={dictation.supported}
                 error={dictation.error}
-                onHoldStart={dictation.start}
-                onHoldEnd={dictation.stop}
+                onStart={dictation.start}
+                onStop={dictation.stop}
               />
             )}
             {!composerExpanded && agentActive && (
@@ -3088,8 +3093,8 @@ export function ThreadPanel({
                   listening={dictation.listening}
                   supported={dictation.supported}
                   error={dictation.error}
-                  onHoldStart={dictation.start}
-                  onHoldEnd={dictation.stop}
+                  onStart={dictation.start}
+                  onStop={dictation.stop}
                 />
                 <FloatingMenu
                   open={plusOpen}
@@ -3186,6 +3191,7 @@ export function ThreadPanel({
             onActivate={activateRightTab}
             onCloseTab={closeRightTab}
             onSchemaContentChange={updateSchemaTab}
+            onReadAloud={onReadAloud}
             worktreeThreadId={thread.id}
             filePicker={filePicker}
             onFilePickerChange={setFilePicker}

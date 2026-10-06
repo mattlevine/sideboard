@@ -247,6 +247,8 @@ const api: IpcApi = {
   askMicrophoneAccess: () => ipcRenderer.invoke('askMicrophoneAccess') as Promise<boolean>,
   transcribeDictation: (wavBase64, locale) =>
     ipcRenderer.invoke('transcribeDictation', wavBase64, locale) as Promise<string>,
+  getDictationPrivacyHelp: () =>
+    ipcRenderer.invoke('getDictationPrivacyHelp') as Promise<{ packaged: boolean }>,
   attachmentsFromPaths: (absolutePaths) =>
     ipcRenderer.invoke('attachmentsFromPaths', absolutePaths),
   attachmentsFromBuffers: (buffers) =>

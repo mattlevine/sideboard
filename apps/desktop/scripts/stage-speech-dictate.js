@@ -23,4 +23,9 @@ execFileSync('swiftc', ['-O', '-o', bin, src], { stdio: 'inherit' });
 if (!fs.existsSync(bin)) {
   throw new Error('swiftc did not produce speech-dictate');
 }
+execFileSync(
+  'codesign',
+  ['--force', '--sign', '-', '--identifier', 'ai.sideboard.dictation', appRoot],
+  { stdio: 'inherit' },
+);
 console.log('staged', bin);

@@ -1,13 +1,13 @@
-import { useRef } from 'react';
-import type { PointerEvent, KeyboardEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
+import { isDictationPermissionError } from '../lib/speech-dictation';
 
 interface Props {
   listening: boolean;
   supported: boolean;
   error?: string | null;
   disabled?: boolean;
-  onHoldStart: () => void;
-  onHoldEnd: () => void;
+  onStart: () => void;
+  onStop: () => void;
 }
 
 export function DictationMicButton({
@@ -15,57 +15,26 @@ export function DictationMicButton({
   supported,
   error,
   disabled,
-  onHoldStart,
-  onHoldEnd,
+  onStart,
+  onStop,
 }: Props) {
   const blocked = disabled || !supported;
-  const holdingRef = useRef(false);
-  const startRef = useRef(onHoldStart);
-  const endRef = useRef(onHoldEnd);
-  startRef.current = onHoldStart;
-  endRef.current = onHoldEnd;
-
   const title = !supported
     ? 'Dictation is not available'
-    : error
-      ? error
-      : listening
-        ? 'Release to stop dictation'
-        : 'Hold to dictate';
+    : listening
+      ? 'Stop dictation'
+      : isDictationPermissionError(error)
+        ? 'Allow microphone'
+        : error
+          ? error
+          : 'Dictate';
 
-  function handlePointerDown(e: PointerEvent<HTMLButtonElement>) {
-    if (blocked || e.button !== 0) return;
-    if (holdingRef.current) return;
-    holdingRef.current = true;
-    startRef.current();
+  function toggle(e: MouseEvent<HTMLButtonElement> | KeyboardEvent<HTMLButtonElement>) {
     e.preventDefault();
     e.stopPropagation();
-    const end = () => {
-      if (!holdingRef.current) return;
-      holdingRef.current = false;
-      window.removeEventListener('pointerup', end, true);
-      window.removeEventListener('pointercancel', end, true);
-      endRef.current();
-    };
-    window.addEventListener('pointerup', end, true);
-    window.addEventListener('pointercancel', end, true);
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
-    if (blocked || e.repeat) return;
-    if (e.key !== ' ' && e.key !== 'Enter') return;
-    e.preventDefault();
-    if (holdingRef.current) return;
-    holdingRef.current = true;
-    startRef.current();
-  }
-
-  function handleKeyUp(e: KeyboardEvent<HTMLButtonElement>) {
-    if (e.key !== ' ' && e.key !== 'Enter') return;
-    e.preventDefault();
-    if (!holdingRef.current) return;
-    holdingRef.current = false;
-    endRef.current();
+    if (blocked) return;
+    if (listening) onStop();
+    else onStart();
   }
 
   return (
@@ -76,12 +45,12 @@ export function DictationMicButton({
       aria-label={title}
       aria-pressed={listening}
       disabled={blocked}
-      onPointerDown={handlePointerDown}
-      onKeyDown={handleKeyDown}
-      onKeyUp={handleKeyUp}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (e.key !== ' ' && e.key !== 'Enter') return;
+        if (e.repeat) return;
+        toggle(e);
       }}
     >
       <svg

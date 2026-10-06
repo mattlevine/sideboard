@@ -5,7 +5,12 @@ import {
   concatFloat32,
   dictationCaptureSupported,
   dictationErrorMessage,
+  dictationPermissionDialogCopy,
+  dictationPrivacySettingsUrl,
+  dictationTccNames,
   encodeWavPcm16,
+  isDictationPermissionError,
+  prepareDictationWav,
 } from './speech-dictation';
 
 describe('composeDictationPrompt', () => {
@@ -47,5 +52,53 @@ describe('encodeWavPcm16', () => {
 describe('dictationErrorMessage', () => {
   it('explains blocked mic access', () => {
     expect(dictationErrorMessage('not-allowed')).toMatch(/Microphone access/i);
+    expect(isDictationPermissionError(dictationErrorMessage('not-allowed'))).toBe(true);
+    expect(isDictationPermissionError(dictationErrorMessage('silent'))).toBe(true);
+    expect(
+      isDictationPermissionError(
+        'Speech recognition is blocked. Allow Sideboard Dictation in System Settings → Privacy & Security → Speech Recognition.',
+      ),
+    ).toBe(true);
+    expect(isDictationPermissionError(dictationErrorMessage('too-short'))).toBe(false);
+    expect(dictationPrivacySettingsUrl('Speech recognition is blocked.')).toMatch(
+      /Privacy_SpeechRecognition/,
+    );
+    expect(dictationPrivacySettingsUrl(dictationErrorMessage('not-allowed'))).toMatch(
+      /Privacy_Microphone/,
+    );
+  });
+
+  it('names Electron in Dev and Sideboard Dictation for speech', () => {
+    expect(dictationTccNames(false)).toEqual({
+      microphoneApp: 'Electron',
+      speechApp: 'Sideboard Dictation',
+    });
+    expect(dictationTccNames(true).microphoneApp).toBe('Sideboard');
+    const devMic = dictationPermissionDialogCopy(dictationErrorMessage('not-allowed'), false);
+    expect(devMic.message).toMatch(/Electron/);
+    expect(devMic.message).toMatch(/not listed as Sideboard/);
+    expect(devMic.message).toMatch(/Sideboard Dictation/);
+    const packagedSpeech = dictationPermissionDialogCopy(
+      'Speech recognition is blocked.',
+      true,
+    );
+    expect(packagedSpeech.title).toMatch(/speech recognition/i);
+    expect(packagedSpeech.message).toMatch(/Sideboard Dictation/);
+    expect(packagedSpeech.message).not.toMatch(/Dev window/);
+  });
+
+  it('tells the user to click again after a short clip', () => {
+    expect(dictationErrorMessage('too-short')).toMatch(/Click the mic/i);
+  });
+});
+
+describe('prepareDictationWav', () => {
+  it('downsamples to 16 kHz and reports energy', () => {
+    const samples = new Float32Array(48_000);
+    for (let i = 0; i < samples.length; i++) samples[i] = Math.sin(i / 20) * 0.2;
+    const prepared = prepareDictationWav(samples, 48_000);
+    expect(prepared.seconds).toBeCloseTo(1, 2);
+    expect(prepared.rms).toBeGreaterThan(0.05);
+    expect(prepared.wav.byteLength).toBe(44 + 16_000 * 2);
   });
 });

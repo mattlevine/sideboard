@@ -3,13 +3,15 @@ import {
   arrayBufferToBase64,
   composeDictationPrompt,
   concatFloat32,
+  DICTATION_MIN_RMS,
+  DICTATION_MIN_SECONDS,
   dictationCaptureSupported,
   dictationErrorMessage,
-  encodeWavPcm16,
+  prepareDictationWav,
 } from './speech-dictation';
 
 type MicSession = {
-  finish: () => ArrayBuffer;
+  finish: () => { samples: Float32Array; sampleRate: number };
 };
 
 export function useSpeechDictation(opts: {
@@ -21,6 +23,7 @@ export function useSpeechDictation(opts: {
   listening: boolean;
   supported: boolean;
   error: string | null;
+  clearError: () => void;
   start: () => void;
   stop: () => void;
 } {
@@ -29,6 +32,7 @@ export function useSpeechDictation(opts: {
   const supported = dictationCaptureSupported();
   const wantRef = useRef(false);
   const sessionRef = useRef<MicSession | null>(null);
+  const startingRef = useRef<Promise<void> | null>(null);
   const genRef = useRef(0);
   const getValueRef = useRef(opts.getValue);
   const setValueRef = useRef(opts.setValue);
@@ -44,24 +48,26 @@ export function useSpeechDictation(opts: {
     setListening(false);
   }, []);
 
-  const stop = useCallback(() => {
-    wantRef.current = false;
-    const session = sessionRef.current;
-    sessionRef.current = null;
-    if (!session) {
+  const transcribe = useCallback((samples: Float32Array, sampleRate: number, gen: number) => {
+    const prepared = prepareDictationWav(samples, sampleRate);
+    if (prepared.seconds < DICTATION_MIN_SECONDS) {
       setListening(false);
+      setError(dictationErrorMessage('too-short'));
       return;
     }
-    const gen = genRef.current;
-    const wav = session.finish();
-    const locale = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US';
-    const transcribe = window.sideboard.transcribeDictation;
-    if (typeof transcribe !== 'function') {
+    if (prepared.rms < DICTATION_MIN_RMS) {
+      setListening(false);
+      setError(dictationErrorMessage('silent'));
+      return;
+    }
+    const run = window.sideboard.transcribeDictation;
+    if (typeof run !== 'function') {
       setListening(false);
       setError('Dictation is not available in this window.');
       return;
     }
-    void transcribe(arrayBufferToBase64(wav), locale)
+    const locale = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US';
+    void run(arrayBufferToBase64(prepared.wav), locale)
       .then((spoken) => {
         if (gen !== genRef.current) return;
         if (!spoken.trim()) {
@@ -80,6 +86,24 @@ export function useSpeechDictation(opts: {
       });
   }, []);
 
+  const stop = useCallback(() => {
+    wantRef.current = false;
+    const gen = genRef.current;
+    const pending = startingRef.current;
+    void (async () => {
+      if (pending) await pending;
+      if (gen !== genRef.current) return;
+      const session = sessionRef.current;
+      sessionRef.current = null;
+      if (!session) {
+        setListening(false);
+        return;
+      }
+      const clip = session.finish();
+      transcribe(clip.samples, clip.sampleRate, gen);
+    })();
+  }, [transcribe]);
+
   const start = useCallback(() => {
     if (opts.disabled) return;
     if (wantRef.current) return;
@@ -91,58 +115,84 @@ export function useSpeechDictation(opts: {
     genRef.current += 1;
     setError(null);
     setListening(true);
-    const ask = window.sideboard.askMicrophoneAccess;
-    if (typeof ask === 'function') void ask().catch(() => {});
 
-    void navigator.mediaDevices
-      .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
-      .then(async (stream) => {
-        if (!wantRef.current) {
-          stream.getTracks().forEach((t) => t.stop());
+    const work = (async () => {
+      const ask = window.sideboard.askMicrophoneAccess;
+      if (typeof ask === 'function') {
+        const allowed = await ask();
+        if (!wantRef.current) return;
+        if (!allowed) {
+          wantRef.current = false;
+          setListening(false);
+          setError(dictationErrorMessage('NotAllowedError'));
           return;
         }
-        const ctx = new AudioContext();
-        await ctx.resume();
-        if (!wantRef.current) {
-          stream.getTracks().forEach((t) => t.stop());
-          void ctx.close();
-          return;
-        }
-        const src = ctx.createMediaStreamSource(stream);
-        const proc = ctx.createScriptProcessor(4096, 1, 1);
-        const chunks: Float32Array[] = [];
-        proc.onaudioprocess = (event) => {
-          if (!wantRef.current) return;
-          chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
-        };
-        const mute = ctx.createGain();
-        mute.gain.value = 0;
-        src.connect(proc);
-        proc.connect(mute);
-        mute.connect(ctx.destination);
-        sessionRef.current = {
-          finish: () => {
-            try {
-              proc.disconnect();
-              src.disconnect();
-              mute.disconnect();
-            } catch {
-              /* ignore */
-            }
-            stream.getTracks().forEach((t) => t.stop());
-            const rate = ctx.sampleRate || 48_000;
-            void ctx.close();
-            return encodeWavPcm16(concatFloat32(chunks), rate);
-          },
-        };
-      })
-      .catch((err) => {
-        wantRef.current = false;
-        sessionRef.current = null;
-        setListening(false);
-        const name = err && typeof err === 'object' && 'name' in err ? String(err.name) : '';
-        setError(dictationErrorMessage(name || undefined));
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true,
+        },
       });
+      if (!wantRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const ctx = new AudioContext();
+      await ctx.resume();
+      if (!wantRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        void ctx.close();
+        return;
+      }
+      const src = ctx.createMediaStreamSource(stream);
+      const proc = ctx.createScriptProcessor(4096, 1, 1);
+      const sink = ctx.createMediaStreamDestination();
+      const keep = ctx.createGain();
+      keep.gain.value = 0.00004;
+      const osc = ctx.createOscillator();
+      const chunks: Float32Array[] = [];
+      proc.onaudioprocess = (event) => {
+        if (!wantRef.current) return;
+        chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      };
+      src.connect(proc);
+      proc.connect(sink);
+      proc.connect(keep);
+      osc.connect(keep);
+      keep.connect(ctx.destination);
+      osc.start();
+      sessionRef.current = {
+        finish: () => {
+          try {
+            osc.stop();
+            proc.disconnect();
+            src.disconnect();
+            sink.disconnect();
+            keep.disconnect();
+          } catch {
+            /* ignore */
+          }
+          stream.getTracks().forEach((t) => t.stop());
+          const sampleRate = ctx.sampleRate || 48_000;
+          void ctx.close();
+          return { samples: concatFloat32(chunks), sampleRate };
+        },
+      };
+    })();
+
+    const tracked = work.catch((err) => {
+      wantRef.current = false;
+      sessionRef.current = null;
+      setListening(false);
+      const name = err && typeof err === 'object' && 'name' in err ? String(err.name) : '';
+      setError(dictationErrorMessage(name || undefined));
+    });
+    startingRef.current = tracked.finally(() => {
+      if (startingRef.current === tracked) startingRef.current = null;
+    });
   }, [opts.disabled]);
 
   useEffect(() => () => discard(), [discard]);
@@ -150,5 +200,7 @@ export function useSpeechDictation(opts: {
     discard();
   }, [opts.resetKey, discard]);
 
-  return { listening, supported, error, start, stop };
+  const clearError = useCallback(() => setError(null), []);
+
+  return { listening, supported, error, clearError, start, stop };
 }

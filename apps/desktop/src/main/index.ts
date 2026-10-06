@@ -1801,6 +1801,7 @@ function registerIpc(): void {
     return result.filePaths.map((p) => attachmentFromAbsolutePath(p));
   });
   ipcMain.handle('askMicrophoneAccess', () => askMicrophoneAccess());
+  ipcMain.handle('getDictationPrivacyHelp', () => ({ packaged: app.isPackaged }));
   ipcMain.handle(
     'transcribeDictation',
     async (_e, wavBase64: string, locale?: string) => {
@@ -1808,7 +1809,7 @@ function registerIpc(): void {
         throw new Error('Dictation is only available on macOS.');
       }
       if (typeof wavBase64 !== 'string' || wavBase64.length === 0 || wavBase64.length > 16_000_000) {
-        throw new Error('No microphone input. Hold the mic and speak, then release.');
+        throw new Error('Click the mic, speak, then click it again to stop.');
       }
       const buf = Buffer.from(wavBase64, 'base64');
       return transcribeWavFile(buf, typeof locale === 'string' && locale ? locale : 'en-US');
@@ -1840,7 +1841,9 @@ function registerIpc(): void {
     } catch {
       return;
     }
-    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+    if (!['http:', 'https:', 'mailto:', 'x-apple.systempreferences:'].includes(parsed.protocol)) {
+      return;
+    }
     await shell.openExternal(parsed.href);
   });
 

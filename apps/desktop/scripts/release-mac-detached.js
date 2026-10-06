@@ -165,6 +165,7 @@ function runPack() {
   run('node scripts/stage-bundled-node.js', desktopRoot);
   run('node scripts/stage-sideboard-mcp.js', desktopRoot);
   run('node scripts/stage-cursor-runtime.js', desktopRoot);
+  run('node scripts/stage-speech-dictate.js', desktopRoot);
   const notarizeArg = macNotarizeCliArg();
   const builderCmd = ['pnpm exec electron-builder', '--mac', notarizeArg, '--publish always']
     .filter(Boolean)

@@ -196,6 +196,7 @@ if (doDesktop) {
   run('node scripts/stage-bundled-node.js');
   run('node scripts/stage-sideboard-mcp.js');
   run('node scripts/stage-cursor-runtime.js');
+  run('node scripts/stage-speech-dictate.js');
 
   const publishFlag = `--publish ${publish}`;
   const builderCmd = [
@@ -298,6 +299,17 @@ if (doDesktop) {
       );
     }
   console.log('✅ Verified extraResources sideboard-mcp');
+
+  const speechDictate = path.join(
+    appResources,
+    'speech-dictate.app/Contents/MacOS/speech-dictate',
+  );
+  if (!fs.existsSync(speechDictate)) {
+    throw new Error(
+      'Packaged extraResources speech-dictate.app is missing. Aborting release.',
+    );
+  }
+  console.log('✅ Verified extraResources speech-dictate');
 }
 
 const tag = `v${nextVersion}`;

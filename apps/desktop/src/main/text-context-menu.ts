@@ -79,7 +79,7 @@ function toElectronItem(
 async function popupTextContextMenu(win: BrowserWindow, params: ContextMenuParams): Promise<void> {
   if (win.isDestroyed() || !isMainFrame(win, params)) return;
 
-  let target: TextContextTarget = { inChatText: false, skipNativeMenu: false };
+  let target: TextContextTarget = { inChatText: false, inArtifactText: false, skipNativeMenu: false };
   try {
     const raw = (await win.webContents.executeJavaScript(
       textContextTargetScript(params.x, params.y),
@@ -87,6 +87,7 @@ async function popupTextContextMenu(win: BrowserWindow, params: ContextMenuParam
     if (raw && typeof raw === 'object') {
       target = {
         inChatText: Boolean(raw.inChatText),
+        inArtifactText: Boolean(raw.inArtifactText),
         skipNativeMenu: Boolean(raw.skipNativeMenu),
       };
     }

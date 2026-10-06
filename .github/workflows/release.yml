@@ -112,6 +112,7 @@ jobs:
           node scripts/stage-bundled-node.js
           node scripts/stage-sideboard-mcp.js
           node scripts/stage-cursor-runtime.js
+          node scripts/stage-speech-dictate.js
           # electron-builder + electron-updater publish to GitHub Releases
           # Signing/notarization require the imported identity + APPLE_* secrets;
           # unsigned builds still upload artifacts but cannot auto-update on macOS.

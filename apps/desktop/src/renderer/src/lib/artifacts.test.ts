@@ -9,6 +9,7 @@ import {
   mergeAppendableArtifact,
   settleLogStatusAfterStream,
 } from './artifacts';
+import { artifactSpeakableText } from './artifact-speakable';
 import type { MessagePart } from '@sideboard-ai/core';
 
 describe('extractFenceArtifacts', () => {
@@ -633,5 +634,33 @@ describe('extractArtifacts / latestArtifact', () => {
     expect(arts).toHaveLength(1);
     expect(arts[0]!.source).toBe('tool');
     expect(latestArtifact(text, parts)?.title).toBe('From tool');
+  });
+});
+
+describe('artifactSpeakableText', () => {
+  it('strips HTML tags for speech', () => {
+    expect(
+      artifactSpeakableText({
+        id: 'a',
+        title: 'Doc',
+        kind: 'html',
+        language: 'html',
+        content: '<h1>Hello</h1><p>world</p>',
+        source: 'tool',
+      }),
+    ).toBe('Hello world');
+  });
+
+  it('keeps markdown source', () => {
+    expect(
+      artifactSpeakableText({
+        id: 'b',
+        title: 'Notes',
+        kind: 'markdown',
+        language: 'md',
+        content: '  Ship the menu  ',
+        source: 'tool',
+      }),
+    ).toBe('Ship the menu');
   });
 });
