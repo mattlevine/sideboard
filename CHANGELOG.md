@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.272] - 2026-10-06
+
 ### Changed
 
 - The Mac signed desktop job times out after 50 minutes (signed step 45) instead of sitting for GitHub's 6h default when notarize or dmg wedges.
