@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PILOT_TOOL_DESCRIPTIONS } from '../agent-rpc/pilot-tools.js';
 import {
   DETACHED_JOBS_DIR,
 } from '../paths/workspace-scratch.js';
@@ -12,8 +13,11 @@ import {
   processGroupAlive,
   capJobLogDelta,
   collapseGhRunWatchLog,
+  formatDeferredDoneContinuePrompt,
+  formatJobStillRunningContinuePrompt,
   isJobContinuePrompt,
   looksLikeDeferredDonePromise,
+  MCP_WAIT_JOB_STILL_RUNNING_HINT,
   planJobContinue,
   stopDetachedJob,
   waitForDetachedJob,
@@ -42,6 +46,30 @@ describe('looksLikeDeferredDonePromise', () => {
     expect(
       looksLikeDeferredDonePromise("I'll come back when the pack finishes."),
     ).toBe(true);
+    expect(
+      looksLikeDeferredDonePromise(
+        'A native CLI Task or bash notify does not resume this chat.',
+      ),
+    ).toBe(false);
+    expect(
+      looksLikeDeferredDonePromise('A background poll does not resume this chat.'),
+    ).toBe(false);
+  });
+
+  it('does not treat host-injected keep-alive copy as a farewell', () => {
+    const copies = [
+      formatDeferredDoneContinuePrompt(),
+      formatJobStillRunningContinuePrompt(['gha-release']),
+      MCP_WAIT_JOB_STILL_RUNNING_HINT,
+      PILOT_TOOL_DESCRIPTIONS.wait_for_job,
+      'A native CLI Task or bash notify does not resume this chat.',
+      'Do not say you will let the user know later — stay in the turn.',
+      'Do not tell the user you will let them know later.',
+      'Do not end the turn or tell the user you will let them know later.',
+    ];
+    for (const text of copies) {
+      expect(looksLikeDeferredDonePromise(text)).toBe(false);
+    }
   });
 
   it('ignores a finished report', () => {
