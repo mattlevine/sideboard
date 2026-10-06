@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.267] - 2026-10-05
 
+### Changed
+
+- Dictation writes into the composer as you speak (live macOS Speech partials), not only after you click the mic again.
+
 ### Fixed
 
 - New workspace and new orchestration agent dialogs no longer blank the app. The dictation hook was reading `busy` before that state existed (`ReferenceError` on first render).
+- Live dictation no longer beach-balls the app. The main process was blocking on a full audio pipe, and the chat view was re-rendering on every partial.
 
 ## [0.1.266] - 2026-10-05
 

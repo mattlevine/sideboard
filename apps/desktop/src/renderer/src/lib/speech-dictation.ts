@@ -72,9 +72,20 @@ export function prepareDictationWav(
   };
 }
 
+export function float32ToPcm16(samples: Float32Array): Uint8Array {
+  const out = new Uint8Array(samples.length * 2);
+  const view = new DataView(out.buffer);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i] ?? 0));
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return out;
+}
+
 export function encodeWavPcm16(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const pcm = float32ToPcm16(samples);
   const n = samples.length;
-  const buffer = new ArrayBuffer(44 + n * 2);
+  const buffer = new ArrayBuffer(44 + pcm.byteLength);
   const view = new DataView(buffer);
   const writeStr = (offset: number, s: string) => {
     for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
@@ -92,12 +103,7 @@ export function encodeWavPcm16(samples: Float32Array, sampleRate: number): Array
   view.setUint16(34, 16, true);
   writeStr(36, 'data');
   view.setUint32(40, n * 2, true);
-  let offset = 44;
-  for (let i = 0; i < n; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i] ?? 0));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    offset += 2;
-  }
+  new Uint8Array(buffer, 44).set(pcm);
   return buffer;
 }
 

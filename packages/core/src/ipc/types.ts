@@ -606,6 +606,16 @@ export interface IpcApi {
   askMicrophoneAccess(): Promise<boolean>;
   /** Transcribe a held dictation clip (PCM WAV, base64). macOS Speech framework. */
   transcribeDictation(wavBase64: string, locale?: string): Promise<string>;
+  /** Start a live macOS Speech session; partials arrive on onLiveDictationTranscript. */
+  startLiveDictation(locale?: string): Promise<void>;
+  /** Push 16 kHz mono PCM16 (base64) into the live dictation helper. */
+  pushLiveDictationAudio(pcm16Base64: string): void;
+  /** Close the live dictation FIFO and wait for the last transcript. */
+  stopLiveDictation(): Promise<void>;
+  onLiveDictationTranscript(
+    listener: (payload: { text: string; isFinal: boolean }) => void,
+  ): () => void;
+  onLiveDictationError(listener: (payload: { message: string }) => void): () => void;
   /** Packaged Sideboard.app vs Dev Electron — Privacy lists different names. */
   getDictationPrivacyHelp(): Promise<{ packaged: boolean }>;
   /** Build composer attachments from absolute paths without a worktree (create modal). */
