@@ -262,7 +262,26 @@ export async function startRelayServer(
     });
   });
 
-  const wss = new WebSocketServer({ server: httpServer, path: SLACK_RELAY_DESKTOP_PATH });
+  // Two WebSocketServers on one HTTP server cannot share `upgrade`: the first
+  // path mismatch aborts the socket with 400, so /remote never connects.
+  const wss = new WebSocketServer({ noServer: true });
+  const remoteWss = new WebSocketServer({ noServer: true });
+  httpServer.on('upgrade', (req, socket, head) => {
+    const pathname = (req.url ?? '/').split('?')[0];
+    const target =
+      pathname === SLACK_RELAY_DESKTOP_PATH
+        ? wss
+        : pathname === REMOTE_RELAY_PATH
+          ? remoteWss
+          : null;
+    if (!target) {
+      socket.destroy();
+      return;
+    }
+    target.handleUpgrade(req, socket, head, (ws) => {
+      target.emit('connection', ws, req);
+    });
+  });
   wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
     const socket = {
       send: (data: string) => {
@@ -295,7 +314,6 @@ export async function startRelayServer(
     });
   });
 
-  const remoteWss = new WebSocketServer({ server: httpServer, path: REMOTE_RELAY_PATH });
   remoteWss.on('connection', (ws: WebSocket) => {
     const socket = {
       send: (data: string) => {
