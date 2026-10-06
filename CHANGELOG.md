@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Mobile run script calls `expo start` directly. `pnpm start --` was forwarding a literal `--`, and this Expo does not accept `--non-interactive`.
 - Mobile no longer exits when the Simulator app is missing. Metro stays up, and Expo Go opens on a simulator that is already booted.
+- The phone relay accepts `wss://…/remote`. The Slack socket was answering that upgrade with 400, so Show pairing code never received a code.
 
 ## [0.1.270] - 2026-10-05
 
