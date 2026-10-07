@@ -51,11 +51,19 @@ function newCode(): string {
   return code;
 }
 
+export type RemoteHostAuthorizer = (input: {
+  accountToken: string;
+  deviceId: string;
+  deviceLabel: string;
+  hostSecret: string;
+}) => { ok: true } | { ok: false; message: string };
+
 /**
  * In-memory phone ↔ Mac registry. One active phone socket per Mac.
  * A phone may hold session tokens for several Macs and attaches to one at a time.
  * Host secrets and session tokens survive that Mac reconnecting in this process.
- * A relay restart drops them — the phone pairs again.
+ * A relay restart drops the live sockets — the phone pairs again. When an
+ * authorizer is set, the account and host secret live in durable storage.
  */
 export class RemoteHub {
   private readonly hosts = new Map<string, HostSession>();
@@ -63,6 +71,13 @@ export class RemoteHub {
   private readonly bySocket = new Map<RemoteSocket, { role: 'host' | 'phone'; deviceId: string }>();
   private readonly codes = new Map<string, PairingCode>();
   private readonly phonesByToken = new Map<string, string>();
+
+  constructor(
+    private readonly opts: {
+      authorizeHost?: RemoteHostAuthorizer;
+      onAuthorized?: (socket: RemoteSocket) => void;
+    } = {},
+  ) {}
 
   handleClientMessage(socket: RemoteSocket, raw: string): void {
     const msg = parseRemoteClientMessage(raw);
@@ -99,7 +114,7 @@ export class RemoteHub {
 
   private dispatch(socket: RemoteSocket, msg: RemoteClientMessage): void {
     if (msg.type === 'host_register') {
-      this.registerHost(socket, msg.deviceId, msg.deviceLabel, msg.hostSecret);
+      this.registerHost(socket, msg.deviceId, msg.deviceLabel, msg.hostSecret, msg.accountToken ?? '');
       return;
     }
     if (msg.type === 'host_pair') {
@@ -132,7 +147,15 @@ export class RemoteHub {
     deviceId: string,
     deviceLabel: string,
     hostSecret: string,
+    accountToken: string,
   ): void {
+    if (this.opts.authorizeHost) {
+      const decision = this.opts.authorizeHost({ accountToken, deviceId, deviceLabel, hostSecret });
+      if (!decision.ok) {
+        send(socket, { type: 'error', message: decision.message });
+        return;
+      }
+    }
     const prior = this.remembered.get(deviceId);
     const existing = this.hosts.get(deviceId);
     if ((prior && prior.hostSecret !== hostSecret) || (existing && existing.hostSecret !== hostSecret)) {
@@ -165,6 +188,7 @@ export class RemoteHub {
     this.bySocket.set(socket, { role: 'host', deviceId });
     send(socket, { type: 'registered', deviceId, deviceLabel });
     if (host.phone) send(socket, { type: 'phone_joined' });
+    this.opts.onAuthorized?.(socket);
   }
 
   private issueCode(socket: RemoteSocket): void {
@@ -272,6 +296,7 @@ export class RemoteHub {
       deviceLabel: host.deviceLabel,
     });
     this.bySocket.set(socket, { role: 'phone', deviceId: host.deviceId });
+    this.opts.onAuthorized?.(socket);
     send(socket, {
       type: 'paired',
       deviceId: host.deviceId,

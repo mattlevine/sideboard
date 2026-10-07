@@ -16,7 +16,7 @@ import {
 } from './account-profile.js';
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
-import { loadSecretVault, saveSecretVault } from './secret-vault.js';
+import { loadSecretVault, saveSecretVault, type SettingsSecretVault } from './secret-vault.js';
 import { sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 import {
   clampHistoryMaxCount,
@@ -230,6 +230,10 @@ export interface IntegrationsSettings {
   slackDeviceLabel?: string;
   /** Secret that proves this Mac to the phone relay. Vaulted. */
   remoteHostSecret?: string;
+  /** Sideboard account credential for the phone relay. Vaulted. Not a git token. */
+  remoteAccountToken?: string;
+  /** Email label for the signed-in relay account. */
+  remoteAccountEmail?: string;
   /**
    * How agents and Sideboard git helpers authenticate GitHub.
    * Omitted = {@link getGithubGitAuthMode} default (`auto`).
@@ -498,6 +502,7 @@ export type PublicIntegrationsSettings = Omit<
   | 'slackClientSecret'
   | 'slackAppToken'
   | 'remoteHostSecret'
+  | 'remoteAccountToken'
   | 'githubPat'
   | 'abletimeAccessToken'
   | 'abletimeRefreshToken'
@@ -520,6 +525,8 @@ export type PublicIntegrationsSettings = Omit<
   hasSupabaseToken: boolean;
   hasPosthogToken: boolean;
   hasSentryToken: boolean;
+  /** True when this Mac has a Sideboard relay account credential. */
+  hasRemoteAccount: boolean;
 };
 
 /** Renderer / empty-state flags (no token values). */
@@ -536,8 +543,28 @@ export function emptyPublicIntegrations(): PublicIntegrationsSettings {
     hasSupabaseToken: false,
     hasPosthogToken: false,
     hasSentryToken: false,
+    hasRemoteAccount: false,
   };
 }
+
+/** Integration secrets stored in the vault, not settings.json. */
+const INTEGRATION_VAULT_KEYS = [
+  'linearApiKey',
+  'linearAccessToken',
+  'linearRefreshToken',
+  'linearClientSecret',
+  'slackClientSecret',
+  'slackAppToken',
+  'remoteHostSecret',
+  'remoteAccountToken',
+  'githubPat',
+  'abletimeAccessToken',
+  'abletimeRefreshToken',
+  'vercelToken',
+  'supabaseAccessToken',
+  'posthogPersonalApiKey',
+  'sentryAuthToken',
+] as const;
 
 /** Settings payload for the desktop UI. Secret values are omitted. */
 export type PublicAppSettings = Omit<AppSettings, 'integrations'> & {
@@ -560,29 +587,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
     if (key.trim()) environment[key] = '';
   }
   const integrations: IntegrationsSettings = { ...settings.integrations };
-  const slackClientSecret = integrations.slackClientSecret;
-  const slackAppToken = integrations.slackAppToken;
-  const githubPat = integrations.githubPat;
-  const abletimeAccessToken = integrations.abletimeAccessToken;
-  const abletimeRefreshToken = integrations.abletimeRefreshToken;
-  const vercelToken = integrations.vercelToken;
-  const supabaseAccessToken = integrations.supabaseAccessToken;
-  const posthogPersonalApiKey = integrations.posthogPersonalApiKey;
-  const sentryAuthToken = integrations.sentryAuthToken;
-  delete integrations.linearApiKey;
-  delete integrations.linearAccessToken;
-  delete integrations.linearRefreshToken;
-  delete integrations.linearClientSecret;
-  delete integrations.slackClientSecret;
-  delete integrations.slackAppToken;
-  delete integrations.remoteHostSecret;
-  delete integrations.githubPat;
-  delete integrations.abletimeAccessToken;
-  delete integrations.abletimeRefreshToken;
-  delete integrations.vercelToken;
-  delete integrations.supabaseAccessToken;
-  delete integrations.posthogPersonalApiKey;
-  delete integrations.sentryAuthToken;
+  for (const key of INTEGRATION_VAULT_KEYS) delete integrations[key];
   return {
     ...settings,
     environment,
@@ -590,15 +595,19 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
       ...integrations,
       hasLinearApiKey: hasLinearCredentials(settings.integrations),
       hasLinearOAuth: hasLinearOAuth(settings.integrations),
-      hasSlackClientSecret: Boolean(slackClientSecret?.trim()),
-      hasSlackAppToken: Boolean(slackAppToken?.trim()),
-      hasGithubPat: Boolean(githubPat?.trim()),
-      hasAbleTimeToken: Boolean(abletimeAccessToken?.trim() || abletimeRefreshToken?.trim()),
-      hasAbleTimeOAuth: Boolean(abletimeRefreshToken?.trim()),
-      hasVercelToken: Boolean(vercelToken?.trim()),
-      hasSupabaseToken: Boolean(supabaseAccessToken?.trim()),
-      hasPosthogToken: Boolean(posthogPersonalApiKey?.trim()),
-      hasSentryToken: Boolean(sentryAuthToken?.trim()),
+      hasSlackClientSecret: Boolean(settings.integrations.slackClientSecret?.trim()),
+      hasSlackAppToken: Boolean(settings.integrations.slackAppToken?.trim()),
+      hasGithubPat: Boolean(settings.integrations.githubPat?.trim()),
+      hasAbleTimeToken: Boolean(
+        settings.integrations.abletimeAccessToken?.trim() ||
+          settings.integrations.abletimeRefreshToken?.trim(),
+      ),
+      hasAbleTimeOAuth: Boolean(settings.integrations.abletimeRefreshToken?.trim()),
+      hasVercelToken: Boolean(settings.integrations.vercelToken?.trim()),
+      hasSupabaseToken: Boolean(settings.integrations.supabaseAccessToken?.trim()),
+      hasPosthogToken: Boolean(settings.integrations.posthogPersonalApiKey?.trim()),
+      hasSentryToken: Boolean(settings.integrations.sentryAuthToken?.trim()),
+      hasRemoteAccount: Boolean(settings.integrations.remoteAccountToken?.trim()),
     },
   };
 }
@@ -748,6 +757,14 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (typeof source.remoteHostSecret === 'string') {
     const secret = source.remoteHostSecret.trim();
     if (secret) out.remoteHostSecret = secret;
+  }
+  if (typeof source.remoteAccountToken === 'string') {
+    const token = source.remoteAccountToken.trim();
+    if (token) out.remoteAccountToken = token;
+  }
+  if (typeof source.remoteAccountEmail === 'string') {
+    const email = source.remoteAccountEmail.trim().toLowerCase();
+    if (email) out.remoteAccountEmail = email;
   }
   if (
     typeof source.githubGitAuthMode === 'string' &&
@@ -1153,22 +1170,9 @@ function readSettingsFile(): AppSettings {
 }
 
 function diskHoldsSecrets(disk: AppSettings): boolean {
-  return Boolean(
-    disk.integrations.linearApiKey ||
-      disk.integrations.linearAccessToken ||
-      disk.integrations.linearRefreshToken ||
-      disk.integrations.linearClientSecret ||
-      disk.integrations.slackClientSecret ||
-      disk.integrations.slackAppToken ||
-      disk.integrations.remoteHostSecret ||
-      disk.integrations.githubPat ||
-      disk.integrations.abletimeAccessToken ||
-      disk.integrations.abletimeRefreshToken ||
-      disk.integrations.vercelToken ||
-      disk.integrations.supabaseAccessToken ||
-      disk.integrations.posthogPersonalApiKey ||
-      disk.integrations.sentryAuthToken ||
-      Object.keys(disk.environment).length > 0,
+  return (
+    INTEGRATION_VAULT_KEYS.some((key) => Boolean(disk.integrations[key])) ||
+    Object.keys(disk.environment).length > 0
   );
 }
 
@@ -1176,102 +1180,25 @@ function mergeVault(disk: AppSettings): AppSettings {
   const vault = loadSecretVault();
   const environment = { ...(vault.environment ?? {}), ...disk.environment };
   const integrations = { ...disk.integrations };
-  if (vault.linearApiKey && !integrations.linearApiKey) {
-    integrations.linearApiKey = vault.linearApiKey;
-  }
-  if (vault.linearAccessToken && !integrations.linearAccessToken) {
-    integrations.linearAccessToken = vault.linearAccessToken;
-  }
-  if (vault.linearRefreshToken && !integrations.linearRefreshToken) {
-    integrations.linearRefreshToken = vault.linearRefreshToken;
-  }
-  if (vault.linearClientSecret && !integrations.linearClientSecret) {
-    integrations.linearClientSecret = vault.linearClientSecret;
-  }
-  if (vault.slackClientSecret && !integrations.slackClientSecret) {
-    integrations.slackClientSecret = vault.slackClientSecret;
-  }
-  if (vault.slackAppToken && !integrations.slackAppToken) {
-    integrations.slackAppToken = vault.slackAppToken;
-  }
-  if (vault.remoteHostSecret && !integrations.remoteHostSecret) {
-    integrations.remoteHostSecret = vault.remoteHostSecret;
-  }
-  if (vault.githubPat && !integrations.githubPat) {
-    integrations.githubPat = vault.githubPat;
-  }
-  if (vault.abletimeAccessToken && !integrations.abletimeAccessToken) {
-    integrations.abletimeAccessToken = vault.abletimeAccessToken;
-  }
-  if (vault.abletimeRefreshToken && !integrations.abletimeRefreshToken) {
-    integrations.abletimeRefreshToken = vault.abletimeRefreshToken;
-  }
-  if (vault.vercelToken && !integrations.vercelToken) {
-    integrations.vercelToken = vault.vercelToken;
-  }
-  if (vault.supabaseAccessToken && !integrations.supabaseAccessToken) {
-    integrations.supabaseAccessToken = vault.supabaseAccessToken;
-  }
-  if (vault.posthogPersonalApiKey && !integrations.posthogPersonalApiKey) {
-    integrations.posthogPersonalApiKey = vault.posthogPersonalApiKey;
-  }
-  if (vault.sentryAuthToken && !integrations.sentryAuthToken) {
-    integrations.sentryAuthToken = vault.sentryAuthToken;
+  for (const key of INTEGRATION_VAULT_KEYS) {
+    const stored = vault[key];
+    if (stored && !integrations[key]) integrations[key] = stored;
   }
   return { ...disk, environment, integrations };
 }
 
 function persistSplit(settings: AppSettings): void {
   const integrations: IntegrationsSettings = { ...settings.integrations };
-  const linearApiKey = integrations.linearApiKey;
-  const linearAccessToken = integrations.linearAccessToken;
-  const linearRefreshToken = integrations.linearRefreshToken;
-  const linearClientSecret = integrations.linearClientSecret;
-  const slackClientSecret = integrations.slackClientSecret;
-  const slackAppToken = integrations.slackAppToken;
-  const remoteHostSecret = integrations.remoteHostSecret;
-  const githubPat = integrations.githubPat;
-  const abletimeAccessToken = integrations.abletimeAccessToken;
-  const abletimeRefreshToken = integrations.abletimeRefreshToken;
-  const vercelToken = integrations.vercelToken;
-  const supabaseAccessToken = integrations.supabaseAccessToken;
-  const posthogPersonalApiKey = integrations.posthogPersonalApiKey;
-  const sentryAuthToken = integrations.sentryAuthToken;
-  delete integrations.linearApiKey;
-  delete integrations.linearAccessToken;
-  delete integrations.linearRefreshToken;
-  delete integrations.linearClientSecret;
-  delete integrations.slackClientSecret;
-  delete integrations.slackAppToken;
-  delete integrations.remoteHostSecret;
-  delete integrations.githubPat;
-  delete integrations.abletimeAccessToken;
-  delete integrations.abletimeRefreshToken;
-  delete integrations.vercelToken;
-  delete integrations.supabaseAccessToken;
-  delete integrations.posthogPersonalApiKey;
-  delete integrations.sentryAuthToken;
+  const vault: SettingsSecretVault = { environment: settings.environment };
+  for (const key of INTEGRATION_VAULT_KEYS) {
+    vault[key] = integrations[key];
+    delete integrations[key];
+  }
   writePrivateFile(
     appSettingsPath(),
     `${JSON.stringify({ ...settings, environment: {}, integrations }, null, 2)}\n`,
   );
-  saveSecretVault({
-    linearApiKey,
-    linearAccessToken,
-    linearRefreshToken,
-    linearClientSecret,
-    slackClientSecret,
-    slackAppToken,
-    remoteHostSecret,
-    githubPat,
-    abletimeAccessToken,
-    abletimeRefreshToken,
-    vercelToken,
-    supabaseAccessToken,
-    posthogPersonalApiKey,
-    sentryAuthToken,
-    environment: settings.environment,
-  });
+  saveSecretVault(vault);
 }
 
 export function loadAppSettings(): AppSettings {
@@ -1451,6 +1378,8 @@ export function updateIntegrationsSettings(
     slackDeviceId?: string | null;
     slackDeviceLabel?: string | null;
     remoteHostSecret?: string | null;
+    remoteAccountToken?: string | null;
+    remoteAccountEmail?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
     abletimeAccessToken?: string | null;
@@ -1545,6 +1474,20 @@ export function updateIntegrationsSettings(
       delete integrations.remoteHostSecret;
     } else {
       integrations.remoteHostSecret = patch.remoteHostSecret.trim();
+    }
+  }
+  if ('remoteAccountToken' in patch) {
+    if (patch.remoteAccountToken == null || patch.remoteAccountToken.trim() === '') {
+      delete integrations.remoteAccountToken;
+    } else {
+      integrations.remoteAccountToken = patch.remoteAccountToken.trim();
+    }
+  }
+  if ('remoteAccountEmail' in patch) {
+    if (patch.remoteAccountEmail == null || patch.remoteAccountEmail.trim() === '') {
+      delete integrations.remoteAccountEmail;
+    } else {
+      integrations.remoteAccountEmail = patch.remoteAccountEmail.trim().toLowerCase();
     }
   }
   if ('githubGitAuthMode' in patch) {

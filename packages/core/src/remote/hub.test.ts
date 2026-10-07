@@ -80,6 +80,28 @@ describe('RemoteHub', () => {
     expect(last(phone).type).toBe('error');
   });
 
+  it('requires a signed-in account when an authorizer is set', () => {
+    const hub = new RemoteHub({
+      authorizeHost: ({ accountToken }) =>
+        accountToken === 'token' ? { ok: true } : { ok: false, message: 'sign in required' },
+    });
+    const rejected = fakeSocket();
+    register(hub, rejected, 'mac-1', 'Work');
+    expect(last(rejected)).toEqual({ type: 'error', message: 'sign in required' });
+    const mac = fakeSocket();
+    hub.handleClientMessage(
+      mac,
+      JSON.stringify({
+        type: 'host_register',
+        deviceId: 'mac-1',
+        deviceLabel: 'Work',
+        hostSecret: 'secret',
+        accountToken: 'token',
+      }),
+    );
+    expect(last(mac).type).toBe('registered');
+  });
+
   it('lets one phone pair with several Macs and talk only to the one it selects', () => {
     const hub = new RemoteHub();
     const work = fakeSocket();

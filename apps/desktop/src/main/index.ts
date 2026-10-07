@@ -41,6 +41,8 @@ import {
   refreshRemoteDeviceLabel,
   requestRemotePairing,
   restartRemoteHost,
+  signInRemoteAccount,
+  signOutRemoteAccount,
   startRemoteHost,
 } from './remote-host-daemon';
 import { initDesktopSecretVault } from './secret-vault';
@@ -1247,6 +1249,10 @@ function registerIpc(): void {
   ipcMain.handle('getSlackListenStatus', () => readSlackListenStatus());
   ipcMain.handle('getRemoteStatus', () => readRemoteStatus());
   ipcMain.handle('requestRemotePairingCode', () => requestRemotePairing());
+  ipcMain.handle('startRemoteAccountLogin', (_e, provider: 'google' | 'github') =>
+    signInRemoteAccount(provider, (url) => shell.openExternal(url)),
+  );
+  ipcMain.handle('disconnectRemoteAccount', () => signOutRemoteAccount());
   ipcMain.handle('setSlackListen', (_e, opts: { enabled: boolean }) =>
     setSlackListen(opts),
   );

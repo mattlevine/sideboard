@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { startRelayServer } from '@sideboard-ai/core';
 
@@ -9,6 +10,10 @@ import { startRelayServer } from '@sideboard-ai/core';
  *   SIDEBOARD_SLACK_APP_TOKEN      optional xapp-… — Slack Listen is off when this is unset
  *   SIDEBOARD_SLACK_CLIENT_SECRET  optional — only for the legacy Slack OAuth callback
  *   SIDEBOARD_SLACK_CLIENT_ID      optional; defaults to the public Sideboard Slack app id
+ *   SIDEBOARD_RELAY_ACCOUNTS_PATH   SQLite file (Fly: /data/relay-accounts.sqlite on a volume)
+ *   SIDEBOARD_RELAY_PUBLIC_ORIGIN   OAuth origin (https://relay.sideboard.cloud)
+ *   SIDEBOARD_RELAY_GOOGLE_CLIENT_ID / SIDEBOARD_RELAY_GOOGLE_CLIENT_SECRET
+ *   SIDEBOARD_RELAY_GITHUB_CLIENT_ID / SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET
  *   PORT                           listen port (default 8787)
  *   HOST                           bind address (default 0.0.0.0)
  *   SIDEBOARD_SITE_ROOT            optional static marketing site (default: repo site/)
@@ -40,6 +45,16 @@ async function main(): Promise<void> {
     process.env.SIDEBOARD_SITE_CANONICAL?.trim().toLowerCase() || 'www.sideboard.cloud';
   const staticHosts = csv(process.env.SIDEBOARD_SITE_HOSTS, [canonicalSiteHost]);
   const redirectHosts = csv(process.env.SIDEBOARD_SITE_REDIRECT_HOSTS, ['sideboard.cloud']);
+  const accountsPath =
+    process.env.SIDEBOARD_RELAY_ACCOUNTS_PATH?.trim() ||
+    (process.env.NODE_ENV === 'production'
+      ? '/data/relay-accounts.sqlite'
+      : path.join(homedir(), '.sideboard', 'relay-accounts.sqlite'));
+  const client = (idKey: string, secretKey: string) => {
+    const clientId = process.env[idKey]?.trim() ?? '';
+    const clientSecret = process.env[secretKey]?.trim() ?? '';
+    return clientId && clientSecret ? { clientId, clientSecret } : undefined;
+  };
 
   const ac = new AbortController();
   const shutdown = () => ac.abort();
@@ -56,6 +71,11 @@ async function main(): Promise<void> {
     staticHosts,
     redirectHosts,
     canonicalSiteHost,
+    accountsPath,
+    relayOAuth: {
+      google: client('SIDEBOARD_RELAY_GOOGLE_CLIENT_ID', 'SIDEBOARD_RELAY_GOOGLE_CLIENT_SECRET'),
+      github: client('SIDEBOARD_RELAY_GITHUB_CLIENT_ID', 'SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET'),
+    },
     signal: ac.signal,
     onLog: (line) => console.log(line),
   });
@@ -64,6 +84,7 @@ async function main(): Promise<void> {
   console.log(`sideboard relay ready · ${handle.url}`);
   console.log('phone remote · /remote');
   console.log(`site · https://${canonicalSiteHost}/`);
+  console.log(`accounts · ${accountsPath}`);
   console.log(`health · http://${listenHost}:${handle.port}/health`);
 
   await new Promise<void>((resolve) => {

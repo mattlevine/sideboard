@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -8,9 +11,39 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { StatusBar } from 'expo-status-bar';
+import {
+  ComposerDock,
+  CreateChatSheet,
+  DEFAULT_OPTIONS,
+  IssuePicker,
+  type AgentId,
+  type ComposerOptions,
+  type CreateMode,
+  type CreateSelection,
+  type FileChip,
+  type LinkChip,
+  type PhoneSources,
+} from './chat-ui';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
+import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { createRelayLink, type RelayLink } from './relay-link';
+
+const palette = {
+  bg: '#121212',
+  elevated: '#18191a',
+  hover: '#242424',
+  border: '#2e2e32',
+  text: '#ededed',
+  secondary: '#c6c6c6',
+  muted: '#9b9b9b',
+  accent: '#007fd4',
+  accentDim: '#0e639c',
+  ok: '#4ade80',
+  warn: '#cca700',
+  err: '#f87171',
+};
 
 const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
 
@@ -19,7 +52,56 @@ type AskQuestion = { question: string; options: AskOption[] };
 type Bubble = { id: string; role: 'user' | 'agent'; text: string };
 type Desktop = SavedDesktop & { online: boolean | null; expired: boolean };
 type Transcript = { bubbles: Bubble[]; questions: AskQuestion[] | null; working: boolean };
-type Screen = 'loading' | 'desktops' | 'pair' | 'chat';
+type Screen = 'loading' | 'desktops' | 'pair' | 'agents' | 'history' | 'chat';
+type PhoneChat = {
+  id: string;
+  title: string;
+  status: string;
+  preview: string;
+  updatedAt: string;
+};
+type PhoneWorktree = { label: string; chats: PhoneChat[] };
+type PhoneProject = { name: string; path: string; worktrees: PhoneWorktree[] };
+type PhonePlace =
+  | { kind: 'orchestration' }
+  | { kind: 'project'; repoPath: string; worktree: string };
+type PhoneHistoryChat = {
+  id: string;
+  title: string;
+  preview: string;
+  updatedAt: string;
+  where: string;
+  agent: string;
+};
+type PhoneControl =
+  | { op: 'sidebar'; orchestration: PhoneChat[]; projects: PhoneProject[] }
+  | {
+      op: 'history';
+      chats: PhoneHistoryChat[];
+      total?: number;
+      next?: string;
+      query?: string;
+      after?: string;
+    }
+  | { op: 'restored'; chatId: string }
+  | {
+      op: 'opened';
+      chat: PhoneChat;
+      messages: Array<{ role: 'user' | 'agent'; text: string }>;
+      place?: PhonePlace;
+      options?: ComposerOptions;
+    }
+  | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'ask'; chatId: string; text: string; questions: AskQuestion[] }
+  | { op: 'stopped'; chatId: string }
+  | { op: 'error'; message: string; chatId?: string }
+  | ({ op: 'sources'; repoPath: string; query?: string } & PhoneSources)
+  | { op: 'models'; agent: AgentId; models: Array<{ id: string; label: string }> }
+  | { op: 'dictated'; id: string; text: string }
+  | ({ op: 'options'; chatId: string } & ComposerOptions);
+
+/** Must match PHONE_CONTROL_PREFIX in packages/core. Rides inside prompt text. */
+const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
 type ServerMessage =
   | { type: 'paired'; deviceId: string; deviceLabel: string; sessionToken: string }
@@ -56,10 +138,421 @@ function pushBubble(bubbles: Bubble[], role: Bubble['role'], text: string): Bubb
   return [...bubbles, { id: `${Date.now()}-${bubbles.length}`, role, text }];
 }
 
+function phoneCommand(payload: object) {
+  return { type: 'prompt' as const, text: PHONE_CONTROL_PREFIX + JSON.stringify(payload) };
+}
+
+function decodePhoneReply(text: string): PhoneControl | null {
+  if (!text.startsWith(PHONE_CONTROL_PREFIX)) return null;
+  try {
+    const value = JSON.parse(text.slice(PHONE_CONTROL_PREFIX.length)) as PhoneControl;
+    if (!value || typeof value !== 'object' || typeof (value as { op?: unknown }).op !== 'string') return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function historyCount(total: number, filtered: boolean): string {
+  if (filtered) return total === 1 ? '1 match' : `${total} matches`;
+  return total === 1 ? '1 archived chat' : `${total} archived chats`;
+}
+
+function agentStatus(status: string): string {
+  if (status === 'running' || status === 'queued') return 'Running';
+  if (status === 'error' || status === 'broken') return 'Error';
+  if (status === 'stopped') return 'Stopped';
+  return 'Idle';
+}
+
 function statusLabel(desktop: Desktop): string {
   if (desktop.expired) return 'Pair again';
   if (desktop.online === null) return 'Checking…';
   return desktop.online ? 'Online' : 'Offline';
+}
+
+function onMac(screen: Screen): boolean {
+  return screen === 'chat' || screen === 'agents' || screen === 'history';
+}
+
+/** Same mark as the desktop sidebar: outline cube over a blue offset plate. */
+function BrandMark({ size = 'sm' }: { size?: 'sm' | 'md' }) {
+  const sm = size === 'sm';
+  const frame = sm ? 22 : 36;
+  const box = sm ? 14 : 22;
+  const shift = sm ? 2.5 : 3.5;
+  const radius = sm ? 3 : 4;
+  const inset = (frame - box) / 2;
+  return (
+    <View style={{ width: frame, height: frame }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: inset,
+          top: inset,
+          width: box,
+          height: box,
+          borderRadius: radius,
+          backgroundColor: '#004070',
+          transform: [{ rotate: '14deg' }, { translateX: shift }, { translateY: shift }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: inset,
+          top: inset,
+          width: box,
+          height: box,
+          borderRadius: radius,
+          borderWidth: sm ? 1.75 : 2,
+          borderColor: palette.text,
+          backgroundColor: 'transparent',
+          transform: [{ rotate: '14deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
+function Brand() {
+  return (
+    <View style={styles.brand}>
+      <BrandMark size="md" />
+      <Text style={styles.brandName}>Sideboard</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: palette.bg },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 16 },
+  brandName: { color: palette.text, fontSize: 15, fontWeight: '600', letterSpacing: -0.3 },
+  chromeMark: { marginRight: 2 },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  title: { color: palette.text, fontSize: 22, fontWeight: '600', letterSpacing: -0.3, marginBottom: 8 },
+  emptyFill: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 24 },
+  empty: { alignItems: 'center' },
+  emptyMark: { width: 52, height: 52, marginBottom: 18 },
+  emptyPlate: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 127, 212, 0.25)',
+    transform: [{ rotate: '14deg' }, { translateX: 6 }, { translateY: 6 }],
+  },
+  emptyCube: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: palette.text,
+    opacity: 0.55,
+    transform: [{ rotate: '14deg' }],
+  },
+  emptyTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyBody: { color: palette.muted, fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  hint: { color: palette.muted, fontSize: 14, lineHeight: 20 },
+  chrome: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  chromeTitle: { flex: 1, color: palette.text, fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
+  link: { color: palette.accent, fontSize: 14, fontWeight: '600' },
+  form: { paddingHorizontal: 16, gap: 8 },
+  label: { color: palette.muted, fontSize: 12, marginTop: 4 },
+  input: {
+    backgroundColor: palette.bg,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 6,
+    color: palette.text,
+    fontSize: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  codeInput: { letterSpacing: 2, fontSize: 18 },
+  error: { color: palette.err, fontSize: 14, marginTop: 4 },
+  errorPad: { paddingHorizontal: 16, marginBottom: 4 },
+  primary: {
+    marginTop: 8,
+    backgroundColor: palette.accentDim,
+    borderWidth: 1,
+    borderColor: palette.accent,
+    borderRadius: 6,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  primaryDisabled: { opacity: 0.45 },
+  primaryText: { color: palette.text, fontSize: 15, fontWeight: '600' },
+  footer: { padding: 16, borderTopWidth: 1, borderTopColor: palette.border },
+  transcript: { flex: 1 },
+  listPad: { padding: 16, paddingBottom: 24 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: palette.elevated,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  rowMain: { flex: 1 },
+  rowTitle: { color: palette.text, fontSize: 16, fontWeight: '600' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  status: { color: palette.muted, fontSize: 13 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  dotOn: { backgroundColor: palette.ok },
+  dotOff: { backgroundColor: palette.muted },
+  dotWarn: { backgroundColor: palette.warn },
+  dotRun: { backgroundColor: palette.accent },
+  dotErr: { backgroundColor: palette.err },
+  preview: { color: palette.muted, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  projectName: { color: palette.text, fontSize: 16, fontWeight: '600' },
+  worktreeName: { color: palette.secondary, fontSize: 13 },
+  rowLabel: { flex: 1 },
+  projectBlock: { marginTop: 12 },
+  worktreeBlock: { marginLeft: 8, marginBottom: 4 },
+  meta: { color: palette.muted, fontSize: 13, marginBottom: 8 },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 8,
+  },
+  sectionLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  projectsHead: { marginTop: 16 },
+  historyLead: { marginBottom: 12 },
+  historyForm: { paddingTop: 12 },
+  historyButton: { alignItems: 'center', paddingVertical: 4 },
+  addAgent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 32,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: palette.hover,
+  },
+  addAgentPlus: { color: palette.text, fontSize: 16, fontWeight: '600', marginTop: -1 },
+  addAgentText: { color: palette.text, fontSize: 13, fontWeight: '600' },
+  ghost: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  ghostText: { color: palette.muted, fontSize: 13, fontWeight: '600' },
+  bubble: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  user: {
+    alignSelf: 'stretch',
+    backgroundColor: palette.elevated,
+    borderRadius: 20,
+  },
+  agent: {
+    alignSelf: 'stretch',
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+  },
+  bubbleText: { color: palette.text, fontSize: 16, lineHeight: 24, letterSpacing: -0.2 },
+  working: { color: palette.muted, fontSize: 15, marginBottom: 8 },
+  ask: { marginTop: 8, marginBottom: 12, gap: 6 },
+  askText: { color: palette.text, fontSize: 16, fontWeight: '500', lineHeight: 22, marginBottom: 4 },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  optionNum: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  optionNumText: { color: palette.muted, fontSize: 11 },
+  optionBody: { flex: 1, gap: 2 },
+  optionLabel: { color: palette.text, fontSize: 15, fontWeight: '500' },
+  optionDesc: { color: palette.muted, fontSize: 13, lineHeight: 18 },
+  composerShell: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    backgroundColor: palette.bg,
+  },
+  composerBox: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 14,
+    backgroundColor: palette.elevated,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  composerInput: {
+    color: palette.text,
+    fontSize: 16,
+    lineHeight: 22,
+    minHeight: 44,
+    maxHeight: 140,
+    padding: 0,
+  },
+  composerActions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  send: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: palette.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendDisabled: { opacity: 0.35 },
+  sendText: { color: palette.bg, fontSize: 16, fontWeight: '700', marginTop: -1 },
+});
+
+function ChatRow({
+  chat,
+  onOpen,
+  onArchive,
+}: {
+  chat: PhoneChat;
+  onOpen: () => void;
+  onArchive: () => void;
+}) {
+  return (
+    <View style={styles.row}>
+      <Pressable style={styles.rowMain} onPress={onOpen}>
+        <Text style={styles.rowTitle}>{chat.title}</Text>
+        <Text style={styles.preview} numberOfLines={1}>
+          {chat.preview || 'No messages yet'}
+        </Text>
+        <View style={styles.statusRow}>
+          <View
+            style={[
+              styles.dot,
+              chat.status === 'running' || chat.status === 'queued'
+                ? styles.dotRun
+                : chat.status === 'error' || chat.status === 'broken'
+                  ? styles.dotErr
+                  : styles.dotOff,
+            ]}
+          />
+          <Text style={styles.status}>{agentStatus(chat.status)}</Text>
+        </View>
+      </Pressable>
+      <Pressable
+        style={styles.ghost}
+        onPress={onArchive}
+        accessibilityRole="button"
+        accessibilityLabel={`Archive ${chat.title}. It stays in History.`}
+      >
+        <Text style={styles.ghostText}>Archive</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function HistoryRow({
+  chat,
+  busy,
+  pending,
+  onRestore,
+}: {
+  chat: PhoneHistoryChat;
+  busy: boolean;
+  pending: boolean;
+  onRestore: () => void;
+}) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowMain}>
+        <Text style={styles.rowTitle}>{chat.title}</Text>
+        {chat.preview ? (
+          <Text style={styles.preview} numberOfLines={1}>
+            {chat.preview}
+          </Text>
+        ) : null}
+        <Text style={styles.status}>
+          {chat.where} · {chat.agent}
+        </Text>
+      </View>
+      <Pressable
+        style={styles.ghost}
+        onPress={onRestore}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={`Restore ${chat.title}`}
+      >
+        <Text style={styles.ghostText}>{pending ? '…' : 'Restore'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function AddButton({
+  label,
+  hint,
+  busy,
+  onPress,
+}: {
+  label: string;
+  hint: string;
+  busy: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={styles.addAgent}
+      onPress={onPress}
+      disabled={busy}
+      accessibilityRole="button"
+      accessibilityLabel={hint}
+    >
+      <Text style={styles.addAgentPlus}>{busy ? '…' : '+'}</Text>
+      <Text style={styles.addAgentText}>{busy ? 'Creating' : label}</Text>
+    </Pressable>
+  );
 }
 
 export default function App() {
@@ -68,21 +561,56 @@ export default function App() {
   const [desktops, setDesktops] = useState<Desktop[]>([]);
   const [screen, setScreen] = useState<Screen>('loading');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [orchestration, setOrchestration] = useState<PhoneChat[]>([]);
+  const [projects, setProjects] = useState<PhoneProject[]>([]);
+  const [history, setHistory] = useState<PhoneHistoryChat[]>([]);
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<string | null>(null);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pendingAdd, setPendingAdd] = useState<string | null>(null);
+  const [files, setFiles] = useState<FileChip[]>([]);
+  const [links, setLinks] = useState<LinkChip[]>([]);
+  const [chatOptions, setChatOptions] = useState<Record<string, ComposerOptions>>({});
+  const [createMode, setCreateMode] = useState<CreateMode | null>(null);
+  const [createDraft, setCreateDraft] = useState('');
+  const [createFiles, setCreateFiles] = useState<FileChip[]>([]);
+  const [createLinks, setCreateLinks] = useState<LinkChip[]>([]);
+  const [createOptions, setCreateOptions] = useState<ComposerOptions>(DEFAULT_OPTIONS);
+  const [sources, setSources] = useState<PhoneSources | null>(null);
+  const [modelsByAgent, setModelsByAgent] = useState<Partial<Record<AgentId, Array<{ id: string; label: string }>>>>({});
+  const [listening, setListening] = useState(false);
+  const [issuePickerFor, setIssuePickerFor] = useState<string | null>(null);
 
   const desktopsRef = useRef(desktops);
   const activeIdRef = useRef(activeId);
+  const activeChatIdRef = useRef(activeChatId);
+  const projectsRef = useRef(projects);
   const urlRef = useRef(url);
   const pendingTokenRef = useRef<string | null>(null);
   const screenRef = useRef(screen);
+  const historyQueryRef = useRef('');
+  const historyAfterRef = useRef<string | null>(null);
+  const historyAppliedRef = useRef<string | null>(null);
+  const historyNextRef = useRef<string | null>(null);
+  const historyLoadingRef = useRef(false);
+  const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const dictateApplyRef = useRef<(text: string) => void>(() => undefined);
+  const dictateIdRef = useRef<string | null>(null);
+  const sourceQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachedRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
   const linkRef = useRef<RelayLink | null>(null);
   desktopsRef.current = desktops;
   activeIdRef.current = activeId;
+  activeChatIdRef.current = activeChatId;
+  projectsRef.current = projects;
   urlRef.current = url;
   screenRef.current = screen;
   if (!linkRef.current) {
@@ -94,7 +622,7 @@ export default function App() {
         attachedRef.current = false;
       },
       attached: () => attachedRef.current,
-      inChat: () => screenRef.current === 'chat',
+      inChat: () => onMac(screenRef.current),
       sessionToken: () => {
         const id = activeIdRef.current;
         const desktop = id ? desktopsRef.current.find((row) => row.deviceId === id) : undefined;
@@ -121,6 +649,221 @@ export default function App() {
       persist(next);
       return next;
     });
+  }
+
+  function mapChats(apply: (chat: PhoneChat) => PhoneChat) {
+    setOrchestration((prev) => prev.map(apply));
+    setProjects((prev) =>
+      prev.map((project) => ({
+        ...project,
+        worktrees: project.worktrees.map((worktree) => ({
+          ...worktree,
+          chats: worktree.chats.map(apply),
+        })),
+      })),
+    );
+  }
+
+  function patchChat(chatId: string, patch: Partial<PhoneChat>) {
+    mapChats((row) => (row.id === chatId ? { ...row, ...patch } : row));
+  }
+
+  function rememberOpened(chat: PhoneChat, place?: PhonePlace) {
+    if (place?.kind === 'project' && place.repoPath) {
+      const label = place.worktree || 'Worktree';
+      setProjects((prev) =>
+        prev.map((project) => {
+          if (project.path !== place.repoPath) return project;
+          const worktree = project.worktrees.find((row) => row.label === label);
+          if (!worktree) {
+            return { ...project, worktrees: [...project.worktrees, { label, chats: [chat] }] };
+          }
+          return {
+            ...project,
+            worktrees: project.worktrees.map((row) =>
+              row.label === label
+                ? { ...row, chats: [...row.chats.filter((item) => item.id !== chat.id), chat] }
+                : row,
+            ),
+          };
+        }),
+      );
+      setOrchestration((prev) => prev.filter((row) => row.id !== chat.id));
+      return;
+    }
+    const inProject = projectsRef.current.some((project) =>
+      project.worktrees.some((worktree) => worktree.chats.some((row) => row.id === chat.id)),
+    );
+    if (inProject) {
+      patchChat(chat.id, chat);
+      return;
+    }
+    setOrchestration((prev) => [chat, ...prev.filter((row) => row.id !== chat.id)]);
+  }
+
+  function applyControl(control: PhoneControl) {
+    if (control.op === 'sidebar') {
+      const nextOrchestration = Array.isArray(control.orchestration)
+        ? control.orchestration.filter((row) => row?.id && row.title)
+        : [];
+      const nextProjects = Array.isArray(control.projects)
+        ? control.projects.filter((project) => project?.name && Array.isArray(project.worktrees))
+        : [];
+      setOrchestration(nextOrchestration);
+      setProjects(nextProjects);
+      const ids = new Set(nextOrchestration.map((row) => row.id));
+      for (const project of nextProjects) {
+        for (const worktree of project.worktrees ?? []) {
+          for (const chat of worktree.chats ?? []) {
+            if (chat?.id) ids.add(chat.id);
+          }
+        }
+      }
+      const id = activeChatIdRef.current;
+      if (id && screenRef.current === 'chat' && !ids.has(id)) {
+        setActiveChatId(null);
+        screenRef.current = 'agents';
+        setScreen('agents');
+      }
+      return;
+    }
+    if (control.op === 'history') {
+      const query = control.query ?? '';
+      const after = control.after ?? '';
+      if (query !== historyQueryRef.current) return;
+      if (after !== (historyAfterRef.current ?? '')) return;
+      if (after !== '' && after === historyAppliedRef.current) return;
+      historyAppliedRef.current = after;
+      historyLoadingRef.current = false;
+      setHistoryLoading(false);
+      setPendingRestore(null);
+      const chats = Array.isArray(control.chats)
+        ? control.chats.filter((chat) => chat?.id && chat.title)
+        : [];
+      if (after) {
+        setHistory((prev) => {
+          const seen = new Set(prev.map((chat) => chat.id));
+          return [...prev, ...chats.filter((chat) => !seen.has(chat.id))];
+        });
+      } else {
+        setHistory(chats);
+      }
+      const next = control.next ?? null;
+      historyNextRef.current = next;
+      setHistoryTotal(typeof control.total === 'number' ? control.total : chats.length);
+      return;
+    }
+    if (control.op === 'restored' && control.chatId) {
+      const chatId = control.chatId;
+      setPendingRestore(null);
+      setHistory((prev) => prev.filter((chat) => chat.id !== chatId));
+      setHistoryTotal((total) => Math.max(0, total - 1));
+      return;
+    }
+    if (control.op === 'opened' && control.chat?.id) {
+      const chat = control.chat;
+      setPendingAdd(null);
+      setCreateMode(null);
+      if (control.options) {
+        setChatOptions((prev) => ({ ...prev, [chat.id]: control.options! }));
+      }
+      rememberOpened(chat, control.place);
+      setActiveChatId(chat.id);
+      screenRef.current = 'chat';
+      setScreen('chat');
+      setTranscripts((prev) => {
+        if (prev[chat.id]?.working) return prev;
+        const bubbles = (Array.isArray(control.messages) ? control.messages : []).map((message, index) => ({
+          id: `${chat.id}-${index}`,
+          role: message.role,
+          text: message.text,
+        }));
+        return { ...prev, [chat.id]: { bubbles, questions: null, working: false } };
+      });
+      return;
+    }
+    if ((control.op === 'assistant' || control.op === 'ask') && control.chatId) {
+      const chatId = control.chatId;
+      setTranscripts((prev) => {
+        const current = prev[chatId] ?? EMPTY;
+        return {
+          ...prev,
+          [chatId]: {
+            bubbles: pushBubble(current.bubbles, 'agent', control.text),
+            questions: control.op === 'ask' ? control.questions : null,
+            working: false,
+          },
+        };
+      });
+      patchChat(chatId, {
+        status: 'idle',
+        preview: control.text.replace(/\s+/g, ' ').trim().slice(0, 90),
+        updatedAt: new Date().toISOString(),
+      });
+      return;
+    }
+    if (control.op === 'stopped' && control.chatId) {
+      const chatId = control.chatId;
+      setTranscripts((prev) => ({
+        ...prev,
+        [chatId]: { ...(prev[chatId] ?? EMPTY), working: false, questions: null },
+      }));
+      patchChat(chatId, { status: 'stopped' });
+      return;
+    }
+    if (control.op === 'sources' && control.repoPath) {
+      setSources({
+        prs: Array.isArray(control.prs) ? control.prs : [],
+        branches: Array.isArray(control.branches) ? control.branches : [],
+        issues: Array.isArray(control.issues) ? control.issues : [],
+        ...(control.warnings?.length ? { warnings: control.warnings } : {}),
+      });
+      return;
+    }
+    if (control.op === 'models' && control.agent) {
+      const agent = control.agent;
+      setModelsByAgent((prev) => ({ ...prev, [agent]: Array.isArray(control.models) ? control.models : [] }));
+      return;
+    }
+    if (control.op === 'dictated') {
+      if (control.id && control.id === dictateIdRef.current) {
+        const spoken = control.text.trim();
+        if (spoken) dictateApplyRef.current(spoken);
+        else setError('Didn’t catch that. Try again.');
+      }
+      dictateIdRef.current = null;
+      setListening(false);
+      return;
+    }
+    if (control.op === 'options' && control.chatId) {
+      const chatId = control.chatId;
+      setChatOptions((prev) => ({
+        ...prev,
+        [chatId]: {
+          agent: control.agent,
+          model: control.model ?? null,
+          effort: control.effort,
+          fast: Boolean(control.fast),
+          planMode: Boolean(control.planMode),
+          autonomy: control.autonomy === 'full' ? 'full' : 'default',
+        },
+      }));
+      return;
+    }
+    if (control.op === 'error') {
+      historyLoadingRef.current = false;
+      setHistoryLoading(false);
+      setPendingAdd(null);
+      setPendingRestore(null);
+      setError(control.message || 'Sideboard failed.');
+      if (control.chatId) {
+        const chatId = control.chatId;
+        setTranscripts((prev) => ({
+          ...prev,
+          [chatId]: { ...(prev[chatId] ?? EMPTY), working: false },
+        }));
+      }
+    }
   }
 
   onMessageRef.current = (raw: string) => {
@@ -160,16 +903,25 @@ export default function App() {
       const pending = pendingSendRef.current;
       pendingSendRef.current = null;
       setError(null);
-      setScreen('chat');
-      setTranscripts((prev) => ({
-        ...prev,
-        [desktop.deviceId]: { ...(prev[desktop.deviceId] ?? EMPTY), working: Boolean(pending) },
-      }));
       if (pending) link.send(pending);
+      if (screenRef.current === 'chat' && activeChatIdRef.current) {
+        link.send(phoneCommand({ op: 'open', chatId: activeChatIdRef.current }));
+      } else {
+        screenRef.current = 'agents';
+        setScreen('agents');
+        link.send(phoneCommand({ op: 'list' }));
+      }
       return;
     }
     if (msg.type === 'assistant' || msg.type === 'ask_user') {
-      const id = activeIdRef.current;
+      if (msg.type === 'assistant') {
+        const control = decodePhoneReply(msg.text);
+        if (control) {
+          applyControl(control);
+          return;
+        }
+      }
+      const id = activeChatIdRef.current;
       if (!id) return;
       setTranscripts((prev) => {
         const current = prev[id] ?? EMPTY;
@@ -193,11 +945,11 @@ export default function App() {
       const token = pendingTokenRef.current;
       if (token) patchDesktop(token, { online: false });
       setError(
-        screenRef.current === 'chat'
+        onMac(screenRef.current)
           ? 'That Mac is offline. Reconnecting…'
           : 'That Mac is offline. Open Sideboard on it, then choose it again.',
       );
-      const id = activeIdRef.current;
+      const id = activeChatIdRef.current;
       if (id) {
         setTranscripts((prev) => ({
           ...prev,
@@ -257,29 +1009,240 @@ export default function App() {
     } else if (next.length === 0) setScreen((screenRef.current = 'pair'));
   }
 
+  function showAgents() {
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    setError(null);
+    screenRef.current = 'agents';
+    setScreen('agents');
+    if (attachedRef.current) link.send(phoneCommand({ op: 'list' }));
+  }
+
+  function sendHistory(query: string, after?: string) {
+    historyQueryRef.current = query;
+    historyAfterRef.current = after ?? null;
+    if (!after) historyAppliedRef.current = null;
+    historyLoadingRef.current = true;
+    setHistoryLoading(true);
+    if (attachedRef.current) {
+      link.send(
+        phoneCommand({
+          op: 'history',
+          ...(query ? { query } : {}),
+          ...(after ? { after } : {}),
+        }),
+      );
+    }
+  }
+
+  function loadMoreHistory() {
+    const after = historyNextRef.current;
+    if (!after || historyLoadingRef.current) return;
+    sendHistory(historyQueryRef.current, after);
+  }
+
+  function openChat(chatId: string) {
+    setError(null);
+    setActiveChatId(chatId);
+    screenRef.current = 'chat';
+    setScreen('chat');
+    link.send(phoneCommand({ op: 'open', chatId }));
+  }
+
+  function requestSources(repoPath: string, query?: string) {
+    if (sourceQueryTimer.current) clearTimeout(sourceQueryTimer.current);
+    sourceQueryTimer.current = setTimeout(() => {
+      link.send(phoneCommand({ op: 'sources', repoPath, ...(query ? { query } : {}) }));
+    }, query ? 250 : 0);
+  }
+
+  function requestModels(agent: AgentId) {
+    if (modelsByAgent[agent]) return;
+    link.send(phoneCommand({ op: 'models', agent }));
+  }
+
+  function stampFiles(picked: PickedFile[]): FileChip[] {
+    return picked.map((file, index) => ({ ...file, id: `${Date.now()}-${index}-${file.name}` }));
+  }
+
+  async function addPicked(kind: 'camera' | 'photos' | 'files', target: 'chat' | 'create') {
+    try {
+      setError(null);
+      const picked = kind === 'camera' ? await takePhoto() : kind === 'photos' ? await pickPhotos() : await pickDocuments();
+      if (picked.length === 0) return;
+      const next = stampFiles(picked);
+      if (target === 'create') setCreateFiles((prev) => [...prev, ...next]);
+      else setFiles((prev) => [...prev, ...next]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function toggleMic(apply: (text: string) => void) {
+    try {
+      setError(null);
+      const current = recordingRef.current;
+      if (current) {
+        recordingRef.current = null;
+        setListening(false);
+        const audioBase64 = await stopMic(current);
+        const id = `${Date.now()}`;
+        dictateIdRef.current = id;
+        dictateApplyRef.current = apply;
+        link.send(phoneCommand({ op: 'dictate', id, audioBase64 }));
+        return;
+      }
+      dictateApplyRef.current = apply;
+      recordingRef.current = await startMic();
+      setListening(true);
+    } catch (err) {
+      recordingRef.current = null;
+      setListening(false);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function openCreate(mode: CreateMode) {
+    setError(null);
+    setCreateDraft('');
+    setCreateFiles([]);
+    setCreateLinks([]);
+    setCreateOptions(DEFAULT_OPTIONS);
+    setSources(null);
+    setCreateMode(mode);
+    if (mode.kind === 'project') requestSources(mode.repoPath);
+    requestModels(DEFAULT_OPTIONS.agent);
+  }
+
+  function submitCreate(body: {
+    text: string;
+    files: FileChip[];
+    links: LinkChip[];
+    options: ComposerOptions;
+    selection: CreateSelection;
+    cowboy: boolean;
+  }) {
+    const mode = createMode;
+    if (!mode) return;
+    if (mode.kind === 'orchestration' && !body.text && body.files.length === 0 && body.links.length === 0) {
+      setError('Describe the orchestration goal.');
+      return;
+    }
+    setError(null);
+    const payloadFiles = body.files.map(({ name, dataBase64 }) => ({ name, dataBase64 }));
+    const shared = {
+      ...body.options,
+      ...(body.text ? { prompt: body.text } : {}),
+      ...(payloadFiles.length ? { files: payloadFiles } : {}),
+      ...(body.links.length ? { links: body.links } : {}),
+    };
+    if (mode.kind === 'orchestration') {
+      setPendingAdd('orchestration');
+      link.send(phoneCommand({ op: 'create', where: 'orchestration', goal: body.text, ...shared }));
+    } else if (mode.kind === 'worktree') {
+      setPendingAdd(`worktree:${mode.chatId}`);
+      link.send(phoneCommand({ op: 'create', where: 'worktree', chatId: mode.chatId, ...shared }));
+    } else {
+      const selection = body.cowboy ? { kind: 'default' as const } : body.selection;
+      setPendingAdd(`project:${mode.repoPath}`);
+      link.send(
+        phoneCommand({
+          op: 'create',
+          where: 'project',
+          repoPath: mode.repoPath,
+          ...(body.cowboy ? { cowboy: true } : {}),
+          ...(selection.kind === 'default'
+            ? { sourceType: 'branch', sourceRef: 'default' }
+            : {
+                sourceType: selection.kind === 'ticket' ? 'ticket' : selection.kind,
+                sourceRef: selection.ref,
+                title: selection.title,
+              }),
+          ...shared,
+        }),
+      );
+    }
+    setCreateMode(null);
+  }
+
+  function archiveChat(chatId: string) {
+    link.send(phoneCommand({ op: 'archive', chatId }));
+  }
+
+  function showHistory() {
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    setError(null);
+    setHistoryQuery('');
+    setHistory([]);
+    historyNextRef.current = null;
+    setHistoryTotal(0);
+    screenRef.current = 'history';
+    setScreen('history');
+    sendHistory('');
+  }
+
+  function onHistoryQuery(value: string) {
+    setHistoryQuery(value);
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    historyTimerRef.current = setTimeout(() => {
+      setHistory([]);
+      historyNextRef.current = null;
+      setHistoryTotal(0);
+      sendHistory(value.trim());
+    }, 250);
+  }
+
+  function restoreChat(chatId: string) {
+    setError(null);
+    setPendingRestore(chatId);
+    link.send(phoneCommand({ op: 'restore', chatId }));
+  }
+
   function sendText(text: string) {
     const body = text.trim();
-    const id = activeIdRef.current;
-    if (!body || !id) return;
+    const id = activeChatIdRef.current;
+    const attached = files.length > 0 || links.length > 0;
+    if ((!body && !attached) || !id) return;
+    const stopping = body.toLowerCase() === 'stop';
+    const bubble = [body, ...files.map((file) => file.name), ...links.map((link) => link.ref)]
+      .filter(Boolean)
+      .join('\n');
     setTranscripts((prev) => {
       const current = prev[id] ?? EMPTY;
       return {
         ...prev,
-        [id]: {
-          bubbles: pushBubble(current.bubbles, 'user', body),
-          questions: null,
-          working: true,
-        },
+        [id]: stopping
+          ? { ...current, questions: null, working: false }
+          : {
+              bubbles: pushBubble(current.bubbles, 'user', bubble),
+              questions: null,
+              working: true,
+            },
       };
     });
-    setDraft('');
-    const payload = body.toLowerCase() === 'stop' ? { type: 'stop' } : { type: 'prompt', text: body };
+    if (!stopping) {
+      setDraft('');
+      setFiles([]);
+      setLinks([]);
+      patchChat(id, { status: 'running', updatedAt: new Date().toISOString() });
+    }
+    const options = chatOptions[id];
+    const payload = stopping
+      ? phoneCommand({ op: 'stop', chatId: id })
+      : phoneCommand({
+          op: 'prompt',
+          chatId: id,
+          text: body,
+          ...(files.length ? { files: files.map(({ name, dataBase64 }) => ({ name, dataBase64 })) } : {}),
+          ...(links.length ? { links } : {}),
+          ...(options ?? {}),
+        });
     if (attachedRef.current) {
       link.send(payload);
       return;
     }
     pendingSendRef.current = payload;
-    const desktop = desktopsRef.current.find((row) => row.deviceId === id);
+    const desktopId = activeIdRef.current;
+    const desktop = desktopId ? desktopsRef.current.find((row) => row.deviceId === desktopId) : undefined;
     const token = desktop?.sessionToken ?? pendingTokenRef.current;
     if (token) link.send({ type: 'resume', sessionToken: token });
     link.scheduleResume();
@@ -311,13 +1274,31 @@ export default function App() {
   }, [desktops]);
 
   const active = desktops.find((row) => row.deviceId === activeId) ?? null;
-  const transcript = (activeId && transcripts[activeId]) || EMPTY;
+  const activeChat =
+    orchestration.find((row) => row.id === activeChatId) ??
+    projects.flatMap((project) => project.worktrees.flatMap((worktree) => worktree.chats)).find((row) => row.id === activeChatId) ??
+    null;
+  const activeIsProject = projects.some((project) =>
+    project.worktrees.some((worktree) => worktree.chats.some((chat) => chat.id === activeChatId)),
+  );
+  const activeRepoPath =
+    projects.find((project) =>
+      project.worktrees.some((worktree) => worktree.chats.some((chat) => chat.id === activeChatId)),
+    )?.path ?? null;
+  const activeOptions = (activeChatId && chatOptions[activeChatId]) || DEFAULT_OPTIONS;
+  function patchActiveOptions(next: ComposerOptions) {
+    const id = activeChatIdRef.current;
+    if (!id || !link) return;
+    setChatOptions((prev) => ({ ...prev, [id]: next }));
+    link.send(phoneCommand({ op: 'options', chatId: id, ...next }));
+  }
+  const transcript = (activeChatId && transcripts[activeChatId]) || EMPTY;
 
   if (screen === 'loading') {
     return (
       <SafeAreaView style={styles.screen}>
         <StatusBar style="light" />
-        <Text style={styles.title}>Sideboard</Text>
+        <Brand />
       </SafeAreaView>
     );
   }
@@ -326,174 +1307,403 @@ export default function App() {
     return (
       <SafeAreaView style={styles.screen}>
         <StatusBar style="light" />
-        <Text style={styles.title}>Choose a desktop</Text>
-        <Text style={styles.hint}>
-          Pair each Mac from Settings → Remote. The name you save there is the name in this list.
-        </Text>
-        <ScrollView style={styles.transcript}>
+        <View style={styles.header}>
+          <Brand />
+          <Text style={styles.title}>Choose a desktop</Text>
+          <Text style={styles.hint}>
+            Pair each Mac from Settings → Remote. The name you save there is the name in this list.
+          </Text>
+        </View>
+        <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad}>
           {ordered.map((desktop) => (
             <View key={desktop.sessionToken} style={styles.row}>
               <Pressable style={styles.rowMain} onPress={() => choose(desktop)}>
                 <Text style={styles.rowTitle}>{desktop.deviceLabel}</Text>
-                <Text style={styles.status}>{statusLabel(desktop)}</Text>
+                <View style={styles.statusRow}>
+                  <View
+                    style={[
+                      styles.dot,
+                      desktop.online ? styles.dotOn : desktop.expired ? styles.dotWarn : styles.dotOff,
+                    ]}
+                  />
+                  <Text style={styles.status}>{statusLabel(desktop)}</Text>
+                </View>
               </Pressable>
-              <Pressable onPress={() => forget(desktop.deviceId)}>
-                <Text style={styles.forget}>Forget</Text>
+              <Pressable style={styles.ghost} onPress={() => forget(desktop.deviceId)}>
+                <Text style={styles.ghostText}>Forget</Text>
               </Pressable>
             </View>
           ))}
         </ScrollView>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable style={styles.button} onPress={() => { setError(null); setScreen('pair'); }}>
-          <Text style={styles.buttonText}>Pair another Mac</Text>
-        </Pressable>
+        <View style={styles.footer}>
+          <Pressable style={styles.primary} onPress={() => { setError(null); setScreen('pair'); }}>
+            <Text style={styles.primaryText}>Pair another Mac</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
 
   if (screen === 'pair') {
     return (
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <SafeAreaView style={styles.screen}>
+          <StatusBar style="light" />
+          <View style={styles.header}>
+            {desktops.length > 0 ? (
+              <Pressable onPress={showDesktops}>
+                <Text style={styles.link}>Desktops</Text>
+              </Pressable>
+            ) : (
+              <Brand />
+            )}
+            <Text style={styles.title}>Pair a Mac</Text>
+            <Text style={styles.hint}>
+              On the Mac, open Sideboard → Settings → Remote, name it, then show a pairing code.
+            </Text>
+          </View>
+          <View style={styles.form}>
+            <Text style={styles.label}>Pairing code</Text>
+            <TextInput
+              style={[styles.input, styles.codeInput]}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder="CODE"
+              placeholderTextColor={palette.muted}
+              value={code}
+              onChangeText={setCode}
+            />
+            <Text style={styles.label}>Relay</Text>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={url}
+              onChangeText={setUrl}
+            />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Pressable
+              style={[styles.primary, !code.trim() && styles.primaryDisabled]}
+              onPress={() => {
+                const next = code.trim().toUpperCase();
+                if (!next) return;
+                setError(null);
+                pendingTokenRef.current = null;
+                link.send({ type: 'pair', code: next });
+              }}
+            >
+              <Text style={styles.primaryText}>Pair</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  if (screen === 'agents') {
+    return (
       <SafeAreaView style={styles.screen}>
         <StatusBar style="light" />
-        {desktops.length > 0 ? (
-          <Pressable onPress={showDesktops}>
+        <View style={styles.chrome}>
+          <BrandMark />
+          <Text style={styles.chromeTitle} numberOfLines={1}>
+            {active?.deviceLabel || 'Chats'}
+          </Text>
+          <Pressable onPress={showDesktops} hitSlop={8}>
             <Text style={styles.link}>Desktops</Text>
           </Pressable>
+        </View>
+        <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad}>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionLabel}>Orchestration</Text>
+            <AddButton
+              label="New agent"
+              hint="Add orchestration agent"
+              busy={pendingAdd === 'orchestration'}
+              onPress={() => openCreate({ kind: 'orchestration' })}
+            />
+          </View>
+          {orchestration.length === 0 ? <Text style={styles.meta}>No agents yet</Text> : null}
+          {orchestration.map((chat) => (
+            <ChatRow key={chat.id} chat={chat} onOpen={() => openChat(chat.id)} onArchive={() => archiveChat(chat.id)} />
+          ))}
+          <View style={[styles.sectionRow, styles.projectsHead]}>
+            <Text style={styles.sectionLabel}>Projects</Text>
+          </View>
+          {projects.length === 0 ? <Text style={styles.meta}>No workspaces yet</Text> : null}
+          {projects.map((project) => (
+            <View key={project.path} style={styles.projectBlock}>
+              <View style={styles.sectionRow}>
+                <Text style={[styles.projectName, styles.rowLabel]}>{project.name}</Text>
+                <AddButton
+                  label="New worktree"
+                  hint={`New worktree in ${project.name}`}
+                  busy={pendingAdd === `project:${project.path}`}
+                  onPress={() => openCreate({ kind: 'project', repoPath: project.path, name: project.name })}
+                />
+              </View>
+              {project.worktrees.length === 0 ? <Text style={styles.meta}>No worktrees</Text> : null}
+              {project.worktrees.map((worktree) => {
+                const anchor = worktree.chats[0];
+                return (
+                  <View key={`${project.path}:${worktree.label}`} style={styles.worktreeBlock}>
+                    <View style={styles.sectionRow}>
+                      <Text style={[styles.worktreeName, styles.rowLabel]}>{worktree.label}</Text>
+                      {anchor ? (
+                        <AddButton
+                          label="Add agent"
+                          hint={`Add agent to ${worktree.label}`}
+                          busy={pendingAdd === `worktree:${anchor.id}`}
+                          onPress={() => openCreate({ kind: 'worktree', chatId: anchor.id, label: worktree.label })}
+                        />
+                      ) : null}
+                    </View>
+                    {worktree.chats.map((chat) => (
+                      <ChatRow
+                        key={chat.id}
+                        chat={chat}
+                        onOpen={() => openChat(chat.id)}
+                        onArchive={() => archiveChat(chat.id)}
+                      />
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          ))}
+        </ScrollView>
+        {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
+        <View style={styles.footer}>
+          <Pressable style={styles.historyButton} onPress={showHistory} accessibilityRole="button">
+            <Text style={styles.link}>Archived chats</Text>
+          </Pressable>
+        </View>
+        {createMode ? (
+          <CreateChatSheet
+            mode={createMode}
+            sources={sources}
+            draft={createDraft}
+            onChangeDraft={setCreateDraft}
+            files={createFiles}
+            links={createLinks}
+            onRemoveFile={(id) => setCreateFiles((prev) => prev.filter((file) => file.id !== id))}
+            onRemoveLink={(ref) => setCreateLinks((prev) => prev.filter((link) => link.ref !== ref))}
+            options={createOptions}
+            onChangeOptions={setCreateOptions}
+            models={modelsByAgent[createOptions.agent] ?? []}
+            onNeedModels={requestModels}
+            listening={listening}
+            onClose={() => setCreateMode(null)}
+            onSubmit={submitCreate}
+            onRequestSources={(query) => {
+              if (createMode.kind === 'project') requestSources(createMode.repoPath, query);
+            }}
+            onMic={() =>
+              void toggleMic((spoken) => {
+                setCreateDraft((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+              })
+            }
+            onCamera={() => void addPicked('camera', 'create')}
+            onPhotos={() => void addPicked('photos', 'create')}
+            onFiles={() => void addPicked('files', 'create')}
+          />
         ) : null}
-        <Text style={styles.title}>Pair a Mac</Text>
-        <Text style={styles.hint}>
-          On the Mac, open Sideboard → Settings → Remote, name it, then show a pairing code.
-        </Text>
-        <TextInput
-          style={styles.input}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          placeholder="CODE"
-          placeholderTextColor="#8b939c"
-          value={code}
-          onChangeText={setCode}
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'history') {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <StatusBar style="light" />
+        <View style={styles.chrome}>
+          <Pressable onPress={showAgents} hitSlop={8}>
+            <Text style={styles.link}>Chats</Text>
+          </Pressable>
+          <Text style={styles.chromeTitle} numberOfLines={1}>
+            History
+          </Text>
+        </View>
+        <View style={[styles.form, styles.historyForm]}>
+          <Text style={[styles.hint, styles.historyLead]}>
+            Archived chats from this Mac. Restore puts one back on the sidebar. The git branch stays.
+          </Text>
+          <TextInput
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Filter by title, project, or agent"
+            placeholderTextColor={palette.muted}
+            value={historyQuery}
+            onChangeText={onHistoryQuery}
+          />
+          <Text style={styles.meta}>
+            {historyLoading && history.length === 0
+              ? 'Loading…'
+              : historyCount(historyTotal, historyQuery.trim().length > 0)}
+          </Text>
+        </View>
+        <FlatList
+          style={styles.transcript}
+          data={history}
+          keyExtractor={(chat) => chat.id}
+          contentContainerStyle={styles.listPad}
+          keyboardShouldPersistTaps="handled"
+          onEndReached={loadMoreHistory}
+          onEndReachedThreshold={0.4}
+          ListEmptyComponent={
+            historyLoading ? null : (
+              <Text style={styles.meta}>
+                {historyQuery.trim()
+                  ? 'No archived chats match that search.'
+                  : 'No archived chats yet.'}
+              </Text>
+            )
+          }
+          ListFooterComponent={
+            historyLoading && history.length > 0 ? <Text style={styles.meta}>Loading more…</Text> : null
+          }
+          renderItem={({ item }) => (
+            <HistoryRow
+              chat={item}
+              busy={pendingRestore !== null}
+              pending={pendingRestore === item.id}
+              onRestore={() => restoreChat(item.id)}
+            />
+          )}
         />
-        <TextInput
-          style={styles.input}
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={url}
-          onChangeText={setUrl}
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable
-          style={styles.button}
-          onPress={() => {
-            const next = code.trim().toUpperCase();
-            if (!next) return;
-            setError(null);
-            pendingTokenRef.current = null;
-            link.send({ type: 'pair', code: next });
-          }}
-        >
-          <Text style={styles.buttonText}>Pair</Text>
-        </Pressable>
+        {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <Pressable onPress={showDesktops}>
-          <Text style={styles.link}>Desktops</Text>
-        </Pressable>
-        <Text style={styles.title}>{active?.deviceLabel || 'Sideboard'}</Text>
-      </View>
-      <ScrollView style={styles.transcript} contentContainerStyle={{ paddingBottom: 12 }}>
-        {transcript.bubbles.map((bubble) => (
-          <View
-            key={bubble.id}
-            style={[styles.bubble, bubble.role === 'user' ? styles.user : styles.agent]}
-          >
-            <Text style={styles.bubbleText}>{bubble.text}</Text>
-          </View>
-        ))}
-        {transcript.working ? <Text style={styles.hint}>Working…</Text> : null}
-        {transcript.questions?.map((question) => (
-          <View key={question.question} style={styles.ask}>
-            <Text style={styles.bubbleText}>{question.question}</Text>
-            {question.options.map((option) => (
-              <Pressable key={option.label} style={styles.option} onPress={() => sendText(option.label)}>
-                <Text style={styles.buttonText}>{option.label}</Text>
-                {option.description ? <Text style={styles.hint}>{option.description}</Text> : null}
-              </Pressable>
-            ))}
-          </View>
-        ))}
-      </ScrollView>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.composer}>
-        <TextInput
-          style={[styles.input, styles.composerInput]}
-          placeholder="Message the orchestrator"
-          placeholderTextColor="#8b939c"
-          value={draft}
-          onChangeText={setDraft}
-          onSubmitEditing={() => sendText(draft)}
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <SafeAreaView style={styles.screen}>
+        <StatusBar style="light" />
+        <View style={styles.chrome}>
+          <Pressable onPress={showAgents} hitSlop={8}>
+            <Text style={styles.link}>Chats</Text>
+          </Pressable>
+          <Text style={styles.chromeTitle} numberOfLines={1}>
+            {activeChat?.title || 'Agent'}
+          </Text>
+          {transcript.working ? (
+            <Pressable onPress={() => sendText('stop')} hitSlop={8}>
+              <Text style={styles.link}>Stop</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.chromeMark} />
+          )}
+        </View>
+        <ScrollView
+          style={styles.transcript}
+          contentContainerStyle={
+            transcript.bubbles.length === 0 && !transcript.working && !transcript.questions
+              ? styles.emptyFill
+              : styles.listPad
+          }
+        >
+          {transcript.bubbles.length === 0 && !transcript.working && !transcript.questions ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyMark}>
+                <View style={styles.emptyPlate} />
+                <View style={styles.emptyCube} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {activeIsProject ? 'What should we work on?' : 'What should we orchestrate?'}
+              </Text>
+              <Text style={styles.emptyBody}>
+                {activeIsProject
+                  ? 'This agent stays on this worktree on the Mac.'
+                  : 'Steer worktree agents across registered repos. They stay on this Mac.'}
+              </Text>
+            </View>
+          ) : null}
+          {transcript.bubbles.map((bubble) => (
+            <View
+              key={bubble.id}
+              style={[styles.bubble, bubble.role === 'user' ? styles.user : styles.agent]}
+            >
+              <Text style={styles.bubbleText}>{bubble.text}</Text>
+            </View>
+          ))}
+          {transcript.working ? <Text style={styles.working}>Working…</Text> : null}
+          {transcript.questions?.map((question) => (
+            <View key={question.question} style={styles.ask}>
+              <Text style={styles.askText}>{question.question}</Text>
+              {question.options.map((option, index) => (
+                <Pressable key={option.label} style={styles.option} onPress={() => sendText(option.label)}>
+                  <View style={styles.optionNum}>
+                    <Text style={styles.optionNumText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.optionBody}>
+                    <Text style={styles.optionLabel}>{option.label}</Text>
+                    {option.description ? <Text style={styles.optionDesc}>{option.description}</Text> : null}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ))}
+        </ScrollView>
+        {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
+        <ComposerDock
+          draft={draft}
+          placeholder={`Message ${activeChat?.title || 'this agent'}`}
+          onChangeDraft={setDraft}
+          onSend={() => sendText(draft)}
+          files={files}
+          links={links}
+          onRemoveFile={(id) => setFiles((prev) => prev.filter((file) => file.id !== id))}
+          onRemoveLink={(ref) => setLinks((prev) => prev.filter((link) => link.ref !== ref))}
+          options={activeOptions}
+          onChangeOptions={patchActiveOptions}
+          models={modelsByAgent[activeOptions.agent] ?? []}
+          onNeedModels={requestModels}
+          allowBrightsy={activeIsProject}
+          listening={listening}
+          onMic={() =>
+            void toggleMic((spoken) => {
+              setDraft((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+            })
+          }
+          onCamera={() => void addPicked('camera', 'chat')}
+          onPhotos={() => void addPicked('photos', 'chat')}
+          onFiles={() => void addPicked('files', 'chat')}
+          onLinkIssue={
+            activeRepoPath
+              ? () => {
+                  setSources(null);
+                  setIssuePickerFor(activeRepoPath);
+                  requestSources(activeRepoPath);
+                }
+              : undefined
+          }
         />
-        <Pressable style={styles.button} onPress={() => sendText(draft)}>
-          <Text style={styles.buttonText}>Send</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+        {issuePickerFor ? (
+          <IssuePicker
+            sources={sources}
+            onClose={() => setIssuePickerFor(null)}
+            onSearch={(query) => requestSources(issuePickerFor, query)}
+            onPick={(issue) => {
+              setLinks((prev) =>
+                prev.some((link) => link.ref === issue.ref)
+                  ? prev
+                  : [...prev, { ref: issue.ref, title: issue.title, url: issue.url }],
+              );
+              setIssuePickerFor(null);
+            }}
+          />
+        ) : null}
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#121417', padding: 16 },
-  header: { marginBottom: 8 },
-  title: { color: '#f4f1ea', fontSize: 22, fontWeight: '600', marginBottom: 8 },
-  hint: { color: '#b3bcc4', marginBottom: 8 },
-  error: { color: '#ffb4a8', marginBottom: 8 },
-  link: { color: '#e8ff47', fontWeight: '600', marginBottom: 8 },
-  forget: { color: '#e8ff47', fontWeight: '600' },
-  status: { color: '#b3bcc4', marginTop: 2 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#3a4149',
-    borderRadius: 8,
-    color: '#f4f1ea',
-    padding: 12,
-    marginBottom: 10,
-  },
-  button: {
-    backgroundColor: '#e8ff47',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  buttonText: { color: '#121417', fontWeight: '600' },
-  transcript: { flex: 1 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#3a4149',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-  },
-  rowMain: { flex: 1 },
-  rowTitle: { color: '#f4f1ea', fontSize: 18, fontWeight: '600' },
-  bubble: { borderRadius: 10, padding: 12, marginBottom: 8, maxWidth: '90%' },
-  user: { alignSelf: 'flex-end', backgroundColor: '#2a3138' },
-  agent: { alignSelf: 'flex-start', backgroundColor: '#1c2228' },
-  bubbleText: { color: '#f4f1ea' },
-  ask: { marginTop: 8, marginBottom: 12 },
-  option: {
-    backgroundColor: '#e8ff47',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-  },
-  composer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  composerInput: { flex: 1, marginBottom: 0 },
-});

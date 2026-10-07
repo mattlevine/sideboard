@@ -22,6 +22,8 @@ import { SlackRelayHub } from '../slack/relay-hub.js';
 import { hostnameAllowed, requestHostname, tryServeStatic } from './static.js';
 import { RemoteHub } from '../remote/hub.js';
 import { REMOTE_PING_INTERVAL_MS, REMOTE_RELAY_PATH } from '../remote/protocol.js';
+import { assertRelayAccountsDurable, RelayAccountStore } from './accounts.js';
+import { handleRelayAccountHttp, RelayLoginSessions, type RelayOAuthConfig } from './account-oauth.js';
 import {
   ableTimeOAuthBouncePage,
   ableTimeOAuthLocalBounceUrl,
@@ -51,6 +53,15 @@ export interface RelayServerOptions {
   redirectHosts?: string[];
   /** Canonical public site host (default `www.sideboard.cloud`). */
   canonicalSiteHost?: string;
+  /**
+   * SQLite file for Sideboard accounts. When set, a Mac must sign in before
+   * `host_register`. On Fly this path is a volume mount so deploys keep it.
+   */
+  accountsPath?: string;
+  /** Google and GitHub OAuth clients. Secrets stay on the relay. */
+  relayOAuth?: RelayOAuthConfig;
+  /** Public origin for OAuth redirects, e.g. `https://relay.sideboard.cloud`. */
+  relayPublicOrigin?: string;
 }
 
 export interface RelayServerHandle {
@@ -68,6 +79,12 @@ function sendHtml(res: ServerResponse, status: number, title: string, body: stri
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
+}
+
+function relayClientIp(req: IncomingMessage): string {
+  const fly = req.headers['fly-client-ip'];
+  if (typeof fly === 'string' && fly.trim()) return fly.trim();
+  return req.socket.remoteAddress ?? 'unknown';
 }
 
 /** Protocol ping so Fly and NAT keep an idle WebSocket. */
@@ -116,6 +133,7 @@ export async function startRelayServer(
   const clientSecret = (opts.clientSecret ?? process.env.SIDEBOARD_SLACK_CLIENT_SECRET ?? '').trim();
   const redirectUri = (opts.oauthRedirectUri ?? slackOAuthRelayRedirectUri()).trim();
   const pending = new SlackOAuthPendingStore();
+  let boundPort = 0;
 
   const hub =
     opts.hub ??
@@ -123,7 +141,23 @@ export async function startRelayServer(
       fetchImpl: opts.fetchImpl ?? fetch,
       onLog: log,
     });
-  const remoteHub = new RemoteHub();
+  const accountsPath = opts.accountsPath?.trim() ?? '';
+  if (accountsPath) assertRelayAccountsDurable(accountsPath);
+  const accountStore = accountsPath ? new RelayAccountStore(accountsPath) : null;
+  const accountSessions = new RelayLoginSessions();
+  const relayOAuth = opts.relayOAuth ?? {};
+  const authMarks = new Map<object, () => void>();
+  const remoteByIp = new Map<string, number>();
+  let remoteSockets = 0;
+  const remoteHub = new RemoteHub({
+    authorizeHost: accountStore
+      ? (input) => {
+          const decision = accountStore.authorizeHost(input);
+          return decision.ok ? { ok: true } : { ok: false, message: decision.message };
+        }
+      : undefined,
+    onAuthorized: (socket) => authMarks.get(socket)?.(),
+  });
 
   const handleCallback = async (reqUrl: string, res: ServerResponse): Promise<boolean> => {
     const url = parseSlackOAuthCallbackUrl(reqUrl);
@@ -207,6 +241,23 @@ export async function startRelayServer(
   const httpServer: Server = createServer((req, res) => {
     void (async () => {
       const reqUrl = req.url || '/';
+      if (
+        accountStore &&
+        (await handleRelayAccountHttp({
+          req,
+          res,
+          store: accountStore,
+          oauth: relayOAuth,
+          sessions: accountSessions,
+          publicOrigin:
+            opts.relayPublicOrigin?.trim() ||
+            process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim() ||
+            `http://127.0.0.1:${boundPort}`,
+          fetchImpl: opts.fetchImpl,
+        }))
+      ) {
+        return;
+      }
       if (await handleCallback(reqUrl, res)) return;
       if (handleResult(reqUrl, res)) return;
       const ableTimeBounce = ableTimeOAuthLocalBounceUrl(reqUrl);
@@ -278,6 +329,14 @@ export async function startRelayServer(
       socket.destroy();
       return;
     }
+    if (target === remoteWss) {
+      const ip = relayClientIp(req);
+      const count = remoteByIp.get(ip) ?? 0;
+      if (count >= 20 || remoteSockets >= 4000) {
+        socket.destroy();
+        return;
+      }
+    }
     target.handleUpgrade(req, socket, head, (ws) => {
       target.emit('connection', ws, req);
     });
@@ -314,7 +373,10 @@ export async function startRelayServer(
     });
   });
 
-  remoteWss.on('connection', (ws: WebSocket) => {
+  remoteWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    const ip = relayClientIp(req);
+    remoteByIp.set(ip, (remoteByIp.get(ip) ?? 0) + 1);
+    remoteSockets += 1;
     const socket = {
       send: (data: string) => {
         if (ws.readyState === ws.OPEN) ws.send(data);
@@ -327,14 +389,38 @@ export async function startRelayServer(
         }
       },
     };
+    let released = false;
+    const authTimer = accountStore
+      ? setTimeout(() => {
+          try {
+            ws.close(4001, 'sign in required');
+          } catch {
+            // ignore
+          }
+        }, 120_000)
+      : null;
+    authMarks.set(socket, () => {
+      if (authTimer) clearTimeout(authTimer);
+    });
+    const release = () => {
+      if (released) return;
+      released = true;
+      if (authTimer) clearTimeout(authTimer);
+      authMarks.delete(socket);
+      remoteSockets -= 1;
+      const next = (remoteByIp.get(ip) ?? 1) - 1;
+      if (next <= 0) remoteByIp.delete(ip);
+      else remoteByIp.set(ip, next);
+      remoteHub.detachSocket(socket);
+    };
     startRelaySocketPing(ws, REMOTE_PING_INTERVAL_MS);
     log('remote client connected');
     ws.on('message', (data) => {
       const raw = typeof data === 'string' ? data : data.toString('utf8');
       remoteHub.handleClientMessage(socket, raw);
     });
-    ws.on('close', () => remoteHub.detachSocket(socket));
-    ws.on('error', () => remoteHub.detachSocket(socket));
+    ws.on('close', release);
+    ws.on('error', release);
   });
 
   const port = opts.port ?? 0;
@@ -344,7 +430,7 @@ export async function startRelayServer(
     httpServer.listen(port, host, () => resolve());
   });
   const address = httpServer.address();
-  const boundPort =
+  boundPort =
     typeof address === 'object' && address ? address.port : typeof port === 'number' ? port : 0;
   const url = `ws://${host === '0.0.0.0' ? '127.0.0.1' : host}:${boundPort}${SLACK_RELAY_DESKTOP_PATH}`;
   log(`relay listening on ${url}`);
@@ -393,6 +479,7 @@ export async function startRelayServer(
         httpServer.close((err) => (err ? reject(err) : resolve()));
       });
       await socketModeDone.catch(() => undefined);
+      accountStore?.close();
     },
   };
 }

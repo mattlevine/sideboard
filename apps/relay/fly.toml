@@ -11,6 +11,17 @@
 #   fly secrets set SIDEBOARD_SLACK_APP_TOKEN=xapp-… -a sideboard-relay
 #   fly secrets set SIDEBOARD_SLACK_CLIENT_SECRET=… -a sideboard-relay
 #
+#   fly secrets set SIDEBOARD_RELAY_GOOGLE_CLIENT_ID=… -a sideboard-relay
+#   fly secrets set SIDEBOARD_RELAY_GOOGLE_CLIENT_SECRET=… -a sideboard-relay
+#   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_ID=… -a sideboard-relay
+#   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=… -a sideboard-relay
+#
+# Phone accounts live in SQLite on a volume so restarts and image deploys keep them.
+# One machine only: the volume and the live phone sockets are local to that process.
+#   fly volumes create relay_accounts -a sideboard-relay -r sjc -s 1
+# OAuth redirect URL for both providers:
+#   https://relay.sideboard.cloud/remote/oauth/callback
+#
 # Custom domains:
 #   fly certs add relay.sideboard.cloud -a sideboard-relay
 #   fly certs add www.sideboard.cloud -a sideboard-relay
@@ -35,6 +46,13 @@ primary_region = 'sjc'
   SIDEBOARD_SITE_HOSTS = 'www.sideboard.cloud'
   SIDEBOARD_SITE_REDIRECT_HOSTS = 'sideboard.cloud'
   SIDEBOARD_SITE_CANONICAL = 'www.sideboard.cloud'
+  SIDEBOARD_RELAY_PUBLIC_ORIGIN = 'https://relay.sideboard.cloud'
+  SIDEBOARD_RELAY_ACCOUNTS_PATH = '/data/relay-accounts.sqlite'
+
+[[mounts]]
+  source = 'relay_accounts'
+  destination = '/data'
+  initial_size = '1gb'
 
 [http_service]
   internal_port = 8080

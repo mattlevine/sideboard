@@ -10,6 +10,7 @@ export interface SettingsSecretVault {
   slackClientSecret?: string;
   slackAppToken?: string;
   remoteHostSecret?: string;
+  remoteAccountToken?: string;
   githubPat?: string;
   abletimeAccessToken?: string;
   abletimeRefreshToken?: string;
@@ -56,6 +57,9 @@ function normalizeVault(raw: SettingsSecretVault): SettingsSecretVault {
   }
   if (typeof raw.remoteHostSecret === 'string' && raw.remoteHostSecret.trim()) {
     out.remoteHostSecret = raw.remoteHostSecret.trim();
+  }
+  if (typeof raw.remoteAccountToken === 'string' && raw.remoteAccountToken.trim()) {
+    out.remoteAccountToken = raw.remoteAccountToken.trim();
   }
   if (typeof raw.githubPat === 'string' && raw.githubPat.trim()) {
     out.githubPat = raw.githubPat.trim();

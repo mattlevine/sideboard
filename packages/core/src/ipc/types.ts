@@ -278,10 +278,10 @@ export interface IpcApi {
   }): Promise<IssueInfo & { created: boolean }>;
   /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */
   getSlackListenStatus(): Promise<SlackListenStatus>;
-  /** Phone remote: this Mac registered on the relay. */
   getRemoteStatus(): Promise<RemoteHostStatus>;
-  /** Ask the relay for a short pairing code the phone can enter. */
   requestRemotePairingCode(): Promise<RemoteHostStatus>;
+  startRemoteAccountLogin(provider: 'google' | 'github'): Promise<PublicAppSettings>;
+  disconnectRemoteAccount(): Promise<PublicAppSettings>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
   /** Live caffeinate: chat hold and/or Settings (agents running / Slack Listen). */
   getCaffeinateHold(): Promise<CaffeinateHoldState & { appCaffeinated: boolean }>;
