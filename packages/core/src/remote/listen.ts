@@ -175,6 +175,28 @@ function phoneError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Wait out a turn that create already started, then send assistant or ask. */
+function deliverPhoneTurn(
+  opts: { onOutbound: (msg: RemoteOutbound) => void },
+  chatId: string,
+): void {
+  const thread = readPhoneThread(chatId);
+  if (!thread || (thread.status !== 'running' && thread.status !== 'queued')) return;
+  const generation = bumpChat(chatId);
+  enqueueChat(chatId, async () => {
+    if (chatGeneration.get(chatId) !== generation) return;
+    try {
+      await getOrchestrator().waitForTurn(chatId, 14 * 60 * 1000);
+    } catch (err) {
+      if (chatGeneration.get(chatId) !== generation) return;
+      emitControl(opts, { op: 'error', chatId, message: `Sideboard failed: ${phoneError(err)}` });
+      return;
+    }
+    if (chatGeneration.get(chatId) !== generation) return;
+    emitChatTurn(opts, chatId, chatId);
+  });
+}
+
 function applyPhoneOptions(chatId: string, draft: PhoneDraft): void {
   const patch: PhoneDraft = {};
   if (draft.agent) patch.agent = draft.agent;
@@ -279,22 +301,26 @@ function handlePhoneControl(
   }
   if (cmd.op === 'create') {
     if (cmd.where === 'worktree') {
-      try {
-        const opened = createPhoneWorktreeAgent(cmd.chatId, cmd);
-        const prompt =
-          cmd.prompt?.trim() ||
-          (cmd.files?.length || cmd.links?.length ? 'See the attached files.' : '');
-        if (prompt) {
-          void getOrchestrator()
-            .send(opened.chat.id, formatRemotePrompt(prompt))
-            .catch((err: unknown) => {
+      void (async () => {
+        try {
+          const opened = createPhoneWorktreeAgent(cmd.chatId, cmd);
+          const prompt =
+            cmd.prompt?.trim() ||
+            (cmd.files?.length || cmd.links?.length ? 'See the attached files.' : '');
+          if (prompt) {
+            try {
+              await getOrchestrator().send(opened.chat.id, formatRemotePrompt(prompt));
+            } catch (err) {
               emitControl(opts, { op: 'error', chatId: opened.chat.id, message: phoneError(err) });
-            });
+            }
+          }
+          const fresh = openPhoneChat(opened.chat.id) ?? opened;
+          emitControl(opts, { op: 'opened', ...fresh });
+          if (prompt) deliverPhoneTurn(opts, fresh.chat.id);
+        } catch (err) {
+          emitControl(opts, { op: 'error', message: phoneError(err) });
         }
-        emitControl(opts, { op: 'opened', ...opened });
-      } catch (err) {
-        emitControl(opts, { op: 'error', message: phoneError(err) });
-      }
+      })();
       return;
     }
     if (cmd.where === 'project') {
@@ -314,6 +340,7 @@ function handlePhoneControl(
           }
           const fresh = openPhoneChat(opened.chat.id) ?? opened;
           emitControl(opts, { op: 'opened', ...fresh });
+          if (prompt) deliverPhoneTurn(opts, fresh.chat.id);
         })
         .catch((err: unknown) => {
           emitControl(opts, { op: 'error', message: phoneError(err) });
@@ -323,7 +350,10 @@ function handlePhoneControl(
     const goal = cmd.goal?.trim() || cmd.prompt?.trim() || '';
     if (goal || cmd.files?.length || cmd.links?.length) {
       void createPhoneOrchestration({ ...cmd, goal })
-        .then((opened) => emitControl(opts, { op: 'opened', ...opened }))
+        .then((opened) => {
+          emitControl(opts, { op: 'opened', ...opened });
+          deliverPhoneTurn(opts, opened.chat.id);
+        })
         .catch((err: unknown) => {
           emitControl(opts, { op: 'error', message: phoneError(err) });
         });
@@ -416,11 +446,7 @@ function handlePhoneControl(
       const staged = stagePhoneTurnFiles(live.worktreePath, cmd);
       const text = cmd.text.trim() || (staged.length ? 'See the attached files.' : '');
       const formatted = formatRemotePrompt(text);
-      if (staged.length) {
-        await getOrchestrator().send(thread.id, formatted, { attachments: staged });
-      } else {
-        await getOrchestrator().send(thread.id, formatted);
-      }
+      await getOrchestrator().send(thread.id, formatted, { attachments: staged });
       await getOrchestrator().waitForTurn(thread.id, 14 * 60 * 1000);
     } catch (err) {
       if (chatGeneration.get(chatId) !== generation) return;

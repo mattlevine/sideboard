@@ -205,6 +205,7 @@ describe('phone orchestration chats', () => {
         sourceType: 'branch',
         sourceRef: 'default',
         repoPath: '/tmp/sideboard',
+        reuseExisting: false,
       }),
     );
     expect(created.place?.kind).toBe('project');

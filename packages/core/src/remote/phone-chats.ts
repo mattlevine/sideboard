@@ -445,6 +445,10 @@ export function listPhoneMessages(thread: Thread): PhoneChatMessage[] {
     if (!text) continue;
     out.push({ role: message.role, text });
   }
+  for (const prompt of thread.queue) {
+    const text = clip(phoneVisibleText('user', prompt), MESSAGE_LIMIT);
+    if (text) out.push({ role: 'user', text });
+  }
   return out.slice(-TRANSCRIPT_LIMIT);
 }
 
@@ -726,6 +730,7 @@ export async function createPhoneProjectWorktree(
     autonomy: options.autonomy,
     attachments: phoneTurnAttachments(input),
     prompt: input.prompt,
+    reuseExisting: false,
   });
   return openedFrom(thread, projectPlace(thread));
 }

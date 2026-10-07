@@ -778,7 +778,8 @@ export default function App() {
           role: message.role,
           text: message.text,
         }));
-        return { ...prev, [chat.id]: { bubbles, questions: null, working: false } };
+        const working = chat.status === 'running' || chat.status === 'queued';
+        return { ...prev, [chat.id]: { bubbles, questions: null, working } };
       });
       return;
     }

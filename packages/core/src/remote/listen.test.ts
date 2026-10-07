@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Orchestrator } from '../orchestrator/orchestrator.js';
+import * as desktopHost from '../store/desktop-host.js';
 import { ensureRemoteCoordinator, findRemoteCoordinator } from '../store/global-workspace.js';
 import { readThread, updateThread } from '../store/thread-store.js';
 import { handleRemoteInbound, REMOTE_STOPPED_REPLY } from './listen.js';
@@ -188,7 +189,9 @@ describe('handleRemoteInbound interrupt', () => {
       onOutbound: outbound,
     });
 
-    await vi.waitFor(() => expect(send).toHaveBeenCalledWith(opened.chat.id, 'Phone\n\nship it'));
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith(opened.chat.id, 'Phone\n\nship it', { attachments: [] }),
+    );
     expect(findRemoteCoordinator('phone-4')).toBeUndefined();
     await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"assistant"'))).toBe(true));
   });
@@ -280,5 +283,85 @@ describe('handleRemoteInbound interrupt', () => {
     await vi.waitFor(() => expect(replies.some((line) => line.includes('ship the fix'))).toBe(true));
     const reply = JSON.parse(replies[0]!.slice(replies[0]!.indexOf('{'))) as { op: string; id: string; text: string };
     expect(reply).toEqual({ op: 'dictated', id: 'mic-1', text: 'ship the fix' });
+  });
+
+  it('replies on the phone after creating an orchestration', async () => {
+    const replies: string[] = [];
+    vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id, prompt) => {
+      const current = readThread(String(id));
+      updateThread(String(id), {
+        status: 'queued',
+        queue: [...(current?.queue ?? []), String(prompt)],
+      });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(async (id) => {
+      updateThread(String(id), { status: 'idle', queue: [] });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'orchestration ready',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+    handleRemoteInbound(
+      encodePhoneControl({ op: 'create', where: 'orchestration', goal: 'ship the fix' }),
+      {
+        deviceId: 'phone-create',
+        agent: 'claude',
+        onOutbound: (msg) => {
+          if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+        },
+      },
+    );
+    await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"opened"'))).toBe(true));
+    await vi.waitFor(() => expect(replies.some((line) => line.includes('orchestration ready'))).toBe(true));
+    const openedAt = replies.findIndex((line) => line.includes('"op":"opened"'));
+    const replyAt = replies.findIndex((line) => line.includes('orchestration ready'));
+    expect(replyAt).toBeGreaterThan(openedAt);
+  });
+
+  it('leaves desktop composer chips in place on a text-only phone send', async () => {
+    const replies: string[] = [];
+    const outbound = (msg: { type: string; text?: string }) => {
+      if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+    };
+    handleRemoteInbound(encodePhoneControl({ op: 'create', where: 'orchestration' }), {
+      deviceId: 'phone-chips',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    const opened = JSON.parse(replies[0]!.slice(replies[0]!.indexOf('{'))) as { chat: { id: string } };
+    updateThread(opened.chat.id, {
+      attachments: [{ id: 'chip-1', name: 'shot.png', kind: 'file', content: 'Image attached: shot.png' }],
+    });
+    vi.spyOn(desktopHost, 'thisProcessShouldDrainAgentQueues').mockReturnValue(false);
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(async (id) => readThread(String(id))!);
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'kept',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+    handleRemoteInbound(encodePhoneControl({ op: 'prompt', chatId: opened.chat.id, text: 'ship it' }), {
+      deviceId: 'phone-chips',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    await vi.waitFor(() => expect(readThread(opened.chat.id)?.queue.at(-1)).toBe('Phone\n\nship it'));
+    expect(readThread(opened.chat.id)?.attachments).toEqual([
+      expect.objectContaining({ id: 'chip-1', name: 'shot.png' }),
+    ]);
   });
 });

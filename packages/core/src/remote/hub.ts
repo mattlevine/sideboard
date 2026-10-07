@@ -254,6 +254,9 @@ export class RemoteHub {
         online: Boolean(host),
       };
     });
+    // Choose a desktop only sends list_hosts. A saved session is enough to
+    // keep the socket open; pair and resume are not required first.
+    if (hosts.some((host) => host.deviceId)) this.opts.onAuthorized?.(socket);
     send(socket, { type: 'hosts', hosts });
   }
 
