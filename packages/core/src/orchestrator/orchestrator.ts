@@ -1153,13 +1153,9 @@ export class Orchestrator {
         throw new Error(`Thread is archived: ${thread.id}`);
       }
       const followUp = resolveSendFollowUp(current, opts?.followUp);
-      // An explicit list, including [], is this turn's files. A text-only phone
-      // send passes [] so chips staged on the Mac stay in the desktop composer.
-      const explicit = opts && opts.attachments !== undefined ? opts.attachments : undefined;
-      const consumed =
-        explicit !== undefined
-          ? { attachments: current.attachments, consumed: explicit }
-          : consumeComposerAttachments(current);
+      // [] is this turn's files. Omitting attachments takes chips staged on the Mac.
+      const explicit = opts?.attachments;
+      const consumed = explicit !== undefined ? { attachments: current.attachments, consumed: explicit } : consumeComposerAttachments(current);
       const queued = appendQueuedItem(
         current.queue,
         current.queueAttachments,
