@@ -30,7 +30,7 @@ describe('slack OAuth URL', () => {
     expect(userScope).toBe(SLACK_USER_SCOPES);
   });
 
-  it('Add to Slack on the marketing site matches OAuth scopes', async () => {
+  it('the old Slack install page points at the phone app', async () => {
     const { readFileSync } = await import('node:fs');
     const { dirname, join } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
@@ -38,9 +38,10 @@ describe('slack OAuth URL', () => {
       join(dirname(fileURLToPath(import.meta.url)), '../../../../site/slack/index.html'),
       'utf8',
     );
-    expect(html).not.toContain('search:read');
-    expect(html).toContain(`scope=${SLACK_BOT_SCOPES}`);
-    expect(html).toContain(`user_scope=${SLACK_USER_SCOPES}`);
+    expect(html).toContain('url=/docs/remote/');
+    expect(html).toContain('Sideboard no longer uses a Slack app');
+    expect(html).not.toContain('scope=');
+    expect(html).not.toContain('user_scope=');
   });
 });
 
