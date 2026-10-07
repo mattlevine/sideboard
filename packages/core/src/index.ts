@@ -360,6 +360,12 @@ export {
 } from './remote/listen.js';
 export { remoteRelayUrl, BAKED_REMOTE_RELAY_URL, REMOTE_RELAY_PATH } from './remote/protocol.js';
 export type { RemoteServerMessage, RemoteAskQuestion } from './remote/protocol.js';
+export {
+  disconnectRemoteAccount,
+  isRemoteAccountLoginCancelled,
+  startRemoteAccountLogin,
+} from './relay/account-login.js';
+export type { RelayAccountProvider, RemoteAccountSession } from './relay/account-login.js';
 export { SlackRelayHub } from './slack/relay-hub.js';
 export { startRelayServer } from './relay/server.js';
 export type { RelayServerOptions, RelayServerHandle } from './relay/server.js';

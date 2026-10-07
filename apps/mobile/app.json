@@ -11,11 +11,23 @@
       "bundleIdentifier": "cloud.sideboard.mobile",
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Sideboard uses the camera to attach a photo to a message.",
+        "NSPhotoLibraryUsageDescription": "Sideboard uses your photos to attach a picture to a message.",
+        "NSMicrophoneUsageDescription": "Sideboard uses the microphone to dictate a message."
       }
     },
     "android": {
       "package": "cloud.sideboard.mobile"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Sideboard uses your photos to attach a picture to a message.",
+          "cameraPermission": "Sideboard uses the camera to attach a photo to a message."
+        }
+      ]
+    ]
   }
 }

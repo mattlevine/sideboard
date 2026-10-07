@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.275] - 2026-10-07
+
+### Added
+
+- The phone composer can attach a photo or file, dictate through the Mac, and create an orchestration or a worktree from a PR, branch, or issue with the same agent, model, effort, and plan options as the desktop. A new chat stays open until the first reply arrives.
+- Settings → Remote signs this Mac into the relay with the git host. GitHub is the host today. The relay keeps that sign-in and each registered Mac in SQLite so a deploy does not drop them.
+
+### Fixed
+
+- A text-only phone send leaves files staged in the Mac composer alone.
+- Creating a project worktree from a PR, branch, or issue opens a new chat instead of reusing a live one.
+- Choosing a desktop with a saved session keeps the relay connection open.
+- Metro treats `apps/mobile` as the Expo project root, so Expo Go loads the phone package.
+
 ## [0.1.274] - 2026-10-06
 
 ### Fixed

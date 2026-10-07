@@ -29,6 +29,8 @@ export type RemoteHostMessage =
       deviceId: string;
       deviceLabel: string;
       hostSecret: string;
+      /** Sideboard account credential. Required when the relay stores accounts. */
+      accountToken?: string;
     }
   | { type: 'host_pair' }
   | { type: 'assistant'; text: string }
@@ -117,7 +119,14 @@ export function parseRemoteClientMessage(raw: string): RemoteClientMessage | nul
     const hostSecret = str((parsed as { hostSecret?: unknown }).hostSecret);
     const deviceLabel = str((parsed as { deviceLabel?: unknown }).deviceLabel);
     if (!deviceId || !hostSecret || !deviceLabel) return null;
-    return { type: 'host_register', deviceId, hostSecret, deviceLabel };
+    const accountToken = str((parsed as { accountToken?: unknown }).accountToken);
+    return {
+      type: 'host_register',
+      deviceId,
+      hostSecret,
+      deviceLabel,
+      ...(accountToken ? { accountToken } : {}),
+    };
   }
   if (msg.type === 'pair') {
     const code = str((parsed as { code?: unknown }).code).toUpperCase();

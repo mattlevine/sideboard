@@ -1140,7 +1140,7 @@ export class Orchestrator {
   async send(
     threadRef: string,
     prompt: string,
-    opts?: { followUp?: FollowUpBehavior },
+    opts?: { followUp?: FollowUpBehavior; attachments?: Thread['attachments'] },
   ): Promise<Thread> {
     const thread = this.requireThread(threadRef);
     if (thread.status === 'archived') {
@@ -1153,7 +1153,9 @@ export class Orchestrator {
         throw new Error(`Thread is archived: ${thread.id}`);
       }
       const followUp = resolveSendFollowUp(current, opts?.followUp);
-      const consumed = consumeComposerAttachments(current);
+      // [] is this turn's files. Omitting attachments takes chips staged on the Mac.
+      const explicit = opts?.attachments;
+      const consumed = explicit !== undefined ? { attachments: current.attachments, consumed: explicit } : consumeComposerAttachments(current);
       const queued = appendQueuedItem(
         current.queue,
         current.queueAttachments,
@@ -1171,7 +1173,7 @@ export class Orchestrator {
       // Skip the inbox (in-flight turn or already-parked follow-ups).
       shouldSteer = followUp === 'steer' && (inFlight || current.queue.length > 0);
       const patch: Parameters<typeof updateThread>[1] = queued;
-      if (consumed.consumed.length > 0) {
+      if (explicit === undefined && consumed.consumed.length > 0) {
         patch.attachments = consumed.attachments;
       }
       if (!inFlight) patch.status = 'queued';

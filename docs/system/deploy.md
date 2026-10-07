@@ -43,7 +43,7 @@ A brief “not listening on 8080” warning during machine start is normal if No
 
 ## First-time / domains
 
-Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for the three hosts. Do not put those secrets in git or the image ([safety.md](safety.md)).
+Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for the three hosts. Phone accounts are SQLite on the `relay_accounts` volume at `/data` (`initial_size` creates it on deploy; or `fly volumes create relay_accounts -a sideboard-relay -r sjc -s 1`). Set `SIDEBOARD_RELAY_GITHUB_CLIENT_ID` and `SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET`. The OAuth redirect is `https://relay.sideboard.cloud/remote/oauth/callback`. Do not put those secrets in git or the image ([safety.md](safety.md)). Keep a single machine: the volume and the live phone sockets belong to that process.
 
 ## Don’t
 

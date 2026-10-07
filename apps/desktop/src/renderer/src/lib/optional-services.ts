@@ -56,10 +56,12 @@ export function emptyPublicIntegrations(): PublicAppSettings['integrations'] {
     hasSlackAppToken: false,
     hasGithubPat: false,
     hasAbleTimeToken: false,
+    hasAbleTimeOAuth: false,
     hasVercelToken: false,
     hasSupabaseToken: false,
     hasPosthogToken: false,
     hasSentryToken: false,
+    hasRemoteAccount: false,
   };
 }
 

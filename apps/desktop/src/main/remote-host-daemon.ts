@@ -1,9 +1,18 @@
 import {
+  disconnectRemoteAccount,
   ensureRemoteHostCredentials,
+  isRemoteAccountLoginCancelled,
+  loadAppSettings,
   remoteRelayUrl,
   runRemoteHost,
+  startRemoteAccountLogin,
+  toPublicAppSettings,
+  updateIntegrationsSettings,
+  type PublicAppSettings,
+  type RelayAccountProvider,
   type RemoteHostStatus,
 } from '@sideboard-ai/core';
+import { transcribeWavFile } from './speech-dictate';
 
 let onActivity: () => void = () => {};
 
@@ -66,6 +75,7 @@ export function startRemoteHost(): void {
     deviceId: creds.deviceId,
     deviceLabel: creds.deviceLabel,
     hostSecret: creds.hostSecret,
+    accountToken: loadAppSettings().integrations.remoteAccountToken,
     signal: ac.signal,
     onPairingCode: (code) => {
       remotePairingCode = code;
@@ -86,6 +96,7 @@ export function startRemoteHost(): void {
         remoteLastError = null;
       }
     },
+    transcribeWav: (wavBase64) => transcribeWavFile(Buffer.from(wavBase64, 'base64')),
   });
   remoteRequestPair = () => handle.requestPairingCode();
   remoteUpdateIdentity = (label) => handle.updateIdentity(label);
@@ -119,4 +130,51 @@ export function requestRemotePairing(): Promise<RemoteHostStatus> {
     remoteRequestPair?.();
     if (remotePairingCode && remotePairingCode !== previous) finish();
   });
+}
+
+let remoteAccountAbort: AbortController | null = null;
+
+export async function signInRemoteAccount(
+  provider: RelayAccountProvider,
+  openUrl: (url: string) => void | Promise<void>,
+): Promise<PublicAppSettings> {
+  if (provider !== 'github') throw new Error('Sign in with the git host.');
+  remoteAccountAbort?.abort();
+  const ac = new AbortController();
+  remoteAccountAbort = ac;
+  try {
+    const session = await startRemoteAccountLogin({
+      provider,
+      openUrl,
+      signal: ac.signal,
+    });
+    const saved = updateIntegrationsSettings({
+      remoteAccountToken: session.credential,
+      remoteAccountEmail: session.email,
+    });
+    restartRemoteHost();
+    return toPublicAppSettings(saved);
+  } catch (err) {
+    if (isRemoteAccountLoginCancelled(err)) throw new Error('Sign-in cancelled');
+    throw err;
+  } finally {
+    if (remoteAccountAbort === ac) remoteAccountAbort = null;
+  }
+}
+
+export async function signOutRemoteAccount(): Promise<PublicAppSettings> {
+  const token = loadAppSettings().integrations.remoteAccountToken;
+  if (token) {
+    try {
+      await disconnectRemoteAccount({ accountToken: token });
+    } catch {
+      // The local credential still has to go, even if the relay is unreachable.
+    }
+  }
+  const saved = updateIntegrationsSettings({
+    remoteAccountToken: null,
+    remoteAccountEmail: null,
+  });
+  restartRemoteHost();
+  return toPublicAppSettings(saved);
 }

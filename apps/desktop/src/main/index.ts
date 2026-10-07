@@ -41,6 +41,8 @@ import {
   refreshRemoteDeviceLabel,
   requestRemotePairing,
   restartRemoteHost,
+  signInRemoteAccount,
+  signOutRemoteAccount,
   startRemoteHost,
 } from './remote-host-daemon';
 import { initDesktopSecretVault } from './secret-vault';
@@ -211,6 +213,7 @@ import {
   type ThreadOptionsPatch,
   type CreateScheduledTaskInput,
   type UpdateScheduledTaskPatch,
+  type RelayAccountProvider,
 } from '@sideboard-ai/core';
 import { closeTsServer, setupTsServer } from './tsserver';
 import { startDesktopHost, stopDesktopHost } from './desktop-host';
@@ -1247,6 +1250,10 @@ function registerIpc(): void {
   ipcMain.handle('getSlackListenStatus', () => readSlackListenStatus());
   ipcMain.handle('getRemoteStatus', () => readRemoteStatus());
   ipcMain.handle('requestRemotePairingCode', () => requestRemotePairing());
+  ipcMain.handle('startRemoteAccountLogin', (_e, provider: RelayAccountProvider) =>
+    signInRemoteAccount(provider, (url) => shell.openExternal(url)),
+  );
+  ipcMain.handle('disconnectRemoteAccount', () => signOutRemoteAccount());
   ipcMain.handle('setSlackListen', (_e, opts: { enabled: boolean }) =>
     setSlackListen(opts),
   );

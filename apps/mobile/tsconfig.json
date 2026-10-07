@@ -10,5 +10,5 @@
     "types": []
   },
   "extends": "expo/tsconfig.base",
-  "include": ["App.tsx", "desktops.ts", "index.js"]
+  "include": ["App.tsx", "chat-ui.tsx", "media.ts", "desktops.ts", "relay-link.ts", "index.js"]
 }

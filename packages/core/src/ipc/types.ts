@@ -61,6 +61,7 @@ import type {
 } from '../store/schedules.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesOptions, ListIssuesResult } from '../integrations/issues.js';
+import type { RelayAccountProvider } from '../relay/account-oauth.js';
 
 /** Live status of the Brightsy cloud connect daemon in the desktop app. */
 export interface CloudConnectStatus {
@@ -76,25 +77,8 @@ export interface CloudConnectStatus {
 import type { RemoteHostStatus, SlackListenStatus } from './listen-status.js';
 export type { RemoteHostStatus, SlackListenStatus };
 
-/** Open-worktree cube targets (Finder, Cursor, VS Code, …). */
-export type WorktreeOpenerId =
-  | 'finder'
-  | 'cursor'
-  | 'code'
-  | 'xcode'
-  | 'terminal'
-  | 'datagrip';
-
-/** Installed third-party (and Finder) apps the worktree cube can open. */
-export interface WorktreeOpener {
-  id: WorktreeOpenerId;
-  label: string;
-  kbd: string;
-  /** True when the `.app` bundle was found on disk (icon is then available). */
-  installed: boolean;
-  /** PNG data URL of the macOS app icon when the bundle was found. */
-  iconDataUrl?: string | null;
-}
+import type { WorktreeOpener, WorktreeOpenerId } from './worktree-opener.js';
+export type { WorktreeOpener, WorktreeOpenerId };
 
 /** Shared typed surface for Electron preload ↔ renderer (and docs). */
 export interface IpcApi {
@@ -278,10 +262,10 @@ export interface IpcApi {
   }): Promise<IssueInfo & { created: boolean }>;
   /** Sideboard Slack listen (DMs + @mentions → Global orchestrator). */
   getSlackListenStatus(): Promise<SlackListenStatus>;
-  /** Phone remote: this Mac registered on the relay. */
   getRemoteStatus(): Promise<RemoteHostStatus>;
-  /** Ask the relay for a short pairing code the phone can enter. */
   requestRemotePairingCode(): Promise<RemoteHostStatus>;
+  startRemoteAccountLogin(provider: RelayAccountProvider): Promise<PublicAppSettings>;
+  disconnectRemoteAccount(): Promise<PublicAppSettings>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
   /** Live caffeinate: chat hold and/or Settings (agents running / Slack Listen). */
   getCaffeinateHold(): Promise<CaffeinateHoldState & { appCaffeinated: boolean }>;

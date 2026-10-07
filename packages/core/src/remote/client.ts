@@ -14,10 +14,14 @@ export interface RemoteHostClientOptions {
   deviceId: string;
   deviceLabel: string;
   hostSecret: string;
+  /** Sideboard account credential from Settings → Remote. */
+  accountToken?: string;
   signal?: AbortSignal;
   onStatus?: (status: { connected: boolean; phoneConnected: boolean }) => void;
   onPairingCode?: (code: string | null) => void;
   onLog?: (line: string) => void;
+  /** Mac speech recognizer for a phone recording (wav base64). */
+  transcribeWav?: (wavBase64: string) => Promise<string>;
   /** Tests: override keepalive cadence. */
   pingIntervalMs?: number;
   pongTimeoutMs?: number;
@@ -99,6 +103,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
       deviceId: opts.deviceId,
       deviceLabel,
       hostSecret: opts.hostSecret,
+      ...(opts.accountToken?.trim() ? { accountToken: opts.accountToken.trim() } : {}),
     });
   };
 
@@ -221,6 +226,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         deviceId: opts.deviceId,
         onLog: log,
         onOutbound: emit,
+        transcribeWav: opts.transcribeWav,
       });
     }
   };

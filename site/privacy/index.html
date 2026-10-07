@@ -31,7 +31,7 @@
 <article style="max-width:720px;margin:0 auto;padding:56px 40px 110px">
 <span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Privacy</span>
 <h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:18px 0 8px;color:#edf0f3">Privacy policy</h1>
-<p style="margin:0;color:#8b949c;font-size:14px">Last updated 5 October 2026. Sideboard is a local Mac app plus a phone relay at <code>relay.sideboard.cloud</code>.</p>
+<p style="margin:0;color:#8b949c;font-size:14px">Last updated 7 October 2026. Sideboard is a local Mac app plus a phone relay at <code>relay.sideboard.cloud</code>.</p>
 
 <h2>What this covers</h2>
 <p>This policy describes data handled by the Sideboard desktop and CLI on your computer, the Sideboard phone app, and the hosted relay. The marketing site at www.sideboard.cloud does not require an account.</p>
@@ -40,8 +40,8 @@
 <ul>
 <li><strong>On your Mac.</strong> This Mac’s name, a host secret used to register with the relay, thread/worktree metadata, and chat you have with agents. Optional tokens for GitHub, Linear, AbleTime, Vercel, Supabase, PostHog, and Sentry also live in the encrypted vault on disk — not in the renderer or in git.</li>
 <li><strong>On your phone.</strong> The pairing session for each Mac you connect (device name and a session token), stored on the phone so you can pick a desktop later.</li>
-<li><strong>Through the relay.</strong> Pairing codes, those session tokens, and message text needed to carry a prompt or reply between the phone and your Mac. The relay does not receive git repos, secrets, or VPN-only traffic.</li>
-<li><strong>We do not</strong> require a Sideboard cloud account. We do not sell message text. We do not use it to train Sideboard models — Sideboard does not host a model.</li>
+<li><strong>Through the relay.</strong> Pairing codes, those session tokens, and message text needed to carry a prompt or reply between the phone and your Mac. Signing the Mac in uses your git host (GitHub today): Sideboard stores that GitHub user id, the email GitHub returns, and a hash of each Mac’s host secret. The relay does not receive git repos, vault tokens, or VPN-only traffic.</li>
+<li><strong>We do not</strong> sell message text. We do not use it to train Sideboard models — Sideboard does not host a model.</li>
 </ul>
 
 <h2>How it is used</h2>
@@ -51,7 +51,7 @@
 <ul>
 <li><strong>Your Mac</strong> — until you uninstall Sideboard or delete the local data directory.</li>
 <li><strong>Your phone</strong> — until you forget that desktop in the app or delete the app.</li>
-<li><strong>Relay</strong> — in-memory sessions while your desktop is connected. A relay restart drops pairing sessions; the phone pairs again. Message text is not stored as a Sideboard database.</li>
+<li><strong>Relay</strong> — the GitHub sign-in and each registered Mac stay on a volume so a restart keeps them. Live phone sockets stay in memory; a restart drops that connection and the phone pairs again. Message text is not stored as a Sideboard database.</li>
 </ul>
 
 <h2>Access, transfer, and deletion</h2>

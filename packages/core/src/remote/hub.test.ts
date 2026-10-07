@@ -80,6 +80,45 @@ describe('RemoteHub', () => {
     expect(last(phone).type).toBe('error');
   });
 
+  it('requires a signed-in account when an authorizer is set', () => {
+    const hub = new RemoteHub({
+      authorizeHost: ({ accountToken }) =>
+        accountToken === 'token' ? { ok: true } : { ok: false, message: 'sign in required' },
+    });
+    const rejected = fakeSocket();
+    register(hub, rejected, 'mac-1', 'Work');
+    expect(last(rejected)).toEqual({ type: 'error', message: 'sign in required' });
+    const mac = fakeSocket();
+    hub.handleClientMessage(
+      mac,
+      JSON.stringify({
+        type: 'host_register',
+        deviceId: 'mac-1',
+        deviceLabel: 'Work',
+        hostSecret: 'secret',
+        accountToken: 'token',
+      }),
+    );
+    expect(last(mac).type).toBe('registered');
+  });
+
+  it('authorizes a phone that only lists saved Macs', () => {
+    const authorized: RemoteSocket[] = [];
+    const hub = new RemoteHub({ onAuthorized: (socket) => authorized.push(socket) });
+    const mac = fakeSocket();
+    register(hub, mac, 'mac-1', 'Work');
+    const paired = fakeSocket();
+    hub.handleClientMessage(paired, JSON.stringify({ type: 'pair', code: pairingCode(hub, mac) }));
+    const token = pairedToken(paired);
+    const picker = fakeSocket();
+    hub.handleClientMessage(picker, JSON.stringify({ type: 'list_hosts', sessionTokens: [token] }));
+    expect(last(picker).type).toBe('hosts');
+    expect(authorized).toContain(picker);
+    const stranger = fakeSocket();
+    hub.handleClientMessage(stranger, JSON.stringify({ type: 'list_hosts', sessionTokens: ['missing'] }));
+    expect(authorized).not.toContain(stranger);
+  });
+
   it('lets one phone pair with several Macs and talk only to the one it selects', () => {
     const hub = new RemoteHub();
     const work = fakeSocket();
