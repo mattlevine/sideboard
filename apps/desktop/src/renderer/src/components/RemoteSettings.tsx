@@ -16,7 +16,7 @@ export function RemoteSettings({
 }) {
   const [remote, setRemote] = useState<RemoteHostStatus | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
-  const [signingIn, setSigningIn] = useState<'google' | 'github' | 'out' | null>(null);
+  const [signingIn, setSigningIn] = useState<'github' | 'out' | null>(null);
   const [pairing, setPairing] = useState(false);
   const signedIn = Boolean(settings.integrations.hasRemoteAccount);
 
@@ -55,11 +55,11 @@ export function RemoteSettings({
     }
   }
 
-  async function signIn(provider: 'google' | 'github') {
-    setSigningIn(provider);
+  async function signIn() {
+    setSigningIn('github');
     setError(null);
     try {
-      const next = await window.sideboard.startRemoteAccountLogin(provider);
+      const next = await window.sideboard.startRemoteAccountLogin('github');
       applySettings(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -93,24 +93,23 @@ export function RemoteSettings({
     <div className="settings-body">
       <p className="settings-lead">
         The Sideboard phone app chats with the Global orchestrator on this Mac. Agents stay here.
-        Sign in so this Mac can register on the relay. Google and GitHub are sign-in methods.
-        The git host for your repos stays in Settings → Git.
+        Sign in with GitHub, the git host, so this Mac can register on the relay. Other git
+        hosts can be added later.
       </p>
 
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Relay account</div>
         <p className="settings-hint">
           {signedIn
-            ? `Signed in${settings.integrations.remoteAccountEmail ? ` as ${settings.integrations.remoteAccountEmail}` : ''}. A second provider links onto this account.`
-            : 'Sign in with Google or GitHub before pairing a phone.'}
+            ? `Signed in${settings.integrations.remoteAccountEmail ? ` as ${settings.integrations.remoteAccountEmail}` : ''}.`
+            : 'Sign in with GitHub before pairing a phone.'}
         </p>
         <div className="settings-key-row" style={{ marginTop: 12 }}>
-          <button type="button" disabled={busy || signingIn !== null} onClick={() => void signIn('google')}>
-            {signingIn === 'google' ? 'Waiting for Google…' : signedIn ? 'Link Google' : 'Sign in with Google'}
-          </button>
-          <button type="button" disabled={busy || signingIn !== null} onClick={() => void signIn('github')}>
-            {signingIn === 'github' ? 'Waiting for GitHub…' : signedIn ? 'Link GitHub' : 'Sign in with GitHub'}
-          </button>
+          {signedIn ? null : (
+            <button type="button" disabled={busy || signingIn !== null} onClick={() => void signIn()}>
+              {signingIn === 'github' ? 'Waiting for GitHub…' : 'Sign in with GitHub'}
+            </button>
+          )}
           {signedIn ? (
             <button type="button" disabled={busy || signingIn !== null} onClick={() => void signOut()}>
               {signingIn === 'out' ? 'Signing out…' : 'Sign out'}

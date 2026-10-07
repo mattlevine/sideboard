@@ -4,10 +4,12 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   GITHUB_ACCOUNT_ISSUER,
-  GOOGLE_ACCOUNT_ISSUER,
   longestMountPoint,
   RelayAccountStore,
 } from './accounts.js';
+
+/** A future git host. Not an OAuth client — only the store’s email link. */
+const OTHER_GIT_HOST_ISSUER = 'https://gitlab.com';
 
 describe('relay accounts', () => {
   const stores: RelayAccountStore[] = [];
@@ -29,8 +31,8 @@ describe('relay accounts', () => {
   it('keeps the account, credential, and Mac secret across a reopened file', () => {
     const first = open();
     const signed = first.signIn({
-      issuer: GOOGLE_ACCOUNT_ISSUER,
-      subject: 'google-sub-1',
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: '99',
       email: 'Ada@Example.com',
       emailVerified: true,
     });
@@ -71,55 +73,55 @@ describe('relay accounts', () => {
     })).toEqual({ ok: false, message: 'sign in required' });
   });
 
-  it('links GitHub onto the Google account when the verified email matches', () => {
+  it('links a second git host onto the GitHub account when the verified email matches', () => {
     const store = open();
-    const google = store.signIn({
-      issuer: GOOGLE_ACCOUNT_ISSUER,
-      subject: 'google-sub-1',
-      email: 'ada@example.com',
-      emailVerified: true,
-    });
     const github = store.signIn({
       issuer: GITHUB_ACCOUNT_ISSUER,
       subject: '99',
+      email: 'ada@example.com',
+      emailVerified: true,
+    });
+    const other = store.signIn({
+      issuer: OTHER_GIT_HOST_ISSUER,
+      subject: 'gl-1',
       email: 'Ada@Example.com',
       emailVerified: true,
     });
-    expect(github.accountId).toBe(google.accountId);
-    expect(store.verifyCredential(google.credential)).toBe(google.accountId);
-    expect(store.verifyCredential(github.credential)).toBe(google.accountId);
+    expect(other.accountId).toBe(github.accountId);
+    expect(store.verifyCredential(github.credential)).toBe(github.accountId);
+    expect(store.verifyCredential(other.credential)).toBe(github.accountId);
   });
 
   it('does not link an unverified email, and links when already signed in', () => {
     const store = open();
-    const google = store.signIn({
-      issuer: GOOGLE_ACCOUNT_ISSUER,
-      subject: 'google-sub-1',
+    const github = store.signIn({
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: '99',
       email: 'ada@example.com',
       emailVerified: true,
     });
     const unverified = store.signIn({
-      issuer: GITHUB_ACCOUNT_ISSUER,
-      subject: '99',
+      issuer: OTHER_GIT_HOST_ISSUER,
+      subject: 'gl-1',
       email: 'ada@example.com',
       emailVerified: false,
     });
-    expect(unverified.accountId).not.toBe(google.accountId);
+    expect(unverified.accountId).not.toBe(github.accountId);
     const linked = store.signIn(
       {
-        issuer: GITHUB_ACCOUNT_ISSUER,
-        subject: '100',
+        issuer: OTHER_GIT_HOST_ISSUER,
+        subject: 'gl-2',
         email: 'other@example.com',
         emailVerified: true,
       },
-      google.accountId,
+      github.accountId,
     );
-    expect(linked.accountId).toBe(google.accountId);
+    expect(linked.accountId).toBe(github.accountId);
     expect(() =>
       store.signIn(
         {
-          issuer: GOOGLE_ACCOUNT_ISSUER,
-          subject: 'google-sub-1',
+          issuer: GITHUB_ACCOUNT_ISSUER,
+          subject: '99',
           email: 'ada@example.com',
           emailVerified: true,
         },
@@ -131,8 +133,8 @@ describe('relay accounts', () => {
   it('caps Macs at three and keeps a device on its first account', () => {
     const store = open();
     const signed = store.signIn({
-      issuer: GOOGLE_ACCOUNT_ISSUER,
-      subject: 'google-sub-1',
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: '99',
       email: null,
       emailVerified: false,
     });
@@ -156,7 +158,7 @@ describe('relay accounts', () => {
     ).toEqual({ ok: false, message: 'This account already has the maximum number of Macs.' });
 
     const other = store.signIn({
-      issuer: GITHUB_ACCOUNT_ISSUER,
+      issuer: OTHER_GIT_HOST_ISSUER,
       subject: '7',
       email: null,
       emailVerified: false,
@@ -174,14 +176,14 @@ describe('relay accounts', () => {
   it('logout drops one credential and revoke drops the account', () => {
     const store = open();
     const signed = store.signIn({
-      issuer: GOOGLE_ACCOUNT_ISSUER,
-      subject: 'google-sub-1',
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: '99',
       email: 'ada@example.com',
       emailVerified: true,
     });
     const second = store.signIn({
-      issuer: GOOGLE_ACCOUNT_ISSUER,
-      subject: 'google-sub-1',
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: '99',
       email: 'ada@example.com',
       emailVerified: true,
     });

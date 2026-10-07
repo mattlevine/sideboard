@@ -9,6 +9,7 @@ import {
   toPublicAppSettings,
   updateIntegrationsSettings,
   type PublicAppSettings,
+  type RelayAccountProvider,
   type RemoteHostStatus,
 } from '@sideboard-ai/core';
 import { transcribeWavFile } from './speech-dictate';
@@ -134,17 +135,16 @@ export function requestRemotePairing(): Promise<RemoteHostStatus> {
 let remoteAccountAbort: AbortController | null = null;
 
 export async function signInRemoteAccount(
-  provider: 'google' | 'github',
+  provider: RelayAccountProvider,
   openUrl: (url: string) => void | Promise<void>,
 ): Promise<PublicAppSettings> {
-  if (provider !== 'google' && provider !== 'github') throw new Error('Choose Google or GitHub.');
+  if (provider !== 'github') throw new Error('Sign in with the git host.');
   remoteAccountAbort?.abort();
   const ac = new AbortController();
   remoteAccountAbort = ac;
   try {
     const session = await startRemoteAccountLogin({
       provider,
-      linkToken: loadAppSettings().integrations.remoteAccountToken,
       openUrl,
       signal: ac.signal,
     });

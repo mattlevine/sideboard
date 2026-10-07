@@ -4,9 +4,10 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
-/** Google’s OpenID issuer. The subject is Google’s `sub`, not the email. */
-export const GOOGLE_ACCOUNT_ISSUER = 'https://accounts.google.com';
-/** GitHub’s issuer. The subject is the numeric user id, not the login. */
+/**
+ * GitHub’s issuer. The subject is the numeric user id, not the login.
+ * Another git host gets its own issuer when that provider is added.
+ */
 export const GITHUB_ACCOUNT_ISSUER = 'https://github.com';
 
 /** Macs one Sideboard account may register on the relay. */

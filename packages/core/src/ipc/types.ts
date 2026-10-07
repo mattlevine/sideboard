@@ -61,6 +61,7 @@ import type {
 } from '../store/schedules.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesOptions, ListIssuesResult } from '../integrations/issues.js';
+import type { RelayAccountProvider } from '../relay/account-oauth.js';
 
 /** Live status of the Brightsy cloud connect daemon in the desktop app. */
 export interface CloudConnectStatus {
@@ -280,7 +281,7 @@ export interface IpcApi {
   getSlackListenStatus(): Promise<SlackListenStatus>;
   getRemoteStatus(): Promise<RemoteHostStatus>;
   requestRemotePairingCode(): Promise<RemoteHostStatus>;
-  startRemoteAccountLogin(provider: 'google' | 'github'): Promise<PublicAppSettings>;
+  startRemoteAccountLogin(provider: RelayAccountProvider): Promise<PublicAppSettings>;
   disconnectRemoteAccount(): Promise<PublicAppSettings>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
   /** Live caffeinate: chat hold and/or Settings (agents running / Slack Listen). */

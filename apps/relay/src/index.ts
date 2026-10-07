@@ -12,7 +12,6 @@ import { startRelayServer } from '@sideboard-ai/core';
  *   SIDEBOARD_SLACK_CLIENT_ID      optional; defaults to the public Sideboard Slack app id
  *   SIDEBOARD_RELAY_ACCOUNTS_PATH   SQLite file (Fly: /data/relay-accounts.sqlite on a volume)
  *   SIDEBOARD_RELAY_PUBLIC_ORIGIN   OAuth origin (https://relay.sideboard.cloud)
- *   SIDEBOARD_RELAY_GOOGLE_CLIENT_ID / SIDEBOARD_RELAY_GOOGLE_CLIENT_SECRET
  *   SIDEBOARD_RELAY_GITHUB_CLIENT_ID / SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET
  *   PORT                           listen port (default 8787)
  *   HOST                           bind address (default 0.0.0.0)
@@ -73,7 +72,6 @@ async function main(): Promise<void> {
     canonicalSiteHost,
     accountsPath,
     relayOAuth: {
-      google: client('SIDEBOARD_RELAY_GOOGLE_CLIENT_ID', 'SIDEBOARD_RELAY_GOOGLE_CLIENT_SECRET'),
       github: client('SIDEBOARD_RELAY_GITHUB_CLIENT_ID', 'SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET'),
     },
     signal: ac.signal,

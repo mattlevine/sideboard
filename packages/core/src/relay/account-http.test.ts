@@ -41,16 +41,19 @@ describe('relay account sign-in', () => {
       host: '127.0.0.1',
       port: 0,
       accountsPath,
-      relayOAuth: { google: { clientId: 'gid', clientSecret: 'gsecret' } },
+      relayOAuth: { github: { clientId: 'gid', clientSecret: 'gsecret' } },
       fetchImpl: async (input) => {
         const url = String(input);
-        if (url.includes('oauth2.googleapis.com/token')) {
-          return new Response(JSON.stringify({ access_token: 'google-access' }));
+        if (url.includes('github.com/login/oauth/access_token')) {
+          return new Response(JSON.stringify({ access_token: 'github-access' }));
         }
-        if (url.includes('openidconnect.googleapis.com')) {
+        if (url.includes('api.github.com/user/emails')) {
           return new Response(
-            JSON.stringify({ sub: 'google-sub-1', email: 'ada@example.com', email_verified: true }),
+            JSON.stringify([{ email: 'ada@example.com', primary: true, verified: true }]),
           );
+        }
+        if (url.includes('api.github.com/user')) {
+          return new Response(JSON.stringify({ id: 99 }));
         }
         throw new Error(`unexpected fetch ${url}`);
       },
@@ -64,11 +67,11 @@ describe('relay account sign-in', () => {
     const started = await fetch(`${origin}/remote/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'google', state }),
+      body: JSON.stringify({ provider: 'github', state }),
     });
     const startBody = (await started.json()) as { url?: string };
-    expect(startBody.url).toContain('accounts.google.com');
-    const callback = await fetch(`${origin}/remote/oauth/callback?code=from-google&state=${state}`);
+    expect(startBody.url).toContain('github.com/login/oauth/authorize');
+    const callback = await fetch(`${origin}/remote/oauth/callback?code=from-github&state=${state}`);
     expect(callback.status).toBe(200);
     const result = await fetch(`${origin}/remote/oauth/result?state=${state}`);
     const session = (await result.json()) as { credential?: string };

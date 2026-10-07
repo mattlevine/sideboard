@@ -2,19 +2,24 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { escapeHtml } from '../slack/oauth-redirect.js';
 import {
   GITHUB_ACCOUNT_ISSUER,
-  GOOGLE_ACCOUNT_ISSUER,
   type RelayAccountStore,
   type RelaySignInIdentity,
 } from './accounts.js';
 
-export type RelayAccountProvider = 'google' | 'github';
+/**
+ * Git hosts that can sign a Mac into the relay. GitHub is the only one today.
+ * Add a host by extending this list and {@link GIT_HOST_AUTH}.
+ */
+export const RELAY_GIT_HOSTS = ['github'] as const;
+
+export type RelayGitHost = (typeof RELAY_GIT_HOSTS)[number];
+
+/** The relay signs a Mac in as its git host. */
+export type RelayAccountProvider = RelayGitHost;
 
 export type RelayOAuthClient = { clientId: string; clientSecret: string };
 
-export type RelayOAuthConfig = {
-  google?: RelayOAuthClient;
-  github?: RelayOAuthClient;
-};
+export type RelayOAuthConfig = Partial<Record<RelayGitHost, RelayOAuthClient>>;
 
 export const REMOTE_LOGIN_PATH = '/remote/login';
 export const REMOTE_OAUTH_CALLBACK_PATH = '/remote/oauth/callback';
@@ -78,9 +83,33 @@ export class RelayLoginSessions {
   }
 }
 
+type GitHostAuth = {
+  label: string;
+  authorizeUrl: string;
+  scope: string;
+  fetchIdentity(
+    client: RelayOAuthClient,
+    code: string,
+    redirectUri: string,
+    fetchImpl: typeof fetch,
+  ): Promise<RelaySignInIdentity>;
+};
+
+/**
+ * One entry per git host. The desktop does not pick a mail provider — the
+ * host that owns the repos is the relay account.
+ */
+const GIT_HOST_AUTH: Record<RelayGitHost, GitHostAuth> = {
+  github: {
+    label: 'GitHub',
+    authorizeUrl: 'https://github.com/login/oauth/authorize',
+    scope: 'user:email',
+    fetchIdentity: fetchGithubIdentity,
+  },
+};
+
 function providerOf(value: string): RelayAccountProvider | null {
-  if (value === 'google' || value === 'github') return value;
-  return null;
+  return (RELAY_GIT_HOSTS as readonly string[]).includes(value) ? (value as RelayGitHost) : null;
 }
 
 export function relayAuthorizeUrl(
@@ -89,20 +118,11 @@ export function relayAuthorizeUrl(
   redirectUri: string,
   state: string,
 ): string {
-  if (provider === 'google') {
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.searchParams.set('client_id', client.clientId);
-    url.searchParams.set('redirect_uri', redirectUri);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', 'openid email');
-    url.searchParams.set('state', state);
-    url.searchParams.set('prompt', 'select_account');
-    return url.toString();
-  }
-  const url = new URL('https://github.com/login/oauth/authorize');
+  const host = GIT_HOST_AUTH[provider];
+  const url = new URL(host.authorizeUrl);
   url.searchParams.set('client_id', client.clientId);
   url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('scope', 'user:email');
+  url.searchParams.set('scope', host.scope);
   url.searchParams.set('state', state);
   return url.toString();
 }
@@ -126,37 +146,12 @@ function accessToken(body: unknown): string {
   return token.trim();
 }
 
-export async function fetchRelayIdentity(
-  provider: RelayAccountProvider,
+async function fetchGithubIdentity(
   client: RelayOAuthClient,
   code: string,
   redirectUri: string,
   fetchImpl: typeof fetch,
 ): Promise<RelaySignInIdentity> {
-  if (provider === 'google') {
-    const tokenRes = await fetchImpl('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: client.clientId,
-        client_secret: client.clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }),
-    });
-    const token = accessToken(await readJson(tokenRes));
-    const infoRes = await fetchImpl('https://openidconnect.googleapis.com/v1/userinfo', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const info = (await readJson(infoRes)) as { sub?: unknown; email?: unknown; email_verified?: unknown };
-    const subject = typeof info.sub === 'string' ? info.sub.trim() : '';
-    if (!subject) throw new Error('Google did not return an account id.');
-    const email = typeof info.email === 'string' ? info.email : null;
-    const verified = info.email_verified === true || info.email_verified === 'true';
-    return { issuer: GOOGLE_ACCOUNT_ISSUER, subject, email, emailVerified: verified };
-  }
-
   const tokenRes = await fetchImpl('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -186,6 +181,16 @@ export async function fetchRelayIdentity(
   return { issuer: GITHUB_ACCOUNT_ISSUER, subject, email, emailVerified: Boolean(email) };
 }
 
+export async function fetchRelayIdentity(
+  provider: RelayAccountProvider,
+  client: RelayOAuthClient,
+  code: string,
+  redirectUri: string,
+  fetchImpl: typeof fetch,
+): Promise<RelaySignInIdentity> {
+  return GIT_HOST_AUTH[provider].fetchIdentity(client, code, redirectUri, fetchImpl);
+}
+
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -211,8 +216,9 @@ function sendHtml(res: ServerResponse, status: number, title: string, body: stri
 }
 
 /**
- * Google and GitHub sign-in for the phone relay. Client secrets stay on the
- * relay. The desktop receives a Sideboard credential, not the provider token.
+ * Git-host sign-in for the phone relay. GitHub is the host today; another host
+ * is a registry entry. Client secrets stay on the relay. The desktop receives
+ * a Sideboard credential, not the provider token.
  */
 export async function handleRelayAccountHttp(opts: {
   req: IncomingMessage;
@@ -244,10 +250,12 @@ export async function handleRelayAccountHttp(opts: {
       sendJson(opts.res, 400, { ok: false, error: 'invalid login request' });
       return true;
     }
-    const client = provider === 'google' ? opts.oauth.google : opts.oauth.github;
+    const client = opts.oauth[provider];
     if (!client?.clientId || !client.clientSecret) {
-      const name = provider === 'google' ? 'Google' : 'GitHub';
-      sendJson(opts.res, 503, { ok: false, error: `${name} sign-in is not configured on this relay.` });
+      sendJson(opts.res, 503, {
+        ok: false,
+        error: `${GIT_HOST_AUTH[provider].label} sign-in is not configured on this relay.`,
+      });
       return true;
     }
     let accountId: string | null = null;
@@ -280,7 +288,7 @@ export async function handleRelayAccountHttp(opts: {
       sendHtml(opts.res, 400, 'Sideboard', `<h1>Could not sign in</h1><p>${escapeHtml(message)}</p>`);
       return true;
     }
-    const client = pending.provider === 'google' ? opts.oauth.google : opts.oauth.github;
+    const client = opts.oauth[pending.provider];
     if (!client) {
       opts.sessions.putResult(state, { ok: false, error: 'Sign-in is not configured on this relay.' });
       sendHtml(opts.res, 503, 'Sideboard', '<h1>Sign-in is not configured</h1>');

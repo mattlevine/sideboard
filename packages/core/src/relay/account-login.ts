@@ -50,7 +50,7 @@ export type RemoteAccountSession = {
 };
 
 /**
- * Open Google or GitHub in the browser. The relay holds the client secret and
+ * Open the git host in the browser. The relay holds the client secret and
  * returns a Sideboard credential for this Mac.
  */
 export async function startRemoteAccountLogin(opts: {

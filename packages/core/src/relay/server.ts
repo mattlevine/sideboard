@@ -58,7 +58,7 @@ export interface RelayServerOptions {
    * `host_register`. On Fly this path is a volume mount so deploys keep it.
    */
   accountsPath?: string;
-  /** Google and GitHub OAuth clients. Secrets stay on the relay. */
+  /** Git-host OAuth clients. Secrets stay on the relay. */
   relayOAuth?: RelayOAuthConfig;
   /** Public origin for OAuth redirects, e.g. `https://relay.sideboard.cloud`. */
   relayPublicOrigin?: string;
