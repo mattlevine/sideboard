@@ -39,8 +39,24 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function normalizedBody(content: string): string {
+  return content.trim().replace(/\s+/g, ' ');
+}
+
+/** Full-body id. A leading slice collides: HTML and React documents share their opening boilerplate. */
 export function artifactHint(content: string): string {
-  return oneLine(content.trim(), 80);
+  const body = normalizedBody(content);
+  if (!body) return '';
+  return fnv1a32(body).toString(36);
+}
+
+function fnv1a32(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }
 
 function looksLikeHtml(content: string): boolean {
@@ -145,7 +161,15 @@ export function parseOpenArtifact(value: unknown, chatId: string): PhoneOpenArti
   return { op: 'open-artifact', chatId, title, ...(hint ? { hint } : {}) };
 }
 
-/** Newest matching document. `items` is oldest first; a content hint beats a shared title. */
+function newest<T>(items: T[]): T | null {
+  return items.length ? (items[items.length - 1] ?? null) : null;
+}
+
+/**
+ * Newest matching document. `items` is oldest first.
+ * A full-body hint identifies one document. A shared prefix matches only when the title agrees,
+ * so a later pane with the same HTML or React boilerplate does not win.
+ */
 export function pickArtifactMatch<T extends { title: string; content?: string }>(
   items: T[],
   request: { title: string; hint?: string },
@@ -153,10 +177,16 @@ export function pickArtifactMatch<T extends { title: string; content?: string }>
   const hint = request.hint?.trim();
   const title = request.title.trim();
   if (hint) {
-    for (let i = items.length - 1; i >= 0; i--) {
-      const content = items[i]?.content;
-      if (!content) continue;
-      if (content.trim().replace(/\s+/g, ' ').startsWith(hint)) return items[i] ?? null;
+    const exact = items.filter((item) => item.content && artifactHint(item.content) === hint);
+    const exactTitled = title ? exact.filter((item) => item.title === title) : [];
+    const exactMatch = newest(exactTitled.length ? exactTitled : exact);
+    if (exactMatch) return exactMatch;
+    if (title) {
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        if (!item?.content || item.title !== title) continue;
+        if (normalizedBody(item.content).startsWith(hint)) return item;
+      }
     }
   }
   if (!title) return null;

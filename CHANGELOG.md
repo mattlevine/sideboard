@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Phone agent replies sit on the page without a bubble border. User messages keep the rounded outline.
 - The phone sidebar uses the desktop project tile and the worktree status mark (idle, running, queued, error).
 - Phone chats show the same agent marks as the desktop: Claude, Codex, Cursor, OpenCode, and Brightsy.
-- Phone artifact documents open on the Mac, the same way file paths do, instead of dumping the source into the chat.
+- Phone artifact documents open on the Mac, the same way file paths do, instead of dumping the source into the chat. A tap opens that document, not a later one that only shares the same opening boilerplate.
 - Phone error lines, such as a file outside the worktree, disappear after a few seconds.
 
 ## [0.1.276] - 2026-10-07

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessagePart } from '../types/thread.js';
-import { parseOpenArtifact, phoneArtifactText, pickArtifactMatch } from './phone-artifact.js';
+import { artifactHint, parseOpenArtifact, phoneArtifactText, pickArtifactMatch } from './phone-artifact.js';
 
 const html = `<!DOCTYPE html>
 <html><head><title>Dashboard</title></head>
@@ -48,6 +48,9 @@ describe('parseOpenArtifact', () => {
   });
 });
 
+const sharedHead =
+  '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
+
 describe('pickArtifactMatch', () => {
   it('prefers a content hint over a shared title, newest first', () => {
     const items = [
@@ -55,6 +58,24 @@ describe('pickArtifactMatch', () => {
       { title: 'HTML artifact', content: '<p>newer document that is long enough</p>' },
     ];
     expect(pickArtifactMatch(items, { title: 'HTML artifact', hint: '<p>older' })).toBe(items[0]);
+    expect(pickArtifactMatch(items, { title: 'HTML artifact', hint: artifactHint(items[0]!.content) })).toBe(items[0]);
     expect(pickArtifactMatch(items, { title: 'HTML artifact' })).toBe(items[1]);
+  });
+
+  it('does not open a later document that only shares opening boilerplate', () => {
+    expect(sharedHead.length).toBeGreaterThan(80);
+    const items = [
+      { title: 'HTML artifact', content: `${sharedHead}<body><p>older unique body</p></body></html>` },
+      { title: 'HTML artifact', content: `${sharedHead}<body><p>newer unique body</p></body></html>` },
+    ];
+    expect(pickArtifactMatch(items, { title: 'HTML artifact', hint: artifactHint(items[0]!.content) })).toBe(items[0]);
+  });
+
+  it('uses the title when a shared prefix would match a later pane', () => {
+    const items = [
+      { title: 'Dashboard', content: `${sharedHead}<body>older</body></html>` },
+      { title: 'Settings', content: `${sharedHead}<body>newer</body></html>` },
+    ];
+    expect(pickArtifactMatch(items, { title: 'Dashboard', hint: sharedHead.slice(0, 80) })).toBe(items[0]);
   });
 });
