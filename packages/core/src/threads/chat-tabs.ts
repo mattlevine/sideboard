@@ -21,8 +21,8 @@ import {
   listThreads,
   writeThread,
 } from '../store/thread-store.js';
+import type { AgentBlockSource } from '../types/agent-block.js';
 import type {
-  AgentBlockSource,
   CreateChatTabInput,
   ForkChatTabInput,
   Thread,

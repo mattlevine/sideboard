@@ -17,9 +17,7 @@ import {
   groupHomeBoardWorktrees,
   isHomeBoardThread,
   visiblePage,
-  visibleAgentBlock,
-  worktreeAgentBlock,
-  worktreeBoardStatus,
+  visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus,
   worktreeMatchesOwnership,
   reviewLabelForRepo,
   type BoardColumnId,
@@ -321,13 +319,9 @@ export function GlobalBoard({
 }
 
 function worktreeSourceLabel(t: Thread): string | null {
-  if (t.sourceType === 'ticket' || t.sourceType === 'pr') {
-    return `${t.sourceType}:${t.sourceRef}`;
-  }
-  if (t.sourceType === 'adopt') return 'adopt';
-  if (t.cowboy) return 'cowboy';
-  if (t.sourceType === 'branch' && t.branchName) return t.branchName;
-  return null;
+  if (t.sourceType === 'ticket' || t.sourceType === 'pr') return `${t.sourceType}:${t.sourceRef}`;
+  if (t.sourceType === 'adopt' || t.cowboy) return t.sourceType === 'adopt' ? 'adopt' : 'cowboy';
+  return t.sourceType === 'branch' && t.branchName ? t.branchName : null;
 }
 
 function WorktreeCard({
@@ -380,9 +374,7 @@ function WorktreeCard({
 
   return (
     <article
-      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}${
-        block ? ' is-blocked' : ''
-      }`}
+      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}${block ? ' is-blocked' : ''}`}
       aria-busy={archiving}
       onClick={openWorktree}
     >
@@ -396,8 +388,7 @@ function WorktreeCard({
             dirtyLoaded={loaded}
             additions={stat?.additions ?? 0}
             deletions={stat?.deletions ?? 0}
-            unread={unread}
-            blockedReason={block?.reason}
+            unread={unread} blockedReason={block?.reason}
           />
         )}
         <div
@@ -432,11 +423,7 @@ function WorktreeCard({
                   .filter(Boolean)
                   .join(' · ')}
           </div>
-          {block ? (
-            <div className="thread-blocked-reason" title={block.reason}>
-              {block.reason}
-            </div>
-          ) : null}
+          {block ? <div className="thread-blocked-reason" title={block.reason}>{block.reason}</div> : null}
         </div>
       </div>
       {canArchive && (
@@ -511,10 +498,7 @@ function ChatCard({
       }}
     >
       <div className="board-card-top">
-        <span
-          className={`dot ${block ? 'blocked' : t.status}`}
-          title={block?.reason ?? t.status}
-        />
+        <span className={`dot ${block ? 'blocked' : t.status}`} title={block?.reason ?? t.status} />
         <div className="board-open">
           <div className="thread-title">{threadDisplayTitle(t)}</div>
           <div className="thread-meta">
@@ -527,11 +511,7 @@ function ChatCard({
               .filter(Boolean)
               .join(' · ')}
           </div>
-          {block ? (
-            <div className="thread-blocked-reason" title={block.reason}>
-              {block.reason}
-            </div>
-          ) : null}
+          {block ? <div className="thread-blocked-reason" title={block.reason}>{block.reason}</div> : null}
         </div>
       </div>
       {preview ? (

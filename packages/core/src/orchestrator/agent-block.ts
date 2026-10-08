@@ -1,7 +1,8 @@
 import { extractPendingPlanQuestions, isAskUserToolName } from '../plan/ask-user.js';
 import { extractPresentedPlan } from '../plan/plan-present.js';
 import { readThread, updateThread } from '../store/thread-store.js';
-import type { AgentBlock, AgentBlockSource, MessagePart } from '../types/thread.js';
+import type { AgentBlock, AgentBlockSource } from '../types/agent-block.js';
+import type { MessagePart } from '../types/thread.js';
 import { formatAskUserNotifyMessage } from './notify-orchestrator.js';
 
 /** Sidebar / orchestrator reasons stay one line. */
@@ -121,4 +122,51 @@ export function settleAgentBlock(
     return;
   }
   updateThread(threadId, { agentBlock: next });
+}
+
+export function chatBlockedSuffix(thread: { agentBlock?: { reason?: string } | null }): string {
+  const raw = thread.agentBlock?.reason;
+  if (!raw?.trim()) return '';
+  return `  blocked:${raw.replace(/\s+/g, ' ').slice(0, 80)}`;
+}
+
+export function agentBlockFields(thread: {
+  agentBlock?: { reason?: string; source?: AgentBlockSource } | null;
+}): { blockedReason: string | null; blockedSource: AgentBlockSource | null } {
+  return {
+    blockedReason: thread.agentBlock?.reason ?? null,
+    blockedSource: thread.agentBlock?.source ?? null,
+  };
+}
+
+export function stampAskUserBlock(
+  resolveCaller: () => { id: string },
+  questions: Array<{ question?: string }>,
+): string {
+  const asked = formatAskUserNotifyMessage(questions);
+  try {
+    writeAgentBlock(resolveCaller().id, makeAgentBlock('ask_user', asked));
+  } catch {
+    /* no thread — picker still returns */
+  }
+  return asked;
+}
+
+export function stampPlanBlock(threadId: string | undefined, title: string | undefined): string {
+  const planTitle = title?.trim() || 'Plan';
+  if (threadId) {
+    const reason = planTitle === 'Plan' ? 'Waiting for plan approval' : `Waiting for plan approval: ${planTitle}`;
+    writeAgentBlock(threadId, makeAgentBlock('plan', reason));
+  }
+  return planTitle;
+}
+
+export function stampNotifyBlock(
+  threadId: string,
+  reason: 'input-required' | 'blocked' | undefined,
+  message: string,
+): 'input-required' | 'blocked' {
+  const resolved = reason ?? 'blocked';
+  writeAgentBlock(threadId, makeAgentBlock(resolved === 'input-required' ? 'ask_user' : 'reported', message));
+  return resolved;
 }

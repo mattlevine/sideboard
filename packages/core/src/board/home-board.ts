@@ -6,14 +6,8 @@ import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
-import type {
-  AgentBlock,
-  IssueInfo,
-  MessagePart,
-  PrInfo,
-  Thread,
-  ThreadMessage,
-} from '../types/thread.js';
+import { threadCardBlockFields, worktreeBoardStatus } from './agent-block-view.js';
+import type { IssueInfo, MessagePart, PrInfo, Thread, ThreadMessage } from '../types/thread.js';
 
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
 const GLOBAL_WORKSPACE_ID = '__global__';
@@ -449,46 +443,7 @@ export function classifyWorktreeListBadges(
   ];
 }
 
-/** Activity dot for a worktree: running / queued beat idle sibling tabs. */
-export function worktreeBoardStatus(group: Array<Pick<Thread, 'status'>>): Thread['status'] {
-  const order: Thread['status'][] = ['running', 'queued', 'error', 'broken'];
-  for (const status of order) {
-    if (group.some((t) => t.status === status)) return status;
-  }
-  return group[0]?.status ?? 'idle';
-}
-
-/** Blocked highlight. Errors and archived chats keep their own status. */
-export function visibleAgentBlock(
-  thread: Pick<Thread, 'status' | 'agentBlock'>,
-): AgentBlock | null {
-  if (
-    thread.status === 'archived' ||
-    thread.status === 'error' ||
-    thread.status === 'broken'
-  ) {
-    return null;
-  }
-  const block = thread.agentBlock;
-  if (!block?.reason?.trim()) return null;
-  return block;
-}
-
-/**
- * Worktree rollup. A blocked agent outranks a working sibling — same priority
- * Herdr uses so the row that needs a decision is the one you see.
- */
-export function worktreeAgentBlock(
-  group: Array<Pick<Thread, 'status' | 'agentBlock'>>,
-): AgentBlock | null {
-  let best: AgentBlock | null = null;
-  for (const thread of group) {
-    const block = visibleAgentBlock(thread);
-    if (!block) continue;
-    if (!best || block.at > best.at) best = block;
-  }
-  return best;
-}
+export { visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus } from './agent-block-view.js';
 
 function normalizeIssueKey(value: string): string {
   return value.trim().toLowerCase().replace(/^#/, '');
@@ -1194,10 +1149,7 @@ export type HomeBoardThreadCard = {
   prUrl: string | null;
   link: string;
   /** Live chat tabs on this checkout. Omitted when 1. */
-  chatCount?: number;
-  /** Why an agent on this checkout is waiting on a person. */
-  blockedReason?: string;
-  blockedSource?: AgentBlock['source'];
+  chatCount?: number; blockedReason?: string; blockedSource?: 'ask_user' | 'plan' | 'reported';
 };
 
 export type HomeBoardCard =
@@ -1276,7 +1228,6 @@ export function findBoardPr(
 function toThreadCard(group: Thread[]): HomeBoardThreadCard {
   const thread = group[0]!;
   const withPr = group.find((t) => t.prUrl?.trim()) ?? thread;
-  const block = worktreeAgentBlock(group);
   return {
     kind: 'thread',
     id: thread.id,
@@ -1289,9 +1240,7 @@ function toThreadCard(group: Thread[]): HomeBoardThreadCard {
     prUrl: withPr.prUrl,
     link: `sideboard://chat/${thread.id}`,
     ...(group.length > 1 ? { chatCount: group.length } : {}),
-    ...(block
-      ? { blockedReason: block.reason, blockedSource: block.source }
-      : {}),
+    ...(threadCardBlockFields(group) ?? {}),
   };
 }
 

@@ -4,7 +4,7 @@ import {
   lastAgentReply,
   pendingInjectedNotices,
 } from '../threads/injected-notices.js';
-import { deriveTaskState, type TaskState } from './task-state.js';
+import { deriveTaskState, type TurnResult } from './task-state.js';
 import { lastActivityAtForWait } from '../mcp/wait-for-turn.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -2028,11 +2028,7 @@ export class Orchestrator {
       } else {
         await syncThreadBranchFromGit(threadId);
       }
-      settleAgentBlock(
-        threadId,
-        parts,
-        exitCode !== 0 && !this.stoppedTurns.has(threadId),
-      );
+      settleAgentBlock(threadId, parts, exitCode !== 0 && !this.stoppedTurns.has(threadId));
       if (this.stoppedTurns.has(threadId)) {
         // Preserve intentional stop — do not overwrite with idle/error from kill exit.
         const stopped = writeLiveStatus(threadId, 'stopped');
@@ -2970,23 +2966,7 @@ export class Orchestrator {
     };
   }
 
-  getTurnResult(threadRef: string): {
-    text: string;
-    status: string;
-    taskState: TaskState;
-    sessionId: string | null;
-    lastError: string | null;
-    stillRunning: boolean;
-    progress: string | null;
-    lastActivityAt: string | null;
-    usage: TokenUsage | null;
-    /**
-     * Why this agent is waiting on a person. Live results always set this
-     * (null when not blocked). Optional so older test doubles still typecheck.
-     */
-    blockedReason?: string | null;
-    blockedSource?: 'ask_user' | 'plan' | 'reported' | null;
-  } {
+  getTurnResult(threadRef: string): TurnResult {
     const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
     const lastAgent = lastAgentReply(thread.messages);
     const lastError = thread.lastError ?? null;

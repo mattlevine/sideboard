@@ -13,20 +13,6 @@ export type ThreadStatus =
   | 'broken'
   | 'archived';
 
-/**
- * Why an agent is waiting on a person. Process liveness stays on
- * {@link ThreadStatus}; this is the attention flag (Herdr `blocked`).
- * Cleared when the next user message starts a turn.
- */
-export type AgentBlockSource = 'ask_user' | 'plan' | 'reported';
-
-export interface AgentBlock {
-  /** Short reason shown on the sidebar, board, and to orchestrators. */
-  reason: string;
-  source: AgentBlockSource;
-  at: string;
-}
-
 export type Autonomy = 'default' | 'full';
 
 /** Structured agent turn content (thinking / tools / text). */
@@ -144,12 +130,7 @@ export interface Thread {
   accountId?: string | null;
   autonomy: Autonomy;
   sourceIsFork: boolean;
-  status: ThreadStatus;
-  /**
-   * Set while this agent is waiting on a person (question, plan approval,
-   * or an explicit block report). Null/omitted when it is not.
-   */
-  agentBlock?: AgentBlock | null;
+  status: ThreadStatus; agentBlock?: import('./agent-block.js').AgentBlock | null;
   queue: string[];
   parentThreadId: string | null;
   /** Port of the default/primary run script (legacy + sidebar). */

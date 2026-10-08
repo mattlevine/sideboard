@@ -25,12 +25,8 @@ import {
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
-import { makeAgentBlock, writeAgentBlock } from '../orchestrator/agent-block.js';
-import {
-  formatAskUserNotifyMessage,
-  notifyOrchestrator,
-  resolveNotifyCallerThread,
-} from '../orchestrator/notify-orchestrator.js';
+import { agentBlockFields, chatBlockedSuffix, stampAskUserBlock, stampNotifyBlock, stampPlanBlock } from '../orchestrator/agent-block.js';
+import { notifyOrchestrator, resolveNotifyCallerThread } from '../orchestrator/notify-orchestrator.js';
 import {
   activeRunPreview,
   runScriptPreview,
@@ -356,13 +352,10 @@ export async function startMcpServer(): Promise<void> {
         const parent = t.parentThreadId ? `  parent:${t.parentThreadId.slice(0, 8)}` : '';
         const preview = lastMessagePreview(t.messages, 80);
         const previewBit = preview ? `  ${preview}` : '';
-        const blocked = t.agentBlock?.reason?.trim()
-          ? `  blocked:${t.agentBlock.reason.replace(/\s+/g, ' ').slice(0, 80)}`
-          : '';
         const err = t.lastError ? `  error:${t.lastError.replace(/\s+/g, ' ').slice(0, 60)}` : '';
         const progress =
           live?.summary && !isInternalAgentStatusText(live.summary) ? `  ${live.summary}` : '';
-        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${blocked}${err}  sideboard://chat/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
+        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${chatBlockedSuffix(t)}${err}  sideboard://chat/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
       });
       return {
         content: [{ type: 'text', text: lines.join('\n') || '(no chats)' }],
@@ -461,8 +454,7 @@ export async function startMcpServer(): Promise<void> {
         devPort: t.devPort,
         prUrl: t.prUrl,
         lastError: t.lastError ?? null,
-        blockedReason: t.agentBlock?.reason ?? null,
-        blockedSource: t.agentBlock?.source ?? null,
+        ...agentBlockFields(t),
         stillRunning,
         progress:
           liveSummary ??
@@ -562,16 +554,9 @@ export async function startMcpServer(): Promise<void> {
         message:
           'Questions shown in Sideboard’s composer. Wait for the user’s next message with their answers before continuing.',
       };
-      const asked = formatAskUserNotifyMessage(questions);
-      try {
-        const child = resolveNotifyCallerThread();
-        writeAgentBlock(child.id, makeAgentBlock('ask_user', asked));
-      } catch {
-        /* no thread — picker still returns */
-      }
       await notifyParent({
         reason: 'input-required',
-        message: asked,
+        message: stampAskUserBlock(resolveNotifyCallerThread, questions),
       });
       return mcpJson(payload);
     },
@@ -610,22 +595,10 @@ export async function startMcpServer(): Promise<void> {
         let root = process.cwd();
         if (t?.worktreePath?.trim()) root = t.worktreePath;
         const path = writePlanFile(root, content);
-        const planTitle = title?.trim() || 'Plan';
-        if (t) {
-          writeAgentBlock(
-            t.id,
-            makeAgentBlock(
-              'plan',
-              planTitle === 'Plan'
-                ? 'Waiting for plan approval'
-                : `Waiting for plan approval: ${planTitle}`,
-            ),
-          );
-        }
         const payload = {
           ok: true,
           path,
-          title: planTitle,
+          title: stampPlanBlock(t?.id, title),
           message:
             'Plan saved to .context/attachments/plan.md and shown in Sideboard chat for approval.',
         };
@@ -917,14 +890,9 @@ export async function startMcpServer(): Promise<void> {
       async ({ message, reason }) => {
         try {
           const child = resolveNotifyCallerThread();
-          const resolved = reason ?? 'blocked';
-          writeAgentBlock(
-            child.id,
-            makeAgentBlock(resolved === 'input-required' ? 'ask_user' : 'reported', message),
-          );
           const result = await notifyOrchestrator({
             child,
-            reason: resolved,
+            reason: stampNotifyBlock(child.id, reason, message),
             message,
             send: (id, prompt, opts) => orch.send(id, prompt, opts),
           });
@@ -1205,8 +1173,7 @@ export async function startMcpServer(): Promise<void> {
           progress: result.progress,
           lastActivityAt: result.lastActivityAt,
           usage: result.usage,
-          blockedReason: result.blockedReason,
-          blockedSource: result.blockedSource,
+          blockedReason: result.blockedReason, blockedSource: result.blockedSource,
         }),
       );
     },
@@ -1220,11 +1187,7 @@ export async function startMcpServer(): Promise<void> {
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);
       const hint = mcpWaitTaskHint(result.taskState, result.status, result.blockedReason);
-      const waiting =
-        Boolean(result.blockedReason) &&
-        !result.stillRunning &&
-        result.taskState !== 'failed' &&
-        result.taskState !== 'canceled';
+      const waiting = Boolean(result.blockedReason) && !result.stillRunning && result.taskState !== 'failed' && result.taskState !== 'canceled';
       return mcpJson({
         ...result,
         hint,

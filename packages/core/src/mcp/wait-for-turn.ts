@@ -1,5 +1,6 @@
 import { needsCoordinatorAction, type TaskState } from '../orchestrator/task-state.js';
-import type { AgentBlockSource, TokenUsage } from '../types/thread.js';
+import type { AgentBlockSource } from '../types/agent-block.js';
+import type { TokenUsage } from '../types/thread.js';
 
 /**
  * MCP clients (Cursor, Claude Code) often kill a tool call around 60s.

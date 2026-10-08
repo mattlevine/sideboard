@@ -1,6 +1,7 @@
 import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { isInjectedNoticeText } from '../threads/injected-notices.js';
-import type { AgentBlockSource, Thread, ThreadMessage } from '../types/thread.js';
+import type { AgentBlockSource } from '../types/agent-block.js';
+import type { Thread, ThreadMessage } from '../types/thread.js';
 
 /** Last non-empty message text for coordinators (not the full transcript). */
 export function lastMessagePreview(

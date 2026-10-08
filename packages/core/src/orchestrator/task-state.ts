@@ -1,5 +1,5 @@
 import { isAskUserToolName } from '../plan/ask-user.js';
-import type { MessagePart, ThreadStatus } from '../types/thread.js';
+import type { MessagePart, ThreadStatus, TokenUsage } from '../types/thread.js';
 
 /**
  * Lifecycle of one worktree turn, in A2A (Agent2Agent) task vocabulary.
@@ -75,3 +75,18 @@ export function deriveTaskState(input: {
       return endedOnAskUser(input.lastAgentParts) ? 'input-required' : 'completed';
   }
 }
+
+/** Snapshot returned by `getTurnResult`. Block fields are optional so older test doubles typecheck. */
+export type TurnResult = {
+  text: string;
+  status: string;
+  taskState: TaskState;
+  sessionId: string | null;
+  lastError: string | null;
+  stillRunning: boolean;
+  progress: string | null;
+  lastActivityAt: string | null;
+  usage: TokenUsage | null;
+  blockedReason?: string | null;
+  blockedSource?: 'ask_user' | 'plan' | 'reported' | null;
+};
