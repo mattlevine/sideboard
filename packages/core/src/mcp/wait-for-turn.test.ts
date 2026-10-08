@@ -54,6 +54,16 @@ describe('mcpWaitTaskHint', () => {
     expect(mcpWaitTaskHint('failed', 'broken')).toBe(MCP_WAIT_BROKEN_HINT);
     expect(mcpWaitTaskHint('completed')).toBeUndefined();
   });
+
+  it('includes the block reason and does not replace a failure', () => {
+    expect(mcpWaitTaskHint('completed', 'idle', 'Need a Linear token')).toMatch(
+      /Need a Linear token/,
+    );
+    expect(mcpWaitTaskHint('input-required', 'idle', 'Asked the user: Which API?')).toMatch(
+      /Which API/,
+    );
+    expect(mcpWaitTaskHint('failed', 'error', 'Need a Linear token')).toBe(MCP_WAIT_ERROR_HINT);
+  });
 });
 
 describe('waitForTurnToolResult', () => {
@@ -116,5 +126,24 @@ describe('waitForTurnToolResult', () => {
     expect(result.usage).toBeNull();
     expect(result.stillRunning).toBe(true);
     expect(result.hint).toBe(MCP_WAIT_STILL_RUNNING_HINT);
+  });
+
+  it('marks a settled reported block incomplete and names the reason', () => {
+    const result = waitForTurnToolResult({
+      id: 't1',
+      status: 'idle',
+      taskState: 'completed',
+      text: 'I cannot continue',
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      blockedReason: 'Need a Linear token',
+      blockedSource: 'reported',
+    });
+    expect(result.incomplete).toBe(true);
+    expect(result.blockedReason).toBe('Need a Linear token');
+    expect(result.hint).toMatch(/Need a Linear token/);
+    expect(result.hint).toMatch(/Do not send_to_chat/);
   });
 });

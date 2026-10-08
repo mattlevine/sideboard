@@ -17,6 +17,8 @@ import {
   groupHomeBoardWorktrees,
   isHomeBoardThread,
   visiblePage,
+  visibleAgentBlock,
+  worktreeAgentBlock,
   worktreeBoardStatus,
   worktreeMatchesOwnership,
   reviewLabelForRepo,
@@ -356,6 +358,7 @@ function WorktreeCard({
   const primary = pickWorktreeChat(group, selectedId) ?? oldest;
   const chats = orderWorktreeChatsForKey(group, unreadWorktreeKey(oldest));
   const status = worktreeBoardStatus(group);
+  const block = worktreeAgentBlock(group);
   const repo = workspaceName(oldest.repoPath, workspaces);
   const label = worktreeDisplayLabelForGroup(group);
   const unread = isWorktreeUnread(
@@ -377,7 +380,9 @@ function WorktreeCard({
 
   return (
     <article
-      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}`}
+      className={`board-card board-card-worktree${archiving ? ' is-archiving' : ''}${
+        block ? ' is-blocked' : ''
+      }`}
       aria-busy={archiving}
       onClick={openWorktree}
     >
@@ -392,6 +397,7 @@ function WorktreeCard({
             additions={stat?.additions ?? 0}
             deletions={stat?.deletions ?? 0}
             unread={unread}
+            blockedReason={block?.reason}
           />
         )}
         <div
@@ -426,6 +432,11 @@ function WorktreeCard({
                   .filter(Boolean)
                   .join(' · ')}
           </div>
+          {block ? (
+            <div className="thread-blocked-reason" title={block.reason}>
+              {block.reason}
+            </div>
+          ) : null}
         </div>
       </div>
       {canArchive && (
@@ -481,9 +492,10 @@ function ChatCard({
       : markdownPreviewSource(previewText)
     : '';
   const canStop = t.status === 'running' || t.status === 'queued';
+  const block = visibleAgentBlock(t);
   return (
     <div
-      className="board-card board-card-chat"
+      className={`board-card board-card-chat${block ? ' is-blocked' : ''}`}
       role="button"
       tabIndex={0}
       onClick={(e) => {
@@ -499,19 +511,27 @@ function ChatCard({
       }}
     >
       <div className="board-card-top">
-        <span className={`dot ${t.status}`} title={t.status} />
+        <span
+          className={`dot ${block ? 'blocked' : t.status}`}
+          title={block?.reason ?? t.status}
+        />
         <div className="board-open">
           <div className="thread-title">{threadDisplayTitle(t)}</div>
           <div className="thread-meta">
             {[
               t.agent,
-              t.status,
+              block ? 'blocked' : t.status,
               t.queue.length ? `q${t.queue.length}` : null,
               relativeTime(t.updatedAt),
             ]
               .filter(Boolean)
               .join(' · ')}
           </div>
+          {block ? (
+            <div className="thread-blocked-reason" title={block.reason}>
+              {block.reason}
+            </div>
+          ) : null}
         </div>
       </div>
       {preview ? (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { worktreeBoardStatus } from '@sideboard/home-board';
+import { worktreeAgentBlock, worktreeBoardStatus } from '@sideboard/home-board';
 import { worktreeAnchorLabel } from '@sideboard/worktree-labels';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { loadThreadDefaults } from '../lib/thread-defaults';
@@ -119,6 +119,7 @@ export function WorktreeSidebarRow({
 
   const orch = primary.sourceType === 'orchestration';
   const dirty = !orch && loaded && Boolean(stat?.dirty);
+  const block = worktreeAgentBlock(group);
   const expandKey = groupKey?.trim() || unreadWorktreeKey(primary);
   const nestMin = orch ? 1 : SIDEBAR_NEST_MIN_CHATS;
   const expanded = resolveSidebarChatExpanded({
@@ -183,7 +184,9 @@ export function WorktreeSidebarRow({
         ref={rowRef}
         className={`thread-item worktree-parent${expanded ? ' is-open' : ''}${
           active && !expanded ? ' active' : ''
-        }${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}`}
+        }${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}${
+          block ? ' is-blocked' : ''
+        }`}
         aria-busy={archiving}
         onMouseEnter={() => {
           if (!orch && !addOpen) setGitCardOpen(true);
@@ -216,6 +219,7 @@ export function WorktreeSidebarRow({
             additions={stat?.additions ?? 0}
             deletions={stat?.deletions ?? 0}
             unread={unread}
+            blockedReason={block?.reason}
           />
         )}
         <div className="thread-item-body">
@@ -230,6 +234,11 @@ export function WorktreeSidebarRow({
               />
             )}
           </div>
+          {block ? (
+            <div className="thread-blocked-reason" title={block.reason}>
+              {block.reason}
+            </div>
+          ) : null}
           {showMetaRow ? (
             <div className="worktree-agents-row">
               {metaLine ? <div className="thread-meta">{metaLine}</div> : null}

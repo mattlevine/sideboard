@@ -25,6 +25,7 @@ import {
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
+import { makeAgentBlock, writeAgentBlock } from '../orchestrator/agent-block.js';
 import {
   formatAskUserNotifyMessage,
   notifyOrchestrator,
@@ -342,7 +343,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_chats',
-    'List chats across all projects (one summary line each — token-frugal). Includes parent id, last message preview, and live progress so you can see workspace children. Each line ends with sideboard://chat/<id> — use that URL in markdown links so the UI can open the chat.',
+    'List chats across all projects (one summary line each — token-frugal). Includes parent id, last message preview, blocked: when an agent is waiting on a person, and live progress so you can see workspace children. Each line ends with sideboard://chat/<id> — use that URL in markdown links so the UI can open the chat.',
     {},
     async () => {
       const threads = orch.getThreads(true);
@@ -355,10 +356,13 @@ export async function startMcpServer(): Promise<void> {
         const parent = t.parentThreadId ? `  parent:${t.parentThreadId.slice(0, 8)}` : '';
         const preview = lastMessagePreview(t.messages, 80);
         const previewBit = preview ? `  ${preview}` : '';
+        const blocked = t.agentBlock?.reason?.trim()
+          ? `  blocked:${t.agentBlock.reason.replace(/\s+/g, ' ').slice(0, 80)}`
+          : '';
         const err = t.lastError ? `  error:${t.lastError.replace(/\s+/g, ' ').slice(0, 60)}` : '';
         const progress =
           live?.summary && !isInternalAgentStatusText(live.summary) ? `  ${live.summary}` : '';
-        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${err}  sideboard://chat/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
+        return `${t.id.slice(0, 8)}  ${t.status.padEnd(9)}  ${t.agent.padEnd(8)}  ${repo}  ${t.sourceType}:${t.sourceRef}  ${t.title}${parent}${previewBit}${blocked}${err}  sideboard://chat/${t.id}${t.devPort ? `  http://localhost:${t.devPort}` : ''}${progress}`;
       });
       return {
         content: [{ type: 'text', text: lines.join('\n') || '(no chats)' }],
@@ -426,7 +430,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_chat',
-    'Get a compact chat summary by id/ref. Includes last message preview, parentChatId, and child workspace chats (status + lastText). While running, includes progress (last tool/thinking) and lastActivityAt. Includes usage (billed token + costUsd totals when providers reported cost) and lastTurnUsage.',
+    'Get a compact chat summary by id/ref. Includes last message preview, parentChatId, and child workspace chats (status + lastText). While running, includes progress (last tool/thinking) and lastActivityAt. Includes usage (billed token + costUsd totals when providers reported cost) and lastTurnUsage. blockedReason is why that agent is waiting on a person (question, plan approval, or a reported block).',
     { ref: z.string() },
     async ({ ref }) => {
       const t = orch.getThread(ref);
@@ -457,6 +461,8 @@ export async function startMcpServer(): Promise<void> {
         devPort: t.devPort,
         prUrl: t.prUrl,
         lastError: t.lastError ?? null,
+        blockedReason: t.agentBlock?.reason ?? null,
+        blockedSource: t.agentBlock?.source ?? null,
         stillRunning,
         progress:
           liveSummary ??
@@ -556,9 +562,16 @@ export async function startMcpServer(): Promise<void> {
         message:
           'Questions shown in Sideboard’s composer. Wait for the user’s next message with their answers before continuing.',
       };
+      const asked = formatAskUserNotifyMessage(questions);
+      try {
+        const child = resolveNotifyCallerThread();
+        writeAgentBlock(child.id, makeAgentBlock('ask_user', asked));
+      } catch {
+        /* no thread — picker still returns */
+      }
       await notifyParent({
         reason: 'input-required',
-        message: formatAskUserNotifyMessage(questions),
+        message: asked,
       });
       return mcpJson(payload);
     },
@@ -597,10 +610,22 @@ export async function startMcpServer(): Promise<void> {
         let root = process.cwd();
         if (t?.worktreePath?.trim()) root = t.worktreePath;
         const path = writePlanFile(root, content);
+        const planTitle = title?.trim() || 'Plan';
+        if (t) {
+          writeAgentBlock(
+            t.id,
+            makeAgentBlock(
+              'plan',
+              planTitle === 'Plan'
+                ? 'Waiting for plan approval'
+                : `Waiting for plan approval: ${planTitle}`,
+            ),
+          );
+        }
         const payload = {
           ok: true,
           path,
-          title: title?.trim() || 'Plan',
+          title: planTitle,
           message:
             'Plan saved to .context/attachments/plan.md and shown in Sideboard chat for approval.',
         };
@@ -875,7 +900,7 @@ export async function startMcpServer(): Promise<void> {
   if (worktreeProfile) {
     server.tool(
       'notify_orchestrator',
-      'Wake the parent Global orchestrator with a short status so it does not have to poll wait_for_turn. Use when you are blocked and the parent may have moved on (missing access, waiting on something the coordinator must handle). ask_user already notifies for input-required — do not call this for the same question. Information only: never a git command. Do not use this to steer other worktrees.',
+      'Wake the parent Global orchestrator with a short status so it does not have to poll wait_for_turn. Use when you are blocked and the parent may have moved on (missing access, waiting on something the coordinator must handle). The message is shown on the sidebar and board until the next user message in this chat. ask_user already notifies for input-required — do not call this for the same question. Information only: never a git command. Do not use this to steer other worktrees.',
       {
         message: z
           .string()
@@ -892,9 +917,14 @@ export async function startMcpServer(): Promise<void> {
       async ({ message, reason }) => {
         try {
           const child = resolveNotifyCallerThread();
+          const resolved = reason ?? 'blocked';
+          writeAgentBlock(
+            child.id,
+            makeAgentBlock(resolved === 'input-required' ? 'ask_user' : 'reported', message),
+          );
           const result = await notifyOrchestrator({
             child,
-            reason: reason ?? 'blocked',
+            reason: resolved,
             message,
             send: (id, prompt, opts) => orch.send(id, prompt, opts),
           });
@@ -1154,7 +1184,7 @@ export async function startMcpServer(): Promise<void> {
   if (shouldRegisterMcpWaitForTurn()) {
   server.tool(
     'wait_for_turn',
-    'Wait until the chat finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. If stillRunning, text and usage are empty (they would be the previous turn) — read progress and call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat. When finished, text is this turn’s assistant reply and usage is that turn’s tokens + costUsd (this turn, not the Claude session total; sessionCostUsd is the provider session total when present).',
+    'Wait until the chat finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. blockedReason is why the child is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. If stillRunning, text and usage are empty (they would be the previous turn) — read progress and call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat. When finished, text is this turn’s assistant reply and usage is that turn’s tokens + costUsd (this turn, not the Claude session total; sessionCostUsd is the provider session total when present).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -1175,6 +1205,8 @@ export async function startMcpServer(): Promise<void> {
           progress: result.progress,
           lastActivityAt: result.lastActivityAt,
           usage: result.usage,
+          blockedReason: result.blockedReason,
+          blockedSource: result.blockedSource,
         }),
       );
     },
@@ -1183,15 +1215,20 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_turn_result',
-    'Assistant message and last-turn usage when the turn finished. While stillRunning (submitted/working), text and usage are empty so a previous reply cannot be mistaken for this turn — use progress for tools/thinking. Not the full transcript. Includes taskState (A2A lifecycle).',
+    'Assistant message and last-turn usage when the turn finished. While stillRunning (submitted/working), text and usage are empty so a previous reply cannot be mistaken for this turn — use progress for tools/thinking. Not the full transcript. Includes taskState (A2A lifecycle) and blockedReason (why the agent is waiting on a person).',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);
-      const hint = mcpWaitTaskHint(result.taskState, result.status);
+      const hint = mcpWaitTaskHint(result.taskState, result.status, result.blockedReason);
+      const waiting =
+        Boolean(result.blockedReason) &&
+        !result.stillRunning &&
+        result.taskState !== 'failed' &&
+        result.taskState !== 'canceled';
       return mcpJson({
         ...result,
         hint,
-        incomplete: needsCoordinatorAction(result.taskState),
+        incomplete: needsCoordinatorAction(result.taskState) || waiting,
       });
     },
   );

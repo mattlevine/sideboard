@@ -1,3 +1,4 @@
+import { isAskUserToolName } from '../plan/ask-user.js';
 import type { MessagePart, ThreadStatus } from '../types/thread.js';
 
 /**
@@ -43,15 +44,13 @@ export function needsCoordinatorAction(state: TaskState): boolean {
   return isIncompleteTaskState(state) || state === 'input-required';
 }
 
-const ASK_USER_TOOL = /(^|[_.:/])ask_user$/i;
-
-/** True when the turn's last agent action was Sideboard `ask_user`. */
+/** True when the turn's last agent action was `ask_user` / AskUserQuestion. */
 export function endedOnAskUser(parts: MessagePart[] | undefined): boolean {
   if (!parts?.length) return false;
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i]!;
     if (p.type === 'tool' && !p.parentId) {
-      return ASK_USER_TOOL.test(p.name);
+      return isAskUserToolName(p.name);
     }
   }
   return false;

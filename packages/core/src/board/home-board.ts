@@ -6,7 +6,14 @@ import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
-import type { IssueInfo, MessagePart, PrInfo, Thread, ThreadMessage } from '../types/thread.js';
+import type {
+  AgentBlock,
+  IssueInfo,
+  MessagePart,
+  PrInfo,
+  Thread,
+  ThreadMessage,
+} from '../types/thread.js';
 
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
 const GLOBAL_WORKSPACE_ID = '__global__';
@@ -449,6 +456,38 @@ export function worktreeBoardStatus(group: Array<Pick<Thread, 'status'>>): Threa
     if (group.some((t) => t.status === status)) return status;
   }
   return group[0]?.status ?? 'idle';
+}
+
+/** Blocked highlight. Errors and archived chats keep their own status. */
+export function visibleAgentBlock(
+  thread: Pick<Thread, 'status' | 'agentBlock'>,
+): AgentBlock | null {
+  if (
+    thread.status === 'archived' ||
+    thread.status === 'error' ||
+    thread.status === 'broken'
+  ) {
+    return null;
+  }
+  const block = thread.agentBlock;
+  if (!block?.reason?.trim()) return null;
+  return block;
+}
+
+/**
+ * Worktree rollup. A blocked agent outranks a working sibling — same priority
+ * Herdr uses so the row that needs a decision is the one you see.
+ */
+export function worktreeAgentBlock(
+  group: Array<Pick<Thread, 'status' | 'agentBlock'>>,
+): AgentBlock | null {
+  let best: AgentBlock | null = null;
+  for (const thread of group) {
+    const block = visibleAgentBlock(thread);
+    if (!block) continue;
+    if (!best || block.at > best.at) best = block;
+  }
+  return best;
 }
 
 function normalizeIssueKey(value: string): string {
@@ -1156,6 +1195,9 @@ export type HomeBoardThreadCard = {
   link: string;
   /** Live chat tabs on this checkout. Omitted when 1. */
   chatCount?: number;
+  /** Why an agent on this checkout is waiting on a person. */
+  blockedReason?: string;
+  blockedSource?: AgentBlock['source'];
 };
 
 export type HomeBoardCard =
@@ -1234,6 +1276,7 @@ export function findBoardPr(
 function toThreadCard(group: Thread[]): HomeBoardThreadCard {
   const thread = group[0]!;
   const withPr = group.find((t) => t.prUrl?.trim()) ?? thread;
+  const block = worktreeAgentBlock(group);
   return {
     kind: 'thread',
     id: thread.id,
@@ -1246,6 +1289,9 @@ function toThreadCard(group: Thread[]): HomeBoardThreadCard {
     prUrl: withPr.prUrl,
     link: `sideboard://chat/${thread.id}`,
     ...(group.length > 1 ? { chatCount: group.length } : {}),
+    ...(block
+      ? { blockedReason: block.reason, blockedSource: block.source }
+      : {}),
   };
 }
 
@@ -1351,7 +1397,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. blockedReason means an agent on that card is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

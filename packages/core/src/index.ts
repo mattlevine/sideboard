@@ -231,6 +231,8 @@ export {
   classifyWorktreeListBadges,
   reviewLabelForRepo,
   worktreeBoardStatus,
+  visibleAgentBlock,
+  worktreeAgentBlock,
   DEFAULT_WORKTREE_SORT,
 } from './board/home-board.js';
 export type {

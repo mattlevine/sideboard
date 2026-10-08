@@ -117,6 +117,7 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
+import { clearAgentBlock, settleAgentBlock } from './agent-block.js';
 import {
   notifyParentOfChildHalt,
   shouldNotifyParentAfterTurnError,
@@ -1429,6 +1430,7 @@ export class Orchestrator {
       promptText.startsWith('The previous agent process ended before it finished.');
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
+    if (!autoContinue) clearAgentBlock(threadId);
     appendMessage(threadId, {
       role: 'user',
       text: promptText,
@@ -2026,6 +2028,11 @@ export class Orchestrator {
       } else {
         await syncThreadBranchFromGit(threadId);
       }
+      settleAgentBlock(
+        threadId,
+        parts,
+        exitCode !== 0 && !this.stoppedTurns.has(threadId),
+      );
       if (this.stoppedTurns.has(threadId)) {
         // Preserve intentional stop — do not overwrite with idle/error from kill exit.
         const stopped = writeLiveStatus(threadId, 'stopped');
@@ -2086,6 +2093,7 @@ export class Orchestrator {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await syncThreadBranchFromGit(threadId).catch(() => undefined);
+      settleAgentBlock(threadId, undefined, !this.stoppedTurns.has(threadId));
       if (this.stoppedTurns.has(threadId)) {
         const stopped = writeLiveStatus(threadId, 'stopped');
         if (stopped?.status === 'stopped') {
@@ -2972,6 +2980,12 @@ export class Orchestrator {
     progress: string | null;
     lastActivityAt: string | null;
     usage: TokenUsage | null;
+    /**
+     * Why this agent is waiting on a person. Live results always set this
+     * (null when not blocked). Optional so older test doubles still typecheck.
+     */
+    blockedReason?: string | null;
+    blockedSource?: 'ask_user' | 'plan' | 'reported' | null;
   } {
     const thread = this.healStaleReportedActivity(this.requireThread(threadRef));
     const lastAgent = lastAgentReply(thread.messages);
@@ -2990,6 +3004,7 @@ export class Orchestrator {
     const taskState = deriveTaskState({
       status: thread.status, stillRunning, lastAgentParts: lastAgent?.parts,
     });
+    const block = thread.agentBlock?.reason?.trim() ? thread.agentBlock : null;
     return {
       text,
       status: thread.status,
@@ -3002,6 +3017,8 @@ export class Orchestrator {
         thread.messages.at(-1)?.ts, lastAgent?.ts, thread.updatedAt,
       ]),
       usage: stillRunning ? null : lastAgent?.usage ?? null,
+      blockedReason: block?.reason ?? null,
+      blockedSource: block?.source ?? null,
     };
   }
 
