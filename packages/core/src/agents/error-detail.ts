@@ -334,6 +334,17 @@ export function looksLikeCursorHttp2StreamClose(text: string): boolean {
 }
 
 /**
+ * Cursor closed the model stream before the turn finished. Observed as
+ * Connect `[unknown] Premature close` and gRPC `[unavailable] Error` after
+ * a partial reply. Not "model unavailable" or a feature gate.
+ */
+export function looksLikeCursorStreamCutOff(text: string): boolean {
+  const t = text.trim();
+  if (/premature close/i.test(t)) return true;
+  return /\[unavailable\]\s+error\b/i.test(t);
+}
+
+/**
  * Brightsy CLI fallback when the provider stream is empty. Shown as a normal
  * assistant reply unless we treat it as a failed turn. Match the whole
  * message (optional `Error:` / `exit N:` wrappers), not a quote inside a
@@ -360,6 +371,7 @@ export function looksLikeRetryableRunnerCrash(text: string): boolean {
   if (looksLikeV8Oom(text)) return false;
   if (looksLikeHugeToolResultDump(text)) return true;
   if (looksLikeCursorHttp2StreamClose(text)) return true;
+  if (looksLikeCursorStreamCutOff(text)) return true;
   if (looksLikeBrightsyEmptyCompletion(text)) return true;
   const lower = text.trim().toLowerCase();
   if (/cannot find (?:package|module)|err_module_not_found/.test(lower)) return false;
@@ -473,7 +485,11 @@ export function humanizeAgentFailDetail(detail: string): string {
   if (/corrupt local agent checkpoint|missing root blob|truncated crash dump/.test(lower)) {
     return `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
   }
-  if (/connection stalled/.test(lower) || looksLikeCursorHttp2StreamClose(raw)) {
+  if (
+    /connection stalled/.test(lower) ||
+    looksLikeCursorHttp2StreamClose(raw) ||
+    looksLikeCursorStreamCutOff(raw)
+  ) {
     return /retry the turn/i.test(raw)
       ? raw
       : `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;

@@ -2,9 +2,9 @@
 
 Short positioning for contributors and evaluators. Not a feature-complete matrix.
 
-Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard does that too. The comparison that matters is the **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and Slack / CLI / MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs). README [Who it's for](../README.md#who-its-for) is the ICP cut.
+Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard isolates the checkout and runs many agents on it. The comparison that matters is the **orchestration tier**: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs). README [Who it's for](../README.md#who-its-for) is the ICP cut.
 
-Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (Slack, CLI, MCP) are what stayed on this machine.
+Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (phone, CLI, MCP) are what stayed on this machine. The phone app is the remote. Slack is not.
 
 ## vs Conductor (Melty)
 
@@ -16,13 +16,13 @@ A serious local orchestration tier would compete with that upsell. Sideboard is 
 |-|-----------|-----------|
 | Where agents run | Free: your Mac. Paid: cloud sandbox, off-VPN | Always this Mac — inside the corporate VPN |
 | Orchestration | Human-oriented local board; programmatic control is the Cloud API | MCP + Global board, on this Mac |
-| Team / remote | Cloud multiplayer and shared workspaces | Slack to this Mac; `slack_post` a review ping; replies come back as info |
-| Away from the laptop | Cloud sandbox keeps running | Slack reaches this Mac only while it is awake (opt-in caffeinate). Local schedules fire the same way. |
-| Session data | Cloud: Conductor’s servers. Local: your disk | Your Mac. Relay routes Slack chat only |
+| Team / remote | Cloud multiplayer and shared workspaces | Phone app paired to this Mac; you pick which desktop to open |
+| Away from the laptop | Cloud sandbox keeps running | The phone reaches this Mac only while it is awake (opt-in caffeinate). Local schedules fire the same way. |
+| Session data | Cloud: Conductor’s servers. Local: your disk | Your Mac. Relay routes phone chat only |
 | Work on `main` in the project folder | Always a sidecar worktree | Opt-in cowboy (Settings → Advanced; off by default) |
 | Lock-in | Sessions live in the app | `attach` / `adopt` — move in and out of native CLIs |
 
-Use Conductor when you want their finished Mac workspace UI, or their cloud sandboxes (always-on, off-VPN, paid). Use Sideboard when the fleet should stay on this machine and Slack / CLI / MCP is how you and a coworker enter the loop.
+Use Conductor when you want their finished Mac workspace UI, or their cloud sandboxes (always-on, off-VPN, paid). Use Sideboard when the fleet should stay on this machine and the phone app, CLI, and MCP are how you enter the loop.
 
 ## vs Orca
 
@@ -33,19 +33,19 @@ Sideboard is not trying to be an IDE. It is the layer above the IDE: a kanban of
 | | Orca | Sideboard |
 |-|------|-----------|
 | Category | Agent IDE / ADE | Local orchestration for a fleet |
-| Surfaces | App, terminal, browser, mobile | Desktop board, CLI, MCP, Slack |
-| Other systems | Orca CLI; mobile companion | `sideboard` CLI, stdio MCP, Slack to this Mac |
+| Surfaces | App, terminal, browser, mobile | Desktop board, CLI, MCP, phone |
+| Other systems | Orca CLI; mobile companion | `sideboard` CLI, stdio MCP, phone paired to this Mac |
 | Desktop OS | macOS, Windows, Linux | macOS (Apple Silicon) |
 | Compute | Local by default; SSH / your VPS | Always this Mac |
 
-Use Orca when you want the whole agent IDE (terminal + browser + design mode) and you are happy driving it from that app. Use Sideboard when you want an orchestrator other agents can call, a board of the fleet, and Slack without moving compute off this machine.
+Use Orca when you want the whole agent IDE (terminal + browser + design mode) and you are happy driving it from that app. Use Sideboard when you want an orchestrator other agents can call, a board of the fleet, and a phone app without moving compute off this machine.
 
 ## vs “open Conductor” clones
 
 Several OSS projects aim to recreate Conductor’s local board (worktrees + terminals + diffs). Sideboard’s wedge is different:
 
 1. **Local orchestration** — MCP so an agent can drive the fleet, and a board so you can see it, without a cloud workspace
-2. **Slack to this Mac** — inbound to the orchestrator, outbound review pings, replies as information — not a rented sandbox
+2. **Phone to this Mac** — pair from Settings → Remote and pick which desktop to open. Message text only, not a rented sandbox
 3. **Handoff** — attach/adopt/Conductor import, not a closed session cage
 4. **Surface split** — CLI (zero tokens) vs MCP (judgment) vs desktop (board)
 

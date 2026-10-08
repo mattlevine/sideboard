@@ -12,6 +12,7 @@ import {
   looksLikeInvalidAgentSession,
   looksLikeBrightsyEmptyCompletion,
   looksLikeCursorHttp2StreamClose,
+  looksLikeCursorStreamCutOff,
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
   looksLikeCodexMcpError,
@@ -192,6 +193,22 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
       looksLikeRetryableRunnerCrash('Cursor startup failed: Network request failed (retryable)'),
     ).toBe(true);
     expect(looksLikeRetryableRunnerCrash('Network request failed')).toBe(true);
+    expect(
+      looksLikeRetryableRunnerCrash(
+        'Cursor run failed (run-d15367a4-534f-4129-b3c6-4e8342257944): [unknown] Premature close',
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeRetryableRunnerCrash(
+        'Cursor run failed (run-909cc631-8dae-4e59-ab13-3ab8a13945c4): [unavailable] Error',
+      ),
+    ).toBe(true);
+    expect(looksLikeCursorStreamCutOff('[unknown] Premature close')).toBe(true);
+    expect(looksLikeCursorStreamCutOff('[unavailable] Error')).toBe(true);
+    expect(looksLikeCursorStreamCutOff('Model unavailable')).toBe(false);
+    expect(looksLikeCursorStreamCutOff('[feature_unavailable] This feature is not available')).toBe(
+      false,
+    );
     expect(
       shouldRetryFailedAgentTurn('Cursor startup failed: Network request failed (retryable)', {
         hasSession: false,
@@ -557,6 +574,22 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
         partsCount: 4,
       }),
     ).toBe(true);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail:
+          'Cursor run failed (run-d407d8d0-5998-42fb-87c7-aa95e02a0bfe): [unknown] Premature close',
+        assistantText: 'The live update path is missing.',
+        partsCount: 2,
+      }),
+    ).toBe(true);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail: 'Cursor run failed (run-909cc631-8dae-4e59-ab13-3ab8a13945c4): [unavailable] Error',
+        assistantText: 'I will fix those types before committing.',
+        partsCount: 3,
+      }),
+    ).toBe(true);
+    expect(humanizeAgentFailDetail('[unknown] Premature close')).toMatch(/retry the turn/i);
     expect(formatAgentErrorContinuePrompt('segfault at 0x0')).toMatch(/Continue from where you left off/);
   });
 

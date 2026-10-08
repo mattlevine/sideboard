@@ -1,26 +1,26 @@
 # Sideboard
 
-**Orchestrate a fleet of coding agents on your Mac.** Isolated git worktrees. A kanban of the whole fleet. An orchestrator that can drive it. Slack, CLI, and MCP so other systems can reach this machine — without a cloud workspace.
+**Orchestrate a fleet of coding agents on your Mac.** Isolated git worktrees. A kanban of the whole fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine — without a cloud workspace.
 
-One agent per git worktree is a crowded pattern in 2026 — Conductor, Orca, Cursor’s Agents window, Claude Code, and OSS boards (Superset, Emdash, Claude Squad) all spawn that. The remaining job is an **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and remotes so a coworker or another tool can enter the loop — without moving the repo into someone else’s cloud.
+Peers often spawn one agent per git worktree. Sideboard isolates the checkout — one workspace per ticket, PR, or named branch — and runs as many agents as that workspace needs. Sibling chats share the files. The remaining job is an **orchestration tier**: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so you can reach this machine — without moving the repo into someone else’s cloud.
 
-Sideboard started as a local port when Conductor moved that tier into a paid cloud, then added the pieces that still belong on this Mac: MCP orchestration, a global kanban, Slack remote, and CLI / MCP so other systems can drive it. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). Compute stays on this machine (corporate VPN, private git, internal APIs). Slack is remote control, not a rented sandbox.
+Sideboard started as a local port when Conductor moved that tier into a paid cloud, then added the pieces that still belong on this Mac: MCP orchestration, a global kanban, a phone app, and CLI / MCP so other systems can drive it. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). Compute stays on this machine (corporate VPN, private git, internal APIs). The phone app is remote control, not a rented sandbox.
 
 1. **A global board for you** — status, live output, and fan-out across every thread
 2. **An MCP for the agents** — list threads, wait on turns, read diffs, orchestrate the fleet, and present artifacts, schemas, and files in the desktop UI
-3. **Slack, CLI, and MCP to this Mac** — DM/@mention the orchestrator; register MCP from any harness; script the fleet without the GUI
+3. **A phone app, CLI, and MCP to this Mac** — pair the phone from Settings → Remote; register MCP from any harness; script the fleet without the GUI
 
 `attach` / `adopt` remain the door back to the native harness — move in and out of Sideboard as you choose.
 
-Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for Slack to reach them, and for scheduled jobs to fire — opt in from Settings → Advanced.
+Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for the phone to reach it, and for scheduled jobs to fire — opt in from Settings → Advanced.
 
 ![Sideboard desktop — chat with a log preview, worktree files, and the run panel](docs/assets/sideboard-desktop-review-v7.png)
 
-**Agents and backends are plugs, not the product.** CLI, MCP, and the desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is **JSON Schema → table/form**, not a CMS shell. The agent can invent a schema for whatever data it needs; wire inline JSON or another datasource later. CLI and MCP also run without the desktop app. Slack is built in ([setup](#slack)).
+**Agents and backends are plugs, not the product.** CLI, MCP, and the desktop board work with Claude Code, Codex, OpenCode, and Cursor alone. Schema UI is **JSON Schema → table/form**, not a CMS shell. The agent can invent a schema for whatever data it needs; wire inline JSON or another datasource later. CLI and MCP also run without the desktop app. The phone app is the remote ([pair it](#phone)).
 
 ## Who it's for
 
-Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and Slack / CLI / MCP can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
+Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and a phone app, the CLI, or MCP can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
 
 Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), a full agent IDE ([Orca](https://www.onorca.dev/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
 
@@ -28,15 +28,15 @@ Peer-by-peer notes: [Compare](docs/COMPARE.md).
 
 ## Why it exists
 
-Spawning worktrees is the shared primitive. When Conductor moved fleet orchestration into a **paid cloud**, Sideboard started as a local port, then kept the rest on this Mac: an orchestrator, a kanban, Slack, and CLI / MCP so other systems can drive it — on the VPN you already sit on:
+Spawning worktrees is the shared primitive. When Conductor moved fleet orchestration into a **paid cloud**, Sideboard started as a local port, then kept the rest on this Mac: an orchestrator, a kanban, a phone app, and CLI / MCP so other systems can drive it — on the VPN you already sit on:
 
 | Job | Typical tools | Sideboard |
 |-----|---------------|-----------|
 | Run N agents in isolated worktrees | Yes | Yes |
 | Orchestrate the fleet (agent-visible) | Human board, or a cloud API | MCP + Global board, on this Mac |
 | Stay on the corporate VPN | Cloud sandboxes leave it | Agents run as you, on this laptop’s network |
-| Coworker in the loop | Product cloud / shared sandbox | Slack: review ping; reply comes back as info |
-| Keep going when you step away | Cloud sandbox keeps running | Slack to this Mac — the machine must stay awake (opt-in caffeinate) |
+| Away from the desk | Product cloud / shared sandbox | Phone app paired to this Mac; pick which desktop to open |
+| Keep going when you step away | Cloud sandbox keeps running | The phone reaches this Mac only while it is awake (caffeinate while the phone remote is connected) |
 | Run work on a schedule | Cloud cron / always-on sandbox | Local jobs on this Mac; opt-in caffeinate so due jobs can fire |
 | See the whole fleet as one board | App-locked or thin | First-class global board |
 | Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
@@ -58,12 +58,12 @@ Also true, and useful on the way:
 - **Schema-agnostic / CMS-optional** — render any JSON Schema + `schemaUi`. CMS is a use case, not the category
 - **Surface-agnostic** — CLI (`sideboard` / `side`), Electron desktop, MCP, or native interactive via `attach`
 - **Origin-agnostic** — create from branch/PR/ticket, adopt any worktree, import Conductor workspaces with chat history
-- **Local-first / Slack-remote** — agents stay on this Mac (VPN, private git, internal APIs); Slack is how you and a coworker reach them ([setup](#slack))
+- **Local-first / phone-remote** — agents stay on this Mac (VPN, private git, internal APIs); the phone app is how you reach them ([pair it](#phone))
 - **Portable process skills** — recurring guides are Claude Code project skills (`.claude/skills/<name>/SKILL.md`). Sideboard `/name`, Claude Code, and `attach` all load that path ([Process skills](#process-skills))
 
-Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Slack](#slack) · [Scheduled orchestration](#scheduled-orchestration)
+Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Phone](#phone) · [Scheduled orchestration](#scheduled-orchestration)
 
-Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.cloud` is the phone remote and legacy Slack). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
+Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.cloud` is the phone remote). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
 ## Install
 
@@ -294,7 +294,7 @@ Once connected, agents get tools to:
 - **Linear tickets** — `linear_list_teams`, `linear_search_issues` / `list_issues` (`query`, `assignee` = `me` / `unassigned` / `all` / user, `updatedSince` for inbox updates + comments, `limit` default 40 max 250; raise `limit` or tighten `query` when `truncated`), `linear_get_issue` (default SmartCrusher-style crush on redundant comments / huge pasted bodies; small unique tickets pass through; `include=full` for the uncompressed vendor payload), `linear_download_attachment` (Account auth → `.context/attachments/`; do not dump bytes into the tool result), `linear_create_issue`, `linear_update_issue` (title, state, assignee, priority, cycle, labels, project, parent, relations), `linear_comment` (Settings → Issues OAuth; reconnect if you connected before write access). Linear / AbleTime mutation tools register only when that account is connected.
 - **AbleTime tickets** — `abletime_orientation`, `abletime_list_projects`, `abletime_list_tasks` / `abletime_search_tasks` (`updatedSince` for inbox updates when the hosted payload includes timestamps), `abletime_get_task`, `abletime_download_attachment` (Account auth → `.context/attachments/`), `abletime_update_task` (title, state, labels, project, parent, relations), `abletime_create_task`, `abletime_ensure_task` (Settings → Issues personal access token → hosted MCP). When AbleTime is the preferred issue source, starting work without a ticket auto-creates one to track against.
 - **Workspaces** — `add_project` / `remove_project`
-- **Worktree chats** — `create_workspace` → `send_to_chat` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentChatId` — MCP binds the child to that chat; do not invent uuids). A ticket, PR, or named branch may have only one live worktree — `create_workspace` returns that chat (`alreadyStarted`) instead of a second checkout; default-branch create still opens a new isolated worktree. `wait_for_turn` returns within ~45s with `stillRunning`, `taskState` (submitted / working / input-required / completed / failed / canceled), and live `progress` while the child is still working — call it again; do not assume a hang. `fork_workspace` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_chat` force-stops (kills in-flight turn and clears the prompt queue); `send_to_chat` steers (Settings → Follow-up, default interrupt now) and accepts optional `force_stop` to clear the inbox first; `archive_chat`, `restore_chat`
+- **Worktree chats** — `create_workspace` → `send_to_chat` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentChatId` — MCP binds the child to that chat; do not invent uuids). A ticket, PR, or named branch has one checkout — `create_workspace` returns it (`alreadyStarted`) and `chats` for every agent on it, instead of a second checkout. Add another agent with `fork_chat`.; default-branch create still opens a new isolated worktree. `wait_for_turn` returns within ~45s with `stillRunning`, `taskState` (submitted / working / input-required / completed / failed / canceled), and live `progress` while the child is still working — call it again; do not assume a hang. `fork_workspace` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_chat` force-stops (kills in-flight turn and clears the prompt queue); `send_to_chat` steers (Settings → Follow-up, default interrupt now) and accepts optional `force_stop` to clear the inbox first; `archive_chat`, `restore_chat`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
 - **Ask the user** — `ask_user` (composer multiple-choice when work is blocked on a concrete choice — not greetings or “what next?” menus). Agents explain options in chat first; Sideboard shows the picker and mirrors questions in the transcript. On a worktree child, `ask_user` also wakes the parent Global chat (`notify_orchestrator`, `input-required`) so the coordinator does not have to poll. Worktree agents can call `notify_orchestrator` themselves when blocked without a picker.
 - **Schedules** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration and worktree). `threadId=self` continues this chat; omit `threadId` to start a new Global chat when due. Jobs fire only while Sideboard.app is running. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled**. Orchestration chats can also `set_caffeinate`.
@@ -314,7 +314,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Projects** | Per-repo context that adds to account context. Agents can update either after you confirm. |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |
-| **Remote** | Slack — remote-control this Mac |
+| **Remote** | Phone app — pair this Mac, then pick it on the phone |
 | **Connectors** | Optional project services: Vercel, Supabase, PostHog, Sentry |
 | **Environment** | Extra env vars injected into agent runs |
 | **Schedules** | Local jobs that wake an orchestration chat |
@@ -422,7 +422,7 @@ Omit `--thread` to open a new orchestration chat when the job fires (recurring j
 
 ## Also: Brightsy
 
-Optional hosted chat and one schema/files backend. Skip this if you use Claude, Codex, OpenCode, or Cursor. Remote control of this Mac is **Slack**, not Brightsy.
+Optional hosted chat and one schema/files backend. Skip this if you use Claude, Codex, OpenCode, or Cursor. Remote control of this Mac is the **phone app** (Settings → Remote), not Brightsy.
 
 ```bash
 npm install -g @brightsy/cli

@@ -116,6 +116,11 @@ describe('isRetryableCursorTransportError', () => {
       ),
     ).toBe(true);
     expect(
+      isRetryableCursorTransportError(new Error('[unknown] Premature close')),
+    ).toBe(true);
+    expect(isRetryableCursorTransportError(new Error('[unavailable] Error'))).toBe(true);
+    expect(isRetryableCursorTransportError(new Error('Model unavailable'))).toBe(false);
+    expect(
       isRetryableCursorTransportError(new Error('Stream closed with error code')),
     ).toBe(false);
   });

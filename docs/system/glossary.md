@@ -22,7 +22,7 @@ One project has many workspaces. One workspace has many chats (sibling tabs shar
 
 ## What each is for
 
-- **New workspace** when the work needs its own files or PR (ticket, PR, named branch, or a fork that must not share dirty files). A ticket/PR/named branch may have only one live workspace — `create_workspace` returns that chat (`alreadyStarted`).
+- **New workspace** when the work needs its own files or PR (ticket, PR, named branch, or a fork that must not share dirty files). A ticket/PR/named branch may have only one live workspace — `create_workspace` returns that checkout (`alreadyStarted`). Add another agent on it with `fork_chat`.
 - **Add agent** / `fork_chat` when a second conversation should share the same files (review, second harness, provider switch).
 - **Agent** is *which CLI* runs the chat, not the name of the workspace.
 
@@ -31,6 +31,12 @@ One project has many workspaces. One workspace has many chats (sibling tabs shar
 A workspace is implemented as a **git worktree**. Say “worktree” when talking about cwd isolation, `git worktree`, or folder nicknames. Humans click **workspace** (Conductor). Orca’s product word for the same unit is worktree — Sideboard prefers workspace in UI/MCP so “worktree” does not compete with chat.
 
 Cowboy mode uses the project folder on the default branch (no extra worktree). Land is commit+push, not a PR.
+
+## Remote
+
+The **phone app** is how you reach this Mac away from the desk. Pair it from **Settings → Remote**, then pick that desktop in the app. One phone can hold several Macs. Message text crosses the relay. Agents, worktrees, repos, and secrets stay on the Mac.
+
+Do not call this Slack. Sideboard no longer uses a Slack app. The public page at `/slack/` only points at the phone.
 
 ## Do not say thread
 
