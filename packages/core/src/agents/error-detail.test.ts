@@ -11,7 +11,6 @@ import {
   looksLikeHugeToolResultDump,
   looksLikeInvalidAgentSession,
   looksLikeBrightsyEmptyCompletion,
-  looksLikeCursorHttp2StreamClose,
   looksLikeCursorStreamCutOff,
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
@@ -225,9 +224,9 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
       false,
     );
     expect(
-      looksLikeCursorHttp2StreamClose('Stream closed with error code NGHTTP2_INTERNAL_ERROR'),
+      looksLikeCursorStreamCutOff('Stream closed with error code NGHTTP2_INTERNAL_ERROR'),
     ).toBe(true);
-    expect(looksLikeCursorHttp2StreamClose('Stream closed with error code')).toBe(false);
+    expect(looksLikeCursorStreamCutOff('Stream closed with error code')).toBe(false);
     expect(looksLikeRetryableRunnerCrash('Stream closed with error code')).toBe(false);
     expect(looksLikeRetryableRunnerCrash('API Error: Connection error')).toBe(false);
     expect(

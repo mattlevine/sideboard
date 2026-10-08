@@ -1,10 +1,7 @@
 /**
  * Cursor SDK session recovery helpers (testable without spawning the runner).
  */
-import {
-  looksLikeCursorHttp2StreamClose,
-  looksLikeCursorStreamCutOff,
-} from './error-detail.js';
+import { looksLikeCursorStreamCutOff } from './error-detail.js';
 
 export function cursorErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message.trim();
@@ -62,11 +59,7 @@ export function isRetryableCursorTransportError(err: unknown): boolean {
     return true;
   }
   const message = cursorErrorMessage(err);
-  return (
-    /network request failed/i.test(message) ||
-    looksLikeCursorHttp2StreamClose(message) ||
-    looksLikeCursorStreamCutOff(message)
-  );
+  return /network request failed/i.test(message) || looksLikeCursorStreamCutOff(message);
 }
 
 function looksLikeNonRetryableCursorFailure(message: string): boolean {

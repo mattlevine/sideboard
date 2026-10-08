@@ -24,7 +24,7 @@ import {
   threadMayPresentPlan,
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
-import { threadsSharingWorktree } from '../threads/chat-tabs.js';
+import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
 import {
   formatAskUserNotifyMessage,
   notifyOrchestrator,
@@ -217,7 +217,7 @@ async function createOrchChildThread(
         link: `sideboard://chat/${thread.id}`,
         parentChatId: thread.parentThreadId,
         parentThreadId: thread.parentThreadId,
-        chats: workspaceAgentChats(thread.worktreePath),
+        chats: workspaceAgentChatSummaries(thread.worktreePath),
         ...(alreadyStarted ? { alreadyStarted: true } : {}),
         ...(opts.coercedFrom ? { agentCoercedFrom: opts.coercedFrom } : {}),
         ...(opts.ignoredAgent ? { agentIgnored: opts.ignoredAgent } : {}),
@@ -229,18 +229,6 @@ async function createOrchChildThread(
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, text: `create_workspace failed: ${message}` };
   }
-}
-
-/** Every live agent chat on this checkout. A workspace is not one agent. */
-function workspaceAgentChats(worktreePath: string | undefined) {
-  if (!worktreePath) return [];
-  return threadsSharingWorktree(worktreePath).map((t) => ({
-    id: t.id,
-    title: t.title,
-    agent: t.agent,
-    status: t.status,
-    link: `sideboard://chat/${t.id}`,
-  }));
 }
 
 function previewHint(preview: DevPreview): string {
@@ -1056,7 +1044,7 @@ export async function startMcpServer(): Promise<void> {
           title: existing.title,
           status: existing.status,
           link: `sideboard://chat/${existing.id}`,
-          chats: workspaceAgentChats(orch.getThread(existing.id)?.worktreePath),
+          chats: workspaceAgentChatSummaries(orch.getThread(existing.id)?.worktreePath),
         });
       }
 
