@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { wrapReactArtifactHtml, type ChatArtifact } from '../lib/artifacts';
+import { useDetachedJobLog } from '../lib/job-log-follow';
 import { artifactSpeakableText } from '../lib/artifact-speakable';
 import {
   artifactPreviewUrlsMatch,
@@ -34,6 +35,8 @@ interface Props {
   headerAction?: ReactNode;
   /** Speak this document with the app Read Aloud modal. */
   onReadAloud?: (text: string) => void;
+  /** Worktree thread, so a running job log can follow its files after the agent stops. */
+  worktreeThreadId?: string;
 }
 
 function kindBadge(kind: ChatArtifact['kind']): string {
@@ -66,14 +69,16 @@ function useDebounced<T>(value: T, ms: number): T {
 }
 
 export function ArtifactPane({
-  artifact,
   width = ARTIFACT_WIDTH_DEFAULT,
   onWidthChange,
   onClose,
   embedded = false,
   headerAction,
   onReadAloud,
+  worktreeThreadId,
+  artifact: source,
 }: Props) {
+  const artifact = useDetachedJobLog(source, worktreeThreadId);
   const canPreview =
     artifact.kind === 'html' ||
     artifact.kind === 'svg' ||
