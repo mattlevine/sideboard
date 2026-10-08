@@ -1,0 +1,176 @@
+import { extractPendingPlanQuestions, isAskUserToolName } from '../plan/ask-user.js';
+import { extractPresentedPlan, isPresentPlanToolName } from '../plan/plan-present.js';
+import { readThread, updateThread } from '../store/thread-store.js';
+import type { AgentBlock, AgentBlockSource } from '../types/agent-block.js';
+import type { MessagePart } from '../types/thread.js';
+import { formatAskUserNotifyMessage } from './notify-orchestrator.js';
+
+/** Sidebar / orchestrator reasons stay one line. */
+export const MAX_AGENT_BLOCK_REASON = 240;
+
+export function clampBlockReason(raw: string): string {
+  const text = raw.replace(/\s+/g, ' ').trim();
+  if (!text) return 'Waiting on a decision';
+  if (text.length <= MAX_AGENT_BLOCK_REASON) return text;
+  return `${text.slice(0, MAX_AGENT_BLOCK_REASON - 1)}…`;
+}
+
+export function makeAgentBlock(
+  source: AgentBlockSource,
+  reason: string,
+  at = new Date().toISOString(),
+): AgentBlock {
+  return { source, reason: clampBlockReason(reason), at };
+}
+
+function lastTopLevelTool(parts: MessagePart[] | undefined): MessagePart | null {
+  if (!parts?.length) return null;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]!;
+    if (part.type === 'tool' && !part.parentId) return part;
+  }
+  return null;
+}
+
+/**
+ * Decision UI in a finished turn. Ask-user wins over plan approval.
+ * A long plan write-up with no present_plan / ExitPlanMode is not blocked.
+ */
+export function decisionBlockFromParts(
+  parts: MessagePart[] | undefined,
+  planMode: boolean,
+  at = new Date().toISOString(),
+): AgentBlock | null {
+  const last = lastTopLevelTool(parts);
+  if (last?.type === 'tool' && isAskUserToolName(last.name)) {
+    const pending = extractPendingPlanQuestions(parts);
+    const reason = pending
+      ? formatAskUserNotifyMessage(pending.questions)
+      : 'Waiting for an answer in that chat.';
+    return makeAgentBlock('ask_user', reason, at);
+  }
+  if (!planMode || last?.type !== 'tool') return null;
+  const exited = /exitplanmode/i.test(last.name ?? '');
+  if (!isPresentPlanToolName(last.name) && !exited) return null;
+  const presented = extractPresentedPlan(parts);
+  if (!presented && !exited) return null;
+  const title =
+    presented?.title && presented.title !== 'Plan' ? presented.title : '';
+  return makeAgentBlock(
+    'plan',
+    title ? `Waiting for plan approval: ${title}` : 'Waiting for plan approval',
+    at,
+  );
+}
+
+/**
+ * Turn-end block. Errors clear it. A successful or stopped turn keeps a
+ * decision in the transcript, or a block stamped earlier in this turn
+ * when that tool never showed up in the transcript. A later top-level tool
+ * means an ask_user / plan stamp is stale. Reported blocks stay until the
+ * next user message.
+ */
+export function agentBlockAfterTurn(input: {
+  existing: AgentBlock | null | undefined;
+  parts: MessagePart[] | undefined;
+  planMode: boolean;
+  failed: boolean;
+}): AgentBlock | null {
+  if (input.failed) return null;
+  const decision = decisionBlockFromParts(input.parts, input.planMode);
+  if (decision) return decision;
+  if (
+    input.existing &&
+    input.existing.source !== 'reported' &&
+    lastTopLevelTool(input.parts)
+  ) {
+    return null;
+  }
+  return input.existing ?? null;
+}
+
+export function clearAgentBlock(threadId: string): void {
+  const thread = readThread(threadId);
+  if (!thread?.agentBlock) return;
+  updateThread(threadId, { agentBlock: null });
+}
+
+export function writeAgentBlock(threadId: string, block: AgentBlock): void {
+  const thread = readThread(threadId);
+  if (!thread || thread.status === 'archived') return;
+  updateThread(threadId, { agentBlock: block });
+}
+
+export function settleAgentBlock(
+  threadId: string,
+  parts: MessagePart[] | undefined,
+  failed: boolean,
+): void {
+  const thread = readThread(threadId);
+  if (!thread || thread.status === 'archived') return;
+  const next = agentBlockAfterTurn({
+    existing: thread.agentBlock,
+    parts,
+    planMode: Boolean(thread.planMode),
+    failed,
+  });
+  const prev = thread.agentBlock ?? null;
+  if (prev === next) return;
+  if (
+    prev &&
+    next &&
+    prev.source === next.source &&
+    prev.reason === next.reason &&
+    prev.at === next.at
+  ) {
+    return;
+  }
+  updateThread(threadId, { agentBlock: next });
+}
+
+export function chatBlockedSuffix(thread: { agentBlock?: { reason?: string } | null }): string {
+  const raw = thread.agentBlock?.reason;
+  if (!raw?.trim()) return '';
+  return `  blocked:${raw.replace(/\s+/g, ' ').slice(0, 80)}`;
+}
+
+export function agentBlockFields(thread: {
+  agentBlock?: { reason?: string; source?: AgentBlockSource } | null;
+}): { blockedReason: string | null; blockedSource: AgentBlockSource | null } {
+  return {
+    blockedReason: thread.agentBlock?.reason ?? null,
+    blockedSource: thread.agentBlock?.source ?? null,
+  };
+}
+
+export function stampAskUserBlock(
+  resolveCaller: () => { id: string },
+  questions: Array<{ question?: string }>,
+): string {
+  const asked = formatAskUserNotifyMessage(questions);
+  try {
+    writeAgentBlock(resolveCaller().id, makeAgentBlock('ask_user', asked));
+  } catch {
+    /* no thread — picker still returns */
+  }
+  return asked;
+}
+
+export function stampPlanBlock(threadId: string | undefined, title: string | undefined): string {
+  const planTitle = title?.trim() || 'Plan';
+  if (threadId) {
+    const reason = planTitle === 'Plan' ? 'Waiting for plan approval' : `Waiting for plan approval: ${planTitle}`;
+    writeAgentBlock(threadId, makeAgentBlock('plan', reason));
+  }
+  return planTitle;
+}
+
+export function stampNotifyBlock(
+  threadId: string,
+  reason: 'input-required' | 'blocked' | undefined,
+  message: string,
+): 'input-required' | 'blocked' {
+  const resolved = reason ?? 'blocked';
+  writeAgentBlock(threadId, makeAgentBlock(resolved === 'input-required' ? 'ask_user' : 'reported', message));
+  return resolved;
+}

@@ -16,6 +16,7 @@
   --accent-soft: #094771;
   --ok: #4ade80;
   --warn: #cca700;
+  --blocked: #f5a524;
   --err: #f87171;
   --selection: #264f78;
   /* Prefer SF / Segoe metrics Cursor leans on; avoid generic Arial fallbacks. */
@@ -2304,6 +2305,20 @@ body.resizing-panels webview {
   border-color: var(--accent-dim);
 }
 
+.thread-item.is-blocked {
+  box-shadow: inset 3px 0 0 var(--blocked);
+}
+
+.thread-blocked-reason {
+  color: var(--blocked);
+  font-size: var(--font-size-tiny);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .dot {
   width: 8px;
   height: 8px;
@@ -2331,6 +2346,10 @@ body.resizing-panels webview {
   background: var(--border);
 }
 
+.dot.blocked {
+  background: var(--blocked);
+}
+
 .thread-status-icon {
   width: 14px;
   height: 14px;
@@ -2352,6 +2371,10 @@ body.resizing-panels webview {
 
 .thread-status-icon.is-error {
   color: var(--err);
+}
+
+.thread-status-icon.is-blocked {
+  color: var(--blocked);
 }
 
 .thread-status-icon.is-dirty {
@@ -11092,6 +11115,10 @@ body:has(.update-banner) .team-toast-stack {
 .board-card-worktree {
   cursor: pointer;
   padding-bottom: 10px;
+}
+
+.board-card.is-blocked {
+  box-shadow: inset 3px 0 0 var(--blocked);
 }
 
 .board-card-worktree:hover {

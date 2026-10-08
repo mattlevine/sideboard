@@ -32,6 +32,8 @@ function labelFor(
       return 'Queued';
     case 'error':
       return 'Error';
+    case 'blocked':
+      return 'Blocked';
     case 'archived':
       return 'Archived';
     case 'dirty':
@@ -70,6 +72,14 @@ function KindGlyph({ kind }: { kind: ThreadStatusKind }) {
           <path d="M12 9v4M12 17h.01" {...stroke} />
         </Glyph>
       );
+    case 'blocked':
+      return (
+        <Glyph>
+          <circle cx="12" cy="12" r="10" {...stroke} />
+          <line x1="10" x2="10" y1="15" y2="9" {...stroke} />
+          <line x1="14" x2="14" y1="15" y2="9" {...stroke} />
+        </Glyph>
+      );
     case 'dirty':
       return (
         <Glyph>
@@ -102,6 +112,7 @@ export function ThreadStatusIcon({
   additions = 0,
   deletions = 0,
   unread = false,
+  blockedReason = null,
 }: {
   status: ThreadStatus;
   dirty?: boolean;
@@ -109,9 +120,13 @@ export function ThreadStatusIcon({
   additions?: number;
   deletions?: number;
   unread?: boolean;
+  /** Why this agent is waiting on a person. Wins over the running spinner. */
+  blockedReason?: string | null;
 }) {
-  const kind = threadStatusKind(status, dirty && dirtyLoaded);
-  const label = labelFor(kind, { additions, deletions, dirtyLoaded });
+  const reason = blockedReason?.trim() || '';
+  const kind = threadStatusKind(status, dirty && dirtyLoaded, Boolean(reason));
+  const label =
+    kind === 'blocked' && reason ? reason : labelFor(kind, { additions, deletions, dirtyLoaded });
   return (
     <span
       className={`thread-status-icon is-${kind}${unread ? ' is-unread' : ''}`}

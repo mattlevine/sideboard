@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { Thread } from '@sideboard-ai/core';
+import { visibleAgentBlock } from '@sideboard/home-board';
 import { nestedChatDisplayTitle } from '../lib/nested-chat-title';
 import { isChatUnread } from '../lib/unread-worktrees';
 import {
@@ -139,6 +140,7 @@ export function WorktreeNestedChats({
         const chatUnread = isChatUnread(chat, { active: chatActive });
         const renaming = editingId === chat.id;
         const chatTitle = nestedChatDisplayTitle(chat, parentTitle);
+        const block = visibleAgentBlock(chat);
         const dragging = draggingId === chat.id;
         const dropClass =
           dropHint?.id === chat.id
@@ -153,7 +155,7 @@ export function WorktreeNestedChats({
               multiSelected.size > 1 && multiSelected.has(chat.id)
                 ? ' selected'
                 : ''
-            }${chatUnread ? ' unread' : ''}${
+            }${chatUnread ? ' unread' : ''}${block ? ' is-blocked' : ''}${
               canReorder && !renaming ? ' is-reorderable' : ''
             }${dragging ? ' is-dragging' : ''}${dropClass}`}
             draggable={canReorder && !renaming}
@@ -183,7 +185,11 @@ export function WorktreeNestedChats({
               onMarkUnread(chat);
             }}
           >
-            <ThreadStatusIcon status={chat.status} unread={chatUnread} />
+            <ThreadStatusIcon
+              status={chat.status}
+              unread={chatUnread}
+              blockedReason={block?.reason}
+            />
             <AgentKindIcon agent={chat.agent} />
             {renaming ? (
               <input

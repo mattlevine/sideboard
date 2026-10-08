@@ -130,7 +130,7 @@ export interface Thread {
   accountId?: string | null;
   autonomy: Autonomy;
   sourceIsFork: boolean;
-  status: ThreadStatus;
+  status: ThreadStatus; agentBlock?: import('./agent-block.js').AgentBlock | null;
   queue: string[];
   parentThreadId: string | null;
   /** Port of the default/primary run script (legacy + sidebar). */

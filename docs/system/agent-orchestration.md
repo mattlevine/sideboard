@@ -19,7 +19,19 @@ The topology stays a **star**: one Global orchestrator talks down to worktree ch
 | `failed` | runner/agent error, or worktree missing (`broken`) |
 | `canceled` | force-stopped before finishing |
 
-`stillRunning` is true only for `submitted` / `working`. `incomplete` is true for `failed` / `canceled` / `input-required`. Helpers: `packages/core/src/orchestrator/task-state.ts`.
+`stillRunning` is true only for `submitted` / `working`. `incomplete` is true for `failed` / `canceled` / `input-required`, and also when a settled turn still has `blockedReason`. Helpers: `packages/core/src/orchestrator/task-state.ts`.
+
+## Blocked (attention)
+
+Herdr marks `blocked` only when an agent is waiting on a person (approval, question, or permission), and that state outranks working on the sidebar. Sideboard does the same with signals it already has, instead of reading the terminal:
+
+| source | when |
+|--------|------|
+| `ask_user` | the turn's last tool is a question (includes AskUserQuestion) |
+| `plan` | Plan mode and the turn called `present_plan` or ExitPlanMode |
+| `reported` | the agent called `notify_orchestrator` with a reason |
+
+`Thread.agentBlock.reason` is the short why. The sidebar and board highlight that agent until the next user message starts a turn. `wait_for_turn` / `get_turn_result` / `list_chats` / `get_chat` / `list_board` include `blockedReason`. Process `status` stays `idle` or `running` — blocked is attention, not liveness.
 
 A2A also has `rejected` and `auth-required`. No Sideboard source yet — do not invent them.
 
@@ -75,6 +87,7 @@ Helpers: `packages/core/src/orchestrator/notify-orchestrator.ts`.
 | Concern | File |
 |---------|------|
 | `taskState` | `packages/core/src/orchestrator/task-state.ts` |
+| blocked attention | `packages/core/src/orchestrator/agent-block.ts` |
 | Child → parent notify | `packages/core/src/orchestrator/notify-orchestrator.ts` |
 | Outbound cloud / Slack replies | `packages/core/src/orchestrator/outbound-turn-reply.ts` |
 | MCP wait hints | `packages/core/src/mcp/wait-for-turn.ts` |

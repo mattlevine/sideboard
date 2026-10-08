@@ -1,4 +1,5 @@
-import type { MessagePart, ThreadStatus } from '../types/thread.js';
+import { isAskUserToolName } from '../plan/ask-user.js';
+import type { MessagePart, ThreadStatus, TokenUsage } from '../types/thread.js';
 
 /**
  * Lifecycle of one worktree turn, in A2A (Agent2Agent) task vocabulary.
@@ -43,15 +44,13 @@ export function needsCoordinatorAction(state: TaskState): boolean {
   return isIncompleteTaskState(state) || state === 'input-required';
 }
 
-const ASK_USER_TOOL = /(^|[_.:/])ask_user$/i;
-
-/** True when the turn's last agent action was Sideboard `ask_user`. */
+/** True when the turn's last agent action was `ask_user` / AskUserQuestion. */
 export function endedOnAskUser(parts: MessagePart[] | undefined): boolean {
   if (!parts?.length) return false;
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i]!;
     if (p.type === 'tool' && !p.parentId) {
-      return ASK_USER_TOOL.test(p.name);
+      return isAskUserToolName(p.name);
     }
   }
   return false;
@@ -76,3 +75,18 @@ export function deriveTaskState(input: {
       return endedOnAskUser(input.lastAgentParts) ? 'input-required' : 'completed';
   }
 }
+
+/** Snapshot returned by `getTurnResult`. Block fields are optional so older test doubles typecheck. */
+export type TurnResult = {
+  text: string;
+  status: string;
+  taskState: TaskState;
+  sessionId: string | null;
+  lastError: string | null;
+  stillRunning: boolean;
+  progress: string | null;
+  lastActivityAt: string | null;
+  usage: TokenUsage | null;
+  blockedReason?: string | null;
+  blockedSource?: 'ask_user' | 'plan' | 'reported' | null;
+};

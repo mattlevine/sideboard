@@ -1,4 +1,5 @@
 export * from './types/thread.js';
+export type { AgentBlock, AgentBlockSource } from './types/agent-block.js';
 export * from './types/thinking-effort.js';
 export * from './store/paths.js';
 export * from './store/app-settings.js';
@@ -231,6 +232,8 @@ export {
   classifyWorktreeListBadges,
   reviewLabelForRepo,
   worktreeBoardStatus,
+  visibleAgentBlock,
+  worktreeAgentBlock,
   DEFAULT_WORKTREE_SORT,
 } from './board/home-board.js';
 export type {

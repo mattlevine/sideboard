@@ -1,4 +1,5 @@
 import { needsCoordinatorAction, type TaskState } from '../orchestrator/task-state.js';
+import type { AgentBlockSource } from '../types/agent-block.js';
 import type { TokenUsage } from '../types/thread.js';
 
 /**
@@ -51,7 +52,18 @@ export function mcpWaitFinishedHint(status: string): string | undefined {
 export function mcpWaitTaskHint(
   taskState: TaskState,
   status?: string,
+  blockedReason?: string | null,
 ): string | undefined {
+  const why = blockedReason?.trim();
+  if (why && taskState !== 'failed' && taskState !== 'canceled') {
+    if (taskState === 'submitted' || taskState === 'working') {
+      return `Child is blocked: ${why} It has not finished the turn. Do not send_to_chat a check-in.`;
+    }
+    if (taskState === 'input-required') {
+      return `Child is blocked: ${why} Wait for the user in that chat — do not send_to_chat a check-in.`;
+    }
+    return `Child is blocked: ${why} Help if this is your child; otherwise tell the user. Do not send_to_chat a check-in.`;
+  }
   switch (taskState) {
     case 'submitted':
       return MCP_WAIT_QUEUED_HINT;
@@ -99,6 +111,12 @@ export type WaitForTurnToolResult = {
   lastActivityAt: string | null;
   /** Last finished agent turn tokens + costUsd when reported. Null while stillRunning. costUsd is this turn; sessionCostUsd is the provider session total when present. */
   usage: TokenUsage | null;
+  /**
+   * Why the child is waiting on a person. Omitted on older fixtures;
+   * live results always set it (null when not blocked).
+   */
+  blockedReason?: string | null;
+  blockedSource?: AgentBlockSource | null;
   hint: string | undefined;
   incomplete: boolean;
 };
@@ -113,11 +131,21 @@ export function waitForTurnToolResult(input: {
   progress: string | null;
   lastActivityAt: string | null;
   usage?: TokenUsage | null;
+  blockedReason?: string | null;
+  blockedSource?: AgentBlockSource | null;
 }): WaitForTurnToolResult {
+  const blockedReason = input.blockedReason?.trim() ? input.blockedReason.trim() : null;
+  const waiting =
+    Boolean(blockedReason) &&
+    !input.stillRunning &&
+    input.taskState !== 'failed' &&
+    input.taskState !== 'canceled';
   return {
     ...input,
     usage: input.usage ?? null,
-    hint: mcpWaitTaskHint(input.taskState, input.status),
-    incomplete: needsCoordinatorAction(input.taskState),
+    blockedReason,
+    blockedSource: blockedReason ? input.blockedSource ?? null : null,
+    hint: mcpWaitTaskHint(input.taskState, input.status, blockedReason),
+    incomplete: needsCoordinatorAction(input.taskState) || waiting,
   };
 }

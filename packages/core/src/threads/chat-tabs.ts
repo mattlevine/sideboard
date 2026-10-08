@@ -21,6 +21,7 @@ import {
   listThreads,
   writeThread,
 } from '../store/thread-store.js';
+import type { AgentBlockSource } from '../types/agent-block.js';
 import type {
   CreateChatTabInput,
   ForkChatTabInput,
@@ -137,6 +138,8 @@ export function workspaceAgentChatSummaries(worktreePath: string | undefined): {
   agent: Thread['agent'];
   status: Thread['status'];
   link: string;
+  blockedReason?: string;
+  blockedSource?: AgentBlockSource;
 }[] {
   if (!worktreePath) return [];
   return threadsSharingWorktree(worktreePath).map((t) => ({
@@ -145,6 +148,9 @@ export function workspaceAgentChatSummaries(worktreePath: string | undefined): {
     agent: t.agent,
     status: t.status,
     link: `sideboard://chat/${t.id}`,
+    ...(t.agentBlock?.reason
+      ? { blockedReason: t.agentBlock.reason, blockedSource: t.agentBlock.source }
+      : {}),
   }));
 }
 

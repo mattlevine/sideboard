@@ -20,4 +20,11 @@ describe('threadStatusKind', () => {
     expect(threadStatusKind('idle', false)).toBe('idle');
     expect(threadStatusKind('queued', false)).toBe('queued');
   });
+
+  it('shows blocked ahead of running and dirty, behind an error', () => {
+    expect(threadStatusKind('running', true, true)).toBe('blocked');
+    expect(threadStatusKind('idle', true, true)).toBe('blocked');
+    expect(threadStatusKind('error', false, true)).toBe('error');
+    expect(threadStatusKind('archived', false, true)).toBe('archived');
+  });
 });

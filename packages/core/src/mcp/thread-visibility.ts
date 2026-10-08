@@ -1,5 +1,6 @@
 import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { isInjectedNoticeText } from '../threads/injected-notices.js';
+import type { AgentBlockSource } from '../types/agent-block.js';
 import type { Thread, ThreadMessage } from '../types/thread.js';
 
 /** Last non-empty message text for coordinators (not the full transcript). */
@@ -19,13 +20,17 @@ export function lastMessagePreview(
 
 export function childThreadRefs(
   parentId: string,
-  threads: Array<Pick<Thread, 'id' | 'title' | 'status' | 'agent' | 'parentThreadId' | 'messages'>>,
+  threads: Array<
+    Pick<Thread, 'id' | 'title' | 'status' | 'agent' | 'parentThreadId' | 'messages' | 'agentBlock'>
+  >,
 ): Array<{
   id: string;
   title: string;
   status: Thread['status'];
   agent: Thread['agent'];
   lastText: string | null;
+  blockedReason?: string;
+  blockedSource?: AgentBlockSource;
 }> {
   return threads
     .filter((t) => t.parentThreadId === parentId)
@@ -35,5 +40,8 @@ export function childThreadRefs(
       status: t.status,
       agent: t.agent,
       lastText: lastMessagePreview(t.messages, 120),
+      ...(t.agentBlock?.reason
+        ? { blockedReason: t.agentBlock.reason, blockedSource: t.agentBlock.source }
+        : {}),
     }));
 }

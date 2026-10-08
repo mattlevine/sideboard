@@ -58,6 +58,22 @@ describe('Orchestrator.getTurnResult', () => {
     return thread;
   }
 
+  it('reports why an idle agent is blocked', () => {
+    const thread = seed({ status: 'idle', agentText: 'stopped here' });
+    const stored = readThread(thread.id);
+    if (!stored) throw new Error('missing thread');
+    stored.agentBlock = {
+      source: 'reported',
+      reason: 'Need a Linear token',
+      at: '2026-10-08T00:00:00.000Z',
+    };
+    writeThread(stored);
+    const result = new Orchestrator().getTurnResult(thread.id);
+    expect(result.taskState).toBe('completed');
+    expect(result.blockedReason).toBe('Need a Linear token');
+    expect(result.blockedSource).toBe('reported');
+  });
+
   it('fills text from lastError when the turn failed with no agent message', () => {
     const thread = seed({
       status: 'error',

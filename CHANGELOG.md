@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.279] - 2026-10-08
+
+### Added
+
+- An agent waiting on a person is highlighted on the sidebar and Home board, ahead of siblings that are still running. The line is the question, the plan approval, or a block the agent reported. Orchestrators see that reason on list, wait, and turn result instead of checking in.
+
+### Fixed
+
+- A question or plan highlight clears when the agent keeps working later in the same turn. A reported block stays until the next message. An error still shows the error icon.
+
 ## [0.1.278] - 2026-10-07
 
 ### Fixed

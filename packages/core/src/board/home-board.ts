@@ -6,6 +6,7 @@ import {
   normalizeWorktreePath,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
+import { threadCardBlockFields, worktreeBoardStatus } from './agent-block-view.js';
 import type { IssueInfo, MessagePart, PrInfo, Thread, ThreadMessage } from '../types/thread.js';
 
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
@@ -442,14 +443,7 @@ export function classifyWorktreeListBadges(
   ];
 }
 
-/** Activity dot for a worktree: running / queued beat idle sibling tabs. */
-export function worktreeBoardStatus(group: Array<Pick<Thread, 'status'>>): Thread['status'] {
-  const order: Thread['status'][] = ['running', 'queued', 'error', 'broken'];
-  for (const status of order) {
-    if (group.some((t) => t.status === status)) return status;
-  }
-  return group[0]?.status ?? 'idle';
-}
+export { visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus } from './agent-block-view.js';
 
 function normalizeIssueKey(value: string): string {
   return value.trim().toLowerCase().replace(/^#/, '');
@@ -1155,7 +1149,7 @@ export type HomeBoardThreadCard = {
   prUrl: string | null;
   link: string;
   /** Live chat tabs on this checkout. Omitted when 1. */
-  chatCount?: number;
+  chatCount?: number; blockedReason?: string; blockedSource?: 'ask_user' | 'plan' | 'reported';
 };
 
 export type HomeBoardCard =
@@ -1246,6 +1240,7 @@ function toThreadCard(group: Thread[]): HomeBoardThreadCard {
     prUrl: withPr.prUrl,
     link: `sideboard://chat/${thread.id}`,
     ...(group.length > 1 ? { chatCount: group.length } : {}),
+    ...(threadCardBlockFields(group) ?? {}),
   };
 }
 
@@ -1351,7 +1346,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. blockedReason means an agent on that card is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

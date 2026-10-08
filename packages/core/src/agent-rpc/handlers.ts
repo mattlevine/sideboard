@@ -207,6 +207,8 @@ async function defaultTurnWait(
     progress: result.progress,
     lastActivityAt: result.lastActivityAt,
     usage: result.usage,
+    blockedReason: result.blockedReason,
+    blockedSource: result.blockedSource,
   });
 }
 
@@ -247,6 +249,8 @@ export async function handleTurnWait(
       usage: null,
       hint: 'Child is still working after max hold. Call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts).',
       incomplete: false,
+      blockedReason: null,
+      blockedSource: null,
     }
   );
 }
