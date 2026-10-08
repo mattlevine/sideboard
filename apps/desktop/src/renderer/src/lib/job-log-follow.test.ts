@@ -53,6 +53,20 @@ describe('detached job log follow', () => {
     expect(followLogContent('older\nline 1\nline 2', 'line 1\nline 2')).toBe(
       'older\nline 1\nline 2',
     );
+  });
+
+  it('appends only the new lines when a tail window slides', () => {
+    expect(followLogContent('a\nb\nc\nd', 'b\nc\nd\ne')).toBe('a\nb\nc\nd\ne');
+    const first = Array.from({ length: 80 }, (_, i) => `L${i}`).join('\n');
+    const next = Array.from({ length: 80 }, (_, i) => `L${i + 5}`).join('\n');
+    const merged = followLogContent(first, next);
+    expect(merged.split('\n')).toHaveLength(85);
+    expect(merged.split('\n').filter((line) => line === 'L10')).toHaveLength(1);
+    expect(merged.endsWith('L84')).toBe(true);
+  });
+
+  it('replaces the pane when the next tail shares no lines', () => {
+    expect(followLogContent('old 1\nold 2', 'new 1\nnew 2')).toBe('new 1\nnew 2');
     expect(parseExitCode('0\n')).toBe(0);
     expect(parseExitCode('still going')).toBeNull();
   });

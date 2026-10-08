@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A job log in the side column shows the log file, not only lines the agent happened to forward. The working pill clears when that process exits, including after the agent stops polling.
+- A job log in the side column shows the end of the log file, not only lines the agent happened to forward, without repeating lines as that tail slides. The working pill clears when that process exits, including after the agent stops polling.
 
 ## [0.1.279] - 2026-10-08
 

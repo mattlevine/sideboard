@@ -170,8 +170,8 @@ const api: IpcApi = {
   listFiles: (threadRef) => ipcRenderer.invoke('listFiles', threadRef),
   statPath: (threadRef, relativePath) =>
     ipcRenderer.invoke('statPath', threadRef, relativePath),
-  readFile: (threadRef, relativePath) =>
-    ipcRenderer.invoke('readFile', threadRef, relativePath),
+  readFile: (threadRef, relativePath, tail) =>
+    ipcRenderer.invoke('readFile', threadRef, relativePath, tail),
   readFileForUpload: (threadRef, relativePath) =>
     ipcRenderer.invoke('readFileForUpload', threadRef, relativePath),
   writeFile: (threadRef, relativePath, content) =>

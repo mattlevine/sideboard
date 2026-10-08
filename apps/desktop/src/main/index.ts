@@ -1601,8 +1601,8 @@ function registerIpc(): void {
   ipcMain.handle('statPath', (_e, ref: string, relativePath: string) =>
     orch.statPath(ref, relativePath),
   );
-  ipcMain.handle('readFile', (_e, ref: string, relativePath: string) =>
-    orch.readFile(ref, relativePath),
+  ipcMain.handle('readFile', (_e, ref: string, relativePath: string, tail?: boolean) =>
+    orch.readFile(ref, relativePath, tail),
   );
   ipcMain.handle('readFileForUpload', (_e, ref: string, relativePath: string) =>
     orch.readFileForUpload(ref, relativePath),

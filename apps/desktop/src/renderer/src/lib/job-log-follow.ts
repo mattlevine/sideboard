@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { joinLogChunks, type ChatArtifact } from './artifacts';
+import type { ChatArtifact } from './artifacts';
 
 const JOB_ID_RE = /^[A-Za-z0-9._-]{1,64}$/;
 const LOG_TAIL_LINES = 80;
@@ -26,7 +26,11 @@ export function tailLog(text: string, maxLines = LOG_TAIL_LINES): string {
   return lines.slice(-maxLines).join('\n');
 }
 
-/** File tail wins when the pane is empty or only holds a fragment of that tail. */
+/**
+ * File tail wins when the pane is empty or only holds a fragment of that tail.
+ * A sliding window shares a suffix with the pane: append only the new lines.
+ * When the window jumps past the pane, the file tail is the live end.
+ */
 export function followLogContent(current: string, logText: string | null | undefined): string {
   const tailed = tailLog(logText ?? '');
   if (!tailed) return current;
@@ -34,7 +38,30 @@ export function followLogContent(current: string, logText: string | null | undef
   if (!cur) return tailed;
   if (tailed.includes(cur)) return tailed;
   if (current.includes(tailed)) return current;
-  return joinLogChunks(current, tailed);
+  const extra = linesAfterOverlap(cur, tailed);
+  if (extra == null) return tailed;
+  if (!extra) return current;
+  const head = current.endsWith('\n') ? current : `${current}\n`;
+  return `${head}${extra}`;
+}
+
+/** New lines after the longest suffix/prefix overlap, or null when the windows share none. */
+function linesAfterOverlap(current: string, next: string): string | null {
+  const curLines = current.split('\n');
+  const nextLines = next.split('\n');
+  const max = Math.min(curLines.length, nextLines.length);
+  for (let k = max; k >= 1; k--) {
+    let match = true;
+    for (let i = 0; i < k; i++) {
+      if (curLines[curLines.length - k + i] !== nextLines[i]) {
+        match = false;
+        break;
+      }
+    }
+    if (!match) continue;
+    return nextLines.slice(k).join('\n');
+  }
+  return null;
 }
 
 export function parseExitCode(text: string | null | undefined): number | null {
@@ -62,7 +89,7 @@ type ReadFile = (
 ) => Promise<{ content: string; binary?: boolean }>;
 
 function defaultReadFile(threadId: string, path: string) {
-  return window.sideboard.readFile(threadId, path);
+  return window.sideboard.readFile(threadId, path, true);
 }
 
 async function readOptional(

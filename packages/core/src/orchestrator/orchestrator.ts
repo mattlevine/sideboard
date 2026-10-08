@@ -191,6 +191,7 @@ import {
   statWorktreePath,
   writeWorktreeFile,
 } from '../diff/diff.js';
+import { readWorktreeFileTail } from '../diff/read-worktree-tail.js';
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
 import { expandComposerPrompt } from '../composer/expand.js';
 import {
@@ -3086,6 +3087,7 @@ export class Orchestrator {
   async readFile(
     threadRef: string,
     relativePath: string,
+    tail?: boolean,
   ): Promise<{
     path: string;
     content: string;
@@ -3098,7 +3100,7 @@ export class Orchestrator {
     if (relativePath.includes('..') || relativePath.startsWith('/')) {
       throw new Error('Invalid path');
     }
-    return readWorktreeFile(thread.worktreePath, relativePath);
+    return (tail ? readWorktreeFileTail : readWorktreeFile)(thread.worktreePath, relativePath);
   }
 
   async readFileForUpload(
