@@ -34,6 +34,7 @@ import {
   takePhoneControl,
   type PhoneControlRequest,
   type PhoneDraft,
+  type PhoneOpened,
 } from './phone-chats.js';
 import { listPhoneSources } from './phone-sources.js';
 import {
@@ -46,8 +47,10 @@ import {
   enqueueChat,
   finishPhoneTurn,
   interruptChat,
+  getPhoneOpenChat,
   phoneError,
   phoneTurnGen,
+  setPhoneOpenChat,
   watchPhoneStream,
   type RemoteOutbound,
 } from './phone-live.js';
@@ -96,6 +99,13 @@ export function interruptRemoteCoordinator(
   }
 }
 
+function emitOpened(
+  opts: { onOutbound: (msg: RemoteOutbound) => void },
+  opened: PhoneOpened,
+): void {
+  setPhoneOpenChat(opened.chat.id);
+  emitControl(opts, { op: 'opened', ...opened });
+}
 
 function publishOpenedChat(
   opts: { onOutbound: (msg: RemoteOutbound) => void },
@@ -106,7 +116,7 @@ function publishOpenedChat(
     emitControl(opts, { op: 'error', message: 'That agent is not on this Mac.' });
     return;
   }
-  emitControl(opts, { op: 'opened', ...opened });
+  emitOpened(opts, opened);
   if (opened.chat.status === 'running' || opened.chat.status === 'queued') {
     deliverPhoneTurn(opts, opened.chat.id);
   }
@@ -146,6 +156,8 @@ function handlePhoneControl(
 ): void {
   const log = opts.onLog ?? (() => undefined);
   if (cmd.op === 'list') {
+    // Back on Chats. A later desktop turn must not stream into the chat they left.
+    setPhoneOpenChat(null);
     emitControl(opts, { op: 'sidebar', ...listPhoneSidebar() });
     return;
   }
@@ -232,7 +244,7 @@ function handlePhoneControl(
             }
           }
           const fresh = openPhoneChat(opened.chat.id) ?? opened;
-          emitControl(opts, { op: 'opened', ...fresh });
+          emitOpened(opts, fresh);
           if (prompt) deliverPhoneTurn(opts, fresh.chat.id);
         } catch (err) {
           emitControl(opts, { op: 'error', message: phoneError(err) });
@@ -256,7 +268,7 @@ function handlePhoneControl(
             }
           }
           const fresh = openPhoneChat(opened.chat.id) ?? opened;
-          emitControl(opts, { op: 'opened', ...fresh });
+          emitOpened(opts, fresh);
           if (prompt) deliverPhoneTurn(opts, fresh.chat.id);
         })
         .catch((err: unknown) => {
@@ -268,7 +280,7 @@ function handlePhoneControl(
     if (goal || cmd.files?.length || cmd.links?.length) {
       void createPhoneOrchestration({ ...cmd, goal })
         .then((opened) => {
-          emitControl(opts, { op: 'opened', ...opened });
+          emitOpened(opts, opened);
           deliverPhoneTurn(opts, opened.chat.id);
         })
         .catch((err: unknown) => {
@@ -280,7 +292,7 @@ function handlePhoneControl(
       const agent = coerceOrchestratorAgent(
         cmd.agent ?? opts.agent ?? resolveOrchestratorDefaults().agent,
       );
-      emitControl(opts, { op: 'opened', ...createPhoneChat(agent) });
+      emitOpened(opts, createPhoneChat(agent));
     } catch (err) {
       emitControl(opts, { op: 'error', message: phoneError(err) });
     }
@@ -315,6 +327,7 @@ function handlePhoneControl(
     }
     bumpChat(thread.id);
     interruptChat(thread.id, log);
+    if (getPhoneOpenChat() === thread.id) setPhoneOpenChat(null);
     archivePhoneChat(thread.id);
     emitControl(opts, { op: 'sidebar', ...listPhoneSidebar() });
     return;

@@ -23,6 +23,16 @@ const chatChains = new Map<string, Promise<void>>();
 export const chatGeneration = new Map<string, number>();
 /** Phone turn already being watched. Reopen must not bump this generation. */
 export const phoneTurnGen = new Map<string, number>();
+/** Chat the phone last opened. Desktop turns in that chat stream without a refresh. */
+let phoneOpenChatId: string | null = null;
+
+export function setPhoneOpenChat(id: string | null): void {
+  phoneOpenChatId = id?.trim() || null;
+}
+
+export function getPhoneOpenChat(): string | null {
+  return phoneOpenChatId;
+}
 
 /**
  * Phone text → Global orchestrator on this Mac → reply or ask_user buttons.
