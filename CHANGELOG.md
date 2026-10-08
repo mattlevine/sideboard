@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.278] - 2026-10-07
+
+### Fixed
+
+- The right sidebar keeps Setup, Run, and Terminal on screen while run scripts are up. Stop a non-default script from the run menu, where a running script already says Stop. On a narrower sidebar, Open shows the globe icon so the tab names still fit.
+
 ## [0.1.277] - 2026-10-07
 
 ### Changed
