@@ -1,5 +1,5 @@
 import { extractPendingPlanQuestions, isAskUserToolName } from '../plan/ask-user.js';
-import { extractPresentedPlan } from '../plan/plan-present.js';
+import { extractPresentedPlan, isPresentPlanToolName } from '../plan/plan-present.js';
 import { readThread, updateThread } from '../store/thread-store.js';
 import type { AgentBlock, AgentBlockSource } from '../types/agent-block.js';
 import type { MessagePart } from '../types/thread.js';
@@ -49,14 +49,10 @@ export function decisionBlockFromParts(
       : 'Waiting for an answer in that chat.';
     return makeAgentBlock('ask_user', reason, at);
   }
-  if (!planMode || !parts?.length) return null;
+  if (!planMode || last?.type !== 'tool') return null;
+  const exited = /exitplanmode/i.test(last.name ?? '');
+  if (!isPresentPlanToolName(last.name) && !exited) return null;
   const presented = extractPresentedPlan(parts);
-  const exited = parts.some(
-    (part) =>
-      part.type === 'tool' &&
-      !part.parentId &&
-      /exitplanmode/i.test(part.name ?? ''),
-  );
   if (!presented && !exited) return null;
   const title =
     presented?.title && presented.title !== 'Plan' ? presented.title : '';
@@ -70,8 +66,9 @@ export function decisionBlockFromParts(
 /**
  * Turn-end block. Errors clear it. A successful or stopped turn keeps a
  * decision in the transcript, or a block stamped earlier in this turn
- * (notify_orchestrator / ask_user / present_plan) when the transcript
- * did not echo the tool.
+ * when that tool never showed up in the transcript. A later top-level tool
+ * means an ask_user / plan stamp is stale. Reported blocks stay until the
+ * next user message.
  */
 export function agentBlockAfterTurn(input: {
   existing: AgentBlock | null | undefined;
@@ -82,6 +79,13 @@ export function agentBlockAfterTurn(input: {
   if (input.failed) return null;
   const decision = decisionBlockFromParts(input.parts, input.planMode);
   if (decision) return decision;
+  if (
+    input.existing &&
+    input.existing.source !== 'reported' &&
+    lastTopLevelTool(input.parts)
+  ) {
+    return null;
+  }
   return input.existing ?? null;
 }
 

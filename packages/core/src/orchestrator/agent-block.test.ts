@@ -57,6 +57,8 @@ describe('decisionBlockFromParts', () => {
       reason: 'Waiting for plan approval: Ship blocked',
       at: 't',
     });
+    const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'done' };
+    expect(decisionBlockFromParts([plan, later], true)).toBeNull();
   });
 
   it('lets a question win over a plan in the same turn', () => {
@@ -90,6 +92,27 @@ describe('agentBlockAfterTurn', () => {
         failed: false,
       }),
     ).toBe(reported);
+  });
+
+  it('drops an ask_user stamp once a later tool runs', () => {
+    const stamped = makeAgentBlock('ask_user', 'Asked the user: Which API?', 't');
+    const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'done' };
+    expect(
+      agentBlockAfterTurn({
+        existing: stamped,
+        parts: [askUser, later],
+        planMode: false,
+        failed: false,
+      }),
+    ).toBeNull();
+    expect(
+      agentBlockAfterTurn({
+        existing: stamped,
+        parts: [],
+        planMode: false,
+        failed: false,
+      }),
+    ).toBe(stamped);
   });
 });
 
