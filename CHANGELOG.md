@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.276] - 2026-10-07
+
 ### Added
 
 - The phone app renders chat markdown as it streams, with the desktop’s live activity mark, link color, syntax-colored code, and mermaid diagrams. Web images show in the bubble. Workspace images and file paths open on the Mac. `sideboard://chat/…` links open that chat.
