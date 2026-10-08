@@ -1,6 +1,8 @@
 import { WebSocket as WsWebSocket } from 'ws';
 import { lookupPreferPublicDns } from '../slack/public-dns.js';
 import { handleRemoteInbound, type RemoteOutbound } from './listen.js';
+import { startPhoneBoardSync } from './phone-board-sync.js';
+import { deliverPhoneTurn, emitControl, getPhoneOpenChat, setPhoneOpenChat } from './phone-live.js';
 import {
   parseRemoteServerMessage,
   REMOTE_PING_INTERVAL_MS,
@@ -95,6 +97,26 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
   let wantPair = false;
   let deviceLabel = opts.deviceLabel;
   let keepalive: ReturnType<typeof createRemoteKeepalive> | null = null;
+  let connectionGen = 0;
+  let stopBoard: (() => void) | null = null;
+
+  const stopBoardSync = () => {
+    stopBoard?.();
+    stopBoard = null;
+  };
+
+  const startBoardSync = () => {
+    stopBoardSync();
+    stopBoard = startPhoneBoardSync({
+      openChatId: getPhoneOpenChat,
+      onSidebar: (sidebar) => {
+        emitControl({ onOutbound: emit }, { op: 'sidebar', ...sidebar });
+      },
+      onRunningChat: (chatId) => {
+        deliverPhoneTurn({ onOutbound: emit }, chatId);
+      },
+    });
+  };
 
   const send = (msg: RemoteHostMessage) => {
     if (!socket || socket.readyState !== socket.OPEN) return;
@@ -136,12 +158,15 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
 
   const connectOnce = () =>
     new Promise<void>((resolve, reject) => {
+      const gen = ++connectionGen;
+      stopBoardSync();
       const ws = new WsWebSocket(opts.url, { lookup: lookupPreferPublicDns });
       socket = ws;
       let settled = false;
       const finish = (err?: Error) => {
         if (settled) return;
         settled = true;
+        if (gen === connectionGen) stopBoardSync();
         keepalive?.stop();
         keepalive = null;
         opts.signal?.removeEventListener('abort', onAbort);
@@ -181,6 +206,13 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         const raw = typeof data === 'string' ? data : data.toString('utf8');
         const msg = parseRemoteServerMessage(raw);
         if (!msg) return;
+        if (gen === connectionGen) {
+          if (msg.type === 'phone_joined') startBoardSync();
+          if (msg.type === 'phone_left') {
+            setPhoneOpenChat(null);
+            stopBoardSync();
+          }
+        }
         handleServer(msg);
       });
       ws.on('close', () => finish());
