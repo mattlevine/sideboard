@@ -16,6 +16,7 @@ import {
   phoneWorktreeRelative,
   type PhoneOpenFileRequest,
 } from './phone-media.js';
+import { type PhoneOpenArtifactRequest } from './phone-artifact.js';
 import {
   archivePhoneChat,
   createPhoneChat,
@@ -140,6 +141,7 @@ function handlePhoneControl(
     onLog?: (line: string) => void;
     transcribeWav?: (wavBase64: string) => Promise<string>;
     onOpenWorktreeFile?: (request: PhoneOpenFileRequest) => void;
+    onOpenArtifact?: (request: PhoneOpenArtifactRequest) => void;
   },
 ): void {
   const log = opts.onLog ?? (() => undefined);
@@ -372,6 +374,19 @@ function handlePhoneControl(
       });
     return;
   }
+  if (cmd.op === 'open-artifact') {
+    const thread = readPhoneThread(cmd.chatId);
+    if (!thread) {
+      emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
+      return;
+    }
+    opts.onOpenArtifact?.({
+      threadId: thread.id,
+      title: cmd.title,
+      ...(cmd.hint ? { hint: cmd.hint } : {}),
+    });
+    return;
+  }
   if (cmd.op === 'stop') {
     if (!readPhoneThread(cmd.chatId)) {
       emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
@@ -438,6 +453,7 @@ export function handleRemoteInbound(
     onLog?: (line: string) => void;
     transcribeWav?: (wavBase64: string) => Promise<string>;
     onOpenWorktreeFile?: (request: PhoneOpenFileRequest) => void;
+    onOpenArtifact?: (request: PhoneOpenArtifactRequest) => void;
   },
 ): void {
   const log = opts.onLog ?? (() => undefined);

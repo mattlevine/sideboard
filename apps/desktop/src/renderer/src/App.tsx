@@ -36,7 +36,7 @@ import { projectReviewLabelsFromSettings } from './lib/project-review-labels';
 import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { applyChatTextScale, resolveChatTextScale } from './lib/chat-text-scale';
 import { ShowCostProvider } from './lib/show-cost';
-import { usePhoneOpenFile } from './lib/phone-open-file';
+import { usePhoneOpenFile, usePhoneSelectArtifact } from './lib/phone-open-file';
 import { useReadAloudSession } from './lib/use-read-aloud-session';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
@@ -874,7 +874,8 @@ export function App() {
     [rightSidebarWorktreeKey],
   );
 
-  usePhoneOpenFile(selectedId, selected?.worktreePath, setSelectedId, openFile, revealDirectoryInFiles);
+  usePhoneOpenFile(selectedId, selected?.worktreePath, (id) => onSelect(id, false), openFile, revealDirectoryInFiles);
+  usePhoneSelectArtifact((id) => onSelect(id, false));
 
   const children = useMemo(
     () => (selected ? threads.filter((t) => t.parentThreadId === selected.id) : []),

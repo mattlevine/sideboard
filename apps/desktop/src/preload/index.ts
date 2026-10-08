@@ -325,6 +325,16 @@ const api: IpcApi = {
       ipcRenderer.removeListener('phone:open-file', handler);
     };
   },
+  onPhoneOpenArtifact: (listener) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: { threadId: string; title: string; hint?: string },
+    ) => listener(payload);
+    ipcRenderer.on('phone:open-artifact', handler);
+    return () => {
+      ipcRenderer.removeListener('phone:open-artifact', handler);
+    };
+  },
   onThreadsChanged: (listener) => {
     const handler = () => listener();
     ipcRenderer.on('threads:changed', handler);

@@ -34,6 +34,7 @@
       "@sideboard/home-board": ["../../packages/core/src/board/home-board.ts"],
       "@sideboard/implied-first-prompt": ["../../packages/core/src/threads/implied-first-prompt.ts"],
       "@sideboard/history-retention": ["../../packages/core/src/store/history-retention.ts"],
+      "@sideboard/phone-artifact": ["../../packages/core/src/remote/phone-artifact.ts"],
       "@brightsy/ui-context": ["./node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx"]
     }
   },

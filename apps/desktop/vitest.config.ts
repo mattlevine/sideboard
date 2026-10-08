@@ -31,6 +31,7 @@ export default defineConfig({
       '@sideboard/home-board': core('board/home-board.ts'),
       '@sideboard/implied-first-prompt': core('threads/implied-first-prompt.ts'),
       '@sideboard/history-retention': core('store/history-retention.ts'),
+      '@sideboard/phone-artifact': core('remote/phone-artifact.ts'),
     },
   },
 });

@@ -18,19 +18,35 @@ import { transcribeWavFile } from './speech-dictate';
 let onActivity: () => void = () => {};
 let onOpenWorktreeFile: NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenWorktreeFile']> | null =
   null;
+let onOpenArtifact: NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenArtifact']> | null = null;
 
 type PhoneOpenFile = NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenWorktreeFile']>;
+type PhoneOpenArtifact = NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenArtifact']>;
+
+function focusPhoneWindow(win: BrowserWindow | null): win is BrowserWindow {
+  if (!win || win.isDestroyed()) return false;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  return true;
+}
 
 export function bindPhoneOpenFile(fn: PhoneOpenFile): void {
   onOpenWorktreeFile = fn;
 }
 
 export function showPhoneFile(win: BrowserWindow | null, request: Parameters<PhoneOpenFile>[0]): void {
-  if (!win || win.isDestroyed()) return;
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
+  if (!focusPhoneWindow(win)) return;
   win.webContents.send('phone:open-file', request);
+}
+
+export function bindPhoneOpenArtifact(fn: PhoneOpenArtifact): void {
+  onOpenArtifact = fn;
+}
+
+export function showPhoneArtifact(win: BrowserWindow | null, request: Parameters<PhoneOpenArtifact>[0]): void {
+  if (!focusPhoneWindow(win)) return;
+  win.webContents.send('phone:open-artifact', request);
 }
 
 export function bindRemoteHostActivity(fn: () => void): void {
@@ -115,6 +131,7 @@ export function startRemoteHost(): void {
     },
     transcribeWav: (wavBase64) => transcribeWavFile(Buffer.from(wavBase64, 'base64')),
     onOpenWorktreeFile: (request) => onOpenWorktreeFile?.(request),
+    onOpenArtifact: (request) => onOpenArtifact?.(request),
   });
   remoteRequestPair = () => handle.requestPairingCode();
   remoteUpdateIdentity = (label) => handle.updateIdentity(label);
