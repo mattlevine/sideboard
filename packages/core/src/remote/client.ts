@@ -160,13 +160,17 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
     new Promise<void>((resolve, reject) => {
       const gen = ++connectionGen;
       stopBoardSync();
+      setPhoneOpenChat(null);
       const ws = new WsWebSocket(opts.url, { lookup: lookupPreferPublicDns });
       socket = ws;
       let settled = false;
       const finish = (err?: Error) => {
         if (settled) return;
         settled = true;
-        if (gen === connectionGen) stopBoardSync();
+        if (gen === connectionGen) {
+          stopBoardSync();
+          setPhoneOpenChat(null);
+        }
         keepalive?.stop();
         keepalive = null;
         opts.signal?.removeEventListener('abort', onAbort);

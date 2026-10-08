@@ -8,6 +8,7 @@ import { ensureRemoteCoordinator, findRemoteCoordinator } from '../store/global-
 import { readThread, updateThread } from '../store/thread-store.js';
 import { handleRemoteInbound, REMOTE_STOPPED_REPLY } from './listen.js';
 import { encodePhoneControl } from './phone-chats.js';
+import { getPhoneOpenChat, setPhoneOpenChat } from './phone-live.js';
 
 describe('handleRemoteInbound interrupt', () => {
   let dataDir: string;
@@ -18,6 +19,7 @@ describe('handleRemoteInbound interrupt', () => {
   });
 
   afterEach(() => {
+    setPhoneOpenChat(null);
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     rmSync(dataDir, { recursive: true, force: true });
@@ -148,6 +150,27 @@ describe('handleRemoteInbound interrupt', () => {
     expect(stop).not.toHaveBeenCalled();
     expect(replies[0]).toContain('"op":"sidebar"');
     release();
+  });
+
+  it('stops treating a chat as open when the phone returns to the list', () => {
+    const replies: string[] = [];
+    const outbound = (msg: { type: string; text?: string }) => {
+      if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+    };
+    handleRemoteInbound(encodePhoneControl({ op: 'create', where: 'orchestration' }), {
+      deviceId: 'phone-list',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    const opened = JSON.parse(replies[0]!.slice(replies[0]!.indexOf('{'))) as { chat: { id: string } };
+    expect(getPhoneOpenChat()).toBe(opened.chat.id);
+
+    handleRemoteInbound(encodePhoneControl({ op: 'list' }), {
+      deviceId: 'phone-list',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    expect(getPhoneOpenChat()).toBeNull();
   });
 
   it('sends a prompt to the selected orchestration chat', async () => {

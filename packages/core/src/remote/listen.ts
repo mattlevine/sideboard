@@ -156,6 +156,8 @@ function handlePhoneControl(
 ): void {
   const log = opts.onLog ?? (() => undefined);
   if (cmd.op === 'list') {
+    // Back on Chats. A later desktop turn must not stream into the chat they left.
+    setPhoneOpenChat(null);
     emitControl(opts, { op: 'sidebar', ...listPhoneSidebar() });
     return;
   }
