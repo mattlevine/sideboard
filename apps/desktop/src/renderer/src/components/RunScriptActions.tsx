@@ -20,7 +20,6 @@ interface Props {
   terminalSplit: boolean;
   onToggleTerminalSplit: () => void;
   primaryPort: number | null;
-  extraStopScripts: string[];
   primaryRunning: boolean;
   primaryScriptName: string | null;
   hasHook: boolean;
@@ -36,14 +35,13 @@ interface Props {
   onOpenRunConfig: () => void;
 }
 
-/** Run-tab Open / Stop / Dev controls. Lives outside RightSidebar so that file can shrink. */
+/** Pinned Dev / Stop control and the run-script menu. Secondary scripts stop from the menu. */
 export function RunScriptActions({
   menuRef,
   lower,
   terminalSplit,
   onToggleTerminalSplit,
   primaryPort,
-  extraStopScripts,
   primaryRunning,
   primaryScriptName,
   hasHook,
@@ -71,12 +69,12 @@ export function RunScriptActions({
           Split
         </button>
       ) : null}
-      {/* Conductor: Open is pinned with Stop/Dev, not in the scrolling tabs. */}
       {lower === 'run' && primaryPort != null ? (
         <button
           type="button"
           className="dev-open-port"
           title={`Open http://localhost:${primaryPort} in your default browser`}
+          aria-label={`Open port ${primaryPort}`}
           onClick={() => {
             void window.sideboard.openExternal(`http://localhost:${primaryPort}`);
           }}
@@ -85,21 +83,6 @@ export function RunScriptActions({
           <span>{`Open :${primaryPort}`}</span>
         </button>
       ) : null}
-      {extraStopScripts.map((name) => (
-        <button
-          key={name}
-          type="button"
-          className="dev-stop-btn"
-          title={`Stop ${scriptDisplayName(name)}`}
-          onClick={() => {
-            onCloseRunMenu();
-            onToggleNamedScript(name);
-          }}
-        >
-          <RunScriptIcon name="stop" />
-          <span>Stop {scriptDisplayName(name)}</span>
-        </button>
-      ))}
       <div className="dev-composite-group">
         {primaryRunning ? (
           <button
@@ -112,11 +95,7 @@ export function RunScriptActions({
             }}
           >
             <RunScriptIcon name="stop" />
-            <span>
-              {(activeRuns.length ?? 0) > 1 && primaryScriptName
-                ? `Stop ${scriptDisplayName(primaryScriptName)}`
-                : 'Stop'}
-            </span>
+            <span>Stop</span>
             <kbd>⌘R</kbd>
           </button>
         ) : (
@@ -144,7 +123,7 @@ export function RunScriptActions({
         <button
           type="button"
           className={`dev-script-chevron${runMenuOpen ? ' open' : ''}`}
-          title="Run scripts — several can stay up together"
+          title="Run scripts — a running script shows Stop"
           aria-haspopup="menu"
           aria-expanded={runMenuOpen}
           onClick={(e) => {

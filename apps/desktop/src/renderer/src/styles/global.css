@@ -7686,9 +7686,40 @@ button.chat-earlier-toggle:hover {
   z-index: 20;
 }
 
+/* Full "Open :port" plus Dev covers Setup / Run / Terminal below this width.
+   The globe stays; the URL stays on the button title. */
+@container right-sidebar (max-width: 479px) {
+  .lower-tab-actions .dev-open-port > span {
+    display: none;
+  }
+
+  .lower-tab-actions .dev-open-port {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+/* Default sidebar (340) still has to show Setup / Run / Terminal beside the
+   globe and Dev controls. Slightly tighter tab padding gets the labels on screen. */
+@container right-sidebar (max-width: 399px) {
+  .lower-tab-actions {
+    gap: 4px;
+    padding-right: 6px;
+  }
+
+  .lower-tabs.right-tabs .lower-tabs-scroll > button {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .lower-tabs.right-tabs .lower-tabs-scroll > button.active::after {
+    left: 6px;
+    right: 6px;
+  }
+}
+
 
 .dev-open-port,
-.dev-stop-btn,
 .dev-script-menu-btn {
   display: inline-flex;
   align-items: center;
@@ -7705,33 +7736,19 @@ button.chat-earlier-toggle:hover {
   flex-shrink: 0;
 }
 
-.dev-open-port .run-script-icon,
-.dev-stop-btn .run-script-icon {
+.dev-open-port .run-script-icon {
   color: var(--muted);
   flex-shrink: 0;
 }
 
-.dev-open-port > span,
-.dev-stop-btn > span {
+.dev-open-port > span {
   white-space: nowrap;
 }
 
 .dev-open-port:hover,
-.dev-stop-btn:hover,
 .dev-script-menu-btn:hover,
 .dev-script-menu-btn.open {
   border-color: color-mix(in srgb, var(--border) 50%, #c4a484);
-}
-
-.dev-stop-btn kbd {
-  margin-left: 2px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: transparent;
-  font-size: 10px;
-  color: var(--muted);
-  white-space: nowrap;
 }
 
 .dev-script-menu.standalone {
@@ -7775,6 +7792,12 @@ button.chat-earlier-toggle:hover {
 .dev-composite .run-script-icon {
   color: var(--muted);
   flex-shrink: 0;
+}
+
+.dev-composite > span {
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dev-composite:disabled {

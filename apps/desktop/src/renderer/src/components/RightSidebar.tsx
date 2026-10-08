@@ -39,7 +39,6 @@ import {
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { FloatingMenu } from './FloatingMenu';
-import { scriptsNeedingStopButton } from '../lib/run-script-stop';
 import { RunScriptActions } from './RunScriptActions';
 import {
   readRightSidebarLower,
@@ -1100,12 +1099,6 @@ export function RightSidebar({
     thread.devPort ??
     thread.activeRuns?.[0]?.port ??
     null;
-  const extraStopScripts = scriptsNeedingStopButton(
-    (thread.activeRuns ?? []).map((run) => run.scriptName),
-    primaryScriptName,
-    primaryRunning,
-  );
-
   async function toggleDev() {
     setLower('run');
     // Main button only starts/stops the default script — never every script.
@@ -1717,7 +1710,9 @@ export function RightSidebar({
             </button>
             <button
               type="button"
-              className={lower === 'run' ? 'active' : ''}
+              className={`${lower === 'run' ? 'active' : ''}${
+                (thread.activeRuns?.length ?? 0) > 0 ? ' is-live' : ''
+              }`}
               onClick={() => setLower('run')}
             >
               Run
@@ -1736,7 +1731,6 @@ export function RightSidebar({
             terminalSplit={terminalSplit}
             onToggleTerminalSplit={() => setTerminalSplit((v) => !v)}
             primaryPort={primaryPort}
-            extraStopScripts={extraStopScripts}
             primaryRunning={primaryRunning}
             primaryScriptName={primaryScriptName}
             hasHook={hasHook}
