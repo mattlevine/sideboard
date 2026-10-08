@@ -63,6 +63,8 @@ let handleChain: Promise<void> = Promise.resolve();
 let inboundGeneration = 0;
 const chatChains = new Map<string, Promise<void>>();
 const chatGeneration = new Map<string, number>();
+/** Phone turn already being watched. Reopen must not bump this generation. */
+const phoneTurnGen = new Map<string, number>();
 
 function enqueue(fn: () => Promise<void>): void {
   const run = handleChain.then(fn, fn);
@@ -102,6 +104,10 @@ function bumpChat(chatId: string): number {
   const next = (chatGeneration.get(chatId) ?? 0) + 1;
   chatGeneration.set(chatId, next);
   return next;
+}
+
+function finishPhoneTurn(chatId: string, generation: number): void {
+  if (phoneTurnGen.get(chatId) === generation) phoneTurnGen.delete(chatId);
 }
 
 function enqueueChat(chatId: string, fn: () => Promise<void>): void {
@@ -247,7 +253,12 @@ function deliverPhoneTurn(
   const thread = readPhoneThread(chatId);
   if (!thread || (thread.status !== 'running' && thread.status !== 'queued')) return;
   const id = thread.id;
+  // Opening the chat again shares the watcher. A new bump would drop frames
+  // until the original waitForTurn finished.
+  const claimed = phoneTurnGen.get(id);
+  if (claimed != null && claimed === chatGeneration.get(id)) return;
   const generation = bumpChat(id);
+  phoneTurnGen.set(id, generation);
   enqueueChat(id, async () => {
     if (chatGeneration.get(id) !== generation) return;
     const stopStream = watchPhoneStream(opts, id, id, generation);
@@ -255,11 +266,13 @@ function deliverPhoneTurn(
       await getOrchestrator().waitForTurn(id, 14 * 60 * 1000);
     } catch (err) {
       stopStream();
+      finishPhoneTurn(id, generation);
       if (chatGeneration.get(id) !== generation) return;
       emitControl(opts, { op: 'error', chatId: id, message: `Sideboard failed: ${phoneError(err)}` });
       return;
     }
     stopStream();
+    finishPhoneTurn(id, generation);
     if (chatGeneration.get(id) !== generation) return;
     emitChatTurn(opts, id, id);
   });
@@ -554,6 +567,7 @@ function handlePhoneControl(
 
   const chatId = cmd.chatId;
   const generation = bumpChat(chatId);
+  phoneTurnGen.set(chatId, generation);
   interruptChat(chatId, log);
   enqueueChat(chatId, async () => {
     if (chatGeneration.get(chatId) !== generation) return;
@@ -590,6 +604,7 @@ function handlePhoneControl(
       return;
     } finally {
       stopStream();
+      finishPhoneTurn(chatId, generation);
     }
     if (chatGeneration.get(chatId) !== generation) return;
     emitChatTurn(opts, chatId, thread.id);

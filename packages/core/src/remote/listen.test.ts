@@ -258,6 +258,78 @@ describe('handleRemoteInbound interrupt', () => {
     expect(assistantAt).toBeGreaterThan(streamAt);
   });
 
+  it('keeps streaming when a running phone chat is opened again', async () => {
+    const replies: string[] = [];
+    const outbound = (msg: { type: string; text?: string }) => {
+      if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+    };
+    handleRemoteInbound(encodePhoneControl({ op: 'create', where: 'orchestration' }), {
+      deviceId: 'phone-reopen',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    const opened = JSON.parse(replies[0]!.slice(replies[0]!.indexOf('{'))) as { chat: { id: string } };
+    let emit: ((event: unknown) => void) | null = null;
+    vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      updateThread(String(id), { status: 'running' });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'on').mockImplementation((listener) => {
+      emit = listener as (event: unknown) => void;
+      return () => undefined;
+    });
+    let release: () => void = () => undefined;
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            updateThread(opened.chat.id, { status: 'idle' });
+            resolve(readThread(opened.chat.id)!);
+          };
+        }),
+    );
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'done',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+
+    handleRemoteInbound(
+      encodePhoneControl({ op: 'prompt', chatId: opened.chat.id, text: 'ship it' }),
+      { deviceId: 'phone-reopen', agent: 'claude', onOutbound: outbound },
+    );
+    await vi.waitFor(() => expect(emit).toBeTruthy());
+    emit?.({
+      type: 'turn_output',
+      threadId: opened.chat.id,
+      event: { type: 'stdout', data: 'hello' },
+    });
+    await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"stream"'))).toBe(true));
+
+    updateThread(opened.chat.id, { status: 'running' });
+    handleRemoteInbound(encodePhoneControl({ op: 'open', chatId: opened.chat.id }), {
+      deviceId: 'phone-reopen',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    emit?.({
+      type: 'turn_output',
+      threadId: opened.chat.id,
+      event: { type: 'stdout', data: ' more' },
+    });
+    await vi.waitFor(() => expect(replies.some((line) => line.includes('more'))).toBe(true));
+    expect(replies.some((line) => line.includes('"op":"assistant"'))).toBe(false);
+
+    release();
+    await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"assistant"'))).toBe(true));
+  });
+
   it('lists archived chats and restores one onto the sidebar', async () => {
     const replies: string[] = [];
     const outbound = (msg: { type: string; text?: string }) => {

@@ -31,7 +31,7 @@ import {
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
-import { publishImage } from './media-cache';
+import { imageCacheKey, publishImage } from './media-cache';
 import { MarkdownText, streamVerb } from './markdown';
 import { createRelayLink, type RelayLink } from './relay-link';
 
@@ -1002,8 +1002,9 @@ export default function App() {
       return;
     }
     if (control.op === 'media' && control.path) {
-      publishImage(control.path, control.dataUrl ?? null);
-      if (pendingImageRef.current === control.path) pendingImageRef.current = null;
+      const key = imageCacheKey(control.chatId ?? '', control.path);
+      publishImage(key, control.dataUrl ?? null);
+      if (pendingImageRef.current === key) pendingImageRef.current = null;
       return;
     }
     if (control.op === 'error') {
@@ -1229,10 +1230,11 @@ export default function App() {
 
   function requestDesktopImage(src: string) {
     const id = activeChatIdRef.current;
-    if (!id || requestedImagesRef.current.has(src)) return;
-    requestedImagesRef.current.add(src);
+    const key = imageCacheKey(id ?? '', src);
+    if (!id || requestedImagesRef.current.has(key)) return;
+    requestedImagesRef.current.add(key);
     lastPhoneOpRef.current = 'media';
-    pendingImageRef.current = src;
+    pendingImageRef.current = key;
     link.send(phoneCommand({ op: 'media', chatId: id, path: src }));
   }
 
@@ -1851,6 +1853,7 @@ export default function App() {
                 text={bubble.text}
                 tone={bubble.role === 'user' ? 'user' : 'agent'}
                 streaming={bubble.streaming === true}
+                chatId={activeChatId ?? ''}
                 onChatLink={openChat}
                 onFileLink={openDesktopFile}
                 onLocalImage={requestDesktopImage}
@@ -1867,7 +1870,7 @@ export default function App() {
           ) : null}
           {transcript.questions?.map((question) => (
             <View key={question.question} style={styles.ask}>
-              <MarkdownText text={question.question} tone="ask" onChatLink={openChat} />
+              <MarkdownText text={question.question} tone="ask" chatId={activeChatId ?? ''} onChatLink={openChat} />
               {question.options.map((option, index) => (
                 <Pressable key={option.label} style={styles.option} onPress={() => sendText(option.label)}>
                   <View style={styles.optionNum}>

@@ -4,7 +4,7 @@ import Markdown, { type RenderRules } from 'react-native-markdown-display';
 import { linkifyChatUrls, parseChatLink } from './chat-link';
 import { fenceLanguage, highlightCode } from './code-highlight';
 import { parseFilePathLink, type FilePathLink } from './file-link';
-import { peekImage, watchImage } from './media-cache';
+import { imageCacheKey, peekImage, watchImage } from './media-cache';
 import { MermaidView } from './mermaid-view';
 
 const text = '#ededed';
@@ -37,26 +37,47 @@ function isRemoteImage(src: string): boolean {
   return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('data:image/');
 }
 
-function FileChip({ link, label }: { link: FilePathLink; label: string }) {
+function FileChip({
+  link,
+  label,
+  onPress,
+}: {
+  link: FilePathLink;
+  label: string;
+  onPress?: (link: FilePathLink) => void;
+}) {
   return (
-    <Text style={fileChip} onPress={() => fileLinkHandler?.(link)}>
+    <Text style={fileChip} onPress={() => onPress?.(link)}>
       {label}
     </Text>
   );
 }
 
-function ChatImage({ src, alt }: { src: string; alt: string }) {
+function ChatImage({
+  chatId,
+  src,
+  alt,
+  onFile,
+  onRequest,
+}: {
+  chatId: string;
+  src: string;
+  alt: string;
+  onFile?: (link: FilePathLink) => void;
+  onRequest?: (src: string) => void;
+}) {
   const remote = isRemoteImage(src);
-  const [local, setLocal] = useState<string | null | undefined>(() => (remote ? src : peekImage(src)));
+  const key = imageCacheKey(chatId, src);
+  const [local, setLocal] = useState<string | null | undefined>(() => (remote ? src : peekImage(key)));
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (remote) return;
-    return watchImage(src, setLocal);
-  }, [remote, src]);
+    return watchImage(key, setLocal);
+  }, [remote, key]);
   useEffect(() => {
-    if (remote || peekImage(src) !== undefined) return;
-    imageRequestHandler?.(src);
-  }, [remote, src]);
+    if (remote || peekImage(key) !== undefined) return;
+    onRequest?.(src);
+  }, [remote, key, src, onRequest]);
   const uri = remote ? src : local;
   if (!remote && local === undefined) {
     return <Text style={imageWait}>{alt.trim() || 'Image'}</Text>;
@@ -65,7 +86,7 @@ function ChatImage({ src, alt }: { src: string; alt: string }) {
     const link = parseFilePathLink(src) ?? { path: src };
     const name = link.path.split('/').pop() || link.path;
     return (
-      <Text style={fileChip} onPress={() => fileLinkHandler?.(link)}>
+      <Text style={fileChip} onPress={() => onFile?.(link)}>
         {alt.trim() || name}
       </Text>
     );
@@ -84,10 +105,12 @@ function ChatImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-let fileLinkHandler: ((link: FilePathLink) => void) | undefined;
-let imageRequestHandler: ((src: string) => void) | undefined;
-
-function markdownRules(streaming: boolean): RenderRules {
+function markdownRules(
+  streaming: boolean,
+  chatId: string,
+  onFileLink: (link: FilePathLink) => void,
+  onLocalImage: (src: string) => void,
+): RenderRules {
   return {
     fence: (node) => {
       const info = (node as { sourceInfo?: string }).sourceInfo;
@@ -95,7 +118,7 @@ function markdownRules(streaming: boolean): RenderRules {
       const content = String(node.content ?? '').replace(/\n$/, '');
       const file = parseFilePathLink(language);
       if (file) {
-        return <FileChip key={node.key} link={file} label={file.path} />;
+        return <FileChip key={node.key} link={file} label={file.path} onPress={onFileLink} />;
       }
       if (language === 'mermaid') {
         if (streaming) {
@@ -127,7 +150,7 @@ function markdownRules(streaming: boolean): RenderRules {
     code_inline: (node, children, _parent, styles) => {
       const raw = String(node.content ?? '');
       const file = parseFilePathLink(raw);
-      if (file) return <FileChip key={node.key} link={file} label={raw} />;
+      if (file) return <FileChip key={node.key} link={file} label={raw} onPress={onFileLink} />;
       return (
         <Text key={node.key} style={styles.code_inline}>
           {children}
@@ -138,7 +161,16 @@ function markdownRules(streaming: boolean): RenderRules {
       const src = typeof node.attributes?.src === 'string' ? node.attributes.src : '';
       const alt = typeof node.attributes?.alt === 'string' ? node.attributes.alt : '';
       if (!src) return null;
-      return <ChatImage key={node.key} src={src} alt={alt} />;
+      return (
+        <ChatImage
+          key={node.key}
+          chatId={chatId}
+          src={src}
+          alt={alt}
+          onFile={onFileLink}
+          onRequest={onLocalImage}
+        />
+      );
     },
   };
 }
@@ -147,6 +179,7 @@ export function MarkdownText({
   text: source,
   tone = 'agent',
   streaming = false,
+  chatId = '',
   onChatLink,
   onFileLink,
   onLocalImage,
@@ -155,6 +188,8 @@ export function MarkdownText({
   tone?: 'agent' | 'user' | 'ask';
   /** Live reply: mermaid stays a preview until the fence is finished, same as desktop. */
   streaming?: boolean;
+  /** Worktree images are cached per chat, not by path alone. */
+  chatId?: string;
   onChatLink?: (chatId: string) => void;
   /** Backtick paths and workspace images: the Mac opens the file. */
   onFileLink?: (link: FilePathLink) => void;
@@ -163,23 +198,34 @@ export function MarkdownText({
 }) {
   const onChatLinkRef = useRef(onChatLink);
   onChatLinkRef.current = onChatLink;
-  fileLinkHandler = onFileLink;
-  imageRequestHandler = onLocalImage;
+  const onFileLinkRef = useRef(onFileLink);
+  onFileLinkRef.current = onFileLink;
+  const onLocalImageRef = useRef(onLocalImage);
+  onLocalImageRef.current = onLocalImage;
   const onLinkPress = useCallback((url: string) => {
-    const chatId = parseChatLink(url);
-    if (chatId) {
-      onChatLinkRef.current?.(chatId);
+    const linked = parseChatLink(url);
+    if (linked) {
+      onChatLinkRef.current?.(linked);
       return false;
     }
     if (isWebUrl(url)) return true;
     const file = parseFilePathLink(url);
     if (file) {
-      fileLinkHandler?.(file);
+      onFileLinkRef.current?.(file);
       return false;
     }
     return false;
   }, []);
-  const rules = useMemo(() => markdownRules(streaming), [streaming]);
+  const rules = useMemo(
+    () =>
+      markdownRules(
+        streaming,
+        chatId,
+        (link) => onFileLinkRef.current?.(link),
+        (src) => onLocalImageRef.current?.(src),
+      ),
+    [streaming, chatId],
+  );
   const body = linkifyChatUrls(source);
   if (!body.trim()) return null;
   return (
