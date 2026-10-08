@@ -36,6 +36,7 @@ import { projectReviewLabelsFromSettings } from './lib/project-review-labels';
 import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { applyChatTextScale, resolveChatTextScale } from './lib/chat-text-scale';
 import { ShowCostProvider } from './lib/show-cost';
+import { usePhoneOpenFile } from './lib/phone-open-file';
 import { useReadAloudSession } from './lib/use-read-aloud-session';
 import { FollowUpBehaviorProvider } from './lib/follow-up-behavior';
 import { Sidebar } from './components/Sidebar';
@@ -873,29 +874,7 @@ export function App() {
     [rightSidebarWorktreeKey],
   );
 
-  const [phoneFile, setPhoneFile] = useState<{
-    threadId: string;
-    path: string;
-    directory?: boolean;
-    startLine?: number;
-    endLine?: number;
-  } | null>(null);
-  useEffect(() => window.sideboard.onPhoneOpenFile(setPhoneFile), []);
-  useEffect(() => {
-    if (!phoneFile) return;
-    if (selectedId !== phoneFile.threadId) {
-      setSelectedId(phoneFile.threadId);
-      return;
-    }
-    if (phoneFile.directory) revealDirectoryInFiles(phoneFile.path);
-    else {
-      openFile(phoneFile.path, {
-        startLine: phoneFile.startLine,
-        endLine: phoneFile.endLine,
-      });
-    }
-    setPhoneFile(null);
-  }, [phoneFile, selectedId, selected?.worktreePath, revealDirectoryInFiles]);
+  usePhoneOpenFile(selectedId, selected?.worktreePath, setSelectedId, openFile, revealDirectoryInFiles);
 
   const children = useMemo(
     () => (selected ? threads.filter((t) => t.parentThreadId === selected.id) : []),

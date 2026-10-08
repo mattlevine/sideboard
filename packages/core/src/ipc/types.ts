@@ -577,15 +577,7 @@ export interface IpcApi {
   /** Subscribe to orchestrator events; returns unsubscribe. */
   onEvent(listener: (event: OrchestratorEvent) => void): () => void;
   /** Phone asked the Mac to open a worktree file or reveal a folder. */
-  onPhoneOpenFile(
-    listener: (request: {
-      threadId: string;
-      path: string;
-      directory?: boolean;
-      startLine?: number;
-      endLine?: number;
-    }) => void,
-  ): () => void;
+  onPhoneOpenFile(listener: (request: { threadId: string; path: string; directory?: boolean; startLine?: number; endLine?: number }) => void): () => void;
   /** Subscribe to store directory changes (CLI threads appear live). */
   onThreadsChanged(listener: () => void): () => void;
   getRepoPath(): Promise<string>;
