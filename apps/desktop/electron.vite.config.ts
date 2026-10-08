@@ -120,6 +120,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/store/history-retention.ts',
         ),
+        '@sideboard/phone-artifact': resolve(
+          __dirname,
+          '../../packages/core/src/remote/phone-artifact.ts',
+        ),
 
       },
     },

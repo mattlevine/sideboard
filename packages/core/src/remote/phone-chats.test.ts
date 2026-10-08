@@ -49,6 +49,9 @@ describe('phone orchestration chats', () => {
     expect(
       takePhoneControl(encodePhoneControl({ op: 'open-file', chatId: 'chat-1', path: 'apps/mobile/App.tsx', startLine: 12 })),
     ).toEqual({ op: 'open-file', chatId: 'chat-1', path: 'apps/mobile/App.tsx', startLine: 12 });
+    expect(
+      takePhoneControl(encodePhoneControl({ op: 'open-artifact', chatId: 'chat-1', title: 'Dashboard', hint: '<p>' })),
+    ).toEqual({ op: 'open-artifact', chatId: 'chat-1', title: 'Dashboard', hint: '<p>' });
     expect(takePhoneControl(encodePhoneControl({ op: 'media', chatId: 'chat-1', path: 'shot.png' }))).toEqual({
       op: 'media',
       chatId: 'chat-1',
@@ -124,9 +127,10 @@ describe('phone orchestration chats', () => {
 
     const listed = listPhoneSidebar();
     expect(listed.orchestration.map((chat) => chat.id)).toContain(created.chat.id);
-    expect(listed.orchestration.find((chat) => chat.id === created.chat.id)?.preview).toBe(
-      'Two agents are running.',
-    );
+    expect(listed.orchestration.find((chat) => chat.id === created.chat.id)).toMatchObject({
+      preview: 'Two agents are running.',
+      agent: 'claude',
+    });
 
     const opened = openPhoneChat(created.chat.id);
     expect(opened?.messages).toEqual([
@@ -161,6 +165,7 @@ describe('phone orchestration chats', () => {
     expect(sidebar.projects.map((project) => project.name)).toContain('sideboard');
     const project = sidebar.projects.find((row) => row.path === '/tmp/sideboard');
     expect(project?.worktrees[0]?.chats.map((chat) => chat.id)).toEqual([thread.id]);
+    expect(project?.worktrees[0]?.chats[0]?.agent).toBe('claude');
     expect(openPhoneChat(thread.id)?.chat.id).toBe(thread.id);
     expect(archivePhoneChat(thread.id)).toBe(true);
     expect(listPhoneHistory().chats[0]).toMatchObject({ id: thread.id, where: 'sideboard', agent: 'claude' });

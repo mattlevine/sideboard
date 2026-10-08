@@ -24,6 +24,8 @@ export interface RemoteHostClientOptions {
   transcribeWav?: (wavBase64: string) => Promise<string>;
   /** Open a worktree file or folder in the desktop window. */
   onOpenWorktreeFile?: (request: import('./phone-media.js').PhoneOpenFileRequest) => void;
+  /** Open a chat artifact in the desktop side column. */
+  onOpenArtifact?: (request: import('./phone-artifact.js').PhoneOpenArtifactRequest) => void;
   /** Tests: override keepalive cadence. */
   pingIntervalMs?: number;
   pongTimeoutMs?: number;
@@ -231,6 +233,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         onOutbound: emit,
         transcribeWav: opts.transcribeWav,
         onOpenWorktreeFile: opts.onOpenWorktreeFile,
+        onOpenArtifact: opts.onOpenArtifact,
       });
     }
   };

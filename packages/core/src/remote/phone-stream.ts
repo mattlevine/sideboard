@@ -1,12 +1,13 @@
 import { applyAgentEvent, liveActivitySummary, visibleAssistantText } from '../agents/message-parts.js';
 import type { AgentEvent, MessagePart } from '../types/thread.js';
+import { phoneArtifactText } from './phone-artifact.js';
 
 /** Coalesce token deltas before the next phone frame. Desktop paints on animation frames. */
 export const PHONE_STREAM_FLUSH_MS = 80;
 
 export function phoneStreamFrame(parts: MessagePart[]): { text: string; activity: string } {
   return {
-    text: visibleAssistantText(undefined, parts),
+    text: phoneArtifactText(visibleAssistantText(undefined, parts), parts),
     activity: liveActivitySummary(parts),
   };
 }

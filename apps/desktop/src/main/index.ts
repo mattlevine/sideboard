@@ -37,6 +37,8 @@ import { formatUpdaterCheckError } from './updater-error';
 import {
   bindPhoneOpenFile,
   showPhoneFile,
+  bindPhoneOpenArtifact,
+  showPhoneArtifact,
   bindRemoteHostActivity,
   isRemoteHostRunning,
   readRemoteStatus,
@@ -2002,6 +2004,7 @@ app.whenReady().then(async () => {
   if (mainWindow) setupTsServer(mainWindow);
   bindRemoteHostActivity(syncCaffeinate);
   bindPhoneOpenFile((request) => showPhoneFile(mainWindow, request));
+  bindPhoneOpenArtifact((request) => showPhoneArtifact(mainWindow, request));
   stopSlackListenDaemon();
   startRemoteHost();
 

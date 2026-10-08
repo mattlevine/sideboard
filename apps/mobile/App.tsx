@@ -31,11 +31,13 @@ import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
 import { imageCacheKey, publishImage } from './media-cache';
-import { MarkdownText, streamVerb } from './markdown';
+import { EmptyChat } from './empty-chat';
+import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
 import { createRelayLink, type RelayLink } from './relay-link';
+import { AgentKindIcon } from './agent-icons';
+import { ProjectGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
 import { palette, styles } from './styles';
-
-const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
+import { useTransientError } from './transient-error';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
@@ -54,6 +56,7 @@ type PhoneChat = {
   status: string;
   preview: string;
   updatedAt: string;
+  agent?: string;
 };
 type PhoneWorktree = { label: string; chats: PhoneChat[] };
 type PhoneProject = { name: string; path: string; worktrees: PhoneWorktree[] };
@@ -97,6 +100,7 @@ type PhoneControl =
   | { op: 'dictated'; id: string; text: string }
   | ({ op: 'options'; chatId: string } & ComposerOptions);
 
+const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
 /** Must match PHONE_CONTROL_PREFIX in packages/core. Rides inside prompt text. */
 const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
@@ -333,10 +337,11 @@ function ChatRow({
   return (
     <View style={styles.row}>
       <Pressable style={styles.rowMain} onPress={onOpen}>
-        <Text style={styles.rowTitle}>{chat.title}</Text>
-        <Text style={styles.preview} numberOfLines={1}>
-          {chat.preview || 'No messages yet'}
-        </Text>
+        <View style={styles.titleRow}>
+          <AgentKindIcon agent={chat.agent || ''} />
+          <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
+        </View>
+        <Text style={styles.preview} numberOfLines={1}>{chat.preview || 'No messages yet'}</Text>
         <View style={styles.statusRow}>
           <View
             style={[
@@ -377,7 +382,10 @@ function HistoryRow({
   return (
     <View style={styles.row}>
       <View style={styles.rowMain}>
-        <Text style={styles.rowTitle}>{chat.title}</Text>
+        <View style={styles.titleRow}>
+          <AgentKindIcon agent={chat.agent} />
+          <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
+        </View>
         {chat.preview ? (
           <Text style={styles.preview} numberOfLines={1}>
             {chat.preview}
@@ -441,7 +449,7 @@ export default function App() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [draft, setDraft] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useTransientError();
   const [pendingAdd, setPendingAdd] = useState<string | null>(null);
   const [files, setFiles] = useState<FileChip[]>([]);
   const [links, setLinks] = useState<LinkChip[]>([]);
@@ -636,7 +644,7 @@ export default function App() {
       return;
     }
     if (control.op === 'opened' && control.chat?.id) {
-      const chat = control.chat;
+      const chat = { ...control.chat, agent: control.chat.agent || control.options?.agent };
       setPendingAdd(null);
       setCreateMode(null);
       if (control.options) {
@@ -764,7 +772,7 @@ export default function App() {
         pendingImageRef.current = null;
         lastPhoneOpRef.current = null;
         if (openedFile) {
-          setError('This Mac’s Sideboard app can’t open files from the phone yet.');
+          setError('This Mac’s Sideboard app can’t open that from the phone yet.');
         }
         return;
       }
@@ -960,6 +968,17 @@ export default function App() {
     const after = historyNextRef.current;
     if (!after || historyLoadingRef.current) return;
     sendHistory(historyQueryRef.current, after);
+  }
+  function openDesktopArtifact(artifact: ArtifactLink) {
+    const id = activeChatIdRef.current;
+    if (!id) return;
+    lastPhoneOpRef.current = 'open-file';
+    link.send(phoneCommand({
+      op: 'open-artifact',
+      chatId: id,
+      title: artifact.title,
+      ...(artifact.hint ? { hint: artifact.hint } : {}),
+    }));
   }
 
   function openDesktopFile(file: FilePathLink) {
@@ -1394,7 +1413,12 @@ export default function App() {
           {projects.map((project) => (
             <View key={project.path} style={styles.projectBlock}>
               <View style={styles.sectionRow}>
-                <Text style={[styles.projectName, styles.rowLabel]}>{project.name}</Text>
+                <View style={styles.glyphRow}>
+                  <ProjectGlyph />
+                  <Text style={styles.projectName} numberOfLines={1}>
+                    {project.name}
+                  </Text>
+                </View>
                 <AddButton
                   label="New worktree"
                   hint={`New worktree in ${project.name}`}
@@ -1408,7 +1432,12 @@ export default function App() {
                 return (
                   <View key={`${project.path}:${worktree.label}`} style={styles.worktreeBlock}>
                     <View style={styles.sectionRow}>
-                      <Text style={[styles.worktreeName, styles.rowLabel]}>{worktree.label}</Text>
+                      <View style={styles.glyphRow}>
+                        <WorktreeStatusIcon kind={worktreeStatusKind(worktree.chats)} />
+                        <Text style={styles.worktreeName} numberOfLines={1}>
+                          {worktree.label}
+                        </Text>
+                      </View>
                       {anchor ? (
                         <AddButton
                           label="Add agent"
@@ -1548,9 +1577,12 @@ export default function App() {
           <Pressable onPress={showAgents} hitSlop={8}>
             <Text style={styles.link}>Chats</Text>
           </Pressable>
-          <Text style={styles.chromeTitle} numberOfLines={1}>
-            {activeChat?.title || 'Agent'}
-          </Text>
+          <View style={[styles.titleRow, styles.titleFlex]}>
+            <AgentKindIcon agent={activeChat?.agent || chatOptions[activeChatId ?? '']?.agent || ''} />
+            <Text style={styles.chromeTitle} numberOfLines={1}>
+              {activeChat?.title || 'Agent'}
+            </Text>
+          </View>
           {transcript.working ? (
             <Pressable onPress={() => sendText('stop')} hitSlop={8}>
               <Text style={styles.link}>Stop</Text>
@@ -1578,20 +1610,7 @@ export default function App() {
           }
         >
           {transcript.bubbles.length === 0 && !transcript.working && !transcript.questions ? (
-            <View style={styles.empty}>
-              <View style={styles.emptyMark}>
-                <View style={styles.emptyPlate} />
-                <View style={styles.emptyCube} />
-              </View>
-              <Text style={styles.emptyTitle}>
-                {activeIsProject ? 'What should we work on?' : 'What should we orchestrate?'}
-              </Text>
-              <Text style={styles.emptyBody}>
-                {activeIsProject
-                  ? 'This agent stays on this worktree on the Mac.'
-                  : 'Steer worktree agents across registered repos. They stay on this Mac.'}
-              </Text>
-            </View>
+            <EmptyChat project={activeIsProject} />
           ) : null}
           {transcript.bubbles.map((bubble) => (
             <View
@@ -1605,6 +1624,7 @@ export default function App() {
                 chatId={activeChatId ?? ''}
                 onChatLink={openChat}
                 onFileLink={openDesktopFile}
+                onArtifact={openDesktopArtifact}
                 onLocalImage={requestDesktopImage}
               />
             </View>

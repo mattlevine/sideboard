@@ -37,6 +37,8 @@ function isRemoteImage(src: string): boolean {
   return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('data:image/');
 }
 
+export type ArtifactLink = { title: string; hint?: string };
+
 function FileChip({
   link,
   label,
@@ -49,6 +51,23 @@ function FileChip({
   return (
     <Text style={fileChip} onPress={() => onPress?.(link)}>
       {label}
+    </Text>
+  );
+}
+
+function ArtifactChip({
+  title,
+  hint,
+  onPress,
+}: {
+  title: string;
+  hint?: string;
+  onPress?: (artifact: ArtifactLink) => void;
+}) {
+  const artifact = hint ? { title, hint } : { title };
+  return (
+    <Text style={fileChip} onPress={() => onPress?.(artifact)}>
+      {title}
     </Text>
   );
 }
@@ -110,12 +129,19 @@ function markdownRules(
   chatId: string,
   onFileLink: (link: FilePathLink) => void,
   onLocalImage: (src: string) => void,
+  onArtifact: (artifact: ArtifactLink) => void,
 ): RenderRules {
   return {
     fence: (node) => {
       const info = (node as { sourceInfo?: string }).sourceInfo;
       const language = fenceLanguage(info);
       const content = String(node.content ?? '').replace(/\n$/, '');
+      if (language === 'sb-artifact') {
+        const [titleLine, hintLine] = content.split('\n');
+        const title = titleLine?.trim() || 'Artifact';
+        const hint = hintLine?.trim();
+        return <ArtifactChip key={node.key} title={title} hint={hint} onPress={onArtifact} />;
+      }
       const file = parseFilePathLink(language);
       if (file) {
         return <FileChip key={node.key} link={file} label={file.path} onPress={onFileLink} />;
@@ -183,6 +209,7 @@ export function MarkdownText({
   onChatLink,
   onFileLink,
   onLocalImage,
+  onArtifact,
 }: {
   text: string;
   tone?: 'agent' | 'user' | 'ask';
@@ -195,6 +222,8 @@ export function MarkdownText({
   onFileLink?: (link: FilePathLink) => void;
   /** Ask the Mac for a worktree image that is not already an https URL. */
   onLocalImage?: (src: string) => void;
+  /** Document artifacts open on the Mac, the same way file paths do. */
+  onArtifact?: (artifact: ArtifactLink) => void;
 }) {
   const onChatLinkRef = useRef(onChatLink);
   onChatLinkRef.current = onChatLink;
@@ -202,6 +231,8 @@ export function MarkdownText({
   onFileLinkRef.current = onFileLink;
   const onLocalImageRef = useRef(onLocalImage);
   onLocalImageRef.current = onLocalImage;
+  const onArtifactRef = useRef(onArtifact);
+  onArtifactRef.current = onArtifact;
   const onLinkPress = useCallback((url: string) => {
     const linked = parseChatLink(url);
     if (linked) {
@@ -223,6 +254,7 @@ export function MarkdownText({
         chatId,
         (link) => onFileLinkRef.current?.(link),
         (src) => onLocalImageRef.current?.(src),
+        (artifact) => onArtifactRef.current?.(artifact),
       ),
     [streaming, chatId],
   );

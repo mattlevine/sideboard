@@ -5,6 +5,7 @@ import { extractPendingPlanQuestions } from '../plan/ask-user.js';
 import { readThread } from '../store/thread-store.js';
 import type { RemoteAskQuestion } from './protocol.js';
 import { encodePhoneControl, readPhoneThread, type PhoneControlReply } from './phone-chats.js';
+import { phoneArtifactText } from './phone-artifact.js';
 import {
   PHONE_STREAM_FLUSH_MS,
   phoneStreamFlushNow,
@@ -161,7 +162,12 @@ export function emitChatTurn(
     failed: (detail) =>
       detail ? `Sideboard failed: ${detail}` : 'Sideboard failed before producing a result.',
   });
-  emitControl(opts, { op: 'assistant', chatId, text: reply.trim() });
+  const agent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+  emitControl(opts, {
+    op: 'assistant',
+    chatId,
+    text: phoneArtifactText(reply.trim(), agent?.parts),
+  });
 }
 
 /**

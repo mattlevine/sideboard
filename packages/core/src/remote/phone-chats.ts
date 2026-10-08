@@ -19,6 +19,7 @@ import { listWorkspaces } from '../store/workspaces.js';
 import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
 import { createThread } from '../threads/create.js';
 import { startOrchestration } from '../orchestrator/orchestrator.js';
+import { parseOpenArtifact, phoneArtifactText, type PhoneOpenArtifact } from './phone-artifact.js';
 
 /**
  * Phone chat control rides inside the existing prompt/assistant text so it
@@ -40,6 +41,7 @@ export interface PhoneChatSummary {
   status: ThreadStatus;
   preview: string;
   updatedAt: string;
+  agent: AgentKind;
 }
 
 export interface PhoneChatMessage {
@@ -161,6 +163,7 @@ export type PhoneControlRequest =
   | ({ op: 'prompt'; chatId: string; text: string } & PhoneDraft)
   | { op: 'stop'; chatId: string }
   | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number }
+  | PhoneOpenArtifact
   | { op: 'media'; chatId: string; path: string };
 
 export interface PhoneWorktree {
@@ -251,6 +254,7 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     : '';
   if (!chatId) return 'invalid';
   if (op === 'open' || op === 'archive' || op === 'restore' || op === 'stop') return { op, chatId };
+  if (op === 'open-artifact') return parseOpenArtifact(value, chatId);
   if (op === 'open-file' || op === 'media') {
     const path = textField(value, 'path');
     if (!path || path.length > 2000) return 'invalid';
@@ -443,6 +447,7 @@ function summarize(thread: Thread): PhoneChatSummary {
     status: thread.status,
     preview: previewOf(thread),
     updatedAt: thread.updatedAt,
+    agent: thread.agent,
   };
 }
 
@@ -458,12 +463,11 @@ export function listPhoneMessages(thread: Thread): PhoneChatMessage[] {
   for (const message of thread.messages) {
     if (message.role !== 'user' && message.role !== 'agent') continue;
     const names = (message.attachments ?? []).map((item) => item.name.trim()).filter(Boolean);
-    const text = clip(
-      [phoneVisibleText(message.role, message.text), names.length ? names.join(', ') : '']
-        .filter(Boolean)
-        .join('\n'),
-      MESSAGE_LIMIT,
-    );
+    const visible = [phoneVisibleText(message.role, message.text), names.length ? names.join(', ') : '']
+      .filter(Boolean)
+      .join('\n');
+    const text =
+      message.role === 'agent' ? phoneArtifactText(visible, message.parts, MESSAGE_LIMIT) : clip(visible, MESSAGE_LIMIT);
     if (!text) continue;
     out.push({ role: message.role, text });
   }

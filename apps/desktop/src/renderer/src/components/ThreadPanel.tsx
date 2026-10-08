@@ -67,6 +67,7 @@ import { useShowCost } from '../lib/show-cost';
 import { useFollowUpBehavior } from '../lib/follow-up-behavior';
 import { createUsageSendGate } from '../lib/usage-send-gate';
 import { useLiveThread } from '../lib/live-paint-context';
+import { usePhoneOpenArtifact } from '../lib/phone-open-file';
 import { shouldShowClaudePlanUsage, useClaudePlanUsage } from '../lib/use-claude-usage';
 import { AgentMessage } from './AgentMessage';
 import { ChatTabs } from './ChatTabs';
@@ -2010,6 +2011,7 @@ export function ThreadPanel({
     });
     onShowChat?.();
   }
+  usePhoneOpenArtifact(thread, liveOutput, liveParts, openRightPane);
 
   function closeRightTab(id: string) {
     setFilePicker((fp) => (fp?.returnTabId === id ? null : fp));
@@ -2155,8 +2157,6 @@ export function ThreadPanel({
     }
   }, [thread.id]); // intentionally not thread.messages — avoid resetting form on each turn update
 
-  // First artifact/schema/files tab: split chat | pane 50/50 unless this
-  // worktree already has a dragged width.
   useLayoutEffect(() => {
     const n = rightSession?.tabs.length ?? 0;
     const openedFirst = prevRightTabCount.current === 0 && n > 0;

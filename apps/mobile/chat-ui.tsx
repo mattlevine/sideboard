@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import type { PickedFile } from './media';
+import { AgentKindIcon } from './agent-icons';
 
 const palette = {
   bg: '#121212',
@@ -24,7 +25,6 @@ const palette = {
 
 export type AgentId = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-
 export type ComposerOptions = {
   agent: AgentId;
   model: string | null;
@@ -130,9 +130,8 @@ export function ComposerDock(props: {
                 setAgentOpen(true);
               }}
             >
-              <Text style={styles.chipText}>
-                {agentLabel(props.options.agent)} · {modelLabel(props.options, props.models)}
-              </Text>
+              <AgentKindIcon agent={props.options.agent} />
+              <Text style={styles.chipText}>{agentLabel(props.options.agent)} · {modelLabel(props.options, props.models)}</Text>
             </Pressable>
             <Pressable
               style={styles.chip}
@@ -257,6 +256,7 @@ function AgentSheet(props: {
                   });
                 }}
               >
+                <AgentKindIcon agent={agent.id} />
                 <Text style={styles.chipText}>{agent.label}</Text>
               </Pressable>
             ))}
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   chipScroll: { flex: 1 },
   chips: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 6 },
   chip: {
-    borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1,
     borderColor: palette.border,
     borderRadius: 999,
     paddingHorizontal: 10,
