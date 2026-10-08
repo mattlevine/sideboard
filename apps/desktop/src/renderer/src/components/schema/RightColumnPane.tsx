@@ -205,6 +205,7 @@ export function RightColumnPane({
       <ArtifactPane
         artifact={content}
         embedded
+        worktreeThreadId={worktreeThreadId}
         onClose={() => onCloseTab(content.id)}
         headerAction={maximizeButton}
         onReadAloud={onReadAloud}

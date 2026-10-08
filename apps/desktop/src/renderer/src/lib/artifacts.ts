@@ -146,10 +146,7 @@ export function inferJobLogStatus(payload: Record<string, unknown> | undefined):
   return undefined;
 }
 
-/**
- * After the chat stream ends, a leftover `working` pill is wrong unless the
- * last completed wait still says the detached job is running.
- */
+/** Leftover working pill stays only while the last wait still says the job is running. */
 export function settleLogStatusAfterStream(
   artifact: ChatArtifact,
   parts?: MessagePart[],
@@ -540,12 +537,14 @@ function extractJobLogArtifact(
         : part.status === 'error'
           ? 'failed'
           : 'ok');
-  const content =
+  const delta =
     typeof payload?.delta === 'string'
       ? payload.delta
       : typeof payload?.content === 'string'
         ? payload.content
         : '';
+  const progress = str(payload?.progress);
+  const content = delta || (progress && progress !== '(no log yet)' ? progress : '');
 
   return jobLogArtifact({
     id,

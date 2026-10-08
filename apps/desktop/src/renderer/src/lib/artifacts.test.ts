@@ -404,6 +404,28 @@ describe('log artifacts', () => {
     expect(merged?.phase).toBe('done');
   });
 
+  it('shows progress when a wait result has no new lines', () => {
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 'w1',
+        name: 'wait_for_job',
+        status: 'running',
+        input: { id: 'gha-release' },
+        result: JSON.stringify({
+          stillRunning: true,
+          status: 'running',
+          id: 'gha-release',
+          delta: '',
+          progress: 'release-desktop-mac in_progress — Build',
+        }),
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts[0]!.content).toBe('release-desktop-mac in_progress — Build');
+    expect(arts[0]!.status).toBe('running');
+  });
+
   it('opens a running log as soon as wait_for_job starts', () => {
     const parts: MessagePart[] = [
       {

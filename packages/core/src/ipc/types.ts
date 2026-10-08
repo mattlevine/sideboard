@@ -437,6 +437,7 @@ export interface IpcApi {
   readFile(
     threadRef: string,
     relativePath: string,
+    tail?: boolean,
   ): Promise<{
     path: string;
     content: string;
