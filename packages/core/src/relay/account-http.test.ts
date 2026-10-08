@@ -73,6 +73,11 @@ describe('relay account sign-in', () => {
     expect(startBody.url).toContain('github.com/login/oauth/authorize');
     const callback = await fetch(`${origin}/remote/oauth/callback?code=from-github&state=${state}`);
     expect(callback.status).toBe(200);
+    const html = await callback.text();
+    expect(html).toContain('Signed in');
+    expect(html).toContain('class="mark"');
+    expect(html).toContain('#09090b');
+    expect(html).toContain('>Sideboard</div>');
     const result = await fetch(`${origin}/remote/oauth/result?state=${state}`);
     const session = (await result.json()) as { credential?: string };
     expect(session.credential).toBeTruthy();
