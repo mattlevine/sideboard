@@ -24,6 +24,7 @@ import {
   threadMayPresentPlan,
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
+import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
 import {
   formatAskUserNotifyMessage,
   notifyOrchestrator,
@@ -216,6 +217,7 @@ async function createOrchChildThread(
         link: `sideboard://chat/${thread.id}`,
         parentChatId: thread.parentThreadId,
         parentThreadId: thread.parentThreadId,
+        chats: workspaceAgentChatSummaries(thread.worktreePath),
         ...(alreadyStarted ? { alreadyStarted: true } : {}),
         ...(opts.coercedFrom ? { agentCoercedFrom: opts.coercedFrom } : {}),
         ...(opts.ignoredAgent ? { agentIgnored: opts.ignoredAgent } : {}),
@@ -366,7 +368,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of worktrees (New, Draft, Review, Merged) — one card per checkout; sibling chat tabs nest as inner cards. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live one if that ticket/PR/named branch is already checked out.',
+    'Home Kanban of workspaces (New, Draft, Review, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
     {
       query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
       repoPath: z
@@ -965,7 +967,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_workspace',
-    `Create a workspace (isolated git worktree + first chat) from branch, pr, or ticket. A ticket, PR, or named branch may have only one live worktree — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. Creating from the default branch still opens a new isolated worktree. Pass repoPath from list_projects. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentChatId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Omit agent/model — Sideboard applies ${accountDefaultsHint}. Do not pass your own agent or agent=cursor; those are ignored. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Then use send_to_chat to chat.`,
+    `Create a workspace (isolated git checkout + first chat) from branch, pr, or ticket. A ticket, PR, or named branch has one checkout — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. That is not one agent: chats lists every agent on that checkout. Add another with fork_chat; send_to_chat only the chat that should do this job. Creating from the default branch still opens a new isolated checkout. Pass repoPath from list_projects. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentChatId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Omit agent/model — Sideboard applies ${accountDefaultsHint}. Do not pass your own agent or agent=cursor; those are ignored. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy).`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -1012,7 +1014,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'start_board_card',
-    'Same as create_workspace for a ticket, PR, or named branch (attaches issue text when Sideboard can resolve it). Does not create a second worktree when one already matches — returns that thread (alreadyStarted). Then send_to_chat.',
+    'Same as create_workspace for a ticket, PR, or named branch (attaches issue text when Sideboard can resolve it). Does not create a second checkout when one already matches — returns that workspace (alreadyStarted) and its chats. A workspace can have many agents. fork_chat to add one; send_to_chat only the chat that should do this job.',
     {
       kind: z.enum(['ticket', 'pr', 'branch']),
       ref: z
@@ -1042,6 +1044,7 @@ export async function startMcpServer(): Promise<void> {
           title: existing.title,
           status: existing.status,
           link: `sideboard://chat/${existing.id}`,
+          chats: workspaceAgentChatSummaries(orch.getThread(existing.id)?.worktreePath),
         });
       }
 
@@ -1424,7 +1427,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fork_chat',
-    'Fork a chat into a NEW tab on the SAME workspace: worktree agent → same worktree tab; Global orchestration chat → new orchestration chat (same synthetic home). Seeds a transcript; optional agent override. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Slack / Global orchestrators use this to continue an orchestration chat on another agent after session limits. Then send_to_chat / wait_for_turn (loop while stillRunning) on the returned id. Use fork_workspace only for worktree agents that need a new git worktree.',
+    'Add another agent chat on the SAME workspace (same files, Run, and git). Also forks a Global orchestration chat into a new orchestration tab. Pass agent when the new chat should use a different harness. Leave model unset for Auto unless you have a reason. Orchestration forks require an MCP-capable agent (claude, cursor, codex, opencode — not brightsy). Use this for a second agent on a checkout (review, another harness, parallel work on the same branch). Do not create_workspace again for that — it returns the existing checkout. Then send_to_chat / wait_for_turn (loop while stillRunning) on the returned id. Use fork_workspace only when the work needs its own git checkout.',
     {
       ref: z.string().describe('Thread id/ref to fork (worktree agent or orchestration chat)'),
       through_index: z

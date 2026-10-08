@@ -182,6 +182,13 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('scope=project');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('repoPath from list_projects');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('confirmed=true');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'A workspace is one isolated checkout and can have many agent chats',
+    );
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Do not treat a workspace as one agent');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'To put another agent on that checkout, fork_chat',
+    );
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('never pass your own agent or agent=cursor');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('CURSOR_API_KEY');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('find me work and start it');

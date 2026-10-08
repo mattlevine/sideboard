@@ -130,6 +130,24 @@ export function threadsSharingWorktree(worktreePath: string): Thread[] {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+/** Live agent chats on this checkout. A workspace is not one agent. */
+export function workspaceAgentChatSummaries(worktreePath: string | undefined): {
+  id: string;
+  title: string;
+  agent: Thread['agent'];
+  status: Thread['status'];
+  link: string;
+}[] {
+  if (!worktreePath) return [];
+  return threadsSharingWorktree(worktreePath).map((t) => ({
+    id: t.id,
+    title: t.title,
+    agent: t.agent,
+    status: t.status,
+    link: `sideboard://chat/${t.id}`,
+  }));
+}
+
 export function formatTranscriptMarkdown(title: string, messages: ThreadMessage[]): string {
   // Full tool inputs/results — this attachment is sent to the agent on the next turn.
   const body = formatMessagesAsTranscript(messages, { tools: 'full' });

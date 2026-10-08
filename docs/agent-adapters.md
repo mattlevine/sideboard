@@ -60,4 +60,4 @@ Reference implementations:
 
 - Auto-publishing the agent to npm
 - Desktop polish beyond showing the new kind in the picker
-- Cloud remote bridges (built-in Slack — [README](../README.md#slack))
+- A second remote. The phone app is already the remote ([README](../README.md#phone))

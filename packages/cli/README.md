@@ -13,13 +13,6 @@ sideboard schedule ls  # local jobs that trigger a chat
 
 Also installs `side` as a short alias. The MCP server is available as `sideboard mcp`, or via `@sideboard-ai/core`'s `sideboard-mcp` bin.
 
-Slack inbound (official Sideboard app + hosted relay):
-
-```bash
-sideboard slack login          # browser OAuth
-sideboard slack listen
-```
-
-How to connect and address Personal / Work Macs: [README — Slack](../../README.md#slack).
+The phone app is the remote. Pair it from Settings → Remote on the Mac, then pick that desktop in the app. Agents stay on the Mac. Details: [README — Phone](../../README.md#phone).
 
 Schedules (Settings, CLI, or MCP `create_schedule`) fire only while Sideboard.app is running. Overnight: Settings → Advanced → Caffeinate while schedules are enabled. Details: [README — Scheduled orchestration](../../README.md#scheduled-orchestration).

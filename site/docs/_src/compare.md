@@ -2,7 +2,7 @@
 
 Short positioning. Not a feature-complete matrix.
 
-Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard does that too. The comparison that matters is the **orchestration tier**: an agent that can reason about other threads, a board where you can see that, and a phone app, CLI, and MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs).
+Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Cursor 3 Agents window, Claude Code, Superset, Emdash, Claude Squad). Sideboard isolates the checkout and runs many agents on it. The comparison that matters is the **orchestration tier**: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs).
 
 Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (phone, CLI, MCP) are what stayed on this machine.
 
