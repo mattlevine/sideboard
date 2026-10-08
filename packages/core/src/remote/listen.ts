@@ -1,4 +1,4 @@
-import type { AgentKind, ThreadAttachment } from '../types/thread.js';
+import type { AgentEvent, AgentKind, MessagePart, ThreadAttachment } from '../types/thread.js';
 import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
 import { stageBuffersAsAttachments } from '../composer/stage-files.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
@@ -13,6 +13,11 @@ import { readThread } from '../store/thread-store.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import type { RemoteAskQuestion } from './protocol.js';
 import {
+  phoneImageDataUrl,
+  phoneWorktreeRelative,
+  type PhoneOpenFileRequest,
+} from './phone-media.js';
+import {
   archivePhoneChat,
   createPhoneChat,
   createPhoneOrchestration,
@@ -26,12 +31,19 @@ import {
   openPhoneChat,
   phoneComposerOptions,
   phoneTurnAttachments,
+  findPhoneChat,
   readPhoneThread,
   takePhoneControl,
   type PhoneControlReply,
   type PhoneControlRequest,
   type PhoneDraft,
 } from './phone-chats.js';
+import {
+  PHONE_STREAM_FLUSH_MS,
+  phoneStreamFlushNow,
+  phoneStreamFrame,
+  phoneStreamParts,
+} from './phone-stream.js';
 
 export const REMOTE_STOPPED_REPLY = 'Sideboard stopped the in-progress turn.';
 
@@ -111,6 +123,58 @@ function emitControl(
   opts.onOutbound({ type: 'assistant', text: encodePhoneControl(reply) });
 }
 
+/**
+ * Push the same live answer the desktop paints: markdown text plus the
+ * activity line (Thinking / tool). Throttled like a frame, flushed on tools.
+ */
+function watchPhoneStream(
+  opts: { onOutbound: (msg: RemoteOutbound) => void },
+  chatId: string,
+  threadId: string,
+  generation: number,
+): () => void {
+  let parts: MessagePart[] = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastKey = '';
+  let closed = false;
+  const alive = () => !closed && chatGeneration.get(chatId) === generation;
+  const flush = () => {
+    timer = null;
+    if (!alive()) return;
+    const frame = phoneStreamFrame(parts);
+    const key = `${frame.activity}\n${frame.text}`;
+    if (key === lastKey) return;
+    if (!frame.text && !frame.activity) return;
+    lastKey = key;
+    emitControl(opts, { op: 'stream', chatId, text: frame.text, activity: frame.activity });
+  };
+  const schedule = (event: AgentEvent) => {
+    if (phoneStreamFlushNow(event) || lastKey === '') {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      flush();
+      return;
+    }
+    if (timer) return;
+    timer = setTimeout(flush, PHONE_STREAM_FLUSH_MS);
+  };
+  const off = getOrchestrator().on((event) => {
+    if (!alive()) return;
+    if (event.type !== 'turn_output' || event.threadId !== threadId) return;
+    const next = phoneStreamParts(parts, event.event);
+    if (!next) return;
+    parts = next;
+    schedule(event.event);
+  });
+  return () => {
+    closed = true;
+    if (timer) clearTimeout(timer);
+    off();
+  };
+}
+
 function interruptChat(chatId: string, log: (line: string) => void): boolean {
   try {
     const thread = readPhoneThread(chatId);
@@ -182,19 +246,38 @@ function deliverPhoneTurn(
 ): void {
   const thread = readPhoneThread(chatId);
   if (!thread || (thread.status !== 'running' && thread.status !== 'queued')) return;
-  const generation = bumpChat(chatId);
-  enqueueChat(chatId, async () => {
-    if (chatGeneration.get(chatId) !== generation) return;
+  const id = thread.id;
+  const generation = bumpChat(id);
+  enqueueChat(id, async () => {
+    if (chatGeneration.get(id) !== generation) return;
+    const stopStream = watchPhoneStream(opts, id, id, generation);
     try {
-      await getOrchestrator().waitForTurn(chatId, 14 * 60 * 1000);
+      await getOrchestrator().waitForTurn(id, 14 * 60 * 1000);
     } catch (err) {
-      if (chatGeneration.get(chatId) !== generation) return;
-      emitControl(opts, { op: 'error', chatId, message: `Sideboard failed: ${phoneError(err)}` });
+      stopStream();
+      if (chatGeneration.get(id) !== generation) return;
+      emitControl(opts, { op: 'error', chatId: id, message: `Sideboard failed: ${phoneError(err)}` });
       return;
     }
-    if (chatGeneration.get(chatId) !== generation) return;
-    emitChatTurn(opts, chatId, chatId);
+    stopStream();
+    if (chatGeneration.get(id) !== generation) return;
+    emitChatTurn(opts, id, id);
   });
+}
+
+function publishOpenedChat(
+  opts: { onOutbound: (msg: RemoteOutbound) => void },
+  chatId: string,
+): void {
+  const opened = openPhoneChat(chatId);
+  if (!opened) {
+    emitControl(opts, { op: 'error', message: 'That agent is not on this Mac.' });
+    return;
+  }
+  emitControl(opts, { op: 'opened', ...opened });
+  if (opened.chat.status === 'running' || opened.chat.status === 'queued') {
+    deliverPhoneTurn(opts, opened.chat.id);
+  }
 }
 
 function applyPhoneOptions(chatId: string, draft: PhoneDraft): void {
@@ -225,6 +308,7 @@ function handlePhoneControl(
     onOutbound: (msg: RemoteOutbound) => void;
     onLog?: (line: string) => void;
     transcribeWav?: (wavBase64: string) => Promise<string>;
+    onOpenWorktreeFile?: (request: PhoneOpenFileRequest) => void;
   },
 ): void {
   const log = opts.onLog ?? (() => undefined);
@@ -370,12 +454,24 @@ function handlePhoneControl(
     return;
   }
   if (cmd.op === 'open') {
-    const opened = openPhoneChat(cmd.chatId);
-    if (!opened) {
+    const thread = findPhoneChat(cmd.chatId);
+    if (!thread) {
       emitControl(opts, { op: 'error', message: 'That agent is not on this Mac.' });
       return;
     }
-    emitControl(opts, { op: 'opened', ...opened });
+    if (thread.status === 'archived') {
+      void getOrchestrator()
+        .restore(thread.id)
+        .then(() => {
+          emitControl(opts, { op: 'sidebar', ...listPhoneSidebar() });
+          publishOpenedChat(opts, thread.id);
+        })
+        .catch((err: unknown) => {
+          emitControl(opts, { op: 'error', message: phoneError(err) });
+        });
+      return;
+    }
+    publishOpenedChat(opts, thread.id);
     return;
   }
   if (cmd.op === 'archive') {
@@ -404,6 +500,44 @@ function handlePhoneControl(
           chatId,
           message: err instanceof Error ? err.message : String(err),
         });
+      });
+    return;
+  }
+  if (cmd.op === 'media') {
+    const thread = readPhoneThread(cmd.chatId);
+    const dataUrl = thread ? phoneImageDataUrl(thread.worktreePath, cmd.path) : null;
+    emitControl(opts, {
+      op: 'media',
+      chatId: cmd.chatId,
+      path: cmd.path,
+      ...(dataUrl ? { dataUrl } : {}),
+    });
+    return;
+  }
+  if (cmd.op === 'open-file') {
+    const thread = readPhoneThread(cmd.chatId);
+    const relative = thread ? phoneWorktreeRelative(thread.worktreePath, cmd.path) : null;
+    if (!thread || !relative) {
+      emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
+      return;
+    }
+    void getOrchestrator()
+      .statPath(thread.id, relative)
+      .then((kind) => {
+        if (kind === 'missing') {
+          emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
+          return;
+        }
+        opts.onOpenWorktreeFile?.({
+          threadId: thread.id,
+          path: relative,
+          ...(kind === 'dir' ? { directory: true } : {}),
+          ...(cmd.startLine != null ? { startLine: cmd.startLine } : {}),
+          ...(cmd.endLine != null ? { endLine: cmd.endLine } : {}),
+        });
+      })
+      .catch(() => {
+        emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
       });
     return;
   }
@@ -436,6 +570,7 @@ function handlePhoneControl(
       }
     }
     if (chatGeneration.get(chatId) !== generation) return;
+    const stopStream = watchPhoneStream(opts, chatId, thread.id, generation);
     try {
       try {
         applyPhoneOptions(thread.id, cmd);
@@ -453,6 +588,8 @@ function handlePhoneControl(
       const message = err instanceof Error ? err.message : String(err);
       emitControl(opts, { op: 'error', chatId, message: `Sideboard failed: ${message}` });
       return;
+    } finally {
+      stopStream();
     }
     if (chatGeneration.get(chatId) !== generation) return;
     emitChatTurn(opts, chatId, thread.id);
@@ -467,6 +604,7 @@ export function handleRemoteInbound(
     onOutbound: (msg: RemoteOutbound) => void;
     onLog?: (line: string) => void;
     transcribeWav?: (wavBase64: string) => Promise<string>;
+    onOpenWorktreeFile?: (request: PhoneOpenFileRequest) => void;
   },
 ): void {
   const log = opts.onLog ?? (() => undefined);

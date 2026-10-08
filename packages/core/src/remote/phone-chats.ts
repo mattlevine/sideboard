@@ -16,7 +16,7 @@ import { isThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.
 import type { RemoteAskQuestion } from './protocol.js';
 import { resolveNewThreadOptions, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { createGlobalChat, isGlobalThread, listGlobalThreads } from '../store/global-workspace.js';
-import { listThreads, readThread, updateThread } from '../store/thread-store.js';
+import { findThreadByRef, listThreads, readThread, updateThread } from '../store/thread-store.js';
 import { listWorkspaces } from '../store/workspaces.js';
 import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
 import { createThread } from '../threads/create.js';
@@ -161,7 +161,9 @@ export type PhoneControlRequest =
   | { op: 'archive'; chatId: string }
   | { op: 'restore'; chatId: string }
   | ({ op: 'prompt'; chatId: string; text: string } & PhoneDraft)
-  | { op: 'stop'; chatId: string };
+  | { op: 'stop'; chatId: string }
+  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number }
+  | { op: 'media'; chatId: string; path: string };
 
 export interface PhoneWorktree {
   label: string;
@@ -197,8 +199,10 @@ export type PhoneControlReply =
   | { op: 'dictated'; id: string; text: string }
   | ({ op: 'options'; chatId: string } & PhoneComposerOptions)
   | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'stream'; chatId: string; text: string; activity: string }
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
   | { op: 'stopped'; chatId: string }
+  | { op: 'media'; chatId: string; path: string; dataUrl?: string }
   | { op: 'error'; message: string; chatId?: string };
 
 export function encodePhoneControl(payload: PhoneControlRequest | PhoneControlReply): string {
@@ -249,6 +253,20 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     : '';
   if (!chatId) return 'invalid';
   if (op === 'open' || op === 'archive' || op === 'restore' || op === 'stop') return { op, chatId };
+  if (op === 'open-file' || op === 'media') {
+    const path = textField(value, 'path');
+    if (!path || path.length > 2000) return 'invalid';
+    if (op === 'media') return { op, chatId, path };
+    const startLine = lineField(value, 'startLine');
+    const endLine = lineField(value, 'endLine');
+    return {
+      op,
+      chatId,
+      path,
+      ...(startLine != null ? { startLine } : {}),
+      ...(endLine != null ? { endLine } : {}),
+    };
+  }
   const draft = parsePhoneDraft(value);
   if (draft === 'invalid') return 'invalid';
   if (op === 'options') return { op: 'options', chatId, ...draft };
@@ -266,6 +284,12 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
 function textField(value: object, key: string): string {
   const raw = (value as Record<string, unknown>)[key];
   return typeof raw === 'string' ? raw.trim() : '';
+}
+
+function lineField(value: object, key: string): number | undefined {
+  const raw = (value as Record<string, unknown>)[key];
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1 || raw > 1_000_000) return undefined;
+  return raw;
 }
 
 function agentField(value: object): AgentKind | undefined {
@@ -542,13 +566,32 @@ export function listPhoneHistory(opts?: { query?: string; after?: string }): Pho
   };
 }
 
-export function readPhoneThread(chatId: string): Thread | null {
+function matchPhoneThread(chatId: string): Thread | null {
   const id = chatId.trim();
   if (!id) return null;
-  const thread = readThread(id);
+  const exact = readThread(id);
+  if (exact) return exact;
+  const match = findThreadByRef(id);
+  if (!match) return null;
+  if (match.id !== id && !match.id.startsWith(id)) return null;
+  return match;
+}
+
+function visiblePhoneThread(thread: Thread): boolean {
+  if (isGlobalThread(thread)) return true;
+  return isProjectPath(thread.repoPath);
+}
+
+/** Full id or `sideboard://chat/` prefix, including archived chats. */
+export function findPhoneChat(chatId: string): Thread | null {
+  const thread = matchPhoneThread(chatId);
+  if (!thread || !visiblePhoneThread(thread)) return null;
+  return thread;
+}
+
+export function readPhoneThread(chatId: string): Thread | null {
+  const thread = findPhoneChat(chatId);
   if (!thread || thread.status === 'archived') return null;
-  if (isGlobalThread(thread)) return thread;
-  if (!isProjectPath(thread.repoPath)) return null;
   return thread;
 }
 

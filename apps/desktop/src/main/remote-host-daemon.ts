@@ -15,6 +15,14 @@ import {
 import { transcribeWavFile } from './speech-dictate';
 
 let onActivity: () => void = () => {};
+let onOpenWorktreeFile: NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenWorktreeFile']> | null =
+  null;
+
+export function bindPhoneOpenFile(
+  fn: NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenWorktreeFile']>,
+): void {
+  onOpenWorktreeFile = fn;
+}
 
 export function bindRemoteHostActivity(fn: () => void): void {
   onActivity = fn;
@@ -97,6 +105,7 @@ export function startRemoteHost(): void {
       }
     },
     transcribeWav: (wavBase64) => transcribeWavFile(Buffer.from(wavBase64, 'base64')),
+    onOpenWorktreeFile: (request) => onOpenWorktreeFile?.(request),
   });
   remoteRequestPair = () => handle.requestPairingCode();
   remoteUpdateIdentity = (label) => handle.updateIdentity(label);

@@ -13,6 +13,7 @@ import {
   createPhoneProjectWorktree,
   createPhoneWorktreeAgent,
   encodePhoneControl,
+  findPhoneChat,
   listPhoneHistory,
   listPhoneSidebar,
   openPhoneChat,
@@ -44,6 +45,14 @@ describe('phone orchestration chats', () => {
     expect(takePhoneControl(encodePhoneControl({ op: 'restore', chatId: 'chat-1' }))).toEqual({
       op: 'restore',
       chatId: 'chat-1',
+    });
+    expect(
+      takePhoneControl(encodePhoneControl({ op: 'open-file', chatId: 'chat-1', path: 'apps/mobile/App.tsx', startLine: 12 })),
+    ).toEqual({ op: 'open-file', chatId: 'chat-1', path: 'apps/mobile/App.tsx', startLine: 12 });
+    expect(takePhoneControl(encodePhoneControl({ op: 'media', chatId: 'chat-1', path: 'shot.png' }))).toEqual({
+      op: 'media',
+      chatId: 'chat-1',
+      path: 'shot.png',
     });
     expect(takePhoneControl(encodePhoneControl({ op: 'create', where: 'orchestration' }))).toEqual({
       op: 'create',
@@ -124,10 +133,12 @@ describe('phone orchestration chats', () => {
       { role: 'user', text: 'check the board' },
       { role: 'agent', text: 'Two agents are running.' },
     ]);
+    expect(openPhoneChat(created.chat.id.slice(0, 8))?.chat.id).toBe(created.chat.id);
 
     expect(archivePhoneChat(created.chat.id)).toBe(true);
     expect(listPhoneSidebar().orchestration.some((chat) => chat.id === created.chat.id)).toBe(false);
     expect(openPhoneChat(created.chat.id)).toBeNull();
+    expect(findPhoneChat(created.chat.id.slice(0, 8))?.id).toBe(created.chat.id);
     const history = listPhoneHistory();
     expect(history.chats.map((chat) => chat.id)).toEqual([created.chat.id]);
     expect(history.total).toBe(1);

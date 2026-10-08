@@ -22,6 +22,8 @@ export interface RemoteHostClientOptions {
   onLog?: (line: string) => void;
   /** Mac speech recognizer for a phone recording (wav base64). */
   transcribeWav?: (wavBase64: string) => Promise<string>;
+  /** Open a worktree file or folder in the desktop window. */
+  onOpenWorktreeFile?: (request: import('./phone-media.js').PhoneOpenFileRequest) => void;
   /** Tests: override keepalive cadence. */
   pingIntervalMs?: number;
   pongTimeoutMs?: number;
@@ -218,6 +220,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         deviceId: opts.deviceId,
         onLog: log,
         onOutbound: emit,
+        onOpenWorktreeFile: opts.onOpenWorktreeFile,
       });
       return;
     }
@@ -227,6 +230,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         onLog: log,
         onOutbound: emit,
         transcribeWav: opts.transcribeWav,
+        onOpenWorktreeFile: opts.onOpenWorktreeFile,
       });
     }
   };

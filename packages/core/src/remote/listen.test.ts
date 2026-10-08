@@ -196,6 +196,68 @@ describe('handleRemoteInbound interrupt', () => {
     await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"assistant"'))).toBe(true));
   });
 
+  it('streams markdown while a phone turn is running', async () => {
+    const replies: string[] = [];
+    const outbound = (msg: { type: string; text?: string }) => {
+      if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+    };
+    handleRemoteInbound(encodePhoneControl({ op: 'create', where: 'orchestration' }), {
+      deviceId: 'phone-stream',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    const opened = JSON.parse(replies[0]!.slice(replies[0]!.indexOf('{'))) as {
+      op: string;
+      chat: { id: string };
+    };
+    expect(opened.op).toBe('opened');
+
+    vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      updateThread(String(id), { status: 'running' });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'on').mockImplementation((listener) => {
+      listener({
+        type: 'turn_output',
+        threadId: opened.chat.id,
+        event: { type: 'stdout', data: 'See [Board](sideboard://chat/abc)' },
+      });
+      return () => undefined;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            updateThread(opened.chat.id, { status: 'idle' });
+            resolve(readThread(opened.chat.id)!);
+          }, 40);
+        }),
+    );
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'See [Board](sideboard://chat/abc)',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+
+    handleRemoteInbound(
+      encodePhoneControl({ op: 'prompt', chatId: opened.chat.id, text: 'ship it' }),
+      { deviceId: 'phone-stream', agent: 'claude', onOutbound: outbound },
+    );
+
+    await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"stream"'))).toBe(true));
+    expect(replies.find((line) => line.includes('"op":"stream"'))).toContain('sideboard://chat/abc');
+    await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"assistant"'))).toBe(true));
+    const streamAt = replies.findIndex((line) => line.includes('"op":"stream"'));
+    const assistantAt = replies.findIndex((line) => line.includes('"op":"assistant"'));
+    expect(assistantAt).toBeGreaterThan(streamAt);
+  });
+
   it('lists archived chats and restores one onto the sidebar', async () => {
     const replies: string[] = [];
     const outbound = (msg: { type: string; text?: string }) => {

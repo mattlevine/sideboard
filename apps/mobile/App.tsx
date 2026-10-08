@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -11,7 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import type { AudioRecorder } from 'expo-audio';
 import { StatusBar } from 'expo-status-bar';
 import {
   ComposerDock,
@@ -28,6 +30,9 @@ import {
 } from './chat-ui';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
+import { type FilePathLink } from './file-link';
+import { publishImage } from './media-cache';
+import { MarkdownText, streamVerb } from './markdown';
 import { createRelayLink, type RelayLink } from './relay-link';
 
 const palette = {
@@ -49,9 +54,14 @@ const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
-type Bubble = { id: string; role: 'user' | 'agent'; text: string };
+type Bubble = { id: string; role: 'user' | 'agent'; text: string; streaming?: boolean };
 type Desktop = SavedDesktop & { online: boolean | null; expired: boolean };
-type Transcript = { bubbles: Bubble[]; questions: AskQuestion[] | null; working: boolean };
+type Transcript = {
+  bubbles: Bubble[];
+  questions: AskQuestion[] | null;
+  working: boolean;
+  activity?: string;
+};
 type Screen = 'loading' | 'desktops' | 'pair' | 'agents' | 'history' | 'chat';
 type PhoneChat = {
   id: string;
@@ -92,8 +102,10 @@ type PhoneControl =
       options?: ComposerOptions;
     }
   | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'stream'; chatId: string; text: string; activity?: string }
   | { op: 'ask'; chatId: string; text: string; questions: AskQuestion[] }
   | { op: 'stopped'; chatId: string }
+  | { op: 'media'; chatId: string; path: string; dataUrl?: string }
   | { op: 'error'; message: string; chatId?: string }
   | ({ op: 'sources'; repoPath: string; query?: string } & PhoneSources)
   | { op: 'models'; agent: AgentId; models: Array<{ id: string; label: string }> }
@@ -136,6 +148,32 @@ function persist(desktops: Desktop[]) {
 function pushBubble(bubbles: Bubble[], role: Bubble['role'], text: string): Bubble[] {
   if (!text.trim()) return bubbles;
   return [...bubbles, { id: `${Date.now()}-${bubbles.length}`, role, text }];
+}
+
+function settleBubbles(bubbles: Bubble[]): Bubble[] {
+  if (!bubbles.some((bubble) => bubble.streaming)) return bubbles;
+  return bubbles.map((bubble) => (bubble.streaming ? { ...bubble, streaming: false } : bubble));
+}
+
+function applyStream(current: Transcript, text: string, activity: string): Transcript {
+  const bubbles = current.bubbles.slice();
+  const trimmed = text.trim();
+  if (trimmed) {
+    const last = bubbles[bubbles.length - 1];
+    if (last?.streaming) bubbles[bubbles.length - 1] = { ...last, text: trimmed };
+    else bubbles.push({ id: `live-${Date.now()}-${bubbles.length}`, role: 'agent', text: trimmed, streaming: true });
+  }
+  return { ...current, bubbles, questions: null, working: true, activity };
+}
+
+function finishAgent(bubbles: Bubble[], text: string): Bubble[] {
+  const trimmed = text.trim();
+  const last = bubbles[bubbles.length - 1];
+  if (last?.streaming) {
+    if (!trimmed) return bubbles.slice(0, -1);
+    return [...bubbles.slice(0, -1), { ...last, text: trimmed, streaming: false }];
+  }
+  return pushBubble(bubbles, 'agent', trimmed);
 }
 
 function phoneCommand(payload: object) {
@@ -220,6 +258,80 @@ function Brand() {
     <View style={styles.brand}>
       <BrandMark size="md" />
       <Text style={styles.brandName}>Sideboard</Text>
+    </View>
+  );
+}
+
+/** Desktop live row: spinning mark, shimmer verb, and the three dots. */
+function StreamStatus({ verb }: { verb: string }) {
+  const spin = useRef(new Animated.Value(0)).current;
+  const wave = useRef(new Animated.Value(0)).current;
+  const dotA = useRef(new Animated.Value(0.35)).current;
+  const dotB = useRef(new Animated.Value(0.35)).current;
+  const dotC = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    const spinLoop = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 2400,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    const waveLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(wave, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(wave, {
+          toValue: 0,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    const pulse = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 450, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.35, duration: 450, useNativeDriver: true }),
+          Animated.delay(300),
+        ]),
+      );
+    const dots = [pulse(dotA, 0), pulse(dotB, 150), pulse(dotC, 300)];
+    spinLoop.start();
+    waveLoop.start();
+    for (const loop of dots) loop.start();
+    return () => {
+      spinLoop.stop();
+      waveLoop.stop();
+      for (const loop of dots) loop.stop();
+    };
+  }, [spin, wave, dotA, dotB, dotC]);
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const color = wave.interpolate({ inputRange: [0, 1], outputRange: [palette.muted, palette.text] });
+  return (
+    <View style={styles.streamRow} accessibilityRole="text" accessibilityLabel={verb || 'Generating'}>
+      <Animated.View style={{ transform: [{ rotate }] }}>
+        <BrandMark size="sm" />
+      </Animated.View>
+      {verb ? (
+        <Animated.Text style={[styles.streamVerb, { color }]} numberOfLines={2}>
+          {verb}
+        </Animated.Text>
+      ) : (
+        <View style={styles.streamVerb} />
+      )}
+      <View style={styles.streamDots}>
+        {[dotA, dotB, dotC].map((dot, index) => (
+          <Animated.View key={index} style={[styles.streamDot, { opacity: dot }]} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -386,8 +498,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: 8,
   },
-  bubbleText: { color: palette.text, fontSize: 16, lineHeight: 24, letterSpacing: -0.2 },
-  working: { color: palette.muted, fontSize: 15, marginBottom: 8 },
+  streamRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+    marginBottom: 8,
+    minHeight: 22,
+  },
+  streamVerb: { flex: 1, fontSize: 16, lineHeight: 22, letterSpacing: -0.2 },
+  streamDots: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  streamDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: palette.muted },
   ask: { marginTop: 8, marginBottom: 12, gap: 6 },
   askText: { color: palette.text, fontSize: 16, fontWeight: '500', lineHeight: 22, marginBottom: 4 },
   option: {
@@ -589,6 +710,9 @@ export default function App() {
   const desktopsRef = useRef(desktops);
   const activeIdRef = useRef(activeId);
   const activeChatIdRef = useRef(activeChatId);
+  const lastPhoneOpRef = useRef<string | null>(null);
+  const pendingImageRef = useRef<string | null>(null);
+  const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
   const urlRef = useRef(url);
   const pendingTokenRef = useRef<string | null>(null);
@@ -599,10 +723,12 @@ export default function App() {
   const historyNextRef = useRef<string | null>(null);
   const historyLoadingRef = useRef(false);
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingRef = useRef<AudioRecorder | null>(null);
   const dictateApplyRef = useRef<(text: string) => void>(() => undefined);
   const dictateIdRef = useRef<string | null>(null);
   const sourceQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transcriptScrollRef = useRef<ScrollView>(null);
+  const pinTranscriptRef = useRef(true);
   const attachedRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
@@ -779,7 +905,24 @@ export default function App() {
           text: message.text,
         }));
         const working = chat.status === 'running' || chat.status === 'queued';
-        return { ...prev, [chat.id]: { bubbles, questions: null, working } };
+        return { ...prev, [chat.id]: { bubbles, questions: null, working, activity: '' } };
+      });
+      return;
+    }
+    if (control.op === 'stream' && control.chatId) {
+      const chatId = control.chatId;
+      const text = control.text ?? '';
+      const activity = control.activity ?? '';
+      setTranscripts((prev) => ({
+        ...prev,
+        [chatId]: applyStream(prev[chatId] ?? EMPTY, text, activity),
+      }));
+      patchChat(chatId, {
+        status: 'running',
+        ...(text.trim()
+          ? { preview: text.replace(/\s+/g, ' ').trim().slice(0, 90) }
+          : {}),
+        updatedAt: new Date().toISOString(),
       });
       return;
     }
@@ -790,9 +933,10 @@ export default function App() {
         return {
           ...prev,
           [chatId]: {
-            bubbles: pushBubble(current.bubbles, 'agent', control.text),
+            bubbles: finishAgent(current.bubbles, control.text),
             questions: control.op === 'ask' ? control.questions : null,
             working: false,
+            activity: '',
           },
         };
       });
@@ -807,7 +951,13 @@ export default function App() {
       const chatId = control.chatId;
       setTranscripts((prev) => ({
         ...prev,
-        [chatId]: { ...(prev[chatId] ?? EMPTY), working: false, questions: null },
+        [chatId]: {
+          ...(prev[chatId] ?? EMPTY),
+          bubbles: settleBubbles((prev[chatId] ?? EMPTY).bubbles),
+          working: false,
+          questions: null,
+          activity: '',
+        },
       }));
       patchChat(chatId, { status: 'stopped' });
       return;
@@ -851,7 +1001,23 @@ export default function App() {
       }));
       return;
     }
+    if (control.op === 'media' && control.path) {
+      publishImage(control.path, control.dataUrl ?? null);
+      if (pendingImageRef.current === control.path) pendingImageRef.current = null;
+      return;
+    }
     if (control.op === 'error') {
+      const askedMac = lastPhoneOpRef.current === 'media' || lastPhoneOpRef.current === 'open-file';
+      if (control.message === 'invalid phone command' && askedMac) {
+        const openedFile = lastPhoneOpRef.current === 'open-file';
+        if (pendingImageRef.current) publishImage(pendingImageRef.current, null);
+        pendingImageRef.current = null;
+        lastPhoneOpRef.current = null;
+        if (openedFile) {
+          setError('This Mac’s Sideboard app can’t open files from the phone yet.');
+        }
+        return;
+      }
       historyLoadingRef.current = false;
       setHistoryLoading(false);
       setPendingAdd(null);
@@ -861,7 +1027,12 @@ export default function App() {
         const chatId = control.chatId;
         setTranscripts((prev) => ({
           ...prev,
-          [chatId]: { ...(prev[chatId] ?? EMPTY), working: false },
+          [chatId]: {
+            ...(prev[chatId] ?? EMPTY),
+            bubbles: settleBubbles((prev[chatId] ?? EMPTY).bubbles),
+            working: false,
+            activity: '',
+          },
         }));
       }
     }
@@ -1041,8 +1212,33 @@ export default function App() {
     sendHistory(historyQueryRef.current, after);
   }
 
+  function openDesktopFile(file: FilePathLink) {
+    const id = activeChatIdRef.current;
+    if (!id) return;
+    lastPhoneOpRef.current = 'open-file';
+    link.send(
+      phoneCommand({
+        op: 'open-file',
+        chatId: id,
+        path: file.path,
+        ...(file.startLine != null ? { startLine: file.startLine } : {}),
+        ...(file.endLine != null ? { endLine: file.endLine } : {}),
+      }),
+    );
+  }
+
+  function requestDesktopImage(src: string) {
+    const id = activeChatIdRef.current;
+    if (!id || requestedImagesRef.current.has(src)) return;
+    requestedImagesRef.current.add(src);
+    lastPhoneOpRef.current = 'media';
+    pendingImageRef.current = src;
+    link.send(phoneCommand({ op: 'media', chatId: id, path: src }));
+  }
+
   function openChat(chatId: string) {
     setError(null);
+    pinTranscriptRef.current = true;
     setActiveChatId(chatId);
     screenRef.current = 'chat';
     setScreen('chat');
@@ -1207,16 +1403,24 @@ export default function App() {
     const bubble = [body, ...files.map((file) => file.name), ...links.map((link) => link.ref)]
       .filter(Boolean)
       .join('\n');
+    if (!stopping) pinTranscriptRef.current = true;
     setTranscripts((prev) => {
       const current = prev[id] ?? EMPTY;
       return {
         ...prev,
         [id]: stopping
-          ? { ...current, questions: null, working: false }
+          ? {
+              ...current,
+              bubbles: settleBubbles(current.bubbles),
+              questions: null,
+              working: false,
+              activity: '',
+            }
           : {
-              bubbles: pushBubble(current.bubbles, 'user', bubble),
+              bubbles: pushBubble(settleBubbles(current.bubbles), 'user', bubble),
               questions: null,
               working: true,
+              activity: '',
             },
       };
     });
@@ -1605,7 +1809,17 @@ export default function App() {
           )}
         </View>
         <ScrollView
+          ref={transcriptScrollRef}
           style={styles.transcript}
+          scrollEventThrottle={16}
+          onScroll={(event) => {
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+            pinTranscriptRef.current =
+              contentSize.height - contentOffset.y - layoutMeasurement.height < 80;
+          }}
+          onContentSizeChange={() => {
+            if (pinTranscriptRef.current) transcriptScrollRef.current?.scrollToEnd({ animated: false });
+          }}
           contentContainerStyle={
             transcript.bubbles.length === 0 && !transcript.working && !transcript.questions
               ? styles.emptyFill
@@ -1633,13 +1847,27 @@ export default function App() {
               key={bubble.id}
               style={[styles.bubble, bubble.role === 'user' ? styles.user : styles.agent]}
             >
-              <Text style={styles.bubbleText}>{bubble.text}</Text>
+              <MarkdownText
+                text={bubble.text}
+                tone={bubble.role === 'user' ? 'user' : 'agent'}
+                streaming={bubble.streaming === true}
+                onChatLink={openChat}
+                onFileLink={openDesktopFile}
+                onLocalImage={requestDesktopImage}
+              />
             </View>
           ))}
-          {transcript.working ? <Text style={styles.working}>Working…</Text> : null}
+          {transcript.working ? (
+            <StreamStatus
+              verb={streamVerb(
+                transcript.activity,
+                transcript.bubbles.some((bubble) => bubble.streaming && bubble.text.trim().length > 0),
+              )}
+            />
+          ) : null}
           {transcript.questions?.map((question) => (
             <View key={question.question} style={styles.ask}>
-              <Text style={styles.askText}>{question.question}</Text>
+              <MarkdownText text={question.question} tone="ask" onChatLink={openChat} />
               {question.options.map((option, index) => (
                 <Pressable key={option.label} style={styles.option} onPress={() => sendText(option.label)}>
                   <View style={styles.optionNum}>

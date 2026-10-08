@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The phone app renders chat markdown as it streams, with the desktop’s live activity mark, link color, syntax-colored code, and mermaid diagrams. Web images show in the bubble. Workspace images and file paths open on the Mac. `sideboard://chat/…` links open that chat.
+
+### Changed
+
+- The phone app runs on Expo SDK 57, the SDK in the current Expo Go. Dictation still records 16 kHz mono PCM WAV for the Mac.
+- A booted iOS simulator gets the Expo Go build for that SDK, and Metro listens on 127.0.0.1 so the simulator can open the project.
+
 ## [0.1.275] - 2026-10-07
 
 ### Added
