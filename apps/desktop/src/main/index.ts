@@ -35,6 +35,8 @@ import {
 } from './speech-dictate';
 import { formatUpdaterCheckError } from './updater-error';
 import {
+  bindPhoneOpenFile,
+  showPhoneFile,
   bindRemoteHostActivity,
   isRemoteHostRunning,
   readRemoteStatus,
@@ -1999,6 +2001,7 @@ app.whenReady().then(async () => {
   createWindow();
   if (mainWindow) setupTsServer(mainWindow);
   bindRemoteHostActivity(syncCaffeinate);
+  bindPhoneOpenFile((request) => showPhoneFile(mainWindow, request));
   stopSlackListenDaemon();
   startRemoteHost();
 

@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import type { AudioRecorder } from 'expo-audio';
 import { StatusBar } from 'expo-status-bar';
 import {
   ComposerDock,
@@ -28,30 +29,24 @@ import {
 } from './chat-ui';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
+import { type FilePathLink } from './file-link';
+import { imageCacheKey, publishImage } from './media-cache';
+import { MarkdownText, streamVerb } from './markdown';
 import { createRelayLink, type RelayLink } from './relay-link';
-
-const palette = {
-  bg: '#121212',
-  elevated: '#18191a',
-  hover: '#242424',
-  border: '#2e2e32',
-  text: '#ededed',
-  secondary: '#c6c6c6',
-  muted: '#9b9b9b',
-  accent: '#007fd4',
-  accentDim: '#0e639c',
-  ok: '#4ade80',
-  warn: '#cca700',
-  err: '#f87171',
-};
+import { palette, styles } from './styles';
 
 const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
-type Bubble = { id: string; role: 'user' | 'agent'; text: string };
+type Bubble = { id: string; role: 'user' | 'agent'; text: string; streaming?: boolean };
 type Desktop = SavedDesktop & { online: boolean | null; expired: boolean };
-type Transcript = { bubbles: Bubble[]; questions: AskQuestion[] | null; working: boolean };
+type Transcript = {
+  bubbles: Bubble[];
+  questions: AskQuestion[] | null;
+  working: boolean;
+  activity?: string;
+};
 type Screen = 'loading' | 'desktops' | 'pair' | 'agents' | 'history' | 'chat';
 type PhoneChat = {
   id: string;
@@ -92,8 +87,10 @@ type PhoneControl =
       options?: ComposerOptions;
     }
   | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'stream'; chatId: string; text: string; activity?: string }
   | { op: 'ask'; chatId: string; text: string; questions: AskQuestion[] }
   | { op: 'stopped'; chatId: string }
+  | { op: 'media'; chatId: string; path: string; dataUrl?: string }
   | { op: 'error'; message: string; chatId?: string }
   | ({ op: 'sources'; repoPath: string; query?: string } & PhoneSources)
   | { op: 'models'; agent: AgentId; models: Array<{ id: string; label: string }> }
@@ -136,6 +133,32 @@ function persist(desktops: Desktop[]) {
 function pushBubble(bubbles: Bubble[], role: Bubble['role'], text: string): Bubble[] {
   if (!text.trim()) return bubbles;
   return [...bubbles, { id: `${Date.now()}-${bubbles.length}`, role, text }];
+}
+
+function settleBubbles(bubbles: Bubble[]): Bubble[] {
+  if (!bubbles.some((bubble) => bubble.streaming)) return bubbles;
+  return bubbles.map((bubble) => (bubble.streaming ? { ...bubble, streaming: false } : bubble));
+}
+
+function applyStream(current: Transcript, text: string, activity: string): Transcript {
+  const bubbles = current.bubbles.slice();
+  const trimmed = text.trim();
+  if (trimmed) {
+    const last = bubbles[bubbles.length - 1];
+    if (last?.streaming) bubbles[bubbles.length - 1] = { ...last, text: trimmed };
+    else bubbles.push({ id: `live-${Date.now()}-${bubbles.length}`, role: 'agent', text: trimmed, streaming: true });
+  }
+  return { ...current, bubbles, questions: null, working: true, activity };
+}
+
+function finishAgent(bubbles: Bubble[], text: string): Bubble[] {
+  const trimmed = text.trim();
+  const last = bubbles[bubbles.length - 1];
+  if (last?.streaming) {
+    if (!trimmed) return bubbles.slice(0, -1);
+    return [...bubbles.slice(0, -1), { ...last, text: trimmed, streaming: false }];
+  }
+  return pushBubble(bubbles, 'agent', trimmed);
 }
 
 function phoneCommand(payload: object) {
@@ -224,232 +247,79 @@ function Brand() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: palette.bg },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 16 },
-  brandName: { color: palette.text, fontSize: 15, fontWeight: '600', letterSpacing: -0.3 },
-  chromeMark: { marginRight: 2 },
-  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  title: { color: palette.text, fontSize: 22, fontWeight: '600', letterSpacing: -0.3, marginBottom: 8 },
-  emptyFill: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 24 },
-  empty: { alignItems: 'center' },
-  emptyMark: { width: 52, height: 52, marginBottom: 18 },
-  emptyPlate: {
-    position: 'absolute',
-    left: 8,
-    top: 8,
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0, 127, 212, 0.25)',
-    transform: [{ rotate: '14deg' }, { translateX: 6 }, { translateY: 6 }],
-  },
-  emptyCube: {
-    position: 'absolute',
-    left: 8,
-    top: 8,
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: palette.text,
-    opacity: 0.55,
-    transform: [{ rotate: '14deg' }],
-  },
-  emptyTitle: {
-    color: palette.text,
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: -0.3,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptyBody: { color: palette.muted, fontSize: 14, lineHeight: 21, textAlign: 'center' },
-  hint: { color: palette.muted, fontSize: 14, lineHeight: 20 },
-  chrome: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  chromeTitle: { flex: 1, color: palette.text, fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
-  link: { color: palette.accent, fontSize: 14, fontWeight: '600' },
-  form: { paddingHorizontal: 16, gap: 8 },
-  label: { color: palette.muted, fontSize: 12, marginTop: 4 },
-  input: {
-    backgroundColor: palette.bg,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 6,
-    color: palette.text,
-    fontSize: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  codeInput: { letterSpacing: 2, fontSize: 18 },
-  error: { color: palette.err, fontSize: 14, marginTop: 4 },
-  errorPad: { paddingHorizontal: 16, marginBottom: 4 },
-  primary: {
-    marginTop: 8,
-    backgroundColor: palette.accentDim,
-    borderWidth: 1,
-    borderColor: palette.accent,
-    borderRadius: 6,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  primaryDisabled: { opacity: 0.45 },
-  primaryText: { color: palette.text, fontSize: 15, fontWeight: '600' },
-  footer: { padding: 16, borderTopWidth: 1, borderTopColor: palette.border },
-  transcript: { flex: 1 },
-  listPad: { padding: 16, paddingBottom: 24 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.elevated,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    gap: 8,
-  },
-  rowMain: { flex: 1 },
-  rowTitle: { color: palette.text, fontSize: 16, fontWeight: '600' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  status: { color: palette.muted, fontSize: 13 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  dotOn: { backgroundColor: palette.ok },
-  dotOff: { backgroundColor: palette.muted },
-  dotWarn: { backgroundColor: palette.warn },
-  dotRun: { backgroundColor: palette.accent },
-  dotErr: { backgroundColor: palette.err },
-  preview: { color: palette.muted, fontSize: 13, lineHeight: 18, marginTop: 4 },
-  projectName: { color: palette.text, fontSize: 16, fontWeight: '600' },
-  worktreeName: { color: palette.secondary, fontSize: 13 },
-  rowLabel: { flex: 1 },
-  projectBlock: { marginTop: 12 },
-  worktreeBlock: { marginLeft: 8, marginBottom: 4 },
-  meta: { color: palette.muted, fontSize: 13, marginBottom: 8 },
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 8,
-  },
-  sectionLabel: {
-    color: palette.muted,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  projectsHead: { marginTop: 16 },
-  historyLead: { marginBottom: 12 },
-  historyForm: { paddingTop: 12 },
-  historyButton: { alignItems: 'center', paddingVertical: 4 },
-  addAgent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    minHeight: 32,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: palette.hover,
-  },
-  addAgentPlus: { color: palette.text, fontSize: 16, fontWeight: '600', marginTop: -1 },
-  addAgentText: { color: palette.text, fontSize: 13, fontWeight: '600' },
-  ghost: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  ghostText: { color: palette.muted, fontSize: 13, fontWeight: '600' },
-  bubble: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 8,
-  },
-  user: {
-    alignSelf: 'stretch',
-    backgroundColor: palette.elevated,
-    borderRadius: 20,
-  },
-  agent: {
-    alignSelf: 'stretch',
-    backgroundColor: 'transparent',
-    borderRadius: 8,
-  },
-  bubbleText: { color: palette.text, fontSize: 16, lineHeight: 24, letterSpacing: -0.2 },
-  working: { color: palette.muted, fontSize: 15, marginBottom: 8 },
-  ask: { marginTop: 8, marginBottom: 12, gap: 6 },
-  askText: { color: palette.text, fontSize: 16, fontWeight: '500', lineHeight: 22, marginBottom: 4 },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  optionNum: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: palette.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  optionNumText: { color: palette.muted, fontSize: 11 },
-  optionBody: { flex: 1, gap: 2 },
-  optionLabel: { color: palette.text, fontSize: 15, fontWeight: '500' },
-  optionDesc: { color: palette.muted, fontSize: 13, lineHeight: 18 },
-  composerShell: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
-    borderTopWidth: 1,
-    borderTopColor: palette.border,
-    backgroundColor: palette.bg,
-  },
-  composerBox: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 14,
-    backgroundColor: palette.elevated,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
-    gap: 8,
-  },
-  composerInput: {
-    color: palette.text,
-    fontSize: 16,
-    lineHeight: 22,
-    minHeight: 44,
-    maxHeight: 140,
-    padding: 0,
-  },
-  composerActions: { flexDirection: 'row', justifyContent: 'flex-end' },
-  send: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: palette.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendDisabled: { opacity: 0.35 },
-  sendText: { color: palette.bg, fontSize: 16, fontWeight: '700', marginTop: -1 },
-});
+/** Desktop live row: spinning mark, shimmer verb, and the three dots. */
+function StreamStatus({ verb }: { verb: string }) {
+  const spin = useRef(new Animated.Value(0)).current;
+  const wave = useRef(new Animated.Value(0)).current;
+  const dotA = useRef(new Animated.Value(0.35)).current;
+  const dotB = useRef(new Animated.Value(0.35)).current;
+  const dotC = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    const spinLoop = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 2400,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    const waveLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(wave, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(wave, {
+          toValue: 0,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    const pulse = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 450, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.35, duration: 450, useNativeDriver: true }),
+          Animated.delay(300),
+        ]),
+      );
+    const dots = [pulse(dotA, 0), pulse(dotB, 150), pulse(dotC, 300)];
+    spinLoop.start();
+    waveLoop.start();
+    for (const loop of dots) loop.start();
+    return () => {
+      spinLoop.stop();
+      waveLoop.stop();
+      for (const loop of dots) loop.stop();
+    };
+  }, [spin, wave, dotA, dotB, dotC]);
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const color = wave.interpolate({ inputRange: [0, 1], outputRange: [palette.muted, palette.text] });
+  return (
+    <View style={styles.streamRow} accessibilityRole="text" accessibilityLabel={verb || 'Generating'}>
+      <Animated.View style={{ transform: [{ rotate }] }}>
+        <BrandMark size="sm" />
+      </Animated.View>
+      {verb ? (
+        <Animated.Text style={[styles.streamVerb, { color }]} numberOfLines={2}>
+          {verb}
+        </Animated.Text>
+      ) : (
+        <View style={styles.streamVerb} />
+      )}
+      <View style={styles.streamDots}>
+        {[dotA, dotB, dotC].map((dot, index) => (
+          <Animated.View key={index} style={[styles.streamDot, { opacity: dot }]} />
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function ChatRow({
   chat,
@@ -589,6 +459,9 @@ export default function App() {
   const desktopsRef = useRef(desktops);
   const activeIdRef = useRef(activeId);
   const activeChatIdRef = useRef(activeChatId);
+  const lastPhoneOpRef = useRef<string | null>(null);
+  const pendingImageRef = useRef<string | null>(null);
+  const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
   const urlRef = useRef(url);
   const pendingTokenRef = useRef<string | null>(null);
@@ -599,10 +472,12 @@ export default function App() {
   const historyNextRef = useRef<string | null>(null);
   const historyLoadingRef = useRef(false);
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingRef = useRef<AudioRecorder | null>(null);
   const dictateApplyRef = useRef<(text: string) => void>(() => undefined);
   const dictateIdRef = useRef<string | null>(null);
   const sourceQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transcriptScrollRef = useRef<ScrollView>(null);
+  const pinTranscriptRef = useRef(true);
   const attachedRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
@@ -779,7 +654,24 @@ export default function App() {
           text: message.text,
         }));
         const working = chat.status === 'running' || chat.status === 'queued';
-        return { ...prev, [chat.id]: { bubbles, questions: null, working } };
+        return { ...prev, [chat.id]: { bubbles, questions: null, working, activity: '' } };
+      });
+      return;
+    }
+    if (control.op === 'stream' && control.chatId) {
+      const chatId = control.chatId;
+      const text = control.text ?? '';
+      const activity = control.activity ?? '';
+      setTranscripts((prev) => ({
+        ...prev,
+        [chatId]: applyStream(prev[chatId] ?? EMPTY, text, activity),
+      }));
+      patchChat(chatId, {
+        status: 'running',
+        ...(text.trim()
+          ? { preview: text.replace(/\s+/g, ' ').trim().slice(0, 90) }
+          : {}),
+        updatedAt: new Date().toISOString(),
       });
       return;
     }
@@ -790,9 +682,10 @@ export default function App() {
         return {
           ...prev,
           [chatId]: {
-            bubbles: pushBubble(current.bubbles, 'agent', control.text),
+            bubbles: finishAgent(current.bubbles, control.text),
             questions: control.op === 'ask' ? control.questions : null,
             working: false,
+            activity: '',
           },
         };
       });
@@ -807,7 +700,13 @@ export default function App() {
       const chatId = control.chatId;
       setTranscripts((prev) => ({
         ...prev,
-        [chatId]: { ...(prev[chatId] ?? EMPTY), working: false, questions: null },
+        [chatId]: {
+          ...(prev[chatId] ?? EMPTY),
+          bubbles: settleBubbles((prev[chatId] ?? EMPTY).bubbles),
+          working: false,
+          questions: null,
+          activity: '',
+        },
       }));
       patchChat(chatId, { status: 'stopped' });
       return;
@@ -851,7 +750,24 @@ export default function App() {
       }));
       return;
     }
+    if (control.op === 'media' && control.path) {
+      const key = imageCacheKey(control.chatId ?? '', control.path);
+      publishImage(key, control.dataUrl ?? null);
+      if (pendingImageRef.current === key) pendingImageRef.current = null;
+      return;
+    }
     if (control.op === 'error') {
+      const askedMac = lastPhoneOpRef.current === 'media' || lastPhoneOpRef.current === 'open-file';
+      if (control.message === 'invalid phone command' && askedMac) {
+        const openedFile = lastPhoneOpRef.current === 'open-file';
+        if (pendingImageRef.current) publishImage(pendingImageRef.current, null);
+        pendingImageRef.current = null;
+        lastPhoneOpRef.current = null;
+        if (openedFile) {
+          setError('This Mac’s Sideboard app can’t open files from the phone yet.');
+        }
+        return;
+      }
       historyLoadingRef.current = false;
       setHistoryLoading(false);
       setPendingAdd(null);
@@ -861,7 +777,12 @@ export default function App() {
         const chatId = control.chatId;
         setTranscripts((prev) => ({
           ...prev,
-          [chatId]: { ...(prev[chatId] ?? EMPTY), working: false },
+          [chatId]: {
+            ...(prev[chatId] ?? EMPTY),
+            bubbles: settleBubbles((prev[chatId] ?? EMPTY).bubbles),
+            working: false,
+            activity: '',
+          },
         }));
       }
     }
@@ -1041,8 +962,34 @@ export default function App() {
     sendHistory(historyQueryRef.current, after);
   }
 
+  function openDesktopFile(file: FilePathLink) {
+    const id = activeChatIdRef.current;
+    if (!id) return;
+    lastPhoneOpRef.current = 'open-file';
+    link.send(
+      phoneCommand({
+        op: 'open-file',
+        chatId: id,
+        path: file.path,
+        ...(file.startLine != null ? { startLine: file.startLine } : {}),
+        ...(file.endLine != null ? { endLine: file.endLine } : {}),
+      }),
+    );
+  }
+
+  function requestDesktopImage(src: string) {
+    const id = activeChatIdRef.current;
+    const key = imageCacheKey(id ?? '', src);
+    if (!id || requestedImagesRef.current.has(key)) return;
+    requestedImagesRef.current.add(key);
+    lastPhoneOpRef.current = 'media';
+    pendingImageRef.current = key;
+    link.send(phoneCommand({ op: 'media', chatId: id, path: src }));
+  }
+
   function openChat(chatId: string) {
     setError(null);
+    pinTranscriptRef.current = true;
     setActiveChatId(chatId);
     screenRef.current = 'chat';
     setScreen('chat');
@@ -1207,16 +1154,24 @@ export default function App() {
     const bubble = [body, ...files.map((file) => file.name), ...links.map((link) => link.ref)]
       .filter(Boolean)
       .join('\n');
+    if (!stopping) pinTranscriptRef.current = true;
     setTranscripts((prev) => {
       const current = prev[id] ?? EMPTY;
       return {
         ...prev,
         [id]: stopping
-          ? { ...current, questions: null, working: false }
+          ? {
+              ...current,
+              bubbles: settleBubbles(current.bubbles),
+              questions: null,
+              working: false,
+              activity: '',
+            }
           : {
-              bubbles: pushBubble(current.bubbles, 'user', bubble),
+              bubbles: pushBubble(settleBubbles(current.bubbles), 'user', bubble),
               questions: null,
               working: true,
+              activity: '',
             },
       };
     });
@@ -1605,7 +1560,17 @@ export default function App() {
           )}
         </View>
         <ScrollView
+          ref={transcriptScrollRef}
           style={styles.transcript}
+          scrollEventThrottle={16}
+          onScroll={(event) => {
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+            pinTranscriptRef.current =
+              contentSize.height - contentOffset.y - layoutMeasurement.height < 80;
+          }}
+          onContentSizeChange={() => {
+            if (pinTranscriptRef.current) transcriptScrollRef.current?.scrollToEnd({ animated: false });
+          }}
           contentContainerStyle={
             transcript.bubbles.length === 0 && !transcript.working && !transcript.questions
               ? styles.emptyFill
@@ -1633,13 +1598,28 @@ export default function App() {
               key={bubble.id}
               style={[styles.bubble, bubble.role === 'user' ? styles.user : styles.agent]}
             >
-              <Text style={styles.bubbleText}>{bubble.text}</Text>
+              <MarkdownText
+                text={bubble.text}
+                tone={bubble.role === 'user' ? 'user' : 'agent'}
+                streaming={bubble.streaming === true}
+                chatId={activeChatId ?? ''}
+                onChatLink={openChat}
+                onFileLink={openDesktopFile}
+                onLocalImage={requestDesktopImage}
+              />
             </View>
           ))}
-          {transcript.working ? <Text style={styles.working}>Working…</Text> : null}
+          {transcript.working ? (
+            <StreamStatus
+              verb={streamVerb(
+                transcript.activity,
+                transcript.bubbles.some((bubble) => bubble.streaming && bubble.text.trim().length > 0),
+              )}
+            />
+          ) : null}
           {transcript.questions?.map((question) => (
             <View key={question.question} style={styles.ask}>
-              <Text style={styles.askText}>{question.question}</Text>
+              <MarkdownText text={question.question} tone="ask" chatId={activeChatId ?? ''} onChatLink={openChat} />
               {question.options.map((option, index) => (
                 <Pressable key={option.label} style={styles.option} onPress={() => sendText(option.label)}>
                   <View style={styles.optionNum}>

@@ -2,9 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { groupHomeBoardWorktrees } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
-import { listBranches, listPrs } from '../git/worktree.js';
 import { worktreeDisplayLabelForGroup } from '../git/worktree-labels.js';
-import { listIssues } from '../integrations/issues.js';
 import type {
   AgentKind,
   Autonomy,
@@ -16,7 +14,7 @@ import { isThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.
 import type { RemoteAskQuestion } from './protocol.js';
 import { resolveNewThreadOptions, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { createGlobalChat, isGlobalThread, listGlobalThreads } from '../store/global-workspace.js';
-import { listThreads, readThread, updateThread } from '../store/thread-store.js';
+import { findThreadByRef, listThreads, readThread, updateThread } from '../store/thread-store.js';
 import { listWorkspaces } from '../store/workspaces.js';
 import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
 import { createThread } from '../threads/create.js';
@@ -161,7 +159,9 @@ export type PhoneControlRequest =
   | { op: 'archive'; chatId: string }
   | { op: 'restore'; chatId: string }
   | ({ op: 'prompt'; chatId: string; text: string } & PhoneDraft)
-  | { op: 'stop'; chatId: string };
+  | { op: 'stop'; chatId: string }
+  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number }
+  | { op: 'media'; chatId: string; path: string };
 
 export interface PhoneWorktree {
   label: string;
@@ -197,8 +197,10 @@ export type PhoneControlReply =
   | { op: 'dictated'; id: string; text: string }
   | ({ op: 'options'; chatId: string } & PhoneComposerOptions)
   | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'stream'; chatId: string; text: string; activity: string }
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
   | { op: 'stopped'; chatId: string }
+  | { op: 'media'; chatId: string; path: string; dataUrl?: string }
   | { op: 'error'; message: string; chatId?: string };
 
 export function encodePhoneControl(payload: PhoneControlRequest | PhoneControlReply): string {
@@ -249,6 +251,20 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     : '';
   if (!chatId) return 'invalid';
   if (op === 'open' || op === 'archive' || op === 'restore' || op === 'stop') return { op, chatId };
+  if (op === 'open-file' || op === 'media') {
+    const path = textField(value, 'path');
+    if (!path || path.length > 2000) return 'invalid';
+    if (op === 'media') return { op, chatId, path };
+    const startLine = lineField(value, 'startLine');
+    const endLine = lineField(value, 'endLine');
+    return {
+      op,
+      chatId,
+      path,
+      ...(startLine != null ? { startLine } : {}),
+      ...(endLine != null ? { endLine } : {}),
+    };
+  }
   const draft = parsePhoneDraft(value);
   if (draft === 'invalid') return 'invalid';
   if (op === 'options') return { op: 'options', chatId, ...draft };
@@ -266,6 +282,12 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
 function textField(value: object, key: string): string {
   const raw = (value as Record<string, unknown>)[key];
   return typeof raw === 'string' ? raw.trim() : '';
+}
+
+function lineField(value: object, key: string): number | undefined {
+  const raw = (value as Record<string, unknown>)[key];
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1 || raw > 1_000_000) return undefined;
+  return raw;
 }
 
 function agentField(value: object): AgentKind | undefined {
@@ -409,7 +431,7 @@ export function phoneVisibleText(role: 'user' | 'agent', text: string): string {
   return trimmed;
 }
 
-function clip(text: string, limit: number): string {
+export function clip(text: string, limit: number): string {
   if (text.length <= limit) return text;
   return `${text.slice(0, limit - 1)}…`;
 }
@@ -542,13 +564,32 @@ export function listPhoneHistory(opts?: { query?: string; after?: string }): Pho
   };
 }
 
-export function readPhoneThread(chatId: string): Thread | null {
+function matchPhoneThread(chatId: string): Thread | null {
   const id = chatId.trim();
   if (!id) return null;
-  const thread = readThread(id);
+  const exact = readThread(id);
+  if (exact) return exact;
+  const match = findThreadByRef(id);
+  if (!match) return null;
+  if (match.id !== id && !match.id.startsWith(id)) return null;
+  return match;
+}
+
+function visiblePhoneThread(thread: Thread): boolean {
+  if (isGlobalThread(thread)) return true;
+  return isProjectPath(thread.repoPath);
+}
+
+/** Full id or `sideboard://chat/` prefix, including archived chats. */
+export function findPhoneChat(chatId: string): Thread | null {
+  const thread = matchPhoneThread(chatId);
+  if (!thread || !visiblePhoneThread(thread)) return null;
+  return thread;
+}
+
+export function readPhoneThread(chatId: string): Thread | null {
+  const thread = findPhoneChat(chatId);
   if (!thread || thread.status === 'archived') return null;
-  if (isGlobalThread(thread)) return thread;
-  if (!isProjectPath(thread.repoPath)) return null;
   return thread;
 }
 
@@ -617,7 +658,7 @@ function projectPlace(thread: Thread): PhonePlace {
   };
 }
 
-function assertKnownProject(repoPath: string): string {
+export function assertKnownProject(repoPath: string): string {
   const path = repoPath.trim();
   if (!isProjectPath(path)) throw new Error('Pick a project on this Mac.');
   const known =
@@ -733,54 +774,6 @@ export async function createPhoneProjectWorktree(
     reuseExisting: false,
   });
   return openedFrom(thread, projectPlace(thread));
-}
-
-function sourceWarning(label: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  return message ? `${label}: ${message}` : `${label} failed.`;
-}
-
-/** PRs, branches, and issues for the create-worktree picker. */
-export async function listPhoneSources(repoPath: string, query?: string): Promise<PhoneSources> {
-  const path = assertKnownProject(repoPath);
-  const q = query?.trim() ?? '';
-  const warnings: string[] = [];
-  const [prs, branches, issues] = await Promise.all([
-    listPrs(path, { state: 'open', limit: 40, ...(q ? { query: q } : {}) }).catch((err: unknown) => {
-      warnings.push(sourceWarning('Pull requests', err));
-      return [];
-    }),
-    listBranches(path).catch((err: unknown) => {
-      warnings.push(sourceWarning('Branches', err));
-      return [];
-    }),
-    listIssues(path, { limit: 40, ...(q ? { query: q } : {}) }).catch((err: unknown) => {
-      warnings.push(sourceWarning('Issues', err));
-      return { issues: [] };
-    }),
-  ]);
-  const needle = q.toLowerCase();
-  const branchRows = branches
-    .filter((branch) => !needle || branch.name.toLowerCase().includes(needle))
-    .slice(0, 50)
-    .map((branch) => ({
-      ref: branch.name,
-      title: branch.current ? `${branch.name} (current)` : branch.name,
-    }));
-  return {
-    prs: prs.slice(0, 40).map((pr) => ({
-      ref: String(pr.number),
-      title: clip(pr.title || `PR #${pr.number}`, 140),
-      ...(pr.url ? { url: pr.url } : {}),
-    })),
-    branches: branchRows,
-    issues: (issues.issues ?? []).slice(0, 40).map((issue) => ({
-      ref: issue.identifier,
-      title: clip(issue.title || issue.identifier, 140),
-      ...(issue.url ? { url: issue.url } : {}),
-    })),
-    ...(warnings.length ? { warnings } : {}),
-  };
 }
 
 /** Model list for the agent picker. Claude is the built-in catalog; others ask the CLI. */

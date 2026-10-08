@@ -12,9 +12,26 @@ import {
   type RelayAccountProvider,
   type RemoteHostStatus,
 } from '@sideboard-ai/core';
+import type { BrowserWindow } from 'electron';
 import { transcribeWavFile } from './speech-dictate';
 
 let onActivity: () => void = () => {};
+let onOpenWorktreeFile: NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenWorktreeFile']> | null =
+  null;
+
+type PhoneOpenFile = NonNullable<Parameters<typeof runRemoteHost>[0]['onOpenWorktreeFile']>;
+
+export function bindPhoneOpenFile(fn: PhoneOpenFile): void {
+  onOpenWorktreeFile = fn;
+}
+
+export function showPhoneFile(win: BrowserWindow | null, request: Parameters<PhoneOpenFile>[0]): void {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  win.webContents.send('phone:open-file', request);
+}
 
 export function bindRemoteHostActivity(fn: () => void): void {
   onActivity = fn;
@@ -97,6 +114,7 @@ export function startRemoteHost(): void {
       }
     },
     transcribeWav: (wavBase64) => transcribeWavFile(Buffer.from(wavBase64, 'base64')),
+    onOpenWorktreeFile: (request) => onOpenWorktreeFile?.(request),
   });
   remoteRequestPair = () => handle.requestPairingCode();
   remoteUpdateIdentity = (label) => handle.updateIdentity(label);

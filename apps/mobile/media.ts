@@ -1,6 +1,14 @@
-import { Audio } from 'expo-av';
+import {
+  AudioModule,
+  AudioQuality,
+  IOSOutputFormat,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  type AudioRecorder,
+  type RecordingOptions,
+} from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -32,7 +40,7 @@ export async function takePhoto(): Promise<PickedFile[]> {
   const perm = await ImagePicker.requestCameraPermissionsAsync();
   if (!perm.granted) throw new Error('Camera access is off.');
   const result = await ImagePicker.launchCameraAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    mediaTypes: ['images'],
     quality: 0.7,
     base64: true,
   });
@@ -44,7 +52,7 @@ export async function pickPhotos(): Promise<PickedFile[]> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) throw new Error('Photo library access is off.');
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    mediaTypes: ['images'],
     quality: 0.7,
     base64: true,
     allowsMultipleSelection: true,
@@ -61,12 +69,9 @@ export async function pickDocuments(): Promise<PickedFile[]> {
   if (result.canceled) return [];
   const out: PickedFile[] = [];
   for (const asset of result.assets) {
-    const info = await FileSystem.getInfoAsync(asset.uri);
-    const size = info.exists && 'size' in info ? info.size ?? 0 : 0;
-    if (size > MAX_BYTES) throw new Error(`${asset.name || 'File'} is larger than 8 MB.`);
-    const dataBase64 = await FileSystem.readAsStringAsync(asset.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    const file = new File(asset.uri);
+    if (file.exists && file.size > MAX_BYTES) throw new Error(`${asset.name || 'File'} is larger than 8 MB.`);
+    const dataBase64 = await file.base64();
     const name = asset.name || 'file';
     assertSize(name, dataBase64);
     out.push({ name, dataBase64 });
@@ -74,23 +79,24 @@ export async function pickDocuments(): Promise<PickedFile[]> {
   return out;
 }
 
-const WAV: Audio.RecordingOptions = {
+/** 16 kHz mono PCM WAV. The Mac transcribes this exact layout. */
+const WAV: RecordingOptions = {
   isMeteringEnabled: false,
+  extension: '.wav',
+  sampleRate: 16000,
+  numberOfChannels: 1,
+  bitRate: 256000,
   android: {
     extension: '.wav',
-    outputFormat: Audio.AndroidOutputFormat.DEFAULT,
-    audioEncoder: Audio.AndroidAudioEncoder.DEFAULT,
+    outputFormat: 'default',
+    audioEncoder: 'default',
     sampleRate: 16000,
-    numberOfChannels: 1,
-    bitRate: 256000,
   },
   ios: {
     extension: '.wav',
-    outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-    audioQuality: Audio.IOSAudioQuality.MAX,
+    outputFormat: IOSOutputFormat.LINEARPCM,
+    audioQuality: AudioQuality.MAX,
     sampleRate: 16000,
-    numberOfChannels: 1,
-    bitRate: 256000,
     linearPCMBitDepth: 16,
     linearPCMIsBigEndian: false,
     linearPCMIsFloat: false,
@@ -101,20 +107,20 @@ const WAV: Audio.RecordingOptions = {
   },
 };
 
-export async function startMic(): Promise<Audio.Recording> {
-  const perm = await Audio.requestPermissionsAsync();
+export async function startMic(): Promise<AudioRecorder> {
+  const perm = await requestRecordingPermissionsAsync();
   if (!perm.granted) throw new Error('Microphone access is off.');
-  await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-  const recording = new Audio.Recording();
-  await recording.prepareToRecordAsync(WAV);
-  await recording.startAsync();
+  await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+  const recording = new AudioModule.AudioRecorder(WAV);
+  await recording.prepareToRecordAsync();
+  recording.record();
   return recording;
 }
 
-export async function stopMic(recording: Audio.Recording): Promise<string> {
-  await recording.stopAndUnloadAsync();
-  await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-  const uri = recording.getURI();
+export async function stopMic(recording: AudioRecorder): Promise<string> {
+  await recording.stop();
+  await setAudioModeAsync({ allowsRecording: false });
+  const uri = recording.uri;
   if (!uri) throw new Error('No recording.');
-  return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  return new File(uri).base64();
 }

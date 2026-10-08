@@ -11,29 +11,48 @@ import {
 } from '../store/global-workspace.js';
 import { readThread } from '../store/thread-store.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
-import type { RemoteAskQuestion } from './protocol.js';
+import {
+  phoneImageDataUrl,
+  phoneWorktreeRelative,
+  type PhoneOpenFileRequest,
+} from './phone-media.js';
 import {
   archivePhoneChat,
   createPhoneChat,
   createPhoneOrchestration,
   createPhoneProjectWorktree,
   createPhoneWorktreeAgent,
-  encodePhoneControl,
   listPhoneHistory,
   listPhoneModels,
   listPhoneSidebar,
-  listPhoneSources,
   openPhoneChat,
   phoneComposerOptions,
   phoneTurnAttachments,
+  findPhoneChat,
   readPhoneThread,
   takePhoneControl,
-  type PhoneControlReply,
   type PhoneControlRequest,
   type PhoneDraft,
 } from './phone-chats.js';
+import { listPhoneSources } from './phone-sources.js';
+import {
+  REMOTE_STOPPED_REPLY,
+  bumpChat,
+  chatGeneration,
+  deliverPhoneTurn,
+  emitChatTurn,
+  emitControl,
+  enqueueChat,
+  finishPhoneTurn,
+  interruptChat,
+  phoneError,
+  phoneTurnGen,
+  watchPhoneStream,
+  type RemoteOutbound,
+} from './phone-live.js';
 
-export const REMOTE_STOPPED_REPLY = 'Sideboard stopped the in-progress turn.';
+export { REMOTE_STOPPED_REPLY };
+export type { RemoteOutbound };
 
 export function formatRemotePrompt(text: string): string {
   return `Phone\n\n${text.trim()}`;
@@ -43,14 +62,8 @@ export function isRemoteStopCommand(text: string): boolean {
   return text.trim().toLowerCase() === 'stop';
 }
 
-export type RemoteOutbound =
-  | { type: 'assistant'; text: string }
-  | { type: 'ask_user'; text: string; questions: RemoteAskQuestion[] };
-
 let handleChain: Promise<void> = Promise.resolve();
 let inboundGeneration = 0;
-const chatChains = new Map<string, Promise<void>>();
-const chatGeneration = new Map<string, number>();
 
 function enqueue(fn: () => Promise<void>): void {
   const run = handleChain.then(fn, fn);
@@ -82,119 +95,20 @@ export function interruptRemoteCoordinator(
   }
 }
 
-/**
- * Phone text → Global orchestrator on this Mac → reply or ask_user buttons.
- * Same turn loop as Slack Listen, without Slack.
- */
-function bumpChat(chatId: string): number {
-  const next = (chatGeneration.get(chatId) ?? 0) + 1;
-  chatGeneration.set(chatId, next);
-  return next;
-}
 
-function enqueueChat(chatId: string, fn: () => Promise<void>): void {
-  const prev = chatChains.get(chatId) ?? Promise.resolve();
-  const run = prev.then(fn, fn);
-  chatChains.set(
-    chatId,
-    run.then(
-      () => undefined,
-      () => undefined,
-    ),
-  );
-}
-
-function emitControl(
-  opts: { onOutbound: (msg: RemoteOutbound) => void },
-  reply: PhoneControlReply,
-): void {
-  opts.onOutbound({ type: 'assistant', text: encodePhoneControl(reply) });
-}
-
-function interruptChat(chatId: string, log: (line: string) => void): boolean {
-  try {
-    const thread = readPhoneThread(chatId);
-    if (!thread) return false;
-    if (thread.status !== 'running' && thread.status !== 'queued') return false;
-    getOrchestrator().stop(thread.id, { clearQueue: true });
-    log(`interrupt phone → chat ${thread.id.slice(0, 8)} (${thread.status})`);
-    return true;
-  } catch (err) {
-    log(`interrupt chat: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
-  }
-}
-
-function emitChatTurn(
-  opts: { onOutbound: (msg: RemoteOutbound) => void },
-  chatId: string,
-  threadId: string,
-): void {
-  const thread = readThread(threadId);
-  if (!thread) {
-    emitControl(opts, { op: 'error', chatId, message: 'That agent is not on this Mac.' });
-    return;
-  }
-  if (thread.status === 'stopped') {
-    emitControl(opts, { op: 'stopped', chatId });
-    return;
-  }
-  const result = getOrchestrator().getTurnResult(thread.id);
-  const pending = extractPendingPlanQuestions(
-    [...thread.messages].reverse().find((m) => m.role === 'agent')?.parts,
-  );
-  if (result.taskState === 'input-required' && pending) {
-    emitControl(opts, {
-      op: 'ask',
-      chatId,
-      text: result.text.trim(),
-      questions: pending.questions.map((q) => ({
-        question: q.question,
-        options: q.options.map((o) =>
-          o.description ? { label: o.label, description: o.description } : { label: o.label },
-        ),
-      })),
-    });
-    return;
-  }
-  const reply = outboundReplyFromTurn(result, {
-    inputRequired: 'Sideboard is waiting for an answer.',
-    canceled: REMOTE_STOPPED_REPLY,
-    completedEmpty: () => '',
-    failed: (detail) =>
-      detail ? `Sideboard failed: ${detail}` : 'Sideboard failed before producing a result.',
-  });
-  emitControl(opts, { op: 'assistant', chatId, text: reply.trim() });
-}
-
-/**
- * List, create, open, archive, and restore chats.
- * Runs outside the single-coordinator queue so one agent does not block the list.
- */
-function phoneError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-/** Wait out a turn that create already started, then send assistant or ask. */
-function deliverPhoneTurn(
+function publishOpenedChat(
   opts: { onOutbound: (msg: RemoteOutbound) => void },
   chatId: string,
 ): void {
-  const thread = readPhoneThread(chatId);
-  if (!thread || (thread.status !== 'running' && thread.status !== 'queued')) return;
-  const generation = bumpChat(chatId);
-  enqueueChat(chatId, async () => {
-    if (chatGeneration.get(chatId) !== generation) return;
-    try {
-      await getOrchestrator().waitForTurn(chatId, 14 * 60 * 1000);
-    } catch (err) {
-      if (chatGeneration.get(chatId) !== generation) return;
-      emitControl(opts, { op: 'error', chatId, message: `Sideboard failed: ${phoneError(err)}` });
-      return;
-    }
-    if (chatGeneration.get(chatId) !== generation) return;
-    emitChatTurn(opts, chatId, chatId);
-  });
+  const opened = openPhoneChat(chatId);
+  if (!opened) {
+    emitControl(opts, { op: 'error', message: 'That agent is not on this Mac.' });
+    return;
+  }
+  emitControl(opts, { op: 'opened', ...opened });
+  if (opened.chat.status === 'running' || opened.chat.status === 'queued') {
+    deliverPhoneTurn(opts, opened.chat.id);
+  }
 }
 
 function applyPhoneOptions(chatId: string, draft: PhoneDraft): void {
@@ -225,6 +139,7 @@ function handlePhoneControl(
     onOutbound: (msg: RemoteOutbound) => void;
     onLog?: (line: string) => void;
     transcribeWav?: (wavBase64: string) => Promise<string>;
+    onOpenWorktreeFile?: (request: PhoneOpenFileRequest) => void;
   },
 ): void {
   const log = opts.onLog ?? (() => undefined);
@@ -370,12 +285,24 @@ function handlePhoneControl(
     return;
   }
   if (cmd.op === 'open') {
-    const opened = openPhoneChat(cmd.chatId);
-    if (!opened) {
+    const thread = findPhoneChat(cmd.chatId);
+    if (!thread) {
       emitControl(opts, { op: 'error', message: 'That agent is not on this Mac.' });
       return;
     }
-    emitControl(opts, { op: 'opened', ...opened });
+    if (thread.status === 'archived') {
+      void getOrchestrator()
+        .restore(thread.id)
+        .then(() => {
+          emitControl(opts, { op: 'sidebar', ...listPhoneSidebar() });
+          publishOpenedChat(opts, thread.id);
+        })
+        .catch((err: unknown) => {
+          emitControl(opts, { op: 'error', message: phoneError(err) });
+        });
+      return;
+    }
+    publishOpenedChat(opts, thread.id);
     return;
   }
   if (cmd.op === 'archive') {
@@ -407,6 +334,44 @@ function handlePhoneControl(
       });
     return;
   }
+  if (cmd.op === 'media') {
+    const thread = readPhoneThread(cmd.chatId);
+    const dataUrl = thread ? phoneImageDataUrl(thread.worktreePath, cmd.path) : null;
+    emitControl(opts, {
+      op: 'media',
+      chatId: cmd.chatId,
+      path: cmd.path,
+      ...(dataUrl ? { dataUrl } : {}),
+    });
+    return;
+  }
+  if (cmd.op === 'open-file') {
+    const thread = readPhoneThread(cmd.chatId);
+    const relative = thread ? phoneWorktreeRelative(thread.worktreePath, cmd.path) : null;
+    if (!thread || !relative) {
+      emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
+      return;
+    }
+    void getOrchestrator()
+      .statPath(thread.id, relative)
+      .then((kind) => {
+        if (kind === 'missing') {
+          emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
+          return;
+        }
+        opts.onOpenWorktreeFile?.({
+          threadId: thread.id,
+          path: relative,
+          ...(kind === 'dir' ? { directory: true } : {}),
+          ...(cmd.startLine != null ? { startLine: cmd.startLine } : {}),
+          ...(cmd.endLine != null ? { endLine: cmd.endLine } : {}),
+        });
+      })
+      .catch(() => {
+        emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
+      });
+    return;
+  }
   if (cmd.op === 'stop') {
     if (!readPhoneThread(cmd.chatId)) {
       emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
@@ -420,6 +385,7 @@ function handlePhoneControl(
 
   const chatId = cmd.chatId;
   const generation = bumpChat(chatId);
+  phoneTurnGen.set(chatId, generation);
   interruptChat(chatId, log);
   enqueueChat(chatId, async () => {
     if (chatGeneration.get(chatId) !== generation) return;
@@ -436,6 +402,7 @@ function handlePhoneControl(
       }
     }
     if (chatGeneration.get(chatId) !== generation) return;
+    const stopStream = watchPhoneStream(opts, chatId, thread.id, generation);
     try {
       try {
         applyPhoneOptions(thread.id, cmd);
@@ -453,6 +420,9 @@ function handlePhoneControl(
       const message = err instanceof Error ? err.message : String(err);
       emitControl(opts, { op: 'error', chatId, message: `Sideboard failed: ${message}` });
       return;
+    } finally {
+      stopStream();
+      finishPhoneTurn(chatId, generation);
     }
     if (chatGeneration.get(chatId) !== generation) return;
     emitChatTurn(opts, chatId, thread.id);
@@ -467,6 +437,7 @@ export function handleRemoteInbound(
     onOutbound: (msg: RemoteOutbound) => void;
     onLog?: (line: string) => void;
     transcribeWav?: (wavBase64: string) => Promise<string>;
+    onOpenWorktreeFile?: (request: PhoneOpenFileRequest) => void;
   },
 ): void {
   const log = opts.onLog ?? (() => undefined);

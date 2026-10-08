@@ -16,7 +16,7 @@ Connections are owned by Sideboard, not per-agent MCP. Optional connector tokens
 
 The phone app is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac. Message text goes through `relay.sideboard.cloud` at `/remote`. The Mac must stay awake — enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from the orchestration chat.
 
-**Settings → Remote** signs this Mac in with its git host (GitHub today), then shows **Show pairing code**. Settings → Git is where this Mac’s `gh`, SSH, or PAT credentials live. Enter the code in the Sideboard phone app. The phone lists every Mac it has paired, using the name from Settings → Remote, and you choose which desktop to open. Send `stop` to cancel a turn. `ask_user` options show up as buttons.
+**Settings → Remote** signs this Mac in with its git host (GitHub today), then shows **Show pairing code**. Settings → Git is where this Mac’s `gh`, SSH, or PAT credentials live. Enter the code in the Sideboard phone app. The phone lists every Mac it has paired, using the name from Settings → Remote, and you choose which desktop to open. Replies stream while the agent writes, with the desktop’s markdown, code colors, and diagrams. Tapping a file path opens that file on the Mac. Send `stop` to cancel a turn. `ask_user` options show up as buttons.
 
 Product questions: [Support](/support/).
 

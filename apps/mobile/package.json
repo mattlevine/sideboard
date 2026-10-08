@@ -10,18 +10,22 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.20.0",
-    "@react-native-async-storage/async-storage": "1.23.1",
-    "expo": "~52.0.47",
-    "expo-av": "~15.0.2",
-    "expo-document-picker": "~13.0.3",
-    "expo-file-system": "~18.0.12",
-    "expo-image-picker": "~16.0.6",
-    "expo-status-bar": "~2.0.1",
-    "react": "18.3.1",
-    "react-native": "0.76.9"
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.27",
+    "expo-audio": "~57.0.5",
+    "expo-document-picker": "~57.0.3",
+    "expo-file-system": "~57.0.7",
+    "expo-image-picker": "~57.0.20",
+    "expo-status-bar": "~57.0.1",
+    "highlight.js": "11.11.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-markdown-display": "^7.0.2",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
-    "@types/react": "~18.3.12",
-    "typescript": "~5.8.2"
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
   }
 }

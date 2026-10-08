@@ -22,6 +22,12 @@
     },
     "plugins": [
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Sideboard uses the microphone to dictate a message."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Sideboard uses your photos to attach a picture to a message.",
