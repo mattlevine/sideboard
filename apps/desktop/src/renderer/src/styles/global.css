@@ -9254,19 +9254,59 @@ button.linkish:hover {
 }
 
 .run-log-script {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 8px;
-  cursor: pointer;
+  padding: 1px 4px 1px 8px;
+}
+
+.run-log-script:not(.is-live) {
+  padding-right: 8px;
 }
 
 .run-log-script.active {
   color: var(--text);
   border-color: color-mix(in srgb, var(--border) 40%, #c4a484);
+}
+
+.run-log-scripts .run-log-script-name,
+.run-log-scripts .run-log-script-stop {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  padding: 1px 2px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.run-log-scripts .run-log-script-name:hover {
+  background: transparent;
+  border: none;
+  color: var(--text);
+}
+
+.run-log-scripts .run-log-script-stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: var(--text);
+}
+
+.run-log-scripts .run-log-script-stop:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: var(--text);
 }
 
 /* Keep Run/Setup/Terminal mounted while another lower tab is focused.

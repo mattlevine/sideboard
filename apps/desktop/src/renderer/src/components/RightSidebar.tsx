@@ -40,6 +40,7 @@ import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { FloatingMenu } from './FloatingMenu';
 import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
+import { runMenuActionLabel, scriptsNeedingStopButton } from '../lib/run-script-stop';
 import {
   readRightSidebarLower,
   readTerminalSplit,
@@ -1099,6 +1100,11 @@ export function RightSidebar({
     thread.devPort ??
     thread.activeRuns?.[0]?.port ??
     null;
+  const extraStopScripts = scriptsNeedingStopButton(
+    (thread.activeRuns ?? []).map((run) => run.scriptName),
+    primaryScriptName,
+    primaryRunning,
+  );
 
   async function toggleDev() {
     setLower('run');
@@ -1750,6 +1756,21 @@ export function RightSidebar({
                 <span>{`Open :${primaryPort}`}</span>
               </button>
             ) : null}
+            {extraStopScripts.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className="dev-stop-btn"
+                title={`Stop ${scriptDisplayName(name)}`}
+                onClick={() => {
+                  setRunMenuOpen(false);
+                  void toggleNamedScript(name);
+                }}
+              >
+                <RunScriptIcon name="stop" />
+                <span>Stop {scriptDisplayName(name)}</span>
+              </button>
+            ))}
             <div className="dev-composite-group">
               {primaryRunning ? (
                 <button
@@ -1825,6 +1846,11 @@ export function RightSidebar({
                           type="button"
                           role="menuitem"
                           className={active ? 'active' : ''}
+                          title={
+                            active
+                              ? `Stop ${scriptDisplayName(script.name)}`
+                              : `Start ${scriptDisplayName(script.name)}`
+                          }
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -1835,7 +1861,7 @@ export function RightSidebar({
                           <RunScriptIcon
                             name={active ? 'stop' : script.icon ?? 'play'}
                           />
-                          <span>{scriptDisplayName(script.name)}</span>
+                          <span>{runMenuActionLabel(script.name, active)}</span>
                           {active ? (
                             <span className="dev-script-port">
                               :
@@ -1947,6 +1973,7 @@ export function RightSidebar({
                 defaultScriptName={defaultRunScript?.name ?? null}
                 canStart={hasHook || runScripts.length > 0}
                 onStart={() => void toggleDev()}
+                onStop={(name) => void toggleNamedScript(name)}
                 clearRequest={runClearRequest}
               />
             </div>
