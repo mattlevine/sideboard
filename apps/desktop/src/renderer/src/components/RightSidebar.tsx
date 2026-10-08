@@ -39,7 +39,8 @@ import {
 import { fileChangeMap, GitChangeBadge } from './GitChangeBadge';
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { FloatingMenu } from './FloatingMenu';
-import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
+import { scriptsNeedingStopButton } from '../lib/run-script-stop';
+import { RunScriptActions } from './RunScriptActions';
 import {
   readRightSidebarLower,
   readTerminalSplit,
@@ -1099,6 +1100,11 @@ export function RightSidebar({
     thread.devPort ??
     thread.activeRuns?.[0]?.port ??
     null;
+  const extraStopScripts = scriptsNeedingStopButton(
+    (thread.activeRuns ?? []).map((run) => run.scriptName),
+    primaryScriptName,
+    primaryRunning,
+  );
 
   async function toggleDev() {
     setLower('run');
@@ -1724,152 +1730,33 @@ export function RightSidebar({
               Terminal
             </button>
           </div>
-          <div className="lower-tab-actions" ref={runMenuRef}>
-            {lower === 'terminal' ? (
-              <button
-                type="button"
-                className={`dev-open-port${terminalSplit ? ' is-live' : ''}`}
-                title={terminalSplit ? 'Merge terminal panes' : 'Split terminal'}
-                aria-pressed={terminalSplit}
-                onClick={() => setTerminalSplit((v) => !v)}
-              >
-                Split
-              </button>
-            ) : null}
-            {/* Conductor: Open is pinned with Stop/Dev, not in the scrolling tabs. */}
-            {lower === 'run' && primaryPort != null ? (
-              <button
-                type="button"
-                className="dev-open-port"
-                title={`Open http://localhost:${primaryPort} in your default browser`}
-                onClick={() => {
-                  void window.sideboard.openExternal(`http://localhost:${primaryPort}`);
-                }}
-              >
-                <RunScriptIcon name="globe" />
-                <span>{`Open :${primaryPort}`}</span>
-              </button>
-            ) : null}
-            <div className="dev-composite-group">
-              {primaryRunning ? (
-                <button
-                  type="button"
-                  className="dev-composite"
-                  title={`Stop ${scriptDisplayName(primaryScriptName ?? 'Dev')} (⌘R). Other run scripts keep going.`}
-                  onClick={() => {
-                    setRunMenuOpen(false);
-                    void toggleDev();
-                  }}
-                >
-                  <RunScriptIcon name="stop" />
-                  <span>
-                    {(thread.activeRuns?.length ?? 0) > 1 && primaryScriptName
-                      ? `Stop ${scriptDisplayName(primaryScriptName)}`
-                      : 'Stop'}
-                  </span>
-                  <kbd>⌘R</kbd>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="dev-composite"
-                  disabled={!hasHook && runScripts.length === 0}
-                  title={
-                    defaultRunScript
-                      ? `Start ${scriptDisplayName(defaultRunScript.name)} (⌘R)`
-                      : 'Configure run scripts'
-                  }
-                  onClick={() => {
-                    setRunMenuOpen(false);
-                    void toggleDev();
-                  }}
-                >
-                  <RunScriptIcon name={defaultRunScript?.icon ?? 'play'} />
-                  <span>
-                    {defaultRunScript
-                      ? scriptDisplayName(defaultRunScript.name)
-                      : 'Dev'}
-                  </span>
-                  <kbd>⌘R</kbd>
-                </button>
-              )}
-              <button
-                type="button"
-                className={`dev-script-chevron${runMenuOpen ? ' open' : ''}`}
-                title="Run scripts — several can stay up together"
-                aria-haspopup="menu"
-                aria-expanded={runMenuOpen}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  reloadRunScripts();
-                  setRunMenuOpen((open) => !open);
-                }}
-              >
-                ▾
-              </button>
-            </div>
-
-            {runMenuOpen ? (
-              <ul className="dev-script-dropdown" role="menu">
-                {runScripts.length === 0 ? (
-                  <li className="dev-script-empty">No run scripts configured</li>
-                ) : (
-                  runScripts.map((script) => {
-                    const active = (thread.activeRuns ?? []).some(
-                      (r) => r.scriptName === script.name,
-                    );
-                    return (
-                      <li key={script.name} role="none">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className={active ? 'active' : ''}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setRunMenuOpen(false);
-                            void toggleNamedScript(script.name);
-                          }}
-                        >
-                          <RunScriptIcon
-                            name={active ? 'stop' : script.icon ?? 'play'}
-                          />
-                          <span>{scriptDisplayName(script.name)}</span>
-                          {active ? (
-                            <span className="dev-script-port">
-                              :
-                              {
-                                thread.activeRuns?.find(
-                                  (r) => r.scriptName === script.name,
-                                )?.port
-                              }
-                            </span>
-                          ) : null}
-                        </button>
-                      </li>
-                    );
-                  })
-                )}
-                <li className="dev-script-sep" aria-hidden />
-                <li role="none">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setRunMenuOpen(false);
-                      void openRunConfig();
-                    }}
-                  >
-                    <RunScriptIcon name="settings" />
-                    <span>Configure</span>
-                  </button>
-                </li>
-              </ul>
-            ) : null}
-          </div>
+          <RunScriptActions
+            menuRef={runMenuRef}
+            lower={lower}
+            terminalSplit={terminalSplit}
+            onToggleTerminalSplit={() => setTerminalSplit((v) => !v)}
+            primaryPort={primaryPort}
+            extraStopScripts={extraStopScripts}
+            primaryRunning={primaryRunning}
+            primaryScriptName={primaryScriptName}
+            hasHook={hasHook}
+            runScripts={runScripts}
+            defaultRunScript={defaultRunScript}
+            activeRuns={thread.activeRuns ?? []}
+            runMenuOpen={runMenuOpen}
+            onReloadRunScripts={reloadRunScripts}
+            onToggleRunMenu={() => setRunMenuOpen((open) => !open)}
+            onCloseRunMenu={() => setRunMenuOpen(false)}
+            onToggleDev={() => {
+              void toggleDev();
+            }}
+            onToggleNamedScript={(name) => {
+              void toggleNamedScript(name);
+            }}
+            onOpenRunConfig={() => {
+              void openRunConfig();
+            }}
+          />
         </div>
 
         <div className="right-lower-body">
@@ -1947,6 +1834,7 @@ export function RightSidebar({
                 defaultScriptName={defaultRunScript?.name ?? null}
                 canStart={hasHook || runScripts.length > 0}
                 onStart={() => void toggleDev()}
+                onStop={(name) => void toggleNamedScript(name)}
                 clearRequest={runClearRequest}
               />
             </div>

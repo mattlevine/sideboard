@@ -6,7 +6,7 @@ import {
   shouldApplyHydratedRunLog,
 } from '../lib/script-output-paint';
 import { eventOnWorktree } from '../lib/worktree-events';
-import { scriptDisplayName } from '../lib/run-script-icons';
+import { RunScriptIcon, scriptDisplayName } from '../lib/run-script-icons';
 
 type ActiveRun = NonNullable<Thread['activeRuns']>[number];
 
@@ -23,6 +23,7 @@ interface Props {
   defaultScriptName: string | null;
   canStart: boolean;
   onStart: () => void;
+  onStop?: (scriptName: string) => void;
   /** Parent bumps token when starting a script so this pane clears without owning start IPC. */
   clearRequest: RunClearRequest | null;
 }
@@ -41,6 +42,7 @@ export const RunOutputPanel = memo(function RunOutputPanel({
   defaultScriptName,
   canStart,
   onStart,
+  onStop,
   clearRequest,
 }: Props) {
   const [runLogs, setRunLogs] = useState<Record<string, string>>({});
@@ -150,18 +152,36 @@ export const RunOutputPanel = memo(function RunOutputPanel({
           {scriptNames.length > 1 ? (
             <div className="run-log-header run-log-scripts">
               <span>Running</span>
-              {scriptNames.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className={`run-log-script${focused === name ? ' active' : ''}`}
-                  onClick={() =>
-                    setFocusScript((current) => (current === name ? null : name))
-                  }
-                >
-                  {scriptDisplayName(name)}
-                </button>
-              ))}
+              {scriptNames.map((name) => {
+                const live = activeRuns.some((run) => run.scriptName === name);
+                return (
+                  <span
+                    key={name}
+                    className={`run-log-script${focused === name ? ' active' : ''}${live ? ' is-live' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="run-log-script-name"
+                      onClick={() =>
+                        setFocusScript((current) => (current === name ? null : name))
+                      }
+                    >
+                      {scriptDisplayName(name)}
+                    </button>
+                    {live && onStop ? (
+                      <button
+                        type="button"
+                        className="run-log-script-stop"
+                        title={`Stop ${scriptDisplayName(name)}`}
+                        aria-label={`Stop ${scriptDisplayName(name)}`}
+                        onClick={() => onStop(name)}
+                      >
+                        <RunScriptIcon name="stop" />
+                      </button>
+                    ) : null}
+                  </span>
+                );
+              })}
             </div>
           ) : (
             <div className="run-log-header">Running {scriptDisplayName(label)}</div>
