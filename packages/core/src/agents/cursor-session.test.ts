@@ -22,6 +22,8 @@ describe('isAgentBusyError', () => {
     expect(isAgentBusyError(Object.assign(new Error('busy'), { name: 'AgentBusyError' }))).toBe(
       true,
     );
+    expect(isAgentBusyError(new Error('[agent_busy] agent still running'))).toBe(true);
+    expect(isAgentBusyError(new Error('Request failed: agent still running'))).toBe(true);
   });
 
   it('ignores unrelated errors', () => {
@@ -80,6 +82,9 @@ describe('isUnresumableCursorSession', () => {
     expect(isUnresumableCursorSession(new Error('invalid API key'))).toBe(false);
     expect(isUnresumableCursorSession(new Error('model gpt-x not found'))).toBe(false);
     expect(isUnresumableCursorSession(new Error('already has active run'))).toBe(false);
+    expect(isUnresumableCursorSession(new Error('Request failed: agent still running'))).toBe(
+      false,
+    );
     expect(isUnresumableCursorSession(new Error('Credit balance is too low'))).toBe(false);
   });
 });

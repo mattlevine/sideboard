@@ -2,14 +2,7 @@ import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
 import { stageBuffersAsAttachments } from '../composer/stage-files.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
-import { outboundReplyFromTurn } from '../orchestrator/outbound-turn-reply.js';
-import { extractPendingPlanQuestions } from '../plan/ask-user.js';
-import { resolveOrchestratorDefaults } from '../store/app-settings.js';
-import {
-  ensureRemoteCoordinator,
-  findRemoteCoordinator,
-} from '../store/global-workspace.js';
-import { readThread } from '../store/thread-store.js';
+import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import {
   phoneImageDataUrl,
@@ -54,50 +47,16 @@ import {
   watchPhoneStream,
   type RemoteOutbound,
 } from './phone-live.js';
+import {
+  beginCoordinatorPrompt,
+  formatRemotePrompt,
+  phoneFollowUpQueues,
+  waitForPhoneTurn,
+} from './phone-turn.js';
 
 export { REMOTE_STOPPED_REPLY };
 export type { RemoteOutbound };
-
-export function formatRemotePrompt(text: string): string {
-  return `Phone\n\n${text.trim()}`;
-}
-
-export function isRemoteStopCommand(text: string): boolean {
-  return text.trim().toLowerCase() === 'stop';
-}
-
-let handleChain: Promise<void> = Promise.resolve();
-let inboundGeneration = 0;
-
-function enqueue(fn: () => Promise<void>): void {
-  const run = handleChain.then(fn, fn);
-  handleChain = run.then(
-    () => undefined,
-    () => undefined,
-  );
-}
-
-/**
- * Kill an in-flight phone turn before the handle queue runs.
- * `stop` inside the queue cannot unblock the previous `waitForTurn`.
- */
-export function interruptRemoteCoordinator(
-  deviceId: string,
-  log: (line: string) => void = () => undefined,
-): boolean {
-  try {
-    const live = findRemoteCoordinator(deviceId);
-    if (!live) return false;
-    const fresh = readThread(live.id) ?? live;
-    if (fresh.status !== 'running' && fresh.status !== 'queued') return false;
-    getOrchestrator().stop(fresh.id, { clearQueue: true });
-    log(`interrupt phone → coordinator ${fresh.id.slice(0, 8)} (${fresh.status})`);
-    return true;
-  } catch (err) {
-    log(`interrupt: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
-  }
-}
+export { formatRemotePrompt, interruptRemoteCoordinator, isRemoteStopCommand } from './phone-turn.js';
 
 function emitOpened(
   opts: { onOutbound: (msg: RemoteOutbound) => void },
@@ -412,24 +371,37 @@ function handlePhoneControl(
   }
 
   const chatId = cmd.chatId;
+  const existing = readPhoneThread(chatId);
+  // Queue keeps the in-flight waiter. This prompt starts after that reply.
+  if (phoneFollowUpQueues(existing?.status)) {
+    deliverPhoneTurn(opts, chatId);
+    const generation = chatGeneration.get(chatId) ?? bumpChat(chatId);
+    enqueueChat(chatId, () => runPhonePrompt(opts, cmd, chatId, generation));
+    return;
+  }
   const generation = bumpChat(chatId);
   phoneTurnGen.set(chatId, generation);
-  interruptChat(chatId, log);
-  enqueueChat(chatId, async () => {
-    if (chatGeneration.get(chatId) !== generation) return;
+  // Steer has to run now: the per-chat queue is blocked in waitForTurn.
+  const task = runPhonePrompt(opts, cmd, chatId, generation);
+  enqueueChat(chatId, () => task);
+}
+
+function runPhonePrompt(
+  opts: {
+    onOutbound: (msg: RemoteOutbound) => void;
+  },
+  cmd: PhoneDraft & { chatId: string; text: string },
+  chatId: string,
+  generation: number,
+): Promise<void> {
+  const current = () => chatGeneration.get(chatId) === generation;
+  return (async () => {
+    if (!current()) return;
     const thread = readPhoneThread(chatId);
     if (!thread) {
       emitControl(opts, { op: 'error', chatId, message: 'That agent is not on this Mac.' });
       return;
     }
-    if (thread.status === 'running' || thread.status === 'queued') {
-      try {
-        getOrchestrator().stop(thread.id, { clearQueue: true });
-      } catch {
-        // the next send still replaces the turn
-      }
-    }
-    if (chatGeneration.get(chatId) !== generation) return;
     const stopStream = watchPhoneStream(opts, chatId, thread.id, generation);
     try {
       try {
@@ -437,14 +409,19 @@ function handlePhoneControl(
       } catch (err) {
         emitControl(opts, { op: 'error', chatId, message: phoneError(err) });
       }
+      if (!current()) return;
       const live = readPhoneThread(thread.id) ?? thread;
+      const followUp = followUpBehavior();
       const staged = stagePhoneTurnFiles(live.worktreePath, cmd);
       const text = cmd.text.trim() || (staged.length ? 'See the attached files.' : '');
-      const formatted = formatRemotePrompt(text);
-      await getOrchestrator().send(thread.id, formatted, { attachments: staged });
-      await getOrchestrator().waitForTurn(thread.id, 14 * 60 * 1000);
+      await getOrchestrator().send(thread.id, formatRemotePrompt(text), {
+        attachments: staged,
+        followUp,
+      });
+      if (!current()) return;
+      await waitForPhoneTurn(thread.id, current);
     } catch (err) {
-      if (chatGeneration.get(chatId) !== generation) return;
+      if (!current()) return;
       const message = err instanceof Error ? err.message : String(err);
       emitControl(opts, { op: 'error', chatId, message: `Sideboard failed: ${message}` });
       return;
@@ -452,9 +429,9 @@ function handlePhoneControl(
       stopStream();
       finishPhoneTurn(chatId, generation);
     }
-    if (chatGeneration.get(chatId) !== generation) return;
+    if (!current()) return;
     emitChatTurn(opts, chatId, thread.id);
-  });
+  })();
 }
 
 export function handleRemoteInbound(
@@ -469,7 +446,6 @@ export function handleRemoteInbound(
     onOpenArtifact?: (request: PhoneOpenArtifactRequest) => void;
   },
 ): void {
-  const log = opts.onLog ?? (() => undefined);
   const body = text.trim();
   const control = takePhoneControl(body);
   if (control) {
@@ -480,65 +456,5 @@ export function handleRemoteInbound(
     handlePhoneControl(control, opts);
     return;
   }
-  const generation = ++inboundGeneration;
-  if (body) interruptRemoteCoordinator(opts.deviceId, log);
-  enqueue(async () => {
-    if (generation !== inboundGeneration) return;
-    const agent = coerceOrchestratorAgent(opts.agent ?? resolveOrchestratorDefaults().agent);
-    if (!body) return;
-    if (isRemoteStopCommand(body)) {
-      if (generation !== inboundGeneration) return;
-      opts.onOutbound({ type: 'assistant', text: REMOTE_STOPPED_REPLY });
-      return;
-    }
-
-    let thread = ensureRemoteCoordinator(opts.deviceId, agent);
-    const fresh = readThread(thread.id) ?? thread;
-    if (fresh.status === 'running' || fresh.status === 'queued') {
-      try {
-        getOrchestrator().stop(fresh.id, { clearQueue: true });
-      } catch {
-        // the next send still replaces the turn
-      }
-    }
-    if (generation !== inboundGeneration) return;
-    const orch = getOrchestrator();
-    try {
-      await orch.send(thread.id, formatRemotePrompt(body));
-      await orch.waitForTurn(thread.id, 14 * 60 * 1000);
-    } catch (err) {
-      if (generation !== inboundGeneration) return;
-      const message = err instanceof Error ? err.message : String(err);
-      opts.onOutbound({ type: 'assistant', text: `Sideboard failed: ${message}` });
-      return;
-    }
-    if (generation !== inboundGeneration) return;
-    thread = readThread(thread.id) ?? thread;
-    if (thread.status === 'stopped') return;
-    const result = orch.getTurnResult(thread.id);
-    const pending = extractPendingPlanQuestions(
-      [...thread.messages].reverse().find((m) => m.role === 'agent')?.parts,
-    );
-    if (result.taskState === 'input-required' && pending) {
-      opts.onOutbound({
-        type: 'ask_user',
-        text: result.text.trim(),
-        questions: pending.questions.map((q) => ({
-          question: q.question,
-          options: q.options.map((o) =>
-            o.description ? { label: o.label, description: o.description } : { label: o.label },
-          ),
-        })),
-      });
-      return;
-    }
-    const reply = outboundReplyFromTurn(result, {
-      inputRequired: 'Sideboard is waiting for an answer.',
-      canceled: REMOTE_STOPPED_REPLY,
-      completedEmpty: () => '',
-      failed: (detail) =>
-        detail ? `Sideboard failed: ${detail}` : 'Sideboard failed before producing a result.',
-    });
-    if (reply.trim()) opts.onOutbound({ type: 'assistant', text: reply.trim() });
-  });
+  beginCoordinatorPrompt(body, opts);
 }

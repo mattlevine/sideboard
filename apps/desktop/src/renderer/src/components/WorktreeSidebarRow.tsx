@@ -207,7 +207,7 @@ export function WorktreeSidebarRow({
           active && !expanded ? ' active' : ''
         }${archiving ? ' archiving' : ''}${unread ? ' unread' : ''}${
           block ? ' is-blocked' : ''
-        }`}
+        }${gitCardOpen ? ' has-hover-card' : ''}`}
         aria-busy={archiving}
         onMouseEnter={() => {
           if (!orch && !addOpen && !tagEditorOpen) setGitCardOpen(true);
