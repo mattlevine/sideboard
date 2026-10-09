@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.282] - 2026-10-09
+
+### Fixed
+
+- Sidebar workspace names use the full row. Tag, archive, and add show on hover, and the name truncates beside them.
+
 ## [0.1.281] - 2026-10-09
 
 ### Added
