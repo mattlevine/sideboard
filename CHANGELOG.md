@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.281] - 2026-10-09
+
 ### Added
 
 - Workspaces can share short tags so checkouts from one task stay recognizable. The sidebar filter is one tag at a time. Worktree agents and the orchestrator can set the labels.
