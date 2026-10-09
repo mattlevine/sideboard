@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Orchestrator } from '../orchestrator/orchestrator.js';
 import * as desktopHost from '../store/desktop-host.js';
 import { ensureRemoteCoordinator, findRemoteCoordinator } from '../store/global-workspace.js';
+import { updateAdvancedSettings } from '../store/app-settings.js';
 import { readThread, updateThread } from '../store/thread-store.js';
 import { handleRemoteInbound, REMOTE_STOPPED_REPLY } from './listen.js';
 import { encodePhoneControl } from './phone-chats.js';
@@ -74,6 +75,59 @@ describe('handleRemoteInbound interrupt', () => {
 
     await vi.waitFor(() => expect(replies).toEqual(['all done']));
     release();
+  });
+
+  it('queues a follow-up and still delivers both replies', async () => {
+    updateAdvancedSettings({ followUpBehavior: 'queue' });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let waits = 0;
+    const send = vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      updateThread(String(id), { status: 'running', queue: [] });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(async (id) => {
+      waits += 1;
+      if (waits === 1) {
+        await gate;
+        updateThread(String(id), { status: 'idle', queue: [] });
+      } else {
+        updateThread(String(id), { status: 'idle', queue: [] });
+      }
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'all done',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+    const replies: string[] = [];
+    const outbound = (msg: { type: string; text?: string }) => {
+      if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+    };
+
+    handleRemoteInbound('first', { deviceId: 'phone-queue', agent: 'claude', onOutbound: outbound });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    handleRemoteInbound('second', { deviceId: 'phone-queue', agent: 'claude', onOutbound: outbound });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(send).toHaveBeenCalledTimes(1);
+
+    release();
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+    expect(send).toHaveBeenLastCalledWith(
+      ensureRemoteCoordinator('phone-queue', 'claude').id,
+      'Phone\n\nsecond',
+      { followUp: 'queue' },
+    );
+    await vi.waitFor(() => expect(replies).toEqual(['all done', 'all done']));
   });
 
   it('replies to stop without waiting out the in-flight turn', async () => {
@@ -284,6 +338,74 @@ describe('handleRemoteInbound interrupt', () => {
       followUp: 'steer',
     });
     release();
+  });
+
+  it('queues a second chat prompt without dropping the in-flight reply', async () => {
+    updateAdvancedSettings({ followUpBehavior: 'queue' });
+    const replies: string[] = [];
+    const outbound = (msg: { type: string; text?: string }) => {
+      if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+    };
+    handleRemoteInbound(encodePhoneControl({ op: 'create', where: 'orchestration' }), {
+      deviceId: 'phone-queue-chat',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    const opened = JSON.parse(replies[0]!.slice(replies[0]!.indexOf('{'))) as {
+      chat: { id: string };
+    };
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let waits = 0;
+    const send = vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      updateThread(String(id), { status: 'running', queue: [] });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(async (id) => {
+      waits += 1;
+      if (waits === 1) {
+        await gate;
+        updateThread(String(id), { status: 'idle', queue: [] });
+      } else {
+        updateThread(String(id), { status: 'idle', queue: [] });
+      }
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'kept',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+
+    handleRemoteInbound(encodePhoneControl({ op: 'prompt', chatId: opened.chat.id, text: 'first' }), {
+      deviceId: 'phone-queue-chat',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    handleRemoteInbound(encodePhoneControl({ op: 'prompt', chatId: opened.chat.id, text: 'second' }), {
+      deviceId: 'phone-queue-chat',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(send).toHaveBeenCalledTimes(1);
+
+    release();
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+    expect(send).toHaveBeenLastCalledWith(opened.chat.id, 'Phone\n\nsecond', {
+      attachments: [],
+      followUp: 'queue',
+    });
+    await vi.waitFor(() => expect(replies.filter((line) => line.includes('"op":"assistant"'))).toHaveLength(2));
   });
 
   it('streams markdown while a phone turn is running', async () => {
