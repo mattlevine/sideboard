@@ -122,6 +122,7 @@ import {
   notifyParentOfChildHalt,
   shouldNotifyParentAfterTurnError,
 } from './child-halt.js';
+import { reasonToKeepOnStop, resolveStopReason } from './stop-reason.js';
 import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
@@ -130,6 +131,7 @@ import {
 } from '../mcp/wait-for-job.js';
 import { agentPurposeStamp } from '../threads/agent-purpose-title.js';
 import { createThread } from '../threads/create.js';
+import { applyWorkspaceTags } from '../threads/workspace-tags.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
@@ -354,6 +356,16 @@ function writeLiveStatus(
   const latest = readThread(threadId);
   if (!latest || latest.status === 'archived') return latest;
   return setStatus(threadId, status, lastError);
+}
+
+/**
+ * Mark a thread stopped and keep the reason. A follow-up write with no new
+ * note (the turn unwind after kill) must not clear lastError.
+ */
+function writeStoppedStatus(threadId: string, reason?: string | null): Thread | null {
+  const latest = readThread(threadId);
+  if (!latest || latest.status === 'archived') return latest;
+  return setStatus(threadId, 'stopped', reasonToKeepOnStop(latest.lastError, reason));
 }
 
 interface RegisteredProcess {
@@ -1466,7 +1478,7 @@ export class Orchestrator {
     // still append the user prompt and emit turn_finished so the live stream
     // unpaints (turn_started already fired).
     if (this.stoppedTurns.has(threadId)) {
-      const stopped = writeLiveStatus(threadId, 'stopped');
+      const stopped = writeStoppedStatus(threadId);
       if (stopped?.status === 'stopped') {
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
       }
@@ -2039,7 +2051,7 @@ export class Orchestrator {
       settleAgentBlock(threadId, parts, exitCode !== 0 && !this.stoppedTurns.has(threadId));
       if (this.stoppedTurns.has(threadId)) {
         // Preserve intentional stop — do not overwrite with idle/error from kill exit.
-        const stopped = writeLiveStatus(threadId, 'stopped');
+        const stopped = writeStoppedStatus(threadId);
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
@@ -2099,7 +2111,7 @@ export class Orchestrator {
       await syncThreadBranchFromGit(threadId).catch(() => undefined);
       settleAgentBlock(threadId, undefined, !this.stoppedTurns.has(threadId));
       if (this.stoppedTurns.has(threadId)) {
-        const stopped = writeLiveStatus(threadId, 'stopped');
+        const stopped = writeStoppedStatus(threadId);
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
@@ -2158,7 +2170,13 @@ export class Orchestrator {
    */
   stop(
     threadRef: string,
-    opts?: { clearQueue?: boolean; continueQueue?: boolean; notifyParent?: boolean },
+    opts?: {
+      clearQueue?: boolean;
+      continueQueue?: boolean;
+      notifyParent?: boolean;
+      /** Stored on the thread so a later session can see why this stop happened. */
+      reason?: string | null;
+    },
   ): Thread {
     const clearQueue = opts?.clearQueue !== false;
     const continueQueue = opts?.continueQueue === true;
@@ -2192,7 +2210,8 @@ export class Orchestrator {
         // Already signaled via handle, or the process exited.
       }
     }
-    const stopped = writeLiveStatus(thread.id, 'stopped') ?? readThread(thread.id) ?? thread;
+    const stopped =
+      writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       // Idle stop (archive, leftover status) is not a mid-turn death.
@@ -3581,6 +3600,10 @@ export class Orchestrator {
     const next = title.trim();
     if (!next) throw new Error('Title cannot be empty');
     return updateThread(thread.id, { title: next, userSetTitle: true });
+  }
+
+  setWorkspaceTags(threadRef: string, tags: string[]): Thread {
+    return applyWorkspaceTags(threadRef, tags, 'replace');
   }
 
   async switchThreadBranch(threadRef: string, branchName: string): Promise<Thread> {

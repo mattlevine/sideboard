@@ -1241,6 +1241,11 @@ export function App() {
               if (markChatUnread(thread)) setUnreadEpoch((n) => n + 1);
             }}
             onRenameChat={(id, title) => void window.sideboard.renameThread(id, title).then(() => refresh())}
+            onSetWorkspaceTags={(id, tags) => {
+              void window.sideboard.setWorkspaceTags(id, tags).then(() => refresh()).catch((err: unknown) => {
+                window.alert(err instanceof Error ? err.message : String(err));
+              });
+            }}
             onCloseChat={(chat) => void archiveThreadsAndRefresh([chat.id], { title: chat.title?.trim() || 'Untitled', removesWorktree: false })}
             onAddAgent={(fromThreadId, opts) => {
               void window.sideboard

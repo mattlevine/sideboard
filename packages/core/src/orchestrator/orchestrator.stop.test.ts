@@ -48,7 +48,19 @@ describe('Orchestrator.stop force-stop', () => {
     const stopped = orch.stop(thread.id);
     expect(stopped.status).toBe('stopped');
     expect(stopped.queue).toEqual([]);
+    expect(stopped.lastError).toBe('Stopped (queue cleared)');
     expect(readThread(thread.id)?.queue).toEqual([]);
+  });
+
+  it('records why the turn stopped', () => {
+    const thread = seedThread(['keep-me']);
+    const orch = new Orchestrator();
+    expect(orch.stop(thread.id, { clearQueue: false }).lastError).toBe('Stopped by the user');
+    expect(orch.stop(thread.id, { clearQueue: false, continueQueue: true }).lastError).toBe(
+      'Stopped to send the next prompt',
+    );
+    expect(orch.stop(thread.id, { reason: 'context limit' }).lastError).toBe('context limit');
+    expect(readThread(thread.id)?.lastError).toBe('context limit');
   });
 
   it('preserves the queue when clearQueue is false', () => {

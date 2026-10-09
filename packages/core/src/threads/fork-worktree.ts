@@ -58,6 +58,7 @@ export async function forkThreadWorktree(
       parentThreadId: from.id,
       attachments: [attachment],
       reuseExisting: false,
+      tags: from.tags,
     },
     onSetupLine,
   );

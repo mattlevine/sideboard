@@ -4,6 +4,7 @@ import {
 } from '../agents/message-parts.js';
 import {
   normalizeWorktreePath,
+  workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
 import { threadCardBlockFields, worktreeBoardStatus } from './agent-block-view.js';
@@ -1024,7 +1025,10 @@ export function pinSearchText(pin: BoardPin, workspaceName = ''): string {
 }
 
 export function threadSearchText(
-  thread: Pick<Thread, 'title' | 'sourceRef' | 'sourceType' | 'agent' | 'status' | 'repoPath' | 'branchName' | 'prUrl'>,
+  thread: Pick<
+    Thread,
+    'title' | 'sourceRef' | 'sourceType' | 'agent' | 'status' | 'repoPath' | 'branchName' | 'prUrl'
+  > & { tags?: string[] | null },
   workspaceName = '',
 ): string {
   return [
@@ -1037,6 +1041,7 @@ export function threadSearchText(
     thread.prUrl ?? '',
     workspaceName,
     thread.repoPath,
+    ...(thread.tags ?? []),
   ].join(' ');
 }
 
@@ -1150,6 +1155,8 @@ export type HomeBoardThreadCard = {
   link: string;
   /** Live chat tabs on this checkout. Omitted when 1. */
   chatCount?: number; blockedReason?: string; blockedSource?: 'ask_user' | 'plan' | 'reported';
+  /** Workspace tags shared by the chats on this checkout. Omitted when empty. */
+  tags?: string[];
 };
 
 export type HomeBoardCard =
@@ -1228,6 +1235,7 @@ export function findBoardPr(
 function toThreadCard(group: Thread[]): HomeBoardThreadCard {
   const thread = group[0]!;
   const withPr = group.find((t) => t.prUrl?.trim()) ?? thread;
+  const tags = workspaceTagsFromGroup(group);
   return {
     kind: 'thread',
     id: thread.id,
@@ -1241,6 +1249,7 @@ function toThreadCard(group: Thread[]): HomeBoardThreadCard {
     link: `sideboard://chat/${thread.id}`,
     ...(group.length > 1 ? { chatCount: group.length } : {}),
     ...(threadCardBlockFields(group) ?? {}),
+    ...(tags.length > 0 ? { tags } : {}),
   };
 }
 

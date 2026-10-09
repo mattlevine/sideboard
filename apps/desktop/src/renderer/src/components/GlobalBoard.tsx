@@ -3,6 +3,7 @@ import type { MessagePart, OrchestratorRuntime, Thread, Workspace } from '@sideb
 import { isSetupLastError } from '../lib/pane-progress';
 import {
   normalizeWorktreePath,
+  workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
@@ -38,6 +39,7 @@ import { FleetActivityBar } from './FleetActivityBar';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { WorktreePrBadges } from './WorktreePrBadges';
+import { WorkspaceTags } from './WorkspaceTags';
 
 interface Props {
   threads: Thread[];
@@ -424,6 +426,7 @@ function WorktreeCard({
                   .join(' · ')}
           </div>
           {block ? <div className="thread-blocked-reason" title={block.reason}>{block.reason}</div> : null}
+          <WorkspaceTags tags={workspaceTagsFromGroup(group)} board />
         </div>
       </div>
       {canArchive && (

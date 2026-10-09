@@ -287,6 +287,7 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
     return str(input?.name) ? `Read ${str(input?.name)} log` : 'Read Dev log';
   }
   if (/notify_orchestrator$/i.test(name)) return 'Notify orchestrator';
+  if (/set_workspace_tags$/i.test(name)) return 'Set workspace tags';
   if (/(?:list|set|delete)_env$/i.test(name)) return /list_env$/i.test(name) ? 'List env vars' : /set_env$/i.test(name) ? 'Set env var' : 'Delete env var';
   if (/list_schedules$/i.test(name)) return 'List schedules';
   if (/create_schedule$/i.test(name)) {

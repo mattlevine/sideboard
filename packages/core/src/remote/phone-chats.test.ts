@@ -178,6 +178,10 @@ describe('phone orchestration chats', () => {
     const project = sidebar.projects.find((row) => row.path === '/tmp/sideboard');
     expect(project?.worktrees[0]?.chats.map((chat) => chat.id)).toEqual([thread.id]);
     expect(project?.worktrees[0]?.chats[0]?.agent).toBe('claude');
+    updateThread(thread.id, { tags: ['phone-sync'] });
+    expect(listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.tags).toEqual([
+      'phone-sync',
+    ]);
     expect(openPhoneChat(thread.id)?.chat.id).toBe(thread.id);
     expect(archivePhoneChat(thread.id)).toBe(true);
     expect(listPhoneHistory().chats[0]).toMatchObject({ id: thread.id, where: 'sideboard', agent: 'claude' });

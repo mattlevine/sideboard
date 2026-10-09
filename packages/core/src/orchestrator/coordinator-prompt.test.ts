@@ -202,6 +202,8 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).not.toContain('Post this review');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not tell the child to comment');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('notify_orchestrator');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('set_workspace_tags');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('same tags');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {

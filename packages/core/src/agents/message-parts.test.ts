@@ -706,6 +706,7 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('get_run_log', {})).toBe('Read Dev log');
     expect(toolDescription('get_run_log', { name: 'dev' })).toBe('Read dev log');
     expect(toolDescription('notify_orchestrator', {})).toBe('Notify orchestrator');
+    expect(toolDescription('set_workspace_tags', {})).toBe('Set workspace tags');
     expect(toolDescription('create_schedule', { name: 'Standup' })).toBe('Schedule Standup');
     expect(toolDescription('list_schedules', {})).toBe('List schedules');
     expect([toolDescription('list_env', {}), toolDescription('set_env', {}), toolDescription('delete_env', {})]).toEqual(['List env vars', 'Set env var', 'Delete env var']);

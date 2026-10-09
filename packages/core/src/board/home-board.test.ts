@@ -854,6 +854,22 @@ describe('board search and paging', () => {
         ['cursor', 'eng-9'],
       ),
     ).toBe(true);
+    expect(
+      haystackMatches(
+        threadSearchText(
+          thread({
+            id: 'tagged',
+            title: 'Marseille',
+            agent: 'claude',
+            sourceRef: 'main',
+            repoPath: '/app',
+            tags: ['phone-sync'],
+          }),
+          'app',
+        ),
+        ['phone-sync'],
+      ),
+    ).toBe(true);
   });
 
   it('pages long columns without dropping the remainder count', () => {

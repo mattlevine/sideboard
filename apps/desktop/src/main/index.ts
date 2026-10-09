@@ -1446,6 +1446,9 @@ function registerIpc(): void {
   ipcMain.handle('renameThread', (_e, ref: string, title: string) =>
     orch.renameThread(ref, title),
   );
+  ipcMain.handle('setWorkspaceTags', (_e, ref: string, tags: string[]) =>
+    orch.setWorkspaceTags(ref, tags),
+  );
   ipcMain.handle('setAttachments', (_e, ref: string, attachments) =>
     orch.setAttachments(ref, attachments),
   );

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { groupHomeBoardWorktrees } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
-import { worktreeDisplayLabelForGroup } from '../git/worktree-labels.js';
+import { workspaceTagsFromGroup, worktreeDisplayLabelForGroup } from '../git/worktree-labels.js';
 import type {
   AgentKind,
   Autonomy,
@@ -172,6 +172,8 @@ export type PhoneControlRequest =
 export interface PhoneWorktree {
   label: string;
   chats: PhoneChatSummary[];
+  /** Shared labels for this checkout. Omitted when the workspace has none. */
+  tags?: string[];
 }
 
 export interface PhoneProject {
@@ -487,10 +489,14 @@ export function listPhoneSidebar(): PhoneSidebar {
     .map(([path, repoThreads]) => ({
       name: repoName(path),
       path,
-      worktrees: groupHomeBoardWorktrees(repoThreads).map((group) => ({
-        label: worktreeDisplayLabelForGroup(group),
-        chats: group.map(summarize),
-      })),
+      worktrees: groupHomeBoardWorktrees(repoThreads).map((group) => {
+        const tags = workspaceTagsFromGroup(group);
+        return {
+          label: worktreeDisplayLabelForGroup(group),
+          chats: group.map(summarize),
+          ...(tags.length > 0 ? { tags } : {}),
+        };
+      }),
     }));
   return { orchestration: listPhoneChats(), projects, defaults: phoneAccountDefaults() };
 }

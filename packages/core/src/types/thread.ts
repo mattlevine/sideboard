@@ -210,6 +210,12 @@ export interface Thread {
   stackLayer: number | null;
   /** When true, `title` is a manual override and is not overwritten by branch/PR sync. */
   userSetTitle: boolean;
+  /**
+   * Short labels shared by every chat on this workspace. Same tags on the
+   * checkouts an orchestrator opened for one task, so they still match
+   * the next day. Omitted when the workspace has none.
+   */
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   /** When this chat was archived. History age uses this, not later row updates. */
@@ -755,6 +761,11 @@ export interface CreateThreadInput {
    * return that thread instead of a second checkout.
    */
   reuseExisting?: boolean;
+  /**
+   * Labels for this workspace. On a brand-new checkout they are the set.
+   * When the checkout already exists they are added to it.
+   */
+  tags?: string[];
 }
 
 export interface AdoptInput {

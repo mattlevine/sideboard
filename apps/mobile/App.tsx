@@ -61,7 +61,7 @@ type PhoneChat = {
   updatedAt: string;
   agent?: string;
 };
-type PhoneWorktree = { label: string; chats: PhoneChat[] };
+type PhoneWorktree = { label: string; chats: PhoneChat[]; tags?: string[] };
 type PhoneProject = { name: string; path: string; worktrees: PhoneWorktree[] };
 type PhonePlace =
   | { kind: 'orchestration' }
@@ -1440,6 +1440,15 @@ export default function App() {
                         />
                       ) : null}
                     </View>
+                    {worktree.tags && worktree.tags.length > 0 ? (
+                      <View style={styles.tagRow}>
+                        {worktree.tags.map((tag) => (
+                          <Text key={tag} style={styles.tag}>
+                            {tag}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
                     {worktree.chats.map((chat) => (
                       <ChatRow
                         key={chat.id}

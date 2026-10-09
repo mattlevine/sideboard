@@ -163,6 +163,9 @@ export function formatWorktreeDirective(
   lines.push(
     'Schedules: `create_schedule` / `list_schedules` (`at` / `every` / `cron`). `chatId=self` continues this chat; omit chatId for a new Global chat. Fires only while Sideboard.app is running. A future job turns on Settings → Advanced → Caffeinate while schedules are enabled.',
   );
+  lines.push(
+    '`set_workspace_tags` labels this checkout (omit ref; replace, add, or remove). Not another checkout.',
+  );
   lines.push('');
   lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));
   return lines.join('\n');
@@ -170,7 +173,7 @@ export function formatWorktreeDirective(
 
 /** Short isolation line on every worktree turn (survives CLI resume). */
 export function formatWorktreeReminder(): string {
-  return 'Sideboard workspace: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push. Schedules: create_schedule (at / every / cron; chatId=self for this chat).';
+  return 'Sideboard workspace: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push. Schedules: create_schedule (at / every / cron; chatId=self for this chat). set_workspace_tags updates labels on this workspace (omit ref).';
 }
 
 const PR_GOAL_RE =
