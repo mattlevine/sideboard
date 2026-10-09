@@ -1,7 +1,8 @@
 {
   "fill-specializations": [
     { "value": "system-light" },
-    { "appearance": "dark", "value": "system-dark" }
+    { "appearance": "dark", "value": "system-dark" },
+    { "appearance": "tinted", "value": "none" }
   ],
   "groups": [
     {
