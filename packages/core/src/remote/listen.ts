@@ -4,7 +4,7 @@ import { stageBuffersAsAttachments } from '../composer/stage-files.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { outboundReplyFromTurn } from '../orchestrator/outbound-turn-reply.js';
 import { extractPendingPlanQuestions } from '../plan/ask-user.js';
-import { resolveOrchestratorDefaults } from '../store/app-settings.js';
+import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import {
   ensureRemoteCoordinator,
   findRemoteCoordinator,
@@ -69,6 +69,21 @@ export function isRemoteStopCommand(text: string): boolean {
 let handleChain: Promise<void> = Promise.resolve();
 let inboundGeneration = 0;
 
+/** Steer sets status to stopped before the replacement turn is marked running. */
+const PHONE_STEER_START_MS = 8_000;
+
+async function waitForPhoneTurn(threadId: string, stillCurrent: () => boolean): Promise<void> {
+  const deadline = Date.now() + PHONE_STEER_START_MS;
+  let thread = readPhoneThread(threadId) ?? readThread(threadId);
+  while (thread?.status === 'stopped' && Date.now() < deadline) {
+    if (!stillCurrent()) return;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    thread = readPhoneThread(threadId) ?? readThread(threadId);
+  }
+  if (!stillCurrent()) return;
+  await getOrchestrator().waitForTurn(threadId, 14 * 60 * 1000);
+}
+
 function enqueue(fn: () => Promise<void>): void {
   const run = handleChain.then(fn, fn);
   handleChain = run.then(
@@ -78,8 +93,10 @@ function enqueue(fn: () => Promise<void>): void {
 }
 
 /**
- * Kill an in-flight phone turn before the handle queue runs.
- * `stop` inside the queue cannot unblock the previous `waitForTurn`.
+ * `stop` inside the phone handle queue cannot unblock the previous
+ * `waitForTurn`. A follow-up prompt steers via `send` instead — force-stop
+ * (`clearQueue`) drops that prompt and starts a second Cursor run while the
+ * first is still active (`request failed: agent still running`).
  */
 export function interruptRemoteCoordinator(
   deviceId: string,
@@ -414,22 +431,27 @@ function handlePhoneControl(
   const chatId = cmd.chatId;
   const generation = bumpChat(chatId);
   phoneTurnGen.set(chatId, generation);
-  interruptChat(chatId, log);
-  enqueueChat(chatId, async () => {
-    if (chatGeneration.get(chatId) !== generation) return;
+  // Start now. The per-chat queue is blocked in waitForTurn for the previous
+  // prompt; Steer has to interrupt that turn the way the desktop composer does.
+  const task = runPhonePrompt(opts, cmd, chatId, generation);
+  enqueueChat(chatId, () => task);
+}
+
+function runPhonePrompt(
+  opts: {
+    onOutbound: (msg: RemoteOutbound) => void;
+  },
+  cmd: PhoneDraft & { chatId: string; text: string },
+  chatId: string,
+  generation: number,
+): Promise<void> {
+  const current = () => chatGeneration.get(chatId) === generation;
+  return (async () => {
     const thread = readPhoneThread(chatId);
     if (!thread) {
       emitControl(opts, { op: 'error', chatId, message: 'That agent is not on this Mac.' });
       return;
     }
-    if (thread.status === 'running' || thread.status === 'queued') {
-      try {
-        getOrchestrator().stop(thread.id, { clearQueue: true });
-      } catch {
-        // the next send still replaces the turn
-      }
-    }
-    if (chatGeneration.get(chatId) !== generation) return;
     const stopStream = watchPhoneStream(opts, chatId, thread.id, generation);
     try {
       try {
@@ -437,14 +459,22 @@ function handlePhoneControl(
       } catch (err) {
         emitControl(opts, { op: 'error', chatId, message: phoneError(err) });
       }
+      if (!current()) return;
       const live = readPhoneThread(thread.id) ?? thread;
+      const wasLive = live.status === 'running' || live.status === 'queued';
+      const followUp = followUpBehavior();
       const staged = stagePhoneTurnFiles(live.worktreePath, cmd);
       const text = cmd.text.trim() || (staged.length ? 'See the attached files.' : '');
-      const formatted = formatRemotePrompt(text);
-      await getOrchestrator().send(thread.id, formatted, { attachments: staged });
-      await getOrchestrator().waitForTurn(thread.id, 14 * 60 * 1000);
+      await getOrchestrator().send(thread.id, formatRemotePrompt(text), {
+        attachments: staged,
+        followUp,
+      });
+      if (!current()) return;
+      // Queue leaves the in-flight turn running. Its reply is not this prompt.
+      if (followUp === 'queue' && wasLive) return;
+      await waitForPhoneTurn(thread.id, current);
     } catch (err) {
-      if (chatGeneration.get(chatId) !== generation) return;
+      if (!current()) return;
       const message = err instanceof Error ? err.message : String(err);
       emitControl(opts, { op: 'error', chatId, message: `Sideboard failed: ${message}` });
       return;
@@ -452,9 +482,9 @@ function handlePhoneControl(
       stopStream();
       finishPhoneTurn(chatId, generation);
     }
-    if (chatGeneration.get(chatId) !== generation) return;
+    if (!current()) return;
     emitChatTurn(opts, chatId, thread.id);
-  });
+  })();
 }
 
 export function handleRemoteInbound(
@@ -481,38 +511,35 @@ export function handleRemoteInbound(
     return;
   }
   const generation = ++inboundGeneration;
-  if (body) interruptRemoteCoordinator(opts.deviceId, log);
-  enqueue(async () => {
-    if (generation !== inboundGeneration) return;
+  const current = () => generation === inboundGeneration;
+  if (body && isRemoteStopCommand(body)) interruptRemoteCoordinator(opts.deviceId, log);
+  const task = (async () => {
+    if (!current()) return;
     const agent = coerceOrchestratorAgent(opts.agent ?? resolveOrchestratorDefaults().agent);
     if (!body) return;
     if (isRemoteStopCommand(body)) {
-      if (generation !== inboundGeneration) return;
+      if (!current()) return;
       opts.onOutbound({ type: 'assistant', text: REMOTE_STOPPED_REPLY });
       return;
     }
 
     let thread = ensureRemoteCoordinator(opts.deviceId, agent);
     const fresh = readThread(thread.id) ?? thread;
-    if (fresh.status === 'running' || fresh.status === 'queued') {
-      try {
-        getOrchestrator().stop(fresh.id, { clearQueue: true });
-      } catch {
-        // the next send still replaces the turn
-      }
-    }
-    if (generation !== inboundGeneration) return;
+    const wasLive = fresh.status === 'running' || fresh.status === 'queued';
+    const followUp = followUpBehavior();
     const orch = getOrchestrator();
     try {
-      await orch.send(thread.id, formatRemotePrompt(body));
-      await orch.waitForTurn(thread.id, 14 * 60 * 1000);
+      await orch.send(thread.id, formatRemotePrompt(body), { followUp });
+      if (!current()) return;
+      if (followUp === 'queue' && wasLive) return;
+      await waitForPhoneTurn(thread.id, current);
     } catch (err) {
-      if (generation !== inboundGeneration) return;
+      if (!current()) return;
       const message = err instanceof Error ? err.message : String(err);
       opts.onOutbound({ type: 'assistant', text: `Sideboard failed: ${message}` });
       return;
     }
-    if (generation !== inboundGeneration) return;
+    if (!current()) return;
     thread = readThread(thread.id) ?? thread;
     if (thread.status === 'stopped') return;
     const result = orch.getTurnResult(thread.id);
@@ -540,5 +567,6 @@ export function handleRemoteInbound(
         detail ? `Sideboard failed: ${detail}` : 'Sideboard failed before producing a result.',
     });
     if (reply.trim()) opts.onOutbound({ type: 'assistant', text: reply.trim() });
-  });
+  })();
+  enqueue(() => task);
 }

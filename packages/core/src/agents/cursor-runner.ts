@@ -23,6 +23,7 @@ import {
 import { cursorSdkStoreDir } from './cursor-store.js';
 import {
   CURSOR_STREAM_IDLE_MS,
+  CURSOR_BUSY_RETRY_DELAY_MS,
   cursorSendOptions,
   cursorSessionRecoveryMessage,
   isAgentBusyError,
@@ -71,21 +72,23 @@ function localAgentStore(
 }
 
 /**
- * Cancel leftover local runs so a follow-up `send` can proceed.
- * Happens when a previous runner process died without waiting/cancelling.
+ * Cancel leftover runs so a follow-up `send` can proceed.
+ * A previous runner can die without cancelling, and a phone/desktop Steer
+ * can arrive while Cursor still reports the run as active
+ * (`already has active run`, `agent still running`).
  */
-async function cancelStaleLocalRuns(
+async function cancelStaleRuns(
   Agent: AgentApi,
   agentId: string,
-  opts: { cwd: string; store: InstanceType<StoreCtor> },
+  opts: { cwd: string; store: InstanceType<StoreCtor>; apiKey?: string },
 ): Promise<number> {
+  let cancelled = 0;
   const listed = await Agent.listRuns(agentId, {
     runtime: 'local',
     cwd: opts.cwd,
     store: opts.store,
     limit: 20,
   });
-  let cancelled = 0;
   for (const run of listed.items) {
     if (run.status !== 'running') continue;
     try {
@@ -98,6 +101,29 @@ async function cancelStaleLocalRuns(
     } catch {
       /* best-effort */
     }
+  }
+  if (cancelled > 0 || !opts.apiKey) return cancelled;
+  try {
+    const cloud = await Agent.listRuns(agentId, {
+      runtime: 'cloud',
+      apiKey: opts.apiKey,
+      limit: 20,
+    });
+    for (const run of cloud.items) {
+      if (run.status !== 'running') continue;
+      try {
+        await Agent.cancelRun(run.id, {
+          runtime: 'cloud',
+          agentId,
+          apiKey: opts.apiKey,
+        });
+        cancelled += 1;
+      } catch {
+        /* best-effort */
+      }
+    }
+  } catch {
+    /* local-only agents have no cloud runs */
   }
   return cancelled;
 }
@@ -240,6 +266,24 @@ async function main(): Promise<number> {
     }
   }
 
+  async function retryAfterBusy(agent: { agentId: string }): Promise<void> {
+    const n = await cancelStaleRuns(Agent, agent.agentId, {
+      cwd: req.cwd,
+      store,
+      ...(apiKey ? { apiKey } : {}),
+    });
+    emit({
+      type: 'stderr',
+      data:
+        n > 0
+          ? `Cursor agent had ${n} stale active run(s) — cancelled and retrying`
+          : 'Cursor agent busy — retrying send',
+    });
+    if (CURSOR_BUSY_RETRY_DELAY_MS > 0) {
+      await new Promise((resolve) => setTimeout(resolve, CURSOR_BUSY_RETRY_DELAY_MS));
+    }
+  }
+
   async function sendPrompt(
     agent: Awaited<ReturnType<typeof createAgent>>,
     extra?: { onDelta?: (args: { update: unknown }) => void },
@@ -252,17 +296,7 @@ async function main(): Promise<number> {
       return await retryTransport(() => agent.send(req.prompt, sendOpts));
     } catch (err) {
       if (!isAgentBusyError(err)) throw err;
-      const n = await cancelStaleLocalRuns(Agent, agent.agentId, {
-        cwd: req.cwd,
-        store,
-      });
-      emit({
-        type: 'stderr',
-        data:
-          n > 0
-            ? `Cursor agent had ${n} stale active run(s) — cancelled and retrying`
-            : 'Cursor agent busy — retrying send',
-      });
+      await retryAfterBusy(agent);
       return retryTransport(() => agent.send(req.prompt, sendOpts));
     }
   }
@@ -359,6 +393,9 @@ async function main(): Promise<number> {
         : await run.wait();
       if (result.status === 'error') {
         const detail = formatUnknownDetail(result.error);
+        if (isAgentBusyError(detail)) {
+          throw Object.assign(new Error(detail || 'agent still running'), { name: 'AgentBusyError' });
+        }
         emit({
           type: 'stderr',
           data: detail
@@ -396,6 +433,12 @@ async function main(): Promise<number> {
       try {
         return await runTurn(agent);
       } catch (err) {
+        // Steer killed the previous process, but Cursor still has that run.
+        // Cancel it and send this prompt again instead of failing the turn.
+        if (isAgentBusyError(err)) {
+          await retryAfterBusy(agent);
+          return await runTurn(agent);
+        }
         // send() can throw the same unresumable errors after a "successful" resume.
         if (!isUnresumableCursorSession(err)) throw err;
         emit({

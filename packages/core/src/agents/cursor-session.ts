@@ -8,12 +8,24 @@ export function cursorErrorMessage(err: unknown): string {
   return String(err).trim();
 }
 
-/** SDK conflict when a previous runner died without cancelling. */
+/**
+ * SDK conflict when a follow-up send hits a run that has not exited.
+ * Local store: `Agent … already has active run`.
+ * Cloud API: `AgentBusyError` / `[agent_busy] agent still running`.
+ */
 export function isAgentBusyError(err: unknown): boolean {
   const name = err instanceof Error ? err.name : '';
   if (name === 'AgentBusyError') return true;
-  return /already has active run/i.test(cursorErrorMessage(err));
+  const message = cursorErrorMessage(err);
+  return (
+    /already has active run/i.test(message) ||
+    /agent still running/i.test(message) ||
+    /\[agent_busy\]/i.test(message)
+  );
 }
+
+/** Pause after cancelling a stale run so the next send is not rejected again. */
+export const CURSOR_BUSY_RETRY_DELAY_MS = 400;
 
 /**
  * True when resume (or a cwd-reused create) cannot continue this agent id.

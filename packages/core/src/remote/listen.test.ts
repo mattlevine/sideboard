@@ -25,7 +25,7 @@ describe('handleRemoteInbound interrupt', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('stops a running phone turn before the handle queue', async () => {
+  it('steers a follow-up without waiting out the in-flight turn', async () => {
     const thread = ensureRemoteCoordinator('phone-1', 'claude');
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -68,10 +68,12 @@ describe('handleRemoteInbound interrupt', () => {
     expect(stop).not.toHaveBeenCalled();
 
     handleRemoteInbound('second', { deviceId: 'phone-1', agent: 'claude', onOutbound: outbound });
-    expect(stop).toHaveBeenCalledWith(thread.id, { clearQueue: true });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+    expect(stop).not.toHaveBeenCalled();
+    expect(send).toHaveBeenLastCalledWith(thread.id, 'Phone\n\nsecond', { followUp: 'steer' });
 
     await vi.waitFor(() => expect(replies).toEqual(['all done']));
-    expect(send).toHaveBeenLastCalledWith(thread.id, 'Phone\n\nsecond');
+    release();
   });
 
   it('replies to stop without waiting out the in-flight turn', async () => {
@@ -213,10 +215,75 @@ describe('handleRemoteInbound interrupt', () => {
     });
 
     await vi.waitFor(() =>
-      expect(send).toHaveBeenCalledWith(opened.chat.id, 'Phone\n\nship it', { attachments: [] }),
+      expect(send).toHaveBeenCalledWith(opened.chat.id, 'Phone\n\nship it', {
+        attachments: [],
+        followUp: 'steer',
+      }),
     );
     expect(findRemoteCoordinator('phone-4')).toBeUndefined();
     await vi.waitFor(() => expect(replies.some((line) => line.includes('"op":"assistant"'))).toBe(true));
+  });
+
+  it('steers a second prompt on the open chat instead of force-stopping', async () => {
+    const replies: string[] = [];
+    const outbound = (msg: { type: string; text?: string }) => {
+      if (msg.type === 'assistant' && msg.text) replies.push(msg.text);
+    };
+    handleRemoteInbound(encodePhoneControl({ op: 'create', where: 'orchestration' }), {
+      deviceId: 'phone-steer',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    const opened = JSON.parse(replies[0]!.slice(replies[0]!.indexOf('{'))) as {
+      chat: { id: string };
+    };
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let waits = 0;
+    const send = vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => {
+      updateThread(String(id), { status: 'running' });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(async (id) => {
+      waits += 1;
+      if (waits === 1) await gate;
+      else updateThread(String(id), { status: 'idle' });
+      return readThread(String(id))!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockReturnValue({
+      text: 'steered',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    });
+    const stop = vi.spyOn(Orchestrator.prototype, 'stop');
+
+    handleRemoteInbound(encodePhoneControl({ op: 'prompt', chatId: opened.chat.id, text: 'first' }), {
+      deviceId: 'phone-steer',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+
+    handleRemoteInbound(encodePhoneControl({ op: 'prompt', chatId: opened.chat.id, text: 'second' }), {
+      deviceId: 'phone-steer',
+      agent: 'claude',
+      onOutbound: outbound,
+    });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+    expect(stop).not.toHaveBeenCalled();
+    expect(send).toHaveBeenLastCalledWith(opened.chat.id, 'Phone\n\nsecond', {
+      attachments: [],
+      followUp: 'steer',
+    });
+    release();
   });
 
   it('streams markdown while a phone turn is running', async () => {
