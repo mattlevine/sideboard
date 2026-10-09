@@ -925,19 +925,11 @@ async function queryLinearProjects(
         nodes?: Array<{ id?: string; name?: string; slugId?: string }>;
         pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
       };
-    }>(
-      PROJECTS_QUERY,
-      after ? { first: 50, filter: filter ?? {}, after } : { first: 50, filter: filter ?? {} },
-      opts,
-    );
+    }>(PROJECTS_QUERY, { first: 50, filter: filter ?? {}, ...(after ? { after } : {}) }, opts);
     for (const node of json.projects?.nodes ?? []) {
       const id = String(node.id ?? '').trim();
       if (!id) continue;
-      out.push({
-        id,
-        name: String(node.name ?? ''),
-        ...(node.slugId ? { slugId: String(node.slugId) } : {}),
-      });
+      out.push({ id, name: String(node.name ?? ''), ...(node.slugId ? { slugId: String(node.slugId) } : {}) });
     }
     const pageInfo = json.projects?.pageInfo;
     if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
@@ -946,10 +938,7 @@ async function queryLinearProjects(
   return out;
 }
 
-/** Open Linear projects the connected user can see (id, name, slug). */
-export async function listLinearProjects(opts?: {
-  apiKey?: string | null;
-}): Promise<LinearProjectRef[]> {
+export function listLinearProjects(opts?: { apiKey?: string | null }): Promise<LinearProjectRef[]> {
   return queryLinearProjects(undefined, opts);
 }
 

@@ -10,6 +10,7 @@ import {
   rewriteAbleTimeError,
 } from './abletime-mcp.js';
 import { mapAbleTimeAttachments } from './abletime-attachments.js';
+import { ableTimeProjectFields, mapAbleTimeProject } from './abletime-projects.js';
 import { textFromAbleTimeDoc } from './abletime-rest.js';
 import type { IssueVendorAttachment } from './issue-attachments.js';
 
@@ -215,36 +216,11 @@ export function toAbleTimeIssueInfo(task: AbleTimeTask): IssueInfo {
     provider: 'abletime',
     assignee: task.assignee?.name,
     assignees: task.assignee?.name ? [task.assignee.name] : undefined,
-    ...(task.project
-      ? { projects: [task.project] }
-      : task.projectId
-        ? { projects: [{ id: task.projectId }] }
-        : {}),
+    ...(task.project || task.projectId
+      ? { projects: [task.project ?? { id: task.projectId }] }
+      : {}),
     ...(task.createdAt ? { createdAt: task.createdAt } : {}),
     ...(task.updatedAt ? { updatedAt: task.updatedAt } : {}),
-  };
-}
-
-function ableTimeProjectFields(nested: Record<string, unknown>): {
-  projectId?: string;
-  project?: { id?: string; name?: string };
-} {
-  const projectRecord = asRecord(nested.project);
-  const projectId =
-    firstString(nested, ['project_id', 'projectId']) ||
-    firstString(projectRecord, ['id']) ||
-    undefined;
-  const projectName =
-    firstString(nested, ['project_name', 'projectName']) ||
-    firstString(projectRecord, ['name', 'title']) ||
-    undefined;
-  if (!projectId && !projectName) return {};
-  return {
-    ...(projectId ? { projectId } : {}),
-    project: {
-      ...(projectId ? { id: projectId } : {}),
-      ...(projectName ? { name: projectName } : {}),
-    },
   };
 }
 
@@ -261,25 +237,6 @@ export function issueAttachmentForAbleTimeTask(task: AbleTimeTask): ThreadAttach
       .filter(Boolean)
       .join('\n'),
   };
-}
-
-function mapProject(raw: unknown): AbleTimeProject | null {
-  const record = asRecord(raw);
-  if (!record) return null;
-  const id = firstString(record, ['id', 'project_id', 'projectId']);
-  const name = firstString(record, ['name', 'title', 'projectName']);
-  if (!id && !name) return null;
-  const categories = asList(record.categories ?? record.category)
-    .map((item) => {
-      const rec = asRecord(item);
-      if (!rec) return null;
-      const categoryId = firstString(rec, ['id', 'category_id', 'projectCategoryId', 'categoryId']);
-      const categoryName = firstString(rec, ['name', 'title', 'categoryName']);
-      if (!categoryId && !categoryName) return null;
-      return { id: categoryId || categoryName, name: categoryName || categoryId };
-    })
-    .filter((item): item is { id: string; name: string } => Boolean(item));
-  return { id: id || name, name: name || id, categories };
 }
 
 function isOpenTask(task: AbleTimeTask): boolean {
@@ -305,7 +262,7 @@ export async function getAbleTimeOrientation(opts?: {
   const projects = asList(
     record?.projects ?? record?.current_projects ?? record?.currentProjects,
   )
-    .map(mapProject)
+    .map(mapAbleTimeProject)
     .filter((item): item is AbleTimeProject => Boolean(item));
   const tasks = asList(record?.tasks ?? record?.active_tasks ?? record?.activeTasks)
     .map((item) => mapAbleTimeTask(item, opts?.host))
@@ -319,7 +276,7 @@ export async function listAbleTimeProjects(opts?: {
 }): Promise<AbleTimeProject[]> {
   const raw = await callAbleTimeTool('list_projects', { include_categories: true }, opts);
   return asList(raw)
-    .map(mapProject)
+    .map(mapAbleTimeProject)
     .filter((item): item is AbleTimeProject => Boolean(item));
 }
 
