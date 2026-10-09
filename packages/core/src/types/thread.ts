@@ -210,11 +210,7 @@ export interface Thread {
   stackLayer: number | null;
   /** When true, `title` is a manual override and is not overwritten by branch/PR sync. */
   userSetTitle: boolean;
-  /**
-   * Short labels shared by every chat on this workspace. Same tags on the
-   * checkouts an orchestrator opened for one task, so they still match
-   * the next day. Omitted when the workspace has none.
-   */
+  /** Short labels shared by every chat on this workspace. */
   tags?: string[];
   createdAt: string;
   updatedAt: string;
@@ -755,16 +751,9 @@ export interface CreateThreadInput {
    * Pushes go to that branch; archive does not remove the folder.
    */
   cowboy?: boolean;
-  /**
-   * When false, always create a new worktree (fork_workspace, best-of-n).
-   * Default true: a ticket, PR, or named branch may have only one live worktree —
-   * return that thread instead of a second checkout.
-   */
+  /** When false, always create a new worktree. Default true reuses a live ticket, PR, or named branch. */
   reuseExisting?: boolean;
-  /**
-   * Labels for this workspace. On a brand-new checkout they are the set.
-   * When the checkout already exists they are added to it.
-   */
+  /** Workspace labels. Added when this checkout already exists. */
   tags?: string[];
 }
 

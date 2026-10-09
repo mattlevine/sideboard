@@ -1025,10 +1025,7 @@ export function pinSearchText(pin: BoardPin, workspaceName = ''): string {
 }
 
 export function threadSearchText(
-  thread: Pick<
-    Thread,
-    'title' | 'sourceRef' | 'sourceType' | 'agent' | 'status' | 'repoPath' | 'branchName' | 'prUrl'
-  > & { tags?: string[] | null },
+  thread: Pick<Thread, 'title' | 'sourceRef' | 'sourceType' | 'agent' | 'status' | 'repoPath' | 'branchName' | 'prUrl' | 'tags'>,
   workspaceName = '',
 ): string {
   return [
@@ -1155,7 +1152,6 @@ export type HomeBoardThreadCard = {
   link: string;
   /** Live chat tabs on this checkout. Omitted when 1. */
   chatCount?: number; blockedReason?: string; blockedSource?: 'ask_user' | 'plan' | 'reported';
-  /** Workspace tags shared by the chats on this checkout. Omitted when empty. */
   tags?: string[];
 };
 

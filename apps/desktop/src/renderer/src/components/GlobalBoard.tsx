@@ -2,8 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { MessagePart, OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
 import { isSetupLastError } from '../lib/pane-progress';
 import {
-  normalizeWorktreePath,
-  workspaceTagsFromGroup,
+  normalizeWorktreePath, workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
 import { CLOUD_ORCHESTRATOR_GOAL, threadDisplayTitle } from '../lib/global-workspace';
@@ -40,7 +39,6 @@ import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { WorktreePrBadges } from './WorktreePrBadges';
 import { WorkspaceTags } from './WorkspaceTags';
-
 interface Props {
   threads: Thread[];
   workspaces?: Workspace[];
@@ -62,7 +60,6 @@ interface Props {
   onOwnershipChange?: (filter: BoardOwnershipFilter) => void;
   githubLogin?: string | null;
   projectReviewLabels?: Record<string, string>;
-  /** Left-edge open control when the left sidebar is closed. */
   leftSidebarToggle?: ReactNode;
 }
 

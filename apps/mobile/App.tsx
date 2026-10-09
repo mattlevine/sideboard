@@ -1440,14 +1440,8 @@ export default function App() {
                         />
                       ) : null}
                     </View>
-                    {worktree.tags && worktree.tags.length > 0 ? (
-                      <View style={styles.tagRow}>
-                        {worktree.tags.map((tag) => (
-                          <Text key={tag} style={styles.tag}>
-                            {tag}
-                          </Text>
-                        ))}
-                      </View>
+                    {worktree.tags?.length ? (
+                      <View style={styles.tagRow}>{worktree.tags.map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}</View>
                     ) : null}
                     {worktree.chats.map((chat) => (
                       <ChatRow

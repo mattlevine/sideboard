@@ -122,7 +122,7 @@ import {
   notifyParentOfChildHalt,
   shouldNotifyParentAfterTurnError,
 } from './child-halt.js';
-import { reasonToKeepOnStop, resolveStopReason } from './stop-reason.js';
+import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
 import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
@@ -260,10 +260,8 @@ import {
 import { loadWorkspaceSettings } from '../hook/settings.js';
 import { syncThreadBranchFromGit } from '../threads/sync-branch.js';
 import {
-  addWorkspace,
-  ensureWorkspace,
-  removeWorkspace,
-  sameWorkspacePath,
+  addWorkspace, ensureWorkspace,
+  removeWorkspace, sameWorkspacePath,
   syncWorkspacesFromThreads,
   type Workspace,
 } from '../store/workspaces.js';
@@ -356,16 +354,6 @@ function writeLiveStatus(
   const latest = readThread(threadId);
   if (!latest || latest.status === 'archived') return latest;
   return setStatus(threadId, status, lastError);
-}
-
-/**
- * Mark a thread stopped and keep the reason. A follow-up write with no new
- * note (the turn unwind after kill) must not clear lastError.
- */
-function writeStoppedStatus(threadId: string, reason?: string | null): Thread | null {
-  const latest = readThread(threadId);
-  if (!latest || latest.status === 'archived') return latest;
-  return setStatus(threadId, 'stopped', reasonToKeepOnStop(latest.lastError, reason));
 }
 
 interface RegisteredProcess {
@@ -2170,13 +2158,7 @@ export class Orchestrator {
    */
   stop(
     threadRef: string,
-    opts?: {
-      clearQueue?: boolean;
-      continueQueue?: boolean;
-      notifyParent?: boolean;
-      /** Stored on the thread so a later session can see why this stop happened. */
-      reason?: string | null;
-    },
+    opts?: { clearQueue?: boolean; continueQueue?: boolean; notifyParent?: boolean; reason?: string | null },
   ): Thread {
     const clearQueue = opts?.clearQueue !== false;
     const continueQueue = opts?.continueQueue === true;
@@ -2210,8 +2192,7 @@ export class Orchestrator {
         // Already signaled via handle, or the process exited.
       }
     }
-    const stopped =
-      writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
+    const stopped = writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       // Idle stop (archive, leftover status) is not a mid-turn death.
@@ -3602,9 +3583,7 @@ export class Orchestrator {
     return updateThread(thread.id, { title: next, userSetTitle: true });
   }
 
-  setWorkspaceTags(threadRef: string, tags: string[]): Thread {
-    return applyWorkspaceTags(threadRef, tags, 'replace');
-  }
+  setWorkspaceTags(threadRef: string, tags: string[]): Thread { return applyWorkspaceTags(threadRef, tags, 'replace'); }
 
   async switchThreadBranch(threadRef: string, branchName: string): Promise<Thread> {
     const thread = this.requireThread(threadRef);

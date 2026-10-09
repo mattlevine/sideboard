@@ -1,3 +1,6 @@
+import { readThread, setStatus } from '../store/thread-store.js';
+import type { Thread } from '../types/thread.js';
+
 /** Cap so a stop note stays a label, not a transcript. */
 const STOP_REASON_MAX = 500;
 
@@ -31,4 +34,11 @@ export function reasonToKeepOnStop(
   const prior = existing?.trim();
   if (prior) return prior.slice(0, STOP_REASON_MAX);
   return 'Stopped';
+}
+
+/** Mark a thread stopped and keep the note across the later turn unwind. */
+export function writeStoppedStatus(threadId: string, reason?: string | null): Thread | null {
+  const latest = readThread(threadId);
+  if (!latest || latest.status === 'archived') return latest;
+  return setStatus(threadId, 'stopped', reasonToKeepOnStop(latest.lastError, reason));
 }
