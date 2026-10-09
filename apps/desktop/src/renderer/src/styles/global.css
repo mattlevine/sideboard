@@ -2649,7 +2649,8 @@ body.resizing-panels webview {
    then re-enter the row so the name truncates beside the buttons. */
 .thread-item > .icon-btn,
 .thread-item > .worktree-remove-btn,
-.thread-item > .worktree-row-actions {
+.thread-item > .worktree-row-actions,
+.worktree-parent-main > .worktree-row-actions {
   flex: 0 0 auto;
   margin-left: 0;
 }
@@ -2665,6 +2666,11 @@ body.resizing-panels webview {
   top: 0;
   bottom: 0;
   z-index: 1;
+}
+
+/* Actions sit on the title row, which is inside the padded parent. */
+.worktree-parent-main > .worktree-row-actions {
+  right: 0;
 }
 
 .thread-item:hover .worktree-row-actions,
@@ -4692,6 +4698,34 @@ mark.chat-search-hit.chat-search-current {
 .worktree-card.is-expanded .thread-item.worktree-parent .thread-title {
   color: var(--text);
   font-weight: 600;
+}
+
+.thread-item.worktree-parent {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.worktree-parent-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  position: relative;
+}
+
+/* Tags share the row's hover and active fill instead of hanging below it. */
+.thread-item.worktree-parent .workspace-tags {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 0 0 20px;
+}
+
+.thread-item.worktree-parent:is(.active, :hover):not(.is-open) .workspace-tag {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  border-color: color-mix(in srgb, var(--text) 20%, transparent);
+  color: var(--text);
 }
 
 .thread-item.worktree-parent .thread-item-body {
