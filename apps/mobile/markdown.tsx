@@ -179,10 +179,22 @@ function markdownRules(
       if (file) return <FileChip key={node.key} link={file} label={raw} onPress={onFileLink} />;
       return (
         <Text key={node.key} style={styles.code_inline}>
-          {children}
+          {raw || children}
         </Text>
       );
     },
+    // Cells size to their text. A flex row with flex:1 measures that text at width 0, so only borders show.
+    table: (node, children, _parent, styles) => (
+      <ScrollView
+        key={node.key}
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        style={styles.table_scroll}
+      >
+        <View style={styles._VIEW_SAFE_table}>{children}</View>
+      </ScrollView>
+    ),
     image: (node) => {
       const src = typeof node.attributes?.src === 'string' ? node.attributes.src : '';
       const alt = typeof node.attributes?.alt === 'string' ? node.attributes.alt : '';
@@ -279,9 +291,13 @@ const shared = {
     letterSpacing: -0.2,
   },
   text: {
+    color: text,
     fontSize: 16,
     lineHeight: 26,
     letterSpacing: -0.2,
+  },
+  textgroup: {
+    color: text,
   },
   paragraph: {
     marginTop: 0,
@@ -392,9 +408,23 @@ const shared = {
     padding: 10,
     marginBottom: 10,
   },
+  table_scroll: { marginBottom: 10, alignSelf: 'stretch' as const },
   table: { borderColor: border, borderWidth: 1, borderRadius: 6 },
-  th: { color: text, padding: 6, borderColor: border, fontWeight: '600' as const },
-  td: { color: secondary, padding: 6, borderColor: border },
+  th: {
+    flex: 0,
+    color: text,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderColor: border,
+    fontWeight: '600' as const,
+  },
+  td: {
+    flex: 0,
+    color: secondary,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderColor: border,
+  },
   tr: { borderColor: border },
 };
 
