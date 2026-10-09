@@ -41,10 +41,14 @@ export function compactIssueRow(
   labels?: string[];
   team?: string;
   cycle?: string;
+  projects?: string[];
   createdAt?: string;
   updatedAt?: string;
   kind?: 'created' | 'updated';
 } {
+  const projectNames = (issue.projects ?? [])
+    .map((project) => (project.name || project.id || '').trim())
+    .filter(Boolean);
   return {
     identifier: issue.identifier,
     title: issue.title,
@@ -52,6 +56,7 @@ export function compactIssueRow(
     ...(issue.labels.length > 0 ? { labels: issue.labels } : {}),
     ...(issue.teamKey ? { team: issue.teamKey } : {}),
     ...(issue.cycle?.name ? { cycle: issue.cycle.name } : {}),
+    ...(projectNames.length ? { projects: projectNames } : {}),
     ...(issue.createdAt ? { createdAt: issue.createdAt } : {}),
     ...(issue.updatedAt ? { updatedAt: issue.updatedAt } : {}),
     ...(opts?.since ? { kind: issueActivityKind(issue, opts.since) } : {}),

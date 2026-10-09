@@ -9,6 +9,7 @@ import {
   getGitHubIssue,
   githubRelationEditFlag,
   listGitHubIssueCommentsSince,
+  listGitHubProjects,
   parseGitHubIssueNumber,
   updateGitHubIssue,
 } from './github-issues.js';
@@ -35,6 +36,91 @@ describe('parseGitHubIssueNumber', () => {
     expect(parseGitHubIssueNumber('#12')).toBe(12);
     expect(parseGitHubIssueNumber('gh-12')).toBe(12);
     expect(parseGitHubIssueNumber('https://github.com/acme/app/issues/12')).toBe(12);
+  });
+});
+
+describe('github projects', () => {
+  it('reads project titles on get', async () => {
+    gh.mockImplementation(async (args: string[]) => {
+      if (args[1] === 'view' && args.at(-1) === 'projectItems') {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({ projectItems: [{ title: 'Roadmap', id: 'PVT_1' }] }),
+          stderr: '',
+        };
+      }
+      if (args[1] === 'view') {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            number: 12,
+            title: 'Fix',
+            url: 'https://github.com/acme/app/issues/12',
+            state: 'OPEN',
+            labels: [],
+            assignees: [],
+            comments: [],
+          }),
+          stderr: '',
+        };
+      }
+      return { exitCode: 1, stdout: '', stderr: `unexpected ${args.join(' ')}` };
+    });
+    const issue = await getGitHubIssue('#12', { repoPath: '/tmp/repo' });
+    expect(issue.projects).toEqual([{ id: 'PVT_1', name: 'Roadmap' }]);
+    expect(issue.projectsError).toBeUndefined();
+  });
+
+  it('reports a missing read:project scope without failing the issue', async () => {
+    gh.mockImplementation(async (args: string[]) => {
+      if (args[1] === 'view' && args.at(-1) === 'projectItems') {
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: 'error: your authentication token is missing required scopes [read:project]',
+        };
+      }
+      if (args[1] === 'view') {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            number: 12,
+            title: 'Fix',
+            url: 'https://github.com/acme/app/issues/12',
+            labels: [],
+            assignees: [],
+            comments: [],
+          }),
+          stderr: '',
+        };
+      }
+      return { exitCode: 1, stdout: '', stderr: `unexpected ${args.join(' ')}` };
+    });
+    const issue = await getGitHubIssue('#12', { repoPath: '/tmp/repo' });
+    expect(issue.projects).toEqual([]);
+    expect(issue.projectsError).toMatch(/gh auth refresh -s read:project/);
+  });
+
+  it('lists the user and repo-owner projects', async () => {
+    gh.mockImplementation(async (args: string[]) => {
+      if (args[0] !== 'project') {
+        return { exitCode: 1, stdout: '', stderr: `unexpected ${args.join(' ')}` };
+      }
+      const owner = args.includes('--owner') ? args[args.indexOf('--owner') + 1] : '';
+      const row = owner
+        ? {
+            id: 'PVT_org',
+            number: 2,
+            title: 'Org board',
+            url: 'https://github.com/orgs/acme/projects/2',
+            owner: { login: 'acme' },
+          }
+        : { id: 'PVT_me', number: 1, title: 'Mine', owner: { login: 'octocat' } };
+      return { exitCode: 0, stdout: JSON.stringify([row]), stderr: '' };
+    });
+    const projects = await listGitHubProjects({ repoPath: '/tmp/repo' });
+    expect(projects.map((project) => project.title).sort()).toEqual(['Mine', 'Org board']);
+    expect(projects.find((project) => project.title === 'Org board')?.owner).toBe('acme');
   });
 });
 
@@ -65,6 +151,7 @@ describe('github issue writes', () => {
     expect(issue.identifier).toBe('#12');
     expect(issue.comments[0]?.body).toBe('Looks good');
     expect(issue.attachments).toEqual([]);
+    expect(issue.projects).toEqual([]);
     expect(gh.mock.calls[0]?.[0]).toEqual(
       expect.arrayContaining(['issue', 'view', '12', '-R', 'acme/app']),
     );

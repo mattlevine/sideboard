@@ -33,6 +33,8 @@ export interface AbleTimeTask {
   description?: string;
   state?: string;
   projectId?: string;
+  /** Project this task is in, when the payload includes an id or name. */
+  project?: { id?: string; name?: string };
   categoryId?: string;
   assignee?: { id?: string; name: string };
   labels: string[];
@@ -179,7 +181,7 @@ export function mapAbleTimeTask(raw: unknown, host?: string | null): AbleTimeTas
     state:
       firstString(nested, ['state', 'board_state', 'boardState', 'status', 'taskState']) ||
       undefined,
-    projectId: firstString(nested, ['project_id', 'projectId']) || firstString(asRecord(nested.project), ['id']) || undefined,
+    ...ableTimeProjectFields(nested),
     categoryId:
       firstString(nested, ['category_id', 'categoryId', 'projectCategoryId']) ||
       firstString(asRecord(nested.category), ['id']) ||
@@ -213,8 +215,36 @@ export function toAbleTimeIssueInfo(task: AbleTimeTask): IssueInfo {
     provider: 'abletime',
     assignee: task.assignee?.name,
     assignees: task.assignee?.name ? [task.assignee.name] : undefined,
+    ...(task.project
+      ? { projects: [task.project] }
+      : task.projectId
+        ? { projects: [{ id: task.projectId }] }
+        : {}),
     ...(task.createdAt ? { createdAt: task.createdAt } : {}),
     ...(task.updatedAt ? { updatedAt: task.updatedAt } : {}),
+  };
+}
+
+function ableTimeProjectFields(nested: Record<string, unknown>): {
+  projectId?: string;
+  project?: { id?: string; name?: string };
+} {
+  const projectRecord = asRecord(nested.project);
+  const projectId =
+    firstString(nested, ['project_id', 'projectId']) ||
+    firstString(projectRecord, ['id']) ||
+    undefined;
+  const projectName =
+    firstString(nested, ['project_name', 'projectName']) ||
+    firstString(projectRecord, ['name', 'title']) ||
+    undefined;
+  if (!projectId && !projectName) return {};
+  return {
+    ...(projectId ? { projectId } : {}),
+    project: {
+      ...(projectId ? { id: projectId } : {}),
+      ...(projectName ? { name: projectName } : {}),
+    },
   };
 }
 

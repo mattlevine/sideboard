@@ -146,7 +146,7 @@ export function registerAbleTimeTools(server: McpServer): void {
 
   server.tool(
     'abletime_get_task',
-    'Get one AbleTime task by id or reference (e.g. CRM-232): description, state, comments, attachments. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. To save a file, call abletime_download_attachment with the attachment id or url (writes `.context/attachments/`; do not dump bytes into the tool result).',
+    'Get one AbleTime task by id or reference (e.g. CRM-232): description, state, project, comments, attachments. Re-fetch to read new comments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. To save a file, call abletime_download_attachment with the attachment id or url (writes `.context/attachments/`; do not dump bytes into the tool result).',
     { id: z.string(), include: mcpIssueIncludeSchema },
     async ({ id, include }) => {
       try {

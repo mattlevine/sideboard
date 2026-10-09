@@ -499,6 +499,11 @@ export interface IssueInfo {
   cycle?: IssueCycleInfo | null;
   /** Linear team key (e.g. ENG). */
   teamKey?: string;
+  /**
+   * Tracker projects this ticket is on.
+   * Linear and AbleTime have at most one. GitHub can have several.
+   */
+  projects?: Array<{ id?: string; name?: string }>;
   createdAt?: string;
   updatedAt?: string;
 }

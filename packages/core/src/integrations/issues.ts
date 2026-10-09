@@ -14,7 +14,7 @@ import {
   searchAbleTimeTasks,
   toAbleTimeIssueInfo,
 } from './abletime.js';
-import { listGitHubIssueCommentsSince } from './github-issues.js';
+import { githubProjectsOnIssue, listGitHubIssueCommentsSince } from './github-issues.js';
 import {
   formatGitHubSearchUpdatedSince,
   issueMatchesUpdatedSince,
@@ -96,32 +96,43 @@ export async function listGitHubIssues(
 ): Promise<IssueInfo[]> {
   const limit = Math.max(1, Math.min(1000, opts?.limit ?? 200));
   const slug = await resolveGithubRepoSlug(repoPath);
-  const args = [
-    'issue',
-    'list',
-    '--json',
-    'number,title,url,labels,assignees,createdAt,updatedAt',
-    '--limit',
-    String(limit),
-    '--state',
-    'open',
-  ];
-  const query = opts?.query?.trim() ?? '';
-  const assignee = opts?.assignee?.trim() ?? '';
-  const key = assignee.toLowerCase();
-  const searchParts: string[] = [];
-  if (query) searchParts.push(query);
-  if (opts?.updatedSince) {
-    searchParts.push(`updated:>=${formatGitHubSearchUpdatedSince(opts.updatedSince)}`);
+  const plainFields = 'number,title,url,labels,assignees,createdAt,updatedAt';
+  const buildArgs = (jsonFields: string) => {
+    const args = [
+      'issue',
+      'list',
+      '--json',
+      jsonFields,
+      '--limit',
+      String(limit),
+      '--state',
+      'open',
+    ];
+    const query = opts?.query?.trim() ?? '';
+    const assignee = opts?.assignee?.trim() ?? '';
+    const key = assignee.toLowerCase();
+    const searchParts: string[] = [];
+    if (query) searchParts.push(query);
+    if (opts?.updatedSince) {
+      searchParts.push(`updated:>=${formatGitHubSearchUpdatedSince(opts.updatedSince)}`);
+    }
+    if (key === 'unassigned' || key === 'none' || key === 'null') {
+      searchParts.push('no:assignee');
+    } else if (key && key !== 'all' && key !== '*') {
+      args.push('--assignee', key === 'me' || key === '@me' ? '@me' : assignee);
+    }
+    if (searchParts.length) args.push('--search', searchParts.join(' '));
+    if (slug) args.push('--repo', slug);
+    return args;
+  };
+  let { stdout, exitCode, stderr } = await gh(
+    buildArgs(`${plainFields},projectItems`),
+    repoPath,
+    { reject: false },
+  );
+  if (exitCode !== 0 && /project|scope|unknown json field/i.test(`${stderr}\n${stdout}`)) {
+    ({ stdout, exitCode, stderr } = await gh(buildArgs(plainFields), repoPath, { reject: false }));
   }
-  if (key === 'unassigned' || key === 'none' || key === 'null') {
-    searchParts.push('no:assignee');
-  } else if (key && key !== 'all' && key !== '*') {
-    args.push('--assignee', key === 'me' || key === '@me' ? '@me' : assignee);
-  }
-  if (searchParts.length) args.push('--search', searchParts.join(' '));
-  if (slug) args.push('--repo', slug);
-  const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
   if (exitCode !== 0 || !stdout.trim()) return [];
 
   let parsed: unknown;
@@ -153,6 +164,10 @@ export async function listGitHubIssues(
       .filter(Boolean);
     const createdAt = item.createdAt?.trim() || undefined;
     const updatedAt = item.updatedAt?.trim() || undefined;
+    const record = raw as Record<string, unknown>;
+    const projects = githubProjectsOnIssue(record);
+    const readProjects =
+      'projectItems' in record || 'projects' in record || 'projectItemsV2' in record;
     return {
       id: Number.isFinite(number) ? `gh-${number}` : identifier,
       identifier,
@@ -162,6 +177,7 @@ export async function listGitHubIssues(
       provider: 'github' as const,
       assignee: assignees[0],
       assignees,
+      ...(readProjects ? { projects } : {}),
       ...(createdAt ? { createdAt } : {}),
       ...(updatedAt ? { updatedAt } : {}),
     };

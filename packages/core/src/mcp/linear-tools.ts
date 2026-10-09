@@ -8,6 +8,7 @@ import {
   getLinearIssue,
   listLinearCommentsSince,
   listLinearIssuesFiltered,
+  listLinearProjects,
   listLinearTeams,
   updateLinearIssue,
 } from '../integrations/linear.js';
@@ -41,6 +42,7 @@ const prioritySchema = z
 /** Account Linear tools registered when Settings → Issues Linear is connected. */
 export const LINEAR_MCP_TOOL_NAMES = [
   'linear_list_teams',
+  'linear_list_projects',
   'linear_search_issues',
   'linear_get_issue',
   'linear_download_attachment',
@@ -61,6 +63,19 @@ export function registerLinearTools(server: McpServer): void {
     async () => {
       try {
         return text(await listLinearTeams());
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.tool(
+    'linear_list_projects',
+    'List Linear projects (id, name, slugId). Pass a name or id as project on linear_update_issue. linear_get_issue and search rows also include the project a ticket is on.',
+    {},
+    async () => {
+      try {
+        return text({ projects: await listLinearProjects() });
       } catch (err) {
         return fail(err);
       }
@@ -129,7 +144,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_get_issue',
-    'Get a Linear issue by uuid or identifier (ENG-123): description, comments, relations, parent/children, attachments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. To save a file, call linear_download_attachment with the attachment id or url (writes `.context/attachments/`; do not dump bytes into the tool result).',
+    'Get a Linear issue by uuid or identifier (ENG-123): description, comments, relations, parent/children, project, attachments. Default crushes redundant comments and huge pasted bodies (SmartCrusher-style; small unique tickets pass through). Pass include=full for the uncompressed vendor payload. To save a file, call linear_download_attachment with the attachment id or url (writes `.context/attachments/`; do not dump bytes into the tool result).',
     { id: z.string(), include: mcpIssueIncludeSchema },
     async ({ id, include }) => {
       try {

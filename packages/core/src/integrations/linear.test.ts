@@ -14,6 +14,7 @@ import {
   listLinearAssignedIssues,
   listLinearCommentsSince,
   listLinearIssuesFiltered,
+  listLinearProjects,
   listLinearTeams,
   normalizeLinearRelationType,
   resolveLinearCycle,
@@ -787,16 +788,43 @@ describe('Linear GraphQL writes', () => {
       assignee: 'Matt',
       teamKey: 'ENG',
       cycle: { name: 'Week 34', number: 34, isActive: true },
+      projects: [{ id: 'proj-1', name: 'Ship' }],
     });
     const query = String(
       JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}')).query ?? '',
     );
     expect(query).toContain('SideboardAssignedIssues');
+    expect(query).toContain('project { id name }');
     expect(query).toMatch(/labels\s*\(\s*first:\s*10\s*\)/);
     expect(query).not.toMatch(/states\s*(\(|\{)/);
     expect(query).not.toContain('description');
     expect(query).not.toMatch(/comments\s*\(/);
     expect(query).not.toMatch(/relations\s*\(/);
+  });
+
+  it('lists Linear projects across pages', async () => {
+    await withAuth();
+    mockGraphql((query, variables) => {
+      expect(query).toContain('SideboardProjects');
+      if (variables.after === 'cursor-1') {
+        return {
+          projects: {
+            nodes: [{ id: 'proj-2', name: 'Infra', slugId: 'infra' }],
+            pageInfo: { hasNextPage: false },
+          },
+        };
+      }
+      return {
+        projects: {
+          nodes: [{ id: 'proj-1', name: 'Ship', slugId: 'ship' }],
+          pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
+        },
+      };
+    });
+    await expect(listLinearProjects()).resolves.toEqual([
+      { id: 'proj-1', name: 'Ship', slugId: 'ship' },
+      { id: 'proj-2', name: 'Infra', slugId: 'infra' },
+    ]);
   });
 
   it('lists unassigned issues and searches beyond the current viewer', async () => {
