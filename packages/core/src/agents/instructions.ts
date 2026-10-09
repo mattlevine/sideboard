@@ -228,17 +228,17 @@ export function formatIssueToolsDirective(opts: {
   ];
   if (opts.linear) {
     lines.push(
-      '- Linear: `linear_search_issues` (assignee=me; pass `updatedSince` for “any updates since yesterday?” — new tickets, edits, and comments), `linear_get_issue` (comments, attachments; pass `include=full` if crush.truncated), `linear_download_attachment` (saves to `.context/attachments/`), `linear_comment`, `linear_update_issue` (state, cycle, labels, project, parent, relations), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
+      '- Linear: `linear_search_issues` (assignee=me; pass `updatedSince` for “any updates since yesterday?” — new tickets, edits, and comments; rows include the project), `linear_list_projects` (id, name, slug — use on update), `linear_get_issue` (comments, project, attachments; pass `include=full` if crush.truncated), `linear_download_attachment` (saves to `.context/attachments/`), `linear_comment`, `linear_update_issue` (state, cycle, labels, project, parent, relations), `linear_create_issue` (pass `parent` for spin-offs; call `linear_list_teams` first). Scope errors: reconnect Linear in Settings → Issues.',
     );
   }
   if (github) {
     lines.push(
-      '- GitHub: `github_search_issues` (assignee=me; `updatedSince` for inbox updates + comments), `github_get_issue` (comments, attachments; pass `include=full` if crush.truncated), `github_download_attachment` (saves to `.context/attachments/`), `github_comment`, `github_update_issue` (state open|closed, labels, project, parent, relations), `github_create_issue` (pass `parent` for spin-offs). Uses Account `gh`.',
+      '- GitHub: `github_search_issues` (assignee=me; `updatedSince` for inbox updates + comments; rows include projects when `gh` can read them), `github_list_projects` (titles for update), `github_get_issue` (comments, projects, attachments; pass `include=full` if crush.truncated; `projectsError` means run `gh auth refresh -s read:project`), `github_download_attachment` (saves to `.context/attachments/`), `github_comment`, `github_update_issue` (state open|closed, labels, project, parent, relations), `github_create_issue` (pass `parent` for spin-offs). Uses Account `gh`.',
     );
   }
   if (opts.abletime) {
     lines.push(
-      '- AbleTime: `abletime_list_tasks` / `abletime_search_tasks` (`updatedSince` for inbox updates + comments), `abletime_get_task` (comments, attachments; pass `include=full` if crush.truncated), `abletime_download_attachment` (saves to `.context/attachments/`), `abletime_comment`, `abletime_update_task` (state, labels, project, parent, relations), `abletime_create_task` (pass `parent` for spin-offs; `abletime_list_projects` if needed).',
+      '- AbleTime: `abletime_list_tasks` / `abletime_search_tasks` (`updatedSince` for inbox updates + comments; rows include the project), `abletime_get_task` (comments, project, attachments; pass `include=full` if crush.truncated), `abletime_download_attachment` (saves to `.context/attachments/`), `abletime_comment`, `abletime_update_task` (state, labels, project, parent, relations), `abletime_create_task` (pass `parent` for spin-offs; `abletime_list_projects` if needed).',
     );
   }
   lines.push(

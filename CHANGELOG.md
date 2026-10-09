@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Issue providers read projects: Linear and GitHub can list projects, and Linear, GitHub, and AbleTime include the project on get and search. GitHub needs `gh auth refresh -s read:project` when the token cannot read Projects.
+
 ## [0.1.280] - 2026-10-08
 
 ### Fixed

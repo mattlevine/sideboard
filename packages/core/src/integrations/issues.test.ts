@@ -311,6 +311,38 @@ describe('integrations / issues', () => {
     expect(gh).toHaveBeenCalled();
   });
 
+  it('lists GitHub issues when the project field query fails for a non-scope error', async () => {
+    const { issues } = await load();
+    const calls: string[][] = [];
+    vi.spyOn(await import('../git/run.js'), 'gh').mockImplementation(async (args) => {
+      calls.push([...args]);
+      const json = String(args[args.indexOf('--json') + 1] ?? '');
+      if (json.includes('projectItems')) {
+        return { stdout: '', stderr: 'HTTP 502: Bad Gateway', exitCode: 1 };
+      }
+      return {
+        stdout: JSON.stringify([
+          {
+            number: 12,
+            title: 'Fix login',
+            url: 'https://github.com/acme/app/issues/12',
+            labels: [],
+            assignees: [],
+          },
+        ]),
+        stderr: '',
+        exitCode: 0,
+      };
+    });
+    const listed = await issues.listGitHubIssues('/tmp/repo');
+    expect(listed.map((issue) => issue.identifier)).toEqual(['#12']);
+    expect(listed[0]?.projects).toBeUndefined();
+    const lists = calls.filter((args) => args[0] === 'issue' && args[1] === 'list');
+    expect(lists).toHaveLength(2);
+    expect(lists[0]?.[lists[0].indexOf('--json') + 1]).toContain('projectItems');
+    expect(lists[1]?.[lists[1].indexOf('--json') + 1]).not.toContain('projectItems');
+  });
+
   it('passes GitHub updatedSince into search and loads comments for those issues', async () => {
     const { issues } = await load();
     const gh = vi.spyOn(await import('../git/run.js'), 'gh').mockImplementation(async (args) => {

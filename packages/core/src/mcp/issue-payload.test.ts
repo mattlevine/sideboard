@@ -111,6 +111,8 @@ describe('formatAbleTimeTaskPayload', () => {
       description: 'Follow up',
       state: 'open',
       assignee: { name: 'Ada' },
+      projectId: 'p1',
+      project: { id: 'p1', name: 'Acme' },
     };
     const out = formatAbleTimeTaskPayload(task);
     expect(out).toMatchObject({
@@ -119,6 +121,7 @@ describe('formatAbleTimeTaskPayload', () => {
       assignee: 'Ada',
       description: 'Follow up',
       state: 'open',
+      projects: [{ id: 'p1', name: 'Acme' }],
     });
     expect('crush' in out && out.crush).toBeFalsy();
   });

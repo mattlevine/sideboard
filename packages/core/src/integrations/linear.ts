@@ -27,6 +27,7 @@ const LIST_ISSUE_FIELDS = `
   team { id key }
   labels(first: 10) { nodes { name } }
   cycle { id name number startsAt endsAt completedAt }
+  project { id name }
 `;
 
 const ISSUE_REF_FIELDS = `
@@ -218,9 +219,10 @@ query SideboardTeamLabels($id: String!, $first: Int!, $after: String) {
 `;
 
 const PROJECTS_QUERY = `
-query SideboardProjects($first: Int!, $filter: ProjectFilter) {
-  projects(first: $first, filter: $filter) {
+query SideboardProjects($first: Int!, $filter: ProjectFilter, $after: String) {
+  projects(first: $first, filter: $filter, after: $after) {
     nodes { id name slugId }
+    pageInfo { hasNextPage endCursor }
   }
 }
 `;
@@ -666,6 +668,7 @@ function toIssueInfo(issue: LinearIssue): IssueInfo {
     assignees: issue.assignee?.name ? [issue.assignee.name] : undefined,
     cycle: issue.cycle ?? null,
     teamKey: issue.team?.key || undefined,
+    ...(issue.project ? { projects: [issue.project] } : {}),
     ...(issue.createdAt ? { createdAt: issue.createdAt } : {}),
     ...(issue.updatedAt ? { updatedAt: issue.updatedAt } : {}),
   };
@@ -910,24 +913,33 @@ async function listLinearLabels(
   return listLinearWorkspaceLabels(opts);
 }
 
-async function listLinearProjects(
+async function queryLinearProjects(
   filter: Record<string, unknown> | undefined,
   opts?: { apiKey?: string | null },
 ): Promise<LinearProjectRef[]> {
-  const json = await linearGraphql<{
-    projects?: { nodes?: Array<{ id?: string; name?: string; slugId?: string }> };
-  }>(PROJECTS_QUERY, { first: 50, filter: filter ?? {} }, opts);
-  return (json.projects?.nodes ?? []).flatMap((node) => {
-    const id = String(node.id ?? '').trim();
-    if (!id) return [];
-    return [
-      {
-        id,
-        name: String(node.name ?? ''),
-        ...(node.slugId ? { slugId: String(node.slugId) } : {}),
-      },
-    ];
-  });
+  const out: LinearProjectRef[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < 4; page++) {
+    const json = await linearGraphql<{
+      projects?: {
+        nodes?: Array<{ id?: string; name?: string; slugId?: string }>;
+        pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+      };
+    }>(PROJECTS_QUERY, { first: 50, filter: filter ?? {}, ...(after ? { after } : {}) }, opts);
+    for (const node of json.projects?.nodes ?? []) {
+      const id = String(node.id ?? '').trim();
+      if (!id) continue;
+      out.push({ id, name: String(node.name ?? ''), ...(node.slugId ? { slugId: String(node.slugId) } : {}) });
+    }
+    const pageInfo = json.projects?.pageInfo;
+    if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
+    after = pageInfo.endCursor;
+  }
+  return out;
+}
+
+export function listLinearProjects(opts?: { apiKey?: string | null }): Promise<LinearProjectRef[]> {
+  return queryLinearProjects(undefined, opts);
 }
 
 async function resolveLinearProjectId(
@@ -937,12 +949,12 @@ async function resolveLinearProjectId(
   if (isLinearNoneToken(project)) return null;
   const s = (project ?? '').trim();
   const filter = UUID_RE.test(s) ? { id: { eq: s } } : { name: { eqIgnoreCase: s } };
-  const matched = await listLinearProjects(filter, opts);
+  const matched = await queryLinearProjects(filter, opts);
   try {
     return resolveLinearProject(matched, s);
   } catch {
     if (UUID_RE.test(s)) return s;
-    const listed = await listLinearProjects(undefined, opts);
+    const listed = await queryLinearProjects(undefined, opts);
     return resolveLinearProject(listed, s);
   }
 }

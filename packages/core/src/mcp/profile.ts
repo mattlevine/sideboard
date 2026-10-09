@@ -97,6 +97,7 @@ export const WORKTREE_MCP_TOOLS = [
 /** GitHub Issues via Account `gh` — always registered on worktree + orchestration. */
 export const WORKTREE_GITHUB_MCP_TOOLS = [
   'github_search_issues',
+  'github_list_projects',
   'github_get_issue',
   'github_download_attachment',
   'github_comment',
@@ -107,6 +108,7 @@ export const WORKTREE_GITHUB_MCP_TOOLS = [
 /** Account Linear tools registered when Linear is connected. */
 export const WORKTREE_LINEAR_MCP_TOOLS = [
   'linear_list_teams',
+  'linear_list_projects',
   'linear_search_issues',
   'linear_get_issue',
   'linear_download_attachment',
