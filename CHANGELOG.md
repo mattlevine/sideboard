@@ -15,7 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Stopping a chat keeps the reason on the thread.
+- Stopping a chat keeps the reason on the thread. A routine stop does not replace the last reply or show as an error.
+- The phone sidebar updates when only workspace tags change, and an in-progress reply stays ahead of queued prompts.
+- An orchestrator steer interrupts the live turn the same way the workspace composer does.
 - Opening a phone chat refreshes it, and the phone sidebar uses the same project and worktree labels as the desktop.
 - A removed project stays off the board until one of its chats is restored.
 

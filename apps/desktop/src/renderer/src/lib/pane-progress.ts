@@ -23,12 +23,30 @@ export function isSetupLastError(err: string | null | undefined): boolean {
   return /^Setup (exited|failed)\b/i.test(err?.trim() ?? '');
 }
 
+/** Same canned labels as `isRoutineStopNote` in core `stop-reason.ts`. */
+export function isRoutineStopNote(err: string | null | undefined): boolean {
+  const text = err?.trim() ?? '';
+  return (
+    text === 'Stopped' ||
+    text === 'Stopped by the user' ||
+    text === 'Stopped (queue cleared)' ||
+    text === 'Stopped to send the next prompt'
+  );
+}
+
+/** Setup leftovers and routine stops stay off the home-card preview. */
+export function hidesLastErrorPreview(err: string | null | undefined, messageCount: number): boolean {
+  if (isRoutineStopNote(err)) return true;
+  return isSetupLastError(err) && messageCount === 0;
+}
+
 /** True once the first user turn (or a create failure) is visible in chat. */
 export function threadHasVisibleFirstTurn(thread: FirstTurnThread): boolean {
   const err = thread.lastError?.trim();
   const showError =
     Boolean(err) &&
     !isSetupLastError(err) &&
+    !isRoutineStopNote(err) &&
     thread.status !== 'running' &&
     thread.status !== 'queued';
   return (

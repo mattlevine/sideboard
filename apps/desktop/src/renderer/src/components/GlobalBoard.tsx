@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { MessagePart, OrchestratorRuntime, Thread, Workspace } from '@sideboard-ai/core';
-import { isSetupLastError } from '../lib/pane-progress';
+import { hidesLastErrorPreview } from '../lib/pane-progress';
 import {
   normalizeWorktreePath, workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
@@ -81,7 +81,7 @@ function previewForThread(
     t.lastError &&
     t.status !== 'running' &&
     t.status !== 'queued' &&
-    !(isSetupLastError(t.lastError) && t.messages.length === 0)
+    !hidesLastErrorPreview(t.lastError, t.messages.length)
   ) {
     return { text: t.lastError, markdown: false };
   }

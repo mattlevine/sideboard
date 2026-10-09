@@ -55,9 +55,10 @@ export function listPhoneMessages(thread: Thread): PhoneTranscriptMessage[] {
     if (!text) continue;
     out.push({ role: message.role, text });
   }
+  const live = withLiveTail(thread, out);
   for (const prompt of thread.queue) {
     const text = clip(phoneVisibleText('user', prompt), MESSAGE_LIMIT);
-    if (text) out.push({ role: 'user', text });
+    if (text) live.push({ role: 'user', text });
   }
-  return withLiveTail(thread, out.slice(-TRANSCRIPT_LIMIT));
+  return live.slice(-TRANSCRIPT_LIMIT);
 }

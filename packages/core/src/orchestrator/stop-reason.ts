@@ -21,6 +21,17 @@ export function resolveStopReason(opts?: {
   return 'Stopped (queue cleared)';
 }
 
+/** Canned stop labels. A real failure note (context limit, and so on) is not one of these. */
+export function isRoutineStopNote(err: string | null | undefined): boolean {
+  const text = err?.trim() ?? '';
+  return (
+    text === 'Stopped' ||
+    text === 'Stopped by the user' ||
+    text === 'Stopped (queue cleared)' ||
+    text === 'Stopped to send the next prompt'
+  );
+}
+
 /**
  * Keep a stop note across the turn unwind. A later status write with no
  * new reason must not wipe the one `stop()` just stored.

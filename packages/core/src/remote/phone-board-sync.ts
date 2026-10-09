@@ -22,7 +22,7 @@ export function phoneBoardKey(sidebar: PhoneSidebar): string {
   const projects = sidebar.projects
     .map((project) => {
       const trees = project.worktrees
-        .map((tree) => `${tree.label}\t${tree.chats.map(chatKey).join('\n')}`)
+        .map((tree) => `${tree.label}\t${(tree.tags ?? []).join(',')}\t${tree.chats.map(chatKey).join('\n')}`)
         .join('\n');
       return `${project.path}\t${project.name}\n${trees}`;
     })

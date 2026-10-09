@@ -2,7 +2,7 @@ import { useEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { latestVisibleMessageText } from '@sideboard/home-board';
 import type { Thread } from '@sideboard-ai/core';
-import { isSetupLastError } from '../lib/pane-progress';
+import { hidesLastErrorPreview } from '../lib/pane-progress';
 import {
   followThreadPrMeta,
   sidebarPrHasKnownStatus,
@@ -88,7 +88,7 @@ function previewSnippet(thread: Thread): string {
     thread.lastError?.trim() &&
     thread.status !== 'running' &&
     thread.status !== 'queued' &&
-    !(isSetupLastError(thread.lastError) && thread.messages.length === 0)
+    !hidesLastErrorPreview(thread.lastError, thread.messages.length)
   ) {
     return thread.lastError.trim();
   }
