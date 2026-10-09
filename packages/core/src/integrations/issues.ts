@@ -125,13 +125,16 @@ export async function listGitHubIssues(
     if (slug) args.push('--repo', slug);
     return args;
   };
-  let { stdout, exitCode, stderr } = await gh(
+  let { stdout, exitCode } = await gh(
     buildArgs(`${plainFields},projectItems`),
     repoPath,
     { reject: false },
   );
-  if (exitCode !== 0 && /project|scope|unknown json field/i.test(`${stderr}\n${stdout}`)) {
-    ({ stdout, exitCode, stderr } = await gh(buildArgs(plainFields), repoPath, { reject: false }));
+  // Missing scope, unknown fields, GraphQL complexity, timeouts, and 502s on
+  // projectItems used to still list issues. Retry without that field so a
+  // project-read failure does not look like an empty inbox.
+  if (exitCode !== 0) {
+    ({ stdout, exitCode } = await gh(buildArgs(plainFields), repoPath, { reject: false }));
   }
   if (exitCode !== 0 || !stdout.trim()) return [];
 
