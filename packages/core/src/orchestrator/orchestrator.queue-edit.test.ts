@@ -280,6 +280,36 @@ describe('Orchestrator queued-message editing', () => {
     expect(readThread(thread.id)?.queue).toHaveLength(2);
   });
 
+  it('resumes an HTTP/2 CANCEL drop a few times, then parks', async () => {
+    const thread = seedThread([]);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      maybeEnqueueCrashContinue: (
+        id: string,
+        opts: { detail: string; assistantText: string; partsCount: number },
+      ) => void;
+      crashContinued: Map<string, number>;
+    };
+    const detail =
+      'Cursor run failed (run-e4fe7b4d-45e0-40c0-a377-c30428439dfc): [unknown] [canceled] http/2 stream closed with error code CANCEL (0x8)';
+    for (let i = 0; i < 3; i++) {
+      internal.maybeEnqueueCrashContinue(thread.id, {
+        detail,
+        assistantText: 'Still reading the ZDR paths.',
+        partsCount: 12,
+      });
+    }
+    expect(readThread(thread.id)?.queue).toHaveLength(3);
+    expect(readThread(thread.id)?.queue[0]).toMatch(/Continue from where you left off/);
+    expect(internal.crashContinued.get(thread.id)).toBe(3);
+    internal.maybeEnqueueCrashContinue(thread.id, {
+      detail,
+      assistantText: 'Still reading the ZDR paths.',
+      partsCount: 12,
+    });
+    expect(readThread(thread.id)?.queue).toHaveLength(3);
+  });
+
   it('does not auto-continue auth or quota failures', async () => {
     const thread = seedThread([]);
     const orch = new Orchestrator();

@@ -204,6 +204,12 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     ).toBe(true);
     expect(looksLikeCursorStreamCutOff('[unknown] Premature close')).toBe(true);
     expect(looksLikeCursorStreamCutOff('[unavailable] Error')).toBe(true);
+    expect(
+      looksLikeCursorStreamCutOff(
+        '[unknown] [canceled] http/2 stream closed with error code CANCEL (0x8)',
+      ),
+    ).toBe(true);
+    expect(looksLikeCursorStreamCutOff('user canceled the turn')).toBe(false);
     expect(looksLikeCursorStreamCutOff('Model unavailable')).toBe(false);
     expect(looksLikeCursorStreamCutOff('[feature_unavailable] This feature is not available')).toBe(
       false,
@@ -586,6 +592,14 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
         detail: 'Cursor run failed (run-909cc631-8dae-4e59-ab13-3ab8a13945c4): [unavailable] Error',
         assistantText: 'I will fix those types before committing.',
         partsCount: 3,
+      }),
+    ).toBe(true);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail:
+          'Cursor run failed (run-e4fe7b4d-45e0-40c0-a377-c30428439dfc): [unknown] [canceled] http/2 stream closed with error code CANCEL (0x8)',
+        assistantText: 'The nits are the tool copy. I will trace those paths.',
+        partsCount: 34,
       }),
     ).toBe(true);
     expect(humanizeAgentFailDetail('[unknown] Premature close')).toMatch(/retry the turn/i);

@@ -8,7 +8,7 @@ import { deriveTaskState, type TurnResult } from './task-state.js';
 import { lastActivityAtForWait } from '../mcp/wait-for-turn.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, nextCrashContinueCount, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
 import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
@@ -404,10 +404,10 @@ export class Orchestrator {
   /** Timers for orchestration session-quota auto-resume. */
   private readonly quotaResumeTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /**
-   * Threads that already got a crash-continue turn. Cleared on a successful
-   * finish or a user send so a later crash can recover again.
+   * Crash-continue count per thread. Cleared on a successful finish or a user
+   * send. Stream cutoffs may resume more than once; other crashes once.
    */
-  private readonly crashContinued = new Set<string>();
+  private readonly crashContinued = new Map<string, number>();
   /** Auto-continues after a worktree turn ended while a detached job still runs. */
   private readonly jobContinueCount = new Map<string, number>();
   private readonly jobContinueNudged = new Set<string>();
@@ -966,7 +966,6 @@ export class Orchestrator {
     threadId: string,
     opts: { detail: string; assistantText: string; partsCount: number },
   ): void {
-    if (this.crashContinued.has(threadId)) return;
     if (this.haltDrain.has(threadId)) return;
     if (
       !shouldFeedErrorBackToAgent({
@@ -977,9 +976,11 @@ export class Orchestrator {
     ) {
       return;
     }
+    const resumeCount = nextCrashContinueCount(opts.detail, this.crashContinued.get(threadId) ?? 0);
+    if (resumeCount == null) return;
     const thread = readThread(threadId);
     if (!thread || thread.status === 'archived') return;
-    this.crashContinued.add(threadId);
+    this.crashContinued.set(threadId, resumeCount);
     const prompt = formatAgentErrorContinuePrompt(opts.detail);
     const next = prependQueuedItem(thread.queue, thread.queueAttachments, prompt);
     updateThread(threadId, next);

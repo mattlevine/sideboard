@@ -1,3 +1,12 @@
+import { looksLikeCursorStreamCutOff } from './cursor-stream-cutoff.js';
+
+export {
+  CURSOR_STREAM_CUTOFF_CONTINUE_LIMIT,
+  cursorStreamCutOffContinueLimit,
+  looksLikeCursorStreamCutOff,
+  nextCrashContinueCount,
+} from './cursor-stream-cutoff.js';
+
 /**
  * Turn opaque SDK / Node failure values into a short string for UI lastError.
  * Prefer message/code fields; never return the useless "[object Object]".
@@ -322,15 +331,6 @@ export function looksLikeInvalidAgentSession(text: string): boolean {
     /\bagent\b.{0,120}\bnot found\b/.test(lower) ||
     /\brun\b.{0,80}\bnot found for agent\b/.test(lower)
   );
-}
-
-/**
- * Cursor dropped the model stream (`NGHTTP2_INTERNAL_ERROR`, `Premature close`,
- * or `[unavailable] Error`). Same class as `Connection stalled`. Not a generic
- * 500, "model unavailable", or a feature gate.
- */
-export function looksLikeCursorStreamCutOff(text: string): boolean {
-  return /nghttp2|premature close|\[unavailable\]\s+error\b/i.test(text.trim());
 }
 
 /**
