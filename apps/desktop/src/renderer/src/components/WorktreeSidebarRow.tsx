@@ -230,134 +230,134 @@ export function WorktreeSidebarRow({
           onMarkUnread(primary);
         }}
       >
-        {archiving ? (
-          <span className="thread-archive-spinner" aria-hidden />
-        ) : (
-          <ThreadStatusIcon
-            status={worktreeBoardStatus(group)}
-            dirty={dirty}
-            dirtyLoaded={loaded}
-            additions={stat?.additions ?? 0}
-            deletions={stat?.deletions ?? 0}
-            unread={unread}
-            blockedReason={block?.reason}
-          />
-        )}
-        <div className="thread-item-body">
-          <div className="thread-title" title={parentTitle}>
-            <span className="thread-title-text">{parentTitle}</span>
-            {primary.cowboy ? <span className="board-badge">cowboy</span> : null}
-            {orch ? null : (
-              <WorktreePrBadges
-                group={group}
-                viewerLogin={githubLogin}
-                reviewLabel={reviewLabel}
-              />
-            )}
-          </div>
-          {block ? (
-            <div className="thread-blocked-reason" title={block.reason}>
-              {block.reason}
+        <div className="worktree-parent-main">
+          {archiving ? (
+            <span className="thread-archive-spinner" aria-hidden />
+          ) : (
+            <ThreadStatusIcon
+              status={worktreeBoardStatus(group)}
+              dirty={dirty}
+              dirtyLoaded={loaded}
+              additions={stat?.additions ?? 0}
+              deletions={stat?.deletions ?? 0}
+              unread={unread}
+              blockedReason={block?.reason}
+            />
+          )}
+          <div className="thread-item-body">
+            <div className="thread-title" title={parentTitle}>
+              <span className="thread-title-text">{parentTitle}</span>
+              {primary.cowboy ? <span className="board-badge">cowboy</span> : null}
+              {orch ? null : (
+                <WorktreePrBadges
+                  group={group}
+                  viewerLogin={githubLogin}
+                  reviewLabel={reviewLabel}
+                />
+              )}
             </div>
-          ) : null}
-          {showMetaRow ? (
-            <div className="worktree-agents-row">
-              {metaLine ? <div className="thread-meta">{metaLine}</div> : null}
-              {showChevron ? (
+            {block ? (
+              <div className="thread-blocked-reason" title={block.reason}>
+                {block.reason}
+              </div>
+            ) : null}
+            {showMetaRow ? (
+              <div className="worktree-agents-row">
+                {metaLine ? <div className="thread-meta">{metaLine}</div> : null}
+                {showChevron ? (
+                  <button
+                    type="button"
+                    className={`worktree-expand${expanded ? ' is-open' : ''}`}
+                    aria-label={expanded ? 'Collapse agents' : 'Expand agents'}
+                    aria-expanded={expanded}
+                    onClick={toggleExpanded}
+                  >
+                    {expanded ? '▾' : '▸'}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          {!archiving && (showWorktreeActions || onSetTags) ? (
+            <div
+              className={`worktree-row-actions${addOpen || tagEditorOpen ? ' is-open' : ''}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {onSetTags && !orch ? (
+                <button
+                  ref={tagBtnRef}
+                  type="button"
+                  className="icon-btn worktree-tag-btn"
+                  aria-label={`Edit tags for ${parentTitle}`}
+                  aria-expanded={tagEditorOpen}
+                  title="Tags"
+                  onClick={() => {
+                    setGitCardOpen(false);
+                    setTagEditorOpen((open) => !open);
+                  }}
+                >
+                  <TagIcon />
+                </button>
+              ) : null}
+              {showArchive ? (
                 <button
                   type="button"
-                  className={`worktree-expand${expanded ? ' is-open' : ''}`}
-                  aria-label={expanded ? 'Collapse agents' : 'Expand agents'}
-                  aria-expanded={expanded}
-                  onClick={toggleExpanded}
+                  className="icon-btn worktree-remove-btn"
+                  aria-label={`Archive ${parentTitle}`}
+                  title="Archive"
+                  onClick={requestArchive}
                 >
-                  {expanded ? '▾' : '▸'}
+                  ▤
+                </button>
+              ) : null}
+              {showAddAgent ? (
+                <button
+                  type="button"
+                  className="icon-btn worktree-add-agent-btn"
+                  aria-label={`Add agent to ${parentTitle}`}
+                  title="Add agent"
+                  onClick={() => void openAddAgent()}
+                >
+                  +
+                </button>
+              ) : null}
+              {showNewOrch ? (
+                <button
+                  type="button"
+                  className="icon-btn worktree-add-agent-btn"
+                  aria-label="Add agent"
+                  title="Add agent"
+                  onClick={() => onNewOrchestration?.()}
+                >
+                  +
                 </button>
               ) : null}
             </div>
           ) : null}
+          {!archiving && !orch ? (
+            <WorktreeEditCard
+              open={gitCardOpen}
+              anchorRef={rowRef}
+              thread={primary}
+              group={group}
+              label={parentTitle}
+              dirty={dirty}
+              loaded={loaded}
+              additions={stat?.additions ?? 0}
+              deletions={stat?.deletions ?? 0}
+              onOpen={() => {
+                setGitCardOpen(false);
+                onSelect(primary.id, false);
+              }}
+              onOpenPr={() => {
+                setGitCardOpen(false);
+                onOpenPr?.(primary.id);
+              }}
+              onKeepOpen={setGitCardOpen}
+            />
+          ) : null}
         </div>
-        {!archiving && (showWorktreeActions || onSetTags) ? (
-          <div
-            className={`worktree-row-actions${addOpen || tagEditorOpen ? ' is-open' : ''}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {onSetTags && !orch ? (
-              <button
-                ref={tagBtnRef}
-                type="button"
-                className="icon-btn worktree-tag-btn"
-                aria-label={`Edit tags for ${parentTitle}`}
-                aria-expanded={tagEditorOpen}
-                title="Tags"
-                onClick={() => {
-                  setGitCardOpen(false);
-                  setTagEditorOpen((open) => !open);
-                }}
-              >
-                <TagIcon />
-              </button>
-            ) : null}
-            {showArchive ? (
-              <button
-                type="button"
-                className="icon-btn worktree-remove-btn"
-                aria-label={`Archive ${parentTitle}`}
-                title="Archive"
-                onClick={requestArchive}
-              >
-                ▤
-              </button>
-            ) : null}
-            {showAddAgent ? (
-              <button
-                type="button"
-                className="icon-btn worktree-add-agent-btn"
-                aria-label={`Add agent to ${parentTitle}`}
-                title="Add agent"
-                onClick={() => void openAddAgent()}
-              >
-                +
-              </button>
-            ) : null}
-            {showNewOrch ? (
-              <button
-                type="button"
-                className="icon-btn worktree-add-agent-btn"
-                aria-label="Add agent"
-                title="Add agent"
-                onClick={() => onNewOrchestration?.()}
-              >
-                +
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {!archiving && !orch ? (
-          <WorktreeEditCard
-            open={gitCardOpen}
-            anchorRef={rowRef}
-            thread={primary}
-            group={group}
-            label={parentTitle}
-            dirty={dirty}
-            loaded={loaded}
-            additions={stat?.additions ?? 0}
-            deletions={stat?.deletions ?? 0}
-            onOpen={() => {
-              setGitCardOpen(false);
-              onSelect(primary.id, false);
-            }}
-            onOpenPr={() => {
-              setGitCardOpen(false);
-              onOpenPr?.(primary.id);
-            }}
-            onKeepOpen={setGitCardOpen}
-          />
-        ) : null}
-      </div>
-      {!orch ? (
-        <>
+        {!orch ? (
           <WorkspaceTags
             tags={workspaceTagsFromGroup(group)}
             onFilter={onFilterTag}
@@ -370,16 +370,16 @@ export function WorktreeSidebarRow({
                 : undefined
             }
           />
-          {onSetTags ? (
-            <WorkspaceTagEditor
-              open={tagEditorOpen}
-              tags={workspaceTagsFromGroup(group)}
-              anchorRef={tagBtnRef}
-              onChange={onSetTags}
-              onClose={() => setTagEditorOpen(false)}
-            />
-          ) : null}
-        </>
+        ) : null}
+      </div>
+      {!orch && onSetTags ? (
+        <WorkspaceTagEditor
+          open={tagEditorOpen}
+          tags={workspaceTagsFromGroup(group)}
+          anchorRef={tagBtnRef}
+          onChange={onSetTags}
+          onClose={() => setTagEditorOpen(false)}
+        />
       ) : null}
       <AgentOptionsPicker
         open={addOpen}
