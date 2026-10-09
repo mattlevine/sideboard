@@ -399,7 +399,7 @@ async function main(): Promise<void> {
     .argument('<path>', 'git repo path')
     .action(async (path) => {
       const repoPath = await resolveRepoRoot(path);
-      orch.removeWorkspace(repoPath);
+      await orch.removeWorkspace(repoPath);
       console.log(chalk.yellow(`Removed ${repoPath}`));
     });
 

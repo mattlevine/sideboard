@@ -37,6 +37,8 @@ describe('optional services', () => {
     expect(text).toMatch(/`sentry-cli`/);
     expect(text).toMatch(/PostHog: no first-class CLI/);
     expect(text).toMatch(/Do not add a Vercel MCP/);
+    expect(text).toMatch(/needsAuth/);
+    expect(text).toMatch(/native CLI/);
     expect(text).toMatch(/Do not ask the user to install a vendor MCP/);
     expect(text).toMatch(/Install CLI from Settings → Connectors/);
     expect(text).toMatch(/Never put raw `--json`/);
@@ -45,6 +47,9 @@ describe('optional services', () => {
     expect(text).toMatch(/Write output to `\.context\/cli\/`/);
     expect(text).toMatch(/not `\.context\/attachments\/`/);
     expect(text).toMatch(/stop_job/);
+    expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
+      /needsAuth/,
+    );
     expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
       /Do not add vendor MCPs/,
     );

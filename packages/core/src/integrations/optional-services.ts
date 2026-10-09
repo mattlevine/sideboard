@@ -329,6 +329,9 @@ export function formatOptionalServicesDirective(
     }
   }
   lines.push(
+    'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP. Check the native CLI (or the HTTP API when there is no CLI) — the token is already in this process.',
+  );
+  lines.push(
     'If a CLI is missing, say so or use the HTTP API with the same token. The user can Install CLI from Settings → Connectors. Do not ask the user to install a vendor MCP.',
   );
   lines.push(
@@ -357,5 +360,5 @@ export function formatOptionalServicesReminder(
   integrations: IntegrationsSettings,
 ): string | null {
   if (connectedOptionalServices(integrations).length === 0) return null;
-  return 'Settings → Connectors: official CLIs / PostHog HTTP with injected env. Write output to `.context/cli/` (not `.context/attachments/`) and read a slice — never dump raw --json/--expand into the tool result (any agent). stop_job if a fetch hangs. Do not add vendor MCPs.';
+  return 'Settings → Connectors: official CLIs / PostHog HTTP with injected env. If a connector MCP needsAuth or is unauthorized, check the native CLI or HTTP API instead of signing in. Write output to `.context/cli/` (not `.context/attachments/`) and read a slice — never dump raw --json/--expand into the tool result (any agent). stop_job if a fetch hangs. Do not add vendor MCPs.';
 }

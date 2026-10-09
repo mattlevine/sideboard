@@ -112,6 +112,7 @@ export * from './threads/cowboy.js';
 export * from './threads/chat-tabs.js';
 export * from './threads/chat-link.js';
 export * from './threads/fork-worktree.js';
+export * from './threads/workspace-tags.js';
 export * from './threads/stack-layers.js';
 export * from './threads/adopt.js';
 export {

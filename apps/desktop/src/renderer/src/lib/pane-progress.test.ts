@@ -34,6 +34,12 @@ describe('threadHasVisibleFirstTurn', () => {
     ).toBe(true);
   });
 
+  it('ignores a routine stop on an empty thread', () => {
+    expect(
+      threadHasVisibleFirstTurn(thread({ id: 't1', status: 'stopped', lastError: 'Stopped by the user' })),
+    ).toBe(false);
+  });
+
   it('is true when the first prompt failed', () => {
     expect(
       threadHasVisibleFirstTurn(thread({ id: 't1', lastError: 'First prompt failed' })),

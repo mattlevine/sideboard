@@ -2094,8 +2094,10 @@ export function suggestSlug(source: string): string {
 export {
   branchDisplayLabel,
   isPlaceholderBranch,
+  normalizeWorkspaceTags,
   normalizeWorktreePath,
   threadDisplayLabel,
+  workspaceTagsFromGroup,
   worktreeDisplayLabel,
   worktreeDisplayLabelForGroup,
   worktreeNameFromPath,

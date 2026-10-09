@@ -612,20 +612,14 @@ export function App() {
   useEffect(() => {
     void window.sideboard.getRepoPath().then(async (p) => {
       const path = typeof p === 'string' ? p.trim() : '';
-      // Packaged apps often report cwd `/` — never treat that as a project.
       if (!path || path === '/') {
         setRepoPath('');
-        if (path === '/') {
-          void window.sideboard.setRepoPath('').catch(() => undefined);
-        }
+        if (path === '/') void window.sideboard.setRepoPath('').catch(() => undefined);
         return;
       }
-      setRepoPath(path);
-      try {
-        await window.sideboard.addWorkspace(path);
-      } catch {
-        // ignore
-      }
+      const listed = await window.sideboard.listWorkspaces().catch(() => [] as Workspace[]);
+      const key = path.replace(/\/+$/, '');
+      setRepoPath(listed.some((ws) => ws.path.replace(/\/+$/, '') === key) ? path : '');
     });
     void refresh();
     const pendingLive = { current: [] as LivePaintOp[] };
@@ -1096,7 +1090,8 @@ export function App() {
   }
 
   async function removeWorkspaceAndRefresh(path: string) {
-    const inWorkspace = threads.filter((t) => t.repoPath === path);
+    const key = path.replace(/\/+$/, '');
+    const inWorkspace = threads.filter((t) => t.repoPath.replace(/\/+$/, '') === key);
     const name = path.split('/').filter(Boolean).pop() || path;
     setPaneProgress({
       mode: 'remove',
@@ -1126,7 +1121,7 @@ export function App() {
           : new Error(String(failed.reason));
       }
       await window.sideboard.removeWorkspace(path);
-      if (repoPath === path || path === '/') {
+      if (repoPath.replace(/\/+$/, '') === key || path === '/') {
         setRepoPath('');
         try {
           await window.sideboard.setRepoPath('');
@@ -1246,6 +1241,11 @@ export function App() {
               if (markChatUnread(thread)) setUnreadEpoch((n) => n + 1);
             }}
             onRenameChat={(id, title) => void window.sideboard.renameThread(id, title).then(() => refresh())}
+            onSetWorkspaceTags={(id, tags) => {
+              void window.sideboard.setWorkspaceTags(id, tags).then(() => refresh()).catch((err: unknown) => {
+                window.alert(err instanceof Error ? err.message : String(err));
+              });
+            }}
             onCloseChat={(chat) => void archiveThreadsAndRefresh([chat.id], { title: chat.title?.trim() || 'Untitled', removesWorktree: false })}
             onAddAgent={(fromThreadId, opts) => {
               void window.sideboard

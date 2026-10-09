@@ -14,7 +14,9 @@ import {
   resolveRepoRoot,
   worktreeSlugForTicket,
 } from '../git/worktree.js';
+import { normalizeWorkspaceTags } from '../git/worktree-labels.js';
 import { findLiveThreadForCreate } from '../board/home-board.js';
+import { applyWorkspaceTags } from './workspace-tags.js';
 import { copyConfiguredFiles } from '../hook/conductor.js';
 import {
   getIssueSource,
@@ -29,7 +31,7 @@ import {
   updateThread,
   writeThread,
 } from '../store/thread-store.js';
-import { ensureWorkspace } from '../store/workspaces.js';
+import { ensureWorkspace, isRemovedWorkspace } from '../store/workspaces.js';
 import type {
   AgentKind,
   CreateThreadInput,
@@ -76,14 +78,19 @@ function reuseLiveThread(
     liveThreadsForCreate(),
   );
   if (!existing) return undefined;
-  const thread = readThread(existing.id) ?? existing;
-  if (!input.attachments?.length) return thread;
-  return updateThread(thread.id, {
-    attachments: persistCreateAttachments(thread.worktreePath, [
-      ...thread.attachments,
-      ...input.attachments,
-    ]),
-  });
+  let thread = readThread(existing.id) ?? existing;
+  if (input.attachments?.length) {
+    thread = updateThread(thread.id, {
+      attachments: persistCreateAttachments(thread.worktreePath, [
+        ...thread.attachments,
+        ...input.attachments,
+      ]),
+    });
+  }
+  if (normalizeWorkspaceTags(input.tags).length > 0) {
+    thread = applyWorkspaceTags(thread.id, input.tags, 'add');
+  }
+  return thread;
 }
 
 export async function createThread(
@@ -94,6 +101,7 @@ export async function createThread(
   if (!existsSync(repoPath)) {
     throw new Error(`Repo not found: ${repoPath}`);
   }
+  if (isRemovedWorkspace(repoPath)) throw new Error(`Project was removed: ${repoPath}`);
 
   const reused = reuseLiveThread(input, repoPath, {
     sourceType: input.sourceType,
@@ -158,6 +166,7 @@ export async function createThread(
       parentThreadId: input.parentThreadId ?? null,
       status: 'idle',
       cowboy: true,
+      tags: input.tags,
     });
     writeThread(thread);
     await ensureWorkspace(repoPath);
@@ -301,6 +310,7 @@ export async function createThread(
     prAuthorLogin,
     prLabels,
     prIsDraft,
+    tags: input.tags,
   });
   writeThread(thread);
   await ensureWorkspace(repoPath);

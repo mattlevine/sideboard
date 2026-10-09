@@ -1,6 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import {
+  normalizeWorkspaceTags,
   threadDisplayLabel,
+  workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
 import {
@@ -59,6 +61,7 @@ interface Props {
   onRenameChat?: (id: string, title: string) => void;
   onCloseChat?: (thread: Thread) => void;
   onAddAgent?: (fromThreadId: string, opts: NewChatTabOptions) => void;
+  onSetWorkspaceTags?: (threadId: string, tags: string[]) => void;
 }
 
 function repoName(repoPath: string): string {
@@ -100,10 +103,12 @@ export function Sidebar({
   onRenameChat,
   onCloseChat,
   onAddAgent,
+  onSetWorkspaceTags,
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [removeConfirm, setRemoveConfirm] = useState<{
     path: string;
     name: string;
@@ -139,7 +144,7 @@ export function Sidebar({
       if (!isProjectPath(t.repoPath)) continue;
       if (q) {
         const hay =
-          `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repoName(t.repoPath)}`.toLowerCase();
+          `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repoName(t.repoPath)} ${(t.tags ?? []).join(' ')}`.toLowerCase();
         if (!hay.includes(q)) continue;
       }
       const list = map.get(t.repoPath) ?? [];
@@ -171,11 +176,26 @@ export function Sidebar({
     return byRepo.map(([path, repoThreads]) => ({
       path,
       repoThreads,
-      groups: groupHomeBoardWorktrees(repoThreads, worktreeSort).filter((group) =>
-        worktreeMatchesOwnership(group, ownership, githubLogin ?? ''),
-      ),
+      groups: groupHomeBoardWorktrees(repoThreads, worktreeSort).filter((group) => {
+        if (!worktreeMatchesOwnership(group, ownership, githubLogin ?? '')) return false;
+        if (!tagFilter) return true;
+        const want = tagFilter.toLowerCase();
+        return workspaceTagsFromGroup(group).some((tag) => tag.toLowerCase() === want);
+      }),
     }));
-  }, [byRepo, worktreeSort, ownership, githubLogin]);
+  }, [byRepo, worktreeSort, ownership, githubLogin, tagFilter]);
+
+  const visibleRepos = tagFilter
+    ? groupedByRepo.filter((row) => row.groups.length > 0)
+    : groupedByRepo;
+
+  const tagChoices = useMemo(() => {
+    const tags = normalizeWorkspaceTags(threads.flatMap((thread) => thread.tags ?? []));
+    if (!tagFilter) return tags;
+    const want = tagFilter.toLowerCase();
+    if (tags.some((tag) => tag.toLowerCase() === want)) return tags;
+    return [tagFilter, ...tags];
+  }, [threads, tagFilter]);
 
   const orchPrimary = pickWorktreeChat(
     globalThreads,
@@ -302,7 +322,7 @@ export function Sidebar({
             <button
               type="button"
               className={`icon-btn${filterOpen ? ' active' : ''}`}
-              title="Filter projects"
+              title="Filter projects and tags"
               onClick={() => setFilterOpen((v) => !v)}
             >
               <span className="filter-glyph" aria-hidden />
@@ -325,7 +345,7 @@ export function Sidebar({
             <button
               type="button"
               className="icon-btn"
-              title="Add workspace"
+              title="Add project"
               onClick={onPickRepo}
             >
               <span className="folder-plus-glyph" aria-hidden />
@@ -339,15 +359,49 @@ export function Sidebar({
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter projects & workspaces…"
+              placeholder="Filter projects and tags…"
             />
+            {tagChoices.length > 0 ? (
+              <select
+                className="sidebar-tag-select"
+                aria-label="Filter by tag"
+                value={tagFilter ?? ''}
+                onChange={(e) => setTagFilter(e.target.value || null)}
+              >
+                <option value="">All tags</option>
+                {tagChoices.map((tag) => (
+                  <option key={tag.toLowerCase()} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </div>
         )}
         </div>
 
+        {tagFilter && !filterOpen ? (
+          <div className="sidebar-tag-filter">
+            <span>Tagged</span>
+            <button
+              type="button"
+              className="workspace-tag"
+              aria-label={`Clear tag ${tagFilter}`}
+              onClick={() => setTagFilter(null)}
+            >
+              <span className="workspace-tag-label">{tagFilter}</span>
+              <span className="workspace-tag-remove" aria-hidden>
+                ×
+              </span>
+            </button>
+          </div>
+        ) : null}
+
         <div className="sidebar-projects">
-        {groupedByRepo.length === 0 && <div className="empty">No workspaces yet</div>}
-        {groupedByRepo.map(({ path, repoThreads, groups }) => (
+        {visibleRepos.length === 0 && (
+          <div className="empty">{q || tagFilter ? 'Nothing matched' : 'No projects yet'}</div>
+        )}
+        {visibleRepos.map(({ path, repoThreads, groups }) => (
           <div key={path} className="workspace-group">
             <div className="workspace-header">
               <div className="workspace-label">
@@ -391,7 +445,7 @@ export function Sidebar({
             </div>
             {repoThreads.length === 0 && (
               <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                No worktrees
+                No workspaces
               </div>
             )}
             {groups.map((group) => {
@@ -426,6 +480,12 @@ export function Sidebar({
                     onRenameChat={onRenameChat}
                     onCloseChat={onCloseChat}
                     onAddAgent={onAddAgent}
+                    onSetTags={
+                      onSetWorkspaceTags
+                        ? (tags) => onSetWorkspaceTags(primary.id, tags)
+                        : undefined
+                    }
+                    onFilterTag={setTagFilter}
                     showArchive={Boolean(onArchive)}
                     onRequestArchive={(chats) =>
                       runArchive(

@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.281] - 2026-10-09
+
 ### Added
 
+- Workspaces can share short tags so checkouts from one task stay recognizable. The sidebar filter is one tag at a time. Worktree agents and the orchestrator can set the labels.
+- When a connector MCP is listed but unauthenticated, agents check that service’s native CLI (or the HTTP API when there is no CLI). The token is already in the process.
 - Issue providers read projects: Linear and GitHub can list projects, and Linear, GitHub, and AbleTime include the project on get and search. GitHub needs `gh auth refresh -s read:project` when the token cannot read Projects.
+
+### Fixed
+
+- Stopping a chat keeps the reason on the thread. A routine stop does not replace the last reply or show as an error.
+- The phone sidebar updates when only workspace tags change, and an in-progress reply stays ahead of queued prompts.
+- An orchestrator steer interrupts the live turn the same way the workspace composer does.
+- Opening a phone chat refreshes it, and the phone sidebar uses the same project and worktree labels as the desktop.
+- A removed project stays off the board until one of its chats is restored.
 
 ## [0.1.280] - 2026-10-08
 

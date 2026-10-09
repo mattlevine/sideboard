@@ -24,6 +24,30 @@ describe('phone board sync', () => {
     vi.useRealTimers();
   });
 
+  it('changes when the account agent defaults change', () => {
+    const base = board();
+    const changed = board({
+      defaults: {
+        orchestration: { agent: 'cursor', model: null, effort: 'high', fast: false },
+        worktree: { agent: 'codex', model: 'gpt-5', effort: 'low', fast: false },
+      },
+    });
+    expect(phoneBoardKey(changed)).not.toBe(phoneBoardKey(base));
+    expect(phoneBoardKey(changed)).toBe(phoneBoardKey(changed));
+  });
+
+  it('changes when only workspace tags change', () => {
+    const tree = { label: 'matt/feature', chats: [chat()] };
+    const project = { name: 'sideboard', path: '/tmp/sideboard', worktrees: [tree] };
+    const tagged = {
+      ...project,
+      worktrees: [{ ...tree, tags: ['phone'] }],
+    };
+    expect(phoneBoardKey(board({ projects: [tagged] }))).not.toBe(
+      phoneBoardKey(board({ projects: [project] })),
+    );
+  });
+
   it('ignores bookkeeping timestamps when the list itself is unchanged', () => {
     const first = board({ orchestration: [chat({ updatedAt: 't0' })] });
     const second = board({ orchestration: [chat({ updatedAt: 't1' })] });

@@ -113,6 +113,7 @@ const api: IpcApi = {
   forkChatTab: (input) => ipcRenderer.invoke('forkChatTab', input),
   forkThreadWorktree: (input) => ipcRenderer.invoke('forkThreadWorktree', input),
   renameThread: (threadRef, title) => ipcRenderer.invoke('renameThread', threadRef, title),
+  setWorkspaceTags: (threadRef, tags) => ipcRenderer.invoke('setWorkspaceTags', threadRef, tags),
   setAttachments: (threadRef, attachments) =>
     ipcRenderer.invoke('setAttachments', threadRef, attachments),
   attachComposerFiles: (threadRef, opts) =>

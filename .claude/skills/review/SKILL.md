@@ -166,6 +166,8 @@ Git-button expansion and PR-goal detection (`expandCanonicalGitRequest`, `mentio
 
 Taken soccer nicknames: `takenSlugsFromThread` / `collectTakenTeamSlugs` must record the bare team token from ticket-prefixed dirs (`eng-12-ajax` → `ajax`).
 
+`phoneBoardKey` must hash every field the phone list renders, including workspace tags. A phone transcript puts the in-progress reply before queued prompts. Routine stop labels stay on `lastError` but must not replace the last-reply preview or render as a red error (`isRoutineStopNote`).
+
 Detached jobs: `listRunningDetachedJobs` uses `jobTreeAlive` (leftover children count). `processGroupAlive` must reject `pgid <= 1` — `kill(-1)` signals every process.
 
 Connector CLIs (Vercel, Supabase, `sentry-cli`) and PostHog HTTP: never stream raw `--json` / `--expand` / huge dumps into a tool result — this applies to Claude, Cursor, Codex, and OpenCode. Write dumps to `.context/cli/` (worktree scratch; not `.context/attachments/`). Cursor’s crash looks like the packaged SDK dumped into chat (`file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then `importas e from"@bufbuild/protobuf"`). Detached jobs may be stopped (`stop_job`) when hung; do not require agents to wait forever on a buffering CLI.

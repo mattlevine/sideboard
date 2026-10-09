@@ -38,6 +38,9 @@ import { AgentKindIcon } from './agent-icons';
 import { ProjectGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
 import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
+import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
+import { agentStatus, composerPlaceholder, desktopStatus, historyCount, onMac } from './labels';
+import { openedTranscript } from './transcript';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
@@ -58,7 +61,7 @@ type PhoneChat = {
   updatedAt: string;
   agent?: string;
 };
-type PhoneWorktree = { label: string; chats: PhoneChat[] };
+type PhoneWorktree = { label: string; chats: PhoneChat[]; tags?: string[] };
 type PhoneProject = { name: string; path: string; worktrees: PhoneWorktree[] };
 type PhonePlace =
   | { kind: 'orchestration' }
@@ -72,7 +75,7 @@ type PhoneHistoryChat = {
   agent: string;
 };
 type PhoneControl =
-  | { op: 'sidebar'; orchestration: PhoneChat[]; projects: PhoneProject[] }
+  | { op: 'sidebar'; orchestration: PhoneChat[]; projects: PhoneProject[]; defaults?: PhoneAccountDefaults }
   | {
       op: 'history';
       chats: PhoneHistoryChat[];
@@ -85,7 +88,7 @@ type PhoneControl =
   | {
       op: 'opened';
       chat: PhoneChat;
-      messages: Array<{ role: 'user' | 'agent'; text: string }>;
+      messages: Array<{ role: 'user' | 'agent'; text: string; streaming?: boolean }>;
       place?: PhonePlace;
       options?: ComposerOptions;
     }
@@ -178,28 +181,6 @@ function decodePhoneReply(text: string): PhoneControl | null {
   } catch {
     return null;
   }
-}
-
-function historyCount(total: number, filtered: boolean): string {
-  if (filtered) return total === 1 ? '1 match' : `${total} matches`;
-  return total === 1 ? '1 archived chat' : `${total} archived chats`;
-}
-
-function agentStatus(status: string): string {
-  if (status === 'running' || status === 'queued') return 'Running';
-  if (status === 'error' || status === 'broken') return 'Error';
-  if (status === 'stopped') return 'Stopped';
-  return 'Idle';
-}
-
-function statusLabel(desktop: Desktop): string {
-  if (desktop.expired) return 'Pair again';
-  if (desktop.online === null) return 'Checking…';
-  return desktop.online ? 'Online' : 'Offline';
-}
-
-function onMac(screen: Screen): boolean {
-  return screen === 'chat' || screen === 'agents' || screen === 'history';
 }
 
 /** Same mark as the desktop sidebar: outline cube over a blue offset plate. */
@@ -471,6 +452,7 @@ export default function App() {
   const pendingImageRef = useRef<string | null>(null);
   const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
+  const accountDefaultsRef = useRef<PhoneAccountDefaults | null>(null);
   const urlRef = useRef(url);
   const pendingTokenRef = useRef<string | null>(null);
   const screenRef = useRef(screen);
@@ -487,6 +469,7 @@ export default function App() {
   const transcriptScrollRef = useRef<ScrollView>(null);
   const pinTranscriptRef = useRef(true);
   const attachedRef = useRef(false);
+  const checkingHostsRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
   const linkRef = useRef<RelayLink | null>(null);
@@ -500,9 +483,16 @@ export default function App() {
     linkRef.current = createRelayLink({
       url: () => urlRef.current.trim() || DEFAULT_URL,
       onMessage: (raw) => onMessageRef.current(raw),
-      onError: (message) => setError(message),
+      onError: (message) => {
+        if (screenRef.current === 'desktops' && checkingHostsRef.current) return;
+        setError(message);
+      },
       onClose: () => {
         attachedRef.current = false;
+        if (screenRef.current === 'desktops' && checkingHostsRef.current) {
+          checkingHostsRef.current = false;
+          setError('Could not reach the relay.');
+        }
       },
       attached: () => attachedRef.current,
       inChat: () => onMac(screenRef.current),
@@ -594,6 +584,9 @@ export default function App() {
         : [];
       setOrchestration(nextOrchestration);
       setProjects(nextProjects);
+      if (control.defaults?.orchestration && control.defaults.worktree) {
+        accountDefaultsRef.current = control.defaults;
+      }
       const ids = new Set(nextOrchestration.map((row) => row.id));
       for (const project of nextProjects) {
         for (const worktree of project.worktrees ?? []) {
@@ -654,16 +647,10 @@ export default function App() {
       setActiveChatId(chat.id);
       screenRef.current = 'chat';
       setScreen('chat');
-      setTranscripts((prev) => {
-        if (prev[chat.id]?.working) return prev;
-        const bubbles = (Array.isArray(control.messages) ? control.messages : []).map((message, index) => ({
-          id: `${chat.id}-${index}`,
-          role: message.role,
-          text: message.text,
-        }));
-        const working = chat.status === 'running' || chat.status === 'queued';
-        return { ...prev, [chat.id]: { bubbles, questions: null, working, activity: '' } };
-      });
+      setTranscripts((prev) => ({
+        ...prev,
+        [chat.id]: openedTranscript(chat.id, control.messages, chat.status),
+      }));
       return;
     }
     if (control.op === 'stream' && control.chatId) {
@@ -800,6 +787,8 @@ export default function App() {
     const msg = parseServer(raw);
     if (!msg) return;
     if (msg.type === 'hosts') {
+      checkingHostsRef.current = false;
+      if (screenRef.current === 'desktops') setError(null);
       setDesktops((prev) => {
         const next = prev.map((row) => {
           const listed = msg.hosts.find((host) => host.sessionToken === row.sessionToken);
@@ -872,6 +861,7 @@ export default function App() {
     }
     if (msg.type === 'host_offline') {
       attachedRef.current = false;
+      if (screenRef.current === 'desktops' && checkingHostsRef.current) return;
       const token = pendingTokenRef.current;
       if (token) patchDesktop(token, { online: false });
       setError(
@@ -912,6 +902,7 @@ export default function App() {
     }
     screenRef.current = 'desktops';
     setScreen('desktops');
+    checkingHostsRef.current = true;
     link.send({ type: 'list_hosts', sessionTokens: tokens });
   }
 
@@ -1073,11 +1064,12 @@ export default function App() {
     setCreateDraft('');
     setCreateFiles([]);
     setCreateLinks([]);
-    setCreateOptions(DEFAULT_OPTIONS);
+    const options = composerOptionsFor(mode.kind, accountDefaultsRef.current);
+    setCreateOptions(options);
     setSources(null);
     setCreateMode(mode);
     if (mode.kind === 'project') requestSources(mode.repoPath);
-    requestModels(DEFAULT_OPTIONS.agent);
+    requestModels(options.agent);
   }
 
   function submitCreate(body: {
@@ -1234,6 +1226,7 @@ export default function App() {
       const rows = saved.map((row) => ({ ...row, online: null, expired: false }));
       setDesktops(rows);
       setScreen('desktops');
+      checkingHostsRef.current = true;
       link.send({ type: 'list_hosts', sessionTokens: rows.map((row) => row.sessionToken) });
     });
     return () => {
@@ -1301,7 +1294,7 @@ export default function App() {
                       desktop.online ? styles.dotOn : desktop.expired ? styles.dotWarn : styles.dotOff,
                     ]}
                   />
-                  <Text style={styles.status}>{statusLabel(desktop)}</Text>
+                  <Text style={styles.status}>{desktopStatus(desktop)}</Text>
                 </View>
               </Pressable>
               <Pressable style={styles.ghost} onPress={() => forget(desktop.deviceId)}>
@@ -1310,7 +1303,7 @@ export default function App() {
             </View>
           ))}
         </ScrollView>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error && !checkingHostsRef.current ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.footer}>
           <Pressable style={styles.primary} onPress={() => { setError(null); setScreen('pair'); }}>
             <Text style={styles.primaryText}>Pair another Mac</Text>
@@ -1409,7 +1402,7 @@ export default function App() {
           <View style={[styles.sectionRow, styles.projectsHead]}>
             <Text style={styles.sectionLabel}>Projects</Text>
           </View>
-          {projects.length === 0 ? <Text style={styles.meta}>No workspaces yet</Text> : null}
+          {projects.length === 0 ? <Text style={styles.meta}>No projects yet</Text> : null}
           {projects.map((project) => (
             <View key={project.path} style={styles.projectBlock}>
               <View style={styles.sectionRow}>
@@ -1426,7 +1419,7 @@ export default function App() {
                   onPress={() => openCreate({ kind: 'project', repoPath: project.path, name: project.name })}
                 />
               </View>
-              {project.worktrees.length === 0 ? <Text style={styles.meta}>No worktrees</Text> : null}
+              {project.worktrees.length === 0 ? <Text style={styles.meta}>No workspaces</Text> : null}
               {project.worktrees.map((worktree) => {
                 const anchor = worktree.chats[0];
                 return (
@@ -1447,6 +1440,9 @@ export default function App() {
                         />
                       ) : null}
                     </View>
+                    {worktree.tags?.length ? (
+                      <View style={styles.tagRow}>{worktree.tags.map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}</View>
+                    ) : null}
                     {worktree.chats.map((chat) => (
                       <ChatRow
                         key={chat.id}
@@ -1657,7 +1653,10 @@ export default function App() {
         {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
         <ComposerDock
           draft={draft}
-          placeholder={`Message ${activeChat?.title || 'this agent'}`}
+          placeholder={composerPlaceholder({
+            orchestration: orchestration.some((row) => row.id === activeChatId),
+            status: activeChat?.status,
+          })}
           onChangeDraft={setDraft}
           onSend={() => sendText(draft)}
           files={files}

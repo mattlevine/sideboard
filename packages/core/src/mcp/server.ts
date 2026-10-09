@@ -25,6 +25,8 @@ import {
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
+import { applyWorkspaceTags, workspaceTagTargetRef } from '../threads/workspace-tags.js';
+import { createOrchChildThread } from './create-orch-child.js';
 import { agentBlockFields, chatBlockedSuffix, stampAskUserBlock, stampNotifyBlock, stampPlanBlock } from '../orchestrator/agent-block.js';
 import { notifyOrchestrator, resolveNotifyCallerThread } from '../orchestrator/notify-orchestrator.js';
 import {
@@ -88,145 +90,7 @@ import {
   type BoardOwnershipFilter,
 } from '../board/home-board.js';
 import { getGitHubStatus } from '../integrations/github.js';
-import type { AgentKind, ThreadAttachment } from '../types/thread.js';
-import {
-  orchCreateThreadAgentNote,
-  resolveOrchCreateThreadOptions,
-  type ResolveNewThreadOptions,
-} from './create-thread-agent.js';
-
-const MAX_ORCH_THREADS = 5;
-/** Hard ceiling so a stuck create_workspace cannot pin the MCP stdio server forever. */
-const CREATE_THREAD_TIMEOUT_MS = 90_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
-    }, ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err: unknown) => {
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
-}
-
-type CreateOrchThreadArgs = {
-  sourceType: 'branch' | 'pr' | 'ticket';
-  sourceRef: string;
-  repoPath: string;
-  title?: string;
-  agent?: AgentKind;
-  model?: string | null;
-  cowboy?: boolean;
-  parentChatId?: string;
-  parentThreadId?: string;
-  attachments?: ThreadAttachment[];
-};
-
-async function createOrchChildThread(
-  orch: ReturnType<typeof getOrchestrator>,
-  args: CreateOrchThreadArgs,
-  resolveNewThreadOptions: ResolveNewThreadOptions,
-): Promise<
-  | { ok: true; text: string }
-  | { ok: false; text: string }
-> {
-  const envParentId = process.env.SIDEBOARD_ORCHESTRATOR_THREAD_ID?.trim() || '';
-  let parentId = args.parentChatId?.trim() || args.parentThreadId?.trim() || '';
-  let parent = parentId ? orch.getThread(parentId) : null;
-  let parentCorrectedFrom: string | undefined;
-
-  if (envParentId) {
-    const envParent = orch.getThread(envParentId);
-    if (envParent) {
-      if (parentId && parentId !== envParentId) parentCorrectedFrom = parentId;
-      else if (!parentId) parentCorrectedFrom = undefined;
-      parentId = envParentId;
-      parent = envParent;
-    }
-  }
-  if (parentId && !parent) {
-    parentCorrectedFrom = parentId;
-    parentId = '';
-    parent = null;
-  }
-  if (parentId) {
-    const children = orch
-      .getThreads(false)
-      .filter((t) => t.parentThreadId === parentId);
-    if (children.length >= MAX_ORCH_THREADS) {
-      return {
-        ok: false,
-        text: `Thread-creation cap (${MAX_ORCH_THREADS}) reached for this orchestration session`,
-      };
-    }
-  }
-  const opts = resolveOrchCreateThreadOptions({
-    requestedAgent: args.agent,
-    requestedModel: args.model,
-    parentAgent: parent?.agent,
-    resolveNewThreadOptions,
-  });
-  const agentNote = orchCreateThreadAgentNote(opts);
-  try {
-    const priorIds = new Set(orch.getThreads(false).map((t) => t.id));
-    const thread = await withTimeout(
-      orch.createThread({
-        sourceType: args.sourceType,
-        sourceRef: args.sourceRef,
-        agent: opts.agent,
-        model: opts.model,
-        effort: opts.effort,
-        fast: opts.fast,
-        repoPath: args.repoPath,
-        title: args.title,
-        parentThreadId: parentId || null,
-        cowboy: args.cowboy || undefined,
-        attachments: args.attachments,
-      }),
-      CREATE_THREAD_TIMEOUT_MS,
-      'create_workspace',
-    );
-    const alreadyStarted = priorIds.has(thread.id);
-    const parentNote = parentCorrectedFrom
-      ? parentId
-        ? `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; nested under ${parentId}`
-        : `Ignored unknown/stale parentThreadId ${parentCorrectedFrom}; created without parent`
-      : undefined;
-    return {
-      ok: true,
-      text: JSON.stringify({
-        id: thread.id,
-        title: thread.title,
-        branchName: thread.branchName,
-        worktreePath: thread.worktreePath,
-        agent: thread.agent,
-        model: thread.model,
-        status: thread.status,
-        cowboy: Boolean(thread.cowboy),
-        link: `sideboard://chat/${thread.id}`,
-        parentChatId: thread.parentThreadId,
-        parentThreadId: thread.parentThreadId,
-        chats: workspaceAgentChatSummaries(thread.worktreePath),
-        ...(alreadyStarted ? { alreadyStarted: true } : {}),
-        ...(opts.coercedFrom ? { agentCoercedFrom: opts.coercedFrom } : {}),
-        ...(opts.ignoredAgent ? { agentIgnored: opts.ignoredAgent } : {}),
-        ...(agentNote ? { note: agentNote } : {}),
-        ...(parentCorrectedFrom ? { parentCorrectedFrom, parentNote } : {}),
-      }),
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, text: `create_workspace failed: ${message}` };
-  }
-}
+import type { ThreadAttachment } from '../types/thread.js';
 
 function previewHint(preview: DevPreview): string {
   return preview === 'window'
@@ -367,7 +231,10 @@ export async function startMcpServer(): Promise<void> {
     'list_board',
     'Home Kanban of workspaces (New, Draft, Review, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
     {
-      query: z.string().optional().describe('Case-insensitive token search across title, id, labels, repo'),
+      query: z
+        .string()
+        .optional()
+        .describe('Case-insensitive token search across title, id, labels, workspace tags, repo'),
       repoPath: z
         .string()
         .optional()
@@ -447,6 +314,7 @@ export async function startMcpServer(): Promise<void> {
         sessionId: t.sessionId,
         parentChatId: t.parentThreadId,
         parentThreadId: t.parentThreadId,
+        tags: t.tags ?? [],
         children: childThreadRefs(t.id, orch.getThreads(false)),
         queueLength: t.queue.length,
         messageCount: t.messages.length,
@@ -918,6 +786,48 @@ export async function startMcpServer(): Promise<void> {
 
   registerScheduleTools(server);
 
+  server.tool(
+    'set_workspace_tags',
+    worktreeProfile
+      ? 'Update tags on this workspace (the checkout you are in). Omit ref to use this chat. mode=replace (default), add, or remove. Short labels — the same ones the orchestrator used for this task. You cannot retag a different checkout.'
+      : 'Label a project workspace so related checkouts stay recognizable in the sidebar and on the phone. Pass any chat id on that workspace. Use the same tags on every workspace from one task. mode=replace is the default; add and remove change the set. create_workspace tags= sets them at create time. Not for orchestration chats.',
+    {
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          worktreeProfile
+            ? 'Omit for this chat. Another chat id only if it is on this same checkout.'
+            : 'Chat id on the workspace to label.',
+        ),
+      tags: z
+        .union([z.string(), z.array(z.string())])
+        .describe('Labels to set. A string may be comma-separated.'),
+      mode: z.enum(['replace', 'add', 'remove']).optional(),
+    },
+    async ({ ref, tags, mode }) => {
+      try {
+        const callerId = process.env[SIDEBOARD_THREAD_ID_ENV]?.trim() || '';
+        const target = workspaceTagTargetRef({
+          ownWorktreeOnly: worktreeProfile,
+          caller: callerId ? orch.getThread(callerId) : null,
+          requestedRef: ref,
+          find: (id) => orch.getThread(id),
+        });
+        const thread = applyWorkspaceTags(target, tags, mode ?? 'replace');
+        return mcpJson({
+          id: thread.id,
+          worktreePath: thread.worktreePath,
+          tags: thread.tags ?? [],
+          chats: workspaceAgentChatSummaries(thread.worktreePath),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return mcpJson({ ok: false, message }, true);
+      }
+    },
+  );
+
   if (!worktreeProfile) {
   registerConnectedIssueVendorTools(server);
   const { getCaffeinateHold, setCaffeinateHold } = await import(
@@ -965,7 +875,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'create_workspace',
-    `Create a workspace (isolated git checkout + first chat) from branch, pr, or ticket. A ticket, PR, or named branch has one checkout — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. That is not one agent: chats lists every agent on that checkout. Add another with fork_chat; send_to_chat only the chat that should do this job. Creating from the default branch still opens a new isolated checkout. Pass repoPath from list_projects. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentChatId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Omit agent/model — Sideboard applies ${accountDefaultsHint}. Do not pass your own agent or agent=cursor; those are ignored. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy).`,
+    `Create a workspace (isolated git checkout + first chat) from branch, pr, or ticket. A ticket, PR, or named branch has one checkout — if one already matches, returns it (alreadyStarted=true) instead of a second checkout. That is not one agent: chats lists every agent on that checkout. Add another with fork_chat; send_to_chat only the chat that should do this job. Creating from the default branch still opens a new isolated checkout. Pass repoPath from list_projects. cowboy=true uses the project folder on the default branch (no isolated worktree; land is commit+push). From an orchestration chat, omit parentChatId (Sideboard binds the child to this chat) or pass the exact id from the turn reminder — never invent a uuid. Omit agent/model — Sideboard applies ${accountDefaultsHint}. Do not pass your own agent or agent=cursor; those are ignored. Setup (settings.toml, .cursor/worktrees.json, or script/setup) runs in the background in parallel with the first turn (skipped for cowboy). Pass the same tags on every workspace you open for one task (short labels such as "phone-sync") so they still match in the sidebar the next day. Reusing a checkout adds those tags.`,
     {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
@@ -1000,6 +910,12 @@ export async function startMcpServer(): Promise<void> {
         .string()
         .optional()
         .describe('Legacy alias for parentChatId.'),
+      tags: z
+        .union([z.string(), z.array(z.string())])
+        .optional()
+        .describe(
+          'Short labels for this workspace (or a comma-separated string). Use the same tags on every checkout for one task. Added when the checkout already exists.',
+        ),
     },
     async (args) => {
       const result = await createOrchChildThread(orch, args, resolveNewThreadOptions);
@@ -1020,8 +936,14 @@ export async function startMcpServer(): Promise<void> {
         .describe('Ticket identifier (ENG-12), PR number (44), or branch name from list_board'),
       repoPath: z.string().describe('Project path from list_projects / list_board'),
       title: z.string().optional(),
+      tags: z
+        .union([z.string(), z.array(z.string())])
+        .optional()
+        .describe(
+          'Short labels for this workspace. Same tags on every checkout for one task. Added when the checkout already exists.',
+        ),
     },
-    async ({ kind, ref, repoPath, title }) => {
+    async ({ kind, ref, repoPath, title, tags }) => {
       const root = await resolveRepoRoot(repoPath);
       const existing = findLiveThreadForCreate(
         {
@@ -1036,13 +958,18 @@ export async function startMcpServer(): Promise<void> {
         })),
       );
       if (existing) {
+        const tagged =
+          tags === undefined
+            ? orch.getThread(existing.id)
+            : applyWorkspaceTags(existing.id, tags, 'add');
         return mcpJson({
           alreadyStarted: true,
           id: existing.id,
           title: existing.title,
           status: existing.status,
+          tags: tagged?.tags ?? [],
           link: `sideboard://chat/${existing.id}`,
-          chats: workspaceAgentChatSummaries(orch.getThread(existing.id)?.worktreePath),
+          chats: workspaceAgentChatSummaries(tagged?.worktreePath),
         });
       }
 
@@ -1059,6 +986,7 @@ export async function startMcpServer(): Promise<void> {
             sourceRef,
             repoPath: root,
             title: title?.trim() || pin?.title || (sourceRef === 'default' ? undefined : sourceRef),
+            tags,
           },
           resolveNewThreadOptions,
         );
@@ -1094,6 +1022,7 @@ export async function startMcpServer(): Promise<void> {
             repoPath: root,
             title: title?.trim() || issue?.title,
             attachments,
+            tags,
           },
           resolveNewThreadOptions,
         );
@@ -1112,6 +1041,7 @@ export async function startMcpServer(): Promise<void> {
           sourceRef: number,
           repoPath: root,
           title: title?.trim() || pr?.title,
+          tags,
         },
         resolveNewThreadOptions,
       );
@@ -1124,7 +1054,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_chat',
-    'Steer a prompt on a workspace chat (Settings → Follow-up, default steer: front of the queue, skips the inbox; while the desktop board is running it starts as soon as the in-flight turn yields). Use after create_workspace to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_chat to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
+    'Steer a prompt on a workspace chat (Settings → Follow-up, default steer: interrupt the in-flight turn and start now, same as the workspace composer). Use after create_workspace to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_chat to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
     {
       ref: z.string(),
       prompt: z.string(),
@@ -1198,12 +1128,16 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'stop_chat',
-    'Force-stop a thread: kill any in-flight agent turn AND clear queued prompts so drainQueue cannot continue. Does not archive the worktree. Optional force defaults to true.',
+    'Force-stop a thread: kill any in-flight agent turn AND clear queued prompts so drainQueue cannot continue. Does not archive the worktree. Optional force defaults to true. Pass reason — a short note on why this chat is stopping. It is stored on the thread and kept when the turn unwinds. If you omit it, Sideboard still records that the queue was cleared.',
     {
       ref: z.string(),
       force: z.boolean().optional(),
+      reason: z
+        .string()
+        .optional()
+        .describe('Why this chat is stopping. Stored on the thread for the next session.'),
     },
-    async ({ ref, force }) => {
+    async ({ ref, force, reason }) => {
       const t = orch.getThread(ref);
       if (!t) {
         return {
@@ -1213,11 +1147,12 @@ export async function startMcpServer(): Promise<void> {
       }
       const clearQueue = force !== false;
       const hadQueued = t.queue.length > 0;
-      const stopped = orch.stop(ref, { clearQueue, notifyParent: false });
+      const stopped = orch.stop(ref, { clearQueue, notifyParent: false, reason });
       return mcpJson({
         id: stopped.id,
         status: stopped.status,
         clearedQueue: clearQueue && hadQueued,
+        lastError: stopped.lastError ?? null,
       });
     },
   );
@@ -1498,10 +1433,10 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'remove_project',
-    'Unregister a Sideboard workspace (does not archive threads)',
+    'Unregister a Sideboard workspace and archive its chats',
     { repoPath: z.string() },
     async ({ repoPath }) => {
-      orch.removeWorkspace(repoPath);
+      await orch.removeWorkspace(repoPath);
       return { content: [{ type: 'text', text: 'ok' }] };
     },
   );

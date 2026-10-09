@@ -251,7 +251,8 @@ describe('formatIssueToolsReminder', () => {
 describe('formatWorktreeReminder', () => {
   it('is a short isolation line for resumed turns', () => {
     const text = formatWorktreeReminder();
-    expect(text.length).toBeLessThan(420);
+    expect(text.length).toBeLessThan(500);
+    expect(text).toMatch(/set_workspace_tags/);
     expect(text).toMatch(/stay in this cwd/i);
     expect(text).toMatch(/origin/i);
     expect(text).toMatch(/upstream/i);
@@ -277,6 +278,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/never the worktree nickname/i);
     expect(text).toMatch(/gh pr create --draft --assignee @me -R/i);
     expect(text).toMatch(/run_dev_script/);
+    expect(text).toMatch(/set_workspace_tags/);
     expect(text).toMatch(/create_schedule/);
     expect(text).toMatch(/chatId=self/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
@@ -349,7 +351,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Not under `\.sideboard\/skills\/`/);
     expect(text).toMatch(/Skip a guide for a one-off/);
     // Budget guard: the fresh-session worktree playbook stays under ~1.1k tokens.
-    expect(text.length).toBeLessThan(4_200);
+    expect(text.length).toBeLessThan(4_400);
   });
 
   it('injects gh-mode instructions instead of the SSH fallback', () => {

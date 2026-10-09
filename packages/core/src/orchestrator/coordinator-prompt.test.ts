@@ -202,6 +202,8 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).not.toContain('Post this review');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not tell the child to comment');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('notify_orchestrator');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('set_workspace_tags');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('same tags');
   });
 
   it('writes CLAUDE.md and AGENTS.md into the global cwd', () => {
@@ -247,6 +249,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('phone remote');
       expect(claude).toContain('Sideboard MCP');
       expect(claude).toMatch(/Prefer official CLIs/);
+      expect(claude).toMatch(/needsAuth/);
+      expect(claude).toMatch(/native CLI/);
       expect(claude).toMatch(/Do not add vendor MCPs/);
       expect(claude).toMatch(/stop_job/);
       expect(claude).toMatch(/write CLI output to `\.context\/cli\/`/);

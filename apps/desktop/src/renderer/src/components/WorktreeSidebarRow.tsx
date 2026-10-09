@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { worktreeAgentBlock, worktreeBoardStatus } from '@sideboard/home-board';
-import { worktreeAnchorLabel } from '@sideboard/worktree-labels';
+import { worktreeAnchorLabel, workspaceTagsFromGroup } from '@sideboard/worktree-labels';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { loadThreadDefaults } from '../lib/thread-defaults';
 import { unreadWorktreeKey } from '../lib/unread-worktrees';
@@ -16,6 +16,21 @@ import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { WorktreeEditCard } from './WorktreeEditCard';
 import { WorktreeNestedChats } from './WorktreeNestedChats';
 import { WorktreePrBadges } from './WorktreePrBadges';
+import { WorkspaceTagEditor, WorkspaceTags } from './WorkspaceTags';
+
+function TagIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M2.2 3.4A1.2 1.2 0 0 1 3.4 2.2h3.7c.32 0 .62.13.85.35l5.5 5.5a1.2 1.2 0 0 1 0 1.7l-3.7 3.7a1.2 1.2 0 0 1-1.7 0l-5.5-5.5a1.2 1.2 0 0 1-.35-.85V3.4z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <circle cx="5.3" cy="5.3" r="0.9" fill="currentColor" />
+    </svg>
+  );
+}
 
 export function WorktreeSidebarRow({
   primary,
@@ -36,6 +51,8 @@ export function WorktreeSidebarRow({
   onRenameChat,
   onCloseChat,
   onAddAgent,
+  onSetTags,
+  onFilterTag,
   onNewOrchestration,
   multiSelected,
   groupKey,
@@ -58,6 +75,8 @@ export function WorktreeSidebarRow({
   onRenameChat?: (id: string, title: string) => void;
   onCloseChat?: (thread: Thread) => void;
   onAddAgent?: (fromThreadId: string, opts: NewChatTabOptions) => void;
+  onSetTags?: (tags: string[]) => void;
+  onFilterTag?: (tag: string) => void;
   /** Orchestration parent +: open the create-orchestrator modal. */
   onNewOrchestration?: () => void;
   multiSelected: Set<string>;
@@ -67,6 +86,8 @@ export function WorktreeSidebarRow({
   const [gitCardOpen, setGitCardOpenState] = useState(false);
   const [collapsedWhileSelected, setCollapsedWhileSelected] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [tagEditorOpen, setTagEditorOpen] = useState(false);
+  const tagBtnRef = useRef<HTMLButtonElement>(null);
   const [addDefaults, setAddDefaults] = useState<{
     agent: AgentKind;
     model: string | null;
@@ -189,7 +210,7 @@ export function WorktreeSidebarRow({
         }`}
         aria-busy={archiving}
         onMouseEnter={() => {
-          if (!orch && !addOpen) setGitCardOpen(true);
+          if (!orch && !addOpen && !tagEditorOpen) setGitCardOpen(true);
         }}
         onMouseLeave={() => {
           if (!orch) setGitCardOpen(false);
@@ -256,11 +277,27 @@ export function WorktreeSidebarRow({
             </div>
           ) : null}
         </div>
-        {!archiving && showWorktreeActions ? (
+        {!archiving && (showWorktreeActions || onSetTags) ? (
           <div
-            className={`worktree-row-actions${addOpen ? ' is-open' : ''}`}
+            className={`worktree-row-actions${addOpen || tagEditorOpen ? ' is-open' : ''}`}
             onClick={(e) => e.stopPropagation()}
           >
+            {onSetTags && !orch ? (
+              <button
+                ref={tagBtnRef}
+                type="button"
+                className="icon-btn worktree-tag-btn"
+                aria-label={`Edit tags for ${parentTitle}`}
+                aria-expanded={tagEditorOpen}
+                title="Tags"
+                onClick={() => {
+                  setGitCardOpen(false);
+                  setTagEditorOpen((open) => !open);
+                }}
+              >
+                <TagIcon />
+              </button>
+            ) : null}
             {showArchive ? (
               <button
                 type="button"
@@ -319,6 +356,31 @@ export function WorktreeSidebarRow({
           />
         ) : null}
       </div>
+      {!orch ? (
+        <>
+          <WorkspaceTags
+            tags={workspaceTagsFromGroup(group)}
+            onFilter={onFilterTag}
+            onManage={
+              onSetTags
+                ? () => {
+                    setGitCardOpen(false);
+                    setTagEditorOpen(true);
+                  }
+                : undefined
+            }
+          />
+          {onSetTags ? (
+            <WorkspaceTagEditor
+              open={tagEditorOpen}
+              tags={workspaceTagsFromGroup(group)}
+              anchorRef={tagBtnRef}
+              onChange={onSetTags}
+              onClose={() => setTagEditorOpen(false)}
+            />
+          ) : null}
+        </>
+      ) : null}
       <AgentOptionsPicker
         open={addOpen}
         value={addDefaults}

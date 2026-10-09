@@ -151,7 +151,7 @@ import {
   loginAgent,
   loginManagedAccount,
   maxConcurrentAgents,
-  resolveRepoRoot,
+  resolveRepoRoot, ensureWorkspace,
   run,
   runCloudConnect,
   saveAppSettings,
@@ -1445,6 +1445,7 @@ function registerIpc(): void {
   ipcMain.handle('renameThread', (_e, ref: string, title: string) =>
     orch.renameThread(ref, title),
   );
+  ipcMain.handle('setWorkspaceTags', (_e, ref: string, tags: string[]) => orch.setWorkspaceTags(ref, tags));
   ipcMain.handle('setAttachments', (_e, ref: string, attachments) =>
     orch.setAttachments(ref, attachments),
   );
@@ -1980,11 +1981,11 @@ app.whenReady().then(async () => {
     const root = await resolveRepoRoot(process.cwd());
     // Packaged launches often have cwd `/`, which is not a real project.
     if (root && root !== '/') {
-      repoPath = root;
       try {
-        await orch.addWorkspace(repoPath);
+        await ensureWorkspace(root);
+        repoPath = root;
       } catch {
-        // cwd may not be a usable workspace
+        // A removed project stays removed, even when this Mac launches inside it.
       }
     }
   } catch {

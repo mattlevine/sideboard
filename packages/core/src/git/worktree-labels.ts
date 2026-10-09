@@ -22,6 +22,38 @@ export function worktreeNameFromPath(worktreePath: string): string {
   return parts[parts.length - 1] || worktreePath;
 }
 
+/** Short sidebar labels. Enough to group a task, not a sentence. */
+export const WORKSPACE_TAG_LIMIT = 8;
+export const WORKSPACE_TAG_MAX_LENGTH = 32;
+
+/**
+ * Normalize workspace tags. A string splits on commas so "phone-sync, auth"
+ * is two tags. Case-insensitive duplicates collapse. Empty input is [].
+ */
+export function normalizeWorkspaceTags(raw: unknown): string[] {
+  const items = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (typeof item !== 'string') continue;
+    const tag = item.trim().replace(/\s+/g, ' ').slice(0, WORKSPACE_TAG_MAX_LENGTH);
+    if (!tag) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+    if (out.length >= WORKSPACE_TAG_LIMIT) break;
+  }
+  return out;
+}
+
+/** Union of tags on the chats that share one workspace, in first-seen order. */
+export function workspaceTagsFromGroup(
+  threads: Array<{ tags?: string[] | null }>,
+): string[] {
+  return normalizeWorkspaceTags(threads.flatMap((thread) => thread.tags ?? []));
+}
+
 /**
  * Ticket id safe for `<ticket>-<team>` (Linear `ENG-12` → `eng-12`,
  * GitHub `#44` → `44`).

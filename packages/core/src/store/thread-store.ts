@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { normalizeWorkspaceTags } from '../git/worktree-labels.js';
 import {
   existsSync,
   readFileSync,
@@ -231,6 +232,7 @@ export function createEmptyThread(
         ? partial.archivedAt.trim()
         : undefined,
     title: partial.title,
+    ...(partial.tags !== undefined ? { tags: normalizeWorkspaceTags(partial.tags) } : {}),
     sourceType: partial.sourceType,
     sourceRef: partial.sourceRef,
     branchName: partial.branchName,

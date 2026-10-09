@@ -122,6 +122,8 @@ import {
   notifyParentOfChildHalt,
   shouldNotifyParentAfterTurnError,
 } from './child-halt.js';
+import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
+import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
@@ -130,6 +132,7 @@ import {
 } from '../mcp/wait-for-job.js';
 import { agentPurposeStamp } from '../threads/agent-purpose-title.js';
 import { createThread } from '../threads/create.js';
+import { applyWorkspaceTags } from '../threads/workspace-tags.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
@@ -258,8 +261,8 @@ import {
 import { loadWorkspaceSettings } from '../hook/settings.js';
 import { syncThreadBranchFromGit } from '../threads/sync-branch.js';
 import {
-  addWorkspace,
-  removeWorkspace,
+  addWorkspace, ensureWorkspace,
+  removeWorkspace, sameWorkspacePath,
   syncWorkspacesFromThreads,
   type Workspace,
 } from '../store/workspaces.js';
@@ -660,6 +663,10 @@ export class Orchestrator {
         continue;
       }
 
+      if (thisProcessShouldDrainAgentQueues() && isUnclaimedSteerRequest(thread.steerRequest) && thread.queue.length > 0) {
+        this.finishSteer(thread.id, false);
+        continue;
+      }
       if (thread.queue.length > 0) {
         this.haltDrain.delete(thread.id);
         this.armDrain(thread.id);
@@ -1120,8 +1127,12 @@ export class Orchestrator {
     return addWorkspace(repoPath);
   }
 
-  removeWorkspace(repoPath: string): void {
+  async removeWorkspace(repoPath: string): Promise<void> {
     removeWorkspace(repoPath);
+    for (const thread of listThreads()) {
+      if (!sameWorkspacePath(thread.repoPath, repoPath)) continue;
+      await this.archive(thread.id).catch(() => undefined);
+    }
   }
 
   async adopt(input: Parameters<typeof adoptThread>[0]): Promise<Thread> {
@@ -1257,44 +1268,38 @@ export class Orchestrator {
     });
   }
 
-  /**
-   * Promote a queued message to run next, interrupting the in-flight turn (if any).
-   * The current turn is stopped without clearing the rest of the queue — drainQueue
-   * picks the promoted message up as soon as the interrupted turn unwinds.
-   */
+  /** Promote a queued prompt to run next, interrupting the in-flight turn. */
   async sendQueuedMessageNow(threadRef: string, index: number): Promise<Thread> {
     const thread = this.requireThread(threadRef);
+    const handoff = !thisProcessShouldDrainAgentQueues();
     const promoted = await withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       if (index < 0 || index >= current.queue.length) return false;
       const next = moveQueuedItemToFront(current.queue, current.queueAttachments, index);
       this.haltDrain.delete(thread.id);
-      updateThread(thread.id, next);
+      updateThread(thread.id, {
+        ...next,
+        ...(handoff ? { steerRequest: nextSteerRequest(current.steerRequest) } : {}),
+      });
       this.emit({ type: 'queue_changed', threadId: thread.id, queue: next.queue });
       return true;
     });
-    if (!promoted) return this.requireThread(thread.id);
-    // MCP/CLI while the board is alive: the in-flight child belongs to the
-    // desktop. Killing it by agentPid reads as a crash there (retry / error
-    // continue), and draining here spawns the next turn in a stdio process
-    // with no renderer IPC. Leave the promoted prompt at the front — the
-    // desktop drain loop runs it as soon as the current turn unwinds.
-    if (!thisProcessShouldDrainAgentQueues()) return this.requireThread(thread.id);
-    const current = this.requireThread(thread.id);
-    const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
-    const livePid = current.agentPid;
-    const foreignLive =
-      !inFlight &&
-      typeof livePid === 'number' &&
-      livePid > 0 &&
-      isPidAlive(livePid);
-    if (inFlight || foreignLive) {
-      this.stop(thread.id, { clearQueue: false, continueQueue: true });
+    if (!promoted || handoff) return this.requireThread(thread.id);
+    return this.finishSteer(thread.id);
+  }
+
+  /** Desktop host: interrupt the live turn and start the front-of-queue prompt. */
+  private finishSteer(threadId: string, notifyParent = true): Thread {
+    claimSteerRequest(threadId);
+    this.haltDrain.delete(threadId);
+    const current = this.requireThread(threadId);
+    const inFlight = this.activeTurns.has(threadId) || this.startingTurns.has(threadId);
+    const pid = current.agentPid;
+    if (inFlight || (typeof pid === 'number' && pid > 0 && isPidAlive(pid))) {
+      this.stop(threadId, { clearQueue: false, continueQueue: true, notifyParent });
     }
-    // Always arm drain. If a loop is already waiting on the dying child, this
-    // is a no-op; if Stop left no drain running, Send now must start one.
-    this.armDrain(thread.id);
-    return this.requireThread(thread.id);
+    this.armDrain(threadId);
+    return this.requireThread(threadId);
   }
 
   private armDrain(threadId: string): void {
@@ -1460,7 +1465,7 @@ export class Orchestrator {
     // still append the user prompt and emit turn_finished so the live stream
     // unpaints (turn_started already fired).
     if (this.stoppedTurns.has(threadId)) {
-      const stopped = writeLiveStatus(threadId, 'stopped');
+      const stopped = writeStoppedStatus(threadId);
       if (stopped?.status === 'stopped') {
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
       }
@@ -2033,7 +2038,7 @@ export class Orchestrator {
       settleAgentBlock(threadId, parts, exitCode !== 0 && !this.stoppedTurns.has(threadId));
       if (this.stoppedTurns.has(threadId)) {
         // Preserve intentional stop — do not overwrite with idle/error from kill exit.
-        const stopped = writeLiveStatus(threadId, 'stopped');
+        const stopped = writeStoppedStatus(threadId);
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
@@ -2093,7 +2098,7 @@ export class Orchestrator {
       await syncThreadBranchFromGit(threadId).catch(() => undefined);
       settleAgentBlock(threadId, undefined, !this.stoppedTurns.has(threadId));
       if (this.stoppedTurns.has(threadId)) {
-        const stopped = writeLiveStatus(threadId, 'stopped');
+        const stopped = writeStoppedStatus(threadId);
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
@@ -2152,7 +2157,7 @@ export class Orchestrator {
    */
   stop(
     threadRef: string,
-    opts?: { clearQueue?: boolean; continueQueue?: boolean; notifyParent?: boolean },
+    opts?: { clearQueue?: boolean; continueQueue?: boolean; notifyParent?: boolean; reason?: string | null },
   ): Thread {
     const clearQueue = opts?.clearQueue !== false;
     const continueQueue = opts?.continueQueue === true;
@@ -2186,7 +2191,7 @@ export class Orchestrator {
         // Already signaled via handle, or the process exited.
       }
     }
-    const stopped = writeLiveStatus(thread.id, 'stopped') ?? readThread(thread.id) ?? thread;
+    const stopped = writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       // Idle stop (archive, leftover status) is not a mid-turn death.
@@ -3460,7 +3465,7 @@ export class Orchestrator {
   }
 
   /**
-   * Desktop git buttons + MCP `ask_git`. Always queues the worktree agent
+   * Desktop git buttons + MCP `ask_git`. Always steers the worktree agent
    * with the action prompt (same path as Resolve). Repository `[prompts]`
    * overrides apply when set.
    */
@@ -3577,6 +3582,8 @@ export class Orchestrator {
     return updateThread(thread.id, { title: next, userSetTitle: true });
   }
 
+  setWorkspaceTags(threadRef: string, tags: string[]): Thread { return applyWorkspaceTags(threadRef, tags, 'replace'); }
+
   async switchThreadBranch(threadRef: string, branchName: string): Promise<Thread> {
     const thread = this.requireThread(threadRef);
     this.assertNotGlobal(thread, 'Switch branch');
@@ -3680,15 +3687,9 @@ export class Orchestrator {
     const archived = setStatus(thread.id, 'archived');
     this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
     this.enforceHistoryRetention();
-    // Archiving the last worktree must not unregister the project — keep it in
-    // the sidebar so the user can create a new thread without re-adding it.
+    // A project the user did not remove stays registered after its last worktree is archived.
     if (thread.repoPath && !isGlobalRepoPath(thread.repoPath)) {
-      try {
-        const { ensureWorkspace } = await import('../store/workspaces.js');
-        await ensureWorkspace(thread.repoPath);
-      } catch {
-        // Best-effort — repo may have been deleted on disk.
-      }
+      await ensureWorkspace(thread.repoPath).catch(() => undefined);
     }
     return archived;
   }
@@ -3746,17 +3747,12 @@ export class Orchestrator {
           `Cowboy checkout missing: ${thread.worktreePath}. Re-add the project folder, then restore.`,
         );
       }
-      const { createThreadWorktree } = await import('../git/worktree.js');
-      // Recreate worktree from existing branch
-      const slug = thread.worktreePath.split('/').pop()!;
       const dest = thread.worktreePath;
       await withRepoGitLock(thread.repoPath, async () => {
         await git(['worktree', 'add', dest, thread.branchName], thread.repoPath);
       });
       const { ensureWorktreeSideboardIgnored } = await import('../git/worktree-exclude.js');
       await ensureWorktreeSideboardIgnored(dest);
-      void createThreadWorktree;
-      void slug;
     }
 
     // Conductor guard: unarchiving a merged-PR workspace must not immediately
@@ -3785,6 +3781,9 @@ export class Orchestrator {
       updateThread(thread.id, restorePatch);
     }
 
+    if (thread.repoPath && !isGlobalRepoPath(thread.repoPath)) {
+      await addWorkspace(thread.repoPath).catch(() => undefined);
+    }
     const restored = setStatus(thread.id, 'idle');
     this.emit({ type: 'status_changed', threadId: restored.id, status: restored.status });
     return restored;

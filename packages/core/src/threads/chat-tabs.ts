@@ -84,6 +84,7 @@ function worktreeBindingFrom(from: Thread): Pick<
   | 'stackId'
   | 'stackLayer'
   | 'cowboy'
+  | 'tags'
 > {
   return {
     worktreePath: normalizeWorktreePath(from.worktreePath),
@@ -115,6 +116,7 @@ function worktreeBindingFrom(from: Thread): Pick<
     stackId: from.stackId,
     stackLayer: from.stackLayer,
     cowboy: from.cowboy,
+    tags: from.tags,
   };
 }
 

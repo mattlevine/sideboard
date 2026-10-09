@@ -3,6 +3,7 @@ import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { outboundReplyFromTurn } from '../orchestrator/outbound-turn-reply.js';
 import { extractPendingPlanQuestions } from '../plan/ask-user.js';
 import { readThread } from '../store/thread-store.js';
+import { readTurnLiveParts } from '../store/turn-live.js';
 import type { RemoteAskQuestion } from './protocol.js';
 import { encodePhoneControl, readPhoneThread, type PhoneControlReply } from './phone-chats.js';
 import { phoneArtifactText } from './phone-artifact.js';
@@ -76,8 +77,9 @@ export function watchPhoneStream(
   chatId: string,
   threadId: string,
   generation: number,
+  seed: MessagePart[] = [],
 ): () => void {
-  let parts: MessagePart[] = [];
+  let parts: MessagePart[] = seed.slice();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let lastKey = '';
   let closed = false;
@@ -112,6 +114,7 @@ export function watchPhoneStream(
     parts = next;
     schedule(event.event);
   });
+  if (parts.length) flush();
   return () => {
     closed = true;
     if (timer) clearTimeout(timer);
@@ -204,7 +207,7 @@ export function deliverPhoneTurn(
   phoneTurnGen.set(id, generation);
   enqueueChat(id, async () => {
     if (chatGeneration.get(id) !== generation) return;
-    const stopStream = watchPhoneStream(opts, id, id, generation);
+    const stopStream = watchPhoneStream(opts, id, id, generation, readTurnLiveParts(id));
     try {
       await getOrchestrator().waitForTurn(id, 14 * 60 * 1000);
     } catch (err) {

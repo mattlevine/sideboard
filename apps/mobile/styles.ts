@@ -127,6 +127,18 @@ export const styles = StyleSheet.create({
   glyphRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   projectBlock: { marginTop: 12 },
   worktreeBlock: { marginLeft: 8, marginBottom: 4 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 6, marginLeft: 22 },
+  tag: {
+    color: palette.muted,
+    fontSize: 11,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
   meta: { color: palette.muted, fontSize: 13, marginBottom: 8 },
   sectionRow: {
     flexDirection: 'row',

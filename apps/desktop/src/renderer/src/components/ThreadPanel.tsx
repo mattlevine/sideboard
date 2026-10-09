@@ -80,7 +80,7 @@ import {
   formatClaudeUsageOverLimitConfirm,
   formatClaudeUsageOverLimitWait,
 } from '@sideboard/claude-usage';
-import { isSetupLastError } from '../lib/pane-progress';
+import { isRoutineStopNote, isSetupLastError } from '../lib/pane-progress';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
 import { ThinkingEffortChip } from './ThinkingEffortChip';
@@ -169,6 +169,7 @@ import { useSpeechDictation } from '../lib/use-speech-dictation';
 function isRedundantLastError(thread: Thread): boolean {
   const err = thread.lastError?.trim();
   if (!err) return false;
+  if (isRoutineStopNote(err)) return true;
   // Setup / reconcile can stamp lastError mid-stream; the agent is still working
   // (or waiting for a concurrency slot after a batch create).
   if (thread.status === 'running' || thread.status === 'queued') return true;

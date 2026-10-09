@@ -137,12 +137,9 @@ export interface Thread {
   devPort: number | null;
   /** Named run scripts currently tracked for this thread. */
   activeRuns?: ActiveRun[];
-  /**
-   * Cross-process run-script intent. Worktree MCP / CLI write this when the
-   * desktop host is alive instead of spawning; Electron main adopts and calls
-   * `startDev` / `stopDev` so Run-tab logs use renderer IPC.
-   */
+  /** MCP/CLI run script or steer for the desktop host to apply in-process. */
   runScriptRequest?: RunScriptRequest | null;
+  steerRequest?: SteerRequest | null;
   prUrl: string | null;
   /** Cached PR title for Conductor-style sidebar labels (PR title > branch). */
   prTitle: string | null;
@@ -210,6 +207,8 @@ export interface Thread {
   stackLayer: number | null;
   /** When true, `title` is a manual override and is not overwritten by branch/PR sync. */
   userSetTitle: boolean;
+  /** Short labels shared by every chat on this workspace. */
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   /** When this chat was archived. History age uses this, not later row updates. */
@@ -680,19 +679,22 @@ export interface ActiveRun {
   pid?: number;
 }
 
-/**
- * MCP/CLI → desktop run-script request (same path as `send_to_chat` queues).
- * Desktop claims, runs `startDev`/`stopDev`, then fulfills or sets `error`.
- */
+/** MCP/CLI → desktop run-script request. Host claims, runs, then fulfills. */
 export interface RunScriptRequest {
   op: 'start' | 'stop';
-  /** Omit/null = default script for start, every script for stop. */
   scriptName?: string | null;
   requestId: string;
   requestedAt: string;
   claimedAt?: string | null;
   fulfilledAt?: string | null;
   error?: string | null;
+}
+
+/** Unapplied orchestrator steer. Desktop interrupts the live turn and starts it. */
+export interface SteerRequest {
+  requestId: string;
+  requestedAt: string;
+  claimedAt?: string | null;
 }
 
 /** True when desktop should first-claim this persisted request. */
@@ -749,12 +751,10 @@ export interface CreateThreadInput {
    * Pushes go to that branch; archive does not remove the folder.
    */
   cowboy?: boolean;
-  /**
-   * When false, always create a new worktree (fork_workspace, best-of-n).
-   * Default true: a ticket, PR, or named branch may have only one live worktree —
-   * return that thread instead of a second checkout.
-   */
+  /** When false, always create a new worktree. Default true reuses a live ticket, PR, or named branch. */
   reuseExisting?: boolean;
+  /** Workspace labels. Added when this checkout already exists. */
+  tags?: string[];
 }
 
 export interface AdoptInput {
