@@ -8,7 +8,7 @@ import { deriveTaskState, type TurnResult } from './task-state.js';
 import { lastActivityAtForWait } from '../mcp/wait-for-turn.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, cursorStreamCutOffContinueLimit, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
+import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnFailDetail, formatAgentErrorContinuePrompt, looksLikeAgentFailureMessage, looksLikeInvalidAgentSession, looksLikeV8Oom, nextCrashContinueCount, shouldFeedErrorBackToAgent, shouldRetryCodexPluginIsolate, shouldRetryFailedAgentTurn, turnFailChatText } from '../agents/error-detail.js';
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
 import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
@@ -404,12 +404,10 @@ export class Orchestrator {
   /** Timers for orchestration session-quota auto-resume. */
   private readonly quotaResumeTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /**
-   * Threads that already got a crash-continue turn. Cleared on a successful
-   * finish or a user send so a later crash can recover again.
+   * Crash-continue count per thread. Cleared on a successful finish or a user
+   * send. Stream cutoffs may resume more than once; other crashes once.
    */
-  private readonly crashContinued = new Set<string>();
-  /** Consecutive HTTP/2 / stall resumes. Reset when a turn exits 0 or the user sends. */
-  private readonly streamCutOffContinues = new Map<string, number>();
+  private readonly crashContinued = new Map<string, number>();
   /** Auto-continues after a worktree turn ended while a detached job still runs. */
   private readonly jobContinueCount = new Map<string, number>();
   private readonly jobContinueNudged = new Set<string>();
@@ -978,21 +976,11 @@ export class Orchestrator {
     ) {
       return;
     }
-    // HTTP/2 drops happen several times in one long turn. Resume a few of
-    // those in a row. A dead Node process still resumes only once.
-    const streamLimit = cursorStreamCutOffContinueLimit(opts.detail);
-    if (streamLimit != null) {
-      const used = this.streamCutOffContinues.get(threadId) ?? 0;
-      if (used >= streamLimit) return;
-    } else if (this.crashContinued.has(threadId)) {
-      return;
-    }
+    const resumeCount = nextCrashContinueCount(opts.detail, this.crashContinued.get(threadId) ?? 0);
+    if (resumeCount == null) return;
     const thread = readThread(threadId);
     if (!thread || thread.status === 'archived') return;
-    if (streamLimit != null) {
-      this.streamCutOffContinues.set(threadId, (this.streamCutOffContinues.get(threadId) ?? 0) + 1);
-    }
-    this.crashContinued.add(threadId);
+    this.crashContinued.set(threadId, resumeCount);
     const prompt = formatAgentErrorContinuePrompt(opts.detail);
     const next = prependQueuedItem(thread.queue, thread.queueAttachments, prompt);
     updateThread(threadId, next);
@@ -1190,7 +1178,6 @@ export class Orchestrator {
         consumed.consumed,
       );
       this.crashContinued.delete(thread.id);
-      this.streamCutOffContinues.delete(thread.id);
       this.jobContinueCount.delete(thread.id);
       this.jobContinueNudged.delete(thread.id);
       this.haltDrain.delete(thread.id);
@@ -2083,7 +2070,6 @@ export class Orchestrator {
         this.emit({ type: 'turn_finished', threadId, exitCode });
         if (exitCode === 0) {
           this.crashContinued.delete(threadId);
-          this.streamCutOffContinues.delete(threadId);
           this.maybeEnqueueJobContinue(threadId, chatText, parts);
         } else {
           const blob = [chatText, detail].filter(Boolean).join('\n');

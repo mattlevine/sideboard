@@ -288,7 +288,7 @@ describe('Orchestrator queued-message editing', () => {
         id: string,
         opts: { detail: string; assistantText: string; partsCount: number },
       ) => void;
-      streamCutOffContinues: Map<string, number>;
+      crashContinued: Map<string, number>;
     };
     const detail =
       'Cursor run failed (run-e4fe7b4d-45e0-40c0-a377-c30428439dfc): [unknown] [canceled] http/2 stream closed with error code CANCEL (0x8)';
@@ -301,7 +301,7 @@ describe('Orchestrator queued-message editing', () => {
     }
     expect(readThread(thread.id)?.queue).toHaveLength(3);
     expect(readThread(thread.id)?.queue[0]).toMatch(/Continue from where you left off/);
-    expect(internal.streamCutOffContinues.get(thread.id)).toBe(3);
+    expect(internal.crashContinued.get(thread.id)).toBe(3);
     internal.maybeEnqueueCrashContinue(thread.id, {
       detail,
       assistantText: 'Still reading the ZDR paths.',

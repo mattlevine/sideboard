@@ -1,3 +1,12 @@
+import { looksLikeCursorStreamCutOff } from './cursor-stream-cutoff.js';
+
+export {
+  CURSOR_STREAM_CUTOFF_CONTINUE_LIMIT,
+  cursorStreamCutOffContinueLimit,
+  looksLikeCursorStreamCutOff,
+  nextCrashContinueCount,
+} from './cursor-stream-cutoff.js';
+
 /**
  * Turn opaque SDK / Node failure values into a short string for UI lastError.
  * Prefer message/code fields; never return the useless "[object Object]".
@@ -322,34 +331,6 @@ export function looksLikeInvalidAgentSession(text: string): boolean {
     /\bagent\b.{0,120}\bnot found\b/.test(lower) ||
     /\brun\b.{0,80}\bnot found for agent\b/.test(lower)
   );
-}
-
-/**
- * How many times a flaky Cursor HTTP/2 stream may auto-resume in one stretch
- * before the thread parks on the error icon. A clean turn resets the count.
- * Generic runner crashes stay at one resume — restarting a dead process in a
- * loop does not help.
- */
-export const CURSOR_STREAM_CUTOFF_CONTINUE_LIMIT = 3;
-
-/**
- * Cursor dropped the model stream (`NGHTTP2_INTERNAL_ERROR`, `Premature close`,
- * `[unavailable] Error`, or HTTP/2 `CANCEL (0x8)` / `http/2 stream closed`).
- * Same class as `Connection stalled`. Not a generic 500, "model unavailable",
- * a feature gate, or the user hitting Stop (that is run status `cancelled`).
- */
-export function looksLikeCursorStreamCutOff(text: string): boolean {
-  return /nghttp2|premature close|\[unavailable\]\s+error\b|http\/2 stream closed|\bcancel \(0x8\)|error code cancel\b/i.test(
-    text.trim(),
-  );
-}
-
-/** Non-null when this failure may auto-resume more than once. */
-export function cursorStreamCutOffContinueLimit(detail: string): number | null {
-  if (looksLikeCursorStreamCutOff(detail) || /connection stalled/i.test(detail)) {
-    return CURSOR_STREAM_CUTOFF_CONTINUE_LIMIT;
-  }
-  return null;
 }
 
 /**
