@@ -12,6 +12,29 @@ describe('formatFetchError', () => {
     );
   });
 
+  it('unwraps an AggregateError cause', () => {
+    const inner = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:443'), {
+      code: 'ECONNREFUSED',
+    });
+    const cause = new AggregateError([inner], '');
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    expect(formatFetchError(err, 'https://relay.sideboard.cloud/remote/login')).toBe(
+      'fetch failed [ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:443] (https://relay.sideboard.cloud/remote/login)',
+    );
+  });
+
+  it('uses a caller TLS hint instead of the Linear note', () => {
+    const cause = Object.assign(new Error('unable to get local issuer certificate'), {
+      code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+    });
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    const formatted = formatFetchError(err, 'https://relay.sideboard.cloud/remote/login', {
+      tlsHint: ' — custom tls',
+    });
+    expect(formatted).toContain('custom tls');
+    expect(formatted).not.toContain('Desktop Linear');
+  });
+
   it('explains UNABLE_TO_GET_ISSUER_CERT_LOCALLY for agent Linear', () => {
     const cause = Object.assign(new Error('unable to get local issuer certificate'), {
       code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
