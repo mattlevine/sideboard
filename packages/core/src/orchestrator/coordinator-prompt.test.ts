@@ -249,6 +249,8 @@ describe('coordinator-prompt', () => {
       expect(claude).toContain('phone remote');
       expect(claude).toContain('Sideboard MCP');
       expect(claude).toMatch(/Prefer official CLIs/);
+      expect(claude).toMatch(/needsAuth/);
+      expect(claude).toMatch(/native CLI/);
       expect(claude).toMatch(/Do not add vendor MCPs/);
       expect(claude).toMatch(/stop_job/);
       expect(claude).toMatch(/write CLI output to `\.context\/cli\/`/);
