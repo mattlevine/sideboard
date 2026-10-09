@@ -287,9 +287,7 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
     return str(input?.name) ? `Read ${str(input?.name)} log` : 'Read Dev log';
   }
   if (/notify_orchestrator$/i.test(name)) return 'Notify orchestrator';
-  if (/list_env$/i.test(name)) return 'List env vars';
-  if (/set_env$/i.test(name)) return 'Set env var';
-  if (/delete_env$/i.test(name)) return 'Delete env var';
+  if (/(?:list|set|delete)_env$/i.test(name)) return /list_env$/i.test(name) ? 'List env vars' : /set_env$/i.test(name) ? 'Set env var' : 'Delete env var';
   if (/list_schedules$/i.test(name)) return 'List schedules';
   if (/create_schedule$/i.test(name)) {
     return str(input?.name) ? `Schedule ${str(input?.name)}` : 'Create schedule';
@@ -303,10 +301,9 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   }
   if (isCompactToolName(name)) {
     const trigger = str(input?.trigger);
-    if (trigger && !/^auto$/i.test(trigger) && trigger !== 'injected') {
-      return `Summarized conversation (${trigger})`;
-    }
-    return 'Summarized conversation';
+    return trigger && !/^auto$/i.test(trigger) && trigger !== 'injected'
+      ? `Summarized conversation (${trigger})`
+      : 'Summarized conversation';
   }
   if (isSubagentToolName(name)) {
     const desc = str(input?.description);

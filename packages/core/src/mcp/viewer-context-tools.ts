@@ -6,6 +6,7 @@ import {
   writeViewerContext,
 } from '../store/app-settings.js';
 import { listWorkspaces } from '../store/workspaces.js';
+import { registerEnvTools } from './env-tools.js';
 import { mcpJson } from './issue-list.js';
 
 function text(payload: unknown, isError = false) {
@@ -129,4 +130,5 @@ export function registerViewerContextTools(server: McpServer): void {
       }
     },
   );
+  registerEnvTools(server);
 }

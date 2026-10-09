@@ -62,9 +62,7 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__notify_orchestrator',
   'mcp__sideboard__get_viewer_context',
   'mcp__sideboard__update_viewer_context',
-  'mcp__sideboard__list_env',
-  'mcp__sideboard__set_env',
-  'mcp__sideboard__delete_env',
+  'mcp__sideboard__list_env', 'mcp__sideboard__set_env', 'mcp__sideboard__delete_env',
   'mcp__sideboard__list_schedules',
   'mcp__sideboard__create_schedule',
   'mcp__sideboard__update_schedule',
@@ -102,8 +100,7 @@ export const BRIGHTSY_MCP_ALLOWED_TOOLS = [
   'mcp__brightsy__*',
 ] as const;
 
-let brightsyMcpCommandCache: { at: number; command: string | null } | null =
-  null;
+let brightsyMcpCommandCache: { at: number; command: string | null } | null = null;
 
 async function resolveBrightsyMcpCommand(): Promise<'brightsy-mcp' | 'npx'> {
   const now = Date.now();

@@ -52,7 +52,6 @@ import { isInternalAgentStatusText } from '../agents/message-parts.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { childThreadRefs, lastMessagePreview } from './thread-visibility.js';
 import { registerConnectedIssueVendorTools } from './issue-vendor-tools.js';
-import { registerEnvTools } from './env-tools.js';
 import { registerViewerContextTools } from './viewer-context-tools.js';
 import {
   applyIssueListWindow,
@@ -304,7 +303,6 @@ export async function startMcpServer(): Promise<void> {
     }
   };
   registerViewerContextTools(server);
-  registerEnvTools(server);
   if (worktreeProfile) {
     registerConnectedIssueVendorTools(server);
   }
