@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { PublicAppSettings, RemoteHostStatus } from '@sideboard-ai/core';
 
+/** Electron IPC prefixes the main-process message and drops `error.cause`. */
+function errorText(err: unknown): string {
+  let msg = err instanceof Error ? err.message : String(err);
+  msg = msg.replace(/^Error invoking remote method '[^']+':\s*/i, '');
+  msg = msg.replace(/^(?:TypeError|Error):\s*/, '');
+  return msg;
+}
+
 function GitHubMark() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
@@ -60,7 +68,7 @@ export function RemoteSettings({
       applySettings(next);
       setLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -73,7 +81,7 @@ export function RemoteSettings({
       const next = await window.sideboard.startRemoteAccountLogin('github');
       applySettings(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setSigningIn(null);
     }
@@ -86,7 +94,7 @@ export function RemoteSettings({
       const next = await window.sideboard.disconnectRemoteAccount();
       applySettings(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setSigningIn(null);
     }

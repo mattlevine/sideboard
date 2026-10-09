@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { currentHttpFetch, formatFetchError } from '../http/fetch.js';
 import { remoteRelayUrl } from '../remote/protocol.js';
 import { REMOTE_LOGIN_PATH, REMOTE_LOGOUT_PATH, REMOTE_OAUTH_RESULT_PATH, type RelayAccountProvider } from './account-oauth.js';
 
@@ -49,6 +50,47 @@ export type RemoteAccountSession = {
   accountId: string;
 };
 
+const RELAY_TLS_HINT =
+  ' — the TLS certificate was rejected. A work proxy often does this when Sideboard is not allowlisted, or when the app does not trust the corporate CA.';
+
+const RELAY_NETWORK_HINT =
+  ' Sideboard could not reach the relay. On a work computer this is often a VPN, a proxy, or an allowlist that does not include Sideboard.';
+
+const RELAY_NETWORK_RE =
+  /fetch failed|Failed to fetch|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|EAI_AGAIN|EPERM|UND_ERR_|ERR_CONNECTION|ERR_NETWORK|ERR_PROXY|ERR_TUNNEL|ERR_INTERNET|ERR_BLOCKED|ERR_NAME_NOT_RESOLVED|ERR_ADDRESS_UNREACHABLE|ERR_CERT|CERT_|UNABLE_TO_GET_ISSUER|SELF_SIGNED/i;
+
+function relayFetchError(err: unknown, url: string): Error {
+  const formatted = formatFetchError(err, url, { tlsHint: RELAY_TLS_HINT });
+  if (formatted.includes(RELAY_TLS_HINT) || !RELAY_NETWORK_RE.test(formatted)) {
+    return new Error(formatted);
+  }
+  return new Error(`${formatted}${RELAY_NETWORK_HINT}`);
+}
+
+async function relayFetch(
+  fetchImpl: typeof fetch | undefined,
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const fn = fetchImpl ?? currentHttpFetch();
+  try {
+    return await fn(url, init);
+  } catch (err) {
+    throw relayFetchError(err, url);
+  }
+}
+
+async function readJson<T>(res: Response, url: string): Promise<T> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    const kind = (res.headers.get('content-type') ?? '').includes('html') ? 'an HTML page' : 'a non-JSON body';
+    throw new Error(
+      `Relay sign-in returned HTTP ${res.status} with ${kind} (${url}). A work proxy or allowlist often answers with a block page instead of the relay.`,
+    );
+  }
+}
+
 /**
  * Open the git host in the browser. The relay holds the client secret and
  * returns a Sideboard credential for this Mac.
@@ -66,12 +108,12 @@ export async function startRemoteAccountLogin(opts: {
 }): Promise<RemoteAccountSession> {
   if (opts.signal?.aborted) throw new RemoteAccountLoginCancelled();
   const origin = (opts.origin ?? remoteAccountHttpOrigin()).replace(/\/+$/, '');
-  const fetchImpl = opts.fetchImpl ?? fetch;
   const state = randomBytes(16).toString('hex');
   const timeoutMs = opts.timeoutMs ?? 5 * 60_000;
   const pollIntervalMs = opts.pollIntervalMs ?? 400;
   const linkToken = opts.linkToken?.trim() ?? '';
-  const started = await fetchImpl(`${origin}${REMOTE_LOGIN_PATH}`, {
+  const startUrl = `${origin}${REMOTE_LOGIN_PATH}`;
+  const started = await relayFetch(opts.fetchImpl, startUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -80,9 +122,9 @@ export async function startRemoteAccountLogin(opts: {
       ...(linkToken ? { accountToken: linkToken } : {}),
     }),
   });
-  const startBody = (await started.json()) as { ok?: boolean; url?: string; error?: string };
+  const startBody = await readJson<{ ok?: boolean; url?: string; error?: string }>(started, startUrl);
   if (!started.ok || !startBody.url) {
-    throw new Error(startBody.error || 'Could not start sign-in.');
+    throw new Error(startBody.error || `Could not start sign-in (HTTP ${started.status}).`);
   }
   await Promise.resolve(opts.openUrl?.(startBody.url));
   const deadline = Date.now() + timeoutMs;
@@ -91,9 +133,11 @@ export async function startRemoteAccountLogin(opts: {
     if (opts.signal?.aborted) throw new RemoteAccountLoginCancelled();
     let res: Response;
     try {
-      res = await fetchImpl(resultUrl);
-    } catch {
-      if (opts.signal?.aborted) throw new RemoteAccountLoginCancelled();
+      res = await relayFetch(opts.fetchImpl, resultUrl);
+    } catch (err) {
+      if (opts.signal?.aborted || isRemoteAccountLoginCancelled(err)) {
+        throw new RemoteAccountLoginCancelled();
+      }
       await sleep(pollIntervalMs, opts.signal);
       continue;
     }
@@ -124,8 +168,7 @@ export async function disconnectRemoteAccount(opts: {
   fetchImpl?: typeof fetch;
 }): Promise<void> {
   const origin = (opts.origin ?? remoteAccountHttpOrigin()).replace(/\/+$/, '');
-  const fetchImpl = opts.fetchImpl ?? fetch;
-  await fetchImpl(`${origin}${REMOTE_LOGOUT_PATH}`, {
+  await relayFetch(opts.fetchImpl, `${origin}${REMOTE_LOGOUT_PATH}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ accountToken: opts.accountToken }),

@@ -21,29 +21,64 @@ const TLS_ISSUER_RE =
 const TLS_ISSUER_HINT =
   ' — Node rejected the TLS certificate (corporate VPN/proxy CA). Desktop Linear can still work; reconnecting the API key will not fix this.';
 
-function tlsIssuerHint(code: string | undefined, message: string): string {
-  const text = `${code ?? ''} ${message}`;
-  return TLS_ISSUER_RE.test(text) ? TLS_ISSUER_HINT : '';
+function isTlsIssuerFailure(code: string | undefined, message: string): boolean {
+  return TLS_ISSUER_RE.test(`${code ?? ''} ${message}`);
 }
 
-/** Expand undici/Electron `TypeError: fetch failed` with the underlying cause. */
-export function formatFetchError(err: unknown, url: string): string {
-  if (!(err instanceof Error)) return `${String(err)} (${url})`;
-  const cause = (err as Error & { cause?: unknown }).cause;
-  let detail = '';
-  let hint = tlsIssuerHint(undefined, err.message);
+type CauseDetail = { code?: string; message: string };
+
+/** Undici often hides the socket error on `cause`, sometimes inside AggregateError. */
+function describeCause(cause: unknown, depth = 0): CauseDetail | null {
+  if (depth > 5 || cause == null) return null;
+  if (cause instanceof AggregateError) {
+    for (const item of cause.errors) {
+      const found = describeCause(item, depth + 1);
+      if (found && (found.code || found.message)) return found;
+    }
+    return cause.message ? { message: cause.message } : null;
+  }
   if (cause instanceof Error) {
     const code =
       typeof (cause as NodeJS.ErrnoException).code === 'string'
         ? (cause as NodeJS.ErrnoException).code
         : undefined;
-    detail = code ? ` [${code}: ${cause.message}]` : ` [${cause.message}]`;
-    hint = tlsIssuerHint(code, `${err.message} ${cause.message}`) || hint;
-  } else if (cause != null) {
-    detail = ` [${String(cause)}]`;
-    hint = tlsIssuerHint(undefined, String(cause)) || hint;
+    const nested = describeCause((cause as Error & { cause?: unknown }).cause, depth + 1);
+    if ((!cause.message || cause.message === 'fetch failed') && nested) return nested;
+    if (cause.message || code) return { code, message: cause.message };
+    return nested;
   }
-  return `${err.message}${detail} (${url})${hint}`;
+  return { message: String(cause) };
+}
+
+function causeSuffix(detail: CauseDetail | null): string {
+  if (!detail) return '';
+  if (detail.code && detail.message) return ` [${detail.code}: ${detail.message}]`;
+  if (detail.code) return ` [${detail.code}]`;
+  if (detail.message) return ` [${detail.message}]`;
+  return '';
+}
+
+/**
+ * Expand undici/Electron `TypeError: fetch failed` with the underlying cause.
+ * `tlsHint` replaces the default Linear certificate note when the failure is a
+ * corporate CA rejection. Pass '' to omit that note.
+ */
+export function formatFetchError(
+  err: unknown,
+  url: string,
+  opts?: { tlsHint?: string },
+): string {
+  if (!(err instanceof Error)) return `${String(err)} (${url})`;
+  const detail = describeCause((err as Error & { cause?: unknown }).cause);
+  const hintSource = `${err.message} ${detail?.code ?? ''} ${detail?.message ?? ''}`;
+  const tls = isTlsIssuerFailure(detail?.code, hintSource);
+  const hint = tls ? (opts?.tlsHint ?? TLS_ISSUER_HINT) : '';
+  return `${err.message}${causeSuffix(detail)} (${url})${hint}`;
+}
+
+/** Chromium `net.fetch` when Electron injected it; otherwise Node `fetch`. */
+export function currentHttpFetch(): typeof fetch {
+  return injected ?? globalThis.fetch.bind(globalThis);
 }
 
 export async function httpFetch(
@@ -51,9 +86,8 @@ export async function httpFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const url = typeof input === 'string' ? input : input.href;
-  const fn = injected ?? globalThis.fetch.bind(globalThis);
   try {
-    return await fn(url, init);
+    return await currentHttpFetch()(url, init);
   } catch (err) {
     throw new Error(formatFetchError(err, url));
   }
