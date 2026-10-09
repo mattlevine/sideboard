@@ -137,12 +137,9 @@ export interface Thread {
   devPort: number | null;
   /** Named run scripts currently tracked for this thread. */
   activeRuns?: ActiveRun[];
-  /**
-   * Cross-process run-script intent. Worktree MCP / CLI write this when the
-   * desktop host is alive instead of spawning; Electron main adopts and calls
-   * `startDev` / `stopDev` so Run-tab logs use renderer IPC.
-   */
+  /** MCP/CLI run script or steer for the desktop host to apply in-process. */
   runScriptRequest?: RunScriptRequest | null;
+  steerRequest?: SteerRequest | null;
   prUrl: string | null;
   /** Cached PR title for Conductor-style sidebar labels (PR title > branch). */
   prTitle: string | null;
@@ -682,19 +679,22 @@ export interface ActiveRun {
   pid?: number;
 }
 
-/**
- * MCP/CLI → desktop run-script request (same path as `send_to_chat` queues).
- * Desktop claims, runs `startDev`/`stopDev`, then fulfills or sets `error`.
- */
+/** MCP/CLI → desktop run-script request. Host claims, runs, then fulfills. */
 export interface RunScriptRequest {
   op: 'start' | 'stop';
-  /** Omit/null = default script for start, every script for stop. */
   scriptName?: string | null;
   requestId: string;
   requestedAt: string;
   claimedAt?: string | null;
   fulfilledAt?: string | null;
   error?: string | null;
+}
+
+/** Unapplied orchestrator steer. Desktop interrupts the live turn and starts it. */
+export interface SteerRequest {
+  requestId: string;
+  requestedAt: string;
+  claimedAt?: string | null;
 }
 
 /** True when desktop should first-claim this persisted request. */

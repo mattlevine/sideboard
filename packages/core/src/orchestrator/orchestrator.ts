@@ -123,6 +123,7 @@ import {
   shouldNotifyParentAfterTurnError,
 } from './child-halt.js';
 import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
+import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
@@ -662,6 +663,10 @@ export class Orchestrator {
         continue;
       }
 
+      if (thisProcessShouldDrainAgentQueues() && isUnclaimedSteerRequest(thread.steerRequest) && thread.queue.length > 0) {
+        this.finishSteer(thread.id, false);
+        continue;
+      }
       if (thread.queue.length > 0) {
         this.haltDrain.delete(thread.id);
         this.armDrain(thread.id);
@@ -1263,44 +1268,38 @@ export class Orchestrator {
     });
   }
 
-  /**
-   * Promote a queued message to run next, interrupting the in-flight turn (if any).
-   * The current turn is stopped without clearing the rest of the queue — drainQueue
-   * picks the promoted message up as soon as the interrupted turn unwinds.
-   */
+  /** Promote a queued prompt to run next, interrupting the in-flight turn. */
   async sendQueuedMessageNow(threadRef: string, index: number): Promise<Thread> {
     const thread = this.requireThread(threadRef);
+    const handoff = !thisProcessShouldDrainAgentQueues();
     const promoted = await withThreadLock(thread.id, async () => {
       const current = this.requireThread(thread.id);
       if (index < 0 || index >= current.queue.length) return false;
       const next = moveQueuedItemToFront(current.queue, current.queueAttachments, index);
       this.haltDrain.delete(thread.id);
-      updateThread(thread.id, next);
+      updateThread(thread.id, {
+        ...next,
+        ...(handoff ? { steerRequest: nextSteerRequest(current.steerRequest) } : {}),
+      });
       this.emit({ type: 'queue_changed', threadId: thread.id, queue: next.queue });
       return true;
     });
-    if (!promoted) return this.requireThread(thread.id);
-    // MCP/CLI while the board is alive: the in-flight child belongs to the
-    // desktop. Killing it by agentPid reads as a crash there (retry / error
-    // continue), and draining here spawns the next turn in a stdio process
-    // with no renderer IPC. Leave the promoted prompt at the front — the
-    // desktop drain loop runs it as soon as the current turn unwinds.
-    if (!thisProcessShouldDrainAgentQueues()) return this.requireThread(thread.id);
-    const current = this.requireThread(thread.id);
-    const inFlight = this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
-    const livePid = current.agentPid;
-    const foreignLive =
-      !inFlight &&
-      typeof livePid === 'number' &&
-      livePid > 0 &&
-      isPidAlive(livePid);
-    if (inFlight || foreignLive) {
-      this.stop(thread.id, { clearQueue: false, continueQueue: true });
+    if (!promoted || handoff) return this.requireThread(thread.id);
+    return this.finishSteer(thread.id);
+  }
+
+  /** Desktop host: interrupt the live turn and start the front-of-queue prompt. */
+  private finishSteer(threadId: string, notifyParent = true): Thread {
+    claimSteerRequest(threadId);
+    this.haltDrain.delete(threadId);
+    const current = this.requireThread(threadId);
+    const inFlight = this.activeTurns.has(threadId) || this.startingTurns.has(threadId);
+    const pid = current.agentPid;
+    if (inFlight || (typeof pid === 'number' && pid > 0 && isPidAlive(pid))) {
+      this.stop(threadId, { clearQueue: false, continueQueue: true, notifyParent });
     }
-    // Always arm drain. If a loop is already waiting on the dying child, this
-    // is a no-op; if Stop left no drain running, Send now must start one.
-    this.armDrain(thread.id);
-    return this.requireThread(thread.id);
+    this.armDrain(threadId);
+    return this.requireThread(threadId);
   }
 
   private armDrain(threadId: string): void {
@@ -3466,7 +3465,7 @@ export class Orchestrator {
   }
 
   /**
-   * Desktop git buttons + MCP `ask_git`. Always queues the worktree agent
+   * Desktop git buttons + MCP `ask_git`. Always steers the worktree agent
    * with the action prompt (same path as Resolve). Repository `[prompts]`
    * overrides apply when set.
    */

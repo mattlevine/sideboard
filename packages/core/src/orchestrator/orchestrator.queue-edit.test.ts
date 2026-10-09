@@ -493,7 +493,7 @@ describe('Orchestrator queued-message editing', () => {
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 
-  it('MCP steer only reorders while the desktop host owns the child (#115)', async () => {
+  it('MCP steer hands the interrupt to the desktop host instead of killing the child (#115)', async () => {
     // Another live process is the desktop host — this one is MCP/CLI.
     const host = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',
@@ -516,8 +516,10 @@ describe('Orchestrator queued-message editing', () => {
       const updated = await orch.send(thread.id, 'steer now', { followUp: 'steer' });
       expect(updated.queue).toEqual(['steer now', 'later']);
       expect(updated.status).toBe('running');
+      expect(updated.steerRequest?.requestId).toBeTruthy();
+      expect(updated.steerRequest?.claimedAt).toBeFalsy();
       expect(drainQueue).not.toHaveBeenCalled();
-      // Desktop-owned child untouched.
+      // Desktop-owned child untouched — the host applies the interrupt.
       expect(() => process.kill(child.pid!, 0)).not.toThrow();
     } finally {
       for (const p of [host, child]) {
@@ -528,6 +530,38 @@ describe('Orchestrator queued-message editing', () => {
         }
       }
     }
+  });
+
+  it('desktop host applies an MCP steer by interrupting the in-flight turn', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const parent = seedOrch();
+    const thread = seedThread(['from orch', 'later']);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    live.parentThreadId = parent.id;
+    live.steerRequest = { requestId: 'steer-1', requestedAt: new Date().toISOString() };
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+    internal.activeTurns.set(thread.id, {
+      pid: process.pid,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    orch.adoptPersistedQueues();
+    expect(kill).toHaveBeenCalledOnce();
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+    expect(readThread(thread.id)?.steerRequest?.claimedAt).toBeTruthy();
+    expect(readThread(thread.id)?.queue[0]).toBe('from orch');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(readThread(parent.id)?.queue ?? []).toEqual([]);
   });
 
   it('drains send() when this process is the desktop host', async () => {
