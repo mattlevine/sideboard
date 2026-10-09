@@ -710,6 +710,9 @@ describe('visibleToolRowDetail', () => {
       'Schedule Standup',
     );
     expect(toolDescription('list_schedules', {})).toBe('List schedules');
+    expect(toolDescription('list_env', {})).toBe('List env vars');
+    expect(toolDescription('set_env', {})).toBe('Set env var');
+    expect(toolDescription('delete_env', {})).toBe('Delete env var');
     expect(toolDescription('Skill', { skill: 'long-running' })).toBe('Using /long-running');
     expect(toolDescription('SlashCommand', { command: '/commit' })).toBe('Using /commit');
     expect(toolDescription('Skill')).toBe('Using skill');

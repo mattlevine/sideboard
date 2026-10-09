@@ -248,6 +248,11 @@ import {
   resolveViewerProfileForRepo,
   type FollowUpBehavior,
 } from '../store/app-settings.js';
+import {
+  formatEnvDirective,
+  formatEnvReminder,
+  projectNameForRepoPath,
+} from '../store/env-vars.js';
 import { planModeTurnInstruction } from '../agents/types.js';
 import {
   extractPresentedPlan,
@@ -1543,6 +1548,10 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatViewerContextReminder()
         : null;
+    const envReminder =
+      thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
+        ? formatEnvReminder(projectNameForRepoPath(thread.repoPath || thread.worktreePath))
+        : null;
     const reviewWriteGateReminder =
       thread.agent !== 'brightsy' &&
       !isOrchestratorThread(thread) &&
@@ -1565,6 +1574,7 @@ export class Orchestrator {
         issueToolsReminder,
         reviewWriteGateReminder,
         viewerContextReminder,
+        envReminder,
         artifactReminder,
         longRunningReminder,
       ]
@@ -1660,6 +1670,7 @@ export class Orchestrator {
         ? null
         : formatReviewWriteGateDirective();
     let viewerContextDirective: string | null = null;
+    let envDirective: string | null = null;
     if (!isBrightsy && !isOrchestration) {
       try {
         viewerContextDirective = formatViewerContextDirective(
@@ -1670,6 +1681,9 @@ export class Orchestrator {
           resolveViewerProfileForRepo(),
         );
       }
+      envDirective = formatEnvDirective(
+        projectNameForRepoPath(fresh.repoPath || fresh.worktreePath),
+      );
     }
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     let renameBranchDirective: string | null = null;
@@ -1728,6 +1742,7 @@ export class Orchestrator {
           issueToolsDirective,
           reviewWriteGateDirective,
           viewerContextDirective,
+          envDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,
@@ -1923,6 +1938,7 @@ export class Orchestrator {
           issueToolsDirective,
           reviewWriteGateDirective,
           viewerContextDirective,
+          envDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,
