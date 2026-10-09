@@ -19,7 +19,13 @@
       }
     },
     "android": {
-      "package": "cloud.sideboard.mobile"
+      "package": "cloud.sideboard.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "plugins": [
       [
@@ -35,6 +41,12 @@
           "cameraPermission": "Sideboard uses the camera to attach a photo to a message."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "df689cd6-ee41-404d-868b-5d079dfa3e76"
+      }
+    },
+    "owner": "matthewklevine"
   }
 }
