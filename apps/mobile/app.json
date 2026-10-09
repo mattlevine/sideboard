@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
+      "icon": "./assets/AppIcon.icon",
       "supportsTablet": false,
       "bundleIdentifier": "cloud.sideboard.mobile",
       "buildNumber": "1",
