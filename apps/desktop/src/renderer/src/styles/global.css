@@ -2288,6 +2288,7 @@ body.resizing-panels webview {
   cursor: pointer;
   min-width: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .thread-item:hover {
@@ -2643,7 +2644,9 @@ body.resizing-panels webview {
   font-weight: 400;
 }
 
-/* Action controls stay pinned in the row — never pushed off-screen. */
+/* Action controls stay pinned in the row — never pushed off-screen.
+   They sit out of flow until hover so the workspace name uses the full row,
+   then re-enter the row so the name truncates beside the buttons. */
 .thread-item > .icon-btn,
 .thread-item > .worktree-remove-btn,
 .thread-item > .worktree-row-actions {
@@ -2657,13 +2660,17 @@ body.resizing-panels webview {
   gap: 2px;
   opacity: 0;
   pointer-events: none;
-  position: relative;
+  position: absolute;
+  right: 8px;
+  top: 0;
+  bottom: 0;
   z-index: 1;
 }
 
 .thread-item:hover .worktree-row-actions,
 .worktree-row-actions:focus-within,
 .worktree-row-actions.is-open {
+  position: static;
   opacity: 1;
   pointer-events: auto;
 }
