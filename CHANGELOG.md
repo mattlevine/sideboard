@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.283] - 2026-10-09
+
+### Fixed
+
+- Sidebar workspace tags sit inside the selected row, so the highlight includes the chips.
+
 ## [0.1.282] - 2026-10-09
 
 ### Fixed
