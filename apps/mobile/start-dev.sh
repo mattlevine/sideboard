@@ -56,15 +56,24 @@ metro_ready() {
   curl -fsS -o /dev/null --max-time 1 "http://127.0.0.1:${port}"
 }
 
+# A phone on this network cannot open 127.0.0.1. --localhost would bind Metro there.
+lan_url() {
+  ip=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
+  if [ -n "$ip" ]; then
+    printf 'exp://%s:%s' "$ip" "$port"
+  fi
+}
+
 install_sdk_expo_go
 
 if osascript -e 'id of app "Simulator"' >/dev/null 2>&1; then
-  exec pnpm exec expo start --ios --localhost --port "$port"
+  exec pnpm exec expo start --ios --port "$port"
 fi
 
+devtools=$(xcode-select -p 2>/dev/null || true)
 echo "Simulator.app is not registered with Launch Services, so Expo will not be asked to open it."
-echo "xcode-select is $(xcode-select -p). Starting Metro on port ${port}."
-pnpm exec expo start --localhost --port "$port" &
+echo "xcode-select is ${devtools:-unset}. Starting Metro on port ${port}."
+pnpm exec expo start --port "$port" &
 child=$!
 i=0
 while [ "$i" -lt 90 ]; do
@@ -76,7 +85,12 @@ while [ "$i" -lt 90 ]; do
     if xcrun simctl openurl booted "exp://127.0.0.1:${port}"; then
       echo "Opened Expo Go on the booted simulator: exp://127.0.0.1:${port}"
     else
-      echo "Metro is at http://127.0.0.1:${port}. No booted simulator accepted the URL."
+      phone=$(lan_url || true)
+      if [ -n "$phone" ]; then
+        echo "Metro is at ${phone}. Open that in Expo Go on a phone on this network."
+      else
+        echo "Metro is up on port ${port}. No booted simulator accepted the URL."
+      fi
     fi
     break
   fi

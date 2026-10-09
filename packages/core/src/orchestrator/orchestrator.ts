@@ -248,6 +248,7 @@ import {
   resolveViewerProfileForRepo,
   type FollowUpBehavior,
 } from '../store/app-settings.js';
+import { formatEnvDirective, formatEnvReminder, projectNameForRepoPath } from '../store/env-vars.js';
 import { planModeTurnInstruction } from '../agents/types.js';
 import {
   extractPresentedPlan,
@@ -1541,7 +1542,7 @@ export class Orchestrator {
         : null;
     const viewerContextReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
-        ? formatViewerContextReminder()
+        ? `${formatViewerContextReminder()}\n\n${formatEnvReminder(projectNameForRepoPath(thread.repoPath || thread.worktreePath))}`
         : null;
     const reviewWriteGateReminder =
       thread.agent !== 'brightsy' &&
@@ -1555,9 +1556,8 @@ export class Orchestrator {
     const injectedNoticeContext = formatInjectedNoticesForTurn(
       pendingInjectedNotices(thread.messages),
     );
-    // Standing reminders restate the fresh-session directives. They travel as
-    // `systemPrompt`: Claude appends them to its (cached) system prompt; other
-    // CLIs prepend them only on resumed turns (fresh turns have the directives).
+    // Standing reminders restate fresh-session directives via systemPrompt
+    // (Claude appends; other CLIs prepend them only on resumed turns).
     const turnReminders =
       [
         worktreeReminder,
@@ -1660,16 +1660,15 @@ export class Orchestrator {
         ? null
         : formatReviewWriteGateDirective();
     let viewerContextDirective: string | null = null;
+    let envDirective: string | null = null;
     if (!isBrightsy && !isOrchestration) {
+      const repo = fresh.repoPath || fresh.worktreePath;
       try {
-        viewerContextDirective = formatViewerContextDirective(
-          resolveViewerProfileForRepo(fresh.repoPath || fresh.worktreePath),
-        );
+        viewerContextDirective = formatViewerContextDirective(resolveViewerProfileForRepo(repo));
       } catch {
-        viewerContextDirective = formatViewerContextDirective(
-          resolveViewerProfileForRepo(),
-        );
+        viewerContextDirective = formatViewerContextDirective(resolveViewerProfileForRepo());
       }
+      envDirective = formatEnvDirective(projectNameForRepoPath(repo));
     }
     const settings = loadWorkspaceSettings(fresh.worktreePath, fresh.repoPath);
     let renameBranchDirective: string | null = null;
@@ -1728,6 +1727,7 @@ export class Orchestrator {
           issueToolsDirective,
           reviewWriteGateDirective,
           viewerContextDirective,
+          envDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,
@@ -1923,6 +1923,7 @@ export class Orchestrator {
           issueToolsDirective,
           reviewWriteGateDirective,
           viewerContextDirective,
+          envDirective,
           artifactDirective,
           longRunningDirective,
           renameBranchDirective,
