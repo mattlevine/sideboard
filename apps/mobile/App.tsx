@@ -39,7 +39,8 @@ import { ProjectGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-
 import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
-import { agentStatus, desktopStatus, historyCount, onMac } from './labels';
+import { agentStatus, composerPlaceholder, desktopStatus, historyCount, onMac } from './labels';
+import { openedTranscript } from './transcript';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
@@ -87,7 +88,7 @@ type PhoneControl =
   | {
       op: 'opened';
       chat: PhoneChat;
-      messages: Array<{ role: 'user' | 'agent'; text: string }>;
+      messages: Array<{ role: 'user' | 'agent'; text: string; streaming?: boolean }>;
       place?: PhonePlace;
       options?: ComposerOptions;
     }
@@ -468,6 +469,7 @@ export default function App() {
   const transcriptScrollRef = useRef<ScrollView>(null);
   const pinTranscriptRef = useRef(true);
   const attachedRef = useRef(false);
+  const checkingHostsRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
   const linkRef = useRef<RelayLink | null>(null);
@@ -481,9 +483,16 @@ export default function App() {
     linkRef.current = createRelayLink({
       url: () => urlRef.current.trim() || DEFAULT_URL,
       onMessage: (raw) => onMessageRef.current(raw),
-      onError: (message) => setError(message),
+      onError: (message) => {
+        if (screenRef.current === 'desktops' && checkingHostsRef.current) return;
+        setError(message);
+      },
       onClose: () => {
         attachedRef.current = false;
+        if (screenRef.current === 'desktops' && checkingHostsRef.current) {
+          checkingHostsRef.current = false;
+          setError('Could not reach the relay.');
+        }
       },
       attached: () => attachedRef.current,
       inChat: () => onMac(screenRef.current),
@@ -638,16 +647,10 @@ export default function App() {
       setActiveChatId(chat.id);
       screenRef.current = 'chat';
       setScreen('chat');
-      setTranscripts((prev) => {
-        if (prev[chat.id]?.working) return prev;
-        const bubbles = (Array.isArray(control.messages) ? control.messages : []).map((message, index) => ({
-          id: `${chat.id}-${index}`,
-          role: message.role,
-          text: message.text,
-        }));
-        const working = chat.status === 'running' || chat.status === 'queued';
-        return { ...prev, [chat.id]: { bubbles, questions: null, working, activity: '' } };
-      });
+      setTranscripts((prev) => ({
+        ...prev,
+        [chat.id]: openedTranscript(chat.id, control.messages, chat.status),
+      }));
       return;
     }
     if (control.op === 'stream' && control.chatId) {
@@ -784,6 +787,8 @@ export default function App() {
     const msg = parseServer(raw);
     if (!msg) return;
     if (msg.type === 'hosts') {
+      checkingHostsRef.current = false;
+      if (screenRef.current === 'desktops') setError(null);
       setDesktops((prev) => {
         const next = prev.map((row) => {
           const listed = msg.hosts.find((host) => host.sessionToken === row.sessionToken);
@@ -856,6 +861,7 @@ export default function App() {
     }
     if (msg.type === 'host_offline') {
       attachedRef.current = false;
+      if (screenRef.current === 'desktops' && checkingHostsRef.current) return;
       const token = pendingTokenRef.current;
       if (token) patchDesktop(token, { online: false });
       setError(
@@ -896,6 +902,7 @@ export default function App() {
     }
     screenRef.current = 'desktops';
     setScreen('desktops');
+    checkingHostsRef.current = true;
     link.send({ type: 'list_hosts', sessionTokens: tokens });
   }
 
@@ -1219,6 +1226,7 @@ export default function App() {
       const rows = saved.map((row) => ({ ...row, online: null, expired: false }));
       setDesktops(rows);
       setScreen('desktops');
+      checkingHostsRef.current = true;
       link.send({ type: 'list_hosts', sessionTokens: rows.map((row) => row.sessionToken) });
     });
     return () => {
@@ -1295,7 +1303,7 @@ export default function App() {
             </View>
           ))}
         </ScrollView>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error && !checkingHostsRef.current ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.footer}>
           <Pressable style={styles.primary} onPress={() => { setError(null); setScreen('pair'); }}>
             <Text style={styles.primaryText}>Pair another Mac</Text>
@@ -1394,7 +1402,7 @@ export default function App() {
           <View style={[styles.sectionRow, styles.projectsHead]}>
             <Text style={styles.sectionLabel}>Projects</Text>
           </View>
-          {projects.length === 0 ? <Text style={styles.meta}>No workspaces yet</Text> : null}
+          {projects.length === 0 ? <Text style={styles.meta}>No projects yet</Text> : null}
           {projects.map((project) => (
             <View key={project.path} style={styles.projectBlock}>
               <View style={styles.sectionRow}>
@@ -1411,7 +1419,7 @@ export default function App() {
                   onPress={() => openCreate({ kind: 'project', repoPath: project.path, name: project.name })}
                 />
               </View>
-              {project.worktrees.length === 0 ? <Text style={styles.meta}>No worktrees</Text> : null}
+              {project.worktrees.length === 0 ? <Text style={styles.meta}>No workspaces</Text> : null}
               {project.worktrees.map((worktree) => {
                 const anchor = worktree.chats[0];
                 return (
@@ -1642,7 +1650,10 @@ export default function App() {
         {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
         <ComposerDock
           draft={draft}
-          placeholder={`Message ${activeChat?.title || 'this agent'}`}
+          placeholder={composerPlaceholder({
+            orchestration: orchestration.some((row) => row.id === activeChatId),
+            status: activeChat?.status,
+          })}
           onChangeDraft={setDraft}
           onSend={() => sendText(draft)}
           files={files}

@@ -16,6 +16,13 @@ export function desktopStatus(desktop: { expired: boolean; online: boolean | nul
   return desktop.online ? 'Online' : 'Offline';
 }
 
+/** Same composer hints as the desktop, without the chat title. */
+export function composerPlaceholder(input: { orchestration: boolean; status?: string }): string {
+  if (input.status === 'running' || input.status === 'queued') return 'Queued when you send…';
+  if (input.orchestration) return 'Describe a goal — spawn and steer worktree agents via MCP';
+  return 'Ask to make changes, @mention files, run /commands';
+}
+
 export function onMac(screen: string): boolean {
   return screen === 'chat' || screen === 'agents' || screen === 'history';
 }

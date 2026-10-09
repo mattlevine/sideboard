@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateDefaultsSettings } from '../store/app-settings.js';
 import { removeWorkspace } from '../store/workspaces.js';
+import { clearTurnLive, noteTurnLiveEvent } from '../store/turn-live.js';
 import { createEmptyThread, updateThread, writeThread } from '../store/thread-store.js';
 
 const createThread = vi.hoisted(() => vi.fn());
@@ -139,6 +140,15 @@ describe('phone orchestration chats', () => {
       { role: 'user', text: 'check the board' },
       { role: 'agent', text: 'Two agents are running.' },
     ]);
+
+    updateThread(created.chat.id, { status: 'running' });
+    noteTurnLiveEvent(created.chat.id, { type: 'stdout', data: 'Still writing the latest reply' });
+    expect(openPhoneChat(created.chat.id)?.messages).toEqual([
+      { role: 'user', text: 'check the board' },
+      { role: 'agent', text: 'Two agents are running.' },
+      { role: 'agent', text: 'Still writing the latest reply', streaming: true },
+    ]);
+    clearTurnLive(created.chat.id);
     expect(openPhoneChat(created.chat.id.slice(0, 8))?.chat.id).toBe(created.chat.id);
 
     expect(archivePhoneChat(created.chat.id)).toBe(true);

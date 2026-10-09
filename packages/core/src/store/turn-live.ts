@@ -136,6 +136,11 @@ export function writeTurnLive(
   }
 }
 
+/** In-memory parts for the turn in progress. Empty once the turn is cleared. */
+export function readTurnLiveParts(threadId: string): MessagePart[] {
+  return buffers.get(threadId)?.parts.slice() ?? [];
+}
+
 export function readTurnLive(threadId: string): TurnLiveProgress | null {
   const path = threadLivePath(threadId);
   if (!existsSync(path)) return null;

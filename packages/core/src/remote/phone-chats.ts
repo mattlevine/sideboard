@@ -19,8 +19,9 @@ import { isRemovedWorkspace, listWorkspaces } from '../store/workspaces.js';
 import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
 import { createThread } from '../threads/create.js';
 import { startOrchestration } from '../orchestrator/orchestrator.js';
-import { parseOpenArtifact, phoneArtifactText, type PhoneOpenArtifact } from './phone-artifact.js';
+import { parseOpenArtifact, type PhoneOpenArtifact } from './phone-artifact.js';
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
+import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js';
 
 /**
  * Phone chat control rides inside the existing prompt/assistant text so it
@@ -29,9 +30,6 @@ import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-default
  */
 export const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
-const PHONE_USER_PREFIX = 'Phone\n\n';
-const TRANSCRIPT_LIMIT = 40;
-const MESSAGE_LIMIT = 4_000;
 const PREVIEW_LIMIT = 90;
 /** One History page. The archive can be long; the phone asks for the next page. */
 const HISTORY_PAGE_SIZE = 40;
@@ -48,7 +46,11 @@ export interface PhoneChatSummary {
 export interface PhoneChatMessage {
   role: 'user' | 'agent';
   text: string;
+  /** Set on the in-progress answer while a turn is still running. */
+  streaming?: boolean;
 }
+
+export { clip, phoneVisibleText };
 
 export type PhonePlace =
   | { kind: 'orchestration' }
@@ -430,19 +432,6 @@ function parsePhoneCreate(value: object): PhoneControlRequest | 'invalid' {
   return 'invalid';
 }
 
-export function phoneVisibleText(role: 'user' | 'agent', text: string): string {
-  const trimmed = text.trim();
-  if (role === 'user' && trimmed.startsWith(PHONE_USER_PREFIX)) {
-    return trimmed.slice(PHONE_USER_PREFIX.length).trim();
-  }
-  return trimmed;
-}
-
-export function clip(text: string, limit: number): string {
-  if (text.length <= limit) return text;
-  return `${text.slice(0, limit - 1)}…`;
-}
-
 function summarize(thread: Thread): PhoneChatSummary {
   return {
     id: thread.id,
@@ -459,26 +448,6 @@ function previewOf(thread: Thread): string {
   const last = messages[messages.length - 1];
   if (!last) return '';
   return clip(last.text.replace(/\s+/g, ' ').trim(), PREVIEW_LIMIT);
-}
-
-export function listPhoneMessages(thread: Thread): PhoneChatMessage[] {
-  const out: PhoneChatMessage[] = [];
-  for (const message of thread.messages) {
-    if (message.role !== 'user' && message.role !== 'agent') continue;
-    const names = (message.attachments ?? []).map((item) => item.name.trim()).filter(Boolean);
-    const visible = [phoneVisibleText(message.role, message.text), names.length ? names.join(', ') : '']
-      .filter(Boolean)
-      .join('\n');
-    const text =
-      message.role === 'agent' ? phoneArtifactText(visible, message.parts, MESSAGE_LIMIT) : clip(visible, MESSAGE_LIMIT);
-    if (!text) continue;
-    out.push({ role: message.role, text });
-  }
-  for (const prompt of thread.queue) {
-    const text = clip(phoneVisibleText('user', prompt), MESSAGE_LIMIT);
-    if (text) out.push({ role: 'user', text });
-  }
-  return out.slice(-TRANSCRIPT_LIMIT);
 }
 
 function repoName(repoPath: string): string {

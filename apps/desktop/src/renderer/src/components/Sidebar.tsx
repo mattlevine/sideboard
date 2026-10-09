@@ -325,7 +325,7 @@ export function Sidebar({
             <button
               type="button"
               className="icon-btn"
-              title="Add workspace"
+              title="Add project"
               onClick={onPickRepo}
             >
               <span className="folder-plus-glyph" aria-hidden />
@@ -339,14 +339,16 @@ export function Sidebar({
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter projects & workspaces…"
+              placeholder="Filter projects…"
             />
           </div>
         )}
         </div>
 
         <div className="sidebar-projects">
-        {groupedByRepo.length === 0 && <div className="empty">No workspaces yet</div>}
+        {groupedByRepo.length === 0 && (
+          <div className="empty">{q ? 'Nothing matched' : 'No projects yet'}</div>
+        )}
         {groupedByRepo.map(({ path, repoThreads, groups }) => (
           <div key={path} className="workspace-group">
             <div className="workspace-header">
@@ -391,7 +393,7 @@ export function Sidebar({
             </div>
             {repoThreads.length === 0 && (
               <div className="thread-meta" style={{ padding: '4px 8px' }}>
-                No worktrees
+                No workspaces
               </div>
             )}
             {groups.map((group) => {
