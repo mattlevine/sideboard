@@ -74,9 +74,18 @@ describe('abletime helpers', () => {
       title: 'REST task',
       state: 'todo',
       projectId: '01PROJ',
+      project: { id: '01PROJ' },
       labels: ['sideboard'],
       updatedAt: '2026-09-16T00:00:00.000Z',
     });
+    const named = mapAbleTimeTask({
+      id: '01TASK',
+      reference: 'CRM-1',
+      title: 'Named',
+      project: { id: 'p1', name: 'Acme' },
+    });
+    expect(named?.project).toEqual({ id: 'p1', name: 'Acme' });
+    expect(toAbleTimeIssueInfo(named!).projects).toEqual([{ id: 'p1', name: 'Acme' }]);
   });
 
   it('maps task payloads with AbleTime field aliases', () => {

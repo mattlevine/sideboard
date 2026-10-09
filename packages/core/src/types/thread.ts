@@ -503,8 +503,8 @@ export interface IssueInfo {
   assignees?: string[];
   /** Linear cycle (sprint). Absent on GitHub / unscheduled issues. */
   cycle?: IssueCycleInfo | null;
-  /** Linear team key (e.g. ENG). */
   teamKey?: string;
+  projects?: Array<{ id?: string; name?: string }>;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -2,10 +2,21 @@ import { ghRepoSelectArgs, resolveGithubRepoSlug, resolveRepoRoot } from '../git
 import { gh } from '../git/run.js';
 import type { IssueActivityComment, IssueInfo } from '../types/thread.js';
 import { extractGitHubIssueAttachments } from './github-issue-attachments.js';
+import {
+  listGitHubIssueProjectNames,
+  readGitHubIssueProjects,
+  type GitHubProjectRef,
+} from './github-projects.js';
 import type { IssueVendorAttachment } from './issue-attachments.js';
 import { previewIssueCommentBody } from './issue-since.js';
 
 export { downloadGitHubIssueAttachment } from './github-issue-attachments.js';
+export {
+  githubProjectsOnIssue,
+  listGitHubProjects,
+  type GitHubProject,
+  type GitHubProjectRef,
+} from './github-projects.js';
 
 export interface GitHubIssueComment {
   id?: string;
@@ -27,6 +38,10 @@ export interface GitHubIssue {
   assignees: string[];
   comments: GitHubIssueComment[];
   attachments: IssueVendorAttachment[];
+  /** GitHub Projects this issue is on. Empty when it is on none. */
+  projects?: GitHubProjectRef[];
+  /** Set when `gh` refused project fields (usually a missing `read:project` scope). */
+  projectsError?: string;
 }
 
 function requireGhOk(
@@ -135,6 +150,7 @@ export function toGitHubIssueInfo(issue: GitHubIssue): IssueInfo {
     provider: 'github',
     assignee: issue.assignees[0],
     assignees: issue.assignees.length ? issue.assignees : undefined,
+    ...(issue.projects?.length ? { projects: issue.projects } : {}),
   };
 }
 
@@ -262,7 +278,11 @@ export async function getGitHubIssue(
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error(`GitHub issue not found: #${number}`);
   }
-  return toGitHubIssue(parsed as Record<string, unknown>);
+  const issue = toGitHubIssue(parsed as Record<string, unknown>);
+  const projects = await readGitHubIssueProjects(number, cwd, repoArgs);
+  issue.projects = projects.projects;
+  if (projects.error) issue.projectsError = projects.error;
+  return issue;
 }
 
 export async function commentGitHubIssue(
@@ -313,55 +333,6 @@ export function githubRelationEditFlag(type: string, remove = false): string {
 
 function labelsEqual(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
-function parseProjectTitles(raw: Record<string, unknown>): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const push = (name: string) => {
-    const title = name.trim();
-    const key = title.toLowerCase();
-    if (!title || seen.has(key)) return;
-    seen.add(key);
-    out.push(title);
-  };
-  const fromItems = raw.projectItems ?? raw.projects ?? raw.projectItemsV2;
-  if (Array.isArray(fromItems)) {
-    for (const item of fromItems) {
-      if (typeof item === 'string') {
-        push(item);
-        continue;
-      }
-      if (!item || typeof item !== 'object') continue;
-      const rec = item as Record<string, unknown>;
-      const nested =
-        rec.project && typeof rec.project === 'object'
-          ? (rec.project as Record<string, unknown>)
-          : rec;
-      const title = String(nested.title ?? nested.name ?? rec.title ?? rec.name ?? '').trim();
-      if (title) push(title);
-    }
-  }
-  return out;
-}
-
-async function listGitHubIssueProjects(
-  number: number,
-  cwd: string,
-  repoArgs: string[],
-): Promise<string[]> {
-  const result = await gh(
-    ['issue', 'view', String(number), ...repoArgs, '--json', 'projectItems'],
-    cwd,
-    { reject: false },
-  );
-  if (result.exitCode !== 0 || !result.stdout.trim()) return [];
-  try {
-    const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
-    return parseProjectTitles(parsed);
-  } catch {
-    return [];
-  }
 }
 
 export async function updateGitHubIssue(
@@ -428,7 +399,7 @@ export async function updateGitHubIssue(
     if (remove.length) args.push('--remove-label', remove.join(','));
   }
   if (input.project !== undefined) {
-    const current = await listGitHubIssueProjects(number, cwd, repoArgs);
+    const current = await listGitHubIssueProjectNames(number, cwd, repoArgs);
     if (isGitHubNoneToken(input.project)) {
       for (const name of current) args.push('--remove-project', name);
     } else {

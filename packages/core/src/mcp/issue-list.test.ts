@@ -59,6 +59,9 @@ describe('mcp issue-list', () => {
       team: 'ENG',
       cycle: 'Week 34',
     });
+    expect(
+      compactIssueRow(issue({ projects: [{ id: 'p1', name: 'Ship' }, { name: 'Roadmap' }] })).projects,
+    ).toEqual(['Ship', 'Roadmap']);
     expect(JSON.stringify(row)).not.toContain('\n');
 
     const listed = formatMcpIssueList({
