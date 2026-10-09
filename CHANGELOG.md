@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.285] - 2026-10-09
+
+### Fixed
+
+- A phone message sent while an agent is running uses the desktop follow-up setting (Steer by default) instead of force-stopping and starting a second Cursor run that fails with "agent still running."
+- With Follow-up set to Queue, the phone still delivers the in-flight reply and then the queued one. A steer that stays stopped while the replacement prompt is queued is not reported as stopped.
+- Pending and review pills on a sidebar workspace hide while that row's action buttons or hover card are open.
+- Remote GitHub sign-in reports the network error, including a proxy block page, instead of an opaque "fetch failed."
+
 ## [0.1.284] - 2026-10-09
 
 ### Fixed
