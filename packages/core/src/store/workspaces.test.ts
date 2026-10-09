@@ -115,11 +115,21 @@ describe('workspaces store', () => {
     expect(paths).not.toContain(realpathSync(wt));
   });
 
-  it('ensureWorkspace re-registers after remove', async () => {
+  it('keeps a removed project removed until it is added again', async () => {
     const mod = await import('./workspaces.js');
     const added = await mod.addWorkspace(repoPath);
     mod.removeWorkspace(added.path);
-    const again = await mod.ensureWorkspace(added.path);
+    await expect(mod.ensureWorkspace(added.path)).rejects.toThrow(/removed/i);
+    expect(mod.listWorkspaces().map((w) => w.path)).not.toContain(added.path);
+    expect(mod.syncWorkspacesFromThreads([added.path]).map((w) => w.path)).not.toContain(
+      added.path,
+    );
+
+    writeFileSync(join(dataDir, 'workspaces.json'), JSON.stringify([added], null, 2));
+    expect(mod.listWorkspaces().map((w) => w.path)).not.toContain(added.path);
+
+    const again = await mod.addWorkspace(added.path);
     expect(mod.listWorkspaces().map((w) => w.path)).toContain(again.path);
+    expect(mod.syncWorkspacesFromThreads([added.path]).map((w) => w.path)).toContain(again.path);
   });
 });

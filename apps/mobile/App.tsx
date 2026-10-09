@@ -38,6 +38,8 @@ import { AgentKindIcon } from './agent-icons';
 import { ProjectGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
 import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
+import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
+import { agentStatus, desktopStatus, historyCount, onMac } from './labels';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
@@ -72,7 +74,7 @@ type PhoneHistoryChat = {
   agent: string;
 };
 type PhoneControl =
-  | { op: 'sidebar'; orchestration: PhoneChat[]; projects: PhoneProject[] }
+  | { op: 'sidebar'; orchestration: PhoneChat[]; projects: PhoneProject[]; defaults?: PhoneAccountDefaults }
   | {
       op: 'history';
       chats: PhoneHistoryChat[];
@@ -178,28 +180,6 @@ function decodePhoneReply(text: string): PhoneControl | null {
   } catch {
     return null;
   }
-}
-
-function historyCount(total: number, filtered: boolean): string {
-  if (filtered) return total === 1 ? '1 match' : `${total} matches`;
-  return total === 1 ? '1 archived chat' : `${total} archived chats`;
-}
-
-function agentStatus(status: string): string {
-  if (status === 'running' || status === 'queued') return 'Running';
-  if (status === 'error' || status === 'broken') return 'Error';
-  if (status === 'stopped') return 'Stopped';
-  return 'Idle';
-}
-
-function statusLabel(desktop: Desktop): string {
-  if (desktop.expired) return 'Pair again';
-  if (desktop.online === null) return 'Checking…';
-  return desktop.online ? 'Online' : 'Offline';
-}
-
-function onMac(screen: Screen): boolean {
-  return screen === 'chat' || screen === 'agents' || screen === 'history';
 }
 
 /** Same mark as the desktop sidebar: outline cube over a blue offset plate. */
@@ -471,6 +451,7 @@ export default function App() {
   const pendingImageRef = useRef<string | null>(null);
   const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
+  const accountDefaultsRef = useRef<PhoneAccountDefaults | null>(null);
   const urlRef = useRef(url);
   const pendingTokenRef = useRef<string | null>(null);
   const screenRef = useRef(screen);
@@ -594,6 +575,9 @@ export default function App() {
         : [];
       setOrchestration(nextOrchestration);
       setProjects(nextProjects);
+      if (control.defaults?.orchestration && control.defaults.worktree) {
+        accountDefaultsRef.current = control.defaults;
+      }
       const ids = new Set(nextOrchestration.map((row) => row.id));
       for (const project of nextProjects) {
         for (const worktree of project.worktrees ?? []) {
@@ -1073,11 +1057,12 @@ export default function App() {
     setCreateDraft('');
     setCreateFiles([]);
     setCreateLinks([]);
-    setCreateOptions(DEFAULT_OPTIONS);
+    const options = composerOptionsFor(mode.kind, accountDefaultsRef.current);
+    setCreateOptions(options);
     setSources(null);
     setCreateMode(mode);
     if (mode.kind === 'project') requestSources(mode.repoPath);
-    requestModels(DEFAULT_OPTIONS.agent);
+    requestModels(options.agent);
   }
 
   function submitCreate(body: {
@@ -1301,7 +1286,7 @@ export default function App() {
                       desktop.online ? styles.dotOn : desktop.expired ? styles.dotWarn : styles.dotOff,
                     ]}
                   />
-                  <Text style={styles.status}>{statusLabel(desktop)}</Text>
+                  <Text style={styles.status}>{desktopStatus(desktop)}</Text>
                 </View>
               </Pressable>
               <Pressable style={styles.ghost} onPress={() => forget(desktop.deviceId)}>

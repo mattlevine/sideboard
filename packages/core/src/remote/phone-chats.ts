@@ -15,11 +15,12 @@ import type { RemoteAskQuestion } from './protocol.js';
 import { resolveNewThreadOptions, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { createGlobalChat, isGlobalThread, listGlobalThreads } from '../store/global-workspace.js';
 import { findThreadByRef, listThreads, readThread, updateThread } from '../store/thread-store.js';
-import { listWorkspaces } from '../store/workspaces.js';
+import { isRemovedWorkspace, listWorkspaces } from '../store/workspaces.js';
 import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
 import { createThread } from '../threads/create.js';
 import { startOrchestration } from '../orchestrator/orchestrator.js';
 import { parseOpenArtifact, phoneArtifactText, type PhoneOpenArtifact } from './phone-artifact.js';
+import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
 
 /**
  * Phone chat control rides inside the existing prompt/assistant text so it
@@ -181,6 +182,8 @@ export interface PhoneProject {
 export interface PhoneSidebar {
   orchestration: PhoneChatSummary[];
   projects: PhoneProject[];
+  /** Account settings for a new orchestration chat and a new worktree agent. */
+  defaults?: PhoneAccountDefaults;
 }
 
 export type PhoneControlReply =
@@ -501,7 +504,7 @@ export function listPhoneSidebar(): PhoneSidebar {
   const threads = listThreads();
   const byRepo = new Map<string, Thread[]>();
   for (const thread of threads) {
-    if (!isProjectPath(thread.repoPath)) continue;
+    if (!isProjectPath(thread.repoPath) || isRemovedWorkspace(thread.repoPath)) continue;
     const list = byRepo.get(thread.repoPath) ?? [];
     list.push(thread);
     byRepo.set(thread.repoPath, list);
@@ -520,7 +523,7 @@ export function listPhoneSidebar(): PhoneSidebar {
         chats: group.map(summarize),
       })),
     }));
-  return { orchestration: listPhoneChats(), projects };
+  return { orchestration: listPhoneChats(), projects, defaults: phoneAccountDefaults() };
 }
 
 function historyStamp(thread: Thread): string {

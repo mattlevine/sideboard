@@ -259,7 +259,9 @@ import { loadWorkspaceSettings } from '../hook/settings.js';
 import { syncThreadBranchFromGit } from '../threads/sync-branch.js';
 import {
   addWorkspace,
+  ensureWorkspace,
   removeWorkspace,
+  sameWorkspacePath,
   syncWorkspacesFromThreads,
   type Workspace,
 } from '../store/workspaces.js';
@@ -1120,8 +1122,12 @@ export class Orchestrator {
     return addWorkspace(repoPath);
   }
 
-  removeWorkspace(repoPath: string): void {
+  async removeWorkspace(repoPath: string): Promise<void> {
     removeWorkspace(repoPath);
+    for (const thread of listThreads()) {
+      if (!sameWorkspacePath(thread.repoPath, repoPath)) continue;
+      await this.archive(thread.id).catch(() => undefined);
+    }
   }
 
   async adopt(input: Parameters<typeof adoptThread>[0]): Promise<Thread> {
@@ -3680,15 +3686,9 @@ export class Orchestrator {
     const archived = setStatus(thread.id, 'archived');
     this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
     this.enforceHistoryRetention();
-    // Archiving the last worktree must not unregister the project — keep it in
-    // the sidebar so the user can create a new thread without re-adding it.
+    // A project the user did not remove stays registered after its last worktree is archived.
     if (thread.repoPath && !isGlobalRepoPath(thread.repoPath)) {
-      try {
-        const { ensureWorkspace } = await import('../store/workspaces.js');
-        await ensureWorkspace(thread.repoPath);
-      } catch {
-        // Best-effort — repo may have been deleted on disk.
-      }
+      await ensureWorkspace(thread.repoPath).catch(() => undefined);
     }
     return archived;
   }
@@ -3746,17 +3746,12 @@ export class Orchestrator {
           `Cowboy checkout missing: ${thread.worktreePath}. Re-add the project folder, then restore.`,
         );
       }
-      const { createThreadWorktree } = await import('../git/worktree.js');
-      // Recreate worktree from existing branch
-      const slug = thread.worktreePath.split('/').pop()!;
       const dest = thread.worktreePath;
       await withRepoGitLock(thread.repoPath, async () => {
         await git(['worktree', 'add', dest, thread.branchName], thread.repoPath);
       });
       const { ensureWorktreeSideboardIgnored } = await import('../git/worktree-exclude.js');
       await ensureWorktreeSideboardIgnored(dest);
-      void createThreadWorktree;
-      void slug;
     }
 
     // Conductor guard: unarchiving a merged-PR workspace must not immediately
@@ -3785,6 +3780,9 @@ export class Orchestrator {
       updateThread(thread.id, restorePatch);
     }
 
+    if (thread.repoPath && !isGlobalRepoPath(thread.repoPath)) {
+      await addWorkspace(thread.repoPath).catch(() => undefined);
+    }
     const restored = setStatus(thread.id, 'idle');
     this.emit({ type: 'status_changed', threadId: restored.id, status: restored.status });
     return restored;

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { execa } from 'execa';
 import { sideboardReposDir } from '../store/paths.js';
-import { ensureWorkspace, type Workspace } from '../store/workspaces.js';
+import { addWorkspace, type Workspace } from '../store/workspaces.js';
 import { resolveRepoRoot } from '../git/worktree.js';
 
 /**
@@ -26,7 +26,7 @@ export async function cloneRepoIntoSideboard(opts: {
   const dest = join(sideboardReposDir(), name);
   if (existsSync(dest)) {
     const repoPath = await resolveRepoRoot(dest);
-    const workspace = await ensureWorkspace(repoPath);
+    const workspace = await addWorkspace(repoPath);
     return { repoPath, workspace };
   }
 
@@ -37,6 +37,6 @@ export async function cloneRepoIntoSideboard(opts: {
     );
   }
   const repoPath = await resolveRepoRoot(dest);
-  const workspace = await ensureWorkspace(repoPath);
+  const workspace = await addWorkspace(repoPath);
   return { repoPath, workspace };
 }

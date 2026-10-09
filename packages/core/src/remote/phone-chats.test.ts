@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { updateDefaultsSettings } from '../store/app-settings.js';
+import { removeWorkspace } from '../store/workspaces.js';
 import { createEmptyThread, updateThread, writeThread } from '../store/thread-store.js';
 
 const createThread = vi.hoisted(() => vi.fn());
@@ -227,6 +229,62 @@ describe('phone orchestration chats', () => {
     expect(created.place?.kind).toBe('project');
     const project = listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard');
     expect(project?.worktrees[0]?.chats.map((chat) => chat.id)).toEqual([created.chat.id]);
+  });
+
+  it('uses the account orchestration and worktree agent defaults', async () => {
+    updateDefaultsSettings({
+      agent: 'codex',
+      model: 'gpt-5',
+      effort: 'low',
+      orchestrator: { agent: 'cursor', model: 'default', effort: 'high' },
+    });
+    const sidebar = listPhoneSidebar();
+    expect(sidebar.defaults?.worktree).toMatchObject({
+      agent: 'codex',
+      model: 'gpt-5',
+      effort: 'low',
+    });
+    expect(sidebar.defaults?.orchestration).toMatchObject({
+      agent: 'cursor',
+      model: 'default',
+      effort: 'high',
+    });
+    expect(createPhoneChat().chat.agent).toBe('cursor');
+
+    writeFileSync(
+      join(dataDir, 'workspaces.json'),
+      JSON.stringify([{ path: '/tmp/sideboard', name: 'sideboard', addedAt: new Date().toISOString() }]),
+    );
+    createThread.mockImplementation(async (input: { repoPath: string; agent: string }) => {
+      const thread = createEmptyThread({
+        title: 'monaco',
+        sourceType: 'branch',
+        sourceRef: 'main',
+        branchName: 'thread/monaco',
+        worktreePath: '/tmp/sideboard-monaco',
+        repoPath: input.repoPath,
+        agent: input.agent as 'codex',
+      });
+      writeThread(thread);
+      return thread;
+    });
+    await createPhoneProjectWorktree('/tmp/sideboard');
+    expect(createThread).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex' }));
+  });
+
+  it('hides a removed project until it is registered again', () => {
+    const thread = createEmptyThread({
+      title: 'ajax',
+      sourceType: 'branch',
+      sourceRef: 'ajax',
+      branchName: 'thread/ajax',
+      worktreePath: '/tmp/sideboard-ajax',
+      repoPath: '/tmp/sideboard',
+      agent: 'claude',
+    });
+    writeThread(thread);
+    removeWorkspace('/tmp/sideboard');
+    expect(listPhoneSidebar().projects.some((row) => row.path === '/tmp/sideboard')).toBe(false);
   });
 
   it('pages a long archive and filters before paging', () => {

@@ -29,7 +29,7 @@ import {
   updateThread,
   writeThread,
 } from '../store/thread-store.js';
-import { ensureWorkspace } from '../store/workspaces.js';
+import { ensureWorkspace, isRemovedWorkspace } from '../store/workspaces.js';
 import type {
   AgentKind,
   CreateThreadInput,
@@ -94,6 +94,7 @@ export async function createThread(
   if (!existsSync(repoPath)) {
     throw new Error(`Repo not found: ${repoPath}`);
   }
+  if (isRemovedWorkspace(repoPath)) throw new Error(`Project was removed: ${repoPath}`);
 
   const reused = reuseLiveThread(input, repoPath, {
     sourceType: input.sourceType,

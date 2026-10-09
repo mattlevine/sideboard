@@ -27,7 +27,13 @@ export function phoneBoardKey(sidebar: PhoneSidebar): string {
       return `${project.path}\t${project.name}\n${trees}`;
     })
     .join('\n---\n');
-  return `${orchestration}\n===\n${projects}`;
+  const defaults = sidebar.defaults;
+  const defaultsKey = defaults
+    ? [defaults.orchestration, defaults.worktree]
+        .map((row) => [row.agent, row.model ?? '', row.effort, row.fast ? '1' : '0'].join('\t'))
+        .join('\n')
+    : '';
+  return `${orchestration}\n===\n${projects}\n===\n${defaultsKey}`;
 }
 
 export function isPhoneBoardEvent(event: OrchestratorEvent): boolean {
@@ -66,7 +72,7 @@ export function subscribePhoneBoard(notify: () => void): () => void {
   const data = watch(appDataDir(), { ignoreInitial: true, depth: 0 });
   const onData = (changed: string) => {
     const name = basename(changed);
-    if (name !== 'workspaces.json' && name !== 'removed-workspaces.json') return;
+    if (name !== 'workspaces.json' && name !== 'removed-workspaces.json' && name !== 'settings.json') return;
     notify();
   };
   data.on('add', onData);

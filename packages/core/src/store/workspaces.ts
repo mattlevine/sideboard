@@ -51,16 +51,57 @@ function writeRemoved(paths: Set<string>): void {
   writeFileSync(removedWorkspacesFile(), JSON.stringify([...paths].sort(), null, 2), 'utf8');
 }
 
+function canonicalWorkspacePath(repoPath: string): string {
+  return canonicalizeRepoPath(repoPath);
+}
+
+/** True when both paths are the same checkout, including a linked worktree of it. */
+export function sameWorkspacePath(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const left = canonicalWorkspacePath(a);
+  const right = canonicalWorkspacePath(b);
+  if (left === right) return true;
+  const primaryA = primaryCheckoutFromLinkedWorktree(a);
+  const primaryB = primaryCheckoutFromLinkedWorktree(b);
+  if (primaryA && (primaryA === right || primaryA === primaryB)) return true;
+  if (primaryB && primaryB === left) return true;
+  return false;
+}
+
+function removedMatches(saved: string, repoPath: string): boolean {
+  if (saved === repoPath || sameWorkspacePath(saved, repoPath)) return true;
+  const primary = primaryCheckoutFromLinkedWorktree(repoPath);
+  return Boolean(primary && sameWorkspacePath(saved, primary));
+}
+
+/** True when the user removed this project and has not added it again. */
+export function isRemovedWorkspace(repoPath: string): boolean {
+  if (!repoPath) return false;
+  for (const saved of readRemoved()) {
+    if (removedMatches(saved, repoPath)) return true;
+  }
+  return false;
+}
+
 function rememberRemoved(repoPath: string): void {
   const next = readRemoved();
-  next.add(repoPath);
-  writeRemoved(next);
+  const before = next.size;
+  const canon = canonicalWorkspacePath(repoPath);
+  next.add(canon);
+  const raw = repoPath.replace(/\/+$/, '');
+  if (raw && raw !== canon) next.add(raw);
+  if (next.size !== before) writeRemoved(next);
 }
 
 function forgetRemoved(repoPath: string): void {
   const next = readRemoved();
-  if (!next.delete(repoPath)) return;
-  writeRemoved(next);
+  let changed = false;
+  for (const saved of [...next]) {
+    if (!removedMatches(saved, repoPath)) continue;
+    next.delete(saved);
+    changed = true;
+  }
+  if (changed) writeRemoved(next);
 }
 
 export function listWorkspaces(): Workspace[] {
@@ -70,7 +111,8 @@ export function listWorkspaces(): Workspace[] {
       Boolean(w.path) &&
       w.path !== '/' &&
       w.path !== '.' &&
-      !isGlobalRepoPath(w.path),
+      !isGlobalRepoPath(w.path) &&
+      !isRemovedWorkspace(w.path),
   );
   if (valid.length !== all.length) writeAll(valid);
   return valid.sort((a, b) => a.name.localeCompare(b.name));
@@ -129,6 +171,11 @@ export async function addWorkspace(repoPath: string): Promise<Workspace> {
   if (!root || root === '/') throw new Error(`Invalid repo path: ${repoPath}`);
   if (!existsSync(root)) throw new Error(`Repo not found: ${root}`);
   forgetRemoved(root);
+  return registerWorkspace(root);
+}
+
+/** Register `root` without clearing an explicit removal. Caller checks the tombstone. */
+async function registerWorkspace(root: string): Promise<Workspace> {
   // Makerkit-style origin+upstream: make `gh` prefer origin for PR/issue commands.
   await ensureGhPreferOrigin(root);
   const current = readAll();
@@ -147,25 +194,33 @@ export async function addWorkspace(repoPath: string): Promise<Workspace> {
 }
 
 export function removeWorkspace(repoPath: string): void {
-  writeAll(readAll().filter((w) => w.path !== repoPath));
   rememberRemoved(repoPath);
+  const canon = canonicalWorkspacePath(repoPath);
+  writeAll(readAll().filter((w) => !sameWorkspacePath(w.path, canon)));
 }
 
-/** Ensure a repo path is registered (e.g. after creating a thread). */
+/**
+ * Register a repo unless the user explicitly removed it.
+ * Adding the folder again (`addWorkspace`) is what clears that removal.
+ */
 export async function ensureWorkspace(repoPath: string): Promise<Workspace> {
-  return addWorkspace(repoPath);
+  const root = await resolveRepoRoot(repoPath);
+  if (!root || root === '/' || !existsSync(root)) {
+    throw new Error(`Invalid repo path: ${repoPath}`);
+  }
+  if (isRemovedWorkspace(root)) throw new Error(`Project was removed: ${root}`);
+  return registerWorkspace(root);
 }
 
 /** Merge in repo paths discovered from existing threads (including archived). */
 export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
   const current = readAll();
-  const removed = readRemoved();
   const byPath = new Map<string, Workspace>();
   let dirty = false;
   for (const w of current) {
     const resolved = resolveSyncWorkspacePath(w.path) ?? w.path;
     if (resolved !== w.path) dirty = true;
-    if (!resolved || resolved === '/' || isGlobalRepoPath(resolved) || removed.has(resolved)) {
+    if (!resolved || resolved === '/' || isGlobalRepoPath(resolved) || isRemovedWorkspace(resolved)) {
       dirty = true;
       continue;
     }
@@ -178,7 +233,7 @@ export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
   }
   for (const raw of repoPaths) {
     const path = resolveSyncWorkspacePath(raw);
-    if (!path || path === '/' || isGlobalRepoPath(path) || byPath.has(path) || removed.has(path)) {
+    if (!path || path === '/' || isGlobalRepoPath(path) || byPath.has(path) || isRemovedWorkspace(path)) {
       continue;
     }
     if (!existsSync(path)) continue;

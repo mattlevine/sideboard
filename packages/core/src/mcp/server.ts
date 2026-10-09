@@ -1498,10 +1498,10 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'remove_project',
-    'Unregister a Sideboard workspace (does not archive threads)',
+    'Unregister a Sideboard workspace and archive its chats',
     { repoPath: z.string() },
     async ({ repoPath }) => {
-      orch.removeWorkspace(repoPath);
+      await orch.removeWorkspace(repoPath);
       return { content: [{ type: 'text', text: 'ok' }] };
     },
   );
