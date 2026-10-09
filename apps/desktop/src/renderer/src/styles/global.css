@@ -2620,6 +2620,17 @@ body.resizing-panels webview {
   flex-shrink: 0;
 }
 
+/* Pending / review share the title with hover actions and the hover card.
+   Drop them while that chrome is up so the name truncates beside the buttons. */
+.thread-item.worktree-parent:is(:hover, .has-hover-card) .board-badge.is-pending,
+.thread-item.worktree-parent:is(:hover, .has-hover-card) .board-badge.is-review,
+.thread-item.worktree-parent:has(.worktree-row-actions:is(.is-open, :focus-within))
+  .board-badge.is-pending,
+.thread-item.worktree-parent:has(.worktree-row-actions:is(.is-open, :focus-within))
+  .board-badge.is-review {
+  display: none;
+}
+
 .thread-item.active .thread-title {
   color: var(--text);
 }
