@@ -236,7 +236,9 @@ import {
   formatReviewWriteGateReminder,
   isReviewWriteGatedThread,
 } from '../review/review-write-gate.js';
+import { optionalCliPresence } from '../integrations/optional-cli.js';
 import {
+  connectedOptionalServices,
   formatOptionalServicesDirective,
   formatOptionalServicesReminder,
 } from '../integrations/optional-services.js';
@@ -1531,9 +1533,23 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatWorktreeReminder()
         : null;
+    const connectorIntegrations = loadAppSettings().integrations;
+    let connectorCli: Awaited<ReturnType<typeof optionalCliPresence>> | undefined;
+    if (thread.agent !== 'brightsy' && !isOrchestratorThread(thread)) {
+      const cliIds = connectedOptionalServices(connectorIntegrations)
+        .filter((spec) => spec.cli)
+        .map((spec) => spec.id);
+      if (cliIds.length > 0) {
+        try {
+          connectorCli = await optionalCliPresence(cliIds);
+        } catch {
+          connectorCli = undefined;
+        }
+      }
+    }
     const optionalServicesReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
-        ? formatOptionalServicesReminder(loadAppSettings().integrations)
+        ? formatOptionalServicesReminder(connectorIntegrations, connectorCli)
         : null;
     const issueTicket = issueTicketFromThread(thread, resolveEffectiveIssueSource());
     const issueToolsReminder =
@@ -1644,7 +1660,7 @@ export class Orchestrator {
     const optionalServicesDirective =
       isBrightsy || isOrchestration
         ? null
-        : formatOptionalServicesDirective(loadAppSettings().integrations);
+        : formatOptionalServicesDirective(connectorIntegrations, connectorCli);
     const freshIssueTicket = issueTicketFromThread(fresh, resolveEffectiveIssueSource());
     const issueToolsDirective =
       isBrightsy || isOrchestration
@@ -1905,7 +1921,7 @@ export class Orchestrator {
           // Best-effort — a real git repo check will surface any remaining lock.
         }
         const retryNote = isolateCodexPluginRetry
-          ? 'Codex plugin/MCP failed — continuing without that vendor plugin (Settings → Connectors + HTTP API)'
+          ? 'Codex plugin/MCP failed — continuing without that vendor plugin (PostHog: Settings → Connectors and posthog_api)'
           : looksLikeInvalidAgentSession(detail)
             ? 'Agent session missing — starting a fresh session'
             : looksLikeV8Oom(detail)

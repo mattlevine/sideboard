@@ -8,6 +8,7 @@ import {
   OPTIONAL_SERVICES,
   isOptionalServiceId,
   optionalServiceSpec,
+  type OptionalCliPresence,
   type OptionalServiceId,
 } from './optional-services.js';
 
@@ -37,6 +38,42 @@ export async function detectOptionalServiceClis(): Promise<OptionalServiceCliSta
   );
 }
 
+const CLI_PRESENCE_TTL_MS = 60_000;
+const cliPresenceCache = new Map<OptionalServiceId, { at: number; installed: boolean }>();
+
+/** Test hook. Presence is cached so a turn does not `which` on every message. */
+export function clearOptionalCliPresenceCache(): void {
+  cliPresenceCache.clear();
+}
+
+/**
+ * `which` for connector CLIs. Does not call `detectOptionalServiceClis` or
+ * `npm prefix -g`, and does not mutate `process.env`.
+ * Pass only connected CLI ids — PostHog has no binary and is ignored.
+ */
+export async function optionalCliPresence(
+  ids: readonly OptionalServiceId[],
+): Promise<OptionalCliPresence> {
+  const presence: OptionalCliPresence = {};
+  const now = Date.now();
+  await Promise.all(
+    ids.map(async (id) => {
+      const spec = optionalServiceSpec(id);
+      if (!spec.cli) return;
+      const hit = cliPresenceCache.get(id);
+      if (hit && now - hit.at < CLI_PRESENCE_TTL_MS) {
+        presence[id] = hit.installed;
+        return;
+      }
+      const path = await whichOnPath(spec.cli);
+      const installed = Boolean(path);
+      cliPresenceCache.set(id, { at: now, installed });
+      presence[id] = installed;
+    }),
+  );
+  return presence;
+}
+
 /** Install a connector CLI via the same `npm i -g` path as Settings → Agents. */
 export async function installOptionalServiceCli(
   id: OptionalServiceId,
@@ -48,7 +85,7 @@ export async function installOptionalServiceCli(
   if (!spec.cli || !spec.npmPackage) {
     return {
       ok: false,
-      message: `${spec.label} has no CLI to install. Use the HTTP API with the stored token.`,
+      message: `${spec.label} has no CLI to install. Agents call posthog_api.`,
     };
   }
   // Connector CLIs stay skip-if-present. Agent Install is the path that

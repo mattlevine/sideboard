@@ -393,13 +393,13 @@ More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 
 ## Connectors
 
-**Settings → Connectors.** Optional tokens for project services. Agents use official CLIs (or the PostHog HTTP API) with env injected into the worktree — not vendor MCPs.
+**Settings → Connectors.** Optional tokens for project services. Agents use official CLIs with those tokens injected into the worktree. PostHog is `posthog_api`; that key stays in the vault and is not copied onto the agent. Not vendor MCPs.
 
 | Service | Env | Agent path |
 |---------|-----|------------|
 | Vercel | `VERCEL_TOKEN` | `vercel` CLI |
 | Supabase | `SUPABASE_ACCESS_TOKEN` | `supabase` CLI |
-| PostHog | `POSTHOG_PERSONAL_API_KEY`, optional `POSTHOG_HOST` | HTTP API (no first-class CLI) |
+| PostHog | vault only (`POSTHOG_PERSONAL_API_KEY`, optional `POSTHOG_HOST`) | `posthog_api` (no first-class CLI) |
 | Sentry | `SENTRY_AUTH_TOKEN`, optional `SENTRY_URL` | `sentry-cli` |
 
 Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supabase`, or `sentry-cli` is missing, **Install CLI** runs `npm i -g` (opens Terminal if npm needs sudo). Sideboard does not auto-install on Connect. Agents write CLI/HTTP dumps to `.context/cli/` (local scratch; not composer drops in `.context/attachments/`) and read a slice — never raw `--json` / `--expand` into the tool result. The phone remote is **Settings → Remote**, not here.

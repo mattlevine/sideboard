@@ -10,7 +10,7 @@ Desktop Settings splits connections by job. The phone app is remote control. Lin
 | **Settings → Remote** | Relay account (GitHub, the git host), this Mac’s name, phone pairing code |
 | **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
-Connections are owned by Sideboard, not per-agent MCP. Optional connector tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`) or the PostHog HTTP API. Write CLI/HTTP dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
+Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`). PostHog is the `posthog_api` tool (the key is not copied onto the agent). Write CLI dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
 
 ## Phone
 

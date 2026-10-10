@@ -622,7 +622,7 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     ).toBe(true);
     expect(
       humanizeAgentFailDetail('PostHog MCP OAuth AuthRequired'),
-    ).toMatch(/HTTP API/);
+    ).toMatch(/posthog_api/);
     expect(
       shouldRetryCodexPluginIsolate(
         'Error loading config.toml: invalid transport in mcp_servers.posthog',

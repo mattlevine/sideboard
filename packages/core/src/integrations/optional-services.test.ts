@@ -21,41 +21,46 @@ describe('optional services', () => {
     return { ...mod, setHttpFetchImpl: fetchMod.setHttpFetchImpl };
   }
 
-  it('tells agents to use official CLIs and skip vendor MCPs', async () => {
+  it('tells agents to use official CLIs, posthog_api, and skip vendor MCPs', async () => {
     const mod = await load();
     expect(mod.formatOptionalServicesDirective({})).toBeNull();
     expect(mod.formatOptionalServicesReminder({})).toBeNull();
 
-    const text = mod.formatOptionalServicesDirective({
-      vercelToken: 'v',
-      supabaseAccessToken: 's',
-      posthogPersonalApiKey: 'p',
-      sentryAuthToken: 't',
-    });
-    expect(text).toMatch(/`vercel` CLI/);
-    expect(text).toMatch(/`supabase` CLI/);
+    const cli = { vercel: true, supabase: false, sentry: true };
+    const text = mod.formatOptionalServicesDirective(
+      {
+        vercelToken: 'v',
+        supabaseAccessToken: 's',
+        posthogPersonalApiKey: 'p',
+        sentryAuthToken: 't',
+      },
+      cli,
+    );
+    expect(text).toMatch(/`vercel` \(`VERCEL_TOKEN`\) \(installed\)/);
+    expect(text).toMatch(/`supabase` \(`SUPABASE_ACCESS_TOKEN`\) \(not installed/);
     expect(text).toMatch(/`sentry-cli`/);
-    expect(text).toMatch(/PostHog: no first-class CLI/);
+    expect(text).toMatch(/call `posthog_api`/);
+    expect(text).toMatch(/\/api\/projects\/:id\/query\//);
+    expect(text).toMatch(/write=true/);
+    expect(text).toMatch(/Do not read the API key from the environment/);
+    expect(text).not.toMatch(/POSTHOG_PERSONAL_API_KEY/);
     expect(text).toMatch(/Do not add a Vercel MCP/);
     expect(text).toMatch(/needsAuth/);
-    expect(text).toMatch(/native CLI/);
-    expect(text).toMatch(/Do not ask the user to install a vendor MCP/);
-    expect(text).toMatch(/Install CLI from Settings → Connectors/);
-    expect(text).toMatch(/Never put raw `--json`/);
-    expect(text).toMatch(/Claude \/ Cursor \/ Codex \/ OpenCode/);
-    expect(text).toMatch(/cursor-runtime|importas e from/);
-    expect(text).toMatch(/Write output to `\.context\/cli\/`/);
-    expect(text).toMatch(/not `\.context\/attachments\/`/);
-    expect(text).toMatch(/stop_job/);
-    expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
-      /needsAuth/,
-    );
-    expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
-      /Do not add vendor MCPs/,
-    );
-    expect(mod.formatOptionalServicesReminder({ vercelToken: 'v' })).toMatch(
-      /Write output to `\.context\/cli\/`/,
-    );
+    expect(text).toMatch(/Do not add a vendor MCP/);
+    expect(text).toMatch(/Install CLI in Settings → Connectors/);
+    expect(text).toMatch(/\.context\/cli\//);
+    expect(text).not.toMatch(/Never put raw `--json`/);
+    expect(text!.split('\n').length).toBeLessThanOrEqual(10);
+
+    const reminder = mod.formatOptionalServicesReminder({ vercelToken: 'v' }, { vercel: false });
+    expect(reminder).toMatch(/needsAuth/);
+    expect(reminder).toMatch(/Do not add vendor MCPs/);
+    expect(reminder).toMatch(/\.context\/cli\//);
+    expect(reminder).toMatch(/`vercel` \(not installed/);
+    const posthogOnly = mod.formatOptionalServicesReminder({ posthogPersonalApiKey: 'p' });
+    expect(posthogOnly).toMatch(/`posthog_api`/);
+    expect(posthogOnly).not.toMatch(/tokens are already in this process/);
+    expect(posthogOnly).toMatch(/Do not read a PostHog key/);
   });
 
   it('normalizes service origins', async () => {

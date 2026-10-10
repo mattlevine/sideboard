@@ -438,7 +438,7 @@ export function humanizeAgentFailDetail(detail: string): string {
     return 'Cursor local file search failed (ripgrep / resource_exhausted). Wait a minute and retry; if it keeps happening, check Cursor usage.';
   }
   if (looksLikeCodexMcpError(raw)) {
-    return `${raw} — skip that vendor MCP and continue (PostHog: Settings → Connectors + HTTP API).`;
+    return `${raw} — skip that vendor MCP and continue (PostHog: Settings → Connectors and posthog_api).`;
   }
   if (
     /invalid user api key|invalid api key|not logged in|not authenticated|unauthorized|authentication|please run.*login|codex login|claude auth|cursor api/.test(

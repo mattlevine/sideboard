@@ -262,9 +262,9 @@ export interface IntegrationsSettings {
   supabaseAccessToken?: string;
   /** Display name of the connected Supabase org (non-secret). */
   supabaseViewerName?: string;
-  /** PostHog personal API key (vaulted). Injected as POSTHOG_PERSONAL_API_KEY. */
+  /** PostHog personal API key (vaulted). `posthog_api` reads this; it is not copied onto the agent. */
   posthogPersonalApiKey?: string;
-  /** PostHog API host (default https://us.posthog.com). */
+  /** PostHog API host (default https://us.posthog.com). Not copied onto the agent. */
   posthogHost?: string;
   /** Display name of the connected PostHog user (non-secret). */
   posthogViewerName?: string;
@@ -2583,8 +2583,10 @@ export function claudeChromeEnabled(settings: AppSettings = loadAppSettings()): 
 
 /**
  * Apply Sideboard-managed environment onto a process env object.
- * Does not overwrite keys already set in the host environment (shell wins),
- * matching Conductor's "shell or Settings" layering for credentials.
+ * Settings → Environment fills gaps only (shell wins). Connected connector
+ * tokens overwrite those keys: Settings → Connectors is the source for
+ * Vercel, Supabase, and Sentry. PostHog stays in the vault for `posthog_api`;
+ * `POSTHOG_PERSONAL_API_KEY` and `POSTHOG_HOST` are removed from the child env.
  */
 export function applyAppEnvironment(
   target: NodeJS.ProcessEnv = process.env,
@@ -2600,33 +2602,32 @@ export function applyAppEnvironment(
   return target;
 }
 
-function fillEnvGap(
+function assignEnv(
   target: NodeJS.ProcessEnv,
   key: string,
   value: string | undefined,
 ): void {
   const v = value?.trim();
   if (!key || !v) return;
-  if (target[key] == null || target[key] === '') target[key] = v;
+  target[key] = v;
 }
 
-/** Connected optional-service tokens fill agent env gaps (shell / Environment win). */
+/** Drop PostHog credentials so a shell export cannot bypass `posthog_api`. */
+function scrubPosthogAgentEnv(target: NodeJS.ProcessEnv): void {
+  delete target.POSTHOG_PERSONAL_API_KEY;
+  delete target.POSTHOG_HOST;
+}
+
+/** Connected optional-service tokens overwrite inherited env for those keys. */
 function applyOptionalServiceTokens(
   target: NodeJS.ProcessEnv,
   integrations: IntegrationsSettings,
 ): void {
-  fillEnvGap(target, 'VERCEL_TOKEN', integrations.vercelToken);
-  fillEnvGap(target, 'SUPABASE_ACCESS_TOKEN', integrations.supabaseAccessToken);
-  fillEnvGap(target, 'POSTHOG_PERSONAL_API_KEY', integrations.posthogPersonalApiKey);
-  fillEnvGap(
-    target,
-    'POSTHOG_HOST',
-    integrations.posthogPersonalApiKey
-      ? integrations.posthogHost || 'https://us.posthog.com'
-      : undefined,
-  );
-  fillEnvGap(target, 'SENTRY_AUTH_TOKEN', integrations.sentryAuthToken);
-  fillEnvGap(
+  assignEnv(target, 'VERCEL_TOKEN', integrations.vercelToken);
+  assignEnv(target, 'SUPABASE_ACCESS_TOKEN', integrations.supabaseAccessToken);
+  scrubPosthogAgentEnv(target);
+  assignEnv(target, 'SENTRY_AUTH_TOKEN', integrations.sentryAuthToken);
+  assignEnv(
     target,
     'SENTRY_URL',
     integrations.sentryAuthToken
@@ -2650,6 +2651,7 @@ export function childEnvWithAppSettings(
       if (v != null) env[k] = v;
     }
   }
+  scrubPosthogAgentEnv(env);
   return env;
 }
 

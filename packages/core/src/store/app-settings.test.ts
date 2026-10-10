@@ -297,12 +297,16 @@ describe('app settings', () => {
     expect(pub.integrations.vercelViewerName).toBe('matt');
     expect((pub.integrations as { vercelToken?: string }).vercelToken).toBeUndefined();
 
-    const target: NodeJS.ProcessEnv = { VERCEL_TOKEN: 'from-shell' };
+    const target: NodeJS.ProcessEnv = {
+      VERCEL_TOKEN: 'from-shell',
+      POSTHOG_PERSONAL_API_KEY: 'phx_shell',
+      POSTHOG_HOST: 'https://evil.example',
+    };
     mod.applyAppEnvironment(target);
-    expect(target.VERCEL_TOKEN).toBe('from-shell');
+    expect(target.VERCEL_TOKEN).toBe('vercel_test');
     expect(target.SUPABASE_ACCESS_TOKEN).toBe('sbp_test');
-    expect(target.POSTHOG_PERSONAL_API_KEY).toBe('phx_test');
-    expect(target.POSTHOG_HOST).toBe('https://eu.posthog.com');
+    expect(target.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
+    expect(target.POSTHOG_HOST).toBeUndefined();
     expect(target.SENTRY_AUTH_TOKEN).toBe('sentry_test');
     expect(target.SENTRY_URL).toBe('https://sentry.io');
 
@@ -317,8 +321,14 @@ describe('app settings', () => {
       false,
     );
 
-    const after: NodeJS.ProcessEnv = {};
+    const after: NodeJS.ProcessEnv = {
+      VERCEL_TOKEN: 'from-shell',
+      POSTHOG_PERSONAL_API_KEY: 'phx_shell',
+      POSTHOG_HOST: 'https://evil.example',
+    };
     mod.applyAppEnvironment(after);
+    expect(after.VERCEL_TOKEN).toBe('from-shell');
+    expect(after.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
     expect(after.POSTHOG_HOST).toBeUndefined();
     expect(after.SENTRY_URL).toBeUndefined();
   });
