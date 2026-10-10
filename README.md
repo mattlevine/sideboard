@@ -1,10 +1,8 @@
 # Sideboard
 
-**Orchestrate a fleet of coding agents on your Mac.** Isolated git worktrees. A kanban of the whole fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine — without a cloud workspace.
+**Tickets in. Reviewed PRs out. On your Mac.** Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine.
 
-Peers often spawn one agent per git worktree. Sideboard isolates the checkout — one workspace per ticket, PR, or named branch — and runs as many agents as that workspace needs. Sibling chats share the files. The remaining job is an **orchestration tier**: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so you can reach this machine — without moving the repo into someone else’s cloud.
-
-Sideboard started as a local port when Conductor moved that tier into a paid cloud, then added the pieces that still belong on this Mac: MCP orchestration, a global kanban, a phone app, and CLI / MCP so other systems can drive it. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). Compute stays on this machine (corporate VPN, private git, internal APIs). The phone app is remote control, not a rented sandbox.
+One workspace per ticket, PR, or named branch, and as many agents as that workspace needs. Sibling chats share the files. Agents run as you, on this Mac (corporate VPN, private git, internal APIs). The phone app is how you reach them.
 
 1. **A global board for you** — status, live output, and fan-out across every thread
 2. **An MCP for the agents** — list threads, wait on turns, read diffs, orchestrate the fleet, and present artifacts, schemas, and files in the desktop UI
@@ -20,31 +18,29 @@ Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The M
 
 ## Who it's for
 
-Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and a phone app, the CLI, or MCP can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
+You already run Claude Code, Codex, OpenCode, or Cursor on a Mac — especially one on a corporate VPN — and you want tickets in, a board of the fleet, a review of what the agents built, and PRs out. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
 
-Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), a full agent IDE with many harnesses on any OS ([Orca](https://www.onorca.dev/)), terminals that outlive a closed lid across machines ([Herdr](https://herdr.dev/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
-
-Peer-by-peer notes — Conductor is the board, Orca is the IDE, Herdr is the runtime, Sideboard is the ticket → worktree → reviewed PR loop around them: [Compare](docs/COMPARE.md).
+Peer notes live in [Compare](docs/COMPARE.md).
 
 ## Why it exists
 
-Spawning worktrees is the shared primitive. When Conductor moved fleet orchestration into a **paid cloud**, Sideboard started as a local port, then kept the rest on this Mac: an orchestrator, a kanban, a phone app, and CLI / MCP so other systems can drive it — on the VPN you already sit on:
+The work starts from a ticket and ends as a reviewed pull request, on the Mac that already has your VPN, your git login, and your internal APIs:
 
-| Job | Typical tools | Sideboard |
-|-----|---------------|-----------|
-| Run N agents in isolated worktrees | Yes | Yes |
-| Orchestrate the fleet (agent-visible) | Human board, or a cloud API | MCP + Global board, on this Mac |
-| Stay on the corporate VPN | Cloud sandboxes leave it | Agents run as you, on this laptop’s network |
-| Away from the desk | Product cloud / shared sandbox | Phone app paired to this Mac; pick which desktop to open |
-| Keep going when you step away | Cloud sandbox keeps running | The phone reaches this Mac only while it is awake (caffeinate while the phone remote is connected) |
-| Run work on a schedule | Cloud cron / always-on sandbox | Local jobs on this Mac; opt-in caffeinate so due jobs can fire |
-| See the whole fleet as one board | App-locked or thin | First-class global board |
-| Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
-| Recurring process guides | Locked in the product, or chat memory | Committed `.claude/skills` — Claude Code and `attach` load them |
-| Bring existing worktrees / Conductor workspaces in | Stuck or start over | `adopt` + Conductor import |
-| Review HTML / docs the agent built | Copy out, or locked chat UI | `present_artifact` → side column |
-| Collect / edit structured data the agent needs | Spreadsheet, separate CMS, or markdown forever | `present_schema` → form/table from a schema the agent can create |
-| Files for that data + the git worktree | Two other windows | File manager tabs + far-right repo Files / Changes / CI |
+| Job | How |
+|-----|-----|
+| Run N agents in isolated worktrees | One workspace per ticket, PR, or branch |
+| Orchestrate the fleet | MCP + a global board, on this Mac |
+| Stay on the corporate VPN | Agents run as you, on this laptop’s network |
+| Away from the desk | Phone app paired to this Mac; pick which desktop to open |
+| Keep going when you step away | The phone reaches this Mac while it is awake (caffeinate while the phone remote is connected) |
+| Run work on a schedule | Local jobs on this Mac; opt-in caffeinate so due jobs can fire |
+| See the whole fleet as one board | Kanban: New → Draft → Review → Merged |
+| Drop into the native CLI mid-session | `attach` keeps the same session |
+| Recurring process guides | Committed `.claude/skills` — Claude Code and `attach` load them |
+| Bring existing worktrees in | `adopt`, including a Conductor import |
+| Review HTML / docs the agent built | `present_artifact` → side column |
+| Collect / edit structured data the agent needs | `present_schema` → form/table from a schema the agent can create |
+| Files for that data + the git worktree | File manager tabs + far-right repo Files / Changes / CI |
 
 Agents write code **and** invent data shapes (content, configs, feedback, ops rows). Sideboard is where those meet — **code in the worktree, data in schema UI** — without a CMS product.
 

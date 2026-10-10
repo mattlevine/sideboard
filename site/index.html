@@ -64,8 +64,8 @@
 </section>
 
 <section id="product" class="section wrap">
-  <h2>The loop, not just the board.</h2>
-  <p class="sub">Worktrees are the shared primitive — every tool in this category has them. Sideboard owns what happens before and after: where the work came from, what the agent produced, and whether it is ready to land.</p>
+  <h2>From the ticket to the pull request.</h2>
+  <p class="sub">Each ticket gets its own git worktree and its own agent. You see the fleet on one board, review what the agent produced, and land the PR. An orchestrator can run that loop, on a schedule, from your phone.</p>
   <div class="tabs" role="tablist" aria-label="Product surfaces">
     <button type="button" class="is-on" data-tab="tickets" role="tab" aria-selected="true">Tickets</button>
     <button type="button" data-tab="review" role="tab" aria-selected="false">Review</button>
@@ -93,7 +93,7 @@
     <div class="panel-grid">
       <div>
         <span class="kicker">Out</span>
-        <h3>Review what they built, not only the diff</h3>
+        <h3>Review the diff, the pages, and the data</h3>
         <p>A worktree chat puts the agent thread, the git repo (Files, Changes, CI, Review), and a structure column side by side. The agent can open an HTML artifact, render a JSON Schema as a table or form you can edit, or show a file manager — so the content, data, and documents it produced get reviewed next to the code, before you land.</p>
       </div>
       <div class="shot-frame">
@@ -148,89 +148,6 @@ sideboard schedule ls</pre>
   </div>
 </section>
 
-<section class="origin">
-  <div class="wrap origin-grid">
-    <div>
-      <span class="kicker">Where it sits</span>
-      <h2>Conductor is the board. Orca is the IDE. Herdr is the runtime.</h2>
-      <p class="sub">All three run agents in worktrees, and all three are good at it. Sideboard is the control plane around that: the ticket the work came from, the review of everything the agent made, the PR, the schedule — on the Mac that is already on your VPN with your git login and your internal APIs.</p>
-      <p class="sub">Only one of them moves the agents off that machine: <a href="https://www.conductor.build/">Conductor</a>'s $50/mo cloud. Sideboard started as a local port of that loop and kept building on the Mac.</p>
-      <a class="btn btn-ghost" href="/docs/compare/" style="margin-top:22px">Peer-by-peer compare</a>
-    </div>
-    <div class="compare-scroll">
-    <table class="compare">
-      <thead>
-        <tr>
-          <th>Job</th>
-          <th>Conductor</th>
-          <th>Orca</th>
-          <th>Herdr</th>
-          <th>Sideboard</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Built around</td>
-          <td>Board + paid cloud</td>
-          <td>Agent IDE</td>
-          <td>Terminal runtime</td>
-          <td>Ticket → reviewed PR</td>
-        </tr>
-        <tr>
-          <td>Start from a ticket</td>
-          <td>PR workflow</td>
-          <td>Linear</td>
-          <td>—</td>
-          <td>Linear, GitHub, AbleTime</td>
-        </tr>
-        <tr>
-          <td>Review the output</td>
-          <td>Diff</td>
-          <td>Diff + inline comments</td>
-          <td>Terminal</td>
-          <td>Diff, CI, artifacts, data, files</td>
-        </tr>
-        <tr>
-          <td>An agent can drive it</td>
-          <td>Cloud API (paid)</td>
-          <td>CLI, MCP</td>
-          <td>CLI, socket API</td>
-          <td>CLI + MCP orchestrator</td>
-        </tr>
-        <tr>
-          <td>Scheduled runs</td>
-          <td>—</td>
-          <td>—</td>
-          <td>—</td>
-          <td>at / every / cron</td>
-        </tr>
-        <tr>
-          <td>Runs with the lid closed</td>
-          <td>Cloud (paid)</td>
-          <td>Your server</td>
-          <td>Yes</td>
-          <td>No — Mac stays awake</td>
-        </tr>
-        <tr>
-          <td>Reach it remotely</td>
-          <td>Mobile (paid)</td>
-          <td>Mobile, SSH</td>
-          <td>SSH</td>
-          <td>Phone to this Mac</td>
-        </tr>
-        <tr>
-          <td>Desktop OS</td>
-          <td>macOS</td>
-          <td>macOS, Windows, Linux</td>
-          <td>macOS, Windows, Linux</td>
-          <td>macOS</td>
-        </tr>
-      </tbody>
-    </table>
-    </div>
-  </div>
-</section>
-
 <section class="section wrap">
   <h2>The Mac is the runtime. Everything else is a remote.</h2>
   <p class="sub">Agents run as you, on this machine — inside the corporate VPN, with the git login and internal APIs you already have. Register MCP once and any of your agents can see the fleet. The phone is how you get in when you are away from the desk. The CLI is how you script it.</p>
@@ -252,7 +169,7 @@ sideboard schedule ls</pre>
 
 <section class="wrap">
   <div class="phone-band">
-    <h2>The phone is remote control, not a cloud workspace.</h2>
+    <h2>Your phone, to this Mac.</h2>
     <p>Pair it from Settings → Remote. Name each Mac. The phone lists those desktops and you pick which one to open. What stays here: agents, worktrees, repos, and secrets — including anything only reachable on the VPN. What leaves: message text, through the relay.</p>
     <p style="margin-top:22px;font-size:14px">The machine has to stay awake — Settings → Advanced → Caffeinate while the phone remote is connected. <a href="/docs/remote/">Pair a phone →</a></p>
   </div>
@@ -262,16 +179,8 @@ sideboard schedule ls</pre>
   <h2>Questions</h2>
   <div class="faq-list">
     <details open>
-      <summary>How is this different from Conductor?</summary>
-      <p>Conductor's free Mac app is a finished workspace UI around local worktrees. Their paid product is cloud sandboxes, multiplayer, a cloud API, and a mobile app. Sideboard keeps the loop on this machine and adds the parts around the board: tickets in, an orchestrator agent, review of artifacts and data as well as the diff, schedules, and a phone to this Mac. Use Conductor if you want their UI or always-on Vercel sandboxes. Use Sideboard if the fleet should stay on the VPN you already sit on.</p>
-    </details>
-    <details>
-      <summary>How is this different from Orca?</summary>
-      <p>Orca is an agent IDE — terminals, embedded browser, inline diff comments, 27 agent CLIs, a CLI and MCP that agents can drive, a mobile companion, Windows and Linux. Sideboard is not an IDE. It is where the work comes from and goes to: the ticket, the schedule, the review of what the agent produced, the PR. Use Orca if you want the whole environment on any OS. Use Sideboard if you want the loop around it on a Mac.</p>
-    </details>
-    <details>
-      <summary>How is this different from Herdr?</summary>
-      <p>Herdr is a terminal runtime: a background server owns your agents' terminals so they keep running when you close the client or lose SSH, with a sidebar of who is working, blocked, or idle, and a CLI and socket API agents can drive. Sideboard does not own terminals. It owns the loop — tickets, review, PRs, schedules — and shows the fleet as a kanban by PR state. If you want terminals that outlive your laptop lid across machines, use Herdr; <code>adopt</code> can bring a worktree it created onto the Sideboard board.</p>
+      <summary>Where do the agents run?</summary>
+      <p>On this Mac, as you. Repos, secrets, and anything on your VPN stay here. The phone sends message text through the relay; the relay does not host worktrees.</p>
     </details>
     <details>
       <summary>Do I pay Sideboard for models?</summary>
@@ -279,7 +188,7 @@ sideboard schedule ls</pre>
     </details>
     <details>
       <summary>Does it keep running if I close the laptop?</summary>
-      <p>No — that is the trade for keeping everything on this machine. The phone and scheduled jobs reach this Mac only while it is awake. Opt in to caffeinate from Settings → Advanced (or from an orchestration chat) when you step away. If you need always-on, off-VPN compute, Conductor Cloud is the fit; if you need terminals that survive a closed lid, Herdr is.</p>
+      <p>The phone and scheduled jobs reach this Mac while it is awake. Opt in to caffeinate from Settings → Advanced, or from an orchestration chat, when you step away.</p>
     </details>
     <details>
       <summary>Can I use it without the desktop app?</summary>
@@ -290,12 +199,12 @@ sideboard schedule ls</pre>
 
 <section class="wrap split-fit">
   <div class="card">
-    <h3>It fits if…</h3>
-    <p>You run Claude Code, Codex, OpenCode, or Cursor on a Mac — especially one on a corporate VPN — and you want the loop around them: tickets in, an orchestrator you can see and an agent can drive, a review of what they built, PRs out, on a schedule, from your phone.</p>
+    <h3>Who it’s for</h3>
+    <p>You run Claude Code, Codex, OpenCode, or Cursor on a Mac — especially one on a corporate VPN — and you want tickets in, a board of the fleet, a review of what the agents built, and PRs out. On a schedule. From your phone.</p>
   </div>
   <div class="card">
-    <h3>Use something else if…</h3>
-    <p>You want always-on sandboxes off your machine (<a href="https://www.conductor.build/">Conductor Cloud</a>), a full agent IDE with many harnesses on any OS (<a href="https://www.onorca.dev/">Orca</a>), or terminals that outlive your laptop lid across machines (<a href="https://herdr.dev/">Herdr</a>). Sideboard is Mac-only and the Mac has to stay awake.</p>
+    <h3>What stays here</h3>
+    <p>Agents, worktrees, repos, and secrets. Apple Silicon. Apache-2.0. Bring the subscriptions you already pay for. The desktop is the board; the CLI and MCP run without it.</p>
   </div>
 </section>
 
