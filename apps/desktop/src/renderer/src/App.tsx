@@ -1109,19 +1109,20 @@ export function App() {
     markArchiving(workspaceIds, true);
 
     try {
-      const results = await Promise.allSettled(
-        workspaceIds.map((id) => window.sideboard.archiveThread(id)),
-      );
-      const failed = results.find(
-        (r): r is PromiseRejectedResult => r.status === 'rejected',
-      );
-      if (failed) {
-        throw failed.reason instanceof Error
-          ? failed.reason
-          : new Error(String(failed.reason));
-      }
+      // Remove before archiving. Archiving deletes the worktree folder, and
+      // the removal has to record the main checkout while that folder exists.
       await window.sideboard.removeWorkspace(path);
-      if (repoPath.replace(/\/+$/, '') === key || path === '/') {
+      const repoKey = repoPath.replace(/\/+$/, '');
+      let clearRepo = repoKey === key || path === '/';
+      if (!clearRepo && repoKey) {
+        try {
+          const listed = await window.sideboard.listWorkspaces();
+          clearRepo = !listed.some((ws) => ws.path.replace(/\/+$/, '') === repoKey);
+        } catch {
+          clearRepo = false;
+        }
+      }
+      if (clearRepo) {
         setRepoPath('');
         try {
           await window.sideboard.setRepoPath('');

@@ -223,68 +223,19 @@ export function CreateModal({
         'Select project';
 
   async function refreshWorkspaces(preferred?: string | null) {
-    const collected: Workspace[] = [...knownWorkspaces];
-
+    // The registered list already includes projects discovered from chats,
+    // and it leaves removed projects removed. Re-adding every archived chat's
+    // repo here cleared that removal.
+    let listed: Workspace[] = [];
     try {
-      const listed = await window.sideboard.listWorkspaces();
-      if (Array.isArray(listed)) collected.push(...listed);
+      const fromMain = await window.sideboard.listWorkspaces();
+      if (Array.isArray(fromMain)) listed = fromMain;
     } catch (err) {
       console.error('listWorkspaces failed', err);
+      listed = knownWorkspaces;
     }
 
-    try {
-      const threads = await window.sideboard.getThreads(true);
-      for (const t of threads) {
-        if (!isRealProjectPath(t.repoPath)) continue;
-        let root = t.repoPath;
-        try {
-          root = await window.sideboard.resolveRepoRoot(t.repoPath);
-        } catch {
-          // keep t.repoPath
-        }
-        if (!isRealProjectPath(root)) continue;
-        const name = root.split('/').filter(Boolean).pop() || root;
-        collected.push({
-          path: root,
-          name,
-          addedAt: t.createdAt,
-        });
-        try {
-          await window.sideboard.addWorkspace(root);
-        } catch {
-          // ignore per-thread add failures
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const current = await window.sideboard.getRepoPath();
-      if (isRealProjectPath(current)) {
-        let root = current;
-        try {
-          root = await window.sideboard.resolveRepoRoot(current);
-        } catch {
-          // keep current
-        }
-        if (!isRealProjectPath(root)) {
-          // skip
-        } else {
-          const name = root.split('/').filter(Boolean).pop() || root;
-          collected.push({ path: root, name, addedAt: new Date().toISOString() });
-          try {
-            await window.sideboard.addWorkspace(root);
-          } catch {
-            // ignore
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    const list = dedupeWorkspaces(collected);
+    const list = dedupeWorkspaces(listed);
     setWorkspaces(list);
     setRepoPath((current) => firstProjectPath(list, preferred ?? current));
     return list;

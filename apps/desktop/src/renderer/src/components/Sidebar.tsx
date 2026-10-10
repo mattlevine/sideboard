@@ -166,7 +166,13 @@ export function Sidebar({
     for (const ws of workspaces) {
       ensurePath(ws.path, ws.name);
     }
-    ensurePath(repoPath);
+    const repoKey = repoPath.replace(/\/+$/, '');
+    if (
+      repoKey &&
+      workspaces.some((ws) => ws.path.replace(/\/+$/, '') === repoKey)
+    ) {
+      ensurePath(repoPath);
+    }
     return [...map.entries()].sort(([a], [b]) =>
       repoName(a).localeCompare(repoName(b)),
     );

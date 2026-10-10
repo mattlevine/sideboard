@@ -262,6 +262,7 @@ import { loadWorkspaceSettings } from '../hook/settings.js';
 import { syncThreadBranchFromGit } from '../threads/sync-branch.js';
 import {
   addWorkspace, ensureWorkspace,
+  isRemovedWorkspace,
   removeWorkspace, sameWorkspacePath,
   syncWorkspacesFromThreads,
   type Workspace,
@@ -1129,9 +1130,14 @@ export class Orchestrator {
   }
 
   async removeWorkspace(repoPath: string): Promise<void> {
+    // Tombstone first, while a worktree folder can still be resolved to the
+    // main checkout. Archiving deletes that folder.
     removeWorkspace(repoPath);
     for (const thread of listThreads()) {
-      if (!sameWorkspacePath(thread.repoPath, repoPath)) continue;
+      if (!thread.repoPath || isGlobalRepoPath(thread.repoPath)) continue;
+      if (!isRemovedWorkspace(thread.repoPath) && !sameWorkspacePath(thread.repoPath, repoPath)) {
+        continue;
+      }
       await this.archive(thread.id).catch(() => undefined);
     }
   }
