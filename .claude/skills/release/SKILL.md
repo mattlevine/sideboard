@@ -85,6 +85,8 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
 
     From the monorepo root (Docker context is `.`). `present_artifact` `type=log` `artifact_id=fly-deploy` with `delta`. Details: [docs/system/deploy.md](../../../docs/system/deploy.md).
 
+    The Fly app id is `sideboard-slack-relay`. Fly cannot rename apps, and `fly apps rename` is not a command. That id is the Sideboard relay (phone, marketing site, and legacy Slack), not a Slack-only service. Do not create `sideboard-relay` or change `app` in `apps/relay/fly.toml` to a name that does not exist.
+
 Human at a real terminal: `pnpm release patch mac` is still fine for the Electron half; they still publish npm themselves unless they asked otherwise.
 
 ## `@cursor/sdk` (user-installed)

@@ -1,6 +1,6 @@
 # Deploy (marketing site + relay)
 
-The static site in `site/` is not a separate host. It ships inside Fly app `sideboard-relay` (`apps/relay`). One deploy updates the phone remote, the public site, and legacy Slack.
+The static site in `site/` is not a separate host. It ships inside the Sideboard relay (`apps/relay`): phone remote, public site, and legacy Slack. One deploy updates all three. The Fly app id is `sideboard-slack-relay` because Fly cannot rename apps; that id is not a Slack-only service. Do not create a second app named `sideboard-relay`.
 
 | Host | Serves |
 |------|--------|
@@ -43,7 +43,7 @@ A brief “not listening on 8080” warning during machine start is normal if No
 
 ## First-time / domains
 
-Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for the three hosts. Phone accounts are SQLite on the `relay_accounts` volume at `/data` (`initial_size` creates it on deploy; or `fly volumes create relay_accounts -a sideboard-relay -r sjc -s 1`). Set `SIDEBOARD_RELAY_GITHUB_CLIENT_ID` and `SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET`. The OAuth redirect is `https://relay.sideboard.cloud/remote/oauth/callback`. Do not put those secrets in git or the image ([safety.md](safety.md)). Keep a single machine: the volume and the live phone sockets belong to that process.
+Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for the three hosts. Phone accounts are SQLite on the `relay_accounts` volume at `/data` (`initial_size` creates it on deploy; or `fly volumes create relay_accounts -a sideboard-slack-relay -r sjc -s 1`). Set `SIDEBOARD_RELAY_GITHUB_CLIENT_ID` and `SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET`. The OAuth redirect is `https://relay.sideboard.cloud/remote/oauth/callback`. Do not put those secrets in git or the image ([safety.md](safety.md)). Keep a single machine: the volume and the live phone sockets belong to that process.
 
 ## Don’t
 

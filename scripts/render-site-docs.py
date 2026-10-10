@@ -214,7 +214,7 @@ def page(meta: dict, body: str) -> str:
 <nav class="nav-links">
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
 </nav>
 <a class="btn btn-primary btn-sm" href="{DL}">Download for Mac</a>
@@ -233,7 +233,7 @@ def page(meta: dict, body: str) -> str:
 <nav>
 <a href="/docs/">Docs</a>
 <a href="/docs/compare/">Compare</a>
-<a href="/slack/">Slack</a>
+<a href="/docs/remote/">Phone</a>
 <a href="/privacy/">Privacy</a>
 <a href="/support/">Support</a>
 <a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>
