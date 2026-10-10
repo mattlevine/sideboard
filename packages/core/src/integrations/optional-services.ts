@@ -53,7 +53,7 @@ export const OPTIONAL_SERVICES: readonly OptionalServiceSpec[] = [
   {
     id: 'posthog',
     label: 'PostHog',
-    hint: 'Product analytics. No first-class CLI — agents use the HTTP API (`POSTHOG_PERSONAL_API_KEY`).',
+    hint: 'Product analytics. Agents call `posthog_api` on the Sideboard MCP server.',
     tokenPlaceholder: 'phx_…',
     tokenDocs: 'https://app.posthog.com/settings/user-api-keys',
     envKey: 'POSTHOG_PERSONAL_API_KEY',
@@ -303,62 +303,95 @@ export function connectedOptionalServices(
   return OPTIONAL_SERVICES.filter((spec) => optionalServiceConnected(spec.id, integrations));
 }
 
+/** Whether each connector CLI is on PATH. Omit a key when status was not checked. */
+export type OptionalCliPresence = Partial<Record<OptionalServiceId, boolean>>;
+
+function cliPresencePhrase(spec: OptionalServiceSpec, cli?: OptionalCliPresence): string {
+  if (!spec.cli || !cli || !(spec.id in cli)) return '';
+  return cli[spec.id]
+    ? ' (installed)'
+    : ' (not installed — ask the user to press Install CLI in Settings → Connectors)';
+}
+
+function connectorDirectiveLine(spec: OptionalServiceSpec, cli?: OptionalCliPresence): string {
+  const extras = spec.hostEnvKey ? ` / \`${spec.hostEnvKey}\`` : '';
+  if (spec.cli) {
+    return `- ${spec.label}: use \`${spec.cli}\` (\`${spec.envKey}\`${extras})${cliPresencePhrase(spec, cli)}. Do not add a ${spec.label} MCP.`;
+  }
+  return `- ${spec.label}: call \`posthog_api\`. Path must start with \`/api/\`. GET is the default. POST \`/api/projects/:id/query/\` or \`/api/environments/:id/query/\` is a read and does not need \`write=true\`. Other POST and PATCH require \`write=true\` only when the user asked to change data. Do not read the API key from the environment. Do not add a ${spec.label} MCP.`;
+}
+
+function connectorReminderBit(spec: OptionalServiceSpec, cli?: OptionalCliPresence): string {
+  if (!spec.cli) return `${spec.label}: \`posthog_api\``;
+  const presence = cliPresencePhrase(spec, cli);
+  return `${spec.label}: \`${spec.cli}\`${presence}`;
+}
+
 /**
- * Fresh-session playbook: official CLI (or HTTP API) with injected env.
+ * Fresh-session playbook: official CLI, or `posthog_api` when there is no CLI.
  * Do not add vendor MCPs for these optional services.
  */
 export function formatOptionalServicesDirective(
   integrations: IntegrationsSettings,
+  cli?: OptionalCliPresence,
 ): string | null {
   const connected = connectedOptionalServices(integrations);
   if (connected.length === 0) return null;
+  const cliConnected = connected.some((spec) => spec.cli);
   const lines = [
-    'Optional connectors (connected — tokens are already in this process env):',
+    cliConnected
+      ? 'Optional connectors (connected — CLI tokens are already in this process env):'
+      : 'Optional connectors (connected):',
+    ...connected.map((spec) => connectorDirectiveLine(spec, cli)),
+    cliConnected
+      ? 'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP. CLI tokens are already in this process. Do not read a PostHog key from the environment.'
+      : 'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP. Do not read a PostHog key from the environment.',
+    'Do not add a vendor MCP. When a binary is missing, ask the user to press Install CLI in Settings → Connectors.',
+    'When you shell a connector CLI, write bulky output to `.context/cli/` and read a slice.',
   ];
-  for (const spec of connected) {
-    if (spec.cli) {
-      const extras = spec.hostEnvKey ? ` / \`${spec.hostEnvKey}\`` : '';
-      lines.push(
-        `- ${spec.label}: use the \`${spec.cli}\` CLI (\`${spec.envKey}\`${extras}). Do not add a ${spec.label} MCP.`,
-      );
-    } else {
-      const extras = spec.hostEnvKey ? ` / \`${spec.hostEnvKey}\`` : '';
-      lines.push(
-        `- ${spec.label}: no first-class CLI — call the HTTP API with \`${spec.envKey}\`${extras}. Do not add a ${spec.label} MCP.`,
-      );
-    }
-  }
-  lines.push(
-    'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP. Check the native CLI (or the HTTP API when there is no CLI) — the token is already in this process.',
-  );
-  lines.push(
-    'If a CLI is missing, say so or use the HTTP API with the same token. The user can Install CLI from Settings → Connectors. Do not ask the user to install a vendor MCP.',
-  );
-  lines.push(
-    'Safe CLI / HTTP (every connector — `vercel logs`, Supabase inspect, `sentry-cli`, PostHog API):',
-  );
-  lines.push(
-    '- Never put raw `--json` / `--expand` / huge dumps in the tool result. That crashes any worktree agent mid-turn (Claude / Cursor / Codex / OpenCode). Cursor chat fills with `file://…/cursor-runtime/…/@cursor/sdk/dist/esm/index.js` then minified `importas e from"@bufbuild/protobuf"`.',
-  );
-  lines.push(
-    '- Write output to `.context/cli/` (worktree scratch; not `.context/attachments/`). Then read a slice. Tight window first (`--limit`, recent `--since` / last N events); raise only if empty.',
-  );
-  lines.push(
-    '- Filter (`jq`) to the fields you need (timestamp, path, status, message) — not the full request object.',
-  );
-  lines.push(
-    '- One query at a time. After you have the error line, stop fetching. Piping to `head` does not help — the CLI still buffers until you kill it.',
-  );
-  lines.push(
-    '- If a call is still running at ~40s with no useful output, stop waiting on the raw shell; detach (`/long-running`) or `stop_job` if it is hanging / doing the wrong thing.',
-  );
   return lines.join('\n');
 }
 
 /** Short resume reminder when at least one optional service is connected. */
 export function formatOptionalServicesReminder(
   integrations: IntegrationsSettings,
+  cli?: OptionalCliPresence,
 ): string | null {
-  if (connectedOptionalServices(integrations).length === 0) return null;
-  return 'Settings → Connectors: official CLIs / PostHog HTTP with injected env. If a connector MCP needsAuth or is unauthorized, check the native CLI or HTTP API instead of signing in. Write output to `.context/cli/` (not `.context/attachments/`) and read a slice — never dump raw --json/--expand into the tool result (any agent). stop_job if a fetch hangs. Do not add vendor MCPs.';
+  const connected = connectedOptionalServices(integrations);
+  if (connected.length === 0) return null;
+  const bits = connected.map((spec) => connectorReminderBit(spec, cli)).join('. ');
+  const tokenBit = connected.some((spec) => spec.cli)
+    ? 'CLI tokens are already in this process. '
+    : '';
+  return `Settings → Connectors: ${tokenBit}${bits}. If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or \`posthog_api\`. Do not add vendor MCPs. Do not read a PostHog key from the environment. Shell dumps from those CLIs go in \`.context/cli/\` — read a slice.`;
+}
+
+/** `which` for connected CLI connectors. Skips `npm prefix -g`. PostHog is omitted. */
+async function connectedCliPresence(
+  integrations: IntegrationsSettings,
+): Promise<OptionalCliPresence | undefined> {
+  const ids = connectedOptionalServices(integrations)
+    .filter((spec) => spec.cli)
+    .map((spec) => spec.id);
+  if (ids.length === 0) return undefined;
+  try {
+    const { optionalCliPresence } = await import('./optional-cli.js');
+    return await optionalCliPresence(ids);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Fresh-session playbook plus installed-CLI hints. Safe to call on every turn. */
+export async function formatOptionalServicesDirectiveForTurn(
+  integrations: IntegrationsSettings,
+): Promise<string | null> {
+  return formatOptionalServicesDirective(integrations, await connectedCliPresence(integrations));
+}
+
+/** Resume reminder plus installed-CLI hints. Safe to call on every turn. */
+export async function formatOptionalServicesReminderForTurn(
+  integrations: IntegrationsSettings,
+): Promise<string | null> {
+  return formatOptionalServicesReminder(integrations, await connectedCliPresence(integrations));
 }

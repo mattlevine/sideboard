@@ -7,7 +7,7 @@ vi.mock('../git/run.js', () => ({
 }));
 
 vi.mock('../agents/path.js', () => ({
-  enrichPathWithNpmGlobalBin: () => '/opt/homebrew/bin:/usr/bin',
+  enrichPathWithNpmGlobalBin: vi.fn(() => '/opt/homebrew/bin:/usr/bin'),
   isConductorBundledCli: () => false,
   resolveCommandBinarySync: (command: string) => command,
   withExportedPath: (command: string, pathValue: string) =>
@@ -96,5 +96,30 @@ describe('optional connector CLI install', () => {
       ['install', '-g', '@sentry/cli'],
       expect.objectContaining({ reject: false }),
     );
+  });
+
+  it('which-checks CLIs without npm prefix and caches the result', async () => {
+    runMock.mockImplementation(async (file: string, args: string[]) => {
+      if (file === 'which' && args[0] === 'vercel') {
+        return { stdout: '/opt/homebrew/bin/vercel\n', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 1 };
+    });
+    const pathMod = await import('../agents/path.js');
+    const { clearOptionalCliPresenceCache, optionalCliPresence } = await import(
+      './optional-cli.js'
+    );
+    clearOptionalCliPresenceCache();
+    vi.mocked(pathMod.enrichPathWithNpmGlobalBin).mockClear();
+    runMock.mockClear();
+    const first = await optionalCliPresence(['vercel', 'posthog']);
+    expect(first).toEqual({ vercel: true });
+    expect(pathMod.enrichPathWithNpmGlobalBin).not.toHaveBeenCalled();
+    expect(runMock).toHaveBeenCalledTimes(1);
+    expect(runMock).toHaveBeenCalledWith('which', ['vercel'], expect.anything());
+    runMock.mockClear();
+    const second = await optionalCliPresence(['vercel']);
+    expect(second).toEqual({ vercel: true });
+    expect(runMock).not.toHaveBeenCalled();
   });
 });

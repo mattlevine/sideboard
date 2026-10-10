@@ -44,7 +44,7 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
  * Worktree Claude turns: auto-approve the UI + schedule tools that the
  * worktree MCP profile always registers (present_* / ask_user / wait_for_job /
  * stop_job / run_dev_script / stop_dev_script / get_run_log /
- * notify_orchestrator / set_workspace_tags / viewer context / schedules). Slack / list_* stay
+ * notify_orchestrator / set_workspace_tags / schedules / posthog_api). Slack / list_* stay
  * orchestration-only so they stay out of the cached tools prefix.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
@@ -67,7 +67,7 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__create_schedule',
   'mcp__sideboard__update_schedule',
   'mcp__sideboard__delete_schedule',
-  'mcp__sideboard__run_schedule',
+  'mcp__sideboard__run_schedule', 'mcp__sideboard__posthog_api',
 ] as const;
 
 /** Account issue tools on the worktree MCP profile. */

@@ -237,8 +237,8 @@ import {
   isReviewWriteGatedThread,
 } from '../review/review-write-gate.js';
 import {
-  formatOptionalServicesDirective,
-  formatOptionalServicesReminder,
+  formatOptionalServicesDirectiveForTurn,
+  formatOptionalServicesReminderForTurn,
 } from '../integrations/optional-services.js';
 import {
   formatViewerContextDirective,
@@ -1533,7 +1533,7 @@ export class Orchestrator {
         : null;
     const optionalServicesReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
-        ? formatOptionalServicesReminder(loadAppSettings().integrations)
+        ? await formatOptionalServicesReminderForTurn(loadAppSettings().integrations)
         : null;
     const issueTicket = issueTicketFromThread(thread, resolveEffectiveIssueSource());
     const issueToolsReminder =
@@ -1644,7 +1644,7 @@ export class Orchestrator {
     const optionalServicesDirective =
       isBrightsy || isOrchestration
         ? null
-        : formatOptionalServicesDirective(loadAppSettings().integrations);
+        : await formatOptionalServicesDirectiveForTurn(loadAppSettings().integrations);
     const freshIssueTicket = issueTicketFromThread(fresh, resolveEffectiveIssueSource());
     const issueToolsDirective =
       isBrightsy || isOrchestration
@@ -1905,7 +1905,7 @@ export class Orchestrator {
           // Best-effort — a real git repo check will surface any remaining lock.
         }
         const retryNote = isolateCodexPluginRetry
-          ? 'Codex plugin/MCP failed — continuing without that vendor plugin (Settings → Connectors + HTTP API)'
+          ? 'Codex plugin/MCP failed — continuing without that vendor plugin (PostHog: Settings → Connectors and posthog_api)'
           : looksLikeInvalidAgentSession(detail)
             ? 'Agent session missing — starting a fresh session'
             : looksLikeV8Oom(detail)

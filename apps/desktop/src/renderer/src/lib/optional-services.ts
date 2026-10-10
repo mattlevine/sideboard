@@ -25,7 +25,7 @@ export const OPTIONAL_SERVICES: readonly OptionalServiceSpec[] = [
   {
     id: 'posthog',
     label: 'PostHog',
-    hint: 'Product analytics. No first-class CLI — agents use the HTTP API (`POSTHOG_PERSONAL_API_KEY`).',
+    hint: 'Product analytics. Agents call `posthog_api` on the Sideboard MCP server.',
     tokenPlaceholder: 'phx_…',
     tokenDocs: 'https://app.posthog.com/settings/user-api-keys',
     envKey: 'POSTHOG_PERSONAL_API_KEY',

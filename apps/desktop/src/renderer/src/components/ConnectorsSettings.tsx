@@ -124,8 +124,9 @@ export function ConnectorsSettings({
   return (
     <div className="settings-body">
       <p className="settings-lead">
-        Optional project services. Slack lives under Remote. Agents use official CLIs (or the
-        PostHog HTTP API) with tokens stored here — not vendor MCPs. Install CLI appears when{' '}
+        Optional project services. Slack lives under Remote. Agents use official CLIs, and PostHog
+        through <code>posthog_api</code>, with tokens stored here — not vendor MCPs. Install CLI
+        appears when{' '}
         <code>vercel</code>, <code>supabase</code>, or <code>sentry-cli</code> is missing — not on
         Connect.
       </p>
