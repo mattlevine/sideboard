@@ -309,3 +309,19 @@ export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
   if (dirty) writeAll(next);
   return next.sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** Archive every chat for a removed project, then surface teardown failures. */
+export async function archiveRemovedWorkspaceChats(
+  threads: Array<{ id: string }>,
+  archive: (id: string) => Promise<unknown>,
+): Promise<void> {
+  const failures: string[] = [];
+  for (const thread of threads) {
+    try {
+      await archive(thread.id);
+    } catch (err) {
+      failures.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  if (failures.length > 0) throw new Error(failures.join('\n'));
+}

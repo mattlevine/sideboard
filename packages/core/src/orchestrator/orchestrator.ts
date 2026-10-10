@@ -261,7 +261,7 @@ import {
 import { loadWorkspaceSettings } from '../hook/settings.js';
 import { syncThreadBranchFromGit } from '../threads/sync-branch.js';
 import {
-  addWorkspace, ensureWorkspace,
+  addWorkspace, archiveRemovedWorkspaceChats, ensureWorkspace,
   archivesWithRemovedWorkspace, removeWorkspace,
   syncWorkspacesFromThreads,
   type Workspace,
@@ -1130,16 +1130,10 @@ export class Orchestrator {
 
   async removeWorkspace(repoPath: string): Promise<void> {
     removeWorkspace(repoPath);
-    const failures: string[] = [];
-    for (const thread of listThreads()) {
-      if (!archivesWithRemovedWorkspace(thread.repoPath, repoPath)) continue;
-      try {
-        await this.archive(thread.id);
-      } catch (err) {
-        failures.push(err instanceof Error ? err.message : String(err));
-      }
-    }
-    if (failures.length > 0) throw new Error(failures.join('\n'));
+    await archiveRemovedWorkspaceChats(
+      listThreads().filter((thread) => archivesWithRemovedWorkspace(thread.repoPath, repoPath)),
+      (id) => this.archive(id),
+    );
   }
 
   async adopt(input: Parameters<typeof adoptThread>[0]): Promise<Thread> {
