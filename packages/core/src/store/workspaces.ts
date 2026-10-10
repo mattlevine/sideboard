@@ -118,13 +118,17 @@ export function isRemovedWorkspace(repoPath: string): boolean {
   return false;
 }
 
-/** Chats archived with a removed project, including a sibling worktree of that checkout. */
+/**
+ * Chats archived with this removal, including a sibling worktree of that checkout.
+ * Older tombstones stay out — they would archive a different project that is
+ * still on the sidebar.
+ */
 export function archivesWithRemovedWorkspace(
   threadRepoPath: string | null | undefined,
   removedPath: string,
 ): boolean {
   if (!threadRepoPath || isGlobalRepoPath(threadRepoPath)) return false;
-  return isRemovedWorkspace(threadRepoPath) || sameWorkspacePath(threadRepoPath, removedPath);
+  return removedMatches(removedPath, threadRepoPath);
 }
 
 function rememberRemoved(repoPath: string): void {
