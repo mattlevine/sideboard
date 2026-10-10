@@ -132,13 +132,26 @@ describe('posthog_api', () => {
     expect(url).toBe('https://us.posthog.com/api/projects/1/query/');
     expect(init.method).toBe('POST');
     expect(mod.isPosthogReadQuery('POST', '/api/projects/1/query')).toBe(true);
+    expect(mod.isPosthogReadQuery('POST', '/api/environments/2/query/')).toBe(true);
     expect(mod.isPosthogReadQuery('PATCH', '/api/projects/1/query/')).toBe(false);
+    const unsuffixed = payload(
+      await mod.runPosthogApi({
+        method: 'POST',
+        path: '/api/environments/2/query',
+        body: { query: { kind: 'HogQLQuery', query: 'select 1' } },
+      }),
+    );
+    expect(unsuffixed.isError).toBe(false);
+    const [envUrl, envInit] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit];
+    expect(envUrl).toBe('https://us.posthog.com/api/environments/2/query/');
+    expect(envInit.method).toBe('POST');
+    expect(envInit.body).toBe(JSON.stringify({ query: { kind: 'HogQLQuery', query: 'select 1' } }));
     const nested = payload(
       await mod.runPosthogApi({ method: 'POST', path: '/api/projects/1/query/export' }),
     );
     expect(nested.isError).toBe(true);
     expect(nested.body.error).toMatch(/write=true/);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it('POSTs only when write=true', async () => {

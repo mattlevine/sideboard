@@ -21,13 +21,23 @@ export type PosthogApiInput = {
 };
 
 /**
- * HogQL and insight queries. `POST /api/projects/:id/query/` reads analytics
- * and does not change the project, so it does not need `write=true`.
+ * HogQL and insight queries. `POST /api/projects/:id/query/` and
+ * `POST /api/environments/:id/query/` read analytics and do not need `write=true`.
  */
+const POSTHOG_READ_QUERY = /^\/api\/(?:projects|environments)\/[^/]+\/query$/;
+
 export function isPosthogReadQuery(method: string, path: string): boolean {
   if (method !== 'POST') return false;
-  const raw = path.trim().replace(/\/+$/, '');
-  return /^\/api\/projects\/[^/]+\/query$/.test(raw);
+  return POSTHOG_READ_QUERY.test(path.trim().replace(/\/+$/, ''));
+}
+
+/** Django 301s a slash-less POST to GET and drops the body. */
+function withPosthogSlash(method: string, path: string): string {
+  const raw = path.trim();
+  if ((method === 'POST' || method === 'PATCH') && raw.startsWith('/api/') && !raw.endsWith('/')) {
+    return `${raw}/`;
+  }
+  return raw;
 }
 
 /**
@@ -70,7 +80,7 @@ export async function runPosthogApi(input: PosthogApiInput) {
       {
         ok: false,
         error:
-          'POST and PATCH require write=true, and only when the user asked to change PostHog data. POST /api/projects/:id/query/ is a read and does not need write=true.',
+          'POST and PATCH require write=true, and only when the user asked to change PostHog data. POST /api/projects/:id/query/ and POST /api/environments/:id/query/ are reads and do not need write=true.',
       },
       true,
     );
@@ -92,7 +102,7 @@ export async function runPosthogApi(input: PosthogApiInput) {
   try {
     url = posthogApiUrl(
       integrations.posthogHost || 'https://us.posthog.com',
-      input.path,
+      withPosthogSlash(method, input.path),
       input.query,
     );
   } catch (err) {
@@ -150,7 +160,7 @@ export async function runPosthogApi(input: PosthogApiInput) {
 }
 
 const POSTHOG_API_DESCRIPTION =
-  'Call the connected PostHog project (Settings → Connectors). path must start with /api/ and is joined to the stored host. GET is the default. POST /api/projects/:id/query/ is a read (HogQL and insights) and does not need write=true. Other POST and PATCH require write=true, and only when the user asked to change PostHog data. The API key is not in the environment. Do not sign in to a PostHog MCP.';
+  'Call the connected PostHog project (Settings → Connectors). path must start with /api/ and is joined to the stored host. GET is the default. POST /api/projects/:id/query/ and POST /api/environments/:id/query/ are reads (HogQL and insights) and do not need write=true. Other POST and PATCH require write=true, and only when the user asked to change PostHog data. The API key is not in the environment. Do not sign in to a PostHog MCP.';
 
 export function registerPosthogTools(server: McpServer): void {
   server.tool(
@@ -160,7 +170,7 @@ export function registerPosthogTools(server: McpServer): void {
       method: z
         .enum(POSTHOG_METHODS)
         .describe(
-          'GET, POST /api/projects/:id/query/ for a read, or POST/PATCH when the user asked for a change',
+          'GET, POST /api/projects|environments/:id/query/ for a read, or POST/PATCH when the user asked for a change',
         ),
       path: z.string().describe('PostHog path starting with /api/, not a full URL'),
       query: z
@@ -172,7 +182,7 @@ export function registerPosthogTools(server: McpServer): void {
         .boolean()
         .optional()
         .describe(
-          'Required true for POST and PATCH that change data. Omit for GET and for POST /api/projects/:id/query/.',
+          'Required true for POST and PATCH that change data. Omit for GET and for POST .../query/.',
         ),
     },
     async (input) => runPosthogApi(input),

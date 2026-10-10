@@ -41,6 +41,7 @@ describe('optional services', () => {
     expect(text).toMatch(/`sentry-cli`/);
     expect(text).toMatch(/call `posthog_api`/);
     expect(text).toMatch(/\/api\/projects\/:id\/query\//);
+    expect(text).toMatch(/\/api\/environments\/:id\/query\//);
     expect(text).toMatch(/write=true/);
     expect(text).toMatch(/Do not read the API key from the environment/);
     expect(text).not.toMatch(/POSTHOG_PERSONAL_API_KEY/);

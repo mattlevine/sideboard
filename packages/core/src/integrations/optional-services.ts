@@ -318,7 +318,7 @@ function connectorDirectiveLine(spec: OptionalServiceSpec, cli?: OptionalCliPres
   if (spec.cli) {
     return `- ${spec.label}: use \`${spec.cli}\` (\`${spec.envKey}\`${extras})${cliPresencePhrase(spec, cli)}. Do not add a ${spec.label} MCP.`;
   }
-  return `- ${spec.label}: call \`posthog_api\`. Path must start with \`/api/\`. GET is the default. POST \`/api/projects/:id/query/\` is a read and does not need \`write=true\`. Other POST and PATCH require \`write=true\` only when the user asked to change data. Do not read the API key from the environment. Do not add a ${spec.label} MCP.`;
+  return `- ${spec.label}: call \`posthog_api\`. Path must start with \`/api/\`. GET is the default. POST \`/api/projects/:id/query/\` or \`/api/environments/:id/query/\` is a read and does not need \`write=true\`. Other POST and PATCH require \`write=true\` only when the user asked to change data. Do not read the API key from the environment. Do not add a ${spec.label} MCP.`;
 }
 
 function connectorReminderBit(spec: OptionalServiceSpec, cli?: OptionalCliPresence): string {
