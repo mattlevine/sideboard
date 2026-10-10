@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import { loadRepoSettings } from '../hook/settings.js';
 import { appDataDir } from './paths.js';
 import { isGlobalRepoPath } from './global-workspace.js';
 import { canonicalizeRepoPath, ensureGhPreferOrigin, resolveRepoRoot } from '../git/worktree.js';
@@ -68,10 +70,43 @@ export function sameWorkspacePath(a: string, b: string): boolean {
   return false;
 }
 
+function pathIsInside(parent: string, child: string): boolean {
+  const root = parent.replace(/\/+$/, '');
+  const path = child.replace(/\/+$/, '');
+  if (!root || !path) return false;
+  return path === root || path.startsWith(`${root}/`);
+}
+
+/** Default `~/sideboard/workspaces/<repo>` without creating the directory. */
+function defaultWorktreesRoot(repoPath: string): string {
+  const slug = basename(repoPath.replace(/\/+$/, '')) || 'repo';
+  return join(homedir(), 'sideboard', 'workspaces', slug);
+}
+
+/**
+ * A removal stored as a worktree path still covers the project after archive
+ * deletes that folder. `~/sideboard/workspaces/<repo>/<worktree>` cannot be
+ * resolved through `.git` once the folder is gone.
+ */
+function removedWorktreeCoversRepo(saved: string, repoPath: string): boolean {
+  if (!saved || !repoPath) return false;
+  if (pathIsInside(defaultWorktreesRoot(repoPath), saved)) return true;
+  try {
+    const custom = loadRepoSettings(repoPath)?.worktreesRoot;
+    if (custom && pathIsInside(custom, saved)) return true;
+  } catch {
+    // Checkout has no settings.
+  }
+  return false;
+}
+
 function removedMatches(saved: string, repoPath: string): boolean {
   if (saved === repoPath || sameWorkspacePath(saved, repoPath)) return true;
   const primary = primaryCheckoutFromLinkedWorktree(repoPath);
-  return Boolean(primary && sameWorkspacePath(saved, primary));
+  if (primary && (sameWorkspacePath(saved, primary) || removedWorktreeCoversRepo(saved, primary))) {
+    return true;
+  }
+  return removedWorktreeCoversRepo(saved, repoPath);
 }
 
 /** True when the user removed this project and has not added it again. */
@@ -83,6 +118,15 @@ export function isRemovedWorkspace(repoPath: string): boolean {
   return false;
 }
 
+/** Chats archived with a removed project, including a sibling worktree of that checkout. */
+export function archivesWithRemovedWorkspace(
+  threadRepoPath: string | null | undefined,
+  removedPath: string,
+): boolean {
+  if (!threadRepoPath || isGlobalRepoPath(threadRepoPath)) return false;
+  return isRemovedWorkspace(threadRepoPath) || sameWorkspacePath(threadRepoPath, removedPath);
+}
+
 function rememberRemoved(repoPath: string): void {
   const next = readRemoved();
   const before = next.size;
@@ -90,6 +134,13 @@ function rememberRemoved(repoPath: string): void {
   next.add(canon);
   const raw = repoPath.replace(/\/+$/, '');
   if (raw && raw !== canon) next.add(raw);
+  // Record the main checkout while the folder still exists. Archiving deletes
+  // the worktree, and a leftover worktree path can no longer be matched back
+  // to the project — thread sync would register the main repo again.
+  const primary =
+    primaryCheckoutFromLinkedWorktree(repoPath) ??
+    (canon !== repoPath ? primaryCheckoutFromLinkedWorktree(canon) : null);
+  if (primary) next.add(primary);
   if (next.size !== before) writeRemoved(next);
 }
 
@@ -257,4 +308,20 @@ export function syncWorkspacesFromThreads(repoPaths: string[]): Workspace[] {
   const next = [...byPath.values()];
   if (dirty) writeAll(next);
   return next.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Archive every chat for a removed project, then surface teardown failures. */
+export async function archiveRemovedWorkspaceChats(
+  threads: Array<{ id: string }>,
+  archive: (id: string) => Promise<unknown>,
+): Promise<void> {
+  const failures: string[] = [];
+  for (const thread of threads) {
+    try {
+      await archive(thread.id);
+    } catch (err) {
+      failures.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  if (failures.length > 0) throw new Error(failures.join('\n'));
 }

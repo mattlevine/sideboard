@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -113,6 +113,57 @@ describe('workspaces store', () => {
     const paths = listed.map((w) => w.path);
     expect(paths).toContain(repoPath);
     expect(paths).not.toContain(realpathSync(wt));
+  });
+
+  it('does not bring back a removed project after its worktree folder is gone', async () => {
+    const mod = await import('./workspaces.js');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: repoPath,
+    });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath });
+    execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: repoPath });
+    const wt = join(dataDir, 'archived-worktree');
+    execFileSync('git', ['worktree', 'add', wt, '-b', 'thread/archived-worktree'], {
+      cwd: repoPath,
+    });
+    const worktreePath = realpathSync(wt);
+
+    await mod.addWorkspace(repoPath);
+    // Sidebar used to remove the worktree path. Archiving then deletes that folder.
+    mod.removeWorkspace(worktreePath);
+    rmSync(wt, { recursive: true, force: true });
+
+    expect(mod.isRemovedWorkspace(repoPath)).toBe(true);
+    expect(mod.listWorkspaces().map((w) => w.path)).not.toContain(repoPath);
+    expect(mod.syncWorkspacesFromThreads([repoPath]).map((w) => w.path)).not.toContain(
+      repoPath,
+    );
+    expect(mod.syncWorkspacesFromThreads([worktreePath]).map((w) => w.path)).not.toContain(
+      repoPath,
+    );
+    await expect(mod.ensureWorkspace(repoPath)).rejects.toThrow(/removed/i);
+  });
+
+  it('honors a worktree removal recorded before the folder was deleted', async () => {
+    const mod = await import('./workspaces.js');
+    const saved = join(
+      homedir(),
+      'sideboard',
+      'workspaces',
+      'my-project',
+      'old-worktree',
+    );
+    writeFileSync(join(dataDir, 'removed-workspaces.json'), JSON.stringify([saved], null, 2));
+
+    expect(mod.isRemovedWorkspace(repoPath)).toBe(true);
+    expect(mod.syncWorkspacesFromThreads([repoPath]).map((w) => w.path)).not.toContain(
+      repoPath,
+    );
+    await expect(mod.ensureWorkspace(repoPath)).rejects.toThrow(/removed/i);
+
+    const again = await mod.addWorkspace(repoPath);
+    expect(mod.listWorkspaces().map((w) => w.path)).toContain(again.path);
+    expect(mod.isRemovedWorkspace(repoPath)).toBe(false);
   });
 
   it('keeps a removed project removed until it is added again', async () => {

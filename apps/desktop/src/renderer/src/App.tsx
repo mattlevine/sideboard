@@ -1109,19 +1109,15 @@ export function App() {
     markArchiving(workspaceIds, true);
 
     try {
-      const results = await Promise.allSettled(
-        workspaceIds.map((id) => window.sideboard.archiveThread(id)),
-      );
-      const failed = results.find(
-        (r): r is PromiseRejectedResult => r.status === 'rejected',
-      );
-      if (failed) {
-        throw failed.reason instanceof Error
-          ? failed.reason
-          : new Error(String(failed.reason));
-      }
+      // Remove first so the tombstone records the main checkout before archive deletes the worktree.
       await window.sideboard.removeWorkspace(path);
-      if (repoPath.replace(/\/+$/, '') === key || path === '/') {
+      const repoKey = repoPath.replace(/\/+$/, '');
+      let clearRepo = repoKey === key || path === '/';
+      if (!clearRepo && repoKey) {
+        const listed = await window.sideboard.listWorkspaces().catch(() => null);
+        if (listed) clearRepo = !listed.some((ws) => ws.path.replace(/\/+$/, '') === repoKey);
+      }
+      if (clearRepo) {
         setRepoPath('');
         try {
           await window.sideboard.setRepoPath('');

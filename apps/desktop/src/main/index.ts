@@ -1467,9 +1467,7 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle('addWorkspace', async (_e, path: string) => orch.addWorkspace(path));
-  ipcMain.handle('removeWorkspace', (_e, path: string) => {
-    orch.removeWorkspace(path);
-  });
+  ipcMain.handle('removeWorkspace', (_e, path: string) => orch.removeWorkspace(path));
   ipcMain.handle('adopt', (_e, input: AdoptInput) => orch.adopt(input));
   ipcMain.handle('listConductor', () => orch.listConductor());
   ipcMain.handle('adoptFromConductor', (_e, id: string) => orch.adoptFromConductor(id));
