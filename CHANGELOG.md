@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.287] - 2026-10-09
+
+### Fixed
+
+- Removing a project archives only that project. An older removal no longer archives a different project that is still on the sidebar.
+- A resumed turn still reaches the agent. The chat no longer shows a "Sideboard continued the turn" row.
+
 ## [0.1.286] - 2026-10-09
 
 ### Fixed
