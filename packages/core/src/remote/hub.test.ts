@@ -243,13 +243,17 @@ describe('RemoteHub', () => {
   it('keeps a phone pairing across a new hub and drops it when another phone pairs', () => {
     const labels = new Map<string, string>();
     const tokens = new Map<string, string>();
+    let finds = 0;
+    let saves = 0;
     const phoneSessions = {
       find(sessionToken: string) {
+        finds += 1;
         const deviceId = tokens.get(sessionToken);
         if (!deviceId) return null;
         return { deviceId, deviceLabel: labels.get(deviceId) ?? '' };
       },
       save(deviceId: string, sessionToken: string) {
+        saves += 1;
         for (const [token, id] of [...tokens]) {
           if (id === deviceId) tokens.delete(token);
         }
@@ -263,10 +267,16 @@ describe('RemoteHub', () => {
     const phone = fakeSocket();
     first.handleClientMessage(phone, JSON.stringify({ type: 'pair', code: pairingCode(first, mac) }));
     const token = pairedToken(phone);
+    expect(saves).toBe(1);
+    first.handleClientMessage(phone, JSON.stringify({ type: 'list_hosts', sessionTokens: [token] }));
+    expect(finds).toBe(0);
 
     const second = new RemoteHub({ phoneSessions });
     const phone2 = fakeSocket();
     second.handleClientMessage(phone2, JSON.stringify({ type: 'list_hosts', sessionTokens: [token] }));
+    expect(finds).toBe(1);
+    second.handleClientMessage(phone2, JSON.stringify({ type: 'list_hosts', sessionTokens: [token] }));
+    expect(finds).toBe(1);
     expect(last(phone2)).toEqual({
       type: 'hosts',
       hosts: [{ sessionToken: token, deviceId: 'mac-1', deviceLabel: 'Work', online: false }],
@@ -276,11 +286,13 @@ describe('RemoteHub', () => {
     labels.set('mac-1', 'Office');
     second.handleClientMessage(phone2, JSON.stringify({ type: 'resume', sessionToken: token }));
     expect(last(phone2).type).toBe('paired');
+    expect(saves).toBe(1);
     second.handleClientMessage(phone2, JSON.stringify({ type: 'prompt', text: 'after deploy' }));
     expect(last(mac2)).toEqual({ type: 'inbound', text: 'after deploy' });
 
     const replacement = fakeSocket();
     second.handleClientMessage(replacement, JSON.stringify({ type: 'pair', code: pairingCode(second, mac2) }));
+    expect(saves).toBe(2);
     const third = new RemoteHub({ phoneSessions });
     const stale = fakeSocket();
     third.handleClientMessage(stale, JSON.stringify({ type: 'resume', sessionToken: token }));

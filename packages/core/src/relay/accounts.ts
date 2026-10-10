@@ -317,7 +317,7 @@ export class RelayAccountStore {
     }
   }
 
-  /** Remember which phone paired to this Mac. The hash is what a later process checks. */
+  /** Store a phone pairing when it is created. A later process looks it up on a memory miss. */
   savePhoneSession(deviceId: string, sessionToken: string): void {
     const id = deviceId.trim();
     const token = sessionToken.trim();
