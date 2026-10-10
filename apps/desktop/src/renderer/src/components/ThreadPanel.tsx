@@ -434,7 +434,7 @@ const ChatTranscript = memo(function ChatTranscript({
   useEffect(() => {
     setEarlierPinned(false);
   }, [threadId]);
-  const earlier = compactedMessages ?? [];
+  const earlier = (compactedMessages ?? []).filter((m) => m.origin !== 'continue');
   const revealEarlier = earlierPinned || forceRevealEarlier;
   return (
     <>
@@ -490,6 +490,7 @@ const ChatTranscript = memo(function ChatTranscript({
         </div>
       )}
       {messages.map((m, i) => {
+        if (m.origin === 'continue') return null;
         const fallbackDuration = fallbackDurations[i];
         const hidePlanProse =
           showPlanCard &&
@@ -502,7 +503,7 @@ const ChatTranscript = memo(function ChatTranscript({
         return (
           <div
             key={`${m.ts}-${i}`}
-            className={`msg ${m.origin === 'continue' ? 'continue' : m.role === 'summary' ? 'agent' : m.role}`}
+            className={`msg ${m.role === 'summary' ? 'agent' : m.role}`}
             data-chat-search-key={`msg-${i}`}
           >
             {m.role === 'agent' ? (
@@ -571,10 +572,6 @@ const ChatTranscript = memo(function ChatTranscript({
                 hideAnswer
                 toolsOnly
               />
-            ) : m.origin === 'continue' ? (
-              <div className="msg-continue" title={m.text}>
-                Sideboard continued the turn
-              </div>
             ) : (
               <div className="msg-user-body">
                 {(m.attachments?.length ?? 0) > 0 && (
@@ -601,16 +598,8 @@ const ChatTranscript = memo(function ChatTranscript({
           </div>
         );
       })}
-      {pendingTranscript && (
-        <div
-          className={`msg ${looksLikeAutoContinuePrompt(pendingTranscript) ? 'continue' : 'user'} pending`}
-          data-chat-search-key="pending"
-        >
-          {looksLikeAutoContinuePrompt(pendingTranscript) ? (
-            <div className="msg-continue" title={pendingTranscript}>
-              Sideboard continued the turn
-            </div>
-          ) : (
+      {pendingTranscript && !looksLikeAutoContinuePrompt(pendingTranscript) && (
+        <div className="msg user pending" data-chat-search-key="pending">
             <div className="msg-user-body">
               {pendingAttachments.length > 0 && (
                 <ComposerAttachmentChips
@@ -632,7 +621,6 @@ const ChatTranscript = memo(function ChatTranscript({
                 />
               ) : null}
             </div>
-          )}
         </div>
       )}
       {showStreaming && (

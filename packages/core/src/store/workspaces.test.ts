@@ -166,6 +166,27 @@ describe('workspaces store', () => {
     expect(mod.isRemovedWorkspace(repoPath)).toBe(false);
   });
 
+  it('archives only the project being removed, not an older tombstone', async () => {
+    const mod = await import('./workspaces.js');
+    const other = join(dataDir, 'other-project');
+    mkdirSync(other, { recursive: true });
+    execFileSync('git', ['init'], { cwd: other, stdio: 'ignore' });
+    const otherPath = realpathSync(other);
+    const saved = join(homedir(), 'sideboard', 'workspaces', 'my-project', 'old-worktree');
+    writeFileSync(join(dataDir, 'removed-workspaces.json'), JSON.stringify([saved], null, 2));
+
+    expect(mod.archivesWithRemovedWorkspace(repoPath, saved)).toBe(true);
+    expect(mod.archivesWithRemovedWorkspace(otherPath, otherPath)).toBe(true);
+    expect(mod.archivesWithRemovedWorkspace(repoPath, otherPath)).toBe(false);
+    expect(mod.archivesWithRemovedWorkspace(otherPath, saved)).toBe(false);
+    expect(
+      mod.archivesWithRemovedWorkspace(
+        repoPath,
+        join(homedir(), 'sideboard', 'workspaces', 'my-project-extra', 'wt'),
+      ),
+    ).toBe(false);
+  });
+
   it('keeps a removed project removed until it is added again', async () => {
     const mod = await import('./workspaces.js');
     const added = await mod.addWorkspace(repoPath);
