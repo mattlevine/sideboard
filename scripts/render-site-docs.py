@@ -35,7 +35,7 @@ PAGES = {
     "compare.md": {
         "out": "compare/index.html",
         "title": "Compare — Sideboard",
-        "description": "Sideboard vs Conductor, Orca, Cursor, and other local boards.",
+        "description": "Sideboard vs Conductor, Orca, and Herdr: the control plane for the ticket → worktree → reviewed PR loop, on your Mac.",
         "h1": "Compare",
     },
     "security.md": {
@@ -95,7 +95,7 @@ def md_to_html(md: str) -> str:
     def close_table() -> None:
         nonlocal in_table
         if in_table:
-            out.append("</tbody></table>")
+            out.append("</tbody></table></div>")
             in_table = False
 
     while i < len(lines):
@@ -122,13 +122,15 @@ def md_to_html(md: str) -> str:
             while i < len(lines) and lines[i].startswith("|"):
                 rows.append(lines[i])
                 i += 1
-            body = [r for r in rows if not re.match(r"^\|\s*[-: ]+\|", r)]
+            # Separator rows only: every cell is dashes (optionally with colons).
+            # A header row with an empty first cell (`| | A | B |`) is not one.
+            body = [r for r in rows if not re.match(r"^\|(\s*:?-+:?\s*\|)+\s*$", r)]
             if not body:
                 continue
             def cells(row: str) -> list[str]:
                 return [c.strip() for c in row.strip().strip("|").split("|")]
             header = cells(body[0])
-            out.append("<table><thead><tr>")
+            out.append('<div class="table-scroll"><table><thead><tr>')
             for c in header:
                 out.append(f"<th>{inline(c) if c else '&nbsp;'}</th>")
             out.append("</tr></thead><tbody>")
@@ -137,7 +139,7 @@ def md_to_html(md: str) -> str:
                 for c in cells(row):
                     out.append(f"<td>{inline(c) if c else '&nbsp;'}</td>")
                 out.append("</tr>")
-            out.append("</tbody></table>")
+            out.append("</tbody></table></div>")
             continue
 
         m = re.match(r"^(#{2,3})\s+(.*)$", line)
@@ -205,7 +207,7 @@ def page(meta: dict, body: str) -> str:
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css?v=20261004-2">
+<link rel="stylesheet" href="/styles.css?v=20261010-1">
 </head>
 <body>
 <header class="nav">

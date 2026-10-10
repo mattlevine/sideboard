@@ -12,7 +12,7 @@
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css?v=20261004-2">
+<link rel="stylesheet" href="/styles.css?v=20261010-1">
 </head>
 <body>
 <header class="nav">
@@ -38,7 +38,7 @@ npm i -g opencode-ai@latest
 npm i -g @cursor/sdk
 export CURSOR_API_KEY=&quot;cursor_...&quot;</code></pre>
 <p>Then <code>sideboard detect</code> (or Settings → Agents) shows which harnesses are installed and signed in.</p>
-<table><thead><tr>
+<div class="table-scroll"><table><thead><tr>
 <th>Agent</th>
 <th>How it runs</th>
 </tr></thead><tbody>
@@ -62,7 +62,7 @@ export CURSOR_API_KEY=&quot;cursor_...&quot;</code></pre>
 <td>Brightsy</td>
 <td>Optional chat-only adapter</td>
 </tr>
-</tbody></table>
+</tbody></table></div>
 <p>Mechanical control (list, send, diff, land) stays on the Sideboard CLI — zero tokens. Use MCP when an agent needs judgment across threads or needs to open a pane in the desktop.</p>
 <p>Connect the Sideboard MCP from each harness so an agent can drive the board. Typical stdio command: <code>sideboard mcp</code> (or <code>npx -y sideboard-mcp</code>). Packaged Sideboard.app writes the absolute Node + bundled MCP path on launch.</p>
 <p>See <a href="/docs/remote/">Remote integrations</a> for Settings → Agents vs Git / Issues / Remote / Connectors.</p>

@@ -22,9 +22,9 @@ Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The M
 
 Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and a phone app, the CLI, or MCP can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
 
-Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), a full agent IDE ([Orca](https://www.onorca.dev/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
+Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), a full agent IDE with many harnesses on any OS ([Orca](https://www.onorca.dev/)), terminals that outlive a closed lid across machines ([Herdr](https://herdr.dev/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
 
-Peer-by-peer notes: [Compare](docs/COMPARE.md).
+Peer-by-peer notes — Conductor is the board, Orca is the IDE, Herdr is the runtime, Sideboard is the ticket → worktree → reviewed PR loop around them: [Compare](docs/COMPARE.md).
 
 ## Why it exists
 
