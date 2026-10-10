@@ -1109,18 +1109,13 @@ export function App() {
     markArchiving(workspaceIds, true);
 
     try {
-      // Remove before archiving. Archiving deletes the worktree folder, and
-      // the removal has to record the main checkout while that folder exists.
+      // Remove first so the tombstone records the main checkout before archive deletes the worktree.
       await window.sideboard.removeWorkspace(path);
       const repoKey = repoPath.replace(/\/+$/, '');
       let clearRepo = repoKey === key || path === '/';
       if (!clearRepo && repoKey) {
-        try {
-          const listed = await window.sideboard.listWorkspaces();
-          clearRepo = !listed.some((ws) => ws.path.replace(/\/+$/, '') === repoKey);
-        } catch {
-          clearRepo = false;
-        }
+        const listed = await window.sideboard.listWorkspaces().catch(() => null);
+        if (listed) clearRepo = !listed.some((ws) => ws.path.replace(/\/+$/, '') === repoKey);
       }
       if (clearRepo) {
         setRepoPath('');

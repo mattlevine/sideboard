@@ -118,6 +118,15 @@ export function isRemovedWorkspace(repoPath: string): boolean {
   return false;
 }
 
+/** Chats archived with a removed project, including a sibling worktree of that checkout. */
+export function archivesWithRemovedWorkspace(
+  threadRepoPath: string | null | undefined,
+  removedPath: string,
+): boolean {
+  if (!threadRepoPath || isGlobalRepoPath(threadRepoPath)) return false;
+  return isRemovedWorkspace(threadRepoPath) || sameWorkspacePath(threadRepoPath, removedPath);
+}
+
 function rememberRemoved(repoPath: string): void {
   const next = readRemoved();
   const before = next.size;
