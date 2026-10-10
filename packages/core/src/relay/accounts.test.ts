@@ -1,4 +1,5 @@
 import { mkdtempSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -192,6 +193,56 @@ describe('relay accounts', () => {
     expect(store.verifyCredential(second.credential)).toBe(second.accountId);
     store.revokeAccount(second.accountId);
     expect(store.verifyCredential(second.credential)).toBeNull();
+  });
+
+  it('keeps a phone pairing across a reopened file, including one that predates the column', () => {
+    file = join(mkdtempSync(join(tmpdir(), 'sb-relay-accounts-')), 'accounts.sqlite');
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+    const legacy = new DatabaseSync(file);
+    legacy.exec(`CREATE TABLE devices (
+      device_id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      host_secret_hash TEXT NOT NULL,
+      device_label TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`);
+    legacy.close();
+
+    const first = open();
+    const signed = first.signIn({
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: '99',
+      email: null,
+      emailVerified: false,
+    });
+    expect(
+      first.authorizeHost({
+        accountToken: signed.credential,
+        deviceId: 'mac-1',
+        deviceLabel: 'Work',
+        hostSecret: 'host-secret',
+      }).ok,
+    ).toBe(true);
+    first.savePhoneSession('mac-1', 'phone-token');
+    expect(first.findPhoneSession('phone-token')).toEqual({ deviceId: 'mac-1', deviceLabel: 'Work' });
+    first.close();
+    stores.pop();
+
+    const second = open();
+    expect(second.findPhoneSession('phone-token')).toEqual({ deviceId: 'mac-1', deviceLabel: 'Work' });
+    expect(second.findPhoneSession('nope')).toBeNull();
+    second.authorizeHost({
+      accountToken: signed.credential,
+      deviceId: 'mac-1',
+      deviceLabel: 'Office',
+      hostSecret: 'host-secret',
+    });
+    expect(second.findPhoneSession('phone-token')?.deviceLabel).toBe('Office');
+    second.savePhoneSession('mac-1', 'next-token');
+    expect(second.findPhoneSession('phone-token')).toBeNull();
+    expect(second.findPhoneSession('next-token')?.deviceId).toBe('mac-1');
+    second.revokeAccount(signed.accountId);
+    expect(second.findPhoneSession('next-token')).toBeNull();
   });
 });
 

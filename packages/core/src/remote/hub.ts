@@ -58,12 +58,23 @@ export type RemoteHostAuthorizer = (input: {
   hostSecret: string;
 }) => { ok: true } | { ok: false; message: string };
 
+export type RemotePhoneSession = {
+  deviceId: string;
+  deviceLabel: string;
+};
+
+/** Durable phone pairings. Same lifetime as the Mac login: a deploy keeps them. */
+export type RemotePhoneSessions = {
+  find(sessionToken: string): RemotePhoneSession | null;
+  save(deviceId: string, sessionToken: string): void;
+};
+
 /**
  * In-memory phone ↔ Mac registry. One active phone socket per Mac.
  * A phone may hold session tokens for several Macs and attaches to one at a time.
  * Host secrets and session tokens survive that Mac reconnecting in this process.
- * A relay restart drops the live sockets — the phone pairs again. When an
- * authorizer is set, the account and host secret live in durable storage.
+ * A relay restart drops the live sockets. Stored phone sessions let the phone
+ * resume with the same token; without that store the phone pairs again.
  */
 export class RemoteHub {
   private readonly hosts = new Map<string, HostSession>();
@@ -75,6 +86,7 @@ export class RemoteHub {
   constructor(
     private readonly opts: {
       authorizeHost?: RemoteHostAuthorizer;
+      phoneSessions?: RemotePhoneSessions;
       onAuthorized?: (socket: RemoteSocket) => void;
     } = {},
   ) {}
@@ -223,14 +235,36 @@ export class RemoteHub {
     this.attachPhone(socket, host);
   }
 
-  private resumePhone(socket: RemoteSocket, sessionToken: string): void {
+  private knownSession(sessionToken: string): RemotePhoneSession | null {
     const deviceId = this.phonesByToken.get(sessionToken);
     const remembered = deviceId ? this.remembered.get(deviceId) : undefined;
-    if (!deviceId || !remembered || remembered.sessionToken !== sessionToken) {
+    if (deviceId && remembered?.sessionToken === sessionToken) {
+      return { deviceId, deviceLabel: remembered.deviceLabel };
+    }
+    const stored = this.opts.phoneSessions?.find(sessionToken) ?? null;
+    if (!stored) {
+      if (deviceId) this.phonesByToken.delete(sessionToken);
+      return null;
+    }
+    const prior = this.remembered.get(stored.deviceId);
+    if (prior?.sessionToken && prior.sessionToken !== sessionToken) return null;
+    this.phonesByToken.set(sessionToken, stored.deviceId);
+    if (prior) prior.sessionToken = sessionToken;
+    const live = this.hosts.get(stored.deviceId);
+    if (live && !live.sessionToken) live.sessionToken = sessionToken;
+    return {
+      deviceId: stored.deviceId,
+      deviceLabel: live?.deviceLabel || prior?.deviceLabel || stored.deviceLabel,
+    };
+  }
+
+  private resumePhone(socket: RemoteSocket, sessionToken: string): void {
+    const known = this.knownSession(sessionToken);
+    if (!known) {
       send(socket, { type: 'error', message: 'phone session expired — pair again' });
       return;
     }
-    const host = this.hosts.get(deviceId);
+    const host = this.hosts.get(known.deviceId);
     if (!host) {
       send(socket, { type: 'host_offline' });
       return;
@@ -240,17 +274,13 @@ export class RemoteHub {
 
   private listHosts(socket: RemoteSocket, sessionTokens: string[]): void {
     const hosts: RemoteHostSummary[] = sessionTokens.map((sessionToken) => {
-      const deviceId = this.phonesByToken.get(sessionToken);
-      const remembered = deviceId ? this.remembered.get(deviceId) : undefined;
-      const valid = Boolean(deviceId && remembered && remembered.sessionToken === sessionToken);
-      if (!valid || !deviceId || !remembered) {
-        return { sessionToken, deviceId: '', deviceLabel: '', online: false };
-      }
-      const host = this.hosts.get(deviceId);
+      const known = this.knownSession(sessionToken);
+      if (!known) return { sessionToken, deviceId: '', deviceLabel: '', online: false };
+      const host = this.hosts.get(known.deviceId);
       return {
         sessionToken,
-        deviceId,
-        deviceLabel: host?.deviceLabel || remembered.deviceLabel,
+        deviceId: known.deviceId,
+        deviceLabel: host?.deviceLabel || known.deviceLabel,
         online: Boolean(host),
       };
     });
@@ -298,6 +328,7 @@ export class RemoteHub {
       sessionToken: token,
       deviceLabel: host.deviceLabel,
     });
+    this.opts.phoneSessions?.save(host.deviceId, token);
     this.bySocket.set(socket, { role: 'phone', deviceId: host.deviceId });
     this.opts.onAuthorized?.(socket);
     send(socket, {
