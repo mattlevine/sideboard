@@ -6,6 +6,52 @@ import { WebSocket } from 'ws';
 import { REMOTE_RELAY_PATH } from '../remote/protocol.js';
 import { startRelayServer, type RelayServerHandle } from './server.js';
 
+type RelaySock = {
+  send(message: unknown): void;
+  next(): Promise<Record<string, unknown>>;
+  close(): void;
+};
+
+function connect(url: string): Promise<RelaySock> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    const pending: Array<(msg: Record<string, unknown>) => void> = [];
+    const queued: Record<string, unknown>[] = [];
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error('timed out'));
+    }, 3000);
+    ws.on('message', (data) => {
+      const msg = JSON.parse(String(data)) as Record<string, unknown>;
+      const wait = pending.shift();
+      if (wait) wait(msg);
+      else queued.push(msg);
+    });
+    ws.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    ws.on('open', () => {
+      clearTimeout(timer);
+      resolve({
+        send: (message) => ws.send(JSON.stringify(message)),
+        next: () => {
+          const msg = queued.shift();
+          if (msg) return Promise.resolve(msg);
+          return new Promise((done, deny) => {
+            const wait = setTimeout(() => deny(new Error('timed out')), 3000);
+            pending.push((row) => {
+              clearTimeout(wait);
+              done(row);
+            });
+          });
+        },
+        close: () => ws.close(),
+      });
+    });
+  });
+}
+
 async function once(url: string, message: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url);
@@ -119,5 +165,70 @@ describe('relay account sign-in', () => {
       accountToken: session.credential,
     });
     expect(wrong).toEqual({ type: 'error', message: 'host secret rejected' });
+  });
+
+  it('keeps a phone pairing after the relay process restarts', async () => {
+    const origin = await listen();
+    const state = 'b'.repeat(32);
+    const started = await fetch(`${origin}/remote/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'github', state }),
+    });
+    expect(started.ok).toBe(true);
+    const callback = await fetch(`${origin}/remote/oauth/callback?code=from-github&state=${state}`);
+    expect(callback.status).toBe(200);
+    const result = await fetch(`${origin}/remote/oauth/result?state=${state}`);
+    const session = (await result.json()) as { credential?: string };
+    expect(session.credential).toBeTruthy();
+
+    const wsUrl = `ws://127.0.0.1:${handle!.port}${REMOTE_RELAY_PATH}`;
+    const mac = await connect(wsUrl);
+    mac.send({
+      type: 'host_register',
+      deviceId: 'mac-1',
+      deviceLabel: 'Work',
+      hostSecret: 'host-secret',
+      accountToken: session.credential,
+    });
+    expect(await mac.next()).toMatchObject({ type: 'registered', deviceId: 'mac-1' });
+    mac.send({ type: 'host_pair' });
+    const code = await mac.next();
+    expect(code.type).toBe('pairing_code');
+
+    const phone = await connect(wsUrl);
+    phone.send({ type: 'pair', code: code.code });
+    const paired = await phone.next();
+    expect(paired.type).toBe('paired');
+    const token = paired.sessionToken;
+    mac.close();
+    phone.close();
+    await handle!.close();
+    handle = null;
+
+    await listen();
+    const resumedUrl = `ws://127.0.0.1:${handle!.port}${REMOTE_RELAY_PATH}`;
+    const phone2 = await connect(resumedUrl);
+    phone2.send({ type: 'list_hosts', sessionTokens: [token] });
+    expect(await phone2.next()).toEqual({
+      type: 'hosts',
+      hosts: [{ sessionToken: token, deviceId: 'mac-1', deviceLabel: 'Work', online: false }],
+    });
+    const mac2 = await connect(resumedUrl);
+    mac2.send({
+      type: 'host_register',
+      deviceId: 'mac-1',
+      deviceLabel: 'Work',
+      hostSecret: 'host-secret',
+      accountToken: session.credential,
+    });
+    expect(await mac2.next()).toMatchObject({ type: 'registered' });
+    phone2.send({ type: 'resume', sessionToken: token });
+    expect(await phone2.next()).toMatchObject({ type: 'paired', sessionToken: token });
+    expect(await mac2.next()).toMatchObject({ type: 'phone_joined' });
+    phone2.send({ type: 'prompt', text: 'still paired' });
+    expect(await mac2.next()).toEqual({ type: 'inbound', text: 'still paired' });
+    mac2.close();
+    phone2.close();
   });
 });

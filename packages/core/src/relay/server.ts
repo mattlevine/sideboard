@@ -156,6 +156,12 @@ export async function startRelayServer(
           return decision.ok ? { ok: true } : { ok: false, message: decision.message };
         }
       : undefined,
+    phoneSessions: accountStore
+      ? {
+          find: (sessionToken) => accountStore.findPhoneSession(sessionToken),
+          save: (deviceId, sessionToken) => accountStore.savePhoneSession(deviceId, sessionToken),
+        }
+      : undefined,
     onAuthorized: (socket) => authMarks.get(socket)?.(),
   });
 

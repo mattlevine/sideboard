@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A phone stays paired to this Mac across a relay deploy. The pairing is stored with the Mac login, so a new image does not require a new pairing code.
+
 ## [0.1.288] - 2026-10-10
 
 ### Added

@@ -114,6 +114,7 @@ export function assertRelayAccountsDurable(filePath: string): void {
 /**
  * Sideboard accounts on the relay. The file is the source of truth across
  * process restarts. On Fly it lives on a volume so image deploys keep it.
+ * Phone pairings are stored on the device row and survive the same deploys.
  * Prompts are not stored here.
  */
 export class RelayAccountStore {
@@ -147,9 +148,15 @@ export class RelayAccountStore {
         account_id TEXT NOT NULL,
         host_secret_hash TEXT NOT NULL,
         device_label TEXT NOT NULL,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        session_token_hash TEXT
       );
     `);
+    const cols = this.db.prepare('PRAGMA table_info(devices)').all() as { name: string }[];
+    if (!cols.some((col) => col.name === 'session_token_hash')) {
+      this.db.exec('ALTER TABLE devices ADD COLUMN session_token_hash TEXT');
+    }
+    this.db.exec('CREATE INDEX IF NOT EXISTS devices_session ON devices(session_token_hash)');
   }
 
   close(): void {
@@ -308,6 +315,24 @@ export class RelayAccountStore {
       this.db.exec('ROLLBACK');
       throw err;
     }
+  }
+
+  /** Store a phone pairing when it is created. A later process looks it up on a memory miss. */
+  savePhoneSession(deviceId: string, sessionToken: string): void {
+    const id = deviceId.trim();
+    const token = sessionToken.trim();
+    if (!id || !token) return;
+    this.db.prepare('UPDATE devices SET session_token_hash = ? WHERE device_id = ?').run(sha256(token), id);
+  }
+
+  findPhoneSession(sessionToken: string): { deviceId: string; deviceLabel: string } | null {
+    const token = sessionToken.trim();
+    if (!token) return null;
+    const row = this.db
+      .prepare('SELECT device_id, device_label FROM devices WHERE session_token_hash = ?')
+      .get(sha256(token)) as { device_id: string; device_label: string } | undefined;
+    if (!row) return null;
+    return { deviceId: row.device_id, deviceLabel: row.device_label };
   }
 
   private requireAccount(accountId: string): void {

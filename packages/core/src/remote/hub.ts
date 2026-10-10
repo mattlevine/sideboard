@@ -58,23 +58,38 @@ export type RemoteHostAuthorizer = (input: {
   hostSecret: string;
 }) => { ok: true } | { ok: false; message: string };
 
+export type RemotePhoneSession = {
+  deviceId: string;
+  deviceLabel: string;
+};
+
+/**
+ * Phone pairings on disk. `save` runs when a pairing is created.
+ * `find` runs only when that token is not already in memory.
+ */
+export type RemotePhoneSessions = {
+  find(sessionToken: string): RemotePhoneSession | null;
+  save(deviceId: string, sessionToken: string): void;
+};
+
 /**
  * In-memory phone ↔ Mac registry. One active phone socket per Mac.
  * A phone may hold session tokens for several Macs and attaches to one at a time.
  * Host secrets and session tokens survive that Mac reconnecting in this process.
- * A relay restart drops the live sockets — the phone pairs again. When an
- * authorizer is set, the account and host secret live in durable storage.
+ * A new pairing is written to the store. A relay restart drops memory; the next
+ * resume reads that store, then keeps the session in memory.
  */
 export class RemoteHub {
   private readonly hosts = new Map<string, HostSession>();
   private readonly remembered = new Map<string, RememberedHost>();
   private readonly bySocket = new Map<RemoteSocket, { role: 'host' | 'phone'; deviceId: string }>();
   private readonly codes = new Map<string, PairingCode>();
-  private readonly phonesByToken = new Map<string, string>();
+  private readonly phonesByToken = new Map<string, RemotePhoneSession>();
 
   constructor(
     private readonly opts: {
       authorizeHost?: RemoteHostAuthorizer;
+      phoneSessions?: RemotePhoneSessions;
       onAuthorized?: (socket: RemoteSocket) => void;
     } = {},
   ) {}
@@ -223,14 +238,48 @@ export class RemoteHub {
     this.attachPhone(socket, host);
   }
 
+  /** In-memory session, with the live Mac's label when that socket is up. */
+  private memorySession(sessionToken: string): RemotePhoneSession | null {
+    const cached = this.phonesByToken.get(sessionToken);
+    if (!cached) return null;
+    const live = this.hosts.get(cached.deviceId);
+    const remembered = this.remembered.get(cached.deviceId);
+    const current = live?.sessionToken ?? remembered?.sessionToken ?? null;
+    if (current && current !== sessionToken) {
+      this.phonesByToken.delete(sessionToken);
+      return null;
+    }
+    return {
+      deviceId: cached.deviceId,
+      deviceLabel: live?.deviceLabel || remembered?.deviceLabel || cached.deviceLabel,
+    };
+  }
+
+  private knownSession(sessionToken: string): RemotePhoneSession | null {
+    const cached = this.memorySession(sessionToken);
+    if (cached) return cached;
+    const stored = this.opts.phoneSessions?.find(sessionToken) ?? null;
+    if (!stored) return null;
+    const live = this.hosts.get(stored.deviceId);
+    const remembered = this.remembered.get(stored.deviceId);
+    const current = live?.sessionToken ?? remembered?.sessionToken ?? null;
+    if (current && current !== sessionToken) return null;
+    this.phonesByToken.set(sessionToken, stored);
+    if (remembered && !remembered.sessionToken) remembered.sessionToken = sessionToken;
+    if (live && !live.sessionToken) live.sessionToken = sessionToken;
+    return {
+      deviceId: stored.deviceId,
+      deviceLabel: live?.deviceLabel || remembered?.deviceLabel || stored.deviceLabel,
+    };
+  }
+
   private resumePhone(socket: RemoteSocket, sessionToken: string): void {
-    const deviceId = this.phonesByToken.get(sessionToken);
-    const remembered = deviceId ? this.remembered.get(deviceId) : undefined;
-    if (!deviceId || !remembered || remembered.sessionToken !== sessionToken) {
+    const known = this.knownSession(sessionToken);
+    if (!known) {
       send(socket, { type: 'error', message: 'phone session expired — pair again' });
       return;
     }
-    const host = this.hosts.get(deviceId);
+    const host = this.hosts.get(known.deviceId);
     if (!host) {
       send(socket, { type: 'host_offline' });
       return;
@@ -240,17 +289,13 @@ export class RemoteHub {
 
   private listHosts(socket: RemoteSocket, sessionTokens: string[]): void {
     const hosts: RemoteHostSummary[] = sessionTokens.map((sessionToken) => {
-      const deviceId = this.phonesByToken.get(sessionToken);
-      const remembered = deviceId ? this.remembered.get(deviceId) : undefined;
-      const valid = Boolean(deviceId && remembered && remembered.sessionToken === sessionToken);
-      if (!valid || !deviceId || !remembered) {
-        return { sessionToken, deviceId: '', deviceLabel: '', online: false };
-      }
-      const host = this.hosts.get(deviceId);
+      const known = this.knownSession(sessionToken);
+      if (!known) return { sessionToken, deviceId: '', deviceLabel: '', online: false };
+      const host = this.hosts.get(known.deviceId);
       return {
         sessionToken,
-        deviceId,
-        deviceLabel: host?.deviceLabel || remembered.deviceLabel,
+        deviceId: known.deviceId,
+        deviceLabel: host?.deviceLabel || known.deviceLabel,
         online: Boolean(host),
       };
     });
@@ -286,18 +331,20 @@ export class RemoteHub {
       }
       host.phone = null;
     }
+    const created = sessionToken == null;
     const token = sessionToken ?? randomBytes(24).toString('hex');
     if (host.sessionToken && host.sessionToken !== token) {
       this.phonesByToken.delete(host.sessionToken);
     }
     host.sessionToken = token;
     host.phone = socket;
-    this.phonesByToken.set(token, host.deviceId);
+    this.phonesByToken.set(token, { deviceId: host.deviceId, deviceLabel: host.deviceLabel });
     this.remembered.set(host.deviceId, {
       hostSecret: host.hostSecret,
       sessionToken: token,
       deviceLabel: host.deviceLabel,
     });
+    if (created) this.opts.phoneSessions?.save(host.deviceId, token);
     this.bySocket.set(socket, { role: 'phone', deviceId: host.deviceId });
     this.opts.onAuthorized?.(socket);
     send(socket, {
