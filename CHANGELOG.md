@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.288] - 2026-10-10
+
+### Added
+
+- PostHog in Settings → Connectors is the `posthog_api` tool. Query reads (`/api/projects/:id/query/` and `/api/environments/:id/query/`) do not need a write flag. The API key stays in the vault and is not copied onto the agent.
+
+### Changed
+
+- Connected Vercel, Supabase, and Sentry tokens replace the same variables inherited from the shell.
+
 ## [0.1.287] - 2026-10-09
 
 ### Fixed
