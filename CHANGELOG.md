@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Removing a project stays removed after its chats are archived. The removal is stored as the main checkout, so deleting the worktree folder does not bring the project back.
+- Removing a project waits until those chats finish archiving, and a failed archive is shown instead of clearing the progress overlay early.
 
 ## [0.1.285] - 2026-10-09
 

@@ -1130,10 +1130,16 @@ export class Orchestrator {
 
   async removeWorkspace(repoPath: string): Promise<void> {
     removeWorkspace(repoPath);
+    const failures: string[] = [];
     for (const thread of listThreads()) {
       if (!archivesWithRemovedWorkspace(thread.repoPath, repoPath)) continue;
-      await this.archive(thread.id).catch(() => undefined);
+      try {
+        await this.archive(thread.id);
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : String(err));
+      }
     }
+    if (failures.length > 0) throw new Error(failures.join('\n'));
   }
 
   async adopt(input: Parameters<typeof adoptThread>[0]): Promise<Thread> {
