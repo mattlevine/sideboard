@@ -3,27 +3,28 @@
 # Deploy from the monorepo root (build context = repo root):
 #   fly deploy --config apps/relay/fly.toml --dockerfile apps/relay/Dockerfile .
 #
-# The running Fly app is still sideboard-slack-relay until this one-time rename:
-#   fly apps rename sideboard-relay -a sideboard-slack-relay
+# Fly cannot rename an application. The app id is sideboard-slack-relay.
+# That id is historical: this process is the relay for the phone, the site,
+# and legacy Slack, not a Slack-only service. Do not create a second app.
 #
 # First time (already done):
-#   fly apps create sideboard-relay
-#   fly secrets set SIDEBOARD_SLACK_APP_TOKEN=xapp-… -a sideboard-relay
-#   fly secrets set SIDEBOARD_SLACK_CLIENT_SECRET=… -a sideboard-relay
+#   fly apps create sideboard-slack-relay
+#   fly secrets set SIDEBOARD_SLACK_APP_TOKEN=xapp-… -a sideboard-slack-relay
+#   fly secrets set SIDEBOARD_SLACK_CLIENT_SECRET=… -a sideboard-slack-relay
 #
-#   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_ID=… -a sideboard-relay
-#   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=… -a sideboard-relay
+#   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_ID=… -a sideboard-slack-relay
+#   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=… -a sideboard-slack-relay
 #
 # Phone accounts live in SQLite on a volume so restarts and image deploys keep them.
 # One machine only: the volume and the live phone sockets are local to that process.
-#   fly volumes create relay_accounts -a sideboard-relay -r sjc -s 1
+#   fly volumes create relay_accounts -a sideboard-slack-relay -r sjc -s 1
 # GitHub OAuth App authorization callback URL:
 #   https://relay.sideboard.cloud/remote/oauth/callback
 #
 # Custom domains:
-#   fly certs add relay.sideboard.cloud -a sideboard-relay
-#   fly certs add www.sideboard.cloud -a sideboard-relay
-#   fly certs add sideboard.cloud -a sideboard-relay
+#   fly certs add relay.sideboard.cloud -a sideboard-slack-relay
+#   fly certs add www.sideboard.cloud -a sideboard-slack-relay
+#   fly certs add sideboard.cloud -a sideboard-slack-relay
 #   GoDaddy: AAAA sideboard.cloud → 2a09:8280:1::16a:3072:0
 #   (www is a CNAME to the apex; A 66.241.125.177 is already set)
 #
@@ -33,7 +34,7 @@
 # sideboard.cloud 301s to www.sideboard.cloud. relay.sideboard.cloud is the phone remote.
 # GET /health stays JSON for Fly checks.
 
-app = 'sideboard-relay'
+app = 'sideboard-slack-relay'
 primary_region = 'sjc'
 
 [build]
