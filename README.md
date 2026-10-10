@@ -1,6 +1,6 @@
 # Sideboard
 
-**Tickets in. Reviewed PRs out. On your Mac.** Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine.
+**Orchestrate a fleet of coding agents on your Mac.** Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine.
 
 One workspace per ticket, PR, or named branch, and as many agents as that workspace needs. Sibling chats share the files. Agents run as you, on this Mac (corporate VPN, private git, internal APIs). The phone app is how you reach them.
 
