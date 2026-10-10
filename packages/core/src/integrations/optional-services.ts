@@ -365,3 +365,33 @@ export function formatOptionalServicesReminder(
     : '';
   return `Settings → Connectors: ${tokenBit}${bits}. If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or \`posthog_api\`. Do not add vendor MCPs. Do not read a PostHog key from the environment. Shell dumps from those CLIs go in \`.context/cli/\` — read a slice.`;
 }
+
+/** `which` for connected CLI connectors. Skips `npm prefix -g`. PostHog is omitted. */
+async function connectedCliPresence(
+  integrations: IntegrationsSettings,
+): Promise<OptionalCliPresence | undefined> {
+  const ids = connectedOptionalServices(integrations)
+    .filter((spec) => spec.cli)
+    .map((spec) => spec.id);
+  if (ids.length === 0) return undefined;
+  try {
+    const { optionalCliPresence } = await import('./optional-cli.js');
+    return await optionalCliPresence(ids);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Fresh-session playbook plus installed-CLI hints. Safe to call on every turn. */
+export async function formatOptionalServicesDirectiveForTurn(
+  integrations: IntegrationsSettings,
+): Promise<string | null> {
+  return formatOptionalServicesDirective(integrations, await connectedCliPresence(integrations));
+}
+
+/** Resume reminder plus installed-CLI hints. Safe to call on every turn. */
+export async function formatOptionalServicesReminderForTurn(
+  integrations: IntegrationsSettings,
+): Promise<string | null> {
+  return formatOptionalServicesReminder(integrations, await connectedCliPresence(integrations));
+}

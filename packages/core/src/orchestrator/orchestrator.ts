@@ -236,11 +236,9 @@ import {
   formatReviewWriteGateReminder,
   isReviewWriteGatedThread,
 } from '../review/review-write-gate.js';
-import { optionalCliPresence } from '../integrations/optional-cli.js';
 import {
-  connectedOptionalServices,
-  formatOptionalServicesDirective,
-  formatOptionalServicesReminder,
+  formatOptionalServicesDirectiveForTurn,
+  formatOptionalServicesReminderForTurn,
 } from '../integrations/optional-services.js';
 import {
   formatViewerContextDirective,
@@ -1533,23 +1531,9 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatWorktreeReminder()
         : null;
-    const connectorIntegrations = loadAppSettings().integrations;
-    let connectorCli: Awaited<ReturnType<typeof optionalCliPresence>> | undefined;
-    if (thread.agent !== 'brightsy' && !isOrchestratorThread(thread)) {
-      const cliIds = connectedOptionalServices(connectorIntegrations)
-        .filter((spec) => spec.cli)
-        .map((spec) => spec.id);
-      if (cliIds.length > 0) {
-        try {
-          connectorCli = await optionalCliPresence(cliIds);
-        } catch {
-          connectorCli = undefined;
-        }
-      }
-    }
     const optionalServicesReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
-        ? formatOptionalServicesReminder(connectorIntegrations, connectorCli)
+        ? await formatOptionalServicesReminderForTurn(loadAppSettings().integrations)
         : null;
     const issueTicket = issueTicketFromThread(thread, resolveEffectiveIssueSource());
     const issueToolsReminder =
@@ -1660,7 +1644,7 @@ export class Orchestrator {
     const optionalServicesDirective =
       isBrightsy || isOrchestration
         ? null
-        : formatOptionalServicesDirective(connectorIntegrations, connectorCli);
+        : await formatOptionalServicesDirectiveForTurn(loadAppSettings().integrations);
     const freshIssueTicket = issueTicketFromThread(fresh, resolveEffectiveIssueSource());
     const issueToolsDirective =
       isBrightsy || isOrchestration

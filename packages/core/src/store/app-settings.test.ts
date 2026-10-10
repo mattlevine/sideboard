@@ -297,11 +297,7 @@ describe('app settings', () => {
     expect(pub.integrations.vercelViewerName).toBe('matt');
     expect((pub.integrations as { vercelToken?: string }).vercelToken).toBeUndefined();
 
-    const target: NodeJS.ProcessEnv = {
-      VERCEL_TOKEN: 'from-shell',
-      POSTHOG_PERSONAL_API_KEY: 'phx_shell',
-      POSTHOG_HOST: 'https://evil.example',
-    };
+    const target: NodeJS.ProcessEnv = { VERCEL_TOKEN: 'from-shell', POSTHOG_PERSONAL_API_KEY: 'phx_shell', POSTHOG_HOST: 'https://evil.example' };
     mod.applyAppEnvironment(target);
     expect(target.VERCEL_TOKEN).toBe('vercel_test');
     expect(target.SUPABASE_ACCESS_TOKEN).toBe('sbp_test');
@@ -321,16 +317,10 @@ describe('app settings', () => {
       false,
     );
 
-    const after: NodeJS.ProcessEnv = {
-      VERCEL_TOKEN: 'from-shell',
-      POSTHOG_PERSONAL_API_KEY: 'phx_shell',
-      POSTHOG_HOST: 'https://evil.example',
-    };
+    const after: NodeJS.ProcessEnv = { VERCEL_TOKEN: 'from-shell', POSTHOG_PERSONAL_API_KEY: 'phx_shell', POSTHOG_HOST: 'https://evil.example' };
     mod.applyAppEnvironment(after);
     expect(after.VERCEL_TOKEN).toBe('from-shell');
-    expect(after.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
-    expect(after.POSTHOG_HOST).toBeUndefined();
-    expect(after.SENTRY_URL).toBeUndefined();
+    expect(after.POSTHOG_PERSONAL_API_KEY ?? after.POSTHOG_HOST ?? after.SENTRY_URL).toBeUndefined();
   });
 
   it('round-trips default agent, model, and effort', async () => {
