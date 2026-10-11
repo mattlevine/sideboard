@@ -1,8 +1,7 @@
-import { MarkdownIt, parser, type ASTNode } from 'react-native-markdown-display';
+import { parser, type ASTNode } from 'react-native-markdown-display';
 import { linkifyChatUrls } from './chat-link';
+import { chatMarkdown } from './chat-markdown';
 import { visibleFindParts, type FindPartNode } from './find-parts';
-
-const markdownIt = MarkdownIt({ typographer: true });
 
 function asFindNodes(nodes: ASTNode[]): FindPartNode[] {
   return nodes.map((node) => ({
@@ -15,7 +14,7 @@ function asFindNodes(nodes: ASTNode[]): FindPartNode[] {
 
 /** Visible chat strings for one message, in the same order MarkdownText paints them. */
 export function paintedFindStrings(source: string): string[] {
-  const ast = parser(linkifyChatUrls(source), (tree) => tree as never, markdownIt);
+  const ast = parser(linkifyChatUrls(source), (tree) => tree as never, chatMarkdown);
   if (!Array.isArray(ast)) return [];
   return visibleFindParts(asFindNodes(ast as ASTNode[]));
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import Markdown, { type RenderRules } from 'react-native-markdown-display';
 import { linkifyChatUrls, parseChatLink } from './chat-link';
+import { chatMarkdown } from './chat-markdown';
 import { chatSearchQuery, highlightSegments } from './chat-search';
 import { fenceLanguage, highlightCode } from './code-highlight';
 import { parseFilePathLink, type FilePathLink } from './file-link';
@@ -151,6 +152,7 @@ function markdownRules(
   onFileLink: (link: FilePathLink) => void,
   onLocalImage: (src: string) => void,
   onArtifact: (artifact: ArtifactLink) => void,
+  onLongPress: () => void,
   findPaint: FindPaint,
 ): RenderRules {
   return {
@@ -236,10 +238,25 @@ function markdownRules(
       </Text>
     ),
     textgroup: (node, children, _parent, styles) => (
-      <Text key={node.key} style={styles.textgroup}>
+      <Text key={node.key} style={styles.textgroup} onLongPress={onLongPress}>
         {children}
       </Text>
     ),
+    link: (node, children, _parent, styles, pressLink) => {
+      const href = typeof node.attributes?.href === 'string' ? node.attributes.href : '';
+      return (
+        <Text
+          key={node.key}
+          style={styles.link}
+          onPress={() => {
+            if (pressLink?.(href)) void Linking.openURL(href);
+          }}
+          onLongPress={onLongPress}
+        >
+          {children}
+        </Text>
+      );
+    },
     // Cells size to their text. A flex row with flex:1 measures that text at width 0, so only borders show.
     table: (node, children, _parent, styles) => (
       <ScrollView
@@ -279,6 +296,7 @@ export function MarkdownText({
   onFileLink,
   onLocalImage,
   onArtifact,
+  onLongPress,
   findQuery = '',
   findLocal = -1,
 }: {
@@ -295,6 +313,8 @@ export function MarkdownText({
   onLocalImage?: (src: string) => void;
   /** Document artifacts open on the Mac, the same way file paths do. */
   onArtifact?: (artifact: ArtifactLink) => void;
+  /** Long-press the bubble to select text, including a press that starts on a link. */
+  onLongPress?: () => void;
   /** Open find query. Empty leaves the prose unhighlighted. */
   findQuery?: string;
   /** Occurrence inside this bubble that is the current hit, or -1. */
@@ -308,6 +328,11 @@ export function MarkdownText({
   onLocalImageRef.current = onLocalImage;
   const onArtifactRef = useRef(onArtifact);
   onArtifactRef.current = onArtifact;
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
+  const longPress = useCallback(() => {
+    onLongPressRef.current?.();
+  }, []);
   const findOccur = useRef({ n: 0 });
   findOccur.current.n = 0;
   const onLinkPress = useCallback((url: string) => {
@@ -332,14 +357,16 @@ export function MarkdownText({
         (link) => onFileLinkRef.current?.(link),
         (src) => onLocalImageRef.current?.(src),
         (artifact) => onArtifactRef.current?.(artifact),
+        longPress,
         { query: findQuery, currentLocal: findLocal, occur: findOccur.current },
       ),
-    [streaming, chatId, findQuery, findLocal],
+    [streaming, chatId, findQuery, findLocal, longPress],
   );
   const body = linkifyChatUrls(source);
   if (!body.trim()) return null;
   return (
     <Markdown
+      markdownit={chatMarkdown}
       style={tone === 'user' ? userMarkdown : tone === 'ask' ? askMarkdown : agentMarkdown}
       rules={rules}
       onLinkPress={onLinkPress}

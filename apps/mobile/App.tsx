@@ -48,7 +48,7 @@ import {
   StreamStatus,
   TagChip,
 } from './phone-chrome';
-import { ChatFindBar, MessageTextTool, showMessageTools } from './chat-find';
+import { ChatFindBar, MessageTextTool } from './chat-find';
 import { currentLocalIndex, findBubbleSearchHits, nextChatSearchIndex, seedChatSearchQuery } from './chat-search';
 import {
   filterPhoneOrchestration,
@@ -1523,13 +1523,14 @@ export default function App() {
           ref={transcriptScrollRef}
           style={styles.transcript}
           scrollEventThrottle={16}
+          // A selected message is a text field. Leaving canCancelContentTouches
+          // on (the default) lets a drag scroll the transcript instead of sticking.
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
             pinTranscriptRef.current =
               contentSize.height - contentOffset.y - layoutMeasurement.height < 80;
           }}
           keyboardShouldPersistTaps="handled"
-          canCancelContentTouches={textToolId == null}
           onContentSizeChange={() => {
             if (pinTranscriptRef.current && textToolId == null) {
               transcriptScrollRef.current?.scrollToEnd({ animated: false });
@@ -1546,6 +1547,10 @@ export default function App() {
           ) : null}
           {transcript.bubbles.map((bubble) => {
             const selecting = textToolId === bubble.id;
+            const selectBubble = () => {
+              selectionRef.current = bubble.text;
+              setTextToolId(bubble.id);
+            };
             return (
               <View
                 key={bubble.id}
@@ -1570,15 +1575,7 @@ export default function App() {
                   </>
                 ) : (
                   <Pressable
-                    onLongPress={() =>
-                      showMessageTools({
-                        onSelectAll: () => {
-                          selectionRef.current = bubble.text;
-                          setTextToolId(bubble.id);
-                        },
-                        onSearch: () => openFind(),
-                      })
-                    }
+                    onLongPress={selectBubble}
                     delayLongPress={350}
                   >
                     <MarkdownText
@@ -1590,6 +1587,7 @@ export default function App() {
                       onFileLink={openDesktopFile}
                       onArtifact={openDesktopArtifact}
                       onLocalImage={requestDesktopImage}
+                      onLongPress={selectBubble}
                       findQuery={findOpen ? findQuery : ''}
                       findLocal={currentLocalIndex(findHits, findSafeIndex, bubble.id)}
                     />
