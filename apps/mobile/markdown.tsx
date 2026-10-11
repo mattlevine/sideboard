@@ -1,25 +1,24 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import Markdown, { type RenderRules } from 'react-native-markdown-display';
 import { linkifyChatUrls, parseChatLink } from './chat-link';
+import { chatSearchQuery, highlightSegments } from './chat-search';
 import { fenceLanguage, highlightCode } from './code-highlight';
 import { parseFilePathLink, type FilePathLink } from './file-link';
 import { imageCacheKey, peekImage, watchImage } from './media-cache';
 import { MermaidView } from './mermaid-view';
-
-const text = '#ededed';
-const secondary = '#c6c6c6';
-const muted = '#9b9b9b';
-const border = '#2e2e32';
-const bg = '#121212';
-const elevated = '#18191a';
-const link = '#3794ff';
-
-const mono = Platform.select({
-  ios: 'Menlo',
-  android: 'monospace',
-  default: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-});
+import {
+  agentMarkdown,
+  askMarkdown,
+  fenceChrome,
+  fileChip,
+  imageFrame,
+  imageFull,
+  imageScrim,
+  imageThumb,
+  imageWait,
+  userMarkdown,
+} from './markdown-styles';
 
 /** Shimmer label. Empty while the answer itself is the live signal. */
 export function streamVerb(activity: string | undefined, hasText: boolean): string {
@@ -41,16 +40,16 @@ export type ArtifactLink = { title: string; hint?: string };
 
 function FileChip({
   link,
-  label,
   onPress,
+  children,
 }: {
   link: FilePathLink;
-  label: string;
   onPress?: (link: FilePathLink) => void;
+  children: ReactNode;
 }) {
   return (
     <Text style={fileChip} onPress={() => onPress?.(link)}>
-      {label}
+      {children}
     </Text>
   );
 }
@@ -59,15 +58,17 @@ function ArtifactChip({
   title,
   hint,
   onPress,
+  children,
 }: {
   title: string;
   hint?: string;
   onPress?: (artifact: ArtifactLink) => void;
+  children: ReactNode;
 }) {
   const artifact = hint ? { title, hint } : { title };
   return (
     <Text style={fileChip} onPress={() => onPress?.(artifact)}>
-      {title}
+      {children}
     </Text>
   );
 }
@@ -124,12 +125,33 @@ function ChatImage({
   );
 }
 
+type FindPaint = { query: string; currentLocal: number; occur: { n: number } };
+
+const findHit = { backgroundColor: '#7a5f14', color: '#fff6cc' };
+const findCurrent = { backgroundColor: '#e6c200', color: '#1a1a1a' };
+
+function paintFind(content: string, paint: FindPaint, key: string) {
+  if (!chatSearchQuery(paint.query)) return content;
+  const parts = highlightSegments(content, paint.query);
+  if (parts.every((part) => !part.match)) return content;
+  return parts.map((part, index) => {
+    if (!part.match) return part.text;
+    const local = paint.occur.n++;
+    return (
+      <Text key={`${key}-${index}`} style={local === paint.currentLocal ? findCurrent : findHit}>
+        {part.text}
+      </Text>
+    );
+  });
+}
+
 function markdownRules(
   streaming: boolean,
   chatId: string,
   onFileLink: (link: FilePathLink) => void,
   onLocalImage: (src: string) => void,
   onArtifact: (artifact: ArtifactLink) => void,
+  findPaint: FindPaint,
 ): RenderRules {
   return {
     fence: (node) => {
@@ -140,11 +162,19 @@ function markdownRules(
         const [titleLine, hintLine] = content.split('\n');
         const title = titleLine?.trim() || 'Artifact';
         const hint = hintLine?.trim();
-        return <ArtifactChip key={node.key} title={title} hint={hint} onPress={onArtifact} />;
+        return (
+          <ArtifactChip key={node.key} title={title} hint={hint} onPress={onArtifact}>
+            {paintFind(title, findPaint, String(node.key))}
+          </ArtifactChip>
+        );
       }
       const file = parseFilePathLink(language);
       if (file) {
-        return <FileChip key={node.key} link={file} label={file.path} onPress={onFileLink} />;
+        return (
+          <FileChip key={node.key} link={file} onPress={onFileLink}>
+            {paintFind(file.path, findPaint, String(node.key))}
+          </FileChip>
+        );
       }
       if (language === 'mermaid') {
         if (streaming) {
@@ -160,6 +190,7 @@ function markdownRules(
         }
         return <MermaidView key={node.key} chart={content} />;
       }
+      const painted = paintFind(content, findPaint, String(node.key));
       return (
         <ScrollView
           key={node.key}
@@ -169,20 +200,46 @@ function markdownRules(
           style={fenceChrome.scroll}
           contentContainerStyle={fenceChrome.scrollContent}
         >
-          <Text style={fenceChrome.code}>{highlightCode(content, language, String(node.key))}</Text>
+          <Text style={fenceChrome.code}>
+            {painted === content ? highlightCode(content, language, String(node.key)) : painted}
+          </Text>
         </ScrollView>
+      );
+    },
+    code_block: (node, _children, _parent, styles) => {
+      const content = String(node.content ?? '').replace(/\n$/, '');
+      return (
+        <Text key={node.key} style={styles.code_block}>
+          {paintFind(content, findPaint, String(node.key))}
+        </Text>
       );
     },
     code_inline: (node, children, _parent, styles) => {
       const raw = String(node.content ?? '');
       const file = parseFilePathLink(raw);
-      if (file) return <FileChip key={node.key} link={file} label={raw} onPress={onFileLink} />;
+      if (file) {
+        return (
+          <FileChip key={node.key} link={file} onPress={onFileLink}>
+            {paintFind(raw, findPaint, String(node.key))}
+          </FileChip>
+        );
+      }
       return (
         <Text key={node.key} style={styles.code_inline}>
-          {raw || children}
+          {raw ? paintFind(raw, findPaint, String(node.key)) : children}
         </Text>
       );
     },
+    text: (node, _children, _parent, styles, inheritedStyles = {}) => (
+      <Text key={node.key} style={[inheritedStyles, styles.text]}>
+        {paintFind(String(node.content ?? ''), findPaint, String(node.key))}
+      </Text>
+    ),
+    textgroup: (node, children, _parent, styles) => (
+      <Text key={node.key} style={styles.textgroup}>
+        {children}
+      </Text>
+    ),
     // Cells size to their text. A flex row with flex:1 measures that text at width 0, so only borders show.
     table: (node, children, _parent, styles) => (
       <ScrollView
@@ -222,6 +279,8 @@ export function MarkdownText({
   onFileLink,
   onLocalImage,
   onArtifact,
+  findQuery = '',
+  findLocal = -1,
 }: {
   text: string;
   tone?: 'agent' | 'user' | 'ask';
@@ -236,6 +295,10 @@ export function MarkdownText({
   onLocalImage?: (src: string) => void;
   /** Document artifacts open on the Mac, the same way file paths do. */
   onArtifact?: (artifact: ArtifactLink) => void;
+  /** Open find query. Empty leaves the prose unhighlighted. */
+  findQuery?: string;
+  /** Occurrence inside this bubble that is the current hit, or -1. */
+  findLocal?: number;
 }) {
   const onChatLinkRef = useRef(onChatLink);
   onChatLinkRef.current = onChatLink;
@@ -245,6 +308,8 @@ export function MarkdownText({
   onLocalImageRef.current = onLocalImage;
   const onArtifactRef = useRef(onArtifact);
   onArtifactRef.current = onArtifact;
+  const findOccur = useRef({ n: 0 });
+  findOccur.current.n = 0;
   const onLinkPress = useCallback((url: string) => {
     const linked = parseChatLink(url);
     if (linked) {
@@ -267,8 +332,9 @@ export function MarkdownText({
         (link) => onFileLinkRef.current?.(link),
         (src) => onLocalImageRef.current?.(src),
         (artifact) => onArtifactRef.current?.(artifact),
+        { query: findQuery, currentLocal: findLocal, occur: findOccur.current },
       ),
-    [streaming, chatId],
+    [streaming, chatId, findQuery, findLocal],
   );
   const body = linkifyChatUrls(source);
   if (!body.trim()) return null;
@@ -283,200 +349,3 @@ export function MarkdownText({
   );
 }
 
-const shared = {
-  body: {
-    color: text,
-    fontSize: 16,
-    lineHeight: 26,
-    letterSpacing: -0.2,
-  },
-  text: {
-    color: text,
-    fontSize: 16,
-    lineHeight: 26,
-    letterSpacing: -0.2,
-  },
-  textgroup: {
-    color: text,
-  },
-  paragraph: {
-    marginTop: 0,
-    marginBottom: 10,
-  },
-  heading1: {
-    color: text,
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '600' as const,
-    letterSpacing: -0.3,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  heading2: {
-    color: text,
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '600' as const,
-    letterSpacing: -0.3,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  heading3: {
-    color: text,
-    fontSize: 17,
-    lineHeight: 24,
-    fontWeight: '600' as const,
-    letterSpacing: -0.2,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  heading4: {
-    color: text,
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600' as const,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  heading5: {
-    color: text,
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600' as const,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  heading6: {
-    color: text,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '600' as const,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  strong: { color: text, fontWeight: '600' as const },
-  em: { fontStyle: 'italic' as const },
-  s: { color: muted, textDecorationLine: 'line-through' as const },
-  link: { color: link, textDecorationLine: 'underline' as const },
-  blocklink: { color: link, textDecorationLine: 'underline' as const },
-  blockquote: {
-    backgroundColor: 'transparent',
-    borderColor: border,
-    borderLeftWidth: 2,
-    marginLeft: 0,
-    paddingLeft: 10,
-    paddingVertical: 2,
-  },
-  bullet_list: { marginBottom: 8 },
-  ordered_list: { marginBottom: 8 },
-  list_item: { marginBottom: 4 },
-  bullet_list_icon: { color: text, marginLeft: 2, marginRight: 8, lineHeight: 26 },
-  ordered_list_icon: { color: text, marginLeft: 2, marginRight: 8, lineHeight: 26 },
-  bullet_list_content: { flex: 1 },
-  ordered_list_content: { flex: 1 },
-  hr: { backgroundColor: border, height: 1, marginVertical: 10 },
-  code_inline: {
-    fontFamily: mono,
-    fontSize: 14,
-    color: secondary,
-    backgroundColor: '#0e0e0e',
-    borderColor: '#262626',
-    borderWidth: 1,
-    borderRadius: 5,
-    paddingHorizontal: 4,
-  },
-  code_block: {
-    fontFamily: mono,
-    fontSize: 12,
-    lineHeight: 18,
-    color: text,
-    backgroundColor: bg,
-    borderColor: border,
-    borderWidth: 1,
-    borderRadius: 6,
-    padding: 10,
-  },
-  fence: {
-    fontFamily: mono,
-    fontSize: 12,
-    lineHeight: 18,
-    color: text,
-    backgroundColor: bg,
-    borderColor: border,
-    borderWidth: 1,
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 10,
-  },
-  table_scroll: { marginBottom: 10, alignSelf: 'stretch' as const },
-  table: { borderColor: border, borderWidth: 1, borderRadius: 6 },
-  th: {
-    flex: 0,
-    color: text,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderColor: border,
-    fontWeight: '600' as const,
-  },
-  td: {
-    flex: 0,
-    color: secondary,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderColor: border,
-  },
-  tr: { borderColor: border },
-};
-
-const agentMarkdown = StyleSheet.create(shared);
-
-const userMarkdown = StyleSheet.create(shared);
-
-const fileChip = {
-  color: link,
-  textDecorationLine: 'underline' as const,
-  fontSize: 16,
-  lineHeight: 26,
-};
-
-const imageWait = { color: muted, fontSize: 13, marginBottom: 8 };
-const imageFrame = { marginBottom: 10, borderRadius: 6, overflow: 'hidden' as const, backgroundColor: bg };
-const imageThumb = { width: '100%' as const, height: 220, backgroundColor: bg };
-const imageScrim = {
-  flex: 1,
-  backgroundColor: 'rgba(0,0,0,0.88)',
-  alignItems: 'center' as const,
-  justifyContent: 'center' as const,
-  padding: 16,
-};
-const imageFull = { width: '100%' as const, height: '80%' as const };
-
-const fenceChrome = StyleSheet.create({
-  scroll: {
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: border,
-    borderRadius: 6,
-    backgroundColor: bg,
-  },
-  scrollContent: { paddingHorizontal: 12, paddingVertical: 10 },
-  code: { fontFamily: mono, fontSize: 12, lineHeight: 18, color: text, alignSelf: 'flex-start' },
-  mermaidWait: {
-    marginBottom: 10,
-    padding: 12,
-    minHeight: 64,
-    borderWidth: 1,
-    borderColor: border,
-    borderRadius: 6,
-    backgroundColor: elevated,
-  },
-  mermaidLabel: { color: muted, fontSize: 12, marginBottom: 6 },
-  mermaidSource: { color: muted, fontSize: 11, lineHeight: 16 },
-});
-
-const askMarkdown = StyleSheet.create({
-  ...shared,
-  body: { ...shared.body, fontSize: 16, lineHeight: 22 },
-  text: { ...shared.text, fontSize: 16, lineHeight: 22, fontWeight: '500' },
-  paragraph: { marginTop: 0, marginBottom: 4 },
-});

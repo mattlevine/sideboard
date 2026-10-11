@@ -23,6 +23,17 @@ export function worktreeStatusKind(chats: { status: string }[]): WorktreeIconKin
   return 'idle';
 }
 
+/** Desktop find mark: a ring with a short handle. */
+export function SearchGlyph({ active = false }: { active?: boolean }) {
+  const color = active ? palette.text : palette.muted;
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.searchMark}>
+      <View style={[styles.searchRing, { borderColor: color }]} />
+      <View style={[styles.searchHandle, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
 /** Desktop filter mark: three bars narrowing into a funnel. */
 export function FilterGlyph({ active = false }: { active?: boolean }) {
   const color = active ? palette.text : palette.muted;
@@ -111,6 +122,25 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     backgroundColor: '#e8dcc8',
+    transform: [{ rotate: '45deg' }],
+  },
+  searchMark: { width: 16, height: 16 },
+  searchRing: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    borderWidth: 1.5,
+  },
+  searchHandle: {
+    position: 'absolute',
+    width: 6,
+    height: 1.5,
+    borderRadius: 1,
+    right: 1,
+    bottom: 2,
     transform: [{ rotate: '45deg' }],
   },
   funnel: { width: 14, height: 14, alignItems: 'center' },
