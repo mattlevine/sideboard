@@ -50,7 +50,6 @@ export const styles = StyleSheet.create({
   findNav: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   findNavText: { color: palette.text, fontSize: 16, fontWeight: '600' },
   findNavOff: { color: palette.border },
-  bubbleHit: { borderWidth: 1, borderColor: '#e6c200' },
   messageSelect: {
     color: palette.text,
     fontSize: 16,

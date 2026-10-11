@@ -1858,9 +1858,7 @@ export default function App() {
           {transcript.bubbles.length === 0 && !transcript.working && !transcript.questions ? (
             <EmptyChat project={activeIsProject} />
           ) : null}
-          {transcript.bubbles.map((bubble) => {
-            const current = findHits[findSafeIndex]?.id === bubble.id;
-            return (
+          {transcript.bubbles.map((bubble) => (
               <Pressable
                 key={bubble.id}
                 onLayout={(event) => {
@@ -1876,11 +1874,7 @@ export default function App() {
                   })
                 }
                 delayLongPress={350}
-                style={[
-                  styles.bubble,
-                  bubble.role === 'user' ? styles.user : styles.agent,
-                  current && styles.bubbleHit,
-                ]}
+                style={[styles.bubble, bubble.role === 'user' ? styles.user : styles.agent]}
               >
                 {textToolId === bubble.id ? (
                   <>
@@ -1911,8 +1905,7 @@ export default function App() {
                   />
                 )}
               </Pressable>
-            );
-          })}
+          ))}
           {transcript.working ? (
             <StreamStatus
               verb={streamVerb(
