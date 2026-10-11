@@ -2,6 +2,7 @@ import { WebSocket as WsWebSocket } from 'ws';
 import { lookupPreferPublicDns } from '../slack/public-dns.js';
 import { handleRemoteInbound, type RemoteOutbound } from './listen.js';
 import { startPhoneBoardSync } from './phone-board-sync.js';
+import { refreshPhoneViewerLogin } from './phone-viewer-login.js';
 import { deliverPhoneTurn, emitControl, getPhoneOpenChat, setPhoneOpenChat } from './phone-live.js';
 import {
   parseRemoteServerMessage,
@@ -115,6 +116,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
       onRunningChat: (chatId) => {
         deliverPhoneTurn({ onOutbound: emit }, chatId);
       },
+      refreshViewerLogin: () => refreshPhoneViewerLogin(true),
     });
   };
 

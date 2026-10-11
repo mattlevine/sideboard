@@ -23,6 +23,18 @@ export function worktreeStatusKind(chats: { status: string }[]): WorktreeIconKin
   return 'idle';
 }
 
+/** Desktop filter mark: three bars narrowing into a funnel. */
+export function FilterGlyph({ active = false }: { active?: boolean }) {
+  const color = active ? palette.text : palette.muted;
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.funnel}>
+      <View style={[styles.funnelBar, styles.funnelWide, { backgroundColor: color }]} />
+      <View style={[styles.funnelBar, styles.funnelMid, { backgroundColor: color }]} />
+      <View style={[styles.funnelBar, styles.funnelStem, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
 /** Desktop `.workspace-glyph`: warm tile, cream on the lower right. */
 export function ProjectGlyph() {
   return (
@@ -101,6 +113,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8dcc8',
     transform: [{ rotate: '45deg' }],
   },
+  funnel: { width: 14, height: 14, alignItems: 'center' },
+  funnelBar: { borderRadius: 1 },
+  funnelWide: { width: 12, height: 2 },
+  funnelMid: { width: 8, height: 2, marginTop: 2 },
+  funnelStem: { width: 4, height: 6, marginTop: 2 },
   slot: {
     width: 14,
     height: 14,

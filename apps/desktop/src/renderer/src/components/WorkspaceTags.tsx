@@ -3,67 +3,56 @@ import { createPortal } from 'react-dom';
 import { normalizeWorkspaceTags, WORKSPACE_TAG_LIMIT } from '@sideboard/worktree-labels';
 
 /**
- * Compact chips for one workspace. Click a chip to filter. Extra tags stay
- * behind +N so the row does not grow. Editing happens in WorkspaceTagEditor.
+ * Chips for one workspace. Every tag is listed and the row wraps.
+ * Click a chip to filter. Editing happens in WorkspaceTagEditor.
  */
 export function WorkspaceTags({
   tags,
   onFilter,
-  onManage,
+  selectedTags,
   board,
 }: {
   tags: string[];
   onFilter?: (tag: string) => void;
-  /** Sidebar: +N opens the editor instead of wrapping the row. */
-  onManage?: () => void;
+  /** Tags currently included in the sidebar filter. */
+  selectedTags?: string[];
   /** Home card: show chips, no editor. */
   board?: boolean;
 }) {
-  const [showAll, setShowAll] = useState(false);
+  const selected = new Set((selectedTags ?? []).map((tag) => tag.toLowerCase()));
 
   if (tags.length === 0) return null;
 
-  const visibleLimit = 2;
-  const canExpand = !onManage;
-  const hiddenCount = canExpand && showAll ? 0 : Math.max(0, tags.length - visibleLimit);
-  const visibleTags = hiddenCount > 0 ? tags.slice(0, visibleLimit) : tags;
-
   return (
     <div
-      className={`workspace-tags${canExpand && showAll ? ' is-open' : ''}${board ? ' is-board' : ''}`}
+      className={`workspace-tags${board ? ' is-board' : ''}`}
       onClick={(e) => e.stopPropagation()}
     >
-      {visibleTags.map((tag) => (
-        <span key={tag.toLowerCase()} className="workspace-tag">
-          {onFilter ? (
-            <button
-              type="button"
-              className="workspace-tag-label"
-              title={`Show workspaces tagged ${tag}`}
-              onClick={() => onFilter(tag)}
-            >
-              {tag}
-            </button>
-          ) : (
-            <span className="workspace-tag-label">{tag}</span>
-          )}
-        </span>
-      ))}
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          className="workspace-tag-more"
-          title={onManage ? 'Edit tags' : `${hiddenCount} more tag${hiddenCount === 1 ? '' : 's'}`}
-          onClick={() => (onManage ? onManage() : setShowAll(true))}
-        >
-          +{hiddenCount}
-        </button>
-      ) : null}
-      {canExpand && showAll && tags.length > visibleLimit ? (
-        <button type="button" className="workspace-tag-more" onClick={() => setShowAll(false)}>
-          less
-        </button>
-      ) : null}
+      {tags.map((tag) => {
+        const on = selected.has(tag.toLowerCase());
+        const title = on
+          ? `Stop filtering by ${tag}`
+          : selected.size > 0
+            ? `Also require ${tag}`
+            : `Show workspaces tagged ${tag}`;
+        return (
+          <span key={tag.toLowerCase()} className={`workspace-tag${on ? ' is-selected' : ''}`}>
+            {onFilter ? (
+              <button
+                type="button"
+                className="workspace-tag-label"
+                aria-pressed={on}
+                title={title}
+                onClick={() => onFilter(tag)}
+              >
+                {tag}
+              </button>
+            ) : (
+              <span className="workspace-tag-label">{tag}</span>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }

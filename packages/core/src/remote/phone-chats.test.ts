@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { updateDefaultsSettings } from '../store/app-settings.js';
+import { updateDefaultsSettings, updateProjectProfileSettings } from '../store/app-settings.js';
 import { removeWorkspace } from '../store/workspaces.js';
 import { clearTurnLive, noteTurnLiveEvent } from '../store/turn-live.js';
 import { createEmptyThread, updateThread, writeThread } from '../store/thread-store.js';
@@ -186,6 +186,71 @@ describe('phone orchestration chats', () => {
     expect(archivePhoneChat(thread.id)).toBe(true);
     expect(listPhoneHistory().chats[0]).toMatchObject({ id: thread.id, where: 'sideboard', agent: 'claude' });
     expect(listPhoneSidebar().projects.some((row) => row.path === '/tmp/sideboard')).toBe(false);
+  });
+
+  it('sends review and pending labels for pull requests in review', () => {
+    updateProjectProfileSettings('/tmp/sideboard', { reviewLabel: 'eng-review' });
+    const mine = createEmptyThread({
+      title: 'mine',
+      sourceType: 'branch',
+      sourceRef: 'mine',
+      branchName: 'thread/mine',
+      worktreePath: '/tmp/sideboard-mine',
+      repoPath: '/tmp/sideboard',
+      agent: 'claude',
+      prUrl: 'https://github.com/acme/app/pull/4',
+      prState: 'OPEN',
+      prAuthorLogin: 'matt',
+      prLabels: ['eng-review'],
+    });
+    const theirs = createEmptyThread({
+      title: 'theirs',
+      sourceType: 'pr',
+      sourceRef: '5',
+      branchName: 'thread/theirs',
+      worktreePath: '/tmp/sideboard-theirs',
+      repoPath: '/tmp/sideboard',
+      agent: 'claude',
+      prUrl: 'https://github.com/acme/app/pull/5',
+      prState: 'OPEN',
+      prAuthorLogin: 'sam',
+    });
+    const draft = createEmptyThread({
+      title: 'draft',
+      sourceType: 'branch',
+      sourceRef: 'draft',
+      branchName: 'thread/draft',
+      worktreePath: '/tmp/sideboard-draft',
+      repoPath: '/tmp/sideboard',
+      agent: 'claude',
+      prUrl: 'https://github.com/acme/app/pull/6',
+      prState: 'OPEN',
+      prIsDraft: true,
+      prAuthorLogin: 'matt',
+    });
+    writeThread(mine);
+    writeThread(theirs);
+    writeThread(draft);
+
+    const labeled = listPhoneSidebar('matt').projects.find((row) => row.path === '/tmp/sideboard');
+    const badge = (id: string) =>
+      labeled?.worktrees.find((worktree) => worktree.chats.some((chat) => chat.id === id))?.badge;
+    expect(badge(mine.id)).toEqual({
+      id: 'pending',
+      label: 'pending',
+      title: 'Waiting for review',
+    });
+    expect(badge(theirs.id)).toEqual({
+      id: 'review',
+      label: 'review',
+      title: "Someone else's PR",
+    });
+    expect(badge(draft.id)).toBeUndefined();
+    expect(
+      listPhoneSidebar()
+        .projects.find((row) => row.path === '/tmp/sideboard')
+        ?.worktrees.every((worktree) => worktree.badge == null),
+    ).toBe(true);
   });
 
   it('adds an agent onto an existing project worktree', () => {

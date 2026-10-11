@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.289] - 2026-10-10
+
+### Changed
+
+- The sidebar tag filter can include more than one tag. A workspace stays listed only when it has every selected tag.
+- A workspace lists every tag. Extra tags no longer collapse behind +N, and the chips wrap onto the next line.
+- The phone sidebar filters projects and tags the same way as the desktop sidebar. A workspace stays listed only when it has every selected tag.
+- The phone sidebar shows the same review and pending labels as the desktop for a pull request that is in review.
+
 ### Fixed
 
 - A phone stays paired to this Mac across a relay deploy. The pairing is stored with the Mac login, so a new image does not require a new pairing code.

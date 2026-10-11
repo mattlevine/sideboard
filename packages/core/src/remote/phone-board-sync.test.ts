@@ -48,6 +48,18 @@ describe('phone board sync', () => {
     );
   });
 
+  it('changes when a review or pending label appears', () => {
+    const tree = { label: 'matt/feature', chats: [chat()] };
+    const project = { name: 'sideboard', path: '/tmp/sideboard', worktrees: [tree] };
+    const pending = {
+      ...project,
+      worktrees: [{ ...tree, badge: { id: 'pending' as const, label: 'pending', title: 'Waiting for review' } }],
+    };
+    expect(phoneBoardKey(board({ projects: [pending] }))).not.toBe(
+      phoneBoardKey(board({ projects: [project] })),
+    );
+  });
+
   it('ignores bookkeeping timestamps when the list itself is unchanged', () => {
     const first = board({ orchestration: [chat({ updatedAt: 't0' })] });
     const second = board({ orchestration: [chat({ updatedAt: 't1' })] });
@@ -156,6 +168,44 @@ describe('phone board sync', () => {
     vi.advanceTimersByTime(200);
     expect(sent).toHaveLength(2);
 
+    stop();
+  });
+
+  it('pushes again after the GitHub login arrives', async () => {
+    vi.useFakeTimers();
+    let loginReady = false;
+    const sent: PhoneSidebar[] = [];
+    const plain = board();
+    const badged = board({
+      projects: [
+        {
+          name: 'sideboard',
+          path: '/tmp/sideboard',
+          worktrees: [
+            {
+              label: 'mine',
+              chats: [chat()],
+              badge: { id: 'pending', label: 'pending', title: 'Waiting for review' },
+            },
+          ],
+        },
+      ],
+    });
+    const stop = startPhoneBoardSync({
+      debounceMs: 200,
+      list: () => (loginReady ? badged : plain),
+      subscribe: () => () => {},
+      events: () => () => {},
+      refreshViewerLogin: async () => {
+        loginReady = true;
+      },
+      onSidebar: (next) => sent.push(next),
+    });
+
+    expect(sent).toEqual([plain]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent).toEqual([plain, badged]);
     stop();
   });
 });

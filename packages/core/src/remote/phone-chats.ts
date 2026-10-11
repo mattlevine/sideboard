@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
-import { groupHomeBoardWorktrees } from '../board/home-board.js';
+import { classifyWorktreeListBadges, groupHomeBoardWorktrees } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import { workspaceTagsFromGroup, worktreeDisplayLabelForGroup } from '../git/worktree-labels.js';
 import type {
@@ -12,7 +12,12 @@ import type {
 } from '../types/thread.js';
 import { isThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import type { RemoteAskQuestion } from './protocol.js';
-import { resolveNewThreadOptions, resolveOrchestratorDefaults } from '../store/app-settings.js';
+import {
+  loadAppSettings,
+  resolveNewThreadOptions,
+  resolveOrchestratorDefaults,
+  resolveProjectReviewLabel,
+} from '../store/app-settings.js';
 import { createGlobalChat, isGlobalThread, listGlobalThreads } from '../store/global-workspace.js';
 import { findThreadByRef, listThreads, readThread, updateThread } from '../store/thread-store.js';
 import { isRemovedWorkspace, listWorkspaces } from '../store/workspaces.js';
@@ -21,6 +26,7 @@ import { createThread } from '../threads/create.js';
 import { startOrchestration } from '../orchestrator/orchestrator.js';
 import { parseOpenArtifact, type PhoneOpenArtifact } from './phone-artifact.js';
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
+import { phoneViewerLogin } from './phone-viewer-login.js';
 import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js';
 
 /**
@@ -169,11 +175,20 @@ export type PhoneControlRequest =
   | PhoneOpenArtifact
   | { op: 'media'; chatId: string; path: string };
 
+/** Same review / pending pill the desktop sidebar shows on a worktree in review. */
+export interface PhoneWorktreeBadge {
+  id: 'review' | 'pending';
+  label: string;
+  title: string;
+}
+
 export interface PhoneWorktree {
   label: string;
   chats: PhoneChatSummary[];
   /** Shared labels for this checkout. Omitted when the workspace has none. */
   tags?: string[];
+  /** Set only while a pull request on this workspace is in review. */
+  badge?: PhoneWorktreeBadge;
 }
 
 export interface PhoneProject {
@@ -471,7 +486,8 @@ export function listPhoneChats(): PhoneChatSummary[] {
 }
 
 /** Same two sections as the desktop sidebar. */
-export function listPhoneSidebar(): PhoneSidebar {
+export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar {
+  const settings = loadAppSettings();
   const threads = listThreads();
   const byRepo = new Map<string, Thread[]>();
   for (const thread of threads) {
@@ -491,10 +507,18 @@ export function listPhoneSidebar(): PhoneSidebar {
       path,
       worktrees: groupHomeBoardWorktrees(repoThreads).map((group) => {
         const tags = workspaceTagsFromGroup(group);
+        const badge = classifyWorktreeListBadges(
+          group,
+          viewerLogin,
+          resolveProjectReviewLabel(settings, path),
+        )[0];
         return {
           label: worktreeDisplayLabelForGroup(group),
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
+          ...(badge
+            ? { badge: { id: badge.id, label: badge.label, title: badge.title } }
+            : {}),
         };
       }),
     }));
