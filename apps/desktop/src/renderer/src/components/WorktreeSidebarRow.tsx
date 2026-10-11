@@ -53,6 +53,7 @@ export function WorktreeSidebarRow({
   onAddAgent,
   onSetTags,
   onFilterTag,
+  selectedTags,
   onNewOrchestration,
   multiSelected,
   groupKey,
@@ -77,6 +78,8 @@ export function WorktreeSidebarRow({
   onAddAgent?: (fromThreadId: string, opts: NewChatTabOptions) => void;
   onSetTags?: (tags: string[]) => void;
   onFilterTag?: (tag: string) => void;
+  /** Tags currently included in the sidebar filter. */
+  selectedTags?: string[];
   /** Orchestration parent +: open the create-orchestrator modal. */
   onNewOrchestration?: () => void;
   multiSelected: Set<string>;
@@ -361,14 +364,7 @@ export function WorktreeSidebarRow({
           <WorkspaceTags
             tags={workspaceTagsFromGroup(group)}
             onFilter={onFilterTag}
-            onManage={
-              onSetTags
-                ? () => {
-                    setGitCardOpen(false);
-                    setTagEditorOpen(true);
-                  }
-                : undefined
-            }
+            selectedTags={selectedTags}
           />
         ) : null}
       </div>

@@ -55,6 +55,50 @@ export function workspaceTagsFromGroup(
 }
 
 /**
+ * Distinct tags across workspaces, in first-seen order.
+ * The per-workspace cap does not apply: the sidebar filter lists every tag in use.
+ */
+export function workspaceTagChoices(
+  threads: readonly { tags?: readonly string[] | null }[],
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const thread of threads) {
+    for (const raw of thread.tags ?? []) {
+      const [tag] = normalizeWorkspaceTags([raw]);
+      if (!tag) continue;
+      const key = tag.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(tag);
+    }
+  }
+  return out;
+}
+
+/** Add a tag to the sidebar filter, or drop it when it is already selected. */
+export function toggleWorkspaceTagFilter(selected: readonly string[], tag: string): string[] {
+  const key = tag.toLowerCase();
+  if (selected.some((item) => item.toLowerCase() === key)) {
+    return selected.filter((item) => item.toLowerCase() !== key);
+  }
+  return [...selected, tag];
+}
+
+/**
+ * A workspace stays visible when it has every selected tag.
+ * An empty selection matches everything. Comparison is case-insensitive.
+ */
+export function workspaceMatchesTagFilter(
+  tags: readonly string[],
+  selected: readonly string[],
+): boolean {
+  if (selected.length === 0) return true;
+  const have = new Set(tags.map((tag) => tag.toLowerCase()));
+  return selected.every((tag) => have.has(tag.toLowerCase()));
+}
+
+/**
  * Ticket id safe for `<ticket>-<team>` (Linear `ENG-12` → `eng-12`,
  * GitHub `#44` → `44`).
  */

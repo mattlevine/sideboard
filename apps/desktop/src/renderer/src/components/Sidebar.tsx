@@ -1,7 +1,9 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import {
-  normalizeWorkspaceTags,
   threadDisplayLabel,
+  toggleWorkspaceTagFilter,
+  workspaceMatchesTagFilter,
+  workspaceTagChoices,
   workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
 } from '@sideboard/worktree-labels';
@@ -108,12 +110,16 @@ export function Sidebar({
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState('');
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [removeConfirm, setRemoveConfirm] = useState<{
     path: string;
     name: string;
     threadCount: number;
   } | null>(null);
+
+  function toggleTag(tag: string) {
+    setTagFilters((current) => toggleWorkspaceTagFilter(current, tag));
+  }
 
   function runArchive(
     ids: string[],
@@ -184,24 +190,23 @@ export function Sidebar({
       repoThreads,
       groups: groupHomeBoardWorktrees(repoThreads, worktreeSort).filter((group) => {
         if (!worktreeMatchesOwnership(group, ownership, githubLogin ?? '')) return false;
-        if (!tagFilter) return true;
-        const want = tagFilter.toLowerCase();
-        return workspaceTagsFromGroup(group).some((tag) => tag.toLowerCase() === want);
+        return workspaceMatchesTagFilter(workspaceTagsFromGroup(group), tagFilters);
       }),
     }));
-  }, [byRepo, worktreeSort, ownership, githubLogin, tagFilter]);
+  }, [byRepo, worktreeSort, ownership, githubLogin, tagFilters]);
 
-  const visibleRepos = tagFilter
-    ? groupedByRepo.filter((row) => row.groups.length > 0)
-    : groupedByRepo;
+  const visibleRepos =
+    tagFilters.length > 0
+      ? groupedByRepo.filter((row) => row.groups.length > 0)
+      : groupedByRepo;
 
   const tagChoices = useMemo(() => {
-    const tags = normalizeWorkspaceTags(threads.flatMap((thread) => thread.tags ?? []));
-    if (!tagFilter) return tags;
-    const want = tagFilter.toLowerCase();
-    if (tags.some((tag) => tag.toLowerCase() === want)) return tags;
-    return [tagFilter, ...tags];
-  }, [threads, tagFilter]);
+    const tags = workspaceTagChoices(threads);
+    const extra = tagFilters.filter(
+      (selected) => !tags.some((tag) => tag.toLowerCase() === selected.toLowerCase()),
+    );
+    return extra.length > 0 ? [...extra, ...tags] : tags;
+  }, [threads, tagFilters]);
 
   const orchPrimary = pickWorktreeChat(
     globalThreads,
@@ -327,7 +332,7 @@ export function Sidebar({
           <div className="projects-actions">
             <button
               type="button"
-              className={`icon-btn${filterOpen ? ' active' : ''}`}
+              className={`icon-btn${filterOpen || tagFilters.length > 0 ? ' active' : ''}`}
               title="Filter projects and tags"
               onClick={() => setFilterOpen((v) => !v)}
             >
@@ -368,44 +373,72 @@ export function Sidebar({
               placeholder="Filter projects and tags…"
             />
             {tagChoices.length > 0 ? (
-              <select
-                className="sidebar-tag-select"
-                aria-label="Filter by tag"
-                value={tagFilter ?? ''}
-                onChange={(e) => setTagFilter(e.target.value || null)}
+              <div
+                className="sidebar-tag-choices"
+                role="group"
+                aria-label="Filter by tags. A workspace must have every selected tag."
               >
-                <option value="">All tags</option>
-                {tagChoices.map((tag) => (
-                  <option key={tag.toLowerCase()} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
+                {tagChoices.map((tag) => {
+                  const on = tagFilters.some((item) => item.toLowerCase() === tag.toLowerCase());
+                  return (
+                    <button
+                      key={tag.toLowerCase()}
+                      type="button"
+                      className={`workspace-tag${on ? ' is-selected' : ''}`}
+                      aria-pressed={on}
+                      onClick={() => toggleTag(tag)}
+                    >
+                      <span className="workspace-tag-label">{tag}</span>
+                    </button>
+                  );
+                })}
+                {tagFilters.length > 0 ? (
+                  <button
+                    type="button"
+                    className="workspace-tag-more"
+                    onClick={() => setTagFilters([])}
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         )}
         </div>
 
-        {tagFilter && !filterOpen ? (
+        {tagFilters.length > 0 && !filterOpen ? (
           <div className="sidebar-tag-filter">
             <span>Tagged</span>
-            <button
-              type="button"
-              className="workspace-tag"
-              aria-label={`Clear tag ${tagFilter}`}
-              onClick={() => setTagFilter(null)}
-            >
-              <span className="workspace-tag-label">{tagFilter}</span>
-              <span className="workspace-tag-remove" aria-hidden>
-                ×
-              </span>
-            </button>
+            {tagFilters.map((tag) => (
+              <button
+                key={tag.toLowerCase()}
+                type="button"
+                className="workspace-tag is-selected"
+                aria-label={`Clear tag ${tag}`}
+                onClick={() => toggleTag(tag)}
+              >
+                <span className="workspace-tag-label">{tag}</span>
+                <span className="workspace-tag-remove" aria-hidden>
+                  ×
+                </span>
+              </button>
+            ))}
+            {tagFilters.length > 1 ? (
+              <button
+                type="button"
+                className="workspace-tag-more"
+                onClick={() => setTagFilters([])}
+              >
+                Clear
+              </button>
+            ) : null}
           </div>
         ) : null}
 
         <div className="sidebar-projects">
         {visibleRepos.length === 0 && (
-          <div className="empty">{q || tagFilter ? 'Nothing matched' : 'No projects yet'}</div>
+          <div className="empty">{q || tagFilters.length > 0 ? 'Nothing matched' : 'No projects yet'}</div>
         )}
         {visibleRepos.map(({ path, repoThreads, groups }) => (
           <div key={path} className="workspace-group">
@@ -491,7 +524,8 @@ export function Sidebar({
                         ? (tags) => onSetWorkspaceTags(primary.id, tags)
                         : undefined
                     }
-                    onFilterTag={setTagFilter}
+                    onFilterTag={toggleTag}
+                    selectedTags={tagFilters}
                     showArchive={Boolean(onArchive)}
                     onRequestArchive={(chats) =>
                       runArchive(

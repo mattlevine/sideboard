@@ -2,10 +2,40 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { normalizeWorkspaceTags } from '../git/worktree-labels.js';
+import {
+  normalizeWorkspaceTags,
+  toggleWorkspaceTagFilter,
+  workspaceMatchesTagFilter,
+  workspaceTagChoices,
+} from '../git/worktree-labels.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { createEmptyThread, readThread, writeThread } from '../store/thread-store.js';
 import { applyWorkspaceTags, workspaceTagTargetRef } from './workspace-tags.js';
+
+describe('workspace tag filter', () => {
+  it('lists every distinct tag, past the per-workspace cap', () => {
+    const threads = Array.from({ length: 9 }, (_, i) => ({ tags: [`tag-${i}`] }));
+    expect(workspaceTagChoices(threads)).toHaveLength(9);
+    expect(workspaceTagChoices([{ tags: ['  Auth '] }, { tags: ['auth', 'phone'] }])).toEqual([
+      'Auth',
+      'phone',
+    ]);
+  });
+
+  it('toggles a tag without caring about case', () => {
+    expect(toggleWorkspaceTagFilter([], 'Auth')).toEqual(['Auth']);
+    expect(toggleWorkspaceTagFilter(['Auth'], 'auth')).toEqual([]);
+    expect(toggleWorkspaceTagFilter(['Auth'], 'phone')).toEqual(['Auth', 'phone']);
+  });
+
+  it('keeps a workspace only when it has every selected tag', () => {
+    expect(workspaceMatchesTagFilter(['Auth', 'phone'], [])).toBe(true);
+    expect(workspaceMatchesTagFilter(['Auth', 'phone'], ['auth'])).toBe(true);
+    expect(workspaceMatchesTagFilter(['Auth', 'phone'], ['auth', 'phone'])).toBe(true);
+    expect(workspaceMatchesTagFilter(['Auth'], ['auth', 'phone'])).toBe(false);
+    expect(workspaceMatchesTagFilter([], ['auth'])).toBe(false);
+  });
+});
 
 describe('workspace tags', () => {
   let dataDir: string;

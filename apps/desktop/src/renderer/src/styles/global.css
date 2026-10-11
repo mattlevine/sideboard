@@ -2436,17 +2436,11 @@ body.resizing-panels webview {
 
 .workspace-tags {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   padding: 0 8px 6px 30px;
   min-width: 0;
-  overflow: hidden;
-}
-
-.workspace-tags.is-open {
-  flex-wrap: wrap;
-  overflow: visible;
 }
 
 .workspace-tags.is-board {
@@ -2455,6 +2449,7 @@ body.resizing-panels webview {
 
 .workspace-tag {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 2px;
   max-width: 100%;
@@ -2483,6 +2478,34 @@ body.resizing-panels webview {
 
 .workspace-tag:has(.workspace-tag-remove) {
   padding: 0 4px 0 7px;
+}
+
+button.workspace-tag {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+}
+
+button.workspace-tag:has(.workspace-tag-remove) {
+  padding: 0 4px 0 7px;
+}
+
+button.workspace-tag:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.workspace-tag.is-selected,
+button.workspace-tag.is-selected,
+button.workspace-tag.is-selected:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .workspace-tag-remove {
@@ -2559,21 +2582,19 @@ body.resizing-panels webview {
 .sidebar-tag-filter {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 0 8px 8px;
   color: var(--muted);
   font-size: 11px;
 }
 
-.sidebar-filter .sidebar-tag-select {
-  width: 100%;
+.sidebar-tag-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
   margin-top: 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 12px;
-  color: var(--text);
 }
 
 .workspace-tag-more {
@@ -4736,6 +4757,12 @@ mark.chat-search-hit.chat-search-current {
 .thread-item.worktree-parent:is(.active, :hover):not(.is-open) .workspace-tag {
   background: color-mix(in srgb, var(--text) 12%, transparent);
   border-color: color-mix(in srgb, var(--text) 20%, transparent);
+  color: var(--text);
+}
+
+.thread-item.worktree-parent:is(.active, :hover):not(.is-open) .workspace-tag.is-selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
   color: var(--text);
 }
 
