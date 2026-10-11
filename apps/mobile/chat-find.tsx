@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { palette, styles } from './styles';
 
 type SelectionRef = { current: string };
@@ -113,23 +113,4 @@ export function ChatFindBar({
       </Pressable>
     </View>
   );
-}
-
-/** Same chat text actions as the desktop context menu: Select All and Search Chat. */
-export function showMessageTools(actions: { onSelectAll: () => void; onSearch: () => void }): void {
-  if (Platform.OS === 'ios') {
-    ActionSheetIOS.showActionSheetWithOptions(
-      { options: ['Select All', 'Search Chat', 'Cancel'], cancelButtonIndex: 2 },
-      (index) => {
-        if (index === 0) actions.onSelectAll();
-        if (index === 1) actions.onSearch();
-      },
-    );
-    return;
-  }
-  Alert.alert('Message', undefined, [
-    { text: 'Select All', onPress: actions.onSelectAll },
-    { text: 'Search Chat', onPress: actions.onSearch },
-    { text: 'Cancel', style: 'cancel' },
-  ]);
 }
