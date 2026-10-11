@@ -1,33 +1,56 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { palette, styles } from './styles';
 
 type SelectionRef = { current: string };
 
-/** Read-only field with the whole message selected, so Copy uses the system text menu. */
+/**
+ * One message as a plain field so iOS can show selection handles.
+ * A multiline input inside the transcript scroll view reports its own content
+ * height and stretches the chat with empty space, so the field is taken out of
+ * layout and sized from a matching Text. It stays editable only so the system
+ * selection gesture runs; keystrokes are written back to the original message.
+ */
 export function MessageTextTool({ text, selectionRef }: { text: string; selectionRef: SelectionRef }) {
-  const [selection, setSelection] = useState({ start: 0, end: text.length });
+  const inputRef = useRef<TextInput>(null);
+  const [height, setHeight] = useState(0);
   useEffect(() => {
     selectionRef.current = text;
-    setSelection({ start: 0, end: text.length });
   }, [text, selectionRef]);
   return (
-    <TextInput
-      editable={false}
-      multiline
-      scrollEnabled={false}
-      value={text}
-      selection={selection}
-      onSelectionChange={(event) => {
-        const next = event.nativeEvent.selection;
-        setSelection(next);
-        selectionRef.current = text.slice(next.start, next.end);
-      }}
-      style={styles.messageSelect}
-      autoFocus
-      showSoftInputOnFocus={false}
-      accessibilityLabel="Selected message text"
-    />
+    <View>
+      <Text
+        pointerEvents="none"
+        accessible={false}
+        style={[styles.messageSelect, styles.messageSelectMeasure]}
+        onLayout={(event) => {
+          const next = Math.ceil(event.nativeEvent.layout.height);
+          if (next > 0) setHeight((prev) => (prev === next ? prev : next));
+        }}
+      >
+        {text || ' '}
+      </Text>
+      {height > 0 ? (
+        <TextInput
+          ref={inputRef}
+          editable
+          multiline
+          scrollEnabled={false}
+          value={text}
+          onChangeText={() => inputRef.current?.setNativeProps({ text })}
+          onSelectionChange={(event) => {
+            const next = event.nativeEvent.selection;
+            selectionRef.current = text.slice(next.start, next.end);
+          }}
+          inputMode="none"
+          selectTextOnFocus
+          autoFocus
+          selectionColor="rgba(61, 143, 212, 0.45)"
+          style={[styles.messageSelect, styles.messageSelectField, { height }]}
+          accessibilityLabel="Selected message text"
+        />
+      ) : null}
+    </View>
   );
 }
 

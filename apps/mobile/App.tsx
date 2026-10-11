@@ -1846,8 +1846,12 @@ export default function App() {
             pinTranscriptRef.current =
               contentSize.height - contentOffset.y - layoutMeasurement.height < 80;
           }}
+          keyboardShouldPersistTaps="handled"
+          canCancelContentTouches={textToolId == null}
           onContentSizeChange={() => {
-            if (pinTranscriptRef.current) transcriptScrollRef.current?.scrollToEnd({ animated: false });
+            if (pinTranscriptRef.current && textToolId == null) {
+              transcriptScrollRef.current?.scrollToEnd({ animated: false });
+            }
           }}
           contentContainerStyle={
             transcript.bubbles.length === 0 && !transcript.working && !transcript.questions
@@ -1858,25 +1862,17 @@ export default function App() {
           {transcript.bubbles.length === 0 && !transcript.working && !transcript.questions ? (
             <EmptyChat project={activeIsProject} />
           ) : null}
-          {transcript.bubbles.map((bubble) => (
-              <Pressable
+          {transcript.bubbles.map((bubble) => {
+            const selecting = textToolId === bubble.id;
+            return (
+              <View
                 key={bubble.id}
                 onLayout={(event) => {
                   bubbleY.current[bubble.id] = event.nativeEvent.layout.y;
                 }}
-                onLongPress={() =>
-                  showMessageTools({
-                    onSelectAll: () => {
-                      selectionRef.current = bubble.text;
-                      setTextToolId(bubble.id);
-                    },
-                    onSearch: () => openFind(),
-                  })
-                }
-                delayLongPress={350}
                 style={[styles.bubble, bubble.role === 'user' ? styles.user : styles.agent]}
               >
-                {textToolId === bubble.id ? (
+                {selecting ? (
                   <>
                     <MessageTextTool text={bubble.text} selectionRef={selectionRef} />
                     <Pressable
@@ -1891,21 +1887,35 @@ export default function App() {
                     </Pressable>
                   </>
                 ) : (
-                  <MarkdownText
-                    text={bubble.text}
-                    tone={bubble.role === 'user' ? 'user' : 'agent'}
-                    streaming={bubble.streaming === true}
-                    chatId={activeChatId ?? ''}
-                    onChatLink={openChat}
-                    onFileLink={openDesktopFile}
-                    onArtifact={openDesktopArtifact}
-                    onLocalImage={requestDesktopImage}
-                    findQuery={findOpen ? findQuery : ''}
-                    findLocal={currentLocalIndex(findHits, findSafeIndex, bubble.id)}
-                  />
+                  <Pressable
+                    onLongPress={() =>
+                      showMessageTools({
+                        onSelectAll: () => {
+                          selectionRef.current = bubble.text;
+                          setTextToolId(bubble.id);
+                        },
+                        onSearch: () => openFind(),
+                      })
+                    }
+                    delayLongPress={350}
+                  >
+                    <MarkdownText
+                      text={bubble.text}
+                      tone={bubble.role === 'user' ? 'user' : 'agent'}
+                      streaming={bubble.streaming === true}
+                      chatId={activeChatId ?? ''}
+                      onChatLink={openChat}
+                      onFileLink={openDesktopFile}
+                      onArtifact={openDesktopArtifact}
+                      onLocalImage={requestDesktopImage}
+                      findQuery={findOpen ? findQuery : ''}
+                      findLocal={currentLocalIndex(findHits, findSafeIndex, bubble.id)}
+                    />
+                  </Pressable>
                 )}
-              </Pressable>
-          ))}
+              </View>
+            );
+          })}
           {transcript.working ? (
             <StreamStatus
               verb={streamVerb(
