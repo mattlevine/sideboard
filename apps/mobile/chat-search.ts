@@ -51,13 +51,17 @@ export type BubbleSearchHit = { id: string; local: number };
 export function findBubbleSearchHits(
   query: string,
   bubbles: Array<{ id: string; text: string }>,
+  visibleParts: (text: string) => string[] = (text) => [text],
 ): BubbleSearchHit[] {
   const q = chatSearchQuery(query);
   if (!q) return [];
   const hits: BubbleSearchHit[] = [];
   for (const bubble of bubbles) {
-    const n = findQueryOffsets(bubble.text, q).length;
-    for (let local = 0; local < n; local++) hits.push({ id: bubble.id, local });
+    let local = 0;
+    for (const part of visibleParts(bubble.text)) {
+      const n = findQueryOffsets(part, q).length;
+      for (let i = 0; i < n; i++) hits.push({ id: bubble.id, local: local++ });
+    }
   }
   return hits;
 }
