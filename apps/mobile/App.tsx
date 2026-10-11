@@ -35,7 +35,9 @@ import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
 import { createRelayLink, type RelayLink } from './relay-link';
 import { AgentKindIcon } from './agent-icons';
-import { FilterGlyph, ProjectGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
+import { FilterGlyph, ProjectGlyph, SearchGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
+import { ChatFindBar, MessageTextTool, showMessageTools } from './chat-find';
+import { currentLocalIndex, findBubbleSearchHits, nextChatSearchIndex, seedChatSearchQuery } from './chat-search';
 import {
   filterPhoneOrchestration,
   filterPhoneProjects,
@@ -496,6 +498,10 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findIndex, setFindIndex] = useState(0);
+  const [textToolId, setTextToolId] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [draft, setDraft] = useState('');
   const [error, setError] = useTransientError();
@@ -561,6 +567,8 @@ export default function App() {
   const sourceQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptScrollRef = useRef<ScrollView>(null);
   const pinTranscriptRef = useRef(true);
+  const bubbleY = useRef<Record<string, number>>({});
+  const selectionRef = useRef('');
   const attachedRef = useRef(false);
   const checkingHostsRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
@@ -1098,9 +1106,31 @@ export default function App() {
     link.send(phoneCommand({ op: 'media', chatId: id, path: src }));
   }
 
+  function openFind() {
+    const next = seedChatSearchQuery('', textToolId ? selectionRef.current : '');
+    setFindOpen(true);
+    if (next && next !== findQuery) {
+      setFindQuery(next);
+      setFindIndex(0);
+    }
+  }
+
+  function toggleFind() {
+    if (findOpen) {
+      setFindOpen(false);
+      return;
+    }
+    openFind();
+  }
+
   function openChat(chatId: string) {
     setError(null);
     pinTranscriptRef.current = true;
+    setFindOpen(false);
+    setFindQuery('');
+    setFindIndex(0);
+    setTextToolId(null);
+    selectionRef.current = '';
     setActiveChatId(chatId);
     screenRef.current = 'chat';
     setScreen('chat');
@@ -1362,6 +1392,22 @@ export default function App() {
     link.send(phoneCommand({ op: 'options', chatId: id, ...next }));
   }
   const transcript = (activeChatId && transcripts[activeChatId]) || EMPTY;
+  const findHits = useMemo(
+    () => (findOpen ? findBubbleSearchHits(findQuery, transcript.bubbles) : []),
+    [findOpen, findQuery, transcript.bubbles],
+  );
+  const findSafeIndex = findHits.length ? findIndex % findHits.length : 0;
+  const findPlace = findHits.map((hit) => `${hit.id}:${hit.local}`).join('|');
+
+  useEffect(() => {
+    if (!findOpen) return;
+    const hit = findHits[findSafeIndex];
+    if (!hit) return;
+    pinTranscriptRef.current = false;
+    const y = bubbleY.current[hit.id];
+    if (y == null) return;
+    transcriptScrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+  }, [findOpen, findSafeIndex, findPlace]);
 
   if (screen === 'loading') {
     return (
@@ -1761,14 +1807,36 @@ export default function App() {
               {activeChat?.title || 'Agent'}
             </Text>
           </View>
-          {transcript.working ? (
-            <Pressable onPress={() => sendText('stop')} hitSlop={8}>
-              <Text style={styles.link}>Stop</Text>
+          <View style={styles.chromeActions}>
+            <Pressable
+              onPress={toggleFind}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Find in chat"
+            >
+              <SearchGlyph active={findOpen} />
             </Pressable>
-          ) : (
-            <View style={styles.chromeMark} />
-          )}
+            {transcript.working ? (
+              <Pressable onPress={() => sendText('stop')} hitSlop={8}>
+                <Text style={styles.link}>Stop</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
+        {findOpen ? (
+          <ChatFindBar
+            query={findQuery}
+            index={findSafeIndex}
+            total={findHits.length}
+            onQuery={(next) => {
+              setFindQuery(next);
+              setFindIndex(0);
+            }}
+            onNext={() => setFindIndex((i) => nextChatSearchIndex(i, findHits.length, 1))}
+            onPrev={() => setFindIndex((i) => nextChatSearchIndex(i, findHits.length, -1))}
+            onClose={() => setFindOpen(false)}
+          />
+        ) : null}
         <ScrollView
           ref={transcriptScrollRef}
           style={styles.transcript}
@@ -1790,23 +1858,61 @@ export default function App() {
           {transcript.bubbles.length === 0 && !transcript.working && !transcript.questions ? (
             <EmptyChat project={activeIsProject} />
           ) : null}
-          {transcript.bubbles.map((bubble) => (
-            <View
-              key={bubble.id}
-              style={[styles.bubble, bubble.role === 'user' ? styles.user : styles.agent]}
-            >
-              <MarkdownText
-                text={bubble.text}
-                tone={bubble.role === 'user' ? 'user' : 'agent'}
-                streaming={bubble.streaming === true}
-                chatId={activeChatId ?? ''}
-                onChatLink={openChat}
-                onFileLink={openDesktopFile}
-                onArtifact={openDesktopArtifact}
-                onLocalImage={requestDesktopImage}
-              />
-            </View>
-          ))}
+          {transcript.bubbles.map((bubble) => {
+            const current = findHits[findSafeIndex]?.id === bubble.id;
+            return (
+              <Pressable
+                key={bubble.id}
+                onLayout={(event) => {
+                  bubbleY.current[bubble.id] = event.nativeEvent.layout.y;
+                }}
+                onLongPress={() =>
+                  showMessageTools({
+                    onSelectAll: () => {
+                      selectionRef.current = bubble.text;
+                      setTextToolId(bubble.id);
+                    },
+                    onSearch: () => openFind(),
+                  })
+                }
+                delayLongPress={350}
+                style={[
+                  styles.bubble,
+                  bubble.role === 'user' ? styles.user : styles.agent,
+                  current && styles.bubbleHit,
+                ]}
+              >
+                {textToolId === bubble.id ? (
+                  <>
+                    <MessageTextTool text={bubble.text} selectionRef={selectionRef} />
+                    <Pressable
+                      onPress={() => {
+                        setTextToolId(null);
+                        selectionRef.current = '';
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Done selecting"
+                    >
+                      <Text style={styles.selectDone}>Done</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <MarkdownText
+                    text={bubble.text}
+                    tone={bubble.role === 'user' ? 'user' : 'agent'}
+                    streaming={bubble.streaming === true}
+                    chatId={activeChatId ?? ''}
+                    onChatLink={openChat}
+                    onFileLink={openDesktopFile}
+                    onArtifact={openDesktopArtifact}
+                    onLocalImage={requestDesktopImage}
+                    findQuery={findOpen ? findQuery : ''}
+                    findLocal={currentLocalIndex(findHits, findSafeIndex, bubble.id)}
+                  />
+                )}
+              </Pressable>
+            );
+          })}
           {transcript.working ? (
             <StreamStatus
               verb={streamVerb(

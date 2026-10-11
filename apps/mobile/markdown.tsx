@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Markdown, { type RenderRules } from 'react-native-markdown-display';
 import { linkifyChatUrls, parseChatLink } from './chat-link';
+import { chatSearchQuery, highlightSegments } from './chat-search';
 import { fenceLanguage, highlightCode } from './code-highlight';
 import { parseFilePathLink, type FilePathLink } from './file-link';
 import { imageCacheKey, peekImage, watchImage } from './media-cache';
@@ -124,12 +125,33 @@ function ChatImage({
   );
 }
 
+type FindPaint = { query: string; currentLocal: number; occur: { n: number } };
+
+const findHit = { backgroundColor: '#7a5f14', color: '#fff6cc' };
+const findCurrent = { backgroundColor: '#e6c200', color: '#1a1a1a' };
+
+function paintFind(content: string, paint: FindPaint, key: string) {
+  if (!chatSearchQuery(paint.query)) return content;
+  const parts = highlightSegments(content, paint.query);
+  if (parts.every((part) => !part.match)) return content;
+  return parts.map((part, index) => {
+    if (!part.match) return part.text;
+    const local = paint.occur.n++;
+    return (
+      <Text key={`${key}-${index}`} style={local === paint.currentLocal ? findCurrent : findHit}>
+        {part.text}
+      </Text>
+    );
+  });
+}
+
 function markdownRules(
   streaming: boolean,
   chatId: string,
   onFileLink: (link: FilePathLink) => void,
   onLocalImage: (src: string) => void,
   onArtifact: (artifact: ArtifactLink) => void,
+  findPaint: FindPaint,
 ): RenderRules {
   return {
     fence: (node) => {
@@ -160,6 +182,7 @@ function markdownRules(
         }
         return <MermaidView key={node.key} chart={content} />;
       }
+      const painted = paintFind(content, findPaint, String(node.key));
       return (
         <ScrollView
           key={node.key}
@@ -169,7 +192,9 @@ function markdownRules(
           style={fenceChrome.scroll}
           contentContainerStyle={fenceChrome.scrollContent}
         >
-          <Text style={fenceChrome.code}>{highlightCode(content, language, String(node.key))}</Text>
+          <Text selectable style={fenceChrome.code}>
+            {painted === content ? highlightCode(content, language, String(node.key)) : painted}
+          </Text>
         </ScrollView>
       );
     },
@@ -178,11 +203,21 @@ function markdownRules(
       const file = parseFilePathLink(raw);
       if (file) return <FileChip key={node.key} link={file} label={raw} onPress={onFileLink} />;
       return (
-        <Text key={node.key} style={styles.code_inline}>
-          {raw || children}
+        <Text key={node.key} selectable style={styles.code_inline}>
+          {raw ? paintFind(raw, findPaint, String(node.key)) : children}
         </Text>
       );
     },
+    text: (node, _children, _parent, styles, inheritedStyles = {}) => (
+      <Text key={node.key} selectable style={[inheritedStyles, styles.text]}>
+        {paintFind(String(node.content ?? ''), findPaint, String(node.key))}
+      </Text>
+    ),
+    textgroup: (node, children, _parent, styles) => (
+      <Text key={node.key} selectable style={styles.textgroup}>
+        {children}
+      </Text>
+    ),
     // Cells size to their text. A flex row with flex:1 measures that text at width 0, so only borders show.
     table: (node, children, _parent, styles) => (
       <ScrollView
@@ -222,6 +257,8 @@ export function MarkdownText({
   onFileLink,
   onLocalImage,
   onArtifact,
+  findQuery = '',
+  findLocal = -1,
 }: {
   text: string;
   tone?: 'agent' | 'user' | 'ask';
@@ -236,6 +273,10 @@ export function MarkdownText({
   onLocalImage?: (src: string) => void;
   /** Document artifacts open on the Mac, the same way file paths do. */
   onArtifact?: (artifact: ArtifactLink) => void;
+  /** Open find query. Empty leaves the prose unhighlighted. */
+  findQuery?: string;
+  /** Occurrence inside this bubble that is the current hit, or -1. */
+  findLocal?: number;
 }) {
   const onChatLinkRef = useRef(onChatLink);
   onChatLinkRef.current = onChatLink;
@@ -245,6 +286,8 @@ export function MarkdownText({
   onLocalImageRef.current = onLocalImage;
   const onArtifactRef = useRef(onArtifact);
   onArtifactRef.current = onArtifact;
+  const findOccur = useRef({ n: 0 });
+  findOccur.current.n = 0;
   const onLinkPress = useCallback((url: string) => {
     const linked = parseChatLink(url);
     if (linked) {
@@ -267,8 +310,9 @@ export function MarkdownText({
         (link) => onFileLinkRef.current?.(link),
         (src) => onLocalImageRef.current?.(src),
         (artifact) => onArtifactRef.current?.(artifact),
+        { query: findQuery, currentLocal: findLocal, occur: findOccur.current },
       ),
-    [streaming, chatId],
+    [streaming, chatId, findQuery, findLocal],
   );
   const body = linkifyChatUrls(source);
   if (!body.trim()) return null;
