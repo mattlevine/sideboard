@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.289] - 2026-10-10
+
 ### Changed
 
 - The sidebar tag filter can include more than one tag. A workspace stays listed only when it has every selected tag.
