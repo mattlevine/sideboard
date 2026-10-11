@@ -35,7 +35,14 @@ import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
 import { createRelayLink, type RelayLink } from './relay-link';
 import { AgentKindIcon } from './agent-icons';
-import { ProjectGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
+import { FilterGlyph, ProjectGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
+import {
+  filterPhoneOrchestration,
+  filterPhoneProjects,
+  phoneOrchestrationVisible,
+  phoneTagChoices,
+  togglePhoneTagFilter,
+} from './sidebar-filter';
 import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
@@ -61,7 +68,8 @@ type PhoneChat = {
   updatedAt: string;
   agent?: string;
 };
-type PhoneWorktree = { label: string; chats: PhoneChat[]; tags?: string[] };
+type PhonePrBadge = { id: 'review' | 'pending'; label: string; title: string };
+type PhoneWorktree = { label: string; chats: PhoneChat[]; tags?: string[]; badge?: PhonePrBadge };
 type PhoneProject = { name: string; path: string; worktrees: PhoneWorktree[] };
 type PhonePlace =
   | { kind: 'orchestration' }
@@ -389,6 +397,63 @@ function HistoryRow({
   );
 }
 
+function TagChip({
+  tag,
+  selected,
+  filtering,
+  remove,
+  onPress,
+}: {
+  tag: string;
+  selected: boolean;
+  filtering: boolean;
+  remove?: boolean;
+  onPress: () => void;
+}) {
+  const label = remove
+    ? `Clear tag ${tag}`
+    : selected
+      ? `Stop filtering by ${tag}`
+      : filtering
+        ? `Also require ${tag}`
+        : `Show workspaces tagged ${tag}`;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      style={[styles.tag, (selected || remove) && styles.tagSelected]}
+    >
+      <Text style={[styles.tagText, (selected || remove) && styles.tagTextSelected]}>{tag}</Text>
+      {remove ? <Text style={styles.tagRemove}>×</Text> : null}
+    </Pressable>
+  );
+}
+
+function phonePrBadge(value: unknown): PhonePrBadge | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const badge = value as { id?: unknown; label?: unknown; title?: unknown };
+  if (badge.id !== 'review' && badge.id !== 'pending') return undefined;
+  const label = typeof badge.label === 'string' && badge.label.trim() ? badge.label.trim() : badge.id;
+  const title = typeof badge.title === 'string' && badge.title.trim() ? badge.title.trim() : label;
+  return { id: badge.id, label, title };
+}
+
+function PrBadge({ badge }: { badge: PhonePrBadge }) {
+  const pending = badge.id === 'pending';
+  return (
+    <View
+      style={[styles.prBadge, pending ? styles.prBadgePending : styles.prBadgeReview]}
+      accessibilityLabel={badge.title}
+    >
+      <Text style={[styles.prBadgeText, pending ? styles.prBadgeTextPending : styles.prBadgeTextReview]}>
+        {badge.label}
+      </Text>
+    </View>
+  );
+}
+
 function AddButton({
   label,
   hint,
@@ -422,6 +487,9 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [orchestration, setOrchestration] = useState<PhoneChat[]>([]);
   const [projects, setProjects] = useState<PhoneProject[]>([]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sidebarQuery, setSidebarQuery] = useState('');
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [history, setHistory] = useState<PhoneHistoryChat[]>([]);
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -444,6 +512,31 @@ export default function App() {
   const [modelsByAgent, setModelsByAgent] = useState<Partial<Record<AgentId, Array<{ id: string; label: string }>>>>({});
   const [listening, setListening] = useState(false);
   const [issuePickerFor, setIssuePickerFor] = useState<string | null>(null);
+
+  const tagChoices = useMemo(() => phoneTagChoices(projects, tagFilters), [projects, tagFilters]);
+  const visibleOrchestration = useMemo(
+    () => filterPhoneOrchestration(orchestration, sidebarQuery),
+    [orchestration, sidebarQuery],
+  );
+  const showOrchestration = useMemo(
+    () => phoneOrchestrationVisible(orchestration, sidebarQuery),
+    [orchestration, sidebarQuery],
+  );
+  const visibleProjects = useMemo(
+    () => filterPhoneProjects(projects, sidebarQuery, tagFilters),
+    [projects, sidebarQuery, tagFilters],
+  );
+  const sidebarFiltering = sidebarQuery.trim().length > 0 || tagFilters.length > 0;
+
+  useEffect(() => {
+    setFilterOpen(false);
+    setSidebarQuery('');
+    setTagFilters([]);
+  }, [activeId]);
+
+  function toggleSidebarTag(tag: string) {
+    setTagFilters((current) => togglePhoneTagFilter(current, tag));
+  }
 
   const desktopsRef = useRef(desktops);
   const activeIdRef = useRef(activeId);
@@ -580,7 +673,15 @@ export default function App() {
         ? control.orchestration.filter((row) => row?.id && row.title)
         : [];
       const nextProjects = Array.isArray(control.projects)
-        ? control.projects.filter((project) => project?.name && Array.isArray(project.worktrees))
+        ? control.projects
+            .filter((project) => project?.name && Array.isArray(project.worktrees))
+            .map((project) => ({
+              ...project,
+              worktrees: project.worktrees.map((worktree) => ({
+                ...worktree,
+                badge: phonePrBadge(worktree?.badge),
+              })),
+            }))
         : [];
       setOrchestration(nextOrchestration);
       setProjects(nextProjects);
@@ -1385,25 +1486,95 @@ export default function App() {
             <Text style={styles.link}>Desktops</Text>
           </Pressable>
         </View>
-        <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionLabel}>Orchestration</Text>
-            <AddButton
-              label="New agent"
-              hint="Add orchestration agent"
-              busy={pendingAdd === 'orchestration'}
-              onPress={() => openCreate({ kind: 'orchestration' })}
-            />
-          </View>
-          {orchestration.length === 0 ? <Text style={styles.meta}>No agents yet</Text> : null}
-          {orchestration.map((chat) => (
-            <ChatRow key={chat.id} chat={chat} onOpen={() => openChat(chat.id)} onArchive={() => archiveChat(chat.id)} />
-          ))}
+        <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad} keyboardShouldPersistTaps="handled">
+          {showOrchestration ? (
+            <>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>Orchestration</Text>
+                <AddButton
+                  label="New agent"
+                  hint="Add orchestration agent"
+                  busy={pendingAdd === 'orchestration'}
+                  onPress={() => openCreate({ kind: 'orchestration' })}
+                />
+              </View>
+              {visibleOrchestration.length === 0 ? <Text style={styles.meta}>No agents yet</Text> : null}
+              {visibleOrchestration.map((chat) => (
+                <ChatRow key={chat.id} chat={chat} onOpen={() => openChat(chat.id)} onArchive={() => archiveChat(chat.id)} />
+              ))}
+            </>
+          ) : null}
           <View style={[styles.sectionRow, styles.projectsHead]}>
             <Text style={styles.sectionLabel}>Projects</Text>
+            <Pressable
+              style={[styles.filterBtn, (filterOpen || tagFilters.length > 0) && styles.filterBtnOn]}
+              onPress={() => setFilterOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityLabel="Filter projects and tags"
+              accessibilityState={{ expanded: filterOpen }}
+            >
+              <FilterGlyph active={filterOpen || tagFilters.length > 0} />
+            </Pressable>
           </View>
-          {projects.length === 0 ? <Text style={styles.meta}>No projects yet</Text> : null}
-          {projects.map((project) => (
+          {filterOpen ? (
+            <View style={styles.filterPanel}>
+              <TextInput
+                style={styles.input}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="Filter projects and tags…"
+                placeholderTextColor={palette.muted}
+                value={sidebarQuery}
+                onChangeText={setSidebarQuery}
+              />
+              {tagChoices.length > 0 ? (
+                <View
+                  style={styles.tagChoices}
+                  accessibilityLabel="Filter by tags. A workspace must have every selected tag."
+                >
+                  {tagChoices.map((tag) => (
+                    <TagChip
+                      key={tag.toLowerCase()}
+                      tag={tag}
+                      selected={tagFilters.some((item) => item.toLowerCase() === tag.toLowerCase())}
+                      filtering={tagFilters.length > 0}
+                      onPress={() => toggleSidebarTag(tag)}
+                    />
+                  ))}
+                  {tagFilters.length > 0 ? (
+                    <Pressable onPress={() => setTagFilters([])} accessibilityRole="button" accessibilityLabel="Clear tags">
+                      <Text style={styles.clearTags}>Clear</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {!filterOpen && tagFilters.length > 0 ? (
+            <View style={styles.taggedRow}>
+              <Text style={styles.taggedLabel}>Tagged</Text>
+              {tagFilters.map((tag) => (
+                <TagChip
+                  key={tag.toLowerCase()}
+                  tag={tag}
+                  selected
+                  filtering
+                  remove
+                  onPress={() => toggleSidebarTag(tag)}
+                />
+              ))}
+              {tagFilters.length > 1 ? (
+                <Pressable onPress={() => setTagFilters([])} accessibilityRole="button" accessibilityLabel="Clear tags">
+                  <Text style={styles.clearTags}>Clear</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {visibleProjects.length === 0 ? (
+            <Text style={styles.meta}>{sidebarFiltering ? 'Nothing matched' : 'No projects yet'}</Text>
+          ) : null}
+          {visibleProjects.map((project) => (
             <View key={project.path} style={styles.projectBlock}>
               <View style={styles.sectionRow}>
                 <View style={styles.glyphRow}>
@@ -1424,12 +1595,13 @@ export default function App() {
                 const anchor = worktree.chats[0];
                 return (
                   <View key={`${project.path}:${worktree.label}`} style={styles.worktreeBlock}>
-                    <View style={styles.sectionRow}>
+                    <View style={[styles.sectionRow, styles.worktreeHead]}>
                       <View style={styles.glyphRow}>
                         <WorktreeStatusIcon kind={worktreeStatusKind(worktree.chats)} />
                         <Text style={styles.worktreeName} numberOfLines={1}>
                           {worktree.label}
                         </Text>
+                        {worktree.badge ? <PrBadge badge={worktree.badge} /> : null}
                       </View>
                       {anchor ? (
                         <AddButton
@@ -1441,7 +1613,17 @@ export default function App() {
                       ) : null}
                     </View>
                     {worktree.tags?.length ? (
-                      <View style={styles.tagRow}>{worktree.tags.map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}</View>
+                      <View style={styles.tagRow}>
+                        {worktree.tags.map((tag) => (
+                          <TagChip
+                            key={tag}
+                            tag={tag}
+                            selected={tagFilters.some((item) => item.toLowerCase() === tag.toLowerCase())}
+                            filtering={tagFilters.length > 0}
+                            onPress={() => toggleSidebarTag(tag)}
+                          />
+                        ))}
+                      </View>
                     ) : null}
                     {worktree.chats.map((chat) => (
                       <ChatRow

@@ -22,7 +22,10 @@ export function phoneBoardKey(sidebar: PhoneSidebar): string {
   const projects = sidebar.projects
     .map((project) => {
       const trees = project.worktrees
-        .map((tree) => `${tree.label}\t${(tree.tags ?? []).join(',')}\t${tree.chats.map(chatKey).join('\n')}`)
+        .map(
+          (tree) =>
+            `${tree.label}\t${tree.badge?.id ?? ''}\t${(tree.tags ?? []).join(',')}\t${tree.chats.map(chatKey).join('\n')}`,
+        )
         .join('\n');
       return `${project.path}\t${project.name}\n${trees}`;
     })
@@ -95,6 +98,12 @@ export function startPhoneBoardSync(opts: {
   subscribe?: (notify: () => void) => () => void;
   events?: (listener: (event: OrchestratorEvent) => void) => () => void;
   list?: () => PhoneSidebar;
+  /**
+   * Resolve the GitHub login used for review / pending pills, then push
+   * again if that changes the sidebar. Also polled on `viewerLoginIntervalMs`.
+   */
+  refreshViewerLogin?: () => Promise<unknown>;
+  viewerLoginIntervalMs?: number;
 }): () => void {
   const list = opts.list ?? listPhoneSidebar;
   const debounceMs = opts.debounceMs ?? PHONE_BOARD_SYNC_MS;
@@ -134,10 +143,24 @@ export function startPhoneBoardSync(opts: {
   const offEvents = (opts.events ?? ((listener) => getOrchestrator().on(listener)))(handle);
   push();
 
+  let loginTimer: ReturnType<typeof setInterval> | null = null;
+  const refreshViewerLogin = opts.refreshViewerLogin;
+  if (refreshViewerLogin) {
+    const afterLogin = () => {
+      void refreshViewerLogin().then(() => {
+        if (!stopped) push();
+      });
+    };
+    afterLogin();
+    loginTimer = setInterval(afterLogin, opts.viewerLoginIntervalMs ?? 5 * 60_000);
+  }
+
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);
     timer = null;
+    if (loginTimer) clearInterval(loginTimer);
+    loginTimer = null;
     unsubscribe();
     offEvents();
   };
