@@ -38,7 +38,7 @@ export function selectionLineRange(
 }
 
 /**
- * Opening a citation focuses the field, and iOS reports a caret.
+ * Focusing the field makes iOS report a caret.
  * Hold the cited range until the user drags a real selection.
  */
 export function holdsCitedSelection(holding: boolean, start: number, end: number): boolean {

@@ -13,6 +13,7 @@ import { palette } from './styles';
 /**
  * Plain field so iOS can show selection handles on a file.
  * Keystrokes are ignored; the Mac file stays the source.
+ * Do not autofocus: iOS puts the caret at the end and scrolls to the bottom.
  */
 type LineRange = { startLine: number; endLine: number; text: string };
 
@@ -72,7 +73,6 @@ export function PhoneFileSelect({
         {...(selection ? { selection } : {})}
         inputMode="none"
         showSoftInputOnFocus={false}
-        autoFocus
         selectionColor="rgba(61, 143, 212, 0.45)"
         style={styles.field}
         accessibilityLabel="File text"
